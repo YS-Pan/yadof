@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+from pathlib import Path
+import shutil
+import sys
+import types
+
+
+def _module(monkeypatch, name: str) -> types.ModuleType:
+    module = types.ModuleType(name)
+    monkeypatch.setitem(sys.modules, name, module)
+    return module
+
+
+def test_optimize_uses_history_then_calls_evaluate_manager(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
+    evaluate_api = _module(monkeypatch, "project.evaluate_manager.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(evaluate_pkg, "api", evaluate_api, raising=False)
+
+    recorded_api.get_optimization_history = lambda: (
+        ("job_bad", (0.9, 0.9), (10.0,)),
+        ("job_good", (0.2, 0.3), (1.0,)),
+    )
+    seen = {}
+
+    def evaluate_generation(population):
+        seen["population"] = population
+        return tuple((sum(individual),) for individual in population)
+
+    evaluate_api.evaluate_generation = evaluate_generation
+
+    from project.optimize.api import run_one_generation
+
+    result = run_one_generation(population_size=2, random_seed=7)
+
+    assert result.source == "recorded_data"
+    assert result.history_count == 2
+    assert seen["population"][0] == (0.2, 0.3)
+    assert result.costs == ((0.5,), (1.8,))
+
+
+def test_optimize_random_generation_when_history_empty(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
+    evaluate_api = _module(monkeypatch, "project.evaluate_manager.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(evaluate_pkg, "api", evaluate_api, raising=False)
+
+    recorded_api.get_optimization_history = lambda: ()
+    evaluate_api.evaluate_generation = lambda population: tuple((1.0,) for _ in population)
+
+    from project.optimize.api import run_one_generation
+
+    result = run_one_generation(population_size=3, variable_count=2, random_seed=3)
+
+    assert result.source == "random"
+    assert len(result.population) == 3
+    assert all(len(individual) == 2 for individual in result.population)
+    assert result.costs == ((1.0,), (1.0,), (1.0,))
+
+
+def test_surrogate_raw_data_to_cost_shape_and_checkpoint(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    job_template_pkg = _module(monkeypatch, "project.job_template")
+    job_template_api = _module(monkeypatch, "project.job_template.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(job_template_pkg, "api", job_template_api, raising=False)
+
+    raw_samples = (
+        ({"rawData": (1.0, 2.0), "metadata": {"source": "test_com"}},),
+        ({"rawData": (3.0, 4.0), "metadata": {"source": "test_com"}},),
+    )
+    recorded_api.get_surrogate_training_data = lambda: {
+        "parameter_names": ("x", "y"),
+        "normalized_variables": ((0.1, 0.2), (0.8, 0.9)),
+        "raw_data": raw_samples,
+    }
+
+    def calculate_costs_from_raw_data(samples):
+        costs = []
+        for sample in samples:
+            item = sample[0]
+            values = item["rawData"]
+            costs.append((sum(values),))
+        return tuple(costs)
+
+    job_template_api.calculate_costs_from_raw_data = calculate_costs_from_raw_data
+
+    from project import config
+    from project.surrogate import runtime
+
+    checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "surrogate_checkpoints"
+    if checkpoint_dir.is_dir():
+        shutil.rmtree(checkpoint_dir)
+    monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
+    runtime._STATE = None
+
+    state = runtime.train(generation_index=5)
+    predictions = runtime.predict_population(((0.12, 0.18), (0.75, 0.85)))
+    errors = runtime.evaluate_historical_errors()
+
+    assert state.checkpoint_path.is_file()
+    assert predictions[0][0] == (3.0,)
+    assert predictions[1][0] == (7.0,)
+    assert predictions[0][1][0][0] < 3.0 < predictions[0][1][0][1]
+    assert errors == ((0.0,), (0.0,))

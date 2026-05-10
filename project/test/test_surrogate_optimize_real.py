@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import shutil
+import sys
+import types
+
+import pytest
+
+
+def _module(monkeypatch, name: str) -> types.ModuleType:
+    module = types.ModuleType(name)
+    monkeypatch.setitem(sys.modules, name, module)
+    return module
+
+
+def test_surrogate_interpolates_rawdata_away_from_training_samples(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    job_template_pkg = _module(monkeypatch, "project.job_template")
+    job_template_api = _module(monkeypatch, "project.job_template.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(job_template_pkg, "api", job_template_api, raising=False)
+
+    raw_samples = (
+        ({"rawData": (0.0, 0.0), "metadata": {"source": "low"}},),
+        ({"rawData": (10.0, 10.0), "metadata": {"source": "high"}},),
+    )
+    recorded_api.get_surrogate_training_data = lambda: {
+        "parameter_names": ("x", "y"),
+        "normalized_variables": ((0.1, 0.1), (0.9, 0.9)),
+        "raw_data": raw_samples,
+    }
+    job_template_api.calculate_costs_from_raw_data = lambda samples: tuple(
+        (float(sum(sample[0]["rawData"])),) for sample in samples
+    )
+
+    from project import config
+    from project.surrogate import runtime
+
+    checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "surrogate_interpolation"
+    if checkpoint_dir.is_dir():
+        shutil.rmtree(checkpoint_dir)
+    monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
+    monkeypatch.setattr(config, "SURROGATE_EXACT_NEIGHBOR_RADIUS", 0.0)
+    runtime._STATE = None
+
+    state = runtime.train(generation_index=2)
+    prediction = runtime.predict_population(((0.5, 0.5),))[0]
+
+    assert state.model_path.is_file()
+    assert json.loads(state.checkpoint_path.read_text(encoding="utf-8"))["model"] == "rbf_idw_rawdata_ensemble"
+    assert 0.0 < prediction[0][0] < 20.0
+    assert prediction[0][0] != pytest.approx(0.0)
+    assert prediction[0][0] != pytest.approx(20.0)
+    assert prediction[1][0][0] < prediction[0][0] < prediction[1][0][1]
+
+
+def test_optimize_uses_gpsaf_surrogate_when_training_data_available(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
+    evaluate_api = _module(monkeypatch, "project.evaluate_manager.api")
+    job_template_pkg = _module(monkeypatch, "project.job_template")
+    job_template_api = _module(monkeypatch, "project.job_template.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(evaluate_pkg, "api", evaluate_api, raising=False)
+    monkeypatch.setattr(job_template_pkg, "api", job_template_api, raising=False)
+
+    history = (
+        ("job_a", (0.10, 0.10), (1.0,)),
+        ("job_b", (0.35, 0.30), (0.2,)),
+        ("job_c", (0.70, 0.65), (0.8,)),
+        ("job_d", (0.90, 0.90), (1.4,)),
+    )
+    raw_samples = tuple(
+        ({"rawData": (costs[0],), "metadata": {"source": job_name}},)
+        for job_name, _x, costs in history
+    )
+    recorded_api.get_optimization_history = lambda: history
+    recorded_api.get_surrogate_training_data = lambda: {
+        "parameter_names": ("x", "y"),
+        "normalized_variables": tuple(x for _job_name, x, _costs in history),
+        "raw_data": raw_samples,
+    }
+    job_template_api.calculate_costs_from_raw_data = lambda samples: tuple(
+        (float(sample[0]["rawData"][0]),) for sample in samples
+    )
+
+    seen = {}
+
+    def evaluate_generation(population):
+        seen["population"] = population
+        return tuple((sum(individual),) for individual in population)
+
+    evaluate_api.evaluate_generation = evaluate_generation
+
+    from project import config
+    from project.surrogate import runtime
+
+    checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "optimize_gpsaf_surrogate"
+    if checkpoint_dir.is_dir():
+        shutil.rmtree(checkpoint_dir)
+    monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ENABLED", True)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 1)
+    runtime._STATE = None
+
+    from project.optimize.api import run_one_generation
+
+    result = run_one_generation(generation_index=3, population_size=2, random_seed=42)
+
+    assert result.source == "gpsaf_surrogate"
+    assert result.surrogate_used is True
+    assert result.history_count == 4
+    assert result.population == seen["population"]
+    assert result.population != ((0.35, 0.30), (0.70, 0.65))
+    assert result.diagnostics["alpha_batches"] == 2
+    assert result.diagnostics["beta_iterations"] == 1
+    assert checkpoint_dir.joinpath("generation_0003.json").is_file()

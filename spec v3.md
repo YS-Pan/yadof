@@ -1,0 +1,957 @@
+# yadot 项目 Specification v3
+
+## 1. 项目背景
+
+本项目计划将 `reference/` 目录下的三个旧项目合并为一个新的、模块化的优化框架。合并过程不仅是简单拼接代码，还包含较大规模的重构。
+
+### 1.1 旧项目来源
+
+`reference/` 下包含三个主要旧项目：
+
+1. `20260403 fanyufei`  
+   当前较成熟的优化框架，是新项目的主要基础。
+
+2. `20260124 combined`  
+   第一个项目的前身。该版本中曾经调试通过基于 HTCondor 的分布式执行。后来为了方便调试，暂时移除了分布式部分，并逐渐演化为 `20260403 fanyufei`。
+
+3. `20260418 shorten`  
+   surrogate + optimize 的实验性代码。需要将其中的 surrogate 与优化相关逻辑整合进第一个项目，用来替代第一个项目中较空的 surrogate 部分。
+
+此外，`reference/` 中还包含：
+
+1. HTCondor 调试经验。
+2. 当前优化算法 GPSAF 的论文原文。
+
+## 2. 新项目总体目标
+
+新项目放在 `project/` 目录下。
+
+总体目标是构建一个模块化、可恢复、支持 surrogate、支持本地与分布式评估、并允许用户在优化中途修改任务定义的优化框架。
+
+项目应重点保留以下能力：
+
+1. 支持不同仿真软件或自定义评估程序。
+2. surrogate 的建模链路是 `优化变量 -> rawData -> cost`，而不是直接 `优化变量 -> cost`。
+3. 支持复杂评估流程，例如多次仿真、多软件工作流，甚至单次评估内部也可以包含一个小优化。
+4. 支持从过去结果继续优化。
+5. 允许评估失败，并让优化流程继续运行。
+6. 允许优化中途修改变量范围、仿真文件、rawData 到 cost 的计算方式等内容。
+
+## 3. Terminology 对照表
+
+| 术语 | 具体定义 | 说明 |
+|---|---|---|
+| 昂贵评估 | 根据优化变量运行真实 workflow，得到 rawData 的过程。 | 昂贵评估不计算 cost。cost 的计算统一在 rawData 进入 `recorded_data` 后，由 `recorded_data` 调用 `job_template/calc_cost.py` 完成。 |
+| rawData | rawData 的基本单位是一个 `.npz` 文件。无论里面保存的是标量、一维数组、二维数组、三维数组，还是更复杂的数据结构，都以一个 `.npz` 文件作为一个 rawData 单元。 | rawData 这个词有时指单个 `.npz` 文件，有时指一个 job 生成的所有 `.npz` 文件，有时也指 `recorded_data` 中保存的、基于所有 job 的所有 `.npz` 文件的整体数据集合。具体含义应根据上下文判断。 |
+| rawData metadata | 每个 `.npz` 文件自己的 metadata。 | metadata 可以包括数据来源、数据形状、每个维度对应的名字、单位、生成时间、仿真状态、错误信息或其他任务相关说明。 |
+| cost | 优化目标函数值。 | cost 是从 rawData 动态计算出来的派生值。五大核心模块中不应以文件形式保存 cost，也不应长期保存 cost。 |
+| 优化变量 | optimizer 控制的输入变量。 | `optimize` 内部主要使用归一化后的 float 数组。`recorded_data` 中保存未归一化的原始值。 |
+| normalized_variables | 归一化后的优化变量值。 | 由 `recorded_data` 在回复请求时动态计算。`recorded_data` 会调用 `job_template` 获取当前变量范围。`optimize` 和 `surrogate` 不应自己从 `job_template` 读取范围来计算历史样本的归一化值。 |
+| unnormalized_variables | 未归一化的原始优化变量值。 | `recorded_data` 只长期保存这种形式，不保存 normalized_variables。 |
+| PARAMETERS | `job_template/parameters_constraints.py` 中定义的优化变量及约束信息。 | 用于确定变量名、变量范围、归一化和反归一化方式。需要归一化历史样本时，由 `recorded_data` 调用 `job_template` 获取。 |
+| job | 一次真实评估任务对应的工作单元。 | job 名字由 `evaluate_manager` 在生成 job 时定义，原则上根据时间命名。 |
+| job name | job 的唯一名字。 | job 完成或报错后，job name 会和该 job 的变量、rawData、metadata 一起进入 `recorded_data`。 |
+| workflow | 将优化变量转化为 rawData 的流程。 | workflow 可以调用仿真软件，也可以调用自定义 Python 代码。本轮修改先用 `test_com.py` 模拟，不接入真实仿真软件 com。 |
+| com 文件 | 连接 workflow 与具体仿真软件或模拟程序的适配层。 | 本轮先不写真实仿真软件的 com，例如不写 `hfss_com.py`，只写 `test_com.py`。 |
+| test_com.py | 本轮用于模拟真实评估的 com 文件。 | 参考 `reference` 中 surrogate 项目的做法，用简单数学函数模拟 `优化变量 -> rawData`。 |
+| calc_cost.py | `job_template` 中负责根据 rawData 计算 cost 的文件。 | 不复制到 jobs 中。job/workflow 不生成 `cost.json`。 |
+| surrogate 评估 | surrogate 根据优化变量预测 rawData，并进一步得到 cost 和 cost 区间的过程。 | surrogate 的核心链路是 `优化变量 -> rawData -> cost`。 |
+| cost 区间 | surrogate 返回的每个 cost 的下限和上限。 | 形式为 `(cost_lower_bound, cost_upper_bound)`，用于表示 surrogate 对目标值范围的估计。 |
+| checkpoint | surrogate 或优化过程在每一代留下的可恢复状态。 | surrogate 每一代应有一个 checkpoint。 |
+| metadata | 描述评估过程、数据结构、状态、失败原因等的信息。 | metadata 可以进入 `recorded_data`。它还可以包括数据形状、每个维度对应的名字、单位、数据来源等信息。 |
+| local 模式 | 不使用 HTCondor，直接在本地运行 job 的模式。 | 也必须处理 job 完成、失败、超时、卡死等情况。 |
+| distributed 模式 | 使用 HTCondor 提交和管理 job 的模式。 | 与 local 模式应尽量共用 job 状态处理函数。 |
+| GPSAF | 一篇论文。 | 本项目的 `optimize` 模块使用这篇论文里提出的优化做法。 |
+
+## 4. 目标目录结构
+
+新项目的代码和数据文件放在 `project/` 目录下。
+
+建议结构如下：
+
+```text
+project/
+  optimize/
+  surrogate/
+  evaluate_manager/
+  job_template/
+  recorded_data/
+  jobs/
+  tools/
+  config.py
+  test/
+```
+
+### 4.1 `optimize/`
+
+存放优化算法本身相关代码。
+
+主要职责：
+
+1. 管理优化流程。
+2. 使用 GPSAF 论文中提出的优化做法。
+3. 生成每一代种群。
+4. 向 `evaluate_manager` 发送一组 float 数组，请求 evaluate 模块处理评估。
+5. `optimize` 不直接调用昂贵评估。
+6. `optimize` 不直接调用 workflow、仿真软件、HTCondor 或 job 执行逻辑。
+7. `optimize` 不再从 `job_template` 读取参数范围。
+8. 历史样本的归一化参数值由 `recorded_data` 直接提供。
+9. `recorded_data` 在回复归一化参数值时，会读取 `job_template` 获得变量范围，并计算归一化值。
+10. 调用 surrogate 评估。
+11. 使用历史结果初始化优化。
+12. 根据 `recorded_data` 返回的历史 normalized variables 和 costs 生成新优化的初始状态。
+
+### 4.2 `surrogate/`
+
+存放 surrogate 模型代码与训练结果。
+
+主要职责：
+
+1. 从 `recorded_data` 获取真实评估样本的 normalized variables。
+2. 从 `recorded_data` 获取真实评估样本的 rawData。
+3. 使用 `job_template/calc_cost.py` 中的 rawData-to-cost 函数计算 cost。
+4. 训练 `normalized variables -> rawData -> cost` 相关模型。
+5. 为 `optimize` 提供 surrogate 预测结果。
+6. 每一代保存一个 checkpoint。
+7. 不保存 surrogate 的评估结果。
+8. surrogate 训练时应更关心相对误差，而不是只关心绝对误差。比如真实值为 `1.0`、surrogate 为 `0.9`，与真实值为 `0.1`、surrogate 为 `0.09`，应得到相同程度的关注。
+
+### 4.3 `evaluate_manager/`
+
+负责生成 job 文件夹，以及管理评估任务的执行。
+
+主要职责：
+
+1. 接收 `optimize` 发送的一组 float 数组。
+2. 为每个 individual 生成对应的 job 文件夹。
+3. 为每个 job 生成基于时间命名的 job name。
+4. 将 job 所需文件从 `job_template` 复制到 job 目录。
+5. 支持 local 和 distributed 两种评估模式。
+6. local 模式不依赖 HTCondor，直接在本地运行。
+7. distributed 模式使用 HTCondor 提交任务。
+8. 处理 job 完成、失败、超时、卡死等情况。
+9. job 完成或报错之后，将 job name、原始变量值、rawData、metadata 转移到 `recorded_data`。
+10. job name 等信息都在评估完成或报错之后进入 `recorded_data`。
+11. 每一代结束后通知 `surrogate` 重新训练模型。
+
+### 4.4 `job_template/`
+
+存放单个评估任务的模板文件。
+
+主要职责：
+
+1. 放置任务相关的参数约束文件。
+2. 放置实际 workflow。
+3. 提供 rawData 到 cost 的计算函数。
+4. 放置昂贵评估使用的仿真模型或模拟模型。
+5. 提供 API 供其他模块获取参数定义、复制 job 文件、计算 cost。
+
+其中应至少包含：
+
+```text
+job_template/
+  api.py
+  parameters_constraints.py
+  parameters_constraints_class.py
+  workflow.py
+  calc_cost.py
+  test_com.py
+  xxxx.aedt
+  rawData/
+```
+
+说明：
+
+1. 原始描述中同时出现了 `parameters_constraint.py` 和 `parameters_constraints.py`。建议统一为 `parameters_constraints.py`。
+2. `workflow.py` 负责运行真实评估流程并输出 rawData。
+3. rawData 到 cost 的逻辑应从 `workflow.py` 中拆出，放入 `calc_cost.py`。
+4. `reference` 里的 workflow 会保存 `cost.json`，但是新的合并后的项目里不保存 `cost.json`。
+5. `workflow.py` 和 job 运行过程不保存 `cost.json`。
+6. 所有 cost 计算都在结果进入 `recorded_data` 之后，由 `recorded_data` 调用 `job_template/calc_cost.py` 执行。
+7. `calc_cost.py` 不复制到 jobs 中。
+8. 本轮修改先不用真实仿真软件的 com，例如不使用 `hfss_com.py`。
+9. 本轮先写 `test_com.py`，参考 `reference` 中 surrogate 项目的做法，用简单数学函数模拟 `优化变量 -> rawData`。
+10. `xxxx.aedt` 是昂贵评估用仿真模型的示例文件名，用来表示 job_template 中通常会包含某种仿真模型文件。
+11. `workflow.py` 可以输出多个 `.npz` 文件。
+12. `.npz` 文件应放在 `rawData/` 下。
+13. `rawData/` 下不应再有子文件夹。
+14. 每个 `.npz` 文件都应包含它自己的 metadata。
+15. `parameters_constraints.py`、`workflow.py`、`calc_cost.py` 是强任务相关文件。原则上每次新优化任务开始前都可以由用户重新编写或由 AI 辅助生成。
+
+### 4.5 `recorded_data/`
+
+存放昂贵评估得到的真实样本。
+
+主要职责：
+
+1. 保存真实评估得到的原始优化变量值。
+2. 保存仿真软件或 workflow 输出的 rawData。
+3. 保存每个 rawData `.npz` 文件自己的 metadata。
+4. 保存 job 级别的必要 metadata。
+5. 保存 job name。
+6. 不保存可由原始数据推导出来的值。
+7. 不以文件形式保存 cost。
+8. 五大核心模块里也不应该有保存 cost 的地方。
+9. 不保存归一化后的变量值。
+10. 当其他模块请求归一化变量值时，临时从 `job_template` 获取当前参数范围并计算。
+11. 当其他模块请求 cost 时，临时调用 `job_template/calc_cost.py` 计算。
+12. 每次需要 cost 都应根据 rawData 重新计算。
+
+这个设计是为了支持用户在优化中途修改变量范围、仿真文件或 cost 计算方式。
+
+### 4.6 `jobs/`
+
+存放每个评估任务对应的 job 文件夹。
+
+说明：
+
+1. `jobs/` 不主动发起通信。
+2. 在 distributed 模式下，HTCondor 中运行的 job 完成后会向对应 job 文件夹写入结果。
+3. 在 local 模式下，本地运行的 job 也会向对应 job 文件夹写入结果。
+4. `jobs/` 的实际路径应可配置。
+5. 默认路径在 `project/jobs/`。
+6. 用户可以将 jobs 路径设置到内存盘，以减少磁盘读写。
+7. job/workflow 不保存 `cost.json`。
+8. jobs 中不需要包含 `calc_cost.py`。
+
+### 4.7 `tools/`
+
+存放用户手动运行的辅助工具。
+
+约束：
+
+1. `tools/` 中的脚本可以灵活访问和修改项目文件。
+2. 项目核心运行流程不应依赖 `tools/`。
+3. `optimize`、`surrogate`、`evaluate_manager`、`job_template`、`recorded_data`、`test` 都不应主动调用 `tools/`。
+4. 即使 `tools/` 不存在，优化流程也应能正常运行，只是用户操作会更麻烦。
+5. 修改其他部分时，不考虑对 `tools/` 中脚本的兼容。
+6. `tools/` 可以有自己的私有测试目录：
+
+```text
+tools/
+  test/
+```
+
+### 4.8 `config.py`
+
+存放跨模块共享的重要参数。
+
+示例：
+
+1. surrogate 的 `alpha`、`beta` 等超参数。
+2. jobs 路径。
+3. local / distributed 模式配置。
+4. 其他全局参数。
+
+约束：
+
+1. `config.py` 可以被所有模块直接读取。
+2. 它是少数允许跨模块直接访问的文件之一。
+
+### 4.9 `test/`
+
+存放项目测试代码。
+
+约束：
+
+1. `test/` 可以灵活访问项目内部模块。
+2. 测试代码不应依赖 `tools/`。
+3. 测试应覆盖 local 模式，避免要求用户必须安装 HTCondor 才能运行基本测试。
+4. 本轮测试应优先围绕 `test_com.py` 构建，不依赖真实仿真软件。
+
+## 5. 模块独立性与 API 原则
+
+`optimize/`、`surrogate/`、`evaluate_manager/`、`job_template/`、`recorded_data/` 是项目最核心的五个模块。
+
+这五个模块之间交互较多，必须保持相对独立。
+
+### 5.1 核心原则
+
+核心模块之间不应随意互相调用内部实现文件。
+
+只使用以下通信路径：
+
+```text
+本模块内部文件
+  -> 对方模块 api
+  -> 对方模块内部实现
+```
+
+不再使用：
+
+```text
+本模块内部文件
+  -> 本模块 api
+  -> 对方模块 api
+  -> 对方模块内部实现
+```
+
+也不允许：
+
+```text
+本模块内部文件
+  -> 对方模块内部实现文件
+```
+
+### 5.2 API 文件要求
+
+五个核心模块都应有统一接收外部请求的 API 文件。
+
+建议命名：
+
+```text
+optimize/api.py
+surrogate/api.py
+evaluate_manager/api.py
+job_template/api.py
+recorded_data/api.py
+```
+
+说明：
+
+1. 每个模块可以没有统一的主动发起文件。
+2. 但必须有统一的被动接收方，即 `api.py`。
+3. 原始需求按“主动发起方”描述通信，只是为了方便表达；实际代码设计时，被动接收 API 更重要。
+
+## 6. 核心模块通信规格
+
+### 6.1 `optimize` 发起的通信
+
+#### 6.1.1 请求 `evaluate_manager` 处理一代评估
+
+用途：每一代优化时，将一代种群发送给 `evaluate_manager`。
+
+`optimize` 不调用昂贵评估，只向 `evaluate_manager` 发送 float 数组。
+
+请求格式：
+
+```python
+tuple[tuple[float, ...], ...]
+```
+
+含义：
+
+```text
+population[individual][variable]
+```
+
+其中每个 `float` 是一个优化变量值。
+
+返回格式：
+
+```python
+tuple[tuple[float, ...], ...]
+```
+
+含义：
+
+```text
+population[individual][objective_cost]
+```
+
+其中每个 `float` 是一个优化目标的 cost。
+
+说明：
+
+1. cost 不是由 job 或 workflow 直接保存的。
+2. job 完成后，rawData 进入 `recorded_data`。
+3. `recorded_data` 根据需要调用 `job_template/calc_cost.py` 动态计算 cost。
+4. `evaluate_manager` 可以把动态计算得到的 cost 作为内存中的返回值返回给 `optimize`。
+5. 五大核心模块不应以文件形式保存 cost。
+
+调用频率：
+
+1. 每一代优化调用一次。
+
+#### 6.1.2 请求 `recorded_data` 返回历史优化结果
+
+用途：优化初始化时，继承上一次优化的结果，用于生成第一代。
+
+返回格式建议整理为：
+
+```python
+tuple[
+    tuple[
+        str,
+        tuple[float, ...],
+        tuple[float, ...],
+    ],
+    ...
+]
+```
+
+每条记录含义：
+
+```text
+(
+  这个 job 的名字,
+  normalized_variables,
+  costs,
+)
+```
+
+说明：
+
+1. job 的名字由 `evaluate_manager` 在生成 job 时定义。
+2. job 名字根据时间命名。
+3. job 名字会在评估完成或报错之后保存到 `recorded_data` 里。
+4. `normalized_variables` 是由 `recorded_data` 动态计算得到的归一化变量值。
+5. `recorded_data` 会调用 `job_template` 获取当前变量范围。
+6. `optimize` 不直接从 `job_template` 读取变量范围来计算历史样本的归一化值。
+7. `costs` 是由 `recorded_data` 调用 `job_template/calc_cost.py` 根据 rawData 动态计算得到的目标值。
+8. 如果 `recorded_data` 返回空结果，则第一代随机生成。
+9. 该请求在优化初始化时执行一次。
+10. 现在不存在“未刷新的 cost”。每次需要 cost 都根据 rawData 重新计算。
+
+#### 6.1.3 请求 `surrogate` 评估种群
+
+请求格式：
+
+```python
+tuple[tuple[float, ...], ...]
+```
+
+含义：
+
+```text
+population[individual][normalized_variable]
+```
+
+返回格式：
+
+```python
+tuple[
+    tuple[
+        tuple[float, ...],
+        tuple[tuple[float, float], ...],
+    ],
+    ...
+]
+```
+
+每个 individual 的返回含义：
+
+```text
+(
+  costs,
+  tuple[
+    (cost 下限, cost 上限),
+    ...
+  ],
+)
+```
+
+其中：
+
+1. `costs` 是 surrogate 预测 rawData 后，再经 `job_template/calc_cost.py` 计算得到的目标值。
+2. 第二项是每个 cost 对应的估计区间。
+3. 每个区间是 `(cost_lower_bound, cost_upper_bound)`。
+4. surrogate 的工作流仍然是 `优化变量 -> rawData -> cost`。
+
+#### 6.1.4 请求 `surrogate` 评估所有历史真实样本误差
+
+用途：让 surrogate 用当前模型对历史上所有真实评估样本进行预测，并返回误差。
+
+返回格式：
+
+```python
+tuple[tuple[float, ...], ...]
+```
+
+含义：
+
+```text
+all_historical_samples[sample][objective_error]
+```
+
+误差定义：
+
+1. 误差应相对真实值归一化。
+2. 这里必须覆盖所有历史真实评估样本，而不是只抽取一部分样本。
+3. 例如真实值为 `1.0`、surrogate 为 `0.9`，与真实值为 `0.1`、surrogate 为 `0.09`，应得到相同量级的误差。
+4. 误差不要求限制在 `[0, 1]`。
+
+### 6.2 `surrogate` 发起的通信
+
+#### 6.2.1 请求 `recorded_data` 返回真实样本的 normalized variables
+
+用途：获取所有真实评估样本的参数名和归一化变量值。
+
+返回内容：
+
+```text
+parameter names
+normalized variable values
+```
+
+说明：
+
+1. `recorded_data` 内部只保存未归一化变量。
+2. 当 surrogate 请求归一化值时，`recorded_data` 应通过 `job_template/api.py` 获取当前参数范围。
+3. `recorded_data` 根据当前参数范围计算 normalized variables。
+4. `recorded_data` 直接把 normalized variables 回复给 surrogate。
+5. surrogate 不需要自己调用 `job_template` 计算归一化值。
+6. surrogate 不应直接从 `job_template` 读取参数范围来计算历史样本的 normalized variables。
+
+#### 6.2.2 请求 `recorded_data` 返回 rawData
+
+用途：获取所有真实评估样本的 rawData，用于训练 surrogate。
+
+训练目标：
+
+```text
+normalized variables -> rawData -> cost
+```
+
+说明：
+
+1. surrogate 训练时需要 rawData。
+2. rawData 的基本单位是 `.npz` 文件。
+3. 每个 `.npz` 文件应包含自己的 metadata。
+4. cost 不应从 `recorded_data` 文件中读取。
+5. cost 应使用 `job_template/calc_cost.py` 当前逻辑动态计算。
+6. surrogate 训练时应重视相对误差。比如真实值为 `1.0`、surrogate 为 `0.9`，与真实值为 `0.1`、surrogate 为 `0.09`，应得到相同程度的关注。
+
+#### 6.2.3 请求 `job_template` 根据 rawData 计算 cost
+
+请求格式：
+
+```python
+tuple[tuple[rawData, ...], ...]
+```
+
+含义：
+
+```text
+samples[sample][rawData_item]
+```
+
+说明：
+
+1. 每个 `rawData_item` 对应一个 `.npz` 文件或其内存表示。
+2. `.npz` 文件中的数据维度不固定。
+3. 可以是标量、一维数组、二维数组、三维数组，或其他任务定义的数据结构。
+4. 每个 `.npz` 文件还应有自己的 metadata。
+5. 具体结构由当前优化任务决定。
+6. 计算入口是 `job_template/calc_cost.py`。
+
+返回内容：
+
+```text
+cost values
+```
+
+### 6.3 `evaluate_manager` 发起的通信
+
+#### 6.3.1 请求 `job_template` 提供 job 文件
+
+用途：为每个 job 复制运行所需文件。
+
+行为：
+
+1. 从 `job_template` 复制 workflow、参数文件、仿真输入文件、`test_com.py` 或真实评估需要的模型文件。
+2. 写入 `jobs/` 下对应 job 文件夹。
+3. 本轮不复制真实仿真软件 com 文件，例如不复制 `hfss_com.py`。
+4. 本轮使用 `test_com.py` 模拟真实评估。
+5. 不复制 `calc_cost.py` 到 jobs 中。
+
+#### 6.3.2 向 `recorded_data` 写入完成或报错的真实评估数据
+
+用途：将完成或报错的 job 结果转移到 `recorded_data`。
+
+行为：
+
+1. 从完成或报错的 job 文件夹中读取或剪切结果。
+2. 保存 job name。
+3. 保存原始变量值。
+4. 保存 rawData。
+5. 保存每个 rawData `.npz` 文件自己的 metadata。
+6. 保存 job 级别 metadata。
+7. 不保存可导出的 cost。
+8. 不保存 `cost.json`。
+
+#### 6.3.3 请求 `surrogate` 重新训练
+
+用途：每一代真实评估完成后，通知 surrogate 重新训练。
+
+约束：
+
+1. 该请求不传递训练数据。
+2. surrogate 应自行从 `recorded_data` 读取训练所需数据。
+3. surrogate 需要 cost 时，应通过 `job_template/calc_cost.py` 动态计算。
+
+### 6.4 `job_template` 发起的通信
+
+`job_template` 不主动发起核心模块通信。
+
+它主要作为被动服务方，提供：
+
+1. 参数定义。
+2. job 模板文件。
+3. rawData-to-cost 计算函数。
+4. 本轮用于模拟真实评估的 `test_com.py`。
+
+### 6.5 `recorded_data` 发起的通信
+
+#### 6.5.1 请求 `job_template` 返回参数定义
+
+用途：获取变量范围，用于计算归一化变量值。
+
+说明：
+
+1. 这个调用由 `recorded_data` 内部完成。
+2. 外部模块请求 normalized variables 时，`recorded_data` 直接返回计算好的 normalized variables。
+3. 外部模块不需要为了归一化再单独调用 `job_template`。
+4. `optimize` 和 `surrogate` 不应自己从 `job_template` 读取参数范围来计算历史样本 normalized variables。
+
+#### 6.5.2 请求 `job_template` 根据 rawData 计算 cost
+
+用途：当其他模块请求 cost 时，`recorded_data` 将 rawData 发送给 `job_template`，由当前 rawData-to-cost 函数计算 cost。
+
+说明：
+
+1. 当前 rawData-to-cost 函数位于 `job_template/calc_cost.py`。
+2. `recorded_data` 不保存 cost 文件。
+3. 五大核心模块不保存 cost 文件。
+4. 每次需要 cost 都重新根据 rawData 计算。
+
+## 7. 非核心模块通信规则
+
+如果发起方或接收方至少有一方不是五个核心模块之一，则通信规则可以更宽松。
+
+### 7.1 `evaluate_manager` 与 `jobs`
+
+`evaluate_manager` 可以直接向 `jobs/` 写入 job 文件夹和 job 文件。
+
+### 7.2 `evaluate_manager` 与 HTCondor
+
+`evaluate_manager` 可以直接向 HTCondor 提交任务。
+
+### 7.3 HTCondor 与 `jobs`
+
+在 distributed 模式下，运行在 cluster 中的 job 可以在结束后向 `jobs/` 中对应目录写入结果。
+
+### 7.4 `tools`
+
+`tools/` 中的脚本可以任意访问和修改项目文件。
+
+修改其他模块时，不需要考虑对 `tools/` 中脚本的兼容。
+
+### 7.5 `config.py`
+
+`config.py` 可以被所有模块直接访问。
+
+### 7.6 `test`
+
+`test/` 中的测试代码可以灵活访问项目代码。
+
+## 8. 数据保存原则
+
+### 8.1 `recorded_data` 只保存原始真实评估数据
+
+`recorded_data` 应保存：
+
+1. job name。
+2. 未归一化的优化变量值。
+3. 仿真软件或 workflow 输出的 rawData。
+4. 每个 rawData `.npz` 文件自己的 metadata。
+5. job 级别 metadata。
+
+`recorded_data` 不应保存：
+
+1. 归一化变量值。
+2. cost。
+3. `cost.json`。
+4. surrogate 评估结果。
+5. 其他可从原始数据推导出的值。
+
+五大核心模块中也不应以文件形式保存 cost。
+
+### 8.2 cost 动态计算
+
+当其他模块需要 cost 时：
+
+```text
+recorded_data/rawData
+  -> job_template/calc_cost.py
+  -> cost
+```
+
+这样做的原因：
+
+1. 昂贵评估不计算 cost。
+2. cost 的计算统一放在 rawData 进入 `recorded_data` 之后。
+3. 用户可能修改 cost 计算方式。
+4. 用户可能修改优化目标数量。
+5. 历史 rawData 可以在新 cost 定义下重新使用。
+6. 避免在多个模块中保存互相不一致的 cost。
+
+### 8.3 归一化变量动态计算
+
+当其他模块需要归一化变量时：
+
+```text
+recorded_data/raw_variables
+  -> job_template/parameters_constraints.py
+  -> normalized_variables
+```
+
+这样做的原因：
+
+1. 用户可能修改变量范围。
+2. 历史未归一化变量更接近真实记录。
+3. 归一化值是派生数据，不应长期保存。
+4. `recorded_data` 应直接向请求方返回 normalized variables，请求方不需要自己计算。
+5. `optimize` 和 `surrogate` 不应直接从 `job_template` 读取参数范围来计算历史样本 normalized variables。
+
+## 9. surrogate 设计原则
+
+surrogate 的核心流程必须是：
+
+```text
+优化变量 -> rawData -> cost
+```
+
+而不是：
+
+```text
+优化变量 -> cost
+```
+
+原因：
+
+1. 昂贵评估本身不计算 cost，cost 统一由 `job_template/calc_cost.py` 根据 rawData 计算。
+2. 当 cost 定义变化时，可以复用 surrogate 生成或预测的 rawData。
+3. 更适合复杂评估流程。
+4. 保留更多物理或仿真中间信息。
+
+surrogate 还应满足：
+
+1. 每一代保存一个 checkpoint。
+2. 不保存 surrogate 的评估结果。
+3. 训练数据从 `recorded_data` 读取。
+4. normalized variables 由 `recorded_data` 直接提供。
+5. cost 通过 `job_template/calc_cost.py` 动态计算。
+6. surrogate 训练时应更关心数值较小的 cost 的相对精度。比如真实值为 `1.0`、surrogate 为 `0.9`，与真实值为 `0.1`、surrogate 为 `0.09`，应得到相同的关心。
+
+## 10. evaluate_manager 设计原则
+
+### 10.1 jobs 路径可配置
+
+`jobs/` 路径应可配置。
+
+默认：
+
+```text
+project/jobs/
+```
+
+用户可配置为其他路径，例如内存盘，以减少磁盘读写。
+
+### 10.2 local 模式
+
+local 模式下：
+
+1. 不使用 HTCondor。
+2. 不要求安装 HTCondor。
+3. 直接在本地运行评估任务。
+4. 应作为基本测试和调试的默认可用模式。
+5. 需要处理 job 完成、失败、超时、卡死等情况。
+
+### 10.3 distributed 模式
+
+distributed 模式下：
+
+1. 使用 HTCondor 提交任务。
+2. 应复用旧项目中已经调试通过的 HTCondor 经验。
+3. 需要处理 job 完成、失败、超时、卡死等情况。
+
+### 10.4 local 与 distributed 的共享逻辑
+
+local 和 distributed 模式应尽量共用同一套 job 状态处理函数。
+
+不应把以下类似逻辑分别写两份：
+
+1. job 完成检测。
+2. job 失败检测。
+3. job 超时处理。
+4. job 卡死处理。
+5. job 结果收集。
+6. job metadata 生成。
+7. 写入 `recorded_data` 的流程。
+
+## 11. job_template 设计原则
+
+### 11.1 强任务相关文件
+
+以下文件对于不同优化任务可能完全不同：
+
+1. `parameters_constraints.py`
+2. `workflow.py`
+3. `calc_cost.py`
+4. `test_com.py`
+5. 真实仿真模型文件，例如 `xxxx.aedt`
+
+原则上，每次新优化任务开始前，用户都可以重新编写这些文件。
+
+实际使用中：
+
+1. `parameters_constraints.py` 可以由 `tools/` 中脚本辅助生成。
+2. `workflow.py` 可以由用户用自然语言描述后让 AI 生成。
+3. `calc_cost.py` 也可以由用户用自然语言描述后让 AI 生成。
+4. 本轮先写 `test_com.py`，不接入真实仿真软件的 com 文件。
+5. 后续可以架构上支持 `hfss_com.py`、`maxwell_com.py` 等真实仿真软件适配文件，但本轮不需要写这些文件。
+
+### 11.2 workflow 与 cost 拆分
+
+原有 workflow 中 rawData-to-cost 的逻辑应拆出到单独文件 `calc_cost.py`。
+
+原因：
+
+1. workflow 只负责 `优化变量 -> rawData`。
+2. workflow 不负责计算 cost。
+3. reference 里的 workflow 会保存 `cost.json`，但是新的合并后的项目里不保存。
+4. job 不生成 `cost.json`。
+5. `calc_cost.py` 不复制到 jobs 中。
+6. 所有 cost 计算都在结果进入 `recorded_data` 后，由 `recorded_data` 调用 `job_template/calc_cost.py` 执行。
+7. surrogate 调用次数会很多。
+8. 不应为每次 surrogate 调用都创建 job 文件夹。
+9. 应支持在内存中直接将 rawData 转换成 cost。
+10. 减少硬盘读写。
+
+### 11.3 rawData 保存方式
+
+workflow 可以输出多个 `.npz` 文件。
+
+约束：
+
+1. `.npz` 文件保存在 `rawData/` 文件夹下。
+2. `rawData/` 中不能再有子文件夹。
+3. 每个 `.npz` 文件都是一个 rawData 单元。
+4. 每个 `.npz` 文件都应包含自己的 metadata。
+5. metadata 可以包括数据形状、每个维度对应的名字、单位、数据来源、生成时间等信息。
+6. rawData 是 workflow 的输出。
+7. cost 不是 workflow 的输出。
+8. workflow 不保存 `cost.json`。
+
+## 12. 错误与恢复要求
+
+### 12.1 支持评估失败
+
+评估可能失败，原因包括：
+
+1. 仿真软件报错。
+2. 仿真软件卡死。
+3. job 执行异常。
+4. 文件缺失或结果不完整。
+
+要求：
+
+1. 单个 individual 失败不应导致整个优化崩溃。
+2. 优化流程应能继续。
+3. 失败信息应记录在 metadata 中。
+4. optimizer 应能识别失败样本并采取合理处理方式。
+5. local 和 distributed 模式都要处理失败、超时和卡死。
+
+### 12.2 支持从历史结果继续优化
+
+优化停止后，应能从过去结果继续。
+
+可能的停止原因：
+
+1. 程序崩溃。
+2. 用户手动关闭。
+3. 停电。
+4. 用户主动中断后修改配置。
+5. 分布式任务失败或不完整。
+
+恢复不要求完美。
+
+允许：
+
+1. 丢失未完成的最后一代。
+2. 只继承已经完整写入 `recorded_data` 的样本。
+3. 在变量数量或目标数量变化后，以部分兼容方式继承旧结果。
+
+额外假设：
+
+1. 这个项目假设新运行的仿真和历史结果之间的差别不会太大。
+2. 也就是说，历史结果不会出现完全没有参考价值的情况。
+3. 确保差别不会太大是用户的职责。
+4. 如果某个修改带来的差别真的特别大，那么用户应该自己手动删除历史结果。
+
+### 12.3 支持优化中途修改
+
+用户可能在优化中途修改：
+
+1. 优化变量范围。
+2. 优化变量数量。
+3. 优化目标数量。
+4. 仿真文件，例如 `.aedt`。
+5. rawData-to-cost 计算方式。
+6. workflow。
+
+设计上应尽量允许这些修改后仍能复用历史 rawData。
+
+## 13. 仿真软件与评估流程扩展性
+
+项目不应绑定到某一个仿真软件。
+
+当前旧项目主要使用 Ansys HFSS，但新项目应在架构上支持：
+
+1. HFSS。
+2. Maxwell。
+3. TwinBuilder。
+4. 其他 Ansys 工具。
+5. 用户自定义仿真程序。
+6. 纯 Python 的 `variables -> rawData` 函数。
+7. 多软件组合工作流。
+8. 单次评估内部包含子优化的复杂工作流。
+
+说明：
+
+1. 新项目只是架构上支持这些可能性。
+2. 本轮不需要写所有这些东西的 `_com.py` 文件。
+3. 本轮不写真实仿真软件的 com，例如不写 `hfss_com.py`。
+4. 本轮先写 `test_com.py`。
+5. 后续应尽量通过替换或添加 `_com.py` 文件、workflow 文件或任务模板文件来扩展，而不是修改核心优化框架。
+
+## 14. 简洁性与代码风格要求
+
+合并后的代码应尽量简洁。
+
+原则：
+
+1. 不为未来可能性过度抽象。
+2. 优先保留清晰的模块边界。
+3. 避免第三个项目中不必要的代码膨胀。
+4. 代码不需要极致运行速度，因为主要耗时来自昂贵评估。
+5. 对昂贵评估以外的部分，优先考虑可维护性、可调试性、可恢复性。
+
+## 15. 旧项目细节保留原则
+
+应尽量保留旧项目中的重要细节，尤其是各旧项目 `prompt/` 文件夹中的 `Non-Obvious Techniques`。
+
+保留原则：
+
+1. 如果旧项目技巧与新项目需求不冲突，应尽量保留。
+2. 如果旧项目技巧与新模块化结构冲突，应以新项目结构为准。
+3. 如果旧项目中已有稳定可用实现，可以复制到新项目中再重构。
+4. 可以从 `reference/` 复制文件，以减少新生成代码量。
+
+## 16. 项目最核心特征
+
+这个项目最核心的几个特征如下，这些特征必须设法保留，不能为了比如代码实现方便而牺牲这些特征。
+
+1. 能使用不同的仿真软件。当前的 reference 里的老项目使用的是 ansys hfss，应当能通过更换或添加 `_com` 文件，来使用其他的仿真软件，比如 maxwell，twinbuilder 等，或者使用自行编写的 优化变量-rawdata 代码。
+
+2. 带有 surrogate 模型，surrogate 的工作流程是 优化变量 -> rawData -> cost，而不是 优化变量 -> cost。其中 rawData -> cost 的步骤使用和昂贵评估的一样的函数进行评估。
+
+3. 可以使用复杂的评估流程。比如可以用同一个软件多次仿真，使用多个仿真软件搭建某种工作流。甚至每次评估本身可以是一个简单的优化。
+
+4. 可以在过去的结果的基础上继续优化，不需要每次都是全新的优化。假如遇到优化崩溃，不小心被用户关闭，停电等情况，应当能以某种形式继承过去的结果。继承不需要完美，可以丢失一些成果，比如丢失未完成的最后一代。
+
+5. 允许评估报错。评估可能因为各种原因而无法完成，最常见的比如仿真软件报错，或者卡死。此时优化应该能继续进行。
+
+6. 允许在优化中途修改。比如修改优化变量取值范围，修改仿真文件，比如 `.aedt` 文件，修改 rawData-cost 的求法。
+```
