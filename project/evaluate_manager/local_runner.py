@@ -91,14 +91,32 @@ def _result(job: JobSpec, metadata: dict, raw_data_paths=()) -> JobResult:
 
 
 def _base_metadata(job: JobSpec) -> dict:
-    return {
-        "job_name": job.name,
-        "status": "created",
-        "engine": "local",
-        "unnormalized_variables": list(job.unnormalized_variables),
-        "timed_out": False,
-        "created_at": _now_text(),
-    }
+    metadata = _read_existing_metadata(job.directory)
+    metadata.update(
+        {
+            "job_name": job.name,
+            "status": "created",
+            "engine": "local",
+            "unnormalized_variables": list(job.unnormalized_variables),
+            "timed_out": False,
+            "created_at": metadata.get("created_at") or _now_text(),
+        }
+    )
+    return metadata
+
+
+def _read_existing_metadata(job_dir: Path) -> dict:
+    for name in ("metadata.json", "metaData.json"):
+        path = job_dir / name
+        if not path.is_file():
+            continue
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(loaded, dict):
+            return dict(loaded)
+    return {}
 
 
 def _raw_data_paths(job_dir: Path) -> tuple[Path, ...]:

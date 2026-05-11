@@ -16,9 +16,11 @@ import numpy as np
 try:
     from . import test_com
     from .parameters_constraints import get_parameters
+    from .rawdata_contract import validate_rawdata_directory, with_schema_version
 except ImportError:  # Allows copied job folders to run workflow.py directly.
     import test_com
     from parameters_constraints import get_parameters
+    from rawdata_contract import validate_rawdata_directory, with_schema_version
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -54,7 +56,7 @@ def run_workflow(
     saved_paths: list[Path] = []
 
     for name, block in test_com.evaluate_raw_data(variable_map).items():
-        metadata = dict(block["metadata"])  # type: ignore[arg-type]
+        metadata = with_schema_version(dict(block["metadata"]))  # type: ignore[arg-type]
         metadata.update(
             {
                 "rawdata_name": name,
@@ -68,7 +70,7 @@ def run_workflow(
         np.savez_compressed(path, **arrays, metadata=_metadata_json(metadata))
         saved_paths.append(path)
 
-    return tuple(saved_paths)
+    return validate_rawdata_directory(rawdata_dir)
 
 
 def main() -> None:

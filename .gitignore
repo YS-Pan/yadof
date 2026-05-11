@@ -1,5 +1,15 @@
 # Project-generated data
 /project/jobs/
-/project/recorded_data/
+/project/recorded_data/manifest.json
+/project/recorded_data/manifest.json.lock
+/project/recorded_data/manifest.json.*.tmp
+/project/recorded_data/rawData/**
+!/project/recorded_data/rawData/.gitkeep
+/project/recorded_data/**/__pycache__/
+/project/recorded_data/**/*.py[cod]
+/project/optimize/checkpoints/
 /project/surrogate/checkpoints/
+/project/tools/cost_*.png
+/project/test/_pytest_tmp*/
 /reference/
+/obsolete/

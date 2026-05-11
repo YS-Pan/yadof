@@ -6,13 +6,14 @@ import shutil
 from pathlib import Path
 from typing import Sequence
 
-from .calc_cost import RawDataItem, calculate_costs
+from .calc_cost import RawDataItem, calculate_costs, get_objective_count as _get_objective_count
+from .calc_cost import get_objective_names as _get_objective_names
 from .parameters_constraints import get_parameters
 from .parameters_constraints_class import denormalize_values, normalize_values
 
 
 TEMPLATE_DIR = Path(__file__).resolve().parent
-EXCLUDED_FROM_JOB_COPY = {"api.py", "calc_cost.py", "__init__.py"}
+EXCLUDED_FROM_JOB_COPY = {"api.py", "calc_cost.py", "hfss_com.py", "__init__.py"}
 
 
 def get_parameter_definitions():
@@ -27,6 +28,18 @@ def get_parameter_names() -> tuple[str, ...]:
     return tuple(parameter.name for parameter in get_parameters())
 
 
+def get_variable_count() -> int:
+    return len(get_parameters())
+
+
+def get_objective_names() -> tuple[str, ...]:
+    return _get_objective_names()
+
+
+def get_objective_count() -> int:
+    return _get_objective_count()
+
+
 def normalize_variables(raw_variables: Sequence[float]) -> tuple[float, ...]:
     return normalize_values(get_parameters(), raw_variables)
 
@@ -36,7 +49,7 @@ def denormalize_variables(normalized_variables: Sequence[float]) -> tuple[float,
 
 
 def copy_job_files(job_dir: str | Path) -> Path:
-    """Copy runnable job files into ``job_dir`` without copying calc_cost.py."""
+    """Copy default runnable job files into ``job_dir``."""
 
     destination = Path(job_dir)
     destination.mkdir(parents=True, exist_ok=True)

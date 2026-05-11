@@ -34,9 +34,10 @@ def test_optimize_uses_history_then_calls_evaluate_manager(monkeypatch):
 
     from project.optimize.api import run_one_generation
 
-    result = run_one_generation(population_size=2, random_seed=7)
+    result = run_one_generation(population_size=2, variable_count=2, random_seed=7)
 
-    assert result.source == "recorded_data"
+    assert result.source == "gpsaf_warm_start"
+    assert result.surrogate_used is False
     assert result.history_count == 2
     assert seen["population"][0] == (0.2, 0.3)
     assert result.costs == ((0.5,), (1.8,))
@@ -57,10 +58,44 @@ def test_optimize_random_generation_when_history_empty(monkeypatch):
 
     result = run_one_generation(population_size=3, variable_count=2, random_seed=3)
 
-    assert result.source == "random"
+    assert result.source == "gpsaf_random"
+    assert result.surrogate_used is False
     assert len(result.population) == 3
     assert all(len(individual) == 2 for individual in result.population)
     assert result.costs == ((1.0,), (1.0,), (1.0,))
+
+
+def test_default_optimize_does_not_call_surrogate(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
+    evaluate_api = _module(monkeypatch, "project.evaluate_manager.api")
+    surrogate_pkg = _module(monkeypatch, "project.surrogate")
+    surrogate_api = _module(monkeypatch, "project.surrogate.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(evaluate_pkg, "api", evaluate_api, raising=False)
+    monkeypatch.setattr(surrogate_pkg, "api", surrogate_api, raising=False)
+
+    recorded_api.get_optimization_history = lambda: (
+        ("job_a", (0.1, 0.2), (0.5,)),
+        ("job_b", (0.7, 0.8), (1.5,)),
+    )
+    evaluate_api.evaluate_generation = lambda population: tuple((sum(row),) for row in population)
+
+    def fail_train(*_args, **_kwargs):
+        raise AssertionError("surrogate should be disabled by default")
+
+    surrogate_api.train = fail_train
+
+    from project import config
+    from project.optimize.api import run_one_generation
+
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 0)
+    result = run_one_generation(population_size=2, random_seed=5)
+
+    assert result.surrogate_used is False
+    assert result.source == "gpsaf_warm_start"
 
 
 def test_surrogate_raw_data_to_cost_shape_and_checkpoint(monkeypatch):

@@ -1,3 +1,17 @@
 [tool.pytest.ini_options]
 addopts = "-p no:cacheprovider --basetemp=project/test/_pytest_tmp --ignore=project/test/_tmp_runtime --ignore=project/test/_contract_tmp --ignore=project/test/_pytest_tmp"
+norecursedirs = [
+    ".*",
+    "build",
+    "dist",
+    "CVS",
+    "_darcs",
+    "{arch}",
+    "*.egg",
+    "venv",
+    "_pytest_tmp*",
+    "_tmp_runtime",
+    "_contract_tmp",
+]
+pythonpath = ["."]
 testpaths = ["project/test"]

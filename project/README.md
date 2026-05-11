@@ -37,8 +37,3 @@ print(state.checkpoint_path)
 '@ | python -
 ```
 
-The workflow must not create `cost.json`. A quick check is:
-
-```powershell
-Get-ChildItem -Path project -Recurse -Filter cost.json -Force
-```

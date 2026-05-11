@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 import json
 import re
 import shutil
@@ -22,6 +23,22 @@ EXCLUDED_TEMPLATE_NAMES = {
     "metaData.json",
 }
 EXCLUDED_TEMPLATE_DIRS = {"__pycache__", RAW_DATA_DIR_NAME}
+HASH_EXCLUDED_NAMES = {
+    "cost.json",
+    "job_input.json",
+    "metadata.json",
+    "metadata.json.tmp",
+    "metaData.json",
+}
+HASH_EXCLUDED_DIRS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".tmp",
+    "_tmp",
+    "rawdata",
+    "temp",
+    "tmp",
+}
 _JOB_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -49,6 +66,7 @@ def prepare_job(
 
     _copy_template(template_dir, job_dir)
     (job_dir / RAW_DATA_DIR_NAME).mkdir(exist_ok=True)
+    job_static_hash = prepared_job_static_hash(job_dir)
 
     normalized_values = tuple(float(x) for x in variables)
     values = _denormalize_variables(normalized_values)
@@ -60,16 +78,38 @@ def prepare_job(
             "unnormalized_variables": list(values),
         },
     )
-    _write_json(
-        job_dir / "metadata.json",
-        {
-            "job_name": name,
-            "status": "created",
-            "normalized_variables": list(normalized_values),
-            "unnormalized_variables": list(values),
-        },
-    )
+    metadata = {
+        "job_name": name,
+        "status": "created",
+        "job_static_hash": job_static_hash,
+        "normalized_variables": list(normalized_values),
+        "unnormalized_variables": list(values),
+    }
+    _write_json(job_dir / "metadata.json", metadata)
+    _write_json(job_dir / "metaData.json", metadata)
     return JobSpec(name=name, directory=job_dir, unnormalized_variables=values)
+
+
+def prepared_job_static_hash(job_dir: str | Path) -> str:
+    """Return a stable hash for static files copied into a prepared job."""
+
+    root = Path(job_dir)
+    digest = hashlib.sha256()
+    files = sorted(
+        (path for path in root.rglob("*") if path.is_file()),
+        key=lambda path: path.relative_to(root).as_posix().lower(),
+    )
+    for path in files:
+        rel_path = path.relative_to(root)
+        if _is_hash_excluded(rel_path):
+            continue
+        data_hash = hashlib.sha256(path.read_bytes()).digest()
+        digest.update(b"FILE\n")
+        digest.update(rel_path.as_posix().encode("utf-8"))
+        digest.update(b"\n")
+        digest.update(data_hash)
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _copy_template(template_dir: Path, job_dir: Path) -> None:
@@ -93,6 +133,14 @@ def _ignore_template_items(_dir: str, names: list[str]) -> set[str]:
 
 def _is_excluded(path: Path) -> bool:
     return path.name in EXCLUDED_TEMPLATE_NAMES or (path.is_dir() and path.name in EXCLUDED_TEMPLATE_DIRS)
+
+
+def _is_hash_excluded(rel_path: Path) -> bool:
+    parts = tuple(part.lower() for part in rel_path.parts)
+    if any(part in HASH_EXCLUDED_DIRS for part in parts[:-1]):
+        return True
+    excluded_names = {name.lower() for name in HASH_EXCLUDED_NAMES}
+    return parts[-1] in excluded_names
 
 
 def _unique_job_name(jobs_dir: Path, requested: str) -> str:

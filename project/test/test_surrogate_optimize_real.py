@@ -57,7 +57,7 @@ def test_surrogate_interpolates_rawdata_away_from_training_samples(monkeypatch):
     assert prediction[1][0][0] < prediction[0][0] < prediction[1][0][1]
 
 
-def test_optimize_uses_gpsaf_surrogate_when_training_data_available(monkeypatch):
+def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
     recorded_pkg = _module(monkeypatch, "project.recorded_data")
     recorded_api = _module(monkeypatch, "project.recorded_data.api")
     evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
@@ -103,9 +103,9 @@ def test_optimize_uses_gpsaf_surrogate_when_training_data_available(monkeypatch)
     if checkpoint_dir.is_dir():
         shutil.rmtree(checkpoint_dir)
     monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
-    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ENABLED", True)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 1)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_GAMMA", 0.5)
     runtime._STATE = None
 
     from project.optimize.api import run_one_generation
@@ -119,4 +119,90 @@ def test_optimize_uses_gpsaf_surrogate_when_training_data_available(monkeypatch)
     assert result.population != ((0.35, 0.30), (0.70, 0.65))
     assert result.diagnostics["alpha_batches"] == 2
     assert result.diagnostics["beta_iterations"] == 1
+    assert result.diagnostics["beta_cluster_size_max"] >= 1
+    assert len(result.diagnostics["beta_cluster_sizes"]) == 2
     assert checkpoint_dir.joinpath("generation_0003.json").is_file()
+
+
+def test_gpsaf_parameters_call_surrogate(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
+    evaluate_api = _module(monkeypatch, "project.evaluate_manager.api")
+    surrogate_pkg = _module(monkeypatch, "project.surrogate")
+    surrogate_api = _module(monkeypatch, "project.surrogate.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(evaluate_pkg, "api", evaluate_api, raising=False)
+    monkeypatch.setattr(surrogate_pkg, "api", surrogate_api, raising=False)
+
+    history = (
+        ("job_a", (0.10, 0.10), (1.0,)),
+        ("job_b", (0.35, 0.30), (0.2,)),
+        ("job_c", (0.70, 0.65), (0.8,)),
+    )
+    calls = {"train": 0}
+    recorded_api.get_optimization_history = lambda: history
+    evaluate_api.evaluate_generation = lambda population: tuple((sum(individual),) for individual in population)
+    surrogate_api.predict_population = lambda population: tuple(
+        ((sum(individual),), ((sum(individual) - 0.1, sum(individual) + 0.1),))
+        for individual in population
+    )
+    surrogate_api.evaluate_historical_errors = lambda: ((0.05,),)
+
+    def train(**_kwargs):
+        calls["train"] += 1
+        return object()
+
+    surrogate_api.train = train
+
+    from project import config
+    from project.optimize.api import run_one_generation
+
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 1)
+    result = run_one_generation(generation_index=2, population_size=2, random_seed=11)
+
+    assert calls["train"] >= 1
+    assert result.source == "gpsaf_surrogate"
+    assert result.surrogate_used is True
+    assert result.diagnostics["alpha_batches"] == 2
+    assert result.diagnostics["beta_iterations"] == 1
+
+
+def test_gpsaf_falls_back_when_surrogate_is_unavailable(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    evaluate_pkg = _module(monkeypatch, "project.evaluate_manager")
+    evaluate_api = _module(monkeypatch, "project.evaluate_manager.api")
+    surrogate_pkg = _module(monkeypatch, "project.surrogate")
+    surrogate_api = _module(monkeypatch, "project.surrogate.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(evaluate_pkg, "api", evaluate_api, raising=False)
+    monkeypatch.setattr(surrogate_pkg, "api", surrogate_api, raising=False)
+
+    recorded_api.get_optimization_history = lambda: (
+        ("job_bad", (0.9, 0.9), (10.0,)),
+        ("job_good", (0.2, 0.3), (1.0,)),
+    )
+    surrogate_api.train = lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("model offline"))
+    evaluate_api.evaluate_generation = lambda population: tuple((sum(individual),) for individual in population)
+
+    from project import config
+    from project.optimize.api import run_one_generation
+
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 0)
+    result = run_one_generation(population_size=2, random_seed=7)
+
+    assert result.source == "gpsaf_warm_start"
+    assert result.surrogate_used is False
+    assert result.population[0] == (0.2, 0.3)
+    assert "RuntimeError: model offline" in result.diagnostics["surrogate_error"]
+
+
+def test_gpsaf_entrypoint_stays_small():
+    from project.optimize import gpsaf
+
+    path = Path(gpsaf.__file__)
+    assert len(path.read_text(encoding="utf-8").splitlines()) < 160
+    assert path.stat().st_size < 7000
