@@ -19,7 +19,8 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
     costs = evaluate_population(population, jobs_dir=jobs_dir, timeout_sec=30)
 
     assert len(costs) == 1
-    assert costs[0][0] > 0.0
+    assert len(costs[0]) == 3
+    assert all(0.0 <= value <= 1.0 for value in costs[0])
 
     job_dirs = [path for path in jobs_dir.iterdir() if path.is_dir()]
     assert len(job_dirs) == 1

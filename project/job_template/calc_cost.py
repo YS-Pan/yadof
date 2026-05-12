@@ -10,7 +10,15 @@ import numpy as np
 from .rawdata_contract import load_rawdata_item, metadata_from_item, validate_rawdata_item
 
 RawDataItem = Mapping[str, object] | str | Path
-OBJECTIVE_NAMES = ("default_cost",)
+OBJECTIVE_NAMES = (
+    "target_match_cost",
+    "curve_magnitude_cost",
+    "surface_reward_cost",
+)
+ERROR_COSTS = (1.0, 1.0, 1.0)
+CURVE_AXIS_RANGE = (0.45, 0.55)
+SURFACE_AXIS_0_RANGE = (-0.2, 0.2)
+SURFACE_AXIS_1_RANGE = (-0.2, 0.2)
 
 
 def get_objective_names() -> tuple[str, ...]:
@@ -19,6 +27,48 @@ def get_objective_names() -> tuple[str, ...]:
 
 def get_objective_count() -> int:
     return len(OBJECTIVE_NAMES)
+
+
+def _soft_cost(result: float, goal: float, worst: float) -> float:
+    """Map a scalar metric to a bounded minimization cost.
+
+    This mirrors the old workflow's tanh-based cost shaping: values near the
+    goal become close to 0, values near the worst threshold become close to 1.
+    """
+
+    r, goal, worst = float(result), float(goal), float(worst)
+    if not (np.isfinite(r) and np.isfinite(goal) and np.isfinite(worst)) or goal == worst:
+        return 1.0
+    value = (np.tanh(4.0 * (r - worst) / (worst - goal) + 2.0) + 1.0) / 2.0
+    return float(np.clip(value, 0.0, 1.0))
+
+
+def _finite_values(values: object) -> np.ndarray:
+    array = np.asarray(values, dtype=float).ravel()
+    return array[np.isfinite(array)]
+
+
+def _axis_window(values: np.ndarray, axis_values: object, axis: int, low: float, high: float) -> np.ndarray:
+    coords = np.asarray(axis_values, dtype=float).ravel()
+    if values.ndim <= axis or coords.size != values.shape[axis]:
+        return values
+    lo, hi = sorted((float(low), float(high)))
+    mask = (coords >= lo) & (coords <= hi)
+    if not np.any(mask):
+        return np.asarray((), dtype=float)
+    return np.take(values, np.flatnonzero(mask), axis=axis)
+
+
+def _curve_observation_values(item: Mapping[str, object]) -> np.ndarray:
+    values = np.asarray(item.get("values", ()), dtype=float)
+    return _axis_window(values, item.get("axis_0", ()), 0, *CURVE_AXIS_RANGE).ravel()
+
+
+def _surface_observation_values(item: Mapping[str, object]) -> np.ndarray:
+    values = np.asarray(item.get("values", ()), dtype=float)
+    window = _axis_window(values, item.get("axis_0", ()), 0, *SURFACE_AXIS_0_RANGE)
+    window = _axis_window(window, item.get("axis_1", ()), 1, *SURFACE_AXIS_1_RANGE)
+    return window.ravel()
 
 
 def calculate_cost(sample_rawdata: Sequence[RawDataItem]) -> tuple[float, ...]:
@@ -31,17 +81,27 @@ def calculate_cost(sample_rawdata: Sequence[RawDataItem]) -> tuple[float, ...]:
         by_name[name] = loaded
 
     summary_values = np.asarray(by_name.get("summary", {}).get("values", ()), dtype=float).ravel()
-    curve_values = np.asarray(by_name.get("curve", {}).get("values", ()), dtype=float).ravel()
-    surface_values = np.asarray(by_name.get("surface", {}).get("values", ()), dtype=float).ravel()
+    curve_values = _curve_observation_values(by_name.get("curve", {}))
+    surface_values = _surface_observation_values(by_name.get("surface", {}))
 
     if summary_values.size < 3 or curve_values.size == 0 or surface_values.size == 0:
-        return (float("inf"),)
+        return ERROR_COSTS
 
     x0, x1, x2 = summary_values[:3]
     target_penalty = (x0 - 0.35) ** 2 + (x1 + 0.45) ** 2 + 0.2 * (x2 - 0.65) ** 2
-    curve_penalty = float(np.mean(np.abs(curve_values)))
-    surface_reward = float(np.mean(surface_values))
-    return (float(target_penalty + 0.05 * curve_penalty + 0.1 * (1.0 - surface_reward)),)
+    curve_finite = _finite_values(curve_values)
+    surface_finite = _finite_values(surface_values)
+    if curve_finite.size == 0 or surface_finite.size == 0:
+        return ERROR_COSTS
+    curve_penalty = float(np.mean(np.abs(curve_finite)))
+    surface_reward = float(np.mean(surface_finite))
+    if not (np.isfinite(target_penalty) and np.isfinite(curve_penalty) and np.isfinite(surface_reward)):
+        return ERROR_COSTS
+    return (
+        _soft_cost(target_penalty, goal=0.0, worst=2.0),
+        _soft_cost(curve_penalty, goal=-0.5, worst=1.5),
+        _soft_cost(surface_reward, goal=1.5, worst=0.0),
+    )
 
 
 def calculate_costs(samples: Sequence[Sequence[RawDataItem]]) -> tuple[tuple[float, ...], ...]:

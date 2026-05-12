@@ -125,7 +125,9 @@ def test_completed_record_enters_history_and_manifest_has_metadata(tmp_path):
     job_name, normalized_variables, costs = history[0]
     assert job_name == "job_completed"
     assert normalized_variables == pytest.approx(_normalized_variables())
-    assert costs[0] < 0.1
+    assert len(costs) == 3
+    assert all(0.0 <= value <= 1.0 for value in costs)
+    assert all(value < 0.1 for value in costs)
     assert recorded_api.get_rawdata_diagnostics() == ()
 
 
@@ -184,7 +186,8 @@ def test_incompatible_completed_rawdata_is_skipped_in_optimization_history(tmp_p
 
     assert tuple(row[0] for row in costs) == ("job_good",)
     assert tuple(row[0] for row in history) == ("job_good",)
-    assert history[0][2][0] < 0.1
+    assert len(history[0][2]) == 3
+    assert all(value < 0.1 for value in history[0][2])
     assert tuple(row["job_name"] for row in diagnostics) == ("job_bad",)
     assert diagnostics[0]["filename"] == "summary.npz"
     assert diagnostics[0]["status"] == "skipped"
