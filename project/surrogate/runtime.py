@@ -1,20 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import importlib
 import json
 import math
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import numpy as np
+import torch
 
 from project import config
+
+from .modeling import (
+    INRTrainConfig,
+    fit_deep_ensemble_conditional_inr,
+    predict_conditional_inr_members,
+)
 
 
 Population = tuple[tuple[float, ...], ...]
 RawDataItem = Mapping[str, object] | str | Path
 RawSample = tuple[RawDataItem, ...]
+MODEL_NAME = "conditional_inr_rawdata_deep_ensemble"
 
 
 @dataclass(frozen=True)
@@ -32,6 +40,7 @@ class RawArraySlot:
     dtype: str
     start: int
     end: int
+    field_id: int
 
 
 @dataclass(frozen=True)
@@ -39,29 +48,27 @@ class RawDataSchema:
     templates: tuple[dict[str, object], ...]
     modeled_slots: tuple[RawArraySlot, ...]
     flat_dim: int
+    coord_table: np.ndarray
+    field_ids: np.ndarray
+
+    @property
+    def n_fields(self) -> int:
+        return int(max((slot.field_id for slot in self.modeled_slots), default=-1) + 1)
 
 
 @dataclass(frozen=True)
-class RbfMember:
-    length_scale: float
-    centers: np.ndarray
-    weights: np.ndarray
+class TargetScaler:
+    mean: np.ndarray
+    scale: np.ndarray
 
+    def transform(self, values: np.ndarray) -> np.ndarray:
+        return np.ascontiguousarray((values - self.mean) / self.scale, dtype=np.float32)
 
-@dataclass(frozen=True)
-class IdwMember:
-    power: float
-    centers: np.ndarray
-    values: np.ndarray
+    def inverse(self, values: np.ndarray) -> np.ndarray:
+        return np.ascontiguousarray(values * self.scale + self.mean, dtype=np.float64)
 
-
-ModelMember = RbfMember | IdwMember
-
-
-@dataclass(frozen=True)
-class SurrogateModel:
-    input_dim: int
-    members: tuple[ModelMember, ...]
+    def inverse_members(self, values: np.ndarray) -> np.ndarray:
+        return np.ascontiguousarray(values * self.scale[None, None, :] + self.mean[None, None, :], dtype=np.float64)
 
 
 @dataclass(frozen=True)
@@ -70,11 +77,18 @@ class SurrogateState:
     sample_count: int
     checkpoint_path: Path
     model_path: Path
+    artifact_dir: Path
+    model_name: str
     parameter_names: tuple[str, ...]
     normalized_variables: Population
     raw_data: tuple[RawSample, ...]
     schema: RawDataSchema | None
-    model: SurrogateModel | None
+    scaler: TargetScaler | None
+    model: object | None
+    train_cfg: INRTrainConfig | None
+    device: torch.device | None
+    train_history: dict[str, object]
+    training_flat_values: np.ndarray
     mean_relative_error: float
     historical_true_costs: tuple[tuple[float, ...], ...]
     historical_predicted_costs: tuple[tuple[float, ...], ...]
@@ -206,16 +220,99 @@ def _normalize_samples(raw_samples: tuple[RawSample, ...]) -> tuple[tuple[dict[s
     return tuple(tuple(_load_rawdata_item(item) for item in sample) for sample in raw_samples)
 
 
-def _flatten_raw_samples(
-    raw_samples: tuple[RawSample, ...],
-) -> tuple[RawDataSchema | None, np.ndarray]:
+def _metadata_dict(value: object) -> dict[str, object]:
+    raw = value
+    if isinstance(raw, np.ndarray):
+        raw = raw.item()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    if isinstance(raw, str):
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
+    return dict(raw) if isinstance(raw, Mapping) else {}
+
+
+def _metadata_array(metadata: Mapping[str, object]) -> np.ndarray:
+    return np.asarray(json.dumps(dict(metadata), ensure_ascii=False), dtype=np.str_)
+
+
+def _normalized_axis(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float64).reshape(-1)
+    if values.size == 0:
+        return values.astype(np.float64)
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return np.zeros_like(values, dtype=np.float64)
+    lo = float(np.min(finite))
+    hi = float(np.max(finite))
+    if hi <= lo:
+        return np.zeros_like(values, dtype=np.float64)
+    return np.ascontiguousarray(2.0 * (values - lo) / (hi - lo) - 1.0, dtype=np.float64)
+
+
+def _axis_values_for_dim(template: Mapping[str, object], shape: tuple[int, ...], dim: int) -> np.ndarray:
+    size = int(shape[dim])
+    metadata = _metadata_dict(template.get("metadata"))
+    axes = metadata.get("axes")
+    if isinstance(axes, Sequence) and not isinstance(axes, (str, bytes, Mapping)) and dim < len(axes):
+        descriptor = axes[dim]
+        if isinstance(descriptor, Mapping):
+            values_key = descriptor.get("values_key")
+            if isinstance(values_key, str) and values_key in template and _is_numeric_array(template[values_key]):
+                values = np.asarray(template[values_key], dtype=np.float64).reshape(-1)
+                if values.size == size:
+                    return _normalized_axis(values)
+    if size <= 1:
+        return np.zeros((size,), dtype=np.float64)
+    return np.linspace(-1.0, 1.0, size, dtype=np.float64)
+
+
+def _slot_coordinates(template: Mapping[str, object], slot: RawArraySlot) -> np.ndarray:
+    shape = tuple(int(value) for value in slot.shape)
+    if not shape:
+        return np.zeros((1, 3), dtype=np.float32)
+
+    indices = np.indices(shape, sparse=False)
+    coords = np.zeros((int(np.prod(shape, dtype=np.int64)), 3), dtype=np.float64)
+    for dim in range(min(len(shape), 3)):
+        axis_values = _axis_values_for_dim(template, shape, dim)
+        coords[:, dim] = axis_values[indices[dim].reshape(-1)]
+    return np.ascontiguousarray(coords, dtype=np.float32)
+
+
+def _build_query_table(schema: RawDataSchema) -> tuple[np.ndarray, np.ndarray]:
+    if not schema.modeled_slots:
+        return np.zeros((0, 3), dtype=np.float32), np.zeros((0,), dtype=np.int64)
+    coords = []
+    fields = []
+    for slot in schema.modeled_slots:
+        slot_coords = _slot_coordinates(schema.templates[slot.item_index], slot)
+        coords.append(slot_coords)
+        fields.append(np.full((slot_coords.shape[0],), int(slot.field_id), dtype=np.int64))
+    return (
+        np.ascontiguousarray(np.concatenate(coords, axis=0), dtype=np.float32),
+        np.ascontiguousarray(np.concatenate(fields, axis=0), dtype=np.int64),
+    )
+
+
+def _flatten_raw_samples(raw_samples: tuple[RawSample, ...]) -> tuple[RawDataSchema | None, np.ndarray]:
     samples = _normalize_samples(raw_samples)
     if not samples:
         return None, np.zeros((0, 0), dtype=np.float64)
 
     item_count = len(samples[0])
     if item_count == 0:
-        return RawDataSchema(templates=(), modeled_slots=(), flat_dim=0), np.zeros((len(samples), 0), dtype=np.float64)
+        empty = RawDataSchema(
+            templates=(),
+            modeled_slots=(),
+            flat_dim=0,
+            coord_table=np.zeros((0, 3), dtype=np.float32),
+            field_ids=np.zeros((0,), dtype=np.int64),
+        )
+        return empty, np.zeros((len(samples), 0), dtype=np.float64)
     for sample in samples:
         if len(sample) != item_count:
             raise ValueError("all surrogate rawData samples must contain the same number of rawData items")
@@ -260,32 +357,28 @@ def _flatten_raw_samples(
                     dtype=str(np.asarray(template[key]).dtype),
                     start=int(start),
                     end=int(offset),
+                    field_id=int(len(modeled_slots)),
                 )
             )
             columns.append(matrix)
 
     y = np.concatenate(columns, axis=1).astype(np.float64) if columns else np.zeros((len(samples), 0), dtype=np.float64)
-    schema = RawDataSchema(templates=templates, modeled_slots=tuple(modeled_slots), flat_dim=int(y.shape[1]))
+    schema = RawDataSchema(
+        templates=templates,
+        modeled_slots=tuple(modeled_slots),
+        flat_dim=int(y.shape[1]),
+        coord_table=np.zeros((0, 3), dtype=np.float32),
+        field_ids=np.zeros((0,), dtype=np.int64),
+    )
+    coord_table, field_ids = _build_query_table(schema)
+    schema = RawDataSchema(
+        templates=templates,
+        modeled_slots=tuple(modeled_slots),
+        flat_dim=int(y.shape[1]),
+        coord_table=coord_table,
+        field_ids=field_ids,
+    )
     return schema, np.ascontiguousarray(y, dtype=np.float64)
-
-
-def _metadata_dict(value: object) -> dict[str, object]:
-    raw = value
-    if isinstance(raw, np.ndarray):
-        raw = raw.item()
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8")
-    if isinstance(raw, str):
-        try:
-            loaded = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return loaded if isinstance(loaded, dict) else {}
-    return dict(raw) if isinstance(raw, Mapping) else {}
-
-
-def _metadata_array(metadata: Mapping[str, object]) -> np.ndarray:
-    return np.asarray(json.dumps(dict(metadata), ensure_ascii=False), dtype=np.str_)
 
 
 def _raw_samples_from_flat(schema: RawDataSchema | None, y_flat: np.ndarray) -> tuple[RawSample, ...]:
@@ -321,6 +414,7 @@ def _raw_samples_from_flat(schema: RawDataSchema | None, y_flat: np.ndarray) -> 
             if metadata:
                 metadata["source"] = "project.surrogate.runtime"
                 metadata["surrogate_prediction"] = True
+                metadata["surrogate_model"] = MODEL_NAME
                 metadata.pop("variables", None)
                 item["metadata"] = _metadata_array(metadata)
 
@@ -332,13 +426,13 @@ def _x_matrix(population: Population | Sequence[Sequence[float]], input_dim: int
     rows = _as_population(population)
     if not rows:
         width = 0 if input_dim is None else int(input_dim)
-        return np.zeros((0, width), dtype=np.float64)
-    matrix = np.asarray(rows, dtype=np.float64)
+        return np.zeros((0, width), dtype=np.float32)
+    matrix = np.asarray(rows, dtype=np.float32)
     if matrix.ndim != 2:
         raise ValueError("population must be a two-dimensional sequence")
     if input_dim is not None and matrix.shape[1] != int(input_dim):
         raise ValueError(f"expected population width {int(input_dim)}, got {matrix.shape[1]}")
-    return np.ascontiguousarray(np.clip(matrix, 0.0, 1.0), dtype=np.float64)
+    return np.ascontiguousarray(np.clip(matrix, 0.0, 1.0), dtype=np.float32)
 
 
 def _pairwise_squared(left: np.ndarray, right: np.ndarray) -> np.ndarray:
@@ -348,112 +442,92 @@ def _pairwise_squared(left: np.ndarray, right: np.ndarray) -> np.ndarray:
     return np.sum(diff * diff, axis=2)
 
 
-def _median_pair_distance(x: np.ndarray) -> float:
-    if x.shape[0] < 2:
-        return 1.0
-    dist = np.sqrt(_pairwise_squared(x, x))
-    values = dist[np.triu_indices(x.shape[0], k=1)]
-    values = values[np.isfinite(values) & (values > 0.0)]
-    if values.size == 0:
-        return max(1.0, math.sqrt(max(1, x.shape[1])))
-    return float(np.median(values))
-
-
-def _fit_model(x: np.ndarray, y: np.ndarray) -> SurrogateModel | None:
-    x = np.ascontiguousarray(x, dtype=np.float64)
+def _fit_scaler(y: np.ndarray) -> TargetScaler:
     y = np.ascontiguousarray(y, dtype=np.float64)
-    if x.ndim != 2 or y.ndim != 2 or x.shape[0] != y.shape[0]:
-        raise ValueError("surrogate model fit requires X[N,D] and Y[N,Q]")
-    input_dim = int(x.shape[1]) if x.ndim == 2 else 0
-    if x.shape[0] == 0 or y.shape[1] == 0:
-        return None
-
-    members: list[ModelMember] = []
-    if x.shape[0] >= 2:
-        base = max(_median_pair_distance(x), 1e-6)
-        ridge = float(getattr(config, "SURROGATE_RBF_RIDGE", 1e-8))
-        for factor in (0.5, 1.0, 2.0):
-            length_scale = base * factor
-            kernel = np.exp(-0.5 * _pairwise_squared(x, x) / (length_scale * length_scale))
-            kernel.flat[:: kernel.shape[0] + 1] += ridge
-            try:
-                weights = np.linalg.solve(kernel, y)
-            except np.linalg.LinAlgError:
-                weights = np.linalg.lstsq(kernel, y, rcond=None)[0]
-            members.append(
-                RbfMember(
-                    length_scale=float(length_scale),
-                    centers=x.copy(),
-                    weights=np.ascontiguousarray(weights, dtype=np.float64),
-                )
-            )
-
-    members.append(
-        IdwMember(
-            power=float(getattr(config, "SURROGATE_IDW_POWER", 2.0)),
-            centers=x.copy(),
-            values=y.copy(),
-        )
+    if y.ndim != 2:
+        raise ValueError("target scaler expects Y[N,Q]")
+    mean = np.min(y, axis=0)
+    scale = np.max(y, axis=0) - mean
+    floor = float(getattr(config, "SURROGATE_TARGET_SCALE_FLOOR", 1e-6))
+    scale = np.maximum(scale, floor)
+    return TargetScaler(
+        mean=np.ascontiguousarray(mean, dtype=np.float32),
+        scale=np.ascontiguousarray(scale, dtype=np.float32),
     )
-    return SurrogateModel(input_dim=input_dim, members=tuple(members))
 
 
-def _predict_rbf(member: RbfMember, x: np.ndarray) -> np.ndarray:
-    scale = max(float(member.length_scale), 1e-12)
-    kernel = np.exp(-0.5 * _pairwise_squared(x, member.centers) / (scale * scale))
-    return np.ascontiguousarray(kernel @ member.weights, dtype=np.float64)
+def _train_config_from_project_config() -> INRTrainConfig:
+    defaults = INRTrainConfig()
+    return INRTrainConfig(
+        epochs=int(getattr(config, "SURROGATE_INR_EPOCHS", defaults.epochs)),
+        ensemble_size=int(getattr(config, "SURROGATE_INR_ENSEMBLE_SIZE", defaults.ensemble_size)),
+        batch_size=int(getattr(config, "SURROGATE_INR_BATCH_SIZE", defaults.batch_size)),
+        lr=float(getattr(config, "SURROGATE_INR_LR", defaults.lr)),
+        weight_decay=float(getattr(config, "SURROGATE_INR_WEIGHT_DECAY", defaults.weight_decay)),
+        loss_beta=float(getattr(config, "SURROGATE_INR_LOSS_BETA", defaults.loss_beta)),
+        relative_loss_weight=float(
+            getattr(config, "SURROGATE_INR_RELATIVE_LOSS_WEIGHT", defaults.relative_loss_weight)
+        ),
+        x_latent_dim=int(getattr(config, "SURROGATE_INR_X_LATENT_DIM", defaults.x_latent_dim)),
+        field_emb_dim=int(getattr(config, "SURROGATE_INR_FIELD_EMB_DIM", defaults.field_emb_dim)),
+        coord_fourier_features=int(
+            getattr(config, "SURROGATE_INR_COORD_FOURIER_FEATURES", defaults.coord_fourier_features)
+        ),
+        hidden_dim=int(getattr(config, "SURROGATE_INR_HIDDEN_DIM", defaults.hidden_dim)),
+        hidden_layers=int(getattr(config, "SURROGATE_INR_HIDDEN_LAYERS", defaults.hidden_layers)),
+        train_query_chunk=int(getattr(config, "SURROGATE_INR_TRAIN_QUERY_CHUNK", defaults.train_query_chunk)),
+        sample_batch_eval=int(getattr(config, "SURROGATE_INR_SAMPLE_BATCH_EVAL", defaults.sample_batch_eval)),
+        query_batch_eval=int(getattr(config, "SURROGATE_INR_QUERY_BATCH_EVAL", defaults.query_batch_eval)),
+        bootstrap_members=bool(getattr(config, "SURROGATE_INR_BOOTSTRAP_MEMBERS", defaults.bootstrap_members)),
+        bootstrap_fraction=float(getattr(config, "SURROGATE_INR_BOOTSTRAP_FRACTION", defaults.bootstrap_fraction)),
+    )
 
 
-def _predict_idw(member: IdwMember, x: np.ndarray) -> np.ndarray:
-    dist = np.sqrt(_pairwise_squared(x, member.centers))
-    out = np.empty((x.shape[0], member.values.shape[1]), dtype=np.float64)
-    for idx, distances in enumerate(dist):
-        exact = np.flatnonzero(distances <= 1e-12)
-        if exact.size:
-            out[idx] = member.values[int(exact[0])]
-            continue
-        weights = 1.0 / np.maximum(distances, 1e-12) ** max(float(member.power), 1e-12)
-        weights = weights / np.sum(weights)
-        out[idx] = weights @ member.values
-    return out
+def _select_device() -> torch.device:
+    requested = str(getattr(config, "SURROGATE_TORCH_DEVICE", "auto")).lower()
+    if requested != "auto":
+        return torch.device(requested)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch, "xpu") and torch.xpu.is_available():
+        return torch.device("xpu")
+    return torch.device("cpu")
 
 
-def _predict_member_flats(model: SurrogateModel | None, x: np.ndarray, flat_dim: int) -> np.ndarray:
-    if model is None or not model.members or flat_dim == 0:
+def _predict_member_flats(state: SurrogateState, x: np.ndarray) -> np.ndarray:
+    if state.model is None or state.schema is None or state.scaler is None or state.schema.flat_dim == 0:
+        flat_dim = 0 if state.schema is None else int(state.schema.flat_dim)
         return np.zeros((1, x.shape[0], flat_dim), dtype=np.float64)
-    predictions = []
-    for member in model.members:
-        if isinstance(member, RbfMember):
-            predictions.append(_predict_rbf(member, x))
-        else:
-            predictions.append(_predict_idw(member, x))
-    return np.stack(predictions, axis=0).astype(np.float64)
+    if state.train_cfg is None or state.device is None:
+        raise ValueError("surrogate state is missing train config or device")
+    scaled = predict_conditional_inr_members(
+        model=state.model,
+        X=np.ascontiguousarray(x, dtype=np.float32),
+        coord_table=state.schema.coord_table,
+        field_ids=state.schema.field_ids,
+        device=state.device,
+        sample_batch=max(1, min(int(state.train_cfg.sample_batch_eval), int(max(1, x.shape[0])))),
+        query_batch=max(1, int(state.train_cfg.query_batch_eval)),
+    )
+    return state.scaler.inverse_members(scaled)
 
 
-def _snap_to_exact_neighbors(
-    x: np.ndarray,
-    y_pred: np.ndarray,
-    x_train: Population,
-    raw_train: tuple[RawSample, ...],
-    schema: RawDataSchema | None,
-) -> np.ndarray:
-    if schema is None or not x_train or not raw_train or y_pred.size == 0:
+def _snap_to_exact_neighbors(state: SurrogateState, x: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+    if state.schema is None or not state.normalized_variables or y_pred.size == 0:
         return y_pred
     radius = float(getattr(config, "SURROGATE_EXACT_NEIGHBOR_RADIUS", 0.0))
     if radius <= 0.0:
         return y_pred
-
-    train_x = _x_matrix(x_train)
-    _train_schema, train_y = _flatten_raw_samples(raw_train)
-    if train_y.shape[0] != train_x.shape[0] or train_y.shape[1] != y_pred.shape[1]:
+    if state.training_flat_values.shape[1] != y_pred.shape[1]:
         return y_pred
 
+    train_x = _x_matrix(state.normalized_variables)
     snapped = np.ascontiguousarray(y_pred, dtype=np.float64).copy()
     distances = np.sqrt(_pairwise_squared(np.ascontiguousarray(x, dtype=np.float64), train_x))
     for row_idx, row_distances in enumerate(distances):
         nearest_idx = int(np.argmin(row_distances))
         if float(row_distances[nearest_idx]) <= radius:
-            snapped[row_idx] = train_y[nearest_idx]
+            snapped[row_idx] = state.training_flat_values[nearest_idx]
     return snapped
 
 
@@ -473,37 +547,14 @@ def _mean_relative_error(true_costs, pred_costs) -> float:
     return float(sum(values) / len(values)) if values else 0.0
 
 
-def _cross_validated_costs(
-    x: np.ndarray,
-    y: np.ndarray,
-    schema: RawDataSchema | None,
-    true_costs: tuple[tuple[float, ...], ...],
-) -> tuple[tuple[float, ...], ...]:
-    if x.shape[0] <= 1 or schema is None:
-        return true_costs
-
-    predictions: list[tuple[float, ...]] = []
-    for idx in range(x.shape[0]):
-        mask = np.ones((x.shape[0],), dtype=bool)
-        mask[idx] = False
-        try:
-            model = _fit_model(x[mask], y[mask])
-            member_flats = _predict_member_flats(model, x[idx : idx + 1], y.shape[1])
-            mean_flat = np.mean(member_flats, axis=0)
-            raw = _raw_samples_from_flat(schema, mean_flat)
-            predictions.append(_costs_from_raw(raw)[0])
-        except Exception:
-            nearest = int(np.argmin(np.sum((x[mask] - x[idx]) ** 2, axis=1)))
-            predictions.append(true_costs[nearest])
-    return tuple(predictions)
-
-
 def _schema_payload(schema: RawDataSchema | None) -> dict[str, object]:
     if schema is None:
         return {"flat_dim": 0, "modeled_slots": []}
     return {
         "rawdata_item_count": len(schema.templates),
         "flat_dim": int(schema.flat_dim),
+        "query_count": int(schema.coord_table.shape[0]),
+        "n_fields": int(schema.n_fields),
         "modeled_slots": [
             {
                 "item_index": int(slot.item_index),
@@ -512,6 +563,7 @@ def _schema_payload(schema: RawDataSchema | None) -> dict[str, object]:
                 "dtype": slot.dtype,
                 "start": int(slot.start),
                 "end": int(slot.end),
+                "field_id": int(slot.field_id),
             }
             for slot in schema.modeled_slots
         ],
@@ -520,17 +572,20 @@ def _schema_payload(schema: RawDataSchema | None) -> dict[str, object]:
 
 def _write_checkpoint(state: SurrogateState) -> None:
     state.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-
+    state.artifact_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "generation_index": int(state.generation_index),
         "sample_count": int(state.sample_count),
         "parameter_names": list(state.parameter_names),
-        "model": "rbf_idw_rawdata_ensemble",
-        "member_count": 0 if state.model is None else len(state.model.members),
+        "model": state.model_name,
+        "member_count": int(state.train_history.get("member_count", 0)),
         "mean_relative_error": float(state.mean_relative_error),
         "model_path": state.model_path.name,
+        "artifact_dir": state.artifact_dir.name,
         "schema": _schema_payload(state.schema),
-        "note": "Surrogate predicts rawData arrays; costs are dynamically derived through job_template.calc_cost.",
+        "train_cfg": None if state.train_cfg is None else asdict(state.train_cfg),
+        "train_history": state.train_history,
+        "note": "Surrogate predicts rawData arrays with a conditional INR deep ensemble; costs are dynamically derived through job_template.calc_cost.",
     }
     state.checkpoint_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
@@ -541,19 +596,14 @@ def _write_checkpoint(state: SurrogateState) -> None:
     arrays: dict[str, np.ndarray] = {
         "schema_flat_dim": np.asarray(0 if state.schema is None else state.schema.flat_dim, dtype=np.int64),
         "training_sample_count": np.asarray(state.sample_count, dtype=np.int64),
+        "training_flat_values": np.ascontiguousarray(state.training_flat_values, dtype=np.float32),
     }
-    if state.model is not None:
-        for idx, member in enumerate(state.model.members):
-            if isinstance(member, RbfMember):
-                arrays[f"member_{idx:03d}_centers"] = member.centers
-                arrays[f"member_{idx:03d}_weights"] = member.weights
-                arrays[f"member_{idx:03d}_kind"] = np.asarray("rbf")
-                arrays[f"member_{idx:03d}_length_scale"] = np.asarray(member.length_scale, dtype=np.float64)
-            else:
-                arrays[f"member_{idx:03d}_centers"] = member.centers
-                arrays[f"member_{idx:03d}_values"] = member.values
-                arrays[f"member_{idx:03d}_kind"] = np.asarray("idw")
-                arrays[f"member_{idx:03d}_power"] = np.asarray(member.power, dtype=np.float64)
+    if state.schema is not None:
+        arrays["coord_table"] = np.ascontiguousarray(state.schema.coord_table, dtype=np.float32)
+        arrays["field_ids"] = np.ascontiguousarray(state.schema.field_ids, dtype=np.int64)
+    if state.scaler is not None:
+        arrays["target_mean"] = np.ascontiguousarray(state.scaler.mean, dtype=np.float32)
+        arrays["target_scale"] = np.ascontiguousarray(state.scaler.scale, dtype=np.float32)
     np.savez_compressed(state.model_path, **arrays)
 
 
@@ -566,30 +616,89 @@ def train(*, generation_index: int = 0) -> SurrogateState:
 
     x = _x_matrix(data.normalized_variables)
     schema, y = _flatten_raw_samples(data.raw_data)
-    model = _fit_model(x, y) if x.shape[0] and y.shape[1] else None
     true_costs = _costs_from_raw(data.raw_data) if data.raw_data else ()
-    cv_pred_costs = _cross_validated_costs(x, y, schema, true_costs) if data.raw_data else ()
-    mean_error = _mean_relative_error(true_costs, cv_pred_costs)
-
-    if data.raw_data and schema is not None:
-        member_flats = _predict_member_flats(model, x, schema.flat_dim)
-        mean_flat = np.mean(member_flats, axis=0)
-        mean_flat = _snap_to_exact_neighbors(x, mean_flat, data.normalized_variables, data.raw_data, schema)
-        pred_costs = _costs_from_raw(_raw_samples_from_flat(schema, mean_flat))
-    else:
-        pred_costs = true_costs
 
     checkpoint_path = Path(config.SURROGATE_CHECKPOINT_DIR) / f"generation_{int(generation_index):04d}.json"
+    artifact_dir = checkpoint_path.parent / f"generation_{int(generation_index):04d}_conditional_inr"
+    model_path = artifact_dir / "model_aux.npz"
+
+    model = None
+    scaler = None
+    train_cfg = None
+    device = None
+    history: dict[str, object] = {
+        "model": MODEL_NAME,
+        "member_count": 0,
+        "train_sample_count": int(x.shape[0]),
+        "query_count": int(y.shape[1]),
+        "device": "",
+        "skipped": True,
+        "skip_reason": "no varying rawData slots or not enough samples",
+    }
+
+    if x.shape[0] >= 2 and y.shape[1] > 0 and schema is not None and schema.n_fields > 0:
+        scaler = _fit_scaler(y)
+        train_cfg = _train_config_from_project_config()
+        device = _select_device()
+        y_scaled = scaler.transform(y)
+        model, history = fit_deep_ensemble_conditional_inr(
+            input_dim=int(x.shape[1]),
+            n_fields=int(schema.n_fields),
+            X_train=np.ascontiguousarray(x, dtype=np.float32),
+            Y_train=y_scaled,
+            coord_table=schema.coord_table,
+            field_ids=schema.field_ids,
+            device=device,
+            train_cfg=train_cfg,
+            artifact_dir=artifact_dir,
+            seed=int(getattr(config, "OPTIMIZE_RANDOM_SEED", 20260510)) + int(generation_index) * 1009,
+        )
+        history["skipped"] = False
+        history["artifact_dir"] = str(artifact_dir)
+    else:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+
     state = SurrogateState(
         generation_index=int(generation_index),
         sample_count=len(data.normalized_variables),
         checkpoint_path=checkpoint_path,
-        model_path=checkpoint_path.with_suffix(".npz"),
+        model_path=model_path,
+        artifact_dir=artifact_dir,
+        model_name=MODEL_NAME,
         parameter_names=data.parameter_names,
         normalized_variables=data.normalized_variables,
         raw_data=data.raw_data,
         schema=schema,
+        scaler=scaler,
         model=model,
+        train_cfg=train_cfg,
+        device=device,
+        train_history=history,
+        training_flat_values=np.ascontiguousarray(y, dtype=np.float64),
+        mean_relative_error=0.0,
+        historical_true_costs=true_costs,
+        historical_predicted_costs=true_costs,
+    )
+
+    pred_costs = true_costs
+    mean_error = _mean_relative_error(true_costs, pred_costs)
+    state = SurrogateState(
+        generation_index=state.generation_index,
+        sample_count=state.sample_count,
+        checkpoint_path=state.checkpoint_path,
+        model_path=state.model_path,
+        artifact_dir=state.artifact_dir,
+        model_name=state.model_name,
+        parameter_names=state.parameter_names,
+        normalized_variables=state.normalized_variables,
+        raw_data=state.raw_data,
+        schema=state.schema,
+        scaler=state.scaler,
+        model=state.model,
+        train_cfg=state.train_cfg,
+        device=state.device,
+        train_history=state.train_history,
+        training_flat_values=state.training_flat_values,
         mean_relative_error=float(mean_error),
         historical_true_costs=true_costs,
         historical_predicted_costs=pred_costs,
@@ -606,14 +715,20 @@ def _ensure_state() -> SurrogateState:
     return _STATE
 
 
+def _state_input_dim(state: SurrogateState) -> int:
+    if state.normalized_variables:
+        return len(state.normalized_variables[0])
+    return len(state.parameter_names)
+
+
 def predict_raw_data(population) -> tuple[RawSample, ...]:
     state = _ensure_state()
-    if state.schema is None:
+    if state.schema is None or state.schema.flat_dim == 0:
         return tuple()
-    x = _x_matrix(population, state.model.input_dim if state.model is not None else None)
-    member_flats = _predict_member_flats(state.model, x, state.schema.flat_dim)
+    x = _x_matrix(population, _state_input_dim(state))
+    member_flats = _predict_member_flats(state, x)
     mean_flat = np.mean(member_flats, axis=0)
-    mean_flat = _snap_to_exact_neighbors(x, mean_flat, state.normalized_variables, state.raw_data, state.schema)
+    mean_flat = _snap_to_exact_neighbors(state, x, mean_flat)
     return _raw_samples_from_flat(state.schema, mean_flat)
 
 
@@ -622,14 +737,14 @@ def predict_population(population) -> tuple[tuple[tuple[float, ...], tuple[tuple
     normalized_population = _as_population(population)
     if not normalized_population:
         return ()
-    if state.schema is None:
+    if state.schema is None or state.schema.flat_dim == 0 or state.model is None:
         costs = tuple((float("inf"),) for _ in normalized_population)
         return tuple((row, tuple((value, value) for value in row)) for row in costs)
 
-    x = _x_matrix(normalized_population, state.model.input_dim if state.model is not None else None)
-    member_flats = _predict_member_flats(state.model, x, state.schema.flat_dim)
+    x = _x_matrix(normalized_population, _state_input_dim(state))
+    member_flats = _predict_member_flats(state, x)
     mean_flat = np.mean(member_flats, axis=0)
-    mean_flat = _snap_to_exact_neighbors(x, mean_flat, state.normalized_variables, state.raw_data, state.schema)
+    mean_flat = _snap_to_exact_neighbors(state, x, mean_flat)
     predicted_raw = _raw_samples_from_flat(state.schema, mean_flat)
     costs = _costs_from_raw(predicted_raw)
 

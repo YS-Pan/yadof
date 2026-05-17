@@ -12,7 +12,7 @@
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, and rawData-to-cost calculation.
 - The current default test task exposes three bounded minimization objectives in `[0, 1]`: target match, curve magnitude, and surface reward.
 - `project.recorded_data` stores real evaluation records, raw variables, rawData files, rawData metadata, job metadata, and job names; it does not store cost or normalized variables as durable source data.
-- `project.surrogate` trains from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, and writes per-generation checkpoints.
+- `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
@@ -31,7 +31,7 @@
 - `job_static_hash` captures copied static job inputs while excluding runtime outputs and per-individual variable payloads. It makes mid-run task changes visible without making every individual unique by hash.
 - rawData directories must stay flat. Each `.npz` is one rawData unit and must include schema-versioned metadata.
 - `evaluate_manager` isolates per-individual failures. Prepare, run, timeout, and record failures should become metadata and `inf` costs rather than crashing the whole generation.
-- `surrogate` predicts rawData first, then derives costs through the same rawData-to-cost path used for real samples. It should care about relative error, especially for small objective values.
+- `surrogate` predicts rawData first, then derives costs through the same rawData-to-cost path used for real samples. Its INR training uses target scaling, ensemble/member spread, and relative-loss weighting so small objective values still matter.
 - GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; default settings keep the entry point available while not forcing surrogate calls.
 
 ## Mutability Profile

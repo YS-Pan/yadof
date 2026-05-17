@@ -18,6 +18,7 @@ except ImportError:  # Allows running from inside the project package directory.
 
 
 BAD_RAWDATA_EXCEPTIONS = (RawDataContractError, FileNotFoundError, OSError, ValueError)
+BAD_VARIABLE_EXCEPTIONS = (KeyError, TypeError, ValueError)
 
 
 def raw_variables_as_tuple(raw_variables: object) -> tuple[float, ...]:
@@ -29,18 +30,27 @@ def raw_variables_as_tuple(raw_variables: object) -> tuple[float, ...]:
 
 def get_raw_variables(*, status: str | None = None) -> tuple[tuple[str, tuple[float, ...]], ...]:
     records = record_list(read_manifest())
-    return tuple(
-        (str(record["job_name"]), raw_variables_as_tuple(record["raw_variables"]))
-        for record in records
-        if status is None or str(record.get("status")) == status
-    )
+    rows: list[tuple[str, tuple[float, ...]]] = []
+    for record in records:
+        if status is not None and str(record.get("status")) != status:
+            continue
+        try:
+            raw_variables = raw_variables_as_tuple(record["raw_variables"])
+        except BAD_VARIABLE_EXCEPTIONS:
+            continue
+        rows.append((str(record["job_name"]), raw_variables))
+    return tuple(rows)
 
 
 def get_normalized_variables(*, status: str | None = None) -> tuple[tuple[str, tuple[float, ...]], ...]:
-    return tuple(
-        (job_name, job_template_api.normalize_variables(raw_variables))
-        for job_name, raw_variables in get_raw_variables(status=status)
-    )
+    rows: list[tuple[str, tuple[float, ...]]] = []
+    for job_name, raw_variables in get_raw_variables(status=status):
+        try:
+            normalized = job_template_api.normalize_variables(raw_variables)
+        except BAD_VARIABLE_EXCEPTIONS:
+            continue
+        rows.append((job_name, normalized))
+    return tuple(rows)
 
 
 def get_normalized_variable_table(*, status: str | None = None) -> tuple[tuple[str, ...], tuple[tuple[float, ...], ...]]:
@@ -108,6 +118,8 @@ def get_surrogate_training_data() -> dict[str, object]:
     variables: list[tuple[float, ...]] = []
     raw_data: list[tuple[dict[str, object], ...]] = []
     for job_name, rawdata in raw_rows:
+        if job_name not in normalized_by_job:
+            continue
         try:
             job_template_api.calculate_cost((rawdata,))
             loaded = tuple(load_npz(path) for path in rawdata)

@@ -35,7 +35,7 @@ flowchart TD
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
 - Current default `job_template`: pure-Python rawData generation plus three `[0, 1]` test objectives.
 - `recorded_data`: durable real-evaluation archive and dynamic historical views.
-- `surrogate`: rawData-first training and prediction.
+- `surrogate`: rawData-first conditional INR ensemble training, rawData prediction, and cost interval generation.
 - `tools`: optional user workflows for visualization and maintenance.
 - `test`: local verification of contracts and failure behavior.
 
@@ -45,7 +45,7 @@ flowchart TD
 3. Job `workflow.py` writes flat rawData `.npz` files.
 4. `evaluate_manager` sends job results to `recorded_data`.
 5. `recorded_data` stores raw evidence and asks `job_template` for dynamic cost when needed.
-6. `surrogate` trains from recorded rawData and predicts rawData for optimizer-side candidate screening.
+6. `surrogate` trains a conditional INR ensemble from recorded rawData and predicts rawData for optimizer-side candidate screening.
 
 ## Container Rules
 - Core modules communicate through each other's `api.py` files.

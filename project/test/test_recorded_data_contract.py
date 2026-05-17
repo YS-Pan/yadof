@@ -33,18 +33,44 @@ def _write_rawdata_set(raw_dir: Path, *, offset: float = 0.0) -> Path:
     metadata_base = {"schema_version": RAWDATA_SCHEMA_VERSION}
     np.savez(
         raw_dir / "summary.npz",
-        values=np.array([0.35 + offset, -0.45, 0.65]),
-        metadata=json.dumps({**metadata_base, "rawdata_name": "summary", "source": "test", "shape": [3]}),
+        values=np.array([0.90 - offset, 0.10 + offset]),
+        metadata=json.dumps({**metadata_base, "rawdata_name": "summary", "source": "test", "shape": [2]}),
     )
     np.savez(
         raw_dir / "curve.npz",
-        values=np.array([0.1 + offset, -0.1]),
-        metadata=json.dumps({**metadata_base, "rawdata_name": "curve", "source": "test", "shape": [2]}),
+        axis_0=np.array([0.0, 1.0]),
+        axis_1=np.array([0.0, 0.5, 1.0]),
+        values=np.array([[100.0, 0.90 - offset, 100.0], [100.0, 0.10 + offset, 100.0]]),
+        metadata=json.dumps(
+            {
+                **metadata_base,
+                "rawdata_name": "curve",
+                "source": "test",
+                "shape": [2, 3],
+                "axes": [
+                    {"index": 0, "size": 2, "values_key": "axis_0"},
+                    {"index": 1, "size": 3, "values_key": "axis_1"},
+                ],
+            }
+        ),
     )
     np.savez(
         raw_dir / "surface.npz",
-        values=np.array([0.9, 0.95]),
-        metadata=json.dumps({**metadata_base, "rawdata_name": "surface", "source": "test", "shape": [2]}),
+        axis_0=np.array([0.0, 0.5, 1.0]),
+        axis_1=np.array([0.0, 0.5, 1.0]),
+        values=np.array([[0.0, 0.0, 0.0], [0.0, 0.90 - offset, 0.0], [0.0, 0.0, 0.0]]),
+        metadata=json.dumps(
+            {
+                **metadata_base,
+                "rawdata_name": "surface",
+                "source": "test",
+                "shape": [3, 3],
+                "axes": [
+                    {"index": 0, "size": 3, "values_key": "axis_0"},
+                    {"index": 1, "size": 3, "values_key": "axis_1"},
+                ],
+            }
+        ),
     )
     return raw_dir
 
@@ -58,16 +84,38 @@ def _write_invalid_rawdata_set(raw_dir: Path, *, metadata: dict[str, object], va
     )
     np.savez(
         raw_dir / "curve.npz",
-        values=np.array([0.1, -0.1]),
+        axis_0=np.array([0.0, 1.0]),
+        axis_1=np.array([0.0, 0.5, 1.0]),
+        values=np.array([[100.0, 0.90, 100.0], [100.0, 0.10, 100.0]]),
         metadata=json.dumps(
-            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "curve", "source": "test", "shape": [2]}
+            {
+                "schema_version": RAWDATA_SCHEMA_VERSION,
+                "rawdata_name": "curve",
+                "source": "test",
+                "shape": [2, 3],
+                "axes": [
+                    {"index": 0, "size": 2, "values_key": "axis_0"},
+                    {"index": 1, "size": 3, "values_key": "axis_1"},
+                ],
+            }
         ),
     )
     np.savez(
         raw_dir / "surface.npz",
-        values=np.array([0.9, 0.95]),
+        axis_0=np.array([0.0, 0.5, 1.0]),
+        axis_1=np.array([0.0, 0.5, 1.0]),
+        values=np.array([[0.0, 0.0, 0.0], [0.0, 0.90, 0.0], [0.0, 0.0, 0.0]]),
         metadata=json.dumps(
-            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "surface", "source": "test", "shape": [2]}
+            {
+                "schema_version": RAWDATA_SCHEMA_VERSION,
+                "rawdata_name": "surface",
+                "source": "test",
+                "shape": [3, 3],
+                "axes": [
+                    {"index": 0, "size": 3, "values_key": "axis_0"},
+                    {"index": 1, "size": 3, "values_key": "axis_1"},
+                ],
+            }
         ),
     )
     return raw_dir
@@ -214,6 +262,21 @@ def test_incompatible_completed_rawdata_is_skipped_for_surrogate_training(tmp_pa
     assert len(training_data["normalized_variables"]) == 1
     assert training_data["normalized_variables"][0] == pytest.approx(_normalized_variables())
     assert len(training_data["raw_data"]) == 1
+
+
+def test_incompatible_variable_count_is_skipped_in_history_and_training(tmp_path):
+    from project.recorded_data import api as recorded_api
+    from project.job_template import api as job_template_api
+
+    record_root = tmp_path / "recorded_data"
+    _configure_recorded_api(recorded_api, record_root)
+    raw_dir = _write_rawdata_set(tmp_path / "job_rawdata")
+    short_variables = (0.5,) * (job_template_api.get_variable_count() - 1)
+
+    recorded_api.record_job_result("job_short_variables", short_variables, raw_dir)
+
+    assert recorded_api.get_optimization_history() == ()
+    assert recorded_api.get_surrogate_training_data()["raw_data"] == ()
 
 
 def test_legacy_rawdata_missing_schema_version_is_skipped_and_diagnosed(tmp_path):

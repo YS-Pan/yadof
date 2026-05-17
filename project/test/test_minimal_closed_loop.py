@@ -12,6 +12,19 @@ def _module(monkeypatch, name: str) -> types.ModuleType:
     return module
 
 
+def _configure_fast_inr(monkeypatch, config) -> None:
+    monkeypatch.setattr(config, "SURROGATE_TORCH_DEVICE", "cpu")
+    monkeypatch.setattr(config, "SURROGATE_INR_EPOCHS", 8)
+    monkeypatch.setattr(config, "SURROGATE_INR_ENSEMBLE_SIZE", 2)
+    monkeypatch.setattr(config, "SURROGATE_INR_BATCH_SIZE", 4)
+    monkeypatch.setattr(config, "SURROGATE_INR_X_LATENT_DIM", 8)
+    monkeypatch.setattr(config, "SURROGATE_INR_FIELD_EMB_DIM", 4)
+    monkeypatch.setattr(config, "SURROGATE_INR_COORD_FOURIER_FEATURES", 4)
+    monkeypatch.setattr(config, "SURROGATE_INR_HIDDEN_DIM", 16)
+    monkeypatch.setattr(config, "SURROGATE_INR_HIDDEN_LAYERS", 1)
+    monkeypatch.setattr(config, "SURROGATE_INR_BOOTSTRAP_MEMBERS", False)
+
+
 def test_optimize_uses_history_then_calls_evaluate_manager(monkeypatch):
     recorded_pkg = _module(monkeypatch, "project.recorded_data")
     recorded_api = _module(monkeypatch, "project.recorded_data.api")
@@ -133,6 +146,7 @@ def test_surrogate_raw_data_to_cost_shape_and_checkpoint(monkeypatch):
     if checkpoint_dir.is_dir():
         shutil.rmtree(checkpoint_dir)
     monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
+    _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
 
     state = runtime.train(generation_index=5)

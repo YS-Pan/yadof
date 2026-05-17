@@ -51,7 +51,9 @@ Closest reference files:
 - `reference/20260418 shorten/code/archive_store.py`
 - `reference/20260403 fanyufei/code/surrogate.py`
 
-Natural-language mapping: `project/surrogate` inherits the idea of a refreshed optimizer-facing surrogate runtime from shorten, but simplifies the model into a rawData-first RBF/IDW ensemble for this v3 skeleton. Shorten's `modeling.py` and `pipeline.py` are references for richer future training/export behavior. Fanyufei's `surrogate.py` is a reference for keeping the surrogate route behind a small integration surface.
+Natural-language mapping: `project/surrogate` inherits the idea of a refreshed optimizer-facing surrogate runtime from shorten and now uses a rawData-first conditional INR deep ensemble behind the stable v3 API. Shorten's `modeling.py` and `pipeline.py` are direct references for the richer training/export behavior, while fanyufei's `surrogate.py` remains a reference for keeping the surrogate route behind a small integration surface.
+
+Current implementation note: `project/surrogate/runtime.py` keeps the v3 public service boundary and generic rawData flatten/reconstruct logic. `project/surrogate/modeling.py` is the direct local adaptation of shorten's conditional INR/deep-ensemble machinery, trimmed to the v3 rawData-first contract instead of the shorten archive/workspace layout.
 
 ## `project/evaluate_manager`
 
@@ -128,7 +130,7 @@ Closest reference files:
 - `reference/20260418 shorten/code/experiment_config.py`
 - `reference/20260418 shorten/code/generation_plan.py`
 
-Natural-language mapping: `project/config.py` is the v3 shared settings surface. Fanyufei's `optConfig.py` is the ancestor for optimizer/evaluation launch settings, while shorten's `experiment_config.py` is the ancestor for surrogate and optimizer defaults. Unlike both older projects, v3 keeps problem shape and objective names in `job_template.api` rather than global config.
+Natural-language mapping: `project/config.py` is the v3 shared settings surface. Fanyufei's `optConfig.py` is the ancestor for optimizer/evaluation launch settings, while shorten's `experiment_config.py` is the ancestor for surrogate and optimizer defaults. The current surrogate settings expose conditional-INR training, target scaling, torch device selection, and GPSAF pressure controls; unlike both older projects, v3 keeps problem shape and objective names in `job_template.api` rather than global config.
 
 ## `project/jobs`
 

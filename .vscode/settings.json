@@ -1,0 +1,10 @@
+{
+  "python.analysis.exclude": [
+    "project/jobs/**",
+    "project/recorded_data/rawData/**"
+  ],
+  "files.watcherExclude": {
+    "**/project/jobs/**": true,
+    "**/project/recorded_data/rawData/**": true
+  }
+}

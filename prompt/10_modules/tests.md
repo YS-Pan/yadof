@@ -10,7 +10,7 @@
 - Default job-template tests assert the three objective names and `[0, 1]` cost bounds.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
 - Contract tests validate rawData metadata, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
-- Surrogate tests verify rawData-first prediction, checkpoint writing, GPSAF integration, and fallback behavior.
+- Surrogate tests verify rawData-first prediction, conditional-INR checkpoint/artifact writing, GPSAF integration, and fallback behavior.
 - Tool tests ensure `viewCost.py` uses the current recorded-data history instead of legacy JSONL files.
 
 ## I/O Format

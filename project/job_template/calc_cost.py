@@ -16,9 +16,9 @@ OBJECTIVE_NAMES = (
     "surface_reward_cost",
 )
 ERROR_COSTS = (1.0, 1.0, 1.0)
-CURVE_AXIS_RANGE = (0.45, 0.55)
-SURFACE_AXIS_0_RANGE = (-0.2, 0.2)
-SURFACE_AXIS_1_RANGE = (-0.2, 0.2)
+CURVE_AXIS_RANGE = (0.46, 0.54)
+SURFACE_AXIS_0_RANGE = (0.46, 0.54)
+SURFACE_AXIS_1_RANGE = (0.46, 0.54)
 
 
 def get_objective_names() -> tuple[str, ...]:
@@ -59,16 +59,27 @@ def _axis_window(values: np.ndarray, axis_values: object, axis: int, low: float,
     return np.take(values, np.flatnonzero(mask), axis=axis)
 
 
-def _curve_observation_values(item: Mapping[str, object]) -> np.ndarray:
-    values = np.asarray(item.get("values", ()), dtype=float)
-    return _axis_window(values, item.get("axis_0", ()), 0, *CURVE_AXIS_RANGE).ravel()
-
-
 def _surface_observation_values(item: Mapping[str, object]) -> np.ndarray:
     values = np.asarray(item.get("values", ()), dtype=float)
     window = _axis_window(values, item.get("axis_0", ()), 0, *SURFACE_AXIS_0_RANGE)
     window = _axis_window(window, item.get("axis_1", ()), 1, *SURFACE_AXIS_1_RANGE)
     return window.ravel()
+
+
+def _curve_band_values(item: Mapping[str, object], curve_index: int) -> np.ndarray:
+    values = np.asarray(item.get("values", ()), dtype=float)
+    if values.ndim == 0:
+        return np.asarray((), dtype=float)
+    if values.ndim == 1:
+        return _axis_window(values, item.get("axis_0", ()), 0, *CURVE_AXIS_RANGE).ravel()
+    selected_index = min(max(0, int(curve_index)), values.shape[0] - 1)
+    selected_curve = np.asarray(values[selected_index], dtype=float)
+    return _axis_window(selected_curve, item.get("axis_1", ()), 0, *CURVE_AXIS_RANGE).ravel()
+
+
+def _mean_soft_cost(values: Sequence[float]) -> float:
+    finite = [float(value) for value in values if np.isfinite(float(value))]
+    return float(np.mean(finite)) if finite else 1.0
 
 
 def calculate_cost(sample_rawdata: Sequence[RawDataItem]) -> tuple[float, ...]:
@@ -81,26 +92,46 @@ def calculate_cost(sample_rawdata: Sequence[RawDataItem]) -> tuple[float, ...]:
         by_name[name] = loaded
 
     summary_values = np.asarray(by_name.get("summary", {}).get("values", ()), dtype=float).ravel()
-    curve_values = _curve_observation_values(by_name.get("curve", {}))
+    curve_item = by_name.get("curve", {})
+    curve0_values = _curve_band_values(curve_item, 0)
+    curve1_values = _curve_band_values(curve_item, 1)
     surface_values = _surface_observation_values(by_name.get("surface", {}))
 
-    if summary_values.size < 3 or curve_values.size == 0 or surface_values.size == 0:
+    if summary_values.size < 2 or curve0_values.size == 0 or curve1_values.size == 0 or surface_values.size == 0:
         return ERROR_COSTS
 
-    x0, x1, x2 = summary_values[:3]
-    target_penalty = (x0 - 0.35) ** 2 + (x1 + 0.45) ** 2 + 0.2 * (x2 - 0.65) ** 2
-    curve_finite = _finite_values(curve_values)
+    scalar0, scalar1 = summary_values[:2]
+    curve0_finite = _finite_values(curve0_values)
+    curve1_finite = _finite_values(curve1_values)
     surface_finite = _finite_values(surface_values)
-    if curve_finite.size == 0 or surface_finite.size == 0:
+    if curve0_finite.size == 0 or curve1_finite.size == 0 or surface_finite.size == 0:
         return ERROR_COSTS
-    curve_penalty = float(np.mean(np.abs(curve_finite)))
-    surface_reward = float(np.mean(surface_finite))
-    if not (np.isfinite(target_penalty) and np.isfinite(curve_penalty) and np.isfinite(surface_reward)):
+
+    scalar0_value = float(scalar0)
+    scalar1_value = float(scalar1)
+    curve0_band_mean = float(np.mean(curve0_finite))
+    curve1_band_mean = float(np.mean(curve1_finite))
+    surface_center_mean = float(np.mean(surface_finite))
+    if not all(
+        np.isfinite(value)
+        for value in (scalar0_value, scalar1_value, curve0_band_mean, curve1_band_mean, surface_center_mean)
+    ):
         return ERROR_COSTS
+
     return (
-        _soft_cost(target_penalty, goal=0.0, worst=2.0),
-        _soft_cost(curve_penalty, goal=-0.5, worst=1.5),
-        _soft_cost(surface_reward, goal=1.5, worst=0.0),
+        _mean_soft_cost(
+            (
+                _soft_cost(scalar0_value, goal=0.72, worst=0.42),
+                _soft_cost(scalar1_value, goal=0.28, worst=0.62),
+            )
+        ),
+        _mean_soft_cost(
+            (
+                _soft_cost(curve0_band_mean, goal=0.40, worst=0.18),
+                _soft_cost(curve1_band_mean, goal=0.44, worst=0.55),
+            )
+        ),
+        _soft_cost(surface_center_mean, goal=0.40, worst=0.20),
     )
 
 

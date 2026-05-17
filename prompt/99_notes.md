@@ -8,7 +8,8 @@
 ## Current Implementation Notes
 - Local mode is implemented; distributed/HTCondor remains a planned backend.
 - `hfss_com.py` exists under `job_template`, but current runnable jobs use `test_com.py` and exclude `hfss_com.py` from copied job folders.
-- The current surrogate is a compact RBF/IDW rawData ensemble rather than the full deep-learning stack from `20260418 shorten`.
+- The current surrogate is a conditional INR rawData deep ensemble adapted from the `20260418 shorten` direction while preserving the v3 rawData-first public API.
+- The v3 surrogate keeps the small `api.py` surface from the earlier implementation, but `runtime.py` now delegates neural model construction/training/prediction to `surrogate/modeling.py`.
 - The current optimizer uses pymoo GA/NSGA2 mechanics inside a GPSAF-shaped flow, not the old DEAP NSGA-III entry point.
 
 ## Documentation Maintenance

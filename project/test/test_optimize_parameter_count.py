@@ -84,11 +84,11 @@ def test_explicit_variable_count_overrides_job_template_parameter_count(monkeypa
     assert calls == {"get_variable_count": 1, "get_objective_count": 1, "get_objective_names": 1}
 
 
-def test_default_job_template_width_is_ten():
+def test_default_job_template_width_is_twenty():
     from project.job_template import api as job_template_api
 
-    assert job_template_api.get_variable_count() == 10
-    assert job_template_api.get_parameter_names() == tuple(f"x{idx}" for idx in range(10))
+    assert job_template_api.get_variable_count() == 20
+    assert job_template_api.get_parameter_names() == tuple(f"x{idx}" for idx in range(20))
     assert job_template_api.get_objective_count() == 3
     assert job_template_api.get_objective_names() == (
         "target_match_cost",

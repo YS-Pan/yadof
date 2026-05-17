@@ -15,7 +15,7 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
     monkeypatch.setattr(recorded_api, "RAWDATA_ROOT", record_root / "rawData")
 
     jobs_dir = tmp_path / "jobs"
-    population = ((0.25, 0.5, 0.75, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5),)
+    population = ((0.25, 0.5, 0.75) + (0.5,) * 17,)
     costs = evaluate_population(population, jobs_dir=jobs_dir, timeout_sec=30)
 
     assert len(costs) == 1
@@ -33,8 +33,8 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
     records = recorded_api.list_records()
     assert len(records) == 1
     assert "cost" not in records[0]
-    assert len(records[0]["raw_variables"]) == 10
-    assert records[0]["raw_variables"][:3] == pytest.approx([-1.0, 0.0, 0.75])
+    assert len(records[0]["raw_variables"]) == 20
+    assert records[0]["raw_variables"][:3] == pytest.approx([0.25, 0.5, 0.75])
     assert "job_static_hash" in records[0]["job_metadata"]
 
     history = recorded_api.get_optimization_history()

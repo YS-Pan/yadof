@@ -23,7 +23,8 @@ flowchart TD
 - Prepared jobs: default `project/jobs/`, configurable by `project/config.py`.
 - Recorded rawData: `project/recorded_data/rawData/<job_name>/`.
 - Recorded manifest: `project/recorded_data/manifest.json`.
-- Surrogate checkpoints: `project/surrogate/checkpoints/`.
+- Surrogate checkpoints: `project/surrogate/checkpoints/generation_*.json`.
+- Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.
 
 ## Future Distributed Deployment

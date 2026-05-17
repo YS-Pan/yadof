@@ -21,24 +21,31 @@ def _metadata(rawdata_name: str, shape, axes=()):
 def test_curve_and_surface_costs_use_local_observation_windows():
     sample = (
         {
-            "values": [0.35, -0.45, 0.65],
-            "metadata": _metadata("summary", [3]),
+            "values": [0.90, 0.10],
+            "metadata": _metadata("summary", [2]),
         },
         {
-            "axis_0": [0.0, 0.5, 1.0],
-            "values": [100.0, 0.0, 100.0],
+            "axis_0": [0.0, 1.0],
+            "axis_1": [0.0, 0.5, 1.0],
+            "values": [
+                [100.0, 0.90, 100.0],
+                [100.0, 0.10, 100.0],
+            ],
             "metadata": _metadata(
                 "curve",
-                [3],
-                [{"index": 0, "size": 3, "values_key": "axis_0"}],
+                [2, 3],
+                [
+                    {"index": 0, "size": 2, "values_key": "axis_0"},
+                    {"index": 1, "size": 3, "values_key": "axis_1"},
+                ],
             ),
         },
         {
-            "axis_0": [-1.0, 0.0, 1.0],
-            "axis_1": [-1.0, 0.0, 1.0],
+            "axis_0": [0.0, 0.5, 1.0],
+            "axis_1": [0.0, 0.5, 1.0],
             "values": [
                 [0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
+                [0.0, 0.90, 0.0],
                 [0.0, 0.0, 0.0],
             ],
             "metadata": _metadata(
@@ -54,6 +61,6 @@ def test_curve_and_surface_costs_use_local_observation_windows():
 
     costs = calculate_cost(sample)
 
-    assert costs[0] == pytest.approx(0.01798620996209155)
+    assert costs[0] < 0.02
     assert costs[1] < 0.02
     assert costs[2] < 0.02

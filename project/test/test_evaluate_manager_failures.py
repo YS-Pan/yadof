@@ -114,7 +114,7 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
     monkeypatch.setattr(api, "run_local_job", run_local_job)
     monkeypatch.setattr(api, "record_result", lambda result: (1.0,))
 
-    costs = api.evaluate_population(((0.25, 0.5, 0.75, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5),), timeout_sec=1)
+    costs = api.evaluate_population(((0.25, 0.5, 0.75) + (0.5,) * 17,), timeout_sec=1)
 
     assert costs == ((1.0,),)
     assert seen["job"].directory.parent == configured_jobs_dir

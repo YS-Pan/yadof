@@ -37,7 +37,7 @@ def _metadata(job_dir, name="metadata.json"):
 
 
 def _values(x0: float, x1: float, x2: float) -> tuple[float, ...]:
-    return (x0, x1, x2) + (0.5,) * 7
+    return (x0, x1, x2) + (0.5,) * 17
 
 
 def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path):

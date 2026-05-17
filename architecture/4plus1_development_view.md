@@ -26,12 +26,14 @@ project/
 - API files are module gateways and should stay small.
 - Internal helpers can change more freely if public API behavior and tests remain stable.
 - Task-specific edits should concentrate in `project/job_template/`.
+- `project/surrogate/runtime.py` owns the cross-module API boundary; `project/surrogate/modeling.py` owns the conditional INR internals and should not import other core modules.
 - Shared settings should stay in `project/config.py`, but task semantics should not move there.
 
 ## Test Strategy
 - Use local mode as the default verification path.
 - Protect rawData schema and recorded-data persistence with contract tests.
 - Use monkeypatched APIs for optimizer unit behavior where full local jobs would be too heavy.
+- Surrogate tests may force smaller CPU INR settings so contract tests stay fast while the default config remains usable for real runs.
 - Avoid adding tests that require real HFSS or HTCondor for the default suite.
 
 ## Documentation Strategy

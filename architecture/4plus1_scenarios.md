@@ -17,9 +17,10 @@
 ## Scenario 3: Use Surrogate Assistance
 1. User increases `OPTIMIZE_SURROGATE_ALPHA` or `OPTIMIZE_SURROGATE_BETA`.
 2. `optimize` trains `surrogate` from completed records.
-3. `surrogate` predicts rawData for candidate pools.
-4. `surrogate` calculates predicted costs and intervals through `job_template.api`.
-5. `optimize` selects a real population and sends it to `evaluate_manager`.
+3. `surrogate` flattens recorded rawData, trains or refreshes the conditional INR ensemble, and writes a generation checkpoint plus member artifacts.
+4. `surrogate` predicts rawData for candidate pools.
+5. `surrogate` calculates predicted costs and intervals through `job_template.api`.
+6. `optimize` selects a real population and sends it to `evaluate_manager`.
 
 ## Scenario 4: Evaluation Failure
 1. One job preparation, workflow run, timeout, or recording step fails.

@@ -39,9 +39,11 @@ sequenceDiagram
     O->>R: get historical optimization results
     O->>S: train(generation_index)
     S->>R: get surrogate training data
-    S->>T: calculate true/cv costs from rawData
+    S->>S: flatten rawData, build query table, train conditional INR ensemble
+    S->>T: calculate true costs from recorded rawData for audit
     S-->>O: checkpointed state
     O->>S: predict_population(candidate pools)
+    S->>S: predict rawData with ensemble mean and member spread
     S->>T: calculate predicted costs from predicted rawData
     S-->>O: costs and intervals
     O->>E: evaluate selected real population

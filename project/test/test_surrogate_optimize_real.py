@@ -6,8 +6,6 @@ import shutil
 import sys
 import types
 
-import pytest
-
 
 def _module(monkeypatch, name: str) -> types.ModuleType:
     module = types.ModuleType(name)
@@ -15,7 +13,20 @@ def _module(monkeypatch, name: str) -> types.ModuleType:
     return module
 
 
-def test_surrogate_interpolates_rawdata_away_from_training_samples(monkeypatch):
+def _configure_fast_inr(monkeypatch, config) -> None:
+    monkeypatch.setattr(config, "SURROGATE_TORCH_DEVICE", "cpu")
+    monkeypatch.setattr(config, "SURROGATE_INR_EPOCHS", 8)
+    monkeypatch.setattr(config, "SURROGATE_INR_ENSEMBLE_SIZE", 2)
+    monkeypatch.setattr(config, "SURROGATE_INR_BATCH_SIZE", 4)
+    monkeypatch.setattr(config, "SURROGATE_INR_X_LATENT_DIM", 8)
+    monkeypatch.setattr(config, "SURROGATE_INR_FIELD_EMB_DIM", 4)
+    monkeypatch.setattr(config, "SURROGATE_INR_COORD_FOURIER_FEATURES", 4)
+    monkeypatch.setattr(config, "SURROGATE_INR_HIDDEN_DIM", 16)
+    monkeypatch.setattr(config, "SURROGATE_INR_HIDDEN_LAYERS", 1)
+    monkeypatch.setattr(config, "SURROGATE_INR_BOOTSTRAP_MEMBERS", False)
+
+
+def test_surrogate_predicts_rawdata_then_costs_and_writes_conditional_inr_checkpoint(monkeypatch):
     recorded_pkg = _module(monkeypatch, "project.recorded_data")
     recorded_api = _module(monkeypatch, "project.recorded_data.api")
     job_template_pkg = _module(monkeypatch, "project.job_template")
@@ -32,9 +43,13 @@ def test_surrogate_interpolates_rawdata_away_from_training_samples(monkeypatch):
         "normalized_variables": ((0.1, 0.1), (0.9, 0.9)),
         "raw_data": raw_samples,
     }
-    job_template_api.calculate_costs_from_raw_data = lambda samples: tuple(
-        (float(sum(sample[0]["rawData"])),) for sample in samples
-    )
+    cost_calls = []
+
+    def calculate_costs_from_raw_data(samples):
+        cost_calls.append(samples)
+        return tuple((100.0 + float(sum(sample[0]["rawData"])),) for sample in samples)
+
+    job_template_api.calculate_costs_from_raw_data = calculate_costs_from_raw_data
 
     from project import config
     from project.surrogate import runtime
@@ -44,16 +59,20 @@ def test_surrogate_interpolates_rawdata_away_from_training_samples(monkeypatch):
         shutil.rmtree(checkpoint_dir)
     monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
     monkeypatch.setattr(config, "SURROGATE_EXACT_NEIGHBOR_RADIUS", 0.0)
+    _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
 
     state = runtime.train(generation_index=2)
     prediction = runtime.predict_population(((0.5, 0.5),))[0]
+    checkpoint = json.loads(state.checkpoint_path.read_text(encoding="utf-8"))
 
     assert state.model_path.is_file()
-    assert json.loads(state.checkpoint_path.read_text(encoding="utf-8"))["model"] == "rbf_idw_rawdata_ensemble"
-    assert 0.0 < prediction[0][0] < 20.0
-    assert prediction[0][0] != pytest.approx(0.0)
-    assert prediction[0][0] != pytest.approx(20.0)
+    assert state.artifact_dir.is_dir()
+    assert checkpoint["model"] == "conditional_inr_rawdata_deep_ensemble"
+    assert checkpoint["model"] == state.model_name
+    assert checkpoint["model_path"] == state.model_path.name
+    assert any(len(call) == 1 for call in cost_calls)
+    assert 100.0 <= prediction[0][0] <= 120.0
     assert prediction[1][0][0] < prediction[0][0] < prediction[1][0][1]
 
 
@@ -106,6 +125,7 @@ def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 1)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_GAMMA", 0.5)
+    _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
 
     from project.optimize.api import run_one_generation

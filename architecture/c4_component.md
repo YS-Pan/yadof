@@ -80,10 +80,13 @@ flowchart LR
 ```mermaid
 flowchart LR
     SurAPI["api.py"] --> Runtime["runtime.py"]
+    Runtime --> Modeling["modeling.py"]
     Runtime --> RD["recorded_data.api"]
     Runtime --> JT["job_template.api"]
     Runtime --> Checkpoints["surrogate/checkpoints"]
+    Modeling --> Checkpoints
 ```
 
-- `runtime.py`: training-data load, rawData flattening, RBF/IDW ensemble, prediction, intervals, checkpoints.
+- `runtime.py`: optimizer-facing service boundary; loads training data, flattens rawData into query-aligned numeric slots, scales targets, reconstructs predicted rawData, calculates costs and intervals, and writes checkpoint summaries.
+- `modeling.py`: PyTorch conditional INR deep ensemble; owns Fourier coordinate features, field embeddings, member bootstrap/mixup training, member prediction, and model artifacts.
 - `api.py`: stable optimizer-facing exports.
