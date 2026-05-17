@@ -10,6 +10,11 @@ class JobSpec:
     name: str
     directory: Path
     unnormalized_variables: tuple[float, ...]
+    normalized_variables: tuple[float, ...] = ()
+    run_id: str | None = None
+    optimization_index: int | None = None
+    generation_index: int | None = None
+    population_index: int | None = None
 
 
 @dataclass(frozen=True)

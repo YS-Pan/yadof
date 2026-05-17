@@ -81,6 +81,41 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
     assert "status counts:" in summary
 
 
+def test_build_rows_prefers_top_level_workflow_timing_and_context():
+    fake_api = FakeRecordedDataApi(
+        records=(
+            {
+                "job_name": "job_a",
+                "status": "completed",
+                "started_at": "2026-05-14T00:00:00+00:00",
+                "ended_at": "2026-05-14T00:02:00+00:00",
+                "run_id": "run_from_individual",
+                "optimization_index": 7,
+                "generation_index": 3,
+                "job_metadata": {
+                    "started_at": "2026-05-14T00:00:00+00:00",
+                    "ended_at": "2026-05-14T00:20:00+00:00",
+                    "run_id": "run_from_nested_metadata",
+                    "optimization_index": 2,
+                    "generation_index": 1,
+                    "job_static_hash": "hash_a",
+                },
+            },
+        ),
+        opt_metadata=(
+            {"run_id": "run_from_opt_meta", "generation_index": 1, "created_job_names": ["job_a"]},
+        ),
+    )
+
+    rows = viewTime.build_rows(fake_api)
+
+    assert rows[0]["elapsed_min"] == pytest.approx(2.0)
+    assert rows[0]["optimization_index"] == 7
+    assert rows[0]["optimization_run_id"] == "run_from_individual"
+    assert rows[0]["generation_index"] == 3
+    assert rows[0]["job_static_hash"] == "hash_a"
+
+
 def test_build_rows_can_filter_completed_records():
     fake_api = FakeRecordedDataApi(
         (

@@ -33,7 +33,11 @@ def _configure_recorded_api(recorded_api, root: Path) -> None:
 
 def _write_rawdata_set(raw_dir: Path, *, offset: float = 0.0) -> Path:
     raw_dir.mkdir(parents=True, exist_ok=True)
-    metadata_base = {"schema_version": RAWDATA_SCHEMA_VERSION}
+    metadata_base = {
+        "schema_version": RAWDATA_SCHEMA_VERSION,
+        "variables": {"x0": 0.25, "x1": 0.5},
+        "job_metadata": {"job_name": "repeated"},
+    }
     np.savez(
         raw_dir / "summary.npz",
         values=np.array([0.90 - offset, 0.10 + offset]),
@@ -152,6 +156,14 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
         {
             "runner": "local",
             "cost": 999.0,
+            "created_at": "2026-05-14T08:00:00+08:00",
+            "started_at": "2026-05-14T08:00:10+08:00",
+            "ended_at": "2026-05-14T08:00:20+08:00",
+            "run_id": "pytest_run",
+            "optimization_index": 3,
+            "generation_index": 2,
+            "variables": {"x0": 0.25},
+            "unnormalized_variables": (1.0, 2.0),
             "normalized_variables": (0.1, 0.2, 0.3),
             "nested": {"costs": (1.0,), "kept": True},
         },
@@ -159,12 +171,24 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
 
     assert record["status"] == "completed"
     assert "cost" not in record
+    assert record["started_at"] == "2026-05-14T08:00:10+08:00"
+    assert record["ended_at"] == "2026-05-14T08:00:20+08:00"
+    assert record["run_id"] == "pytest_run"
+    assert record["optimization_index"] == 3
+    assert record["generation_index"] == 2
     assert "normalized_variables" not in record
     assert "cost" not in record["job_metadata"]
+    assert "created_at" not in record["job_metadata"]
+    assert "variables" not in record["job_metadata"]
+    assert "unnormalized_variables" not in record["job_metadata"]
     assert "normalized_variables" not in record["job_metadata"]
+    assert "started_at" not in record["job_metadata"]
+    assert "ended_at" not in record["job_metadata"]
     assert record["job_metadata"]["nested"] == {"kept": True}
     assert record["rawdata_metadata"]["job_completed/summary.npz"]["rawdata_name"] == "summary"
     assert record["rawdata_metadata"]["job_completed/summary.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
+    assert "variables" not in record["rawdata_metadata"]["job_completed/summary.npz"]
+    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/summary.npz"]
 
     rows = [
         json.loads(line)

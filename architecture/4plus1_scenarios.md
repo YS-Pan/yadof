@@ -4,9 +4,10 @@
 1. User edits `project/job_template/parameters_constraints.py`, `workflow.py`, and `calc_cost.py`.
 2. User calls `project.optimize.api.run_one_generation()`.
 3. `optimize` has no history, so it samples normalized candidates.
-4. `evaluate_manager` prepares jobs and runs `workflow.py`.
-5. `recorded_data` stores raw variables, rawData, and metadata.
-6. Three bounded costs are calculated dynamically and returned to `optimize`.
+4. `evaluate_manager` prepares jobs with run/generation context and runs `workflow.py`.
+5. `workflow.py` writes each individual's start/end metadata inside the job folder.
+6. `recorded_data` stores raw variables, rawData, compact metadata, optimization index, and generation index.
+7. Three bounded costs are calculated dynamically and returned to `optimize`.
 
 ## Scenario 2: Resume From History
 1. `optimize` asks `recorded_data` for historical optimization results.
@@ -24,7 +25,7 @@
 
 ## Scenario 4: Evaluation Failure
 1. One job preparation, workflow run, timeout, or recording step fails.
-2. `evaluate_manager` builds failure metadata and records best effort.
+2. `evaluate_manager` combines workflow-owned metadata, when present, with runner diagnostics and records best effort.
 3. The failed individual receives `inf` costs.
 4. Other individuals in the generation continue.
 5. Failure records remain visible in `recorded_data`, but default history excludes non-completed records.
@@ -39,6 +40,6 @@
 ## Scenario 6: Future Distributed Evaluation
 1. `evaluate_manager` selects distributed mode.
 2. It prepares the same job folder contract.
-3. HTCondor workers run workflow logic and write rawData/metadata.
+3. HTCondor workers run workflow logic and write rawData plus `individual_metadata.json`.
 4. Finalization reuses the local-mode status interpretation and `recorded_data` write path.
 5. Optimizer receives the same cost tuple shape as in local mode.

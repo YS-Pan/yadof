@@ -63,6 +63,8 @@ def test_run_generations_calls_evaluate_and_writes_lightweight_metadata(monkeypa
 
     assert first["record_type"] == "generation"
     assert first["run_id"] == "pytest_run"
+    assert first["optimization_index"] == 0
+    assert second["optimization_index"] == 0
     assert first["source"] == "gpsaf_random"
     assert second["source"] == "gpsaf_offspring"
     assert first["population_size"] == 2

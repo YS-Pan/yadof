@@ -17,6 +17,7 @@ DEFAULT_MODE = "local"
 FINAL_STATUSES = {"done", "error", "timeout"}
 WORKFLOW_SCRIPT_NAME = "workflow.py"
 RAW_DATA_DIR_NAME = "rawData"
+INDIVIDUAL_METADATA_FILE_NAME = "individual_metadata.json"
 
 
 def default_jobs_dir() -> Path:

@@ -9,9 +9,10 @@ from project.tools import viewCost
 
 
 class FakeRecordedDataApi:
-    def __init__(self, history, opt_metadata=()):
+    def __init__(self, history, opt_metadata=(), records=None):
         self.history = history
         self.opt_metadata = opt_metadata
+        self.records = records
         self.history_calls = []
 
     def get_historical_results(self, *, status="completed"):
@@ -19,6 +20,8 @@ class FakeRecordedDataApi:
         return self.history
 
     def list_records(self):
+        if self.records is not None:
+            return self.records
         return (
             {
                 "job_name": "job_a",
@@ -65,6 +68,36 @@ def test_build_rows_uses_recorded_data_history():
     assert "rows: 3" in summary
     assert "objectives: objective_1, objective_2" in summary
     assert "Pareto front:" in summary
+
+
+def test_build_rows_prefers_individual_context_over_opt_metadata():
+    fake_api = FakeRecordedDataApi(
+        history=(("job_a", (0.1, 0.2), (0.5, 0.8)),),
+        opt_metadata=(
+            {"run_id": "run_from_opt_meta", "generation_index": 1, "created_job_names": ["job_a"]},
+        ),
+        records=(
+            {
+                "job_name": "job_a",
+                "run_id": "run_from_individual",
+                "optimization_index": 7,
+                "generation_index": 3,
+                "job_metadata": {
+                    "run_id": "run_from_nested_metadata",
+                    "optimization_index": 2,
+                    "generation_index": 1,
+                    "job_static_hash": "hash_a",
+                },
+            },
+        ),
+    )
+
+    rows = viewCost.build_rows(fake_api)
+
+    assert rows[0]["optimization_index"] == 7
+    assert rows[0]["optimization_run_id"] == "run_from_individual"
+    assert rows[0]["generation_index"] == 3
+    assert rows[0]["job_static_hash"] == "hash_a"
 
 
 def test_build_rows_reports_empty_recorded_data():

@@ -54,7 +54,11 @@ def _metadata_by_job(recorded_api=recorded_data_api) -> dict[str, dict[str, obje
         if not isinstance(record, dict) or "job_name" not in record:
             continue
         metadata = record.get("job_metadata")
-        out[str(record["job_name"])] = metadata if isinstance(metadata, dict) else {}
+        row = dict(metadata) if isinstance(metadata, dict) else {}
+        for key in ("run_id", "optimization_index", "generation_index", "population_index"):
+            if key in record:
+                row[key] = record[key]
+        out[str(record["job_name"])] = row
     return out
 
 
@@ -146,12 +150,13 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = "complete
 
         job_metadata = metadata.get(job_name, {})
         job_opt_metadata = opt_metadata.get(job_name, {})
-        optimization_index = job_opt_metadata.get("optimization_index")
+        optimization_index = _metadata_int(job_metadata, "optimization_index")
         if optimization_index is None:
-            optimization_index = _metadata_int(job_metadata, "optimization_index")
-        generation_index = job_opt_metadata.get("generation_index")
+            optimization_index = job_opt_metadata.get("optimization_index")
+        generation_index = _metadata_int(job_metadata, "generation_index")
         if generation_index is None:
-            generation_index = _metadata_int(job_metadata, "generation_index")
+            generation_index = job_opt_metadata.get("generation_index")
+        optimization_run_id = _metadata_str(job_metadata, "run_id") or job_opt_metadata.get("optimization_run_id")
         rows.append(
             {
                 "row_number": row_number,
@@ -159,7 +164,7 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = "complete
                 "variables": variables,
                 "costs": costs,
                 "optimization_index": optimization_index,
-                "optimization_run_id": job_opt_metadata.get("optimization_run_id"),
+                "optimization_run_id": optimization_run_id,
                 "generation_index": generation_index,
                 "job_static_hash": _metadata_str(job_metadata, "job_static_hash"),
             }

@@ -9,7 +9,7 @@
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
 - Default job-template tests assert the three objective names and `[0, 1]` cost bounds.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
-- Contract tests validate rawData metadata, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
+- Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
 - Surrogate tests verify rawData-first prediction, conditional-INR checkpoint/artifact writing, GPSAF integration, and fallback behavior.
 - Tool tests ensure `viewCost.py` uses the current recorded-data history instead of legacy JSONL files.
 
@@ -22,6 +22,7 @@
 - Tests intentionally avoid requiring real HFSS, HTCondor, or expensive simulation software.
 - Runtime temp directories are ignored through `pyproject.toml` pytest settings.
 - Tests assert that problem shape comes from `job_template`, not from global config.
+- Local pipeline tests should assert that `individual_metadata.json` exists in job folders and that recorded individual rows promote `started_at`, `ended_at`, `optimization_index`, and `generation_index` without persisting `created_at`.
 
 ## Mutability Profile
 - Add tests when changing shared contracts, storage layout, failure semantics, or surrogate API behavior.

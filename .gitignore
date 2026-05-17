@@ -3,6 +3,12 @@
 /project/recorded_data/manifest.json
 /project/recorded_data/manifest.json.lock
 /project/recorded_data/manifest.json.*.tmp
+/project/recorded_data/indMeta.jsonl
+/project/recorded_data/indMeta.jsonl.lock
+/project/recorded_data/indMeta.jsonl.*.tmp
+/project/recorded_data/rawData.npz
+/project/recorded_data/rawData.npz.tmp
+/project/recorded_data/optMeta/
 /project/recorded_data/rawData/**
 !/project/recorded_data/rawData/.gitkeep
 /project/recorded_data/**/__pycache__/
@@ -10,6 +16,7 @@
 /project/optimize/checkpoints/
 /project/surrogate/checkpoints/
 /project/tools/cost_*.png
+/project/tools/time_*.png
 /project/test/_pytest_tmp*/
 /reference/
 /obsolete/

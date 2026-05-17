@@ -11,14 +11,17 @@ sequenceDiagram
     participant R as recorded_data
     participant C as job_template calc_cost
 
-    O->>E: evaluate_population(normalized population)
+    O->>E: evaluate_population(normalized population, run/generation context)
     E->>T: denormalize through job_template.api
-    E->>J: copy template, write job_input.json, metadata
+    E->>J: copy template, write job_input.json and submit-side metadata
     E->>J: run workflow.py subprocess
     J->>T: workflow reads raw variables
+    T->>J: write individual_metadata.json started_at
     T->>J: write flat rawData/*.npz
-    E->>R: record_job_result(job, raw variables, rawData paths, metadata)
-    R->>R: append indMeta row, archive rawData members
+    T->>J: update individual_metadata.json ended_at/status
+    E->>J: read individual_metadata.json
+    E->>R: record_job_result(job, raw variables, rawData paths, merged metadata)
+    R->>R: append compact indMeta row, archive rawData members
     E->>R: calculate_costs(job_name)
     R->>C: calculate from rawData paths
     C-->>R: costs
@@ -51,12 +54,12 @@ sequenceDiagram
 
 ## Failure Handling
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
-- Workflow failure: local runner captures return code, stdout/stderr tails, status, and rawData presence.
-- Timeout: local runner terminates the process tree and records status `timeout`.
+- Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; local runner adds return code, stdout/stderr tails, and rawData presence.
+- Timeout: local runner terminates the process tree, records status `timeout`, and preserves any partial `individual_metadata.json` already written by the workflow.
 - Record failure: evaluation continues; returned row becomes `inf`.
 - Invalid rawData: `recorded_data.query` skips invalid completed rawData for history/training and exposes diagnostics.
 
 ## Concurrency Notes
 - Current local evaluation is sequential at the API level.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
-- Future distributed mode should reuse the same record/finalize semantics.
+- Future distributed mode should reuse the same record/finalize semantics: workers write job-local individual metadata and finalizers send compact records to `recorded_data`.

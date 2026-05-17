@@ -8,6 +8,7 @@
 ## Functionalities
 - `viewCost.py` reads `recorded_data.api.get_historical_results()`, dynamically calculates current costs, prints a Pareto-oriented summary, and optionally saves a PNG plot.
 - Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes.
+- `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback.
 - Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
 
 ## I/O Format
@@ -18,6 +19,7 @@
 ## Non-Obvious Techniques
 - `viewCost.py` intentionally reads costs through `recorded_data` instead of legacy `para_cost.jsonl` files.
 - Static-hash changes are plotted from job metadata so task definition changes are visible on cost timelines.
+- Optimization and generation boundaries can now come directly from individual `optimization_index` and `generation_index` fields, with `optMeta` joins still useful for run-level diagnostics.
 - The Pareto table is rendered in ASCII-safe text to keep terminal output robust.
 
 ## Mutability Profile

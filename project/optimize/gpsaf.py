@@ -52,6 +52,8 @@ def run_one_generation(
     population_size: int | None = None,
     variable_count: int | None = None,
     random_seed: int | None = None,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
 ) -> OptimizationResult:
     size = _config_population_size(population_size)
     seed = _config_seed(random_seed)
@@ -105,7 +107,12 @@ def run_one_generation(
         )
         population = population_from_records(records)
 
-    costs = evaluate(population)
+    costs = evaluate(
+        population,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=int(generation_index),
+    )
     if _surrogate_requested():
         notify_surrogate_after_evaluation(int(generation_index))
     return OptimizationResult(

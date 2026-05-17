@@ -12,6 +12,13 @@ import numpy as np
 from . import paths
 
 RawDataItem = dict[str, object] | str
+RAWDATA_METADATA_FORBIDDEN_KEYS = {
+    "variables",
+    "raw_variables",
+    "unnormalized_variables",
+    "normalized_variables",
+    "job_metadata",
+}
 
 
 def metadata_from_npz(path: Path) -> dict[str, object]:
@@ -31,7 +38,19 @@ def _metadata_from_npz_payload(data) -> dict[str, object]:
         loaded = json.loads(raw)
     except json.JSONDecodeError:
         return {}
-    return loaded if isinstance(loaded, dict) else {}
+    return _scrub_rawdata_metadata(loaded) if isinstance(loaded, dict) else {}
+
+
+def _scrub_rawdata_metadata(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _scrub_rawdata_metadata(item)
+            for key, item in value.items()
+            if str(key) not in RAWDATA_METADATA_FORBIDDEN_KEYS
+        }
+    if isinstance(value, (list, tuple)):
+        return [_scrub_rawdata_metadata(item) for item in value]
+    return value
 
 
 def load_npz(path: Path) -> dict[str, object]:

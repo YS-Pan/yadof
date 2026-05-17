@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import inspect
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -21,6 +22,9 @@ def evaluate_population(
     timeout_sec: float | None = None,
     python_executable: str | Path = sys.executable,
     env: Mapping[str, str] | None = None,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
+    generation_index: int | None = None,
 ) -> tuple[tuple[float, ...], ...]:
     """Evaluate a generation and return dynamically computed costs.
 
@@ -41,6 +45,9 @@ def evaluate_population(
             timeout_sec=timeout_sec,
             python_executable=python_executable,
             env=env,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
         )
     if mode == "distributed":
         raise NotImplementedError(
@@ -66,6 +73,9 @@ def _evaluate_population_local(
     timeout_sec: float,
     python_executable: str | Path,
     env: Mapping[str, str] | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
 ) -> tuple[tuple[float, ...], ...]:
     jobs_dir = Path(jobs_dir)
     costs_by_individual: list[tuple[float, ...] | None] = []
@@ -77,7 +87,15 @@ def _evaluate_population_local(
         result: JobResult | None = None
 
         try:
-            job = prepare_job(population_row, jobs_dir=jobs_dir, job_template_dir=job_template_dir)
+            job = _prepare_job(
+                population_row,
+                jobs_dir=jobs_dir,
+                job_template_dir=job_template_dir,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+                population_index=index,
+            )
         except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
             failure = _failed_result(
                 stage="prepare",
@@ -87,6 +105,9 @@ def _evaluate_population_local(
                 jobs_dir=jobs_dir,
                 job=job,
                 result=result,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
             )
             _best_effort_record_failure(failure)
             costs_by_individual.append(None)
@@ -103,6 +124,9 @@ def _evaluate_population_local(
                 jobs_dir=jobs_dir,
                 job=job,
                 result=result,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
             )
             _best_effort_record_failure(failure)
             costs_by_individual.append(None)
@@ -119,6 +143,9 @@ def _evaluate_population_local(
                 jobs_dir=jobs_dir,
                 job=job,
                 result=result,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
             )
             _best_effort_record_failure(failure)
             costs_by_individual.append(None)
@@ -145,6 +172,34 @@ def _finalize_result(result: JobResult) -> tuple[float, ...] | None:
     return tuple(float(x) for x in costs)
 
 
+def _prepare_job(
+    variables: tuple[Any, ...],
+    *,
+    jobs_dir: Path,
+    job_template_dir: str | Path,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+    population_index: int,
+) -> JobSpec:
+    kwargs: dict[str, Any] = {
+        "jobs_dir": jobs_dir,
+        "job_template_dir": job_template_dir,
+        "run_id": run_id,
+        "optimization_index": optimization_index,
+        "generation_index": generation_index,
+        "population_index": population_index,
+    }
+    try:
+        signature = inspect.signature(prepare_job)
+    except (TypeError, ValueError):
+        return prepare_job(variables, **kwargs)
+    if any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()):
+        return prepare_job(variables, **kwargs)
+    filtered = {key: value for key, value in kwargs.items() if key in signature.parameters}
+    return prepare_job(variables, **filtered)
+
+
 def _best_effort_record_failure(result: JobResult) -> None:
     try:
         record_result(result)
@@ -161,6 +216,9 @@ def _failed_result(
     jobs_dir: Path,
     job: JobSpec | None,
     result: JobResult | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
 ) -> JobResult:
     now = _now_text()
     job_name = _failure_job_name(index, now) if job is None and result is None else (result.job_name if result else job.name)
@@ -186,6 +244,14 @@ def _failed_result(
             "population_row": _metadata_row(population_row),
         }
     )
+    if run_id is not None:
+        metadata.setdefault("run_id", str(run_id))
+    if optimization_index is not None:
+        metadata.setdefault("optimization_index", int(optimization_index))
+    if generation_index is not None:
+        metadata.setdefault("generation_index", int(generation_index))
+    if job is not None and job.population_index is not None:
+        metadata.setdefault("population_index", int(job.population_index))
     return JobResult(
         job_name=job_name,
         job_dir=Path(job_dir),

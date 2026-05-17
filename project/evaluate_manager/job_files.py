@@ -21,6 +21,7 @@ EXCLUDED_TEMPLATE_NAMES = {
     "cost.json",
     "metadata.json",
     "metaData.json",
+    "individual_metadata.json",
 }
 EXCLUDED_TEMPLATE_DIRS = {"__pycache__", RAW_DATA_DIR_NAME}
 HASH_EXCLUDED_NAMES = {
@@ -29,6 +30,8 @@ HASH_EXCLUDED_NAMES = {
     "metadata.json",
     "metadata.json.tmp",
     "metaData.json",
+    "individual_metadata.json",
+    "individual_metadata.json.tmp",
 }
 HASH_EXCLUDED_DIRS = {
     "__pycache__",
@@ -53,6 +56,10 @@ def prepare_job(
     jobs_dir: str | Path,
     job_template_dir: str | Path,
     job_name: str | None = None,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
+    generation_index: int | None = None,
+    population_index: int | None = None,
 ) -> JobSpec:
     jobs_dir = Path(jobs_dir)
     template_dir = Path(job_template_dir)
@@ -70,24 +77,39 @@ def prepare_job(
 
     normalized_values = tuple(float(x) for x in variables)
     values = _denormalize_variables(normalized_values)
+    evaluation_context = _evaluation_context(
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        population_index=population_index,
+    )
     _write_json(
         job_dir / "job_input.json",
         {
             "job_name": name,
             "normalized_variables": list(normalized_values),
             "unnormalized_variables": list(values),
+            "evaluation_context": evaluation_context,
         },
     )
     metadata = {
         "job_name": name,
-        "status": "created",
+        "status": "prepared",
         "job_static_hash": job_static_hash,
-        "normalized_variables": list(normalized_values),
-        "unnormalized_variables": list(values),
+        **evaluation_context,
     }
     _write_json(job_dir / "metadata.json", metadata)
     _write_json(job_dir / "metaData.json", metadata)
-    return JobSpec(name=name, directory=job_dir, unnormalized_variables=values)
+    return JobSpec(
+        name=name,
+        directory=job_dir,
+        unnormalized_variables=values,
+        normalized_variables=normalized_values,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        population_index=population_index,
+    )
 
 
 def prepared_job_static_hash(job_dir: str | Path) -> str:
@@ -190,3 +212,22 @@ def _denormalize_variables(normalized_values: tuple[float, ...]) -> tuple[float,
 
 def _write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=True, indent=2), encoding="utf-8", newline="\n")
+
+
+def _evaluation_context(
+    *,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+    population_index: int | None,
+) -> dict[str, object]:
+    context: dict[str, object] = {}
+    if run_id is not None:
+        context["run_id"] = str(run_id)
+    if optimization_index is not None:
+        context["optimization_index"] = int(optimization_index)
+    if generation_index is not None:
+        context["generation_index"] = int(generation_index)
+    if population_index is not None:
+        context["population_index"] = int(population_index)
+    return context

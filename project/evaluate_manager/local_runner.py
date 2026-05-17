@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Mapping
 
-from .config import RAW_DATA_DIR_NAME, WORKFLOW_SCRIPT_NAME
+from .config import INDIVIDUAL_METADATA_FILE_NAME, RAW_DATA_DIR_NAME, WORKFLOW_SCRIPT_NAME
 from .types import JobResult, JobSpec
 
 
@@ -22,11 +22,11 @@ def run_local_job(
     workflow = job.directory / WORKFLOW_SCRIPT_NAME
     metadata = _base_metadata(job)
     if not workflow.is_file():
-        metadata.update(status="error", error=f"Missing {WORKFLOW_SCRIPT_NAME}", ended_at=_now_text())
+        metadata.update(status="error", error=f"Missing {WORKFLOW_SCRIPT_NAME}", runner_detected_at=_now_text())
         _write_metadata(job.directory, metadata)
         return _result(job, metadata)
 
-    metadata.update(status="running", started_at=_now_text())
+    metadata.update(status="running", runner_started_at=_now_text())
     _write_metadata(job.directory, metadata)
 
     run_env = os.environ.copy()
@@ -51,10 +51,11 @@ def run_local_job(
         stdout, stderr = proc.communicate()
 
     raw_data_paths = _raw_data_paths(job.directory)
+    individual_metadata = _read_individual_metadata(job.directory)
     if timed_out:
         status = "timeout"
         error = f"Workflow exceeded timeout_sec={float(timeout_sec):.3f}"
-    elif proc.returncode == 0 and raw_data_paths:
+    elif proc.returncode == 0 and raw_data_paths and str(individual_metadata.get("status", "")).lower() != "error":
         status = "done"
         error = None
     elif proc.returncode == 0:
@@ -64,11 +65,12 @@ def run_local_job(
         status = "error"
         error = f"Workflow exited with return code {proc.returncode}"
 
+    metadata.update(individual_metadata)
     metadata.update(
         status=status,
         timed_out=timed_out,
         returncode=None if timed_out else int(proc.returncode),
-        ended_at=_now_text(),
+        runner_finished_at=_now_text(),
         raw_data_files=[p.name for p in raw_data_paths],
         stdout_tail=_tail(stdout),
         stderr_tail=_tail(stderr),
@@ -95,13 +97,13 @@ def _base_metadata(job: JobSpec) -> dict:
     metadata.update(
         {
             "job_name": job.name,
-            "status": "created",
+            "status": "prepared",
             "engine": "local",
-            "unnormalized_variables": list(job.unnormalized_variables),
             "timed_out": False,
-            "created_at": metadata.get("created_at") or _now_text(),
         }
     )
+    for key, value in _job_context(job).items():
+        metadata.setdefault(key, value)
     return metadata
 
 
@@ -130,6 +132,32 @@ def _write_metadata(job_dir: Path, metadata: dict) -> None:
     text = json.dumps(metadata, ensure_ascii=True, indent=2)
     for name in ("metadata.json", "metaData.json"):
         (job_dir / name).write_text(text, encoding="utf-8", newline="\n")
+
+
+def _read_individual_metadata(job_dir: Path) -> dict:
+    path = job_dir / INDIVIDUAL_METADATA_FILE_NAME
+    if not path.is_file():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "individual_metadata_error": f"could not read {INDIVIDUAL_METADATA_FILE_NAME}",
+        }
+    return dict(loaded) if isinstance(loaded, dict) else {}
+
+
+def _job_context(job: JobSpec) -> dict[str, object]:
+    context: dict[str, object] = {}
+    if job.run_id is not None:
+        context["run_id"] = str(job.run_id)
+    if job.optimization_index is not None:
+        context["optimization_index"] = int(job.optimization_index)
+    if job.generation_index is not None:
+        context["generation_index"] = int(job.generation_index)
+    if job.population_index is not None:
+        context["population_index"] = int(job.population_index)
+    return context
 
 
 def _now_text() -> str:

@@ -8,10 +8,10 @@
 
 ## Functionalities
 - `project.optimize` owns the optimization loop, GPSAF-style candidate generation, history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
-- `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, runs local jobs, records failures, and returns in-memory costs to the optimizer.
+- `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, passes run/generation context, runs local jobs, reads workflow-owned individual metadata, records failures, and returns in-memory costs to the optimizer.
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, and rawData-to-cost calculation.
 - The current default test task exposes three bounded minimization objectives in `[0, 1]`: target match, curve magnitude, and surface reward.
-- `project.recorded_data` stores real evaluation records, raw variables, rawData files, rawData metadata, job metadata, and job names; it does not store cost or normalized variables as durable source data.
+- `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
@@ -21,7 +21,7 @@
 - User-edited inputs are primarily `project/config.py` plus the task-specific files in `project/job_template/`: `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and future simulator model/adaptor files.
 - Optimizer input and output use normalized float tuples shaped as `population[individual][variable]`.
 - Evaluator input is a generation of normalized float tuples; evaluator output is cost tuples shaped as `population[individual][objective_cost]`.
-- Job folders contain copied runtime files, `job_input.json`, `metadata.json`, `metaData.json`, and flat `rawData/*.npz` files. Jobs do not contain or save `cost.json`.
+- Job folders contain copied runtime files, `job_input.json`, submit-side `metadata.json`/`metaData.json`, workflow-owned `individual_metadata.json`, and flat `rawData/*.npz` files. Jobs do not contain or save `cost.json`.
 - Recorded history is represented by append-only individual metadata in `project/recorded_data/indMeta.jsonl`, optimization-level metadata in `project/recorded_data/optMeta/optMeta.jsonl`, and a single zip-based `project/recorded_data/rawData.npz` archive whose members are shaped like `job_name/file.npz`.
 - Public cross-core-module calls go through `api.py` files only: `optimize/api.py`, `evaluate_manager/api.py`, `job_template/api.py`, `recorded_data/api.py`, and `surrogate/api.py`.
 
@@ -30,6 +30,8 @@
 - Normalized historical variables are also derived data. `recorded_data` stores raw variables and uses current `job_template` parameter ranges to calculate normalized variables on demand.
 - `job_static_hash` captures copied static job inputs while excluding runtime outputs and per-individual variable payloads. It makes mid-run task changes visible without making every individual unique by hash.
 - rawData directories must stay flat. Each `.npz` is one rawData unit and must include schema-versioned metadata.
+- Workflow lifecycle time is owned by the individual job: `workflow.py` writes `started_at` and `ended_at` into `individual_metadata.json`, and `evaluate_manager` only reads and forwards it.
+- Variable values are stored once as individual `raw_variables`; repeated variable payloads are scrubbed from rawData metadata and job metadata before appending `indMeta.jsonl`.
 - `evaluate_manager` isolates per-individual failures. Prepare, run, timeout, and record failures should become metadata and `inf` costs rather than crashing the whole generation.
 - `surrogate` predicts rawData first, then derives costs through the same rawData-to-cost path used for real samples. Its INR training uses target scaling, ensemble/member spread, and relative-loss weighting so small objective values still matter.
 - GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; default settings keep the entry point available while not forcing surrogate calls.

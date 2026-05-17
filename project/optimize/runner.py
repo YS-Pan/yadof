@@ -27,6 +27,29 @@ def job_names() -> tuple[str, ...]:
     return ()
 
 
+def next_optimization_index() -> int:
+    try:
+        recorded_api = importlib.import_module("project.recorded_data.api")
+        func = getattr(recorded_api, "list_optimization_metadata", None)
+        if not callable(func):
+            return 0
+        rows = tuple(row for row in func() if isinstance(row, dict))
+    except Exception:
+        return 0
+    explicit = []
+    run_ids: list[str] = []
+    for row in rows:
+        try:
+            explicit.append(int(row["optimization_index"]))
+        except (KeyError, TypeError, ValueError):
+            run_id = row.get("run_id")
+            if run_id not in (None, "") and str(run_id) not in run_ids:
+                run_ids.append(str(run_id))
+    if explicit:
+        return max(explicit) + 1
+    return len(run_ids)
+
+
 def created_job_names(before: tuple[str, ...], after: tuple[str, ...]) -> tuple[str, ...]:
     before_counts: dict[str, int] = {}
     for name in before:
@@ -45,6 +68,7 @@ def created_job_names(before: tuple[str, ...], after: tuple[str, ...]) -> tuple[
 def record_generation_metadata(
     *,
     run_id: str,
+    optimization_index: int,
     result: OptimizationResult,
     started_at: str,
     ended_at: str,
@@ -54,6 +78,7 @@ def record_generation_metadata(
     data = {
         "record_type": "generation",
         "run_id": str(run_id),
+        "optimization_index": int(optimization_index),
         "generation_index": int(result.generation_index),
         "source": str(result.source),
         "surrogate_used": bool(result.surrogate_used),

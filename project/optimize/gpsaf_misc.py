@@ -150,7 +150,13 @@ def resolve_variable_count(
     raise RuntimeError("job_template.api must provide optimization variable count")
 
 
-def evaluate(population: Population) -> Costs:
+def evaluate(
+    population: Population,
+    *,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
+    generation_index: int | None = None,
+) -> Costs:
     evaluate_api = importlib.import_module("project.evaluate_manager.api")
     try:
         raw_costs = call_first(
@@ -158,6 +164,9 @@ def evaluate(population: Population) -> Costs:
             ("evaluate_generation", "evaluate_population", "evaluate"),
             population,
             mode=config.EVALUATION_MODE,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
         )
     except TypeError:
         raw_costs = call_first(

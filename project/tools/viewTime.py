@@ -86,10 +86,10 @@ def _opt_metadata_by_job(recorded_api=recorded_data_api) -> dict[str, dict[str, 
 
 def _first_datetime(record: Mapping[str, object], metadata: Mapping[str, object], keys: Sequence[str]) -> datetime | None:
     for key in keys:
-        dt = _parse_dt(metadata.get(key))
+        dt = _parse_dt(record.get(key))
         if dt is not None:
             return dt
-        dt = _parse_dt(record.get(key))
+        dt = _parse_dt(metadata.get(key))
         if dt is not None:
             return dt
     return None
@@ -187,12 +187,12 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
         start = _first_datetime(
             record,
             metadata,
-            ("started_at", "created_at", "failed_at", "ended_at", "recorded_at"),
+            ("started_at", "failed_at", "ended_at", "recorded_at"),
         )
         end = _first_datetime(
             record,
             metadata,
-            ("ended_at", "failed_at", "recorded_at", "started_at", "created_at"),
+            ("ended_at", "failed_at", "recorded_at", "started_at"),
         )
         if start is None and end is None:
             skipped_without_time += 1
@@ -204,12 +204,21 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
         assert start is not None and end is not None
 
         job_name = str(record.get("job_name") or metadata.get("job_name") or f"row_{row_number}")
-        optimization_index = (opt_row or {}).get("optimization_index")
+        optimization_index = _metadata_int(record, "optimization_index")
         if optimization_index is None:
             optimization_index = _metadata_int(metadata, "optimization_index")
-        generation_index = (opt_row or {}).get("generation_index")
+        if optimization_index is None:
+            optimization_index = (opt_row or {}).get("optimization_index")
+        generation_index = _metadata_int(record, "generation_index")
         if generation_index is None:
             generation_index = _metadata_int(metadata, "generation_index")
+        if generation_index is None:
+            generation_index = (opt_row or {}).get("generation_index")
+        optimization_run_id = (
+            _metadata_str(record, "run_id")
+            or _metadata_str(metadata, "run_id")
+            or (opt_row or {}).get("optimization_run_id")
+        )
         rows.append(
             {
                 "row_number": row_number,
@@ -220,7 +229,7 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
                 "elapsed_min": _elapsed_minutes(start, end, metadata),
                 "success": record_status == "completed",
                 "optimization_index": optimization_index,
-                "optimization_run_id": (opt_row or {}).get("optimization_run_id"),
+                "optimization_run_id": optimization_run_id,
                 "generation_index": generation_index,
                 "job_static_hash": _metadata_str(metadata, "job_static_hash"),
             }

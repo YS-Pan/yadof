@@ -33,8 +33,8 @@ flowchart LR
     EvalAPI --> EvalConfig["config.py"]
 ```
 
-- `job_files.py`: copy template, write job input, compute static hash.
-- `local_runner.py`: subprocess workflow execution and timeout handling.
+- `job_files.py`: copy template, write job input and run/generation context, compute static hash.
+- `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.
 
@@ -51,7 +51,7 @@ flowchart LR
     HFSS["hfss_com.py"] -. future adapter .-> Workflow
 ```
 
-- `workflow.py`: raw variable input to flat rawData output.
+- `workflow.py`: raw variable input to flat rawData output plus workflow-owned `individual_metadata.json` lifecycle timestamps.
 - `calc_cost.py`: rawData to three bounded objective costs.
 - `rawdata_contract.py`: `.npz` schema validation.
 - `test_com.py`: current pure-Python simulator stand-in.
@@ -70,10 +70,10 @@ flowchart LR
     MetaStore --> Paths["paths.py"]
 ```
 
-- `records.py`: individual metadata creation, optimization metadata creation, and rawData archiving.
+- `records.py`: compact individual metadata creation, optimization metadata creation, workflow timing promotion, and rawData archiving.
 - `query.py`: normalized variables, costs, history, training data, diagnostics.
 - `manifest_store.py`: JSONL locking, append/rewrite helpers, and status normalization.
-- `rawdata_store.py`: `rawData.npz` member archiving, metadata extraction, and archive loading.
+- `rawdata_store.py`: `rawData.npz` member archiving, repeated-variable metadata scrubbing, metadata extraction, and archive loading.
 
 ## Surrogate Components
 

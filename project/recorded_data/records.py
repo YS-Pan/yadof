@@ -19,7 +19,17 @@ from .utils import now_utc_text
 
 
 def safe_metadata(metadata: Mapping[str, object] | None) -> dict[str, object]:
-    forbidden = {"cost", "costs", "objective_costs", "normalized_variables", "normalized_variable_table"}
+    forbidden = {
+        "cost",
+        "costs",
+        "objective_costs",
+        "created_at",
+        "normalized_variables",
+        "normalized_variable_table",
+        "variables",
+        "raw_variables",
+        "unnormalized_variables",
+    }
     return {
         str(key): _safe_metadata_value(value, forbidden)
         for key, value in dict(metadata or {}).items()
@@ -75,6 +85,7 @@ def record_job_result(
             remove_archive_members_for_job(clean_job_name)
 
         rawdata_files, rawdata_metadata = append_rawdata_files(clean_job_name, source_paths)
+        clean_metadata = safe_metadata(job_metadata)
         record = {
             "schema_version": paths.IND_META_SCHEMA_VERSION,
             "job_name": clean_job_name,
@@ -82,9 +93,10 @@ def record_job_result(
             "raw_variables": variable_payload,
             "rawdata_files": rawdata_files,
             "rawdata_metadata": rawdata_metadata,
-            "job_metadata": safe_metadata(job_metadata),
             "recorded_at": now_utc_text(),
         }
+        _promote_individual_metadata(record, clean_metadata)
+        record["job_metadata"] = clean_metadata
 
         if overwrite:
             records.append(record)
@@ -120,3 +132,17 @@ def get_job_names(*, status: str | None = None) -> tuple[str, ...]:
         for record in records
         if status is None or str(record.get("status")) == status
     )
+
+
+def _promote_individual_metadata(record: dict[str, object], metadata: dict[str, object]) -> None:
+    for key in (
+        "run_id",
+        "optimization_index",
+        "generation_index",
+        "population_index",
+        "started_at",
+        "ended_at",
+    ):
+        if key not in metadata:
+            continue
+        record[key] = metadata.pop(key)

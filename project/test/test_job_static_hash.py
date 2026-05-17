@@ -96,6 +96,7 @@ def test_prepared_job_static_hash_ignores_runtime_artifacts(tmp_path):
     (job.directory / "job_input.json").write_text('{"normalized_variables": [9, 9, 9]}', encoding="utf-8")
     (job.directory / "metadata.json").write_text('{"status": "running"}', encoding="utf-8")
     (job.directory / "metaData.json").write_text('{"status": "running"}', encoding="utf-8")
+    (job.directory / "individual_metadata.json").write_text('{"status": "done"}', encoding="utf-8")
     (job.directory / "cost.json").write_text('{"cost": 123}', encoding="utf-8")
     (job.directory / "rawData" / "curve.npz").write_bytes(b"runtime raw data")
     (job.directory / "__pycache__").mkdir()

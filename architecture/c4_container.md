@@ -14,8 +14,8 @@ flowchart TD
 
     Evaluate -->|copy template, denormalize| Template["project/job_template"]
     Evaluate -->|create/run| Jobs["project/jobs runtime folders"]
-    Jobs -->|workflow writes rawData| Jobs
-    Evaluate -->|record result| Recorded
+    Jobs -->|workflow writes rawData and individual metadata| Jobs
+    Evaluate -->|read job metadata, record result| Recorded
 
     Recorded -->|normalize variables, calculate cost| Template
     Surrogate -->|training data| Recorded
@@ -30,8 +30,8 @@ flowchart TD
 ```
 
 ## Container Responsibilities
-- `optimize`: search policy, history warm start, GPSAF-style surrogate assistance, generation metadata.
-- `evaluate_manager`: job preparation, local execution, failure isolation, recording handoff.
+- `optimize`: search policy, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
+- `evaluate_manager`: job preparation, local execution, workflow metadata collection, failure isolation, recording handoff.
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
 - Current default `job_template`: pure-Python rawData generation plus three `[0, 1]` test objectives.
 - `recorded_data`: durable real-evaluation archive and dynamic historical views.
@@ -42,9 +42,9 @@ flowchart TD
 ## Primary Data Flow
 1. `optimize` creates normalized candidates.
 2. `evaluate_manager` prepares one job per candidate and denormalizes through `job_template`.
-3. Job `workflow.py` writes flat rawData `.npz` files.
-4. `evaluate_manager` sends job results to `recorded_data`.
-5. `recorded_data` stores raw evidence and asks `job_template` for dynamic cost when needed.
+3. Job `workflow.py` writes `individual_metadata.json` at start/end and writes flat rawData `.npz` files.
+4. `evaluate_manager` reads job-local metadata and sends job results to `recorded_data`.
+5. `recorded_data` stores raw evidence once per individual, archives rawData, and asks `job_template` for dynamic cost when needed.
 6. `surrogate` trains a conditional INR ensemble from recorded rawData and predicts rawData for optimizer-side candidate screening.
 
 ## Container Rules

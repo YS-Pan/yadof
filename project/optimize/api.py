@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .gpsaf import OptimizationResult
 from . import gpsaf
-from .runner import job_names, new_run_id, now_text, record_generation_metadata
+from .runner import job_names, new_run_id, next_optimization_index, now_text, record_generation_metadata
 
 
 def run_one_generation(
@@ -11,12 +11,20 @@ def run_one_generation(
     population_size: int | None = None,
     variable_count: int | None = None,
     random_seed: int | None = None,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
 ) -> OptimizationResult:
+    if run_id is None:
+        run_id = new_run_id()
+    if optimization_index is None:
+        optimization_index = next_optimization_index()
     return gpsaf.run_one_generation(
         generation_index=int(generation_index),
         population_size=population_size,
         variable_count=variable_count,
         random_seed=random_seed,
+        run_id=run_id,
+        optimization_index=int(optimization_index),
     )
 
 
@@ -28,8 +36,10 @@ def run_generations(
     variable_count: int | None = None,
     random_seed: int | None = None,
     run_id: str | None = None,
+    optimization_index: int | None = None,
 ) -> tuple[OptimizationResult, ...]:
     run_id = new_run_id() if run_id is None else str(run_id)
+    optimization_index = next_optimization_index() if optimization_index is None else int(optimization_index)
     results: list[OptimizationResult] = []
     for offset in range(max(0, int(generations))):
         generation_index = int(start_generation) + offset
@@ -40,11 +50,14 @@ def run_generations(
             population_size=population_size,
             variable_count=variable_count,
             random_seed=random_seed,
+            run_id=run_id,
+            optimization_index=optimization_index,
         )
         ended_at = now_text()
         after = job_names()
         record_generation_metadata(
             run_id=run_id,
+            optimization_index=optimization_index,
             result=result,
             started_at=started_at,
             ended_at=ended_at,

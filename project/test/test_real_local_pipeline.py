@@ -18,7 +18,14 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
 
     jobs_dir = tmp_path / "jobs"
     population = ((0.25, 0.5, 0.75) + (0.5,) * 17,)
-    costs = evaluate_population(population, jobs_dir=jobs_dir, timeout_sec=30)
+    costs = evaluate_population(
+        population,
+        jobs_dir=jobs_dir,
+        timeout_sec=30,
+        run_id="pytest_run",
+        optimization_index=4,
+        generation_index=5,
+    )
 
     assert len(costs) == 1
     assert len(costs[0]) == 3
@@ -30,13 +37,23 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
     assert not (job_dir / "cost.json").exists()
     assert not (job_dir / "calc_cost.py").exists()
     assert not (job_dir / "hfss_com.py").exists()
+    assert (job_dir / "individual_metadata.json").is_file()
     assert len(tuple((job_dir / "rawData").glob("*.npz"))) == 3
 
     records = recorded_api.list_records()
     assert len(records) == 1
     assert "cost" not in records[0]
+    assert "created_at" not in records[0]
+    assert isinstance(records[0]["started_at"], str)
+    assert isinstance(records[0]["ended_at"], str)
+    assert records[0]["run_id"] == "pytest_run"
+    assert records[0]["optimization_index"] == 4
+    assert records[0]["generation_index"] == 5
+    assert records[0]["population_index"] == 0
     assert len(records[0]["raw_variables"]) == 20
     assert records[0]["raw_variables"][:3] == pytest.approx([0.25, 0.5, 0.75])
+    assert "variables" not in records[0]["rawdata_metadata"][records[0]["rawdata_files"][0]]
+    assert "unnormalized_variables" not in records[0]["job_metadata"]
     assert (record_root / "rawData.npz").is_file()
     assert not (record_root / "rawData").exists()
     assert "job_static_hash" in records[0]["job_metadata"]
