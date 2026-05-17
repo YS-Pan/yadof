@@ -9,18 +9,22 @@ from project.tools import viewTime
 
 
 class FakeRecordedDataApi:
-    def __init__(self, records):
+    def __init__(self, records, opt_metadata=()):
         self.records = records
+        self.opt_metadata = opt_metadata
         self.list_calls = 0
 
     def list_records(self):
         self.list_calls += 1
         return self.records
 
+    def list_optimization_metadata(self):
+        return self.opt_metadata
+
 
 def test_build_rows_uses_recorded_data_individual_metadata_records():
     fake_api = FakeRecordedDataApi(
-        (
+        records=(
             {
                 "job_name": "job_a",
                 "status": "completed",
@@ -28,7 +32,6 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
                 "job_metadata": {
                     "started_at": "2026-05-14T08:00:00+08:00",
                     "ended_at": "2026-05-14T08:01:00+08:00",
-                    "optimization_index": 1,
                     "job_static_hash": "hash_a",
                 },
             },
@@ -39,7 +42,6 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
                 "job_metadata": {
                     "started_at": "2026-05-14T08:02:00+08:00",
                     "ended_at": "2026-05-14T08:03:30+08:00",
-                    "optimization_index": 1,
                     "job_static_hash": "hash_a",
                 },
             },
@@ -49,11 +51,14 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
                 "recorded_at": "2026-05-14T00:04:00+00:00",
                 "job_metadata": {
                     "failed_at": "2026-05-14T08:04:00+08:00",
-                    "optimization_index": 2,
                     "job_static_hash": "hash_b",
                 },
             },
-        )
+        ),
+        opt_metadata=(
+            {"run_id": "run_a", "generation_index": 0, "created_job_names": ["job_a", "job_b"]},
+            {"run_id": "run_b", "generation_index": 0, "created_job_names": ["job_c"]},
+        ),
     )
 
     rows = viewTime.build_rows(fake_api)
@@ -66,6 +71,8 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
     assert rows[1]["elapsed_min"] == pytest.approx(1.5)
     assert rows[2]["elapsed_min"] == pytest.approx(0.0)
     assert rows[2]["optimization_index"] == 2
+    assert rows[2]["optimization_run_id"] == "run_b"
+    assert rows[2]["generation_index"] == 0
     assert rows[2]["job_static_hash"] == "hash_b"
 
     summary = viewTime.summarize_rows(rows)

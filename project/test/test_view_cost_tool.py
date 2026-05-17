@@ -9,8 +9,9 @@ from project.tools import viewCost
 
 
 class FakeRecordedDataApi:
-    def __init__(self, history):
+    def __init__(self, history, opt_metadata=()):
         self.history = history
+        self.opt_metadata = opt_metadata
         self.history_calls = []
 
     def get_historical_results(self, *, status="completed"):
@@ -21,26 +22,33 @@ class FakeRecordedDataApi:
         return (
             {
                 "job_name": "job_a",
-                "job_metadata": {"optimization_index": 1, "job_static_hash": "hash_a"},
+                "job_metadata": {"job_static_hash": "hash_a"},
             },
             {
                 "job_name": "job_b",
-                "job_metadata": {"optimization_index": 1, "job_static_hash": "hash_a"},
+                "job_metadata": {"job_static_hash": "hash_a"},
             },
             {
                 "job_name": "job_c",
-                "job_metadata": {"optimization_index": 2, "job_static_hash": "hash_b"},
+                "job_metadata": {"job_static_hash": "hash_b"},
             },
         )
+
+    def list_optimization_metadata(self):
+        return self.opt_metadata
 
 
 def test_build_rows_uses_recorded_data_history():
     fake_api = FakeRecordedDataApi(
-        (
+        history=(
             ("job_a", (0.1, 0.2), (0.5, 0.8)),
             ("job_b", (0.2, 0.3), (0.4, 0.9)),
             ("job_c", (0.3, 0.4), (0.7, 0.3)),
-        )
+        ),
+        opt_metadata=(
+            {"run_id": "run_a", "generation_index": 0, "created_job_names": ["job_a", "job_b"]},
+            {"run_id": "run_b", "generation_index": 0, "created_job_names": ["job_c"]},
+        ),
     )
 
     rows = viewCost.build_rows(fake_api)
@@ -49,6 +57,8 @@ def test_build_rows_uses_recorded_data_history():
     assert [row["job_name"] for row in rows] == ["job_a", "job_b", "job_c"]
     assert rows[0]["costs"] == pytest.approx((0.5, 0.8))
     assert rows[2]["optimization_index"] == 2
+    assert rows[2]["optimization_run_id"] == "run_b"
+    assert rows[2]["generation_index"] == 0
     assert rows[2]["job_static_hash"] == "hash_b"
 
     summary = viewCost.summarize_rows(rows)

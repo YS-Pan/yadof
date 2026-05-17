@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+from collections.abc import Sequence as SequenceABC
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 try:
     from project.recorded_data import api as recorded_data_api
@@ -57,6 +58,38 @@ def _metadata_by_job(recorded_api=recorded_data_api) -> dict[str, dict[str, obje
     return out
 
 
+def _opt_metadata_by_job(recorded_api=recorded_data_api) -> dict[str, dict[str, object]]:
+    list_optimization_metadata = getattr(recorded_api, "list_optimization_metadata", None)
+    if list_optimization_metadata is None:
+        return {}
+
+    out: dict[str, dict[str, object]] = {}
+    run_order: dict[str, int] = {}
+    for row_number, raw_row in enumerate(list_optimization_metadata(), start=1):
+        if not isinstance(raw_row, Mapping):
+            continue
+        row = dict(raw_row)
+        run_id = str(row.get("run_id") or row.get("optimization_index") or f"run_{row_number}")
+        if run_id not in run_order:
+            run_order[run_id] = len(run_order) + 1
+        created_job_names = row.get("created_job_names", ())
+        if isinstance(created_job_names, (str, bytes)) or not isinstance(created_job_names, SequenceABC):
+            created_job_names = (created_job_names,)
+        for job_name_raw in created_job_names:
+            if job_name_raw in (None, ""):
+                continue
+            out[str(job_name_raw)] = {
+                "optimization_index": run_order[run_id],
+                "optimization_run_id": run_id,
+                "generation_index": _metadata_int(row, "generation_index"),
+                "started_at": row.get("started_at"),
+                "ended_at": row.get("ended_at"),
+                "source": row.get("source"),
+                "surrogate_used": row.get("surrogate_used"),
+            }
+    return out
+
+
 def _metadata_int(metadata: dict[str, object], key: str) -> int | None:
     value = metadata.get(key)
     if value is None:
@@ -87,6 +120,7 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = "complete
         history = get_history()
 
     metadata = _metadata_by_job(recorded_api)
+    opt_metadata = _opt_metadata_by_job(recorded_api)
     rows: list[dict[str, object]] = []
     objective_count: int | None = None
     for row_number, item in enumerate(history, start=1):
@@ -104,13 +138,22 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = "complete
             raise ViewCostError("Historical rows have inconsistent objective counts")
 
         job_metadata = metadata.get(job_name, {})
+        job_opt_metadata = opt_metadata.get(job_name, {})
+        optimization_index = job_opt_metadata.get("optimization_index")
+        if optimization_index is None:
+            optimization_index = _metadata_int(job_metadata, "optimization_index")
+        generation_index = job_opt_metadata.get("generation_index")
+        if generation_index is None:
+            generation_index = _metadata_int(job_metadata, "generation_index")
         rows.append(
             {
                 "row_number": row_number,
                 "job_name": job_name,
                 "variables": variables,
                 "costs": costs,
-                "optimization_index": _metadata_int(job_metadata, "optimization_index"),
+                "optimization_index": optimization_index,
+                "optimization_run_id": job_opt_metadata.get("optimization_run_id"),
+                "generation_index": generation_index,
                 "job_static_hash": _metadata_str(job_metadata, "job_static_hash"),
             }
         )

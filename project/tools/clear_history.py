@@ -12,6 +12,8 @@ JOBS_DIR = PROJECT_ROOT / "jobs"
 SURROGATE_CHECKPOINTS_DIR = PROJECT_ROOT / "surrogate" / "checkpoints"
 RECORDED_RAWDATA_ARCHIVE = PROJECT_ROOT / "recorded_data" / "rawData.npz"
 RECORDED_IND_META_PATH = PROJECT_ROOT / "recorded_data" / "indMeta.jsonl"
+RECORDED_IND_META_LOCK = PROJECT_ROOT / "recorded_data" / "indMeta.jsonl.lock"
+RECORDED_RAWDATA_ARCHIVE_TEMP = PROJECT_ROOT / "recorded_data" / "rawData.npz.tmp"
 RECORDED_OPT_META_DIR = PROJECT_ROOT / "recorded_data" / "optMeta"
 
 
@@ -118,6 +120,10 @@ def clear_history() -> dict[str, object]:
     rawdata_recycled = _move_to_recycle_bin(RECORDED_RAWDATA_ARCHIVE)
     ind_meta_recycled = _move_to_recycle_bin(RECORDED_IND_META_PATH)
     opt_meta_recycled = _move_to_recycle_bin(RECORDED_OPT_META_DIR)
+    ind_meta_lock_deleted = RECORDED_IND_META_LOCK.exists()
+    rawdata_temp_deleted = RECORDED_RAWDATA_ARCHIVE_TEMP.exists()
+    _permanently_delete(RECORDED_IND_META_LOCK)
+    _permanently_delete(RECORDED_RAWDATA_ARCHIVE_TEMP)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
     return {
@@ -127,6 +133,8 @@ def clear_history() -> dict[str, object]:
         "recorded_rawdata_archive_moved_to_recycle_bin": rawdata_recycled,
         "recorded_ind_meta_moved_to_recycle_bin": ind_meta_recycled,
         "recorded_opt_meta_moved_to_recycle_bin": opt_meta_recycled,
+        "recorded_ind_meta_lock_permanently_deleted": ind_meta_lock_deleted,
+        "recorded_rawdata_temp_permanently_deleted": rawdata_temp_deleted,
     }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+from collections.abc import Sequence as SequenceABC
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -49,6 +50,38 @@ def _parse_dt(value: object) -> datetime | None:
 def _metadata(record: Mapping[str, object]) -> dict[str, object]:
     metadata = record.get("job_metadata")
     return dict(metadata) if isinstance(metadata, Mapping) else {}
+
+
+def _opt_metadata_by_job(recorded_api=recorded_data_api) -> dict[str, dict[str, object]]:
+    list_optimization_metadata = getattr(recorded_api, "list_optimization_metadata", None)
+    if list_optimization_metadata is None:
+        return {}
+
+    out: dict[str, dict[str, object]] = {}
+    run_order: dict[str, int] = {}
+    for row_number, raw_row in enumerate(list_optimization_metadata(), start=1):
+        if not isinstance(raw_row, Mapping):
+            continue
+        row = dict(raw_row)
+        run_id = str(row.get("run_id") or row.get("optimization_index") or f"run_{row_number}")
+        if run_id not in run_order:
+            run_order[run_id] = len(run_order) + 1
+        created_job_names = row.get("created_job_names", ())
+        if isinstance(created_job_names, (str, bytes)) or not isinstance(created_job_names, SequenceABC):
+            created_job_names = (created_job_names,)
+        for job_name_raw in created_job_names:
+            if job_name_raw in (None, ""):
+                continue
+            out[str(job_name_raw)] = {
+                "optimization_index": run_order[run_id],
+                "optimization_run_id": run_id,
+                "generation_index": _metadata_int(row, "generation_index"),
+                "started_at": row.get("started_at"),
+                "ended_at": row.get("ended_at"),
+                "source": row.get("source"),
+                "surrogate_used": row.get("surrogate_used"),
+            }
+    return out
 
 
 def _first_datetime(record: Mapping[str, object], metadata: Mapping[str, object], keys: Sequence[str]) -> datetime | None:
@@ -138,6 +171,7 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
         raise ViewTimeError("recorded_data.api does not provide list_records()")
 
     wanted_status = _as_filter_status(status)
+    opt_metadata = _opt_metadata_by_job(recorded_api)
     rows: list[dict[str, object]] = []
     skipped_without_time = 0
     for row_number, record_raw in enumerate(list_records(), start=1):
@@ -145,6 +179,7 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
             continue
         record = dict(record_raw)
         metadata = _metadata(record)
+        opt_row = opt_metadata.get(str(record.get("job_name") or metadata.get("job_name") or ""))
         record_status = _record_status(record, metadata)
         if wanted_status is not None and record_status != wanted_status:
             continue
@@ -169,6 +204,12 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
         assert start is not None and end is not None
 
         job_name = str(record.get("job_name") or metadata.get("job_name") or f"row_{row_number}")
+        optimization_index = (opt_row or {}).get("optimization_index")
+        if optimization_index is None:
+            optimization_index = _metadata_int(metadata, "optimization_index")
+        generation_index = (opt_row or {}).get("generation_index")
+        if generation_index is None:
+            generation_index = _metadata_int(metadata, "generation_index")
         rows.append(
             {
                 "row_number": row_number,
@@ -178,7 +219,9 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> 
                 "end": end,
                 "elapsed_min": _elapsed_minutes(start, end, metadata),
                 "success": record_status == "completed",
-                "optimization_index": _metadata_int(metadata, "optimization_index"),
+                "optimization_index": optimization_index,
+                "optimization_run_id": (opt_row or {}).get("optimization_run_id"),
+                "generation_index": generation_index,
                 "job_static_hash": _metadata_str(metadata, "job_static_hash"),
             }
         )
