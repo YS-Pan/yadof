@@ -14,17 +14,22 @@ from . import query as _query
 from . import records as _records
 
 MODULE_DIR = paths.MODULE_DIR
-MANIFEST_PATH = paths.MANIFEST_PATH
-RAWDATA_ROOT = paths.RAWDATA_ROOT
-MANIFEST_SCHEMA_VERSION = paths.MANIFEST_SCHEMA_VERSION
+IND_META_PATH = paths.IND_META_PATH
+RAWDATA_ARCHIVE_PATH = paths.RAWDATA_ARCHIVE_PATH
+OPT_META_DIR = paths.OPT_META_DIR
+OPT_META_PATH = paths.OPT_META_PATH
+IND_META_SCHEMA_VERSION = paths.IND_META_SCHEMA_VERSION
+OPT_META_SCHEMA_VERSION = paths.OPT_META_SCHEMA_VERSION
 VALID_RECORD_STATUSES = paths.VALID_RECORD_STATUSES
 
 
 def _sync_paths() -> None:
     paths.configure(
         module_dir=MODULE_DIR,
-        manifest_path=MANIFEST_PATH,
-        rawdata_root=RAWDATA_ROOT,
+        ind_meta_path=IND_META_PATH,
+        rawdata_archive_path=RAWDATA_ARCHIVE_PATH,
+        opt_meta_dir=OPT_META_DIR,
+        opt_meta_path=OPT_META_PATH,
     )
 
 
@@ -55,6 +60,16 @@ def list_records() -> tuple[dict[str, object], ...]:
     return _records.list_records()
 
 
+def record_optimization_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
+    _sync_paths()
+    return _records.record_optimization_metadata(metadata)
+
+
+def list_optimization_metadata() -> tuple[dict[str, object], ...]:
+    _sync_paths()
+    return _records.list_optimization_metadata()
+
+
 def get_job_names(*, status: str | None = None) -> tuple[str, ...]:
     _sync_paths()
     return _records.get_job_names(status=status)
@@ -80,7 +95,7 @@ def get_rawdata_samples(
     job_names: Sequence[str] | None = None,
     as_paths: bool = False,
     status: str | None = None,
-) -> tuple[tuple[str, tuple[dict[str, object] | Path, ...]], ...]:
+) -> tuple[tuple[str, tuple[dict[str, object] | str, ...]], ...]:
     _sync_paths()
     return _query.get_rawdata_samples(job_names=job_names, as_paths=as_paths, status=status)
 

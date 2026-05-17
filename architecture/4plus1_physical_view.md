@@ -21,8 +21,9 @@ flowchart TD
 ## Runtime Locations
 - Source code: `project/`.
 - Prepared jobs: default `project/jobs/`, configurable by `project/config.py`.
-- Recorded rawData: `project/recorded_data/rawData/<job_name>/`.
-- Recorded manifest: `project/recorded_data/manifest.json`.
+- Recorded individual metadata: `project/recorded_data/indMeta.jsonl`.
+- Recorded rawData: `project/recorded_data/rawData.npz`, a zip-based archive with members shaped like `job_name/file.npz`.
+- Recorded optimization metadata: `project/recorded_data/optMeta/optMeta.jsonl`.
 - Surrogate checkpoints: `project/surrogate/checkpoints/generation_*.json`.
 - Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.
@@ -44,4 +45,4 @@ flowchart LR
 - Local tests should not require HTCondor or simulator software.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
-- `recorded_data` manifest writes must stay atomic because future distributed finalization may introduce more concurrency.
+- `recorded_data` JSONL metadata writes and rawData archive updates must stay atomic because future distributed finalization may introduce more concurrency.

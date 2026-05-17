@@ -38,8 +38,6 @@ SURROGATE_INR_QUERY_BATCH_EVAL = 8192
 SURROGATE_INR_BOOTSTRAP_MEMBERS = True
 SURROGATE_INR_BOOTSTRAP_FRACTION = 1.0
 
-OPTIMIZE_CHECKPOINT_DIR = PROJECT_ROOT / "optimize" / "checkpoints"
-
 # GPSAF surrogate-assistance controls.
 # Set OPTIMIZE_SURROGATE_ALPHA = 1 and OPTIMIZE_SURROGATE_BETA = 0 to run the
 # same GPSAF entrypoint without importing or calling project.surrogate.

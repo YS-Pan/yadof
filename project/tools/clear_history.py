@@ -10,8 +10,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 JOBS_DIR = PROJECT_ROOT / "jobs"
 SURROGATE_CHECKPOINTS_DIR = PROJECT_ROOT / "surrogate" / "checkpoints"
-RECORDED_RAWDATA_DIR = PROJECT_ROOT / "recorded_data" / "rawData"
-RECORDED_MANIFEST_PATH = PROJECT_ROOT / "recorded_data" / "manifest.json"
+RECORDED_RAWDATA_ARCHIVE = PROJECT_ROOT / "recorded_data" / "rawData.npz"
+RECORDED_IND_META_PATH = PROJECT_ROOT / "recorded_data" / "indMeta.jsonl"
+RECORDED_OPT_META_DIR = PROJECT_ROOT / "recorded_data" / "optMeta"
 
 
 def _is_under_project(path: Path) -> bool:
@@ -114,16 +115,18 @@ def clear_history() -> dict[str, object]:
     jobs_deleted = _empty_directory_permanently(JOBS_DIR)
     checkpoints_existed = SURROGATE_CHECKPOINTS_DIR.exists()
     _permanently_delete(SURROGATE_CHECKPOINTS_DIR)
-    rawdata_recycled = _move_to_recycle_bin(RECORDED_RAWDATA_DIR)
-    manifest_recycled = _move_to_recycle_bin(RECORDED_MANIFEST_PATH)
+    rawdata_recycled = _move_to_recycle_bin(RECORDED_RAWDATA_ARCHIVE)
+    ind_meta_recycled = _move_to_recycle_bin(RECORDED_IND_META_PATH)
+    opt_meta_recycled = _move_to_recycle_bin(RECORDED_OPT_META_DIR)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
     return {
         "project_root": str(PROJECT_ROOT),
         "jobs_entries_permanently_deleted": jobs_deleted,
         "surrogate_checkpoints_permanently_deleted": checkpoints_existed,
-        "recorded_rawdata_moved_to_recycle_bin": rawdata_recycled,
-        "recorded_manifest_moved_to_recycle_bin": manifest_recycled,
+        "recorded_rawdata_archive_moved_to_recycle_bin": rawdata_recycled,
+        "recorded_ind_meta_moved_to_recycle_bin": ind_meta_recycled,
+        "recorded_opt_meta_moved_to_recycle_bin": opt_meta_recycled,
     }
 
 

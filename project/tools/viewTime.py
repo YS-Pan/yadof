@@ -131,7 +131,7 @@ def _as_filter_status(status: str | None) -> str | None:
 
 
 def build_rows(recorded_api=recorded_data_api, *, status: str | None = None) -> list[dict[str, object]]:
-    """Build timing rows from the v3 recorded_data manifest."""
+    """Build timing rows from v3 recorded_data individual metadata."""
 
     list_records = getattr(recorded_api, "list_records", None)
     if list_records is None:

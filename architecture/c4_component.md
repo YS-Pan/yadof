@@ -63,17 +63,17 @@ flowchart LR
 flowchart LR
     RDAPI["api.py"] --> Records["records.py"]
     RDAPI --> Query["query.py"]
-    Records --> Manifest["manifest_store.py"]
-    Query --> Manifest
+    Records --> MetaStore["manifest_store.py"]
+    Query --> MetaStore
     Records --> RawStore["rawdata_store.py"]
     Query --> RawStore
-    Manifest --> Paths["paths.py"]
+    MetaStore --> Paths["paths.py"]
 ```
 
-- `records.py`: record creation and rawData copy.
+- `records.py`: individual metadata creation, optimization metadata creation, and rawData archiving.
 - `query.py`: normalized variables, costs, history, training data, diagnostics.
-- `manifest_store.py`: locking, schema, atomic JSON writes.
-- `rawdata_store.py`: `.npz` metadata and file loading.
+- `manifest_store.py`: JSONL locking, append/rewrite helpers, and status normalization.
+- `rawdata_store.py`: `rawData.npz` member archiving, metadata extraction, and archive loading.
 
 ## Surrogate Components
 

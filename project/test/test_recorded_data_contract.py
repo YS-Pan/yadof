@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 from pathlib import Path
+import zipfile
 
 import numpy as np
 import pytest
@@ -24,8 +25,10 @@ def _raw_variables() -> tuple[float, ...]:
 
 def _configure_recorded_api(recorded_api, root: Path) -> None:
     recorded_api.MODULE_DIR = root
-    recorded_api.MANIFEST_PATH = root / "manifest.json"
-    recorded_api.RAWDATA_ROOT = root / "rawData"
+    recorded_api.IND_META_PATH = root / "indMeta.jsonl"
+    recorded_api.RAWDATA_ARCHIVE_PATH = root / "rawData.npz"
+    recorded_api.OPT_META_DIR = root / "optMeta"
+    recorded_api.OPT_META_PATH = root / "optMeta" / "optMeta.jsonl"
 
 
 def _write_rawdata_set(raw_dir: Path, *, offset: float = 0.0) -> Path:
@@ -135,7 +138,7 @@ def _record_error_worker(root_text: str, index: int) -> None:
     )
 
 
-def test_completed_record_enters_history_and_manifest_has_metadata(tmp_path):
+def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path):
     from project.recorded_data import api as recorded_api
 
     record_root = tmp_path / "recorded_data"
@@ -160,13 +163,24 @@ def test_completed_record_enters_history_and_manifest_has_metadata(tmp_path):
     assert "cost" not in record["job_metadata"]
     assert "normalized_variables" not in record["job_metadata"]
     assert record["job_metadata"]["nested"] == {"kept": True}
-    assert record["rawdata_metadata"]["summary.npz"]["rawdata_name"] == "summary"
-    assert record["rawdata_metadata"]["summary.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
+    assert record["rawdata_metadata"]["job_completed/summary.npz"]["rawdata_name"] == "summary"
+    assert record["rawdata_metadata"]["job_completed/summary.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
 
-    manifest = json.loads(recorded_api.MANIFEST_PATH.read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == recorded_api.MANIFEST_SCHEMA_VERSION
-    assert isinstance(manifest["updated_at"], str)
-    assert manifest["record_statuses"] == list(recorded_api.VALID_RECORD_STATUSES)
+    rows = [
+        json.loads(line)
+        for line in recorded_api.IND_META_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) == 1
+    assert rows[0]["schema_version"] == recorded_api.IND_META_SCHEMA_VERSION
+    assert rows[0]["job_name"] == "job_completed"
+    assert isinstance(rows[0]["recorded_at"], str)
+    with zipfile.ZipFile(recorded_api.RAWDATA_ARCHIVE_PATH, "r") as archive:
+        assert sorted(archive.namelist()) == [
+            "job_completed/curve.npz",
+            "job_completed/summary.npz",
+            "job_completed/surface.npz",
+        ]
 
     history = recorded_api.get_optimization_history()
     assert len(history) == 1
@@ -340,27 +354,31 @@ def test_record_job_result_rejects_nested_rawdata_directory(tmp_path):
         recorded_api.record_job_result("job_nested", _raw_variables(), raw_dir)
 
 
-def test_old_manifest_is_readable_and_upgraded_on_next_write(tmp_path):
+def test_existing_ind_meta_jsonl_is_preserved_on_next_write(tmp_path):
     from project.recorded_data import api as recorded_api
 
     record_root = tmp_path / "recorded_data"
     _configure_recorded_api(recorded_api, record_root)
     record_root.mkdir(parents=True)
-    recorded_api.MANIFEST_PATH.write_text(
-        json.dumps({"records": [{"job_name": "old_job", "status": "error", "raw_variables": []}]}),
+    recorded_api.IND_META_PATH.write_text(
+        json.dumps({"schema_version": 1, "job_name": "old_job", "status": "error", "raw_variables": []}) + "\n",
         encoding="utf-8",
     )
 
     assert tuple(record["job_name"] for record in recorded_api.list_records()) == ("old_job",)
 
     recorded_api.record_job_result("new_job", _raw_variables(), (), status="error")
-    manifest = json.loads(recorded_api.MANIFEST_PATH.read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == recorded_api.MANIFEST_SCHEMA_VERSION
-    assert isinstance(manifest["updated_at"], str)
-    assert tuple(record["job_name"] for record in manifest["records"]) == ("old_job", "new_job")
+    rows = [
+        json.loads(line)
+        for line in recorded_api.IND_META_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert tuple(record["job_name"] for record in rows) == ("old_job", "new_job")
+    assert rows[1]["schema_version"] == recorded_api.IND_META_SCHEMA_VERSION
+    assert isinstance(rows[1]["recorded_at"], str)
 
 
-def test_concurrent_recording_keeps_all_manifest_records(tmp_path):
+def test_concurrent_recording_keeps_all_ind_meta_records(tmp_path):
     from project.recorded_data import api as recorded_api
 
     record_root = tmp_path / "recorded_data"

@@ -11,8 +11,10 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
 
     record_root = tmp_path / "recorded_data"
     monkeypatch.setattr(recorded_api, "MODULE_DIR", record_root)
-    monkeypatch.setattr(recorded_api, "MANIFEST_PATH", record_root / "manifest.json")
-    monkeypatch.setattr(recorded_api, "RAWDATA_ROOT", record_root / "rawData")
+    monkeypatch.setattr(recorded_api, "IND_META_PATH", record_root / "indMeta.jsonl")
+    monkeypatch.setattr(recorded_api, "RAWDATA_ARCHIVE_PATH", record_root / "rawData.npz")
+    monkeypatch.setattr(recorded_api, "OPT_META_DIR", record_root / "optMeta")
+    monkeypatch.setattr(recorded_api, "OPT_META_PATH", record_root / "optMeta" / "optMeta.jsonl")
 
     jobs_dir = tmp_path / "jobs"
     population = ((0.25, 0.5, 0.75) + (0.5,) * 17,)
@@ -35,6 +37,8 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
     assert "cost" not in records[0]
     assert len(records[0]["raw_variables"]) == 20
     assert records[0]["raw_variables"][:3] == pytest.approx([0.25, 0.5, 0.75])
+    assert (record_root / "rawData.npz").is_file()
+    assert not (record_root / "rawData").exists()
     assert "job_static_hash" in records[0]["job_metadata"]
 
     history = recorded_api.get_optimization_history()

@@ -3,11 +3,11 @@
 ## Intent
 - Own the optimizer-facing API and the GPSAF-style search policy while staying independent from workflow, simulator, job execution, and rawData storage details.
 - Work in normalized variable space and treat historical samples as advisory state supplied by `recorded_data`.
-- Support warm-started runs, optional surrogate assistance, and small, resumable generation metadata.
+- Support warm-started runs, optional surrogate assistance, and small optimization-level generation metadata.
 
 ## Functionalities
 - `api.run_one_generation()` delegates one generation to `gpsaf.run_one_generation()`.
-- `api.run_generations()` wraps repeated generation execution and writes lightweight generation metadata through `runner.py`.
+- `api.run_generations()` wraps repeated generation execution and records lightweight generation metadata through `recorded_data.api`.
 - `gpsaf.py` resolves problem width/objective width, builds a pymoo-backed context, chooses baseline or surrogate-assisted candidate generation, evaluates the chosen population, and optionally notifies surrogate retraining.
 - `gpsaf_pymoo.py` adapts GA/NSGA2 ask-tell behavior to the unit hypercube and reconstructs optimizer state from historical records.
 - `gpsaf_phases.py` implements surrogate alpha/beta candidate phases, uncertainty-aware comparisons, and graceful fallback when surrogate calls fail.
@@ -20,7 +20,7 @@
 - Historical rows are `(job_name, normalized_variables, costs)` from `recorded_data.api`.
 - Evaluation requests go to `evaluate_manager.api.evaluate_generation/evaluate_population/evaluate`.
 - Public result is `OptimizationResult(generation_index, population, costs, history_count, source, surrogate_used, diagnostics)`.
-- Optimizer checkpoints and generation metadata should remain lightweight; durable real-evaluation data belongs to `recorded_data`.
+- Optimizer generation metadata should remain lightweight and live under `recorded_data/optMeta/`; durable real-evaluation data belongs to `recorded_data`.
 
 ## Non-Obvious Techniques
 - `optimize` must not read `job_template` directly to normalize historical variables; only problem shape metadata may come from `job_template.api`.

@@ -18,7 +18,7 @@ sequenceDiagram
     J->>T: workflow reads raw variables
     T->>J: write flat rawData/*.npz
     E->>R: record_job_result(job, raw variables, rawData paths, metadata)
-    R->>R: copy rawData, update manifest
+    R->>R: append indMeta row, archive rawData members
     E->>R: calculate_costs(job_name)
     R->>C: calculate from rawData paths
     C-->>R: costs
@@ -58,5 +58,5 @@ sequenceDiagram
 
 ## Concurrency Notes
 - Current local evaluation is sequential at the API level.
-- `recorded_data` manifest writes are protected by process-local and file-level locks.
+- `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
 - Future distributed mode should reuse the same record/finalize semantics.

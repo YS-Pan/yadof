@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from .gpsaf import OptimizationResult
 from . import gpsaf
-from .runner import job_names, new_run_id, now_text, write_generation_metadata
+from .runner import job_names, new_run_id, now_text, record_generation_metadata
 
 
 def run_one_generation(
@@ -30,7 +28,6 @@ def run_generations(
     variable_count: int | None = None,
     random_seed: int | None = None,
     run_id: str | None = None,
-    checkpoint_dir: str | Path | None = None,
 ) -> tuple[OptimizationResult, ...]:
     run_id = new_run_id() if run_id is None else str(run_id)
     results: list[OptimizationResult] = []
@@ -46,14 +43,13 @@ def run_generations(
         )
         ended_at = now_text()
         after = job_names()
-        write_generation_metadata(
+        record_generation_metadata(
             run_id=run_id,
             result=result,
             started_at=started_at,
             ended_at=ended_at,
             jobs_before=before,
             jobs_after=after,
-            checkpoint_dir=checkpoint_dir,
         )
         results.append(result)
     return tuple(results)

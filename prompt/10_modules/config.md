@@ -6,7 +6,7 @@
 - Make local/default behavior explicit while leaving future distributed and surrogate-assisted tuning paths visible.
 
 ## Functionalities
-- Defines root paths such as `PROJECT_ROOT`, `JOBS_DIR`, `SURROGATE_CHECKPOINT_DIR`, and `OPTIMIZE_CHECKPOINT_DIR`.
+- Defines root paths such as `PROJECT_ROOT`, `JOBS_DIR`, and `SURROGATE_CHECKPOINT_DIR`.
 - Selects `EVALUATION_MODE`.
 - Defines optimizer population, random seed, pymoo operator parameters, duplicate-key rounding, and refill behavior.
 - Defines surrogate model, torch device selection, conditional-INR training, target scaling, interval, and error hyperparameters.

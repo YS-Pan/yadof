@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Mapping, Sequence
+import zipfile
 
 try:
     from project.job_template import api as job_template_api
 except ImportError:  # Allows running from inside the project package directory.
     from ..job_template import api as job_template_api
 
-from .manifest_store import read_manifest, record_list
-from .rawdata_store import load_npz, rawdata_paths_for_record
+from .manifest_store import read_individual_records
+from . import paths
+from .rawdata_store import load_archive_member, rawdata_items_for_record, rawdata_members_for_record
 
 try:
     from project.job_template.rawdata_contract import RawDataContractError, validate_rawdata_item
@@ -17,7 +19,7 @@ except ImportError:  # Allows running from inside the project package directory.
     from ..job_template.rawdata_contract import RawDataContractError, validate_rawdata_item
 
 
-BAD_RAWDATA_EXCEPTIONS = (RawDataContractError, FileNotFoundError, OSError, ValueError)
+BAD_RAWDATA_EXCEPTIONS = (RawDataContractError, FileNotFoundError, OSError, ValueError, KeyError, zipfile.BadZipFile)
 BAD_VARIABLE_EXCEPTIONS = (KeyError, TypeError, ValueError)
 
 
@@ -29,7 +31,7 @@ def raw_variables_as_tuple(raw_variables: object) -> tuple[float, ...]:
 
 
 def get_raw_variables(*, status: str | None = None) -> tuple[tuple[str, tuple[float, ...]], ...]:
-    records = record_list(read_manifest())
+    records = read_individual_records()
     rows: list[tuple[str, tuple[float, ...]]] = []
     for record in records:
         if status is not None and str(record.get("status")) != status:
@@ -63,9 +65,9 @@ def get_rawdata_samples(
     job_names: Sequence[str] | None = None,
     as_paths: bool = False,
     status: str | None = None,
-) -> tuple[tuple[str, tuple[dict[str, object] | Path, ...]], ...]:
+) -> tuple[tuple[str, tuple[dict[str, object] | str, ...]], ...]:
     requested = set(str(name) for name in job_names) if job_names is not None else None
-    records = record_list(read_manifest())
+    records = read_individual_records()
     samples = []
     for record in records:
         name = str(record["job_name"])
@@ -73,8 +75,8 @@ def get_rawdata_samples(
             continue
         if status is not None and str(record.get("status")) != status:
             continue
-        paths = rawdata_paths_for_record(record)
-        items = paths if as_paths else tuple(load_npz(path) for path in paths)
+        members = rawdata_members_for_record(record)
+        items = members if as_paths else rawdata_items_for_record(record)
         samples.append((name, tuple(items)))
     return tuple(samples)
 
@@ -88,7 +90,7 @@ def calculate_costs(
     job_names: Sequence[str] | None = None,
     status: str | None = "completed",
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
-    samples = get_rawdata_samples(job_names=job_names, as_paths=True, status=status)
+    samples = get_rawdata_samples(job_names=job_names, as_paths=False, status=status)
     rows: list[tuple[str, tuple[float, ...]]] = []
     for job_name, rawdata in samples:
         try:
@@ -113,7 +115,7 @@ def get_historical_results(*, status: str | None = "completed") -> tuple[tuple[s
 def get_surrogate_training_data() -> dict[str, object]:
     names = job_template_api.get_parameter_names()
     normalized_by_job = dict(get_normalized_variables(status="completed"))
-    raw_rows = get_rawdata_samples(status="completed", as_paths=True)
+    raw_rows = get_rawdata_samples(status="completed", as_paths=False)
 
     variables: list[tuple[float, ...]] = []
     raw_data: list[tuple[dict[str, object], ...]] = []
@@ -122,11 +124,10 @@ def get_surrogate_training_data() -> dict[str, object]:
             continue
         try:
             job_template_api.calculate_cost((rawdata,))
-            loaded = tuple(load_npz(path) for path in rawdata)
         except BAD_RAWDATA_EXCEPTIONS:
             continue
         variables.append(normalized_by_job[job_name])
-        raw_data.append(loaded)
+        raw_data.append(tuple(rawdata))
 
     return {
         "parameter_names": names,
@@ -143,27 +144,28 @@ def get_rawdata_diagnostics(
 ) -> tuple[dict[str, object], ...]:
     requested = set(str(name) for name in job_names) if job_names is not None else None
     diagnostics: list[dict[str, object]] = []
-    for record in record_list(read_manifest()):
+    for record in read_individual_records():
         job_name = str(record["job_name"])
         if requested is not None and job_name not in requested:
             continue
         if status is not None and str(record.get("status")) != status:
             continue
-        for path in rawdata_paths_for_record(record):
-            diagnostic = _rawdata_diagnostic(job_name, path)
+        for member in rawdata_members_for_record(record):
+            diagnostic = _rawdata_diagnostic(job_name, member)
             if include_valid or diagnostic["status"] != "valid":
                 diagnostics.append(diagnostic)
     return tuple(diagnostics)
 
 
-def _rawdata_diagnostic(job_name: str, path: Path) -> dict[str, object]:
+def _rawdata_diagnostic(job_name: str, member: str) -> dict[str, object]:
     base = {
         "job_name": job_name,
-        "filename": path.name,
-        "path": str(path),
+        "filename": Path(member).name,
+        "archive_member": member,
+        "path": f"{paths.RAWDATA_ARCHIVE_PATH}::{member}",
     }
     try:
-        validate_rawdata_item(path)
+        validate_rawdata_item(load_archive_member(member))
     except RawDataContractError as exc:
         return {
             **base,
@@ -178,7 +180,7 @@ def _rawdata_diagnostic(job_name: str, path: Path) -> dict[str, object]:
             "error_type": "missing_file",
             "error_message": str(exc),
         }
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
         return {
             **base,
             "status": "skipped",

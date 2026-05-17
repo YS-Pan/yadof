@@ -18,7 +18,7 @@ class FakeRecordedDataApi:
         return self.records
 
 
-def test_build_rows_uses_recorded_data_manifest_records():
+def test_build_rows_uses_recorded_data_individual_metadata_records():
     fake_api = FakeRecordedDataApi(
         (
             {

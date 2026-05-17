@@ -5,7 +5,7 @@
 - rawData: one or more `.npz` files produced by a workflow.
 - Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. The default test task returns three minimization costs in `[0, 1]`.
 - Job: one real evaluation sandbox created by `evaluate_manager`.
-- Checkpoint: recoverable optimizer or surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts.
+- Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
 
 ## Logical Modules
 - `optimize`: asks for candidate evaluations and optional surrogate predictions.
@@ -21,7 +21,7 @@
 - `tools` and `test` have looser access rules but should not become runtime dependencies.
 
 ## Derived Data Rules
-- Stored: job name, raw variables, rawData, rawData metadata, job metadata, status.
+- Stored: job name, raw variables, archived rawData, rawData metadata, job metadata, status, and optimization-level metadata.
 - Derived on demand: normalized variables, cost, surrogate errors, Pareto summaries.
 - Not stored as source truth: `cost.json`, normalized historical variables, surrogate prediction results.
 

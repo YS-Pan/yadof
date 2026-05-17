@@ -12,7 +12,7 @@ flowchart LR
     Yadot -->|runs workflow locally| Python["Local Python runtime"]
     Yadot -->|future distributed jobs| HTCondor["HTCondor cluster (future)"]
     Yadot -->|future real simulations| Simulator["Simulator adapters: HFSS, Maxwell, TwinBuilder, custom Python"]
-    Yadot -->|reads/writes| FS["Workspace filesystem: jobs, recorded_data, checkpoints"]
+    Yadot -->|reads/writes| FS["Workspace filesystem: jobs, recorded_data, surrogate checkpoints"]
     Tools["Optional plotting / maintenance tools"] -->|public APIs| Yadot
 ```
 
@@ -21,7 +21,7 @@ flowchart LR
 - Local Python runtime: executes the current `workflow.py` in isolated job folders.
 - Simulator adapters: future or optional adapters that turn variables into rawData.
 - HTCondor: planned distributed backend, not implemented in the current local skeleton.
-- Filesystem: the durable persistence layer for source files, job folders, rawData records, manifests, and checkpoints.
+- Filesystem: the durable persistence layer for source files, job folders, individual metadata, optimization metadata, archived rawData, and surrogate checkpoints.
 
 ## System Responsibilities
 - Generate candidate populations in normalized variable space.

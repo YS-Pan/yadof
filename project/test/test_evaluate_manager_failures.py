@@ -72,7 +72,7 @@ def test_record_failure_returns_inf_and_generation_continues(tmp_path, monkeypat
             recorded_failures.append(result)
             return None
         if result.job_name == "job_0":
-            raise OSError("manifest locked")
+            raise OSError("metadata locked")
         return (4.0,)
 
     monkeypatch.setattr(api, "prepare_job", prepare_job)
@@ -88,7 +88,7 @@ def test_record_failure_returns_inf_and_generation_continues(tmp_path, monkeypat
     assert failure.status == "error"
     assert failure.metadata["failure_stage"] == "record"
     assert failure.metadata["error_type"] == "OSError"
-    assert failure.metadata["error_message"] == "manifest locked"
+    assert failure.metadata["error_message"] == "metadata locked"
     assert failure.metadata["population_row"] == [0.0]
 
 

@@ -23,9 +23,10 @@ not stored as a durable source file.
 - `job_template/`: task-specific parameter definitions, workflow, rawData
   contract, simulator stand-in or adapter files, and rawData-to-cost logic.
   The default test task currently returns three bounded costs in `[0, 1]`.
-- `recorded_data/`: durable archive of job names, raw variables, rawData files,
-  rawData metadata, and job metadata. Normalized variables and costs are
-  calculated dynamically through APIs.
+- `recorded_data/`: durable archive of job names, raw variables, individual
+  metadata in `indMeta.jsonl`, optimization metadata in `optMeta/`, and all
+  rawData `.npz` members inside one `rawData.npz` archive. Normalized variables
+  and costs are calculated dynamically through APIs.
 - `surrogate/`: rawData-first surrogate training, prediction, uncertainty
   intervals, and per-generation checkpoints.
 - `tools/`: optional user-launched utilities. Core runtime does not import or

@@ -7,7 +7,7 @@
 - Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and later local/distributed execution backends should not force a rewrite of the core optimizer.
 
 ## Functionalities
-- `project.optimize` owns the optimization loop, GPSAF-style candidate generation, history warm start, and optional surrogate-assisted candidate selection.
+- `project.optimize` owns the optimization loop, GPSAF-style candidate generation, history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
 - `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, runs local jobs, records failures, and returns in-memory costs to the optimizer.
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, and rawData-to-cost calculation.
 - The current default test task exposes three bounded minimization objectives in `[0, 1]`: target match, curve magnitude, and surface reward.
@@ -22,7 +22,7 @@
 - Optimizer input and output use normalized float tuples shaped as `population[individual][variable]`.
 - Evaluator input is a generation of normalized float tuples; evaluator output is cost tuples shaped as `population[individual][objective_cost]`.
 - Job folders contain copied runtime files, `job_input.json`, `metadata.json`, `metaData.json`, and flat `rawData/*.npz` files. Jobs do not contain or save `cost.json`.
-- Recorded history is represented by a manifest plus copied rawData files under `project/recorded_data/rawData/<job_name>/`.
+- Recorded history is represented by append-only individual metadata in `project/recorded_data/indMeta.jsonl`, optimization-level metadata in `project/recorded_data/optMeta/optMeta.jsonl`, and a single zip-based `project/recorded_data/rawData.npz` archive whose members are shaped like `job_name/file.npz`.
 - Public cross-core-module calls go through `api.py` files only: `optimize/api.py`, `evaluate_manager/api.py`, `job_template/api.py`, `recorded_data/api.py`, and `surrogate/api.py`.
 
 ## Non-Obvious Techniques
@@ -38,5 +38,5 @@
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and simulator model files are intentionally highly mutable between optimization tasks.
 - `project/config.py` is mutable at campaign setup time and occasionally during tuning.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
-- Runtime folders such as `project/jobs/`, `project/recorded_data/rawData/`, and checkpoint directories are generated artifacts.
+- Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
 - `prompt/`, `reference_map.md`, and `architecture/` are documentation artifacts. Update them when module responsibilities or contracts change, not for every small implementation tweak.
