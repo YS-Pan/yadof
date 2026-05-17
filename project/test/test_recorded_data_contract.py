@@ -315,6 +315,26 @@ def test_legacy_rawdata_missing_schema_version_is_skipped_and_diagnosed(tmp_path
     assert diagnostics[0]["error_type"] == "legacy_schema"
 
 
+def test_corrupt_rawdata_archive_is_skipped_and_diagnosed(tmp_path):
+    from project.recorded_data import api as recorded_api
+
+    record_root = tmp_path / "recorded_data"
+    _configure_recorded_api(recorded_api, record_root)
+    raw_dir = _write_rawdata_set(tmp_path / "job_rawdata")
+    recorded_api.record_job_result("job_bad_archive", _raw_variables(), raw_dir)
+    recorded_api.RAWDATA_ARCHIVE_PATH.write_bytes(b"not a zip archive")
+
+    assert recorded_api.get_optimization_history() == ()
+    diagnostics = recorded_api.get_rawdata_diagnostics()
+
+    assert tuple(row["job_name"] for row in diagnostics) == (
+        "job_bad_archive",
+        "job_bad_archive",
+        "job_bad_archive",
+    )
+    assert {row["error_type"] for row in diagnostics} == {"unreadable_rawdata"}
+
+
 def test_duplicate_job_requires_explicit_overwrite(tmp_path):
     from project.recorded_data import api as recorded_api
 

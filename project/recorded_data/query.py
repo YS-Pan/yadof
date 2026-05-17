@@ -11,7 +11,12 @@ except ImportError:  # Allows running from inside the project package directory.
 
 from .manifest_store import read_individual_records
 from . import paths
-from .rawdata_store import load_archive_member, rawdata_items_for_record, rawdata_members_for_record
+from .rawdata_store import (
+    load_archive_member,
+    load_archive_members_from_archive,
+    rawdata_items_for_record,
+    rawdata_members_for_record,
+)
 
 try:
     from project.job_template.rawdata_contract import RawDataContractError, validate_rawdata_item
@@ -69,15 +74,33 @@ def get_rawdata_samples(
     requested = set(str(name) for name in job_names) if job_names is not None else None
     records = read_individual_records()
     samples = []
-    for record in records:
-        name = str(record["job_name"])
-        if requested is not None and name not in requested:
-            continue
-        if status is not None and str(record.get("status")) != status:
-            continue
-        members = rawdata_members_for_record(record)
-        items = members if as_paths else rawdata_items_for_record(record)
-        samples.append((name, tuple(items)))
+    if as_paths:
+        for record in records:
+            name = str(record["job_name"])
+            if requested is not None and name not in requested:
+                continue
+            if status is not None and str(record.get("status")) != status:
+                continue
+            samples.append((name, rawdata_members_for_record(record)))
+        return tuple(samples)
+
+    try:
+        archive = zipfile.ZipFile(paths.RAWDATA_ARCHIVE_PATH, "r")
+    except BAD_RAWDATA_EXCEPTIONS:
+        return ()
+    with archive:
+        for record in records:
+            name = str(record["job_name"])
+            if requested is not None and name not in requested:
+                continue
+            if status is not None and str(record.get("status")) != status:
+                continue
+            members = rawdata_members_for_record(record)
+            try:
+                items = load_archive_members_from_archive(archive, members)
+            except BAD_RAWDATA_EXCEPTIONS:
+                continue
+            samples.append((name, tuple(items)))
     return tuple(samples)
 
 

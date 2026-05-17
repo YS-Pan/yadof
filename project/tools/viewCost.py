@@ -117,7 +117,14 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = "complete
     try:
         history = get_history(status=status)
     except TypeError:
-        history = get_history()
+        try:
+            history = get_history()
+        except Exception as exc:  # noqa: BLE001 - keep the CLI from printing raw internals.
+            raise ViewCostError(f"Could not read recorded_data history: {exc}") from exc
+    except ViewCostError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - keep the CLI from printing raw internals.
+        raise ViewCostError(f"Could not read recorded_data history: {exc}") from exc
 
     metadata = _metadata_by_job(recorded_api)
     opt_metadata = _opt_metadata_by_job(recorded_api)

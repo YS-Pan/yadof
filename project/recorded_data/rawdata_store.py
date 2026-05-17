@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 import json
+import shutil
 from pathlib import Path
 from typing import Mapping, Sequence
 import zipfile
@@ -40,10 +41,21 @@ def load_npz(path: Path) -> dict[str, object]:
 
 def load_archive_member(member_name: str) -> dict[str, object]:
     with zipfile.ZipFile(paths.RAWDATA_ARCHIVE_PATH, "r") as archive:
-        with archive.open(member_name, "r") as member_file:
-            payload = member_file.read()
+        return load_archive_member_from_archive(archive, member_name)
+
+
+def load_archive_member_from_archive(archive: zipfile.ZipFile, member_name: str) -> dict[str, object]:
+    with archive.open(member_name, "r") as member_file:
+        payload = member_file.read()
     with np.load(BytesIO(payload), allow_pickle=False) as data:
         return {key: data[key].copy() for key in data.files}
+
+
+def load_archive_members_from_archive(
+    archive: zipfile.ZipFile,
+    member_names: Sequence[str],
+) -> tuple[dict[str, object], ...]:
+    return tuple(load_archive_member_from_archive(archive, member_name) for member_name in member_names)
 
 
 def rawdata_members_for_record(record: Mapping[str, object]) -> tuple[str, ...]:
@@ -66,17 +78,29 @@ def append_rawdata_files(job_name: str, source_paths: Sequence[Path]) -> tuple[l
     paths.RAWDATA_ARCHIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
     members: list[str] = []
     metadata: dict[str, object] = {}
-    with zipfile.ZipFile(paths.RAWDATA_ARCHIVE_PATH, "a", compression=zipfile.ZIP_STORED) as archive:
-        existing = set(archive.namelist())
-        for source_file in source_paths:
-            member = rawdata_member_name(job_name, source_file.name)
-            if member in existing:
-                raise ValueError(f"rawData archive already contains member {member!r}")
-            archive.write(source_file, member)
-            existing.add(member)
-            members.append(member)
-            metadata[member] = metadata_from_npz(source_file)
-    return members, metadata
+    archive_path = paths.RAWDATA_ARCHIVE_PATH
+    temp_path = archive_path.with_name(f"{archive_path.name}.tmp")
+    try:
+        if archive_path.exists():
+            shutil.copy2(archive_path, temp_path)
+            mode = "a"
+        else:
+            mode = "w"
+        with zipfile.ZipFile(temp_path, mode, compression=zipfile.ZIP_STORED, allowZip64=True) as target:
+            existing = set(target.namelist())
+            for source_file in source_paths:
+                member = rawdata_member_name(job_name, source_file.name)
+                if member in existing:
+                    raise ValueError(f"rawData archive already contains member {member!r}")
+                target.write(source_file, member)
+                existing.add(member)
+                members.append(member)
+                metadata[member] = metadata_from_npz(source_file)
+        temp_path.replace(archive_path)
+        return members, metadata
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
 
 
 def remove_archive_members_for_job(job_name: str) -> None:

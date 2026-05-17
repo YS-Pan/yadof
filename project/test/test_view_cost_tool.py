@@ -74,6 +74,15 @@ def test_build_rows_reports_empty_recorded_data():
         viewCost.build_rows(fake_api)
 
 
+def test_build_rows_wraps_recorded_data_errors():
+    class BrokenRecordedDataApi:
+        def get_historical_results(self, *, status="completed"):
+            raise OSError("rawData archive is busy")
+
+    with pytest.raises(viewCost.ViewCostError, match="rawData archive is busy"):
+        viewCost.build_rows(BrokenRecordedDataApi())
+
+
 def test_view_cost_source_does_not_reference_legacy_jsonl_inputs():
     source = Path(viewCost.__file__).read_text(encoding="utf-8")
 
