@@ -1,6 +1,13 @@
 # Architecture Index
 
-This folder describes the v3 `yadot` architecture from multiple viewpoints.
+This folder describes the v3 `yadot` architecture from multiple viewpoints. It is
+part of the documentation home under `dev_doc/`.
+
+## Reading Policy
+- Read every file in this folder in full when collecting project context.
+- Use `dev_doc/readme.md` for the broader documentation reading and writing guide.
+- Do not read `dev_doc/change_records/` by default; use it only when historical
+  rationale is needed.
 
 ## Files
 - `c4_context.md`: system context, actors, external systems, and project boundary.
@@ -23,3 +30,22 @@ normalized variables
 ```
 
 Cost and normalized historical variables are derived views, not durable source records.
+
+## Documentation Center
+The documentation home is:
+
+```text
+dev_doc/
+  readme.md
+  spec 20260502.md
+  terminology.md
+  reference_map.md
+  architecture/
+  prompt/
+  change_records/
+  obsolete/
+```
+
+`spec 20260502.md`, `architecture/`, `reference_map.md`, and `terminology.md` are
+full-read context sources. `prompt/` is listed first and read selectively.
+`change_records/` and `obsolete/` are historical sources and are not read by default.

@@ -16,6 +16,7 @@
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
+- `dev_doc` owns project documentation guidance, including full-read context sources, selective prompt reading, terminology, reference ancestry, and append-only change records.
 
 ## I/O Format
 - User-edited inputs are primarily `project/config.py` plus the task-specific files in `project/job_template/`: `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and future simulator model/adaptor files.
@@ -41,4 +42,7 @@
 - `project/config.py` is mutable at campaign setup time and occasionally during tuning.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
-- `prompt/`, `reference_map.md`, and `architecture/` are documentation artifacts. Update them when module responsibilities or contracts change, not for every small implementation tweak.
+- `dev_doc/architecture/`, `dev_doc/prompt/`, `dev_doc/reference_map.md`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are documentation artifacts.
+- Update architecture and prompt files when module responsibilities, contracts, I/O, persistence behavior, execution topology, or non-obvious techniques change.
+- Add one `dev_doc/change_records/` file after each code change to explain what changed and why.
+- Update `dev_doc/terminology.md` when a change corrects a concept or introduces a non-obvious name.

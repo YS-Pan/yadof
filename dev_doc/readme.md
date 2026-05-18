@@ -1,0 +1,254 @@
+# dev_doc README
+
+`dev_doc/` stores the project documents that help an AI or human maintainer understand
+what the project is, how it is shaped, and why it changed over time.
+
+The documents in this folder are not all read with the same priority. Use the rules
+below before changing code or documentation.
+
+## Reading Guide
+
+When collecting project context, read these files in full:
+
+- `spec 20260502.md`
+- every file in `architecture/`
+- `reference_map.md`
+- `terminology.md`
+
+Read `prompt/` in two passes:
+
+1. List all filenames under `prompt/` and `prompt/10_modules/`.
+2. Read only the prompt files that match the modules or concepts being changed.
+
+Do not read `change_records/` by default. Use it only when you need the reason behind
+a past change, when a current change conflicts with old intent, or when the user asks
+for project history.
+
+`obsolete/` is archival material. Do not read it by default; use it only when a newer
+document explicitly points there or when investigating old plans.
+
+## Document Roles
+
+### `spec 20260502.md`
+
+The spec is the highest-level product and architecture contract. It explains the
+project goals, required capabilities, module boundaries, persistence rules, and
+non-negotiable invariants.
+
+Use it to answer:
+
+- What must the system be able to do?
+- Which design choices are intentional constraints?
+- Which behaviors must not be simplified away?
+
+Write it as a stable contract, not as a daily implementation log.
+
+Recommended structure:
+
+```text
+# Project Specification
+## Background
+## Goals
+## Terminology
+## Target Structure
+## Module Responsibilities
+## Communication Contracts
+## Data Persistence Rules
+## Error And Recovery Requirements
+## Extension Requirements
+## Core Invariants
+```
+
+### `architecture/`
+
+Architecture documents describe the current system from several viewpoints. They
+should explain how the project is organized now, what boundaries matter, and how
+runtime/development flows work.
+
+Use them to answer:
+
+- Which modules exist and how do they communicate?
+- Where does data flow at runtime?
+- Which files own which responsibilities?
+- What must be updated when a contract changes?
+
+Write architecture docs as current-view maps. They can describe the current
+implementation, but should emphasize stable relationships and invariants rather than
+line-by-line code details.
+
+Recommended file roles:
+
+```text
+00_architecture_index.md      overview and reading order
+c4_context.md                 system boundary and external actors
+c4_container.md               major modules and data flow
+c4_component.md               important internal components
+4plus1_logical_view.md        concepts, responsibilities, invariants
+4plus1_process_view.md        runtime sequences and failure flows
+4plus1_development_view.md    source layout, dependency rules, doc rules
+4plus1_physical_view.md       filesystem and deployment layout
+4plus1_scenarios.md           concrete use cases
+```
+
+Recommended section shape:
+
+```text
+# View Name
+## Scope
+## Diagram Or Structure
+## Responsibilities
+## Rules / Invariants
+## Notes
+```
+
+### `prompt/`
+
+Prompt documents are generative module descriptions. Their center thought is:
+
+> A capable AI should be able to recreate a file or module with the same function
+> from this prompt, even if the current source file is not visible.
+
+Therefore prompt files should not merely summarize the current source code. They
+should explain intent, expected behavior, I/O shapes, non-obvious techniques, and
+mutability boundaries.
+
+Use prompt files to answer:
+
+- What should this module do?
+- What shape should its inputs and outputs have?
+- Which implementation tricks are easy to lose?
+- Which parts are intended to change often?
+
+Recommended structure:
+
+```text
+# Module prompt: module_name
+
+## Intent
+- Why this module exists.
+
+## Functionalities
+- What this module must provide.
+
+## I/O Format
+- Public data shapes, files, APIs, and return values.
+
+## Non-Obvious Techniques
+- Important implementation ideas that should survive rewrites.
+
+## Mutability Profile
+- Which parts may change often and which contracts should stay stable.
+```
+
+Keep prompt files module-level until the project stabilizes. Avoid file-level prompt
+documents unless a single file has a complex contract that cannot be captured by the
+module prompt.
+
+### `reference_map.md`
+
+The reference map links current modules to their closest source references in
+`reference/`. It is not a copy plan. It exists so an AI can quickly find conceptual
+ancestors without bulk-reading old projects.
+
+Use it to answer:
+
+- Which old files are most relevant to this module?
+- Which old implementation ideas should be preserved?
+- Which references are historical only?
+
+Recommended structure:
+
+```text
+# Reference Map
+## project/ as a whole
+## project/module_name
+- Closest reference files
+- Natural-language mapping
+- Current implementation note, when useful
+```
+
+Update it when a module adopts a new reference, drops an old one, or changes which
+old project is conceptually closest.
+
+### `terminology.md`
+
+Terminology defines project-specific words whose meanings are not obvious from common
+software usage.
+
+Use it to answer:
+
+- What exactly does this project mean by a name?
+- Is a term durable data, derived data, runtime state, or a workflow concept?
+
+Recommended structure:
+
+```text
+# Project-Specific Terminology
+
+Only terms that need project context are listed here.
+
+| Term | Meaning In This Project |
+|---|---|
+| `term` | Definition and boundary notes. |
+```
+
+Update terminology when a change reveals a mistaken concept, introduces a new
+non-obvious name, or clarifies a term that could otherwise be misused.
+
+### `change_records/`
+
+`change_records/` contains time-named change records. It is similar to Architecture
+Decision Records, but broader: each record explains a concrete change, why it was
+made, what was affected, and what remains open.
+
+The folder is not part of the default context-reading set. Read it only for historical
+reasoning.
+
+Filename format:
+
+```text
+YYYYMMDD_HHMMSS_short-description.md
+```
+
+Examples:
+
+```text
+20260518_075810_dev-doc-governance.md
+20260602_143000-surrogate-cache-policy.md
+```
+
+Recommended record structure:
+
+```text
+# YYYY-MM-DD HH:MM - Short Title
+
+## Context
+- What situation or problem triggered the change.
+
+## Change
+- What was changed.
+
+## Rationale
+- Why this approach was chosen.
+
+## Impact
+- Which modules, docs, tests, or workflows are affected.
+
+## Follow-Up
+- Optional remaining work, risks, or things to revisit.
+```
+
+## Maintenance Rules
+
+After each code change:
+
+1. Update relevant files in `architecture/` when module responsibilities, public APIs,
+   data persistence, execution topology, or development workflow changes.
+2. Update relevant files in `prompt/` when module intent, I/O, non-obvious techniques,
+   or mutability boundaries change.
+3. Add one file under `change_records/` describing what changed and why.
+4. Update `terminology.md` if the change corrects a mistaken concept or introduces a
+   name that is not intuitive.
+
+For documentation-only changes, still update architecture/prompt when the documentation
+system itself changes, and add a change record.

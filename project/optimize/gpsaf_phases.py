@@ -12,7 +12,7 @@ from .gpsaf_pymoo import (
     advance_population_with_records,
     clone_algorithm,
     generate_candidate_pool,
-    history_population,
+    survivor_state_from_history,
 )
 from .gpsaf_misc import (
     CandidateRecord,
@@ -271,7 +271,7 @@ def surrogate_population(
         return None, {"surrogate_error": error}
 
     rng = random.Random(int(seed) + int(generation_index) * 1009 + 17)
-    base_state = history_population(context, history)
+    base_state = survivor_state_from_history(context, history, population_size)
     used_keys = history_keys(history)
     diagnostics: dict[str, object] = {"optimizer": "gpsaf"}
 

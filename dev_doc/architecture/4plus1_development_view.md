@@ -3,6 +3,16 @@
 ## Source Layout
 
 ```text
+dev_doc/
+  readme.md
+  spec 20260502.md
+  terminology.md
+  reference_map.md
+  architecture/
+  prompt/
+  change_records/
+  obsolete/
+
 project/
   optimize/
   evaluate_manager/
@@ -37,7 +47,12 @@ project/
 - Avoid adding tests that require real HFSS or HTCondor for the default suite.
 
 ## Documentation Strategy
-- `prompt/` captures module intent and non-obvious techniques.
-- `reference_map.md` captures old-project ancestry.
-- `architecture/` captures current design views.
-- These docs should be updated when module contracts shift.
+- `dev_doc/readme.md` is the documentation entry point and writing guide.
+- `dev_doc/spec 20260502.md` is the highest-level product and architecture contract.
+- `dev_doc/architecture/` captures current design views and must be read in full for context.
+- `dev_doc/prompt/` captures generative module intent and non-obvious techniques; list all prompt files first, then read relevant files in full.
+- `dev_doc/reference_map.md` captures old-project ancestry and must be read in full for context.
+- `dev_doc/terminology.md` captures project-specific concepts and must be read in full for context.
+- `dev_doc/change_records/` captures what changed and why; do not read it by default.
+- `dev_doc/obsolete/` is archival and should not be read by default.
+- After each code change, update relevant architecture and prompt files, add a change record, and update terminology when a concept was misunderstood or a non-obvious term was introduced.

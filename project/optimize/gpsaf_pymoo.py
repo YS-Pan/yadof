@@ -155,7 +155,19 @@ def _selected_population(context: PymooContext, algorithm, size: int) -> Populat
         pop,
         n_survive=min(int(size), len(pop)),
         algorithm=algorithm,
+        random_state=getattr(algorithm, "random_state", None),
     )
+
+
+def survivor_state_from_history(context: PymooContext, history: Sequence[HistoryRecord], size: int):
+    algorithm = history_population(context, history)
+    selected = _selected_population(context, algorithm, size)
+    if len(selected) > 0:
+        algorithm.pop = selected
+        set_optimum = getattr(algorithm, "_set_optimum", None)
+        if callable(set_optimum):
+            set_optimum()
+    return algorithm
 
 
 def _record_from_individual(context: PymooContext, individual, origin: str) -> CandidateRecord:
@@ -257,6 +269,7 @@ def baseline_records(
             return selected[: int(size)], "gpsaf_random_refill"
         return selected, "gpsaf_warm_start"
 
+    state = survivor_state_from_history(context, history, size)
     records = generate_candidate_pool(
         context,
         state,

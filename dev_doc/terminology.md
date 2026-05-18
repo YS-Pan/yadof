@@ -14,3 +14,6 @@ Only terms that need project context are listed here.
 | `optimization_index` | Numeric ordinal for an optimization run. It is stored on each individual and in generation-level metadata. |
 | `generation_index` | Numeric generation number inside an optimization run. It is stored on each individual and in generation-level metadata. |
 | `population_index` | Zero-based position of an individual inside the evaluated population sent to `evaluate_manager`. |
+| `dev_doc` | Documentation home for project specification, architecture views, generative prompts, reference ancestry, terminology, change records, and obsolete notes. |
+| `prompt` | A generative module document. Its goal is to let an AI recreate equivalent behavior, not merely describe the current source file. |
+| `change_records` | Time-named documentation records under `dev_doc/change_records/` that explain what changed and why. They are not read by default during normal context gathering. |
