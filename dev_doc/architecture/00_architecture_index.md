@@ -5,7 +5,7 @@ part of the documentation home under `dev_doc/`.
 
 ## Reading Policy
 - Read every file in this folder in full when collecting project context.
-- Use `dev_doc/readme.md` for the broader documentation reading and writing guide.
+- Use `dev_doc/README.md` for the broader documentation reading and writing guide.
 - Do not read `dev_doc/change_records/` by default; use it only when historical
   rationale is needed.
 
@@ -36,16 +36,18 @@ The documentation home is:
 
 ```text
 dev_doc/
-  readme.md
+  README.md
   spec 20260502.md
   terminology.md
   reference_map.md
   architecture/
   prompt/
+  toDo/
   change_records/
   obsolete/
 ```
 
 `spec 20260502.md`, `architecture/`, `reference_map.md`, and `terminology.md` are
-full-read context sources. `prompt/` is listed first and read selectively.
-`change_records/` and `obsolete/` are historical sources and are not read by default.
+full-read context sources. `toDo/` is also full-read so pending future goals can shape
+current implementation choices. `prompt/` is listed first and read selectively.
+`change_records/` is historical and `obsolete/` is archival; neither is read by default.

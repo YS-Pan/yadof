@@ -4,7 +4,8 @@
 what the project is, how it is shaped, and why it changed over time.
 
 The documents in this folder are not all read with the same priority. Use the rules
-below before changing code or documentation.
+below before changing code or documentation. The canonical entry point is
+`dev_doc/README.md`.
 
 ## Reading Guide
 
@@ -14,6 +15,12 @@ When collecting project context, read these files in full:
 - every file in `architecture/`
 - `reference_map.md`
 - `terminology.md`
+- every Markdown file in `toDo/`
+
+Read `toDo/` in full during the first `dev_doc` pass even when the user's current
+instruction appears unrelated to every pending item. These files describe work that
+has not been done yet, and their purpose is to help the AI choose a technical route
+that will not fight likely future goals.
 
 Read `prompt/` in two passes:
 
@@ -25,7 +32,8 @@ a past change, when a current change conflicts with old intent, or when the user
 for project history.
 
 `obsolete/` is archival material. Do not read it by default; use it only when a newer
-document explicitly points there or when investigating old plans.
+document explicitly points there, when investigating old plans, or when checking a
+completed toDo handoff.
 
 ## Document Roles
 
@@ -144,6 +152,49 @@ Keep prompt files module-level until the project stabilizes. Avoid file-level pr
 documents unless a single file has a complex contract that cannot be captured by the
 module prompt.
 
+### `toDo/`
+
+`toDo/` contains time-named Markdown files for future work that has not been done
+yet. A file may describe one task or a cluster of related tasks. It is part of the
+default context-reading set because pending work can affect today's implementation
+choice even when today's request is not directly about that future task.
+
+Filename format:
+
+```text
+YYYYMMDD_HHMMSS_short-description.md
+```
+
+Examples:
+
+```text
+20260519_193400_nsga3-surrogate-handoff.md
+20260602_143000_surrogate-cache-policy.md
+```
+
+Recommended toDo structure:
+
+```text
+# Short Future Task Title
+
+## Context
+- Why this future work matters.
+
+## Goal
+- What should be true when the task is complete.
+
+## Guidance
+- Technical direction, constraints, and relevant files.
+
+## Completion Rule
+- How to recognize completion and whether any follow-up should remain.
+```
+
+When the user asks the AI to execute a task described in `toDo/`, complete the code
+and documentation work first, then move the corresponding Markdown file to
+`obsolete/`. If only part of the future work is completed, update the remaining
+toDo file or split out a new time-named toDo file before archiving the completed one.
+
 ### `reference_map.md`
 
 The reference map links current modules to their closest source references in
@@ -238,6 +289,20 @@ Recommended record structure:
 - Optional remaining work, risks, or things to revisit.
 ```
 
+### `obsolete/`
+
+`obsolete/` stores old plans, old diagnostics, completed toDo handoffs, and drafts
+that are no longer active design input.
+
+Use it to answer:
+
+- Why did a past plan exist?
+- What was completed and archived?
+- Is a current question explicitly pointing to an old handoff?
+
+Do not use `obsolete/` as a current fact source unless a current document explicitly
+brings a piece of information forward.
+
 ## Maintenance Rules
 
 After each code change:
@@ -249,6 +314,12 @@ After each code change:
 3. Add one file under `change_records/` describing what changed and why.
 4. Update `terminology.md` if the change corrects a mistaken concept or introduces a
    name that is not intuitive.
+5. If the change completes a task described in `toDo/`, move that toDo file to
+   `obsolete/` after updating the current docs and adding the change record.
 
 For documentation-only changes, still update architecture/prompt when the documentation
 system itself changes, and add a change record.
+
+When adding new future work, put it under `toDo/` rather than `change_records/`.
+`change_records/` explains completed changes; `toDo/` describes pending work that
+should influence future technical choices.
