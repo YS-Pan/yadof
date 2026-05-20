@@ -17,9 +17,9 @@ not stored as a durable source file.
 
 - `optimize/`: optimizer-facing entry points, GPSAF-style search, history warm
   start, and optional surrogate-assisted candidate selection.
-- `evaluate_manager/`: job creation, local execution, timeout/failure
-  isolation, and handoff to `recorded_data`. Distributed/HTCondor mode is still
-  a planned backend.
+- `evaluate_manager/`: job creation, local execution, optional
+  Distributed/HTCondor execution, timeout/failure isolation, and handoff to
+  `recorded_data`.
 - `job_template/`: task-specific parameter definitions, workflow, rawData
   contract, simulator stand-in or adapter files, and rawData-to-cost logic.
   The default test task currently returns three bounded costs in `[0, 1]`.
@@ -72,8 +72,8 @@ print(state.checkpoint_path)
 
 ## Useful Docs
 
-- Project prompt overview: `../prompt/00_project.md`
-- Module prompts: `../prompt/10_modules/`
-- Reference ancestry map: `../reference_map.md`
-- Architecture views: `../architecture/`
-- Highest-level specification: `../spec 20260502.md`
+- Project blueprint overview: `../dev_doc/blueprints/00_project.md`
+- Module blueprints: `../dev_doc/blueprints/10_modules/`
+- Reference ancestry map: `../dev_doc/reference_map.md`
+- Architecture views: `../dev_doc/architecture/`
+- Highest-level specification: `../dev_doc/spec 20260502.md`

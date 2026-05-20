@@ -29,7 +29,7 @@ flowchart TD
 - Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.
 
-## Future Distributed Deployment
+## Optional Distributed Deployment
 
 ```mermaid
 flowchart LR
@@ -42,9 +42,15 @@ flowchart LR
     Submit --> Records["recorded_data finalization"]
 ```
 
+In the implemented HTCondor path, the submit side writes one `job.sub` per prepared
+job folder. The submit file uses `executable = workflow.py`, `transfer_executable =
+True`, sandboxed Windows profile/temp environment variables, and transfers
+`rawData/` plus `individual_metadata.json` back on exit.
+
 ## Physical Constraints
 - Local tests should not require HTCondor or simulator software.
+- Distributed tests should mock HTCondor command execution unless they are explicit environment smoke tests.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
 - `created_at` is not part of the individual record contract; job creation time can be inferred from time-based job folder names when needed.
-- `recorded_data` JSONL metadata writes and rawData archive updates must stay atomic because future distributed finalization may introduce more concurrency.
+- `recorded_data` JSONL metadata writes and rawData archive updates must stay atomic because distributed finalization may introduce more concurrency.

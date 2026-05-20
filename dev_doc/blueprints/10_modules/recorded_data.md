@@ -1,4 +1,4 @@
-# Module prompt: recorded_data
+# Module blueprint: recorded_data
 
 ## Intent
 - Store durable real-evaluation evidence while avoiding derived values that can become stale.

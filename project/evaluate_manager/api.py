@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .config import DEFAULT_JOB_TEMPLATE_DIR, default_jobs_dir, default_mode, default_timeout_sec
+from .condor_runner import run_condor_jobs
 from .job_files import prepare_job
 from .local_runner import run_local_job
 from .recorded_data_client import record_result
@@ -33,7 +34,7 @@ def evaluate_population(
     the optimizer as in-memory values only.
     """
 
-    mode = default_mode() if mode is None else mode
+    mode = (default_mode() if mode is None else mode).strip().lower()
     jobs_dir = default_jobs_dir() if jobs_dir is None else jobs_dir
     timeout_sec = default_timeout_sec() if timeout_sec is None else timeout_sec
 
@@ -50,9 +51,15 @@ def evaluate_population(
             generation_index=generation_index,
         )
     if mode == "distributed":
-        raise NotImplementedError(
-            "distributed evaluate_manager mode is not implemented yet; "
-            "local mode uses isolated per-individual finalization."
+        return _evaluate_population_distributed(
+            population,
+            jobs_dir=jobs_dir,
+            job_template_dir=job_template_dir,
+            timeout_sec=timeout_sec,
+            env=env,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
         )
     raise ValueError(f"Unsupported evaluate_manager mode: {mode!r}")
 
@@ -99,6 +106,7 @@ def _evaluate_population_local(
         except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
             failure = _failed_result(
                 stage="prepare",
+                engine="local",
                 exc=exc,
                 population_row=population_row,
                 index=index,
@@ -118,6 +126,7 @@ def _evaluate_population_local(
         except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
             failure = _failed_result(
                 stage="run",
+                engine="local",
                 exc=exc,
                 population_row=population_row,
                 index=index,
@@ -137,6 +146,7 @@ def _evaluate_population_local(
         except Exception as exc:  # noqa: BLE001 - isolate recorded_data failures.
             failure = _failed_result(
                 stage="record",
+                engine="local",
                 exc=exc,
                 population_row=population_row,
                 index=index,
@@ -157,6 +167,106 @@ def _evaluate_population_local(
 
         objective_width = len(costs)
         costs_by_individual.append(costs)
+
+    return tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
+
+
+def _evaluate_population_distributed(
+    population: Iterable[Iterable[float]],
+    *,
+    jobs_dir: str | Path,
+    job_template_dir: str | Path,
+    timeout_sec: float,
+    env: Mapping[str, str] | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+) -> tuple[tuple[float, ...], ...]:
+    jobs_dir = Path(jobs_dir)
+    costs_by_individual: list[tuple[float, ...] | None] = []
+    objective_width: int | None = None
+    prepared_jobs: list[JobSpec] = []
+    prepared_positions: list[int] = []
+    population_rows: list[tuple[Any, ...]] = []
+
+    for index, variables in enumerate(population):
+        population_row = _population_row(variables)
+        population_rows.append(population_row)
+        costs_by_individual.append(None)
+        try:
+            job = _prepare_job(
+                population_row,
+                jobs_dir=jobs_dir,
+                job_template_dir=job_template_dir,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+                population_index=index,
+            )
+        except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
+            failure = _failed_result(
+                stage="prepare",
+                engine="htcondor",
+                exc=exc,
+                population_row=population_row,
+                index=index,
+                jobs_dir=jobs_dir,
+                job=None,
+                result=None,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+            )
+            _best_effort_record_failure(failure)
+            continue
+        prepared_positions.append(index)
+        prepared_jobs.append(job)
+
+    if prepared_jobs:
+        try:
+            results = run_condor_jobs(tuple(prepared_jobs), timeout_sec=timeout_sec, env=env)
+        except Exception as exc:  # noqa: BLE001 - backend-wide unexpected failure.
+            results = tuple(
+                _failed_result(
+                    stage="run",
+                    engine="htcondor",
+                    exc=exc,
+                    population_row=population_rows[position],
+                    index=position,
+                    jobs_dir=jobs_dir,
+                    job=job,
+                    result=None,
+                    run_id=run_id,
+                    optimization_index=optimization_index,
+                    generation_index=generation_index,
+                )
+                for position, job in zip(prepared_positions, prepared_jobs)
+            )
+
+        for position, job, result in zip(prepared_positions, prepared_jobs, results):
+            try:
+                costs = _finalize_result(result)
+            except Exception as exc:  # noqa: BLE001 - isolate recorded_data failures.
+                failure = _failed_result(
+                    stage="record",
+                    engine="htcondor",
+                    exc=exc,
+                    population_row=population_rows[position],
+                    index=position,
+                    jobs_dir=jobs_dir,
+                    job=job,
+                    result=result,
+                    run_id=run_id,
+                    optimization_index=optimization_index,
+                    generation_index=generation_index,
+                )
+                _best_effort_record_failure(failure)
+                continue
+
+            if costs is None:
+                continue
+            objective_width = len(costs)
+            costs_by_individual[position] = costs
 
     return tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
 
@@ -210,6 +320,7 @@ def _best_effort_record_failure(result: JobResult) -> None:
 def _failed_result(
     *,
     stage: str,
+    engine: str,
     exc: BaseException,
     population_row: tuple[Any, ...],
     index: int,
@@ -235,7 +346,7 @@ def _failed_result(
         {
             "job_name": job_name,
             "status": "error",
-            "engine": "local",
+            "engine": engine,
             "failure_stage": stage,
             "error_type": type(exc).__name__,
             "error_message": str(exc),

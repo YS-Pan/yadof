@@ -8,7 +8,7 @@
 
 ## Functionalities
 - `project.optimize` owns the optimization loop, GPSAF-style candidate generation, history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
-- `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, passes run/generation context, runs local jobs, reads workflow-owned individual metadata, records failures, and returns in-memory costs to the optimizer.
+- `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, passes run/generation context, runs local jobs or submits HTCondor jobs, reads workflow-owned individual metadata, records failures, and returns in-memory costs to the optimizer.
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, and rawData-to-cost calculation.
 - The current default test task exposes three bounded minimization objectives in `[0, 1]`: target match, curve magnitude, and surface reward.
 - `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
@@ -16,7 +16,7 @@
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
-- `dev_doc` owns project documentation guidance, including full-read context sources, selective prompt reading, terminology, reference ancestry, and append-only change records.
+- `dev_doc` owns project documentation guidance, including full-read context sources, selective blueprint reading, terminology, reference ancestry, and append-only change records.
 
 ## I/O Format
 - User-edited inputs are primarily `project/config.py` plus the task-specific files in `project/job_template/`: `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and future simulator model/adaptor files.
@@ -36,13 +36,14 @@
 - `evaluate_manager` isolates per-individual failures. Prepare, run, timeout, and record failures should become metadata and `inf` costs rather than crashing the whole generation.
 - `surrogate` predicts rawData first, then derives costs through the same rawData-to-cost path used for real samples. Its INR training uses target scaling, ensemble/member spread, and relative-loss weighting so small objective values still matter.
 - GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; default settings keep the entry point available while not forcing surrogate calls.
+- HTCondor distributed evaluation uses the same job folder and recording contract as local mode. Submit failures, stale daemons, credential errors, or broken pool topology are captured as job metadata; the project does not try to repair the installed HTCondor environment.
 
 ## Mutability Profile
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and simulator model files are intentionally highly mutable between optimization tasks.
 - `project/config.py` is mutable at campaign setup time and occasionally during tuning.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
-- `dev_doc/architecture/`, `dev_doc/prompt/`, `dev_doc/reference_map.md`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are documentation artifacts.
-- Update architecture and prompt files when module responsibilities, contracts, I/O, persistence behavior, execution topology, or non-obvious techniques change.
+- `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/reference_map.md`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are documentation artifacts.
+- Update architecture and blueprint files when module responsibilities, contracts, I/O, persistence behavior, execution topology, or non-obvious techniques change.
 - Add one `dev_doc/change_records/` file after each code change to explain what changed and why.
 - Update `dev_doc/terminology.md` when a change corrects a concept or introduces a non-obvious name.

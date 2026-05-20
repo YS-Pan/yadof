@@ -1,4 +1,4 @@
-# Module prompt: job_template
+# Module blueprint: job_template
 
 ## Intent
 - Own the task-specific definition of optimization variables, workflow execution, rawData shape, and rawData-to-cost calculation.

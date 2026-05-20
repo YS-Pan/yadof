@@ -3,10 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-JOBS_DIR = PROJECT_ROOT / "jobs"
+JOBS_DIR = Path("R:/")
 SURROGATE_CHECKPOINT_DIR = PROJECT_ROOT / "surrogate" / "checkpoints"
 
 EVALUATION_MODE = "local"
+HTCONDOR_SUBMIT_EXE = "condor_submit"
+HTCONDOR_REMOVE_EXE = "condor_rm"
+HTCONDOR_POLL_SEC = 30.0
+HTCONDOR_REQUEST_CPUS = 4
+HTCONDOR_REQUEST_MEMORY = "8GB"
+HTCONDOR_REQUEST_DISK = "2GB"
+HTCONDOR_ENVIRONMENT = "USERPROFILE=._home;HOME=._home;APPDATA=._appdata;LOCALAPPDATA=._localappdata;TEMP=._tmp;TMP=._tmp"
+HTCONDOR_LOAD_PROFILE = True
+HTCONDOR_RUN_AS_OWNER = False
+HTCONDOR_REQUIREMENTS = '(OpSys == "WINDOWS")'
 
 OPTIMIZE_POPULATION_SIZE = 100
 OPTIMIZE_RANDOM_SEED = 20260510
@@ -43,8 +53,8 @@ SURROGATE_INR_BOOTSTRAP_FRACTION = 1.0
 # same GPSAF entrypoint without importing or calling project.surrogate.
 # Increase alpha above 1 to add surrogate tournament pressure; increase beta
 # above 0 to run simulated baseline-optimizer iterations on surrogate costs.
-OPTIMIZE_SURROGATE_ALPHA = 1
-OPTIMIZE_SURROGATE_BETA = 0
+OPTIMIZE_SURROGATE_ALPHA = 3
+OPTIMIZE_SURROGATE_BETA = 3
 OPTIMIZE_SURROGATE_GAMMA = 0.5
 
 OPTIMIZE_REFILL_ATTEMPTS = 8

@@ -1,4 +1,4 @@
-# Module prompt: surrogate
+# Module blueprint: surrogate
 
 ## Intent
 - Provide optimizer-facing surrogate prediction while preserving the required `normalized variables -> rawData -> cost` chain.

@@ -22,10 +22,10 @@ instruction appears unrelated to every pending item. These files describe work t
 has not been done yet, and their purpose is to help the AI choose a technical route
 that will not fight likely future goals.
 
-Read `prompt/` in two passes:
+Read `blueprints/` in two passes:
 
-1. List all filenames under `prompt/` and `prompt/10_modules/`.
-2. Read only the prompt files that match the modules or concepts being changed.
+1. List all filenames under `blueprints/` and `blueprints/10_modules/`.
+2. Read only the blueprint files that match the modules or concepts being changed.
 
 Do not read `change_records/` by default. Use it only when you need the reason behind
 a past change, when a current change conflicts with old intent, or when the user asks
@@ -34,6 +34,24 @@ for project history.
 `obsolete/` is archival material. Do not read it by default; use it only when a newer
 document explicitly points there, when investigating old plans, or when checking a
 completed toDo handoff.
+
+## Encoding And Mojibake
+
+Markdown files in `dev_doc/` and `reference/` should be treated as UTF-8 text. Some
+documents contain Chinese, and reading them with a local ANSI/default code page can
+produce mojibake instead of readable text.
+
+When using PowerShell, prefer explicit UTF-8 reads:
+
+```powershell
+Get-Content -Raw -Encoding UTF8 dev_doc/README.md
+Get-Content -Raw -Encoding UTF8 reference/how_to_create_new_project.md
+```
+
+If text appears garbled, do not edit based on the garbled display. Re-read the file
+with UTF-8 first, or use an editor that shows the file encoding. When writing these
+documents from tools or scripts, preserve UTF-8 and avoid default-encoding commands
+that depend on the current Windows code page.
 
 ## Document Roles
 
@@ -109,18 +127,18 @@ Recommended section shape:
 ## Notes
 ```
 
-### `prompt/`
+### `blueprints/`
 
-Prompt documents are generative module descriptions. Their center thought is:
+Blueprint documents are generative module descriptions. Their center thought is:
 
 > A capable AI should be able to recreate a file or module with the same function
-> from this prompt, even if the current source file is not visible.
+> from this blueprint, even if the current source file is not visible.
 
-Therefore prompt files should not merely summarize the current source code. They
+Therefore blueprint files should not merely summarize the current source code. They
 should explain intent, expected behavior, I/O shapes, non-obvious techniques, and
 mutability boundaries.
 
-Use prompt files to answer:
+Use blueprint files to answer:
 
 - What should this module do?
 - What shape should its inputs and outputs have?
@@ -130,7 +148,7 @@ Use prompt files to answer:
 Recommended structure:
 
 ```text
-# Module prompt: module_name
+# Module blueprint: module_name
 
 ## Intent
 - Why this module exists.
@@ -148,9 +166,9 @@ Recommended structure:
 - Which parts may change often and which contracts should stay stable.
 ```
 
-Keep prompt files module-level until the project stabilizes. Avoid file-level prompt
+Keep blueprint files module-level until the project stabilizes. Avoid file-level blueprint
 documents unless a single file has a complex contract that cannot be captured by the
-module prompt.
+module blueprint.
 
 ### `toDo/`
 
@@ -309,7 +327,7 @@ After each code change:
 
 1. Update relevant files in `architecture/` when module responsibilities, public APIs,
    data persistence, execution topology, or development workflow changes.
-2. Update relevant files in `prompt/` when module intent, I/O, non-obvious techniques,
+2. Update relevant files in `blueprints/` when module intent, I/O, non-obvious techniques,
    or mutability boundaries change.
 3. Add one file under `change_records/` describing what changed and why.
 4. Update `terminology.md` if the change corrects a mistaken concept or introduces a
@@ -317,7 +335,7 @@ After each code change:
 5. If the change completes a task described in `toDo/`, move that toDo file to
    `obsolete/` after updating the current docs and adding the change record.
 
-For documentation-only changes, still update architecture/prompt when the documentation
+For documentation-only changes, still update architecture/blueprints when the documentation
 system itself changes, and add a change record.
 
 When adding new future work, put it under `toDo/` rather than `change_records/`.

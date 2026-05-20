@@ -41,7 +41,7 @@ dev_doc/
   terminology.md
   reference_map.md
   architecture/
-  prompt/
+  blueprints/
   toDo/
   change_records/
   obsolete/
@@ -49,5 +49,5 @@ dev_doc/
 
 `spec 20260502.md`, `architecture/`, `reference_map.md`, and `terminology.md` are
 full-read context sources. `toDo/` is also full-read so pending future goals can shape
-current implementation choices. `prompt/` is listed first and read selectively.
+current implementation choices. `blueprints/` is listed first and read selectively.
 `change_records/` is historical and `obsolete/` is archival; neither is read by default.

@@ -52,14 +52,38 @@ sequenceDiagram
     O->>E: evaluate selected real population
 ```
 
+## Distributed Evaluation Sequence
+
+```mermaid
+sequenceDiagram
+    participant O as optimize
+    participant E as evaluate_manager
+    participant C as condor_runner
+    participant H as HTCondor
+    participant J as job folder
+    participant R as recorded_data
+
+    O->>E: evaluate_population(..., mode="distributed")
+    E->>J: prepare all job folders with the local job contract
+    E->>C: submit prepared jobs
+    C->>J: write job.sub with executable = workflow.py
+    C->>H: condor_submit job.sub
+    H->>J: return rawData/ and individual_metadata.json on exit
+    C->>J: poll condor.log and job-local outputs
+    C-->>E: JobResult rows
+    E->>R: record_job_result through the shared finalization path
+    E-->>O: dynamic cost rows or inf rows
+```
+
 ## Failure Handling
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
 - Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; local runner adds return code, stdout/stderr tails, and rawData presence.
-- Timeout: local runner terminates the process tree, records status `timeout`, and preserves any partial `individual_metadata.json` already written by the workflow.
+- Submit failure: HTCondor submission errors are captured as per-job `error` metadata. The project does not attempt to repair the local HTCondor installation.
+- Timeout: local runner terminates the process tree; HTCondor runner best-effort removes the submitted cluster id. Both record status `timeout` and preserve any returned job-local metadata.
 - Record failure: evaluation continues; returned row becomes `inf`.
 - Invalid rawData: `recorded_data.query` skips invalid completed rawData for history/training and exposes diagnostics.
 
 ## Concurrency Notes
 - Current local evaluation is sequential at the API level.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
-- Future distributed mode should reuse the same record/finalize semantics: workers write job-local individual metadata and finalizers send compact records to `recorded_data`.
+- Distributed mode reuses the same record/finalize semantics: workers write job-local individual metadata and submit-side finalizers send compact records to `recorded_data`.

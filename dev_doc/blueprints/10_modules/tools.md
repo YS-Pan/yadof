@@ -1,4 +1,4 @@
-# Module prompt: tools
+# Module blueprint: tools
 
 ## Intent
 - Provide optional, user-launched utilities for inspecting or maintaining project data.

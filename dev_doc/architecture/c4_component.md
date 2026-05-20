@@ -26,15 +26,21 @@ flowchart LR
 flowchart LR
     EvalAPI["api.py"] --> JobFiles["job_files.py"]
     EvalAPI --> LocalRunner["local_runner.py"]
+    EvalAPI --> CondorRunner["condor_runner.py"]
     EvalAPI --> RDClient["recorded_data_client.py"]
+    LocalRunner --> JobResult["job_result.py"]
+    CondorRunner --> JobResult
     JobFiles --> Types["types.py"]
     LocalRunner --> Types
+    CondorRunner --> Types
     RDClient --> Types
     EvalAPI --> EvalConfig["config.py"]
 ```
 
 - `job_files.py`: copy template, write job input and run/generation context, compute static hash.
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
+- `condor_runner.py`: direct-`.py` HTCondor submit-file generation, submission, polling, timeout removal, and job-local result collection.
+- `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.
 

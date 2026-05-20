@@ -1,4 +1,4 @@
-# Module prompt: tests
+# Module blueprint: tests
 
 ## Intent
 - Protect the v3 contracts while the implementation is still moving quickly.
@@ -9,6 +9,7 @@
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
 - Default job-template tests assert the three objective names and `[0, 1]` cost bounds.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
+- HTCondor tests cover submit-file generation, submit failure capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
 - Surrogate tests verify rawData-first prediction, conditional-INR checkpoint/artifact writing, GPSAF integration, and fallback behavior.
 - Tool tests ensure `viewCost.py` uses the current recorded-data history instead of legacy JSONL files.
@@ -20,6 +21,7 @@
 
 ## Non-Obvious Techniques
 - Tests intentionally avoid requiring real HFSS, HTCondor, or expensive simulation software.
+- Tests for distributed mode should mock `condor_submit`/runner behavior unless they are explicit environment smoke tests requested by the user.
 - Runtime temp directories are ignored through `pyproject.toml` pytest settings.
 - Tests assert that problem shape comes from `job_template`, not from global config.
 - Local pipeline tests should assert that `individual_metadata.json` exists in job folders and that recorded individual rows promote `started_at`, `ended_at`, `optimization_index`, and `generation_index` without persisting `created_at`.

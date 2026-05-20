@@ -21,27 +21,27 @@ Before implementing, read these files in full:
 4. `dev_doc/reference_map.md`
 5. `dev_doc/terminology.md`
 
-Then list prompt files under:
+Then list blueprint files under:
 
 ```text
-dev_doc/prompt/
-dev_doc/prompt/10_modules/
+dev_doc/blueprints/
+dev_doc/blueprints/10_modules/
 ```
 
 For this task, read at least:
 
 ```text
-dev_doc/prompt/00_project.md
-dev_doc/prompt/10_modules/optimize.md
-dev_doc/prompt/10_modules/surrogate.md
-dev_doc/prompt/10_modules/job_template.md
-dev_doc/prompt/10_modules/recorded_data.md
-dev_doc/prompt/10_modules/config.md
-dev_doc/prompt/10_modules/tests.md
+dev_doc/blueprints/00_project.md
+dev_doc/blueprints/10_modules/optimize.md
+dev_doc/blueprints/10_modules/surrogate.md
+dev_doc/blueprints/10_modules/job_template.md
+dev_doc/blueprints/10_modules/recorded_data.md
+dev_doc/blueprints/10_modules/config.md
+dev_doc/blueprints/10_modules/tests.md
 ```
 
 Follow the documentation rules in `dev_doc/README.md`: after code changes,
-update relevant architecture and prompt files, add a change record, and update
+update relevant architecture and blueprint files, add a change record, and update
 terminology if the change introduces or clarifies a non-obvious term.
 
 ## Current Project Constraints
@@ -418,10 +418,10 @@ dev_doc/architecture/c4_component.md
 dev_doc/architecture/c4_container.md
 dev_doc/architecture/4plus1_process_view.md
 dev_doc/architecture/4plus1_development_view.md
-dev_doc/prompt/10_modules/optimize.md
-dev_doc/prompt/10_modules/config.md
-dev_doc/prompt/10_modules/surrogate.md
-dev_doc/prompt/00_project.md
+dev_doc/blueprints/10_modules/optimize.md
+dev_doc/blueprints/10_modules/config.md
+dev_doc/blueprints/10_modules/surrogate.md
+dev_doc/blueprints/00_project.md
 dev_doc/change_records/<timestamp>_nsga3-surrogate-selection.md
 ```
 
@@ -772,7 +772,7 @@ This is much faster than using `evaluate_manager` job folders.
 9. Add interval calibration from real historical prediction error.
 10. Add objective-aware loss while keeping full-field loss.
 11. Run focused tests.
-12. Update `dev_doc` architecture/prompt/change record.
+12. Update `dev_doc` architecture/blueprints/change record.
 13. Move this toDo file to `dev_doc/obsolete/` after the task is complete.
 
 ## Risks And Mitigations

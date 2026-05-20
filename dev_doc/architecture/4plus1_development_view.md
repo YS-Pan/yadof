@@ -9,7 +9,7 @@ dev_doc/
   terminology.md
   reference_map.md
   architecture/
-  prompt/
+  blueprints/
   toDo/
   change_records/
   obsolete/
@@ -46,15 +46,16 @@ project/
 - Use monkeypatched APIs for optimizer unit behavior where full local jobs would be too heavy.
 - Surrogate tests may force smaller CPU INR settings so contract tests stay fast while the default config remains usable for real runs.
 - Avoid adding tests that require real HFSS or HTCondor for the default suite.
+- HTCondor behavior should be covered with submit-file and monkeypatched-runner tests by default; real pool diagnostics are manual or explicit smoke checks.
 
 ## Documentation Strategy
 - `dev_doc/README.md` is the documentation entry point and writing guide.
 - `dev_doc/spec 20260502.md` is the highest-level product and architecture contract.
 - `dev_doc/architecture/` captures current design views and must be read in full for context.
-- `dev_doc/prompt/` captures generative module intent and non-obvious techniques; list all prompt files first, then read relevant files in full.
+- `dev_doc/blueprints/` captures generative module intent and non-obvious techniques; list all blueprint files first, then read relevant files in full.
 - `dev_doc/reference_map.md` captures old-project ancestry and must be read in full for context.
 - `dev_doc/terminology.md` captures project-specific concepts and must be read in full for context.
 - `dev_doc/toDo/` captures pending future work and must be read in full during the first `dev_doc` pass.
 - `dev_doc/change_records/` captures what changed and why; do not read it by default.
 - `dev_doc/obsolete/` is archival, including completed toDo handoffs, and should not be read by default.
-- After each code change, update relevant architecture and prompt files, add a change record, and update terminology when a concept was misunderstood or a non-obvious term was introduced.
+- After each code change, update relevant architecture and blueprint files, add a change record, and update terminology when a concept was misunderstood or a non-obvious term was introduced.

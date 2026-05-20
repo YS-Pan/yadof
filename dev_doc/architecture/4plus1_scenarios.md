@@ -37,16 +37,17 @@
 4. Historical normalized variables and costs are recalculated under the current task definition.
 5. If the change makes old rawData semantically invalid, the user manually removes or ignores old records.
 
-## Scenario 6: Future Distributed Evaluation
-1. `evaluate_manager` selects distributed mode.
+## Scenario 6: Distributed Evaluation
+1. `evaluate_manager` selects distributed mode through `EVALUATION_MODE = "distributed"` or an explicit API argument.
 2. It prepares the same job folder contract.
-3. HTCondor workers run workflow logic and write rawData plus `individual_metadata.json`.
-4. Finalization reuses the local-mode status interpretation and `recorded_data` write path.
-5. Optimizer receives the same cost tuple shape as in local mode.
+3. `condor_runner.py` writes `job.sub` and calls `condor_submit` without changing the HTCondor installation.
+4. HTCondor workers run workflow logic and transfer rawData plus `individual_metadata.json` back to the job folder.
+5. Finalization reuses the shared job metadata and `recorded_data` write path.
+6. Optimizer receives the same cost tuple shape as in local mode.
 
 ## Scenario 7: Code Change With Documentation Update
 1. AI or user changes source behavior, module contracts, persistence behavior, or important implementation technique.
 2. The relevant `dev_doc/architecture/` files are updated when the change affects system views, dependencies, data flow, or workflow.
-3. The relevant `dev_doc/prompt/` files are updated when the change affects module intent, I/O, non-obvious techniques, or mutability boundaries.
+3. The relevant `dev_doc/blueprints/` files are updated when the change affects module intent, I/O, non-obvious techniques, or mutability boundaries.
 4. A new file is appended under `dev_doc/change_records/` with a date-time prefix and a short description.
 5. `dev_doc/terminology.md` is updated if the change corrects a concept or introduces a non-obvious name.

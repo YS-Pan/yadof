@@ -1,4 +1,4 @@
-# Module prompt: optimize
+# Module blueprint: optimize
 
 ## Intent
 - Own the optimizer-facing API and the GPSAF-style search policy while staying independent from workflow, simulator, job execution, and rawData storage details.
