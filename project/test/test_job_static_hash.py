@@ -10,8 +10,8 @@ from project.evaluate_manager.job_files import prepare_job, prepared_job_static_
 def _make_template(template_dir, *, workflow_body: str = "WORKFLOW_VERSION = 1\n", x0_max: float = 2.0):
     template_dir.mkdir(parents=True, exist_ok=True)
     (template_dir / "workflow.py").write_text(workflow_body, encoding="utf-8", newline="\n")
-    (template_dir / "test_com.py").write_text("COM_VERSION = 1\n", encoding="utf-8", newline="\n")
-    (template_dir / "xxxx.aedt").write_bytes(b"model bytes v1\n")
+    (template_dir / "hfss_com.py").write_text("COM_VERSION = 1\n", encoding="utf-8", newline="\n")
+    (template_dir / "Metal_recon_ant.aedt").write_bytes(b"model bytes v1\n")
     (template_dir / "calc_cost.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8", newline="\n")
     (template_dir / "parameters_constraints.py").write_text(
         "\n".join(
@@ -37,7 +37,9 @@ def _metadata(job_dir, name="metadata.json"):
 
 
 def _values(x0: float, x1: float, x2: float) -> tuple[float, ...]:
-    return (x0, x1, x2) + (0.5,) * 17
+    from project.job_template import api as job_template_api
+
+    return (x0, x1, x2) + (0.5,) * (job_template_api.get_variable_count() - 3)
 
 
 def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path):

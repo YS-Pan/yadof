@@ -38,92 +38,60 @@ def _write_rawdata_set(raw_dir: Path, *, offset: float = 0.0) -> Path:
         "variables": {"x0": 0.25, "x1": 0.5},
         "job_metadata": {"job_name": "repeated"},
     }
-    np.savez(
-        raw_dir / "summary.npz",
-        values=np.array([0.90 - offset, 0.10 + offset]),
-        metadata=json.dumps({**metadata_base, "rawdata_name": "summary", "source": "test", "shape": [2]}),
-    )
-    np.savez(
-        raw_dir / "curve.npz",
-        axis_0=np.array([0.0, 1.0]),
-        axis_1=np.array([0.0, 0.5, 1.0]),
-        values=np.array([[100.0, 0.90 - offset, 100.0], [100.0, 0.10 + offset, 100.0]]),
-        metadata=json.dumps(
-            {
-                **metadata_base,
-                "rawdata_name": "curve",
-                "source": "test",
-                "shape": [2, 3],
-                "axes": [
-                    {"index": 0, "size": 2, "values_key": "axis_0"},
-                    {"index": 1, "size": 3, "values_key": "axis_1"},
-                ],
-            }
-        ),
-    )
-    np.savez(
-        raw_dir / "surface.npz",
-        axis_0=np.array([0.0, 0.5, 1.0]),
-        axis_1=np.array([0.0, 0.5, 1.0]),
-        values=np.array([[0.0, 0.0, 0.0], [0.0, 0.90 - offset, 0.0], [0.0, 0.0, 0.0]]),
-        metadata=json.dumps(
-            {
-                **metadata_base,
-                "rawdata_name": "surface",
-                "source": "test",
-                "shape": [3, 3],
-                "axes": [
-                    {"index": 0, "size": 3, "values_key": "axis_0"},
-                    {"index": 1, "size": 3, "values_key": "axis_1"},
-                ],
-            }
-        ),
-    )
+    freq_axis = np.array([2.30, 2.39, 2.44, 2.49, 2.60])
+    theta_axis = np.array([-30.0, 0.0, 30.0])
+    for state in (1, 2, 3, 4):
+        np.savez(
+            raw_dir / f"s11_pinState{state}.npz",
+            axis_Freq=freq_axis,
+            unit_Freq=np.asarray("GHz"),
+            data=np.array([-3.0, -3.0, -12.0 + offset, -3.0, -3.0]),
+            metadata=json.dumps(
+                {
+                    **metadata_base,
+                    "rawdata_name": f"s11_pinState{state}",
+                    "source": "test",
+                    "pin_state": state,
+                    "shape": [5],
+                    "axis_names": ["Freq"],
+                    "axes": [{"index": 0, "size": 5, "name": "Freq", "values_key": "axis_Freq", "unit": "GHz"}],
+                }
+            ),
+        )
+    gain_values = {
+        1: [7.0 - offset, 0.0, 0.0 + offset],
+        2: [0.0 + offset, 0.0, 7.0 - offset],
+        3: [7.0 - offset, -15.0 + offset, 7.0 - offset],
+        4: [0.0, 8.0 - offset, 0.0],
+    }
+    for state, values in gain_values.items():
+        np.savez(
+            raw_dir / f"gain_pinState{state}.npz",
+            axis_Theta=theta_axis,
+            unit_Theta=np.asarray("deg"),
+            data=np.asarray(values, dtype=float),
+            metadata=json.dumps(
+                {
+                    **metadata_base,
+                    "rawdata_name": f"gain_pinState{state}",
+                    "source": "test",
+                    "pin_state": state,
+                    "shape": [3],
+                    "axis_names": ["Theta"],
+                    "axes": [{"index": 0, "size": 3, "name": "Theta", "values_key": "axis_Theta", "unit": "deg"}],
+                }
+            ),
+        )
     return raw_dir
 
 
 def _write_invalid_rawdata_set(raw_dir: Path, *, metadata: dict[str, object], values) -> Path:
     raw_dir.mkdir(parents=True, exist_ok=True)
+    _write_rawdata_set(raw_dir)
     np.savez(
-        raw_dir / "summary.npz",
-        values=np.asarray(values),
+        raw_dir / "s11_pinState1.npz",
+        data=np.asarray(values),
         metadata=json.dumps(metadata),
-    )
-    np.savez(
-        raw_dir / "curve.npz",
-        axis_0=np.array([0.0, 1.0]),
-        axis_1=np.array([0.0, 0.5, 1.0]),
-        values=np.array([[100.0, 0.90, 100.0], [100.0, 0.10, 100.0]]),
-        metadata=json.dumps(
-            {
-                "schema_version": RAWDATA_SCHEMA_VERSION,
-                "rawdata_name": "curve",
-                "source": "test",
-                "shape": [2, 3],
-                "axes": [
-                    {"index": 0, "size": 2, "values_key": "axis_0"},
-                    {"index": 1, "size": 3, "values_key": "axis_1"},
-                ],
-            }
-        ),
-    )
-    np.savez(
-        raw_dir / "surface.npz",
-        axis_0=np.array([0.0, 0.5, 1.0]),
-        axis_1=np.array([0.0, 0.5, 1.0]),
-        values=np.array([[0.0, 0.0, 0.0], [0.0, 0.90, 0.0], [0.0, 0.0, 0.0]]),
-        metadata=json.dumps(
-            {
-                "schema_version": RAWDATA_SCHEMA_VERSION,
-                "rawdata_name": "surface",
-                "source": "test",
-                "shape": [3, 3],
-                "axes": [
-                    {"index": 0, "size": 3, "values_key": "axis_0"},
-                    {"index": 1, "size": 3, "values_key": "axis_1"},
-                ],
-            }
-        ),
     )
     return raw_dir
 
@@ -185,10 +153,10 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     assert "started_at" not in record["job_metadata"]
     assert "ended_at" not in record["job_metadata"]
     assert record["job_metadata"]["nested"] == {"kept": True}
-    assert record["rawdata_metadata"]["job_completed/summary.npz"]["rawdata_name"] == "summary"
-    assert record["rawdata_metadata"]["job_completed/summary.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
-    assert "variables" not in record["rawdata_metadata"]["job_completed/summary.npz"]
-    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/summary.npz"]
+    assert record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]["rawdata_name"] == "s11_pinState1"
+    assert record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
+    assert "variables" not in record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]
+    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]
 
     rows = [
         json.loads(line)
@@ -201,9 +169,14 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     assert isinstance(rows[0]["recorded_at"], str)
     with zipfile.ZipFile(recorded_api.RAWDATA_ARCHIVE_PATH, "r") as archive:
         assert sorted(archive.namelist()) == [
-            "job_completed/curve.npz",
-            "job_completed/summary.npz",
-            "job_completed/surface.npz",
+            "job_completed/gain_pinState1.npz",
+            "job_completed/gain_pinState2.npz",
+            "job_completed/gain_pinState3.npz",
+            "job_completed/gain_pinState4.npz",
+            "job_completed/s11_pinState1.npz",
+            "job_completed/s11_pinState2.npz",
+            "job_completed/s11_pinState3.npz",
+            "job_completed/s11_pinState4.npz",
         ]
 
     history = recorded_api.get_optimization_history()
@@ -211,7 +184,7 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     job_name, normalized_variables, costs = history[0]
     assert job_name == "job_completed"
     assert normalized_variables == pytest.approx(_normalized_variables())
-    assert len(costs) == 3
+    assert len(costs) == 4
     assert all(0.0 <= value <= 1.0 for value in costs)
     assert all(value < 0.1 for value in costs)
     assert recorded_api.get_rawdata_diagnostics() == ()
@@ -242,7 +215,7 @@ def test_error_and_timeout_are_recorded_but_excluded_from_default_history(tmp_pa
         (
             {
                 "schema_version": RAWDATA_SCHEMA_VERSION,
-                "rawdata_name": "summary",
+                "rawdata_name": "s11_pinState1",
                 "source": "legacy",
                 "shape": [3],
                 "axes": {"time": "seconds"},
@@ -250,7 +223,7 @@ def test_error_and_timeout_are_recorded_but_excluded_from_default_history(tmp_pa
             [0.35, -0.45, 0.65],
         ),
         (
-            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "summary", "source": "legacy", "shape": [2]},
+            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "s11_pinState1", "source": "legacy", "shape": [2]},
             [0.35, -0.45, 0.65],
         ),
     ),
@@ -272,10 +245,10 @@ def test_incompatible_completed_rawdata_is_skipped_in_optimization_history(tmp_p
 
     assert tuple(row[0] for row in costs) == ("job_good",)
     assert tuple(row[0] for row in history) == ("job_good",)
-    assert len(history[0][2]) == 3
+    assert len(history[0][2]) == 4
     assert all(value < 0.1 for value in history[0][2])
     assert tuple(row["job_name"] for row in diagnostics) == ("job_bad",)
-    assert diagnostics[0]["filename"] == "summary.npz"
+    assert diagnostics[0]["filename"] == "s11_pinState1.npz"
     assert diagnostics[0]["status"] == "skipped"
     assert diagnostics[0]["error_message"]
 
@@ -287,7 +260,7 @@ def test_incompatible_completed_rawdata_is_skipped_for_surrogate_training(tmp_pa
     _configure_recorded_api(recorded_api, record_root)
     bad_raw_dir = _write_invalid_rawdata_set(
         tmp_path / "bad_rawdata",
-        metadata={"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "summary", "source": "legacy", "shape": [2]},
+        metadata={"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "s11_pinState1", "source": "legacy", "shape": [2]},
         values=[0.35, -0.45, 0.65],
     )
     good_raw_dir = _write_rawdata_set(tmp_path / "good_rawdata")
@@ -324,7 +297,7 @@ def test_legacy_rawdata_missing_schema_version_is_skipped_and_diagnosed(tmp_path
     _configure_recorded_api(recorded_api, record_root)
     legacy_raw_dir = _write_invalid_rawdata_set(
         tmp_path / "legacy_rawdata",
-        metadata={"rawdata_name": "summary", "source": "legacy", "shape": [3]},
+        metadata={"rawdata_name": "s11_pinState1", "source": "legacy", "shape": [3]},
         values=[0.35, -0.45, 0.65],
     )
     good_raw_dir = _write_rawdata_set(tmp_path / "good_rawdata")
@@ -352,6 +325,11 @@ def test_corrupt_rawdata_archive_is_skipped_and_diagnosed(tmp_path):
     diagnostics = recorded_api.get_rawdata_diagnostics()
 
     assert tuple(row["job_name"] for row in diagnostics) == (
+        "job_bad_archive",
+        "job_bad_archive",
+        "job_bad_archive",
+        "job_bad_archive",
+        "job_bad_archive",
         "job_bad_archive",
         "job_bad_archive",
         "job_bad_archive",

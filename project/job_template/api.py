@@ -14,7 +14,7 @@ from .parameters_constraints_class import denormalize_values, normalize_values
 
 
 TEMPLATE_DIR = Path(__file__).resolve().parent
-EXCLUDED_FROM_JOB_COPY = {"api.py", "calc_cost.py", "hfss_com.py", "__init__.py"}
+EXCLUDED_FROM_JOB_COPY = {"api.py", "calc_cost.py", "__init__.py"}
 
 
 def get_parameter_definitions():
@@ -56,7 +56,7 @@ def copy_job_files(job_dir: str | Path) -> Path:
     destination.mkdir(parents=True, exist_ok=True)
 
     for source in TEMPLATE_DIR.iterdir():
-        if source.name in EXCLUDED_FROM_JOB_COPY or source.name == "__pycache__":
+        if _skip_template_source(source):
             continue
         target = destination / source.name
         if source.name == "rawData":
@@ -70,6 +70,12 @@ def copy_job_files(job_dir: str | Path) -> Path:
     (destination / "rawData").mkdir(exist_ok=True)
     return destination
 
+
+def _skip_template_source(source: Path) -> bool:
+    if source.name in EXCLUDED_FROM_JOB_COPY or source.name in {"__pycache__", "history"}:
+        return True
+    lowered = source.name.lower()
+    return lowered.endswith((".aedtresults", ".aedtresult", ".pyaedt", ".lock"))
 
 def calculate_cost(samples: Sequence[Sequence[RawDataItem]]) -> tuple[tuple[float, ...], ...]:
     return calculate_costs(samples)

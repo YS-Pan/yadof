@@ -1,9 +1,11 @@
-"""Dynamic rawData-to-cost calculation for the default test task."""
+"""Dynamic rawData-to-cost calculation for the Metal_recon_ant HFSS task."""
 
 from __future__ import annotations
 
+import math
+import re
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence
 
 import numpy as np
 
@@ -11,14 +13,21 @@ from .rawdata_contract import load_rawdata_item, metadata_from_item, validate_ra
 
 RawDataItem = Mapping[str, object] | str | Path
 OBJECTIVE_NAMES = (
-    "target_match_cost",
-    "curve_magnitude_cost",
-    "surface_reward_cost",
+    "cost_s11_band",
+    "cost_gain_steering",
+    "cost_gain_split",
+    "cost_gain_broadside",
 )
-ERROR_COSTS = (1.0, 1.0, 1.0)
-CURVE_AXIS_RANGE = (0.46, 0.54)
-SURFACE_AXIS_0_RANGE = (0.46, 0.54)
-SURFACE_AXIS_1_RANGE = (0.46, 0.54)
+ERROR_COSTS = (1.0, 1.0, 1.0, 1.0)
+
+PIN_STATES = (1, 2, 3, 4)
+S11_BAND_GHZ = (2.40, 2.48)
+TARGET_FREQ_GHZ = 2.44
+TARGET_PHI_DEG = 90.0
+TARGET_THETA_DEG = (-30, 0, 30)
+ANGLE_TOL_DEG = 1.5
+FREQ_TOL_GHZ = 0.02
+_PIN_STATE_RE = re.compile(r"pinState(\d+)", re.IGNORECASE)
 
 
 def get_objective_names() -> tuple[str, ...]:
@@ -29,122 +38,251 @@ def get_objective_count() -> int:
     return len(OBJECTIVE_NAMES)
 
 
-def _soft_cost(result: float, goal: float, worst: float) -> float:
-    """Map a scalar metric to a bounded minimization cost.
-
-    This mirrors the old workflow's tanh-based cost shaping: values near the
-    goal become close to 0, values near the worst threshold become close to 1.
-    """
-
-    r, goal, worst = float(result), float(goal), float(worst)
-    if not (np.isfinite(r) and np.isfinite(goal) and np.isfinite(worst)) or goal == worst:
-        return 1.0
-    value = (np.tanh(4.0 * (r - worst) / (worst - goal) + 2.0) + 1.0) / 2.0
-    return float(np.clip(value, 0.0, 1.0))
-
-
-def _finite_values(values: object) -> np.ndarray:
-    array = np.asarray(values, dtype=float).ravel()
-    return array[np.isfinite(array)]
-
-
-def _axis_window(values: np.ndarray, axis_values: object, axis: int, low: float, high: float) -> np.ndarray:
-    coords = np.asarray(axis_values, dtype=float).ravel()
-    if values.ndim <= axis or coords.size != values.shape[axis]:
-        return values
-    lo, hi = sorted((float(low), float(high)))
-    mask = (coords >= lo) & (coords <= hi)
-    if not np.any(mask):
-        return np.asarray((), dtype=float)
-    return np.take(values, np.flatnonzero(mask), axis=axis)
-
-
-def _surface_observation_values(item: Mapping[str, object]) -> np.ndarray:
-    values = np.asarray(item.get("values", ()), dtype=float)
-    window = _axis_window(values, item.get("axis_0", ()), 0, *SURFACE_AXIS_0_RANGE)
-    window = _axis_window(window, item.get("axis_1", ()), 1, *SURFACE_AXIS_1_RANGE)
-    return window.ravel()
-
-
-def _curve_band_values(item: Mapping[str, object], curve_index: int) -> np.ndarray:
-    values = np.asarray(item.get("values", ()), dtype=float)
-    if values.ndim == 0:
-        return np.asarray((), dtype=float)
-    if values.ndim == 1:
-        return _axis_window(values, item.get("axis_0", ()), 0, *CURVE_AXIS_RANGE).ravel()
-    selected_index = min(max(0, int(curve_index)), values.shape[0] - 1)
-    selected_curve = np.asarray(values[selected_index], dtype=float)
-    return _axis_window(selected_curve, item.get("axis_1", ()), 0, *CURVE_AXIS_RANGE).ravel()
-
-
-def _mean_soft_cost(values: Sequence[float]) -> float:
-    finite = [float(value) for value in values if np.isfinite(float(value))]
-    return float(np.mean(finite)) if finite else 1.0
-
-
 def calculate_cost(sample_rawdata: Sequence[RawDataItem]) -> tuple[float, ...]:
     """Calculate objective values for one sample from in-memory or file rawData."""
 
-    by_name: dict[str, dict[str, object]] = {}
-    for item in sample_rawdata:
-        loaded = validate_rawdata_item(load_rawdata_item(item))
-        name = str(metadata_from_item(loaded).get("rawdata_name") or len(by_name))
-        by_name[name] = loaded
-
-    summary_values = np.asarray(by_name.get("summary", {}).get("values", ()), dtype=float).ravel()
-    curve_item = by_name.get("curve", {})
-    curve0_values = _curve_band_values(curve_item, 0)
-    curve1_values = _curve_band_values(curve_item, 1)
-    surface_values = _surface_observation_values(by_name.get("surface", {}))
-
-    if summary_values.size < 2 or curve0_values.size == 0 or curve1_values.size == 0 or surface_values.size == 0:
+    loaded_items = tuple(validate_rawdata_item(load_rawdata_item(item)) for item in sample_rawdata)
+    s11_items = tuple(item for item in loaded_items if _rawdata_name(item).startswith("s11"))
+    gain_by_state = {
+        state: item
+        for item in loaded_items
+        if _rawdata_name(item).startswith("gain") and (state := _pin_state(item)) is not None
+    }
+    if not s11_items or any(state not in gain_by_state for state in PIN_STATES):
         return ERROR_COSTS
 
-    scalar0, scalar1 = summary_values[:2]
-    curve0_finite = _finite_values(curve0_values)
-    curve1_finite = _finite_values(curve1_values)
-    surface_finite = _finite_values(surface_values)
-    if curve0_finite.size == 0 or curve1_finite.size == 0 or surface_finite.size == 0:
+    try:
+        measured = {
+            "s11_band_value": _s11_band_value(s11_items),
+            "gain": {state: _gain_cut(gain_by_state[state]) for state in PIN_STATES},
+        }
+        return (
+            _objective_s11(measured),
+            _objective_gain_steering(measured),
+            _objective_gain_split(measured),
+            _objective_gain_broadside(measured),
+        )
+    except (KeyError, ValueError, IndexError, TypeError, FloatingPointError):
         return ERROR_COSTS
-
-    scalar0_value = float(scalar0)
-    scalar1_value = float(scalar1)
-    curve0_band_mean = float(np.mean(curve0_finite))
-    curve1_band_mean = float(np.mean(curve1_finite))
-    surface_center_mean = float(np.mean(surface_finite))
-    if not all(
-        np.isfinite(value)
-        for value in (scalar0_value, scalar1_value, curve0_band_mean, curve1_band_mean, surface_center_mean)
-    ):
-        return ERROR_COSTS
-
-    return (
-        _mean_soft_cost(
-            (
-                _soft_cost(scalar0_value, goal=0.72, worst=0.42),
-                _soft_cost(scalar1_value, goal=0.28, worst=0.62),
-            )
-        ),
-        _mean_soft_cost(
-            (
-                _soft_cost(curve0_band_mean, goal=0.40, worst=0.18),
-                _soft_cost(curve1_band_mean, goal=0.44, worst=0.55),
-            )
-        ),
-        _soft_cost(surface_center_mean, goal=0.40, worst=0.20),
-    )
 
 
 def calculate_costs(samples: Sequence[Sequence[RawDataItem]]) -> tuple[tuple[float, ...], ...]:
     return tuple(calculate_cost(sample) for sample in samples)
 
 
-def _axis_mask(size: int, axis_values: object, low: float, high: float) -> np.ndarray:
-    coords = np.asarray(axis_values, dtype=float).ravel()
-    if coords.size != int(size):
-        return np.ones((int(size),), dtype=bool)
-    lo, hi = sorted((float(low), float(high)))
-    return (coords >= lo) & (coords <= hi)
+def _rawdata_name(item: Mapping[str, object]) -> str:
+    return str(metadata_from_item(item).get("rawdata_name") or "")
+
+
+def _pin_state(item: Mapping[str, object]) -> int | None:
+    metadata = metadata_from_item(item)
+    raw = metadata.get("pin_state")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        match = _PIN_STATE_RE.search(_rawdata_name(item))
+        return int(match.group(1)) if match else None
+
+
+def _data_array(item: Mapping[str, object]) -> np.ndarray:
+    key = "data" if "data" in item else "values"
+    return np.asarray(item.get(key, ()), dtype=float)
+
+
+def _scalar_text(value: object) -> str:
+    array = np.asarray(value)
+    if array.shape == ():
+        return str(array.item())
+    return str(value)
+
+
+def _axis_names(item: Mapping[str, object]) -> list[str]:
+    metadata = metadata_from_item(item)
+    raw_names = metadata.get("axis_names")
+    if isinstance(raw_names, Sequence) and not isinstance(raw_names, (str, bytes, Mapping)):
+        return [str(name) for name in raw_names]
+    raw_axes = metadata.get("axes")
+    names: list[str] = []
+    if isinstance(raw_axes, Sequence) and not isinstance(raw_axes, (str, bytes, Mapping)):
+        for descriptor in raw_axes:
+            if isinstance(descriptor, Mapping):
+                name = descriptor.get("name")
+                if name is None and isinstance(descriptor.get("values_key"), str):
+                    name = str(descriptor["values_key"]).removeprefix("axis_")
+                names.append(str(name if name is not None else len(names)))
+            else:
+                names.append(str(descriptor))
+    return names
+
+
+def _load_axis(item: Mapping[str, object], name: str) -> tuple[np.ndarray, str]:
+    values = np.asarray(item.get(f"axis_{name}", ()), dtype=float).ravel()
+    unit = _scalar_text(item.get(f"unit_{name}", ""))
+    return values, unit
+
+
+def _freq_to_ghz(values: np.ndarray, unit: str) -> np.ndarray:
+    scale = {"hz": 1e-9, "khz": 1e-6, "mhz": 1e-3, "ghz": 1.0}.get(unit.strip().lower())
+    if scale is not None:
+        return values * scale
+    vmax = float(np.max(np.abs(values))) if values.size else 0.0
+    return values * (1e-9 if vmax > 1e8 else 1e-6 if vmax > 1e5 else 1e-3 if vmax > 1e2 else 1.0)
+
+
+def _angle_to_deg(values: np.ndarray, unit: str) -> np.ndarray:
+    unit_text = unit.strip().lower()
+    if unit_text.startswith("rad") or (not unit_text and values.size and float(np.max(np.abs(values))) <= 2.0 * np.pi + 1e-9):
+        return np.degrees(values)
+    return values
+
+
+def _nearest_index(values: np.ndarray, target: float, tol: float, *, period: float | None = None) -> int:
+    vals = np.asarray(values, dtype=float).ravel()
+    if vals.size == 0:
+        raise ValueError("empty axis")
+    diff = vals - float(target)
+    if period is not None:
+        p = abs(float(period))
+        diff = np.minimum.reduce((np.abs(diff), np.abs(diff - p), np.abs(diff + p)))
+    else:
+        diff = np.abs(diff)
+    idx = int(np.argmin(diff))
+    if float(diff[idx]) > float(tol):
+        raise ValueError("nearest axis point outside tolerance")
+    return idx
+
+
+def _take_axis(
+    data: np.ndarray,
+    axes: list[str],
+    name: str,
+    axis_values: np.ndarray,
+    target: float,
+    tol: float,
+    *,
+    period: float | None = None,
+) -> tuple[np.ndarray, list[str]]:
+    if name not in axes:
+        return data, axes
+    axis = axes.index(name)
+    if data.ndim <= axis:
+        raise ValueError("axis index outside data rank")
+    idx = _nearest_index(axis_values, target, tol, period=period)
+    return np.take(data, idx, axis=axis), axes[:axis] + axes[axis + 1 :]
+
+
+def _s11_band_value(items: Sequence[Mapping[str, object]]) -> float:
+    chunks: list[np.ndarray] = []
+    for item in items:
+        data = _data_array(item)
+        data = (np.real(data) if np.iscomplexobj(data) else data).astype(float, copy=False).ravel()
+        freq, unit = _load_axis(item, "Freq")
+        if freq.size == data.size:
+            freq = _freq_to_ghz(freq, unit)
+            lo, hi = sorted(S11_BAND_GHZ)
+            values = data[(freq >= lo) & (freq <= hi)]
+        else:
+            values = data
+        finite = values[np.isfinite(values)]
+        if finite.size:
+            chunks.append(finite)
+    if not chunks:
+        raise ValueError("no S11 data in target band")
+    values = np.concatenate(chunks)
+    return 0.8 * float(values.mean()) + 0.2 * float(values.max())
+
+
+def _gain_cut(item: Mapping[str, object]) -> dict[int, float]:
+    data = _data_array(item)
+    data = (np.real(data) if np.iscomplexobj(data) else data).astype(float, copy=False)
+    axes = _axis_names(item)
+
+    if "Freq" in axes:
+        freq, unit = _load_axis(item, "Freq")
+        data, axes = _take_axis(data, axes, "Freq", _freq_to_ghz(freq, unit), TARGET_FREQ_GHZ, FREQ_TOL_GHZ)
+
+    if "Phi" in axes:
+        phi, unit = _load_axis(item, "Phi")
+        data, axes = _take_axis(data, axes, "Phi", _angle_to_deg(phi, unit), TARGET_PHI_DEG, ANGLE_TOL_DEG, period=360.0)
+
+    if "Theta" not in axes:
+        values = np.asarray(data, dtype=float).ravel()
+        if values.size == len(TARGET_THETA_DEG):
+            return {int(angle): float(value) for angle, value in zip(TARGET_THETA_DEG, values)}
+        raise KeyError("Theta")
+
+    theta, unit = _load_axis(item, "Theta")
+    theta = _angle_to_deg(theta, unit)
+    axis = axes.index("Theta")
+    return {
+        int(angle): float(np.asarray(np.take(data, _nearest_index(theta, angle, ANGLE_TOL_DEG, period=360.0), axis=axis)).squeeze())
+        for angle in TARGET_THETA_DEG
+    }
+
+
+def _mean_cost(values: Sequence[float]) -> float:
+    finite = [float(value) for value in values if math.isfinite(float(value))]
+    return float(np.mean(finite)) if finite else 1.0
+
+
+def _soft_cost(result: float, goal: float, worst: float) -> float:
+    if result is False or result is None:
+        return 1.0
+    value, goal, worst = float(result), float(goal), float(worst)
+    if not (math.isfinite(value) and math.isfinite(goal) and math.isfinite(worst)) or goal == worst:
+        return 1.0
+    cost = (math.tanh(4.0 * (value - worst) / (worst - goal) + 2.0) + 1.0) / 2.0
+    return float(np.clip(cost, 0.0, 1.0))
+
+
+def _cost_ge(value: float, goal: float, margin: float) -> float:
+    return _soft_cost(value, goal=goal, worst=goal - abs(float(margin)))
+
+
+def _cost_le(value: float, goal: float, margin: float) -> float:
+    return _soft_cost(value, goal=goal, worst=goal + abs(float(margin)))
+
+
+def _objective_s11(measured: Mapping[str, object]) -> float:
+    return _soft_cost(float(measured["s11_band_value"]), goal=-12.0, worst=-3.0)
+
+
+def _objective_gain_steering(measured: Mapping[str, object]) -> float:
+    gain = measured["gain"]  # type: ignore[index]
+    g1, g2 = gain[1], gain[2]
+    c1 = _mean_cost(
+        (
+            _cost_ge(g1[-30], 7.0, 5.0),
+            _cost_le(g1[30], 0.0, 5.0),
+            _soft_cost(g1[-30] - g1[30], goal=3.0, worst=0.0),
+        )
+    )
+    c2 = _mean_cost(
+        (
+            _cost_le(g2[-30], 0.0, 5.0),
+            _cost_ge(g2[30], 7.0, 5.0),
+            _soft_cost(g2[30] - g2[-30], goal=3.0, worst=0.0),
+        )
+    )
+    return 0.5 * (c1 + c2)
+
+
+def _objective_gain_split(measured: Mapping[str, object]) -> float:
+    gain = measured["gain"]  # type: ignore[index]
+    g = gain[3]
+    return _mean_cost(
+        (
+            _cost_ge(g[-30], 7.0, 5.0),
+            _cost_le(g[0], -15.0, 7.0),
+            _cost_ge(g[30], 7.0, 5.0),
+            _soft_cost(min(g[-30], g[30]) - g[0], goal=15.0, worst=5.0),
+        )
+    )
+
+
+def _objective_gain_broadside(measured: Mapping[str, object]) -> float:
+    gain = measured["gain"]  # type: ignore[index]
+    return _cost_ge(gain[4][0], 8.0, 5.0)
 
 
 def rawdata_importance_weights(
@@ -153,38 +291,83 @@ def rawdata_importance_weights(
     floor: float = 0.25,
     boost: float = 2.0,
 ) -> tuple[dict[str, np.ndarray], ...]:
-    """Return task-owned per-rawData weights for surrogate full-field training.
-
-    The full fields remain trainable everywhere, but the observation windows
-    used by the default objectives receive extra weight.
-    """
+    """Return task-owned per-rawData weights for surrogate full-field training."""
 
     base = max(0.0, float(floor))
     important = max(base, base + max(0.0, float(boost)))
     out: list[dict[str, np.ndarray]] = []
     for item in sample_rawdata:
         loaded = validate_rawdata_item(load_rawdata_item(item))
-        metadata = metadata_from_item(loaded)
-        name = str(metadata.get("rawdata_name") or "")
-        values = np.asarray(loaded.get("values", ()), dtype=float)
+        name = _rawdata_name(loaded)
+        data_key = "data" if "data" in loaded else "values"
+        values = np.asarray(loaded.get(data_key, ()), dtype=float)
         if values.size == 0:
             out.append({})
             continue
-
         weights = np.full(values.shape, base, dtype=np.float32)
-        if name == "summary":
-            weights[...] = important
-        elif name == "curve":
-            if values.ndim == 1:
-                mask = _axis_mask(values.shape[0], loaded.get("axis_0", ()), *CURVE_AXIS_RANGE)
-                weights[mask] = important
-            elif values.ndim >= 2:
-                mask = _axis_mask(values.shape[1], loaded.get("axis_1", ()), *CURVE_AXIS_RANGE)
-                for curve_idx in range(min(2, values.shape[0])):
-                    weights[curve_idx, mask] = important
-        elif name == "surface" and values.ndim >= 2:
-            mask0 = _axis_mask(values.shape[0], loaded.get("axis_0", ()), *SURFACE_AXIS_0_RANGE)
-            mask1 = _axis_mask(values.shape[1], loaded.get("axis_1", ()), *SURFACE_AXIS_1_RANGE)
-            weights[np.ix_(mask0, mask1)] = important
-        out.append({"values": weights})
+        if name.startswith("s11"):
+            _mark_axis_window(weights, loaded, "Freq", S11_BAND_GHZ[0], S11_BAND_GHZ[1], important, converter=_freq_to_ghz)
+        elif name.startswith("gain"):
+            _mark_axis_points(weights, loaded, "Theta", TARGET_THETA_DEG, ANGLE_TOL_DEG, important, converter=_angle_to_deg)
+        out.append({data_key: weights})
     return tuple(out)
+
+
+def _mark_axis_window(
+    weights: np.ndarray,
+    item: Mapping[str, object],
+    axis_name: str,
+    low: float,
+    high: float,
+    value: float,
+    *,
+    converter,
+) -> None:
+    axes = _axis_names(item)
+    if axis_name not in axes:
+        weights[...] = value
+        return
+    axis = axes.index(axis_name)
+    coords, unit = _load_axis(item, axis_name)
+    coords = converter(coords, unit)
+    if coords.size != weights.shape[axis]:
+        weights[...] = value
+        return
+    lo, hi = sorted((float(low), float(high)))
+    mask = (coords >= lo) & (coords <= hi)
+    if np.any(mask):
+        slicer = [slice(None)] * weights.ndim
+        slicer[axis] = mask
+        weights[tuple(slicer)] = value
+
+
+def _mark_axis_points(
+    weights: np.ndarray,
+    item: Mapping[str, object],
+    axis_name: str,
+    targets: Sequence[float],
+    tol: float,
+    value: float,
+    *,
+    converter,
+) -> None:
+    axes = _axis_names(item)
+    if axis_name not in axes:
+        if weights.size == len(targets):
+            weights[...] = value
+        return
+    axis = axes.index(axis_name)
+    coords, unit = _load_axis(item, axis_name)
+    coords = converter(coords, unit)
+    if coords.size != weights.shape[axis]:
+        return
+    indices: list[int] = []
+    for target in targets:
+        try:
+            indices.append(_nearest_index(coords, float(target), tol, period=360.0))
+        except ValueError:
+            continue
+    if indices:
+        slicer = [slice(None)] * weights.ndim
+        slicer[axis] = np.asarray(sorted(set(indices)), dtype=int)
+        weights[tuple(slicer)] = value

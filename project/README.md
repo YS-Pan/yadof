@@ -21,8 +21,13 @@ not stored as a durable source file.
   Distributed/HTCondor execution, timeout/failure isolation, and handoff to
   `recorded_data`.
 - `job_template/`: task-specific parameter definitions, workflow, rawData
-  contract, simulator stand-in or adapter files, and rawData-to-cost logic.
-  The default test task currently returns three bounded costs in `[0, 1]`.
+  contract, simulator model files, and rawData-to-cost logic. The current
+  template uses `Metal_recon_ant.aedt` and returns four bounded HFSS-derived
+  costs in `[0, 1]`.
+- `com_lib/`: optional adapter staging/reference files, including reference
+  copies such as `hfss_com.py` and `test_com.py`. Jobs do not import this
+  directory directly; copy a needed com file into `job_template/` before the
+  workflow uses it.
 - `recorded_data/`: durable archive of job names, raw variables, individual
   metadata in `indMeta.jsonl`, optimization metadata in `optMeta/`, and all
   rawData `.npz` members inside one `rawData.npz` archive. Normalized variables
@@ -56,6 +61,16 @@ files are intentionally mutable between optimization tasks.
 
 ```powershell
 pytest -q
+```
+
+The real HFSS local-pipeline smoke test is skipped by default so ordinary test
+runs do not launch AEDT. Set `YADOT_RUN_HFSS_TESTS=1` when you intentionally
+want to run that smoke path on a machine with PyAEDT/AEDT configured.
+
+```powershell
+$env:YADOT_RUN_HFSS_TESTS = '1'
+$env:YADOT_HFSS_SMOKE_TIMEOUT_SEC = '5400'
+pytest -q project\test\test_real_local_pipeline.py
 ```
 
 ```powershell

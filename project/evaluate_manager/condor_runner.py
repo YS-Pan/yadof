@@ -65,7 +65,6 @@ _RUNTIME_ARTIFACTS = {
     "metaData.json.tmp",
     "cost.json",
     "calc_cost.py",
-    "hfss_com.py",
 }
 _SANDBOX_ENV_DIRS = ("._home", "._appdata", "._localappdata", "._tmp")
 

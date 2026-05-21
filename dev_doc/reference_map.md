@@ -15,10 +15,13 @@ For the whole project, the primary references are:
 - `reference/20260403 fanyufei/prompt/10_modules/solver_worker.md`
 - `reference/20260418 shorten/prompt/_project.md`
 - `reference/20260418 shorten/prompt/_module.md`
+- `reference/20260319 huangzetao/job_template/workflow.py`
+- `reference/20260319 huangzetao/job_template/hfss_com.py`
+- `reference/20260319 huangzetao/job_template/Metal_recon_ant.aedt`
 - `reference/htcondor_windows_debug_reference.md`
 - `reference/GPSAF A Generalized Probabilistic Surrogate-Assisted Framework for Constrained Single- and Multi-objective Optimization.tex`
 
-Natural-language mapping: `project/` combines the mature job pipeline and raw-data recording habits from `20260403 fanyufei`, the surrogate-refresh and cumulative-archive ideas from `20260418 shorten`, the HTCondor experience from `20260124 combined` and the HTCondor debug note, and the algorithmic direction from the GPSAF paper.
+Natural-language mapping: `project/` combines the mature job pipeline and raw-data recording habits from `20260403 fanyufei`, the surrogate-refresh and cumulative-archive ideas from `20260418 shorten`, the HFSS task/workflow from `20260319 huangzetao`, the HTCondor experience from `20260124 combined` and the HTCondor debug note, and the algorithmic direction from the GPSAF paper.
 
 ## `project/optimize`
 
@@ -88,10 +91,14 @@ Closest reference files:
 - `reference/20260124 combined/job_template/workflow.py`
 - `reference/20260124 combined/job_template/worker_misc.py`
 - `reference/20260124 combined/job_template/hfss_com.py`
+- `reference/20260319 huangzetao/job_template/workflow.py`
+- `reference/20260319 huangzetao/job_template/hfss_com.py`
+- `reference/20260319 huangzetao/job_template/Metal_recon_ant.aedt`
+- `reference/20260319 huangzetao/parameters_constraints.py`
 - `reference/20260418 shorten/code/problem.py`
 - `reference/20260418 shorten/code/objectives.py`
 
-Natural-language mapping: `job_template` keeps the fanyufei worker/workflow and HFSS-adapter lineage, but v3 splits workflow and cost more strictly: workflow produces rawData, and `calc_cost.py` computes cost later. The shorten `problem.py` and `objectives.py` files are references for synthetic problem outputs and objective definitions, especially when using a pure-Python stand-in instead of real HFSS.
+Natural-language mapping: `job_template` now uses the huangzetao `Metal_recon_ant` HFSS task as its closest runnable reference, while retaining the fanyufei worker/workflow and HFSS-adapter lineage. V3 still splits workflow and cost more strictly than the reference: workflow produces flat schema-valid rawData, and `calc_cost.py` computes the four old objective costs later. The shorten `problem.py` and `objectives.py` files remain historical references for synthetic problem outputs.
 
 ## `project/recorded_data`
 
@@ -118,9 +125,10 @@ Closest reference files:
 - `reference/20260403 fanyufei/code/tools/viewTime.py`
 - `reference/20260403 fanyufei/code/tools/backup_recorded_data.py`
 - `reference/20260403 fanyufei/code/tools/hfss_get_para_and_range.py`
+- `reference/20260319 huangzetao/tools/hfss_get_para_and_range.py`
 - `reference/20260418 shorten/code/interactive_results.py`
 
-Natural-language mapping: `tools` follows fanyufei's optional observability and maintenance tools. Current `project/tools/viewCost.py` maps most directly to fanyufei's cost plotter, but it reads current `recorded_data.api` instead of legacy `para_cost.jsonl`. Shorten's viewer is a reference for inspecting the latest shared optimization workspace.
+Natural-language mapping: `tools` follows fanyufei's optional observability and maintenance tools. Current `project/tools/viewCost.py` maps most directly to fanyufei's cost plotter, but it reads current `recorded_data.api` instead of legacy `para_cost.jsonl`. `project/tools/hfss_get_para_and_range.py` now maps to the huangzetao parameter-extraction tool, adapted to write `job_template/parameters_constraints.py` in the v3 `Parameter` format. Shorten's viewer is a reference for inspecting the latest shared optimization workspace.
 
 ## `project/config.py`
 

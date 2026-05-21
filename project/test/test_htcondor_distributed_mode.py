@@ -31,9 +31,8 @@ def test_condor_submit_file_uses_direct_workflow_and_rawdata_contract(tmp_path):
         "parameters_constraints.py",
         "parameters_constraints_class.py",
         "rawdata_contract.py",
-        "test_com.py",
-        "calc_cost.py",
         "hfss_com.py",
+        "calc_cost.py",
     ):
         (job.directory / name).write_text("# test\n", encoding="utf-8", newline="\n")
     (job.directory / "rawData").mkdir()
@@ -48,8 +47,8 @@ def test_condor_submit_file_uses_direct_workflow_and_rawdata_contract(tmp_path):
     assert "load_profile = True" in text
     assert "EXTRA_FLAG=1" in text
     assert "job_input.json" in text
+    assert "hfss_com.py" in text
     assert "calc_cost.py" not in text
-    assert "hfss_com.py" not in text
     assert "cost.json" not in text
 
 

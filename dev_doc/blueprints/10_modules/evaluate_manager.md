@@ -9,7 +9,7 @@
 - `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
 - Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
 - Distributed mode prepares all jobs, writes HTCondor submit files, submits direct `workflow.py` payloads, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
-- `job_files.prepare_job()` copies job template files, denormalizes variables via `job_template.api`, writes `job_input.json` with run/generation context, and records `job_static_hash` in submit-side metadata.
+- `job_files.prepare_job()` copies job template files through `job_template.api`, including any active com files already placed in `job_template`, denormalizes variables via `job_template.api`, writes `job_input.json` with run/generation context, and records `job_static_hash` in submit-side metadata.
 - `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
 - `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, best-effort removes timed-out cluster ids, and collects `JobResult` objects.
 - `job_result.py` provides shared helpers for reading/writing job metadata, discovering rawData files, promoting workflow metadata, and constructing `JobResult`.
@@ -26,7 +26,7 @@
 
 ## Non-Obvious Techniques
 - `calc_cost.py` is excluded from job copies. Jobs generate rawData only; cost is derived after recording.
-- `hfss_com.py` is excluded from current job copies because this round uses `test_com.py`; future simulator adapters should be added deliberately.
+- `calc_cost.py` is excluded from job copies, while active adapter files already placed in `job_template` are copied because workflow execution needs them in the job folder. The current active adapter is `hfss_com.py`.
 - `job_static_hash` excludes `rawData`, metadata, `job_input.json`, and other runtime files so it reflects static task definition, not individual values.
 - `created_at` is not recorded. If job creation time is needed, infer it from the time-based job folder name.
 - `evaluate_manager` adds runner diagnostics such as return code and stdout/stderr tails, while preserving workflow-written `started_at`/`ended_at`.

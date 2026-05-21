@@ -10,7 +10,8 @@
 - `project.optimize` owns the optimization loop, NSGA-III multi-objective candidate generation, GPSAF-style history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
 - `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, passes run/generation context, runs local jobs or submits HTCondor jobs, reads workflow-owned individual metadata, records failures, and returns in-memory costs to the optimizer.
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, rawData-to-cost calculation, and optional rawData importance weights for surrogate training.
-- The current default test task exposes three bounded minimization objectives in `[0, 1]`: target match, curve magnitude, and surface reward.
+- The current default task uses HFSS/PyAEDT with `Metal_recon_ant.aedt` and exposes four bounded minimization objectives in `[0, 1]`: S11 band, gain steering, gain split, and broadside gain.
+- Active workflow adapters live in `project/job_template` so prepared jobs are self-contained. `project/com_lib` is only a staging/reference area for adapter source/reference copies such as `hfss_com.py` and retained synthetic `test_com.py`.
 - `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
@@ -19,7 +20,7 @@
 - `dev_doc` owns project documentation guidance, including full-read context sources, selective blueprint reading, terminology, reference ancestry, and append-only change records.
 
 ## I/O Format
-- User-edited inputs are primarily `project/config.py` plus the task-specific files in `project/job_template/`: `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and future simulator model/adaptor files.
+- User-edited inputs are primarily `project/config.py`, task-specific files in `project/job_template/` such as `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and any active adapter files copied into `job_template/`.
 - Optimizer input and output use normalized float tuples shaped as `population[individual][variable]`.
 - Evaluator input is a generation of normalized float tuples; evaluator output is cost tuples shaped as `population[individual][objective_cost]`.
 - Job folders contain copied runtime files, `job_input.json`, submit-side `metadata.json`/`metaData.json`, workflow-owned `individual_metadata.json`, and flat `rawData/*.npz` files. Jobs do not contain or save `cost.json`.
@@ -40,7 +41,7 @@
 - HTCondor distributed evaluation uses the same job folder and recording contract as local mode. Submit failures, stale daemons, credential errors, or broken pool topology are captured as job metadata; the project does not try to repair the installed HTCondor environment.
 
 ## Mutability Profile
-- `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, `test_com.py`, and simulator model files are intentionally highly mutable between optimization tasks.
+- `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and active adapter files in `job_template/` are intentionally highly mutable between optimization tasks.
 - `project/config.py` is mutable at campaign setup time and occasionally during tuning.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.

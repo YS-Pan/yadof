@@ -17,7 +17,7 @@ sequenceDiagram
     E->>J: run workflow.py subprocess
     J->>T: workflow reads raw variables
     T->>J: write individual_metadata.json started_at
-    T->>J: write flat rawData/*.npz
+    T->>J: import copied job_template adapter and write flat rawData/*.npz
     T->>J: update individual_metadata.json ended_at/status
     E->>J: read individual_metadata.json
     E->>R: record_job_result(job, raw variables, rawData paths, merged metadata)
@@ -78,7 +78,7 @@ sequenceDiagram
 
 ## Failure Handling
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
-- Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; local runner adds return code, stdout/stderr tails, and rawData presence.
+- Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; the current HFSS workflow also records child/AEDT process metadata for cleanup. Local runner adds return code, stdout/stderr tails, and rawData presence.
 - Submit failure: HTCondor submission errors are captured as per-job `error` metadata. The project does not attempt to repair the local HTCondor installation.
 - Timeout: local runner terminates the process tree; HTCondor runner best-effort removes the submitted cluster id. Both record status `timeout` and preserve any returned job-local metadata.
 - Record failure: evaluation continues; returned row becomes `inf`.

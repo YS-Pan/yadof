@@ -2,12 +2,12 @@
 
 ## Intent
 - Protect the v3 contracts while the implementation is still moving quickly.
-- Keep the default test path local and independent of HTCondor or real simulator installations.
+- Keep the default test path local and independent of HTCondor or accidental real HFSS launches; real HFSS smoke tests must be explicitly enabled.
 - Verify behavior from module public APIs whenever possible.
 
 ## Functionalities
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
-- Default job-template tests assert the three objective names and `[0, 1]` cost bounds.
+- Default job-template tests assert the Metal_recon_ant parameter names, four objective names, and `[0, 1]` cost bounds using small HFSS-like rawData fixtures.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
 - HTCondor tests cover submit-file generation, submit failure capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
@@ -22,7 +22,7 @@
 - Tests may monkeypatch public APIs to isolate module behavior.
 
 ## Non-Obvious Techniques
-- Tests intentionally avoid requiring real HFSS, HTCondor, or expensive simulation software.
+- Tests intentionally avoid requiring real HFSS, HTCondor, or expensive simulation software unless a real-HFSS smoke-test flag is set.
 - Tests for distributed mode should mock `condor_submit`/runner behavior unless they are explicit environment smoke tests requested by the user.
 - Runtime temp directories are ignored through `pyproject.toml` pytest settings.
 - Tests assert that problem shape comes from `job_template`, not from global config.

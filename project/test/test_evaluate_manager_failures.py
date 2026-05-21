@@ -98,6 +98,7 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
     from project import config
     from project.evaluate_manager import api
     from project.evaluate_manager.types import JobResult, JobSpec
+    from project.job_template import api as job_template_api
 
     configured_jobs_dir = tmp_path / "configured_jobs"
     seen: dict[str, JobSpec] = {}
@@ -116,7 +117,8 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
     monkeypatch.setattr(api, "run_local_job", run_local_job)
     monkeypatch.setattr(api, "record_result", lambda result: (1.0,))
 
-    costs = api.evaluate_population(((0.25, 0.5, 0.75) + (0.5,) * 17,), timeout_sec=1)
+    population = ((0.25, 0.5, 0.75) + (0.5,) * (job_template_api.get_variable_count() - 3),)
+    costs = api.evaluate_population(population, timeout_sec=1)
 
     assert costs == ((1.0,),)
     assert seen["job"].directory.parent == configured_jobs_dir

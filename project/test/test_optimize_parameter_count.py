@@ -84,16 +84,37 @@ def test_explicit_variable_count_overrides_job_template_parameter_count(monkeypa
     assert calls == {"get_variable_count": 1, "get_objective_count": 1, "get_objective_names": 1}
 
 
-def test_default_job_template_width_is_twenty():
+def test_default_job_template_width_matches_metal_recon_ant():
     from project.job_template import api as job_template_api
 
-    assert job_template_api.get_variable_count() == 20
-    assert job_template_api.get_parameter_names() == tuple(f"x{idx}" for idx in range(20))
-    assert job_template_api.get_objective_count() == 3
+    assert job_template_api.get_variable_count() == 19
+    assert job_template_api.get_parameter_names() == (
+        "feed_pad_r",
+        "feed_strip_patch_gap",
+        "feed_strip_w",
+        "feedline1_w",
+        "feedline2_l",
+        "feedline2_w",
+        "gnd_metal_match1_l",
+        "gnd_metal_match1_w",
+        "gnd_metal_match_gap",
+        "iso_slot_l",
+        "iso_slot_w",
+        "iso_slot_xposi",
+        "metal_match_w",
+        "metal_patch_x",
+        "metal_patch_y",
+        "metal_patch_zposi",
+        "patch_feed_strip_cut_l",
+        "phase_l2",
+        "phase_xposi",
+    )
+    assert job_template_api.get_objective_count() == 4
     assert job_template_api.get_objective_names() == (
-        "target_match_cost",
-        "curve_magnitude_cost",
-        "surface_reward_cost",
+        "cost_s11_band",
+        "cost_gain_steering",
+        "cost_gain_split",
+        "cost_gain_broadside",
     )
 
 

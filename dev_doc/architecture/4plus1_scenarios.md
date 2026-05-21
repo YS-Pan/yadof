@@ -1,11 +1,11 @@
 # 4+1 Scenarios
 
 ## Scenario 1: First Local Generation
-1. User edits `project/job_template/parameters_constraints.py`, `workflow.py`, and `calc_cost.py`.
+1. User edits `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, and any needed adapter file placed in `project/job_template`.
 2. User calls `project.optimize.api.run_one_generation()`.
 3. `optimize` has no history, so it samples normalized candidates.
 4. `evaluate_manager` prepares jobs with run/generation context and runs `workflow.py`.
-5. `workflow.py` writes each individual's start/end metadata inside the job folder.
+5. `workflow.py` writes each individual's start/end metadata inside the job folder and, for the current task, uses the copied HFSS adapter to write flat S11/gain rawData.
 6. `recorded_data` stores raw variables, rawData, compact metadata, optimization index, and generation index.
 7. Three bounded costs are calculated dynamically and returned to `optimize`.
 

@@ -52,17 +52,19 @@ flowchart LR
     JTAPI["api.py"] --> Params["parameters_constraints.py"]
     JTAPI --> ParamClass["parameters_constraints_class.py"]
     JTAPI --> Cost["calc_cost.py"]
-    Workflow["workflow.py"] --> TestCom["test_com.py"]
+    JTAPI --> Copy["copy_job_files"]
+    Copy --> ActiveCom["hfss_com.py"]
+    Workflow["workflow.py"] --> HFSSCom["hfss_com.py"]
     Workflow --> RawContract["rawdata_contract.py"]
     Cost --> RawContract
-    HFSS["hfss_com.py"] -. future adapter .-> Workflow
+    ComLib["project/com_lib/hfss_com.py and test_com.py"] -. source/reference copies .-> ActiveCom
 ```
 
 - `workflow.py`: raw variable input to flat rawData output plus workflow-owned `individual_metadata.json` lifecycle timestamps.
-- `calc_cost.py`: rawData to three bounded objective costs plus task-owned rawData importance weights for surrogate training.
+- `calc_cost.py`: HFSS rawData to four bounded reference objective costs plus task-owned rawData importance weights for surrogate training.
 - `rawdata_contract.py`: `.npz` schema validation.
-- `test_com.py`: current pure-Python simulator stand-in.
-- `hfss_com.py`: real simulator adapter reference surface.
+- `hfss_com.py`: current HFSS/PyAEDT simulator adapter copied into real jobs because it lives in `job_template`; `project/com_lib/hfss_com.py` keeps a source/reference copy.
+- `project/com_lib/test_com.py`: retained pure-Python simulator stand-in; it must be copied into `job_template` before a workflow can use it.
 
 ## Recorded Data Components
 
