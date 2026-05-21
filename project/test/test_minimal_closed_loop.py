@@ -5,6 +5,8 @@ import shutil
 import sys
 import types
 
+import numpy as np
+
 
 def _module(monkeypatch, name: str) -> types.ModuleType:
     module = types.ModuleType(name)
@@ -148,13 +150,74 @@ def test_surrogate_raw_data_to_cost_shape_and_checkpoint(monkeypatch):
     monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
     _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
+    monkeypatch.setattr(
+        runtime,
+        "_predict_costs_for_error_audit",
+        lambda _state, _x: ((4.0,), (9.0,)),
+    )
 
     state = runtime.train(generation_index=5)
+    monkeypatch.setattr(
+        runtime,
+        "_predict_member_flats",
+        lambda _state, _x: np.asarray(
+            [
+                [[1.0, 2.0], [3.0, 4.0]],
+                [[1.0, 2.0], [3.0, 4.0]],
+            ],
+            dtype=float,
+        ),
+    )
     predictions = runtime.predict_population(((0.12, 0.18), (0.75, 0.85)))
     errors = runtime.evaluate_historical_errors()
 
     assert state.checkpoint_path.is_file()
     assert predictions[0][0] == (3.0,)
     assert predictions[1][0] == (7.0,)
-    assert predictions[0][1][0][0] < 3.0 < predictions[0][1][0][1]
-    assert errors == ((0.0,), (0.0,))
+    assert predictions[0][1] == ((3.0, 3.0),)
+    assert errors == ((1.0 / 3.0,), (2.0 / 7.0,))
+    assert state.mean_relative_error > 0.0
+    assert state.historical_relative_error_p90
+
+
+def test_surrogate_interval_is_member_cost_min_max(monkeypatch):
+    recorded_pkg = _module(monkeypatch, "project.recorded_data")
+    recorded_api = _module(monkeypatch, "project.recorded_data.api")
+    job_template_pkg = _module(monkeypatch, "project.job_template")
+    job_template_api = _module(monkeypatch, "project.job_template.api")
+    monkeypatch.setattr(recorded_pkg, "api", recorded_api, raising=False)
+    monkeypatch.setattr(job_template_pkg, "api", job_template_api, raising=False)
+
+    raw_samples = (
+        ({"rawData": (1.0, 2.0), "metadata": {"source": "low"}},),
+        ({"rawData": (5.0, 8.0), "metadata": {"source": "high"}},),
+    )
+    recorded_api.get_surrogate_training_data = lambda: {
+        "parameter_names": ("x", "y"),
+        "normalized_variables": ((0.0, 0.0), (1.0, 1.0)),
+        "raw_data": raw_samples,
+    }
+    job_template_api.calculate_costs_from_raw_data = lambda samples: tuple(
+        (float(sum(sample[0]["rawData"])),) for sample in samples
+    )
+
+    from project import config
+    from project.surrogate import runtime
+
+    checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "surrogate_member_interval"
+    if checkpoint_dir.is_dir():
+        shutil.rmtree(checkpoint_dir)
+    monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
+    _configure_fast_inr(monkeypatch, config)
+    runtime._STATE = None
+    runtime.train(generation_index=6)
+    monkeypatch.setattr(
+        runtime,
+        "_predict_member_flats",
+        lambda _state, _x: np.asarray([[[1.0, 2.0]], [[2.0, 4.0]]], dtype=float),
+    )
+
+    prediction = runtime.predict_population(((0.5, 0.5),))[0]
+
+    assert prediction[0] == (4.5,)
+    assert prediction[1] == ((3.0, 6.0),)

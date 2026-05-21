@@ -30,12 +30,12 @@ flowchart TD
 ```
 
 ## Container Responsibilities
-- `optimize`: search policy, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
+- `optimize`: NSGA-III search policy for multi-objective runs, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
 - `evaluate_manager`: job preparation, local execution, optional HTCondor submission, workflow metadata collection, failure isolation, recording handoff.
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
 - Current default `job_template`: pure-Python rawData generation plus three `[0, 1]` test objectives.
 - `recorded_data`: durable real-evaluation archive and dynamic historical views.
-- `surrogate`: rawData-first conditional INR ensemble training, rawData prediction, and cost interval generation.
+- `surrogate`: rawData-first conditional INR ensemble training, audited rawData prediction, and ensemble member min/max cost interval generation.
 - `tools`: optional user workflows for visualization and maintenance.
 - `test`: local verification of contracts and failure behavior.
 
@@ -45,7 +45,7 @@ flowchart TD
 3. Job `workflow.py` runs either as a local subprocess or HTCondor payload, writes `individual_metadata.json` at start/end, and writes flat rawData `.npz` files.
 4. `evaluate_manager` reads job-local metadata and sends job results to `recorded_data`.
 5. `recorded_data` stores raw evidence once per individual, archives rawData, and asks `job_template` for dynamic cost when needed.
-6. `surrogate` trains a conditional INR ensemble from recorded rawData and predicts rawData for optimizer-side candidate screening.
+6. `surrogate` trains a conditional INR ensemble from recorded rawData, with task-owned importance weights for objective-relevant windows, and predicts rawData for optimizer-side candidate screening.
 
 ## Container Rules
 - Core modules communicate through each other's `api.py` files.

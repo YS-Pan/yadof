@@ -45,6 +45,8 @@ project/
 - Protect rawData schema and recorded-data persistence with contract tests.
 - Use monkeypatched APIs for optimizer unit behavior where full local jobs would be too heavy.
 - Surrogate tests may force smaller CPU INR settings so contract tests stay fast while the default config remains usable for real runs.
+- Optimizer tests should cover NSGA-III reference-direction diagnostics, pooled surrogate survival, and the surrogate exploration quota without running expensive full campaigns.
+- Surrogate tests should verify historical error audit, ensemble min/max interval output, and task-owned rawData importance weights with monkeypatched or small training data.
 - Avoid adding tests that require real HFSS or HTCondor for the default suite.
 - HTCondor behavior should be covered with submit-file and monkeypatched-runner tests by default; real pool diagnostics are manual or explicit smoke checks.
 

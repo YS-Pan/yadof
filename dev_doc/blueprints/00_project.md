@@ -7,12 +7,12 @@
 - Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and later local/distributed execution backends should not force a rewrite of the core optimizer.
 
 ## Functionalities
-- `project.optimize` owns the optimization loop, GPSAF-style candidate generation, history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
+- `project.optimize` owns the optimization loop, NSGA-III multi-objective candidate generation, GPSAF-style history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
 - `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, passes run/generation context, runs local jobs or submits HTCondor jobs, reads workflow-owned individual metadata, records failures, and returns in-memory costs to the optimizer.
-- `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, and rawData-to-cost calculation.
+- `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, rawData-to-cost calculation, and optional rawData importance weights for surrogate training.
 - The current default test task exposes three bounded minimization objectives in `[0, 1]`: target match, curve magnitude, and surface reward.
 - `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
-- `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, and writes per-generation checkpoints plus member artifacts.
+- `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
@@ -34,8 +34,9 @@
 - Workflow lifecycle time is owned by the individual job: `workflow.py` writes `started_at` and `ended_at` into `individual_metadata.json`, and `evaluate_manager` only reads and forwards it.
 - Variable values are stored once as individual `raw_variables`; repeated variable payloads are scrubbed from rawData metadata and job metadata before appending `indMeta.jsonl`.
 - `evaluate_manager` isolates per-individual failures. Prepare, run, timeout, and record failures should become metadata and `inf` costs rather than crashing the whole generation.
-- `surrogate` predicts rawData first, then derives costs through the same rawData-to-cost path used for real samples. Its INR training uses target scaling, ensemble/member spread, and relative-loss weighting so small objective values still matter.
-- GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; default settings keep the entry point available while not forcing surrogate calls.
+- `surrogate` predicts rawData first, then derives costs through the same rawData-to-cost path used for real samples. Its INR training uses target scaling, task-owned rawData importance weights, ensemble/member spread, and relative-loss weighting so small objective values and objective-relevant windows still matter.
+- GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves real-evaluation slots that bypass surrogate selection to reduce branch starvation.
+- Multi-objective optimizer diagnostics include `pymoo.NSGA3`, requested population size, reference-direction method, partition count, and reference-direction count.
 - HTCondor distributed evaluation uses the same job folder and recording contract as local mode. Submit failures, stale daemons, credential errors, or broken pool topology are captured as job metadata; the project does not try to repair the installed HTCondor environment.
 
 ## Mutability Profile

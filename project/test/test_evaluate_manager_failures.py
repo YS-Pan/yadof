@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+import threading
+import time
 
 
 def test_prepare_failure_returns_inf_and_generation_continues(tmp_path, monkeypatch):
@@ -119,3 +121,61 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
     assert costs == ((1.0,),)
     assert seen["job"].directory.parent == configured_jobs_dir
     assert configured_jobs_dir.is_dir()
+
+
+def test_local_evaluation_can_run_jobs_in_parallel(tmp_path, monkeypatch):
+    from project import config
+    from project.evaluate_manager import api
+    from project.evaluate_manager.types import JobResult, JobSpec
+
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+
+    def prepare_job(variables, *, jobs_dir, job_template_dir):
+        values = tuple(float(value) for value in variables)
+        name = f"job_{int(values[0])}"
+        return JobSpec(name=name, directory=Path(jobs_dir) / name, unnormalized_variables=values)
+
+    def run_local_job(job, *, timeout_sec, python_executable, env):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return JobResult(
+            job_name=job.name,
+            job_dir=job.directory,
+            status="done",
+            unnormalized_variables=job.unnormalized_variables,
+            metadata={"job_name": job.name, "status": "done"},
+        )
+
+    monkeypatch.setenv("LOCAL_EVALUATION_MAX_WORKERS", "2")
+    monkeypatch.setattr(api, "prepare_job", prepare_job)
+    monkeypatch.setattr(api, "run_local_job", run_local_job)
+    monkeypatch.setattr(api, "record_result", lambda result: (result.unnormalized_variables[0],))
+
+    costs = api.evaluate_population(((0.0,), (1.0,), (2.0,), (3.0,)), jobs_dir=tmp_path, timeout_sec=1)
+
+    assert costs == ((0.0,), (1.0,), (2.0,), (3.0,))
+    assert max_active >= 2
+
+
+def test_local_worker_config_is_read_fresh(monkeypatch):
+    import types
+
+    from project.evaluate_manager import config as eval_config
+
+    values = iter((3, 5))
+
+    def fresh_project_config():
+        return types.SimpleNamespace(LOCAL_EVALUATION_MAX_WORKERS=next(values))
+
+    monkeypatch.delenv("LOCAL_EVALUATION_MAX_WORKERS", raising=False)
+    monkeypatch.setattr(eval_config, "_fresh_project_config", fresh_project_config)
+
+    assert eval_config.local_evaluation_max_workers() == 3
+    assert eval_config.local_evaluation_max_workers() == 5

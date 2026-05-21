@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 import random
 
 from project.optimize.gpsaf_misc import CandidateRecord, HistoryRecord
@@ -68,6 +69,26 @@ def test_baseline_offspring_generation_uses_survivors_as_active_population(monke
     assert observed_active_sizes == [("gpsaf_offspring", 5)]
 
 
+def test_multi_objective_context_uses_nsga3_reference_directions():
+    from project.optimize import gpsaf_pymoo
+
+    context = _context(population_size=5, objective_count=3)
+    diagnostics = gpsaf_pymoo.diagnostics(context)
+    source = Path(gpsaf_pymoo.__file__).read_text(encoding="utf-8").lower()
+
+    assert context.baseline_optimizer == "pymoo.NSGA3"
+    assert diagnostics["reference_direction_count"] <= 5
+    assert diagnostics["reference_direction_partitions"] >= 1
+    assert "nsga2" not in source
+
+
+def test_single_objective_context_skips_nsga3_reference_directions():
+    context = _context(population_size=5, objective_count=1)
+
+    assert context.baseline_optimizer == "pymoo.GA"
+    assert context.reference_directions is None
+
+
 def test_surrogate_generation_uses_survivors_as_active_population(monkeypatch):
     from project import config
     from project.optimize import gpsaf_phases
@@ -95,6 +116,7 @@ def test_surrogate_generation_uses_survivors_as_active_population(monkeypatch):
 
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 0)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0)
     monkeypatch.setattr(gpsaf_phases, "try_train_surrogate", lambda _generation_index: (object(), None))
     monkeypatch.setattr(gpsaf_phases, "generate_candidate_pool", fake_generate_candidate_pool)
     monkeypatch.setattr(gpsaf_phases, "predict_records", fake_predict_records)
@@ -111,4 +133,48 @@ def test_surrogate_generation_uses_survivors_as_active_population(monkeypatch):
     assert population is not None
     assert len(population) == 5
     assert diagnostics["alpha_batches"] == 1
+    assert diagnostics["alpha_selection"] == "nsga3_pooled_survival"
     assert observed_active_sizes == [("gpsaf_alpha_1", 5)]
+
+
+def test_surrogate_generation_reserves_exploration_quota(monkeypatch):
+    from project import config
+    from project.optimize import gpsaf_phases
+
+    def fake_generate_candidate_pool(context, state, need, _used_keys, _rng, *, origin):
+        if origin == "gpsaf_exploration":
+            return tuple(CandidateRecord(x=(0.90 + 0.01 * idx, 0.10), origin=origin) for idx in range(int(need)))
+        return tuple(CandidateRecord(x=(0.10 + 0.01 * idx, 0.20), origin=origin) for idx in range(int(need)))
+
+    def fake_predict_records(records):
+        return [
+            CandidateRecord(
+                x=record.x,
+                origin=record.origin,
+                individual=record.individual,
+                pred_costs=(sum(record.x), sum(record.x), sum(record.x)),
+                intervals=((0.0, 1.0), (0.0, 1.0), (0.0, 1.0)),
+            )
+            for record in records
+        ]
+
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 0)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.4)
+    monkeypatch.setattr(gpsaf_phases, "try_train_surrogate", lambda _generation_index: (object(), None))
+    monkeypatch.setattr(gpsaf_phases, "generate_candidate_pool", fake_generate_candidate_pool)
+    monkeypatch.setattr(gpsaf_phases, "predict_records", fake_predict_records)
+    monkeypatch.setattr(gpsaf_phases, "historical_surrogate_errors", lambda: ())
+
+    population, diagnostics = gpsaf_phases.surrogate_population(
+        _history(20),
+        context=_context(population_size=5, objective_count=3),
+        generation_index=2,
+        population_size=5,
+        seed=123,
+    )
+
+    assert population is not None
+    assert len(population) == 5
+    assert diagnostics["exploration_count"] == 2
+    assert any(row[0] >= 0.90 for row in population)

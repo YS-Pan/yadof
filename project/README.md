@@ -27,8 +27,8 @@ not stored as a durable source file.
   metadata in `indMeta.jsonl`, optimization metadata in `optMeta/`, and all
   rawData `.npz` members inside one `rawData.npz` archive. Normalized variables
   and costs are calculated dynamically through APIs.
-- `surrogate/`: rawData-first surrogate training, prediction, uncertainty
-  intervals, and per-generation checkpoints.
+- `surrogate/`: rawData-first surrogate training, prediction, ensemble member
+  min/max intervals, and per-generation checkpoints.
 - `tools/`: optional user-launched utilities. Core runtime does not import or
   depend on tools.
 - `test/`: pytest coverage for local closed-loop behavior, rawData contracts,

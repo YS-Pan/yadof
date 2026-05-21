@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import os
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ DEFAULT_JOB_TEMPLATE_DIR = PROJECT_DIR / "job_template"
 
 DEFAULT_TIMEOUT_SEC = 60.0 * 60.0
 DEFAULT_MODE = "local"
+DEFAULT_LOCAL_EVALUATION_MAX_WORKERS = 1
 DEFAULT_HTCONDOR_SUBMIT_EXE = "condor_submit"
 DEFAULT_HTCONDOR_REMOVE_EXE = "condor_rm"
 DEFAULT_HTCONDOR_POLL_SEC = 30.0
@@ -50,6 +52,18 @@ def default_timeout_sec() -> float:
 
 def default_mode() -> str:
     return str(getattr(project_config, "EVALUATION_MODE", DEFAULT_MODE))
+
+
+def local_evaluation_max_workers() -> int:
+    raw = os.environ.get("LOCAL_EVALUATION_MAX_WORKERS")
+    if raw is None:
+        fresh_config = _fresh_project_config()
+        raw = _first_config_value(
+            ("LOCAL_EVALUATION_MAX_WORKERS", "EVALUATE_LOCAL_MAX_WORKERS", "LOCAL_EVALUATION_WORKERS"),
+            DEFAULT_LOCAL_EVALUATION_MAX_WORKERS,
+            config_module=fresh_config,
+        )
+    return max(1, int(raw))
 
 
 def htcondor_submit_exe() -> str:
@@ -92,10 +106,24 @@ def htcondor_requirements() -> str:
     return str(getattr(project_config, "HTCONDOR_REQUIREMENTS", DEFAULT_HTCONDOR_REQUIREMENTS))
 
 
-def _first_config_value(names: tuple[str, ...], fallback: Any) -> Any:
+def _fresh_project_config():
+    try:
+        config_path = Path(project_config.__file__)
+        spec = importlib.util.spec_from_file_location("_yadot_fresh_project_config", config_path)
+        if spec is None or spec.loader is None:
+            return project_config
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return project_config
+
+
+def _first_config_value(names: tuple[str, ...], fallback: Any, *, config_module=None) -> Any:
+    module = project_config if config_module is None else config_module
     for name in names:
-        if hasattr(project_config, name):
-            return getattr(project_config, name)
+        if hasattr(module, name):
+            return getattr(module, name)
     return fallback
 
 

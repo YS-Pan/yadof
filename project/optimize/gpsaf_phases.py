@@ -12,6 +12,7 @@ from .gpsaf_pymoo import (
     advance_population_with_records,
     clone_algorithm,
     generate_candidate_pool,
+    select_records_by_survival,
     survivor_state_from_history,
 )
 from .gpsaf_misc import (
@@ -151,8 +152,9 @@ def run_alpha_phase(
     used_keys: set[tuple[float, ...]],
     rng: random.Random,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
-    batches: list[list[CandidateRecord]] = []
+    predicted_pool: list[CandidateRecord] = []
     alpha = max(1, int(getattr(config, "OPTIMIZE_SURROGATE_ALPHA", 4)))
+    batches_completed = 0
 
     for batch_index in range(alpha):
         pool = generate_candidate_pool(
@@ -165,26 +167,19 @@ def run_alpha_phase(
         )
         if not pool:
             break
-        batches.append(predict_records(pool))
+        predicted_pool.extend(predict_records(pool))
+        batches_completed += 1
 
-    if not batches:
+    if not predicted_pool:
         return [], {"alpha_batches": 0, "alpha_replacements": 0, "alpha_candidate_count": 0}
 
-    selected = list(batches[0])
-    replacements = 0
-    for batch in batches[1:]:
-        width = min(len(selected), len(batch))
-        selected = selected[:width]
-        for idx in range(width):
-            winner = pick_record(selected[idx], batch[idx], rng)
-            if winner is not selected[idx]:
-                replacements += 1
-            selected[idx] = winner
-
+    selected = select_records_by_survival(context, predicted_pool, batch_target)
     return selected[: int(batch_target)], {
-        "alpha_batches": int(len(batches)),
-        "alpha_replacements": int(replacements),
-        "alpha_candidate_count": int(sum(len(batch) for batch in batches)),
+        "alpha_batches": int(batches_completed),
+        "alpha_replacements": 0,
+        "alpha_candidate_count": int(len(predicted_pool)),
+        "alpha_selection": "nsga3_pooled_survival",
+        "alpha_survival_selected": int(len(selected)),
     }
 
 
@@ -208,6 +203,7 @@ def run_beta_phase(
 
     sim_state = clone_algorithm(state)
     clusters = [[] for _ in anchors]
+    beta_records: list[CandidateRecord] = []
     candidate_count = 0
     iterations = 0
 
@@ -229,25 +225,23 @@ def run_beta_phase(
         local_clusters = assign_clusters(anchors, records)
         for idx, bucket in enumerate(local_clusters):
             clusters[idx].extend(bucket)
+        beta_records.extend(records)
         sim_state = advance_population_with_records(context, sim_state, records, batch_target)
 
     cluster_sizes = [len(bucket) for bucket in clusters]
     cluster_max = max(cluster_sizes) if cluster_sizes else 0
-    gamma = float(getattr(config, "OPTIMIZE_SURROGATE_GAMMA", 0.5))
-    final_records = []
-    replacements = 0
-
-    for anchor, bucket in zip(anchors, clusters):
-        if not bucket or cluster_max <= 0:
-            final_records.append(anchor)
-            continue
-        winner = probabilistic_knockout(bucket, rng, historical_error)
-        rho = (float(len(bucket)) / float(cluster_max)) ** gamma
-        if rng.random() < rho:
-            final_records.append(winner)
-            replacements += 1
-        else:
-            final_records.append(anchor)
+    pooled = list(anchors) + beta_records
+    final_records = select_records_by_survival(context, pooled, batch_target)
+    if len(final_records) < int(batch_target):
+        existing = {id(record) for record in final_records}
+        for record in anchors:
+            if id(record) in existing:
+                continue
+            final_records.append(record)
+            if len(final_records) >= int(batch_target):
+                break
+    anchor_ids = {id(record) for record in anchors}
+    replacements = sum(1 for record in final_records if id(record) not in anchor_ids)
 
     return final_records[: int(batch_target)], {
         "beta_iterations": int(iterations),
@@ -255,7 +249,17 @@ def run_beta_phase(
         "beta_replacements": int(replacements),
         "beta_cluster_size_max": int(cluster_max),
         "beta_cluster_sizes": tuple(int(value) for value in cluster_sizes),
+        "beta_selection": "nsga3_pooled_survival",
+        "beta_pool_size": int(len(pooled)),
+        "beta_survival_selected": int(len(final_records)),
     }
+
+
+def _exploration_count(population_size: int) -> int:
+    fraction = max(0.0, min(1.0, float(getattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0))))
+    if fraction <= 0.0:
+        return 0
+    return min(int(population_size), max(1, int(round(int(population_size) * fraction))))
 
 
 def surrogate_population(
@@ -274,9 +278,30 @@ def surrogate_population(
     base_state = survivor_state_from_history(context, history, population_size)
     used_keys = history_keys(history)
     diagnostics: dict[str, object] = {"optimizer": "gpsaf"}
+    exploration_count = _exploration_count(population_size)
+    surrogate_target = max(0, int(population_size) - int(exploration_count))
 
     try:
-        anchors, alpha_info = run_alpha_phase(context, base_state, population_size, used_keys, rng)
+        exploration_records = (
+            generate_candidate_pool(
+                context,
+                clone_algorithm(base_state),
+                exploration_count,
+                used_keys,
+                rng,
+                origin="gpsaf_exploration",
+            )
+            if exploration_count > 0
+            else []
+        )
+        diagnostics["exploration_count"] = int(len(exploration_records))
+        diagnostics["exploration_fraction"] = float(
+            getattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0)
+        )
+        if surrogate_target <= 0:
+            return tuple(record.x for record in exploration_records[: int(population_size)]), diagnostics
+
+        anchors, alpha_info = run_alpha_phase(context, base_state, surrogate_target, used_keys, rng)
         diagnostics.update(alpha_info)
         if not anchors:
             return None, {**diagnostics, "surrogate_error": "no_alpha_candidates"}
@@ -286,14 +311,26 @@ def surrogate_population(
             context,
             base_state,
             anchors,
-            population_size,
+            surrogate_target,
             used_keys,
             rng,
             historical_error,
         )
         diagnostics.update(beta_info)
         diagnostics["historical_error_rows"] = len(historical_error)
+        final_records = list(final_records) + list(exploration_records)
+        if len(final_records) < int(population_size):
+            final_records.extend(
+                generate_candidate_pool(
+                    context,
+                    clone_algorithm(base_state),
+                    int(population_size) - len(final_records),
+                    used_keys,
+                    rng,
+                    origin="gpsaf_exploration_refill",
+                )
+            )
     except Exception as exc:
         return None, {**diagnostics, "surrogate_error": f"{exc.__class__.__name__}: {exc}"}
 
-    return tuple(record.x for record in final_records), diagnostics
+    return tuple(record.x for record in final_records[: int(population_size)]), diagnostics

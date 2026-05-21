@@ -23,6 +23,7 @@ class INRTrainConfig:
     weight_decay: float = 1e-5
     loss_beta: float = 0.05
     relative_loss_weight: float = 0.15
+    relative_loss_eps: float = 0.05
     x_latent_dim: int = 96
     field_emb_dim: int = 12
     coord_fourier_features: int = 24
@@ -234,6 +235,20 @@ def _mean(values: list[float]) -> float:
     return float(np.mean(values)) if values else float("nan")
 
 
+def _weighted_smooth_l1(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    beta: float,
+    query_weights: torch.Tensor | None,
+) -> torch.Tensor:
+    loss = F.smooth_l1_loss(pred, target, beta=float(beta), reduction="none")
+    if query_weights is None:
+        return loss.mean()
+    weights = query_weights.to(dtype=loss.dtype, device=loss.device).reshape(1, -1)
+    return (loss * weights).mean() / weights.mean().clamp_min(1e-12)
+
+
 def _train_one_member(
     model: ConditionalRawDataINR,
     *,
@@ -241,6 +256,7 @@ def _train_one_member(
     Y_train: np.ndarray,
     coords_device: torch.Tensor,
     fields_device: torch.Tensor,
+    query_weights_device: torch.Tensor | None,
     device: torch.device,
     cfg: INRTrainConfig,
     shuffle_seed: int,
@@ -271,13 +287,23 @@ def _train_one_member(
                 fields=fields_device,
                 query_chunk=cfg.train_query_chunk,
             )
-            value_loss = F.smooth_l1_loss(pred, y_batch, beta=float(cfg.loss_beta))
+            value_loss = _weighted_smooth_l1(
+                pred,
+                y_batch,
+                beta=float(cfg.loss_beta),
+                query_weights=query_weights_device,
+            )
             loss_terms = [value_loss]
             coeff_sum = 1.0
             rel_loss = torch.zeros((), dtype=value_loss.dtype, device=value_loss.device)
             if relative_weight > 0.0:
-                denom = y_batch.abs().clamp_min(1.0)
-                rel_loss = F.smooth_l1_loss(pred / denom, y_batch / denom, beta=float(cfg.loss_beta))
+                denom = y_batch.abs().clamp_min(float(cfg.relative_loss_eps))
+                rel_loss = _weighted_smooth_l1(
+                    pred / denom,
+                    y_batch / denom,
+                    beta=float(cfg.loss_beta),
+                    query_weights=query_weights_device,
+                )
                 loss_terms.append(relative_weight * rel_loss)
                 coeff_sum += relative_weight
 
@@ -298,7 +324,12 @@ def _train_one_member(
                     fields=fields_device,
                     query_chunk=cfg.train_query_chunk,
                 )
-                mix_loss = F.smooth_l1_loss(pred_mix, y_mix, beta=float(cfg.loss_beta))
+                mix_loss = _weighted_smooth_l1(
+                    pred_mix,
+                    y_mix,
+                    beta=float(cfg.loss_beta),
+                    query_weights=query_weights_device,
+                )
                 loss_terms.append(mix_loss)
                 coeff_sum += 1.0
 
@@ -332,6 +363,7 @@ def fit_deep_ensemble_conditional_inr(
     field_ids: np.ndarray,
     device: torch.device,
     train_cfg: INRTrainConfig,
+    query_weights: np.ndarray | None = None,
     artifact_dir: Path | None = None,
     seed: int = 0,
 ):
@@ -354,6 +386,22 @@ def fit_deep_ensemble_conditional_inr(
         raise ValueError("Y_train must be sampled on coord_table")
     if X_train.shape[0] == 0 or Y_train.shape[1] == 0:
         raise ValueError("surrogate training needs at least one sample and one query")
+    query_weights_device = None
+    query_weight_stats: dict[str, float] | None = None
+    if query_weights is not None:
+        weights_np = np.asarray(query_weights, dtype=np.float32).reshape(-1)
+        if weights_np.size != Y_train.shape[1]:
+            raise ValueError("query_weights must align with Y_train query dimension")
+        weights_np = np.where(np.isfinite(weights_np), weights_np, 0.0)
+        weights_np = np.maximum(weights_np, 0.0)
+        if float(np.max(weights_np, initial=0.0)) <= 0.0:
+            weights_np = np.ones_like(weights_np, dtype=np.float32)
+        query_weight_stats = {
+            "query_weight_min": float(np.min(weights_np)),
+            "query_weight_mean": float(np.mean(weights_np)),
+            "query_weight_max": float(np.max(weights_np)),
+        }
+        query_weights_device = torch.from_numpy(np.ascontiguousarray(weights_np, dtype=np.float32)).to(device)
 
     if hasattr(torch, "set_float32_matmul_precision"):
         torch.set_float32_matmul_precision("high")
@@ -392,6 +440,7 @@ def fit_deep_ensemble_conditional_inr(
             Y_train=visible_y,
             coords_device=coords_device,
             fields_device=fields_device,
+            query_weights_device=query_weights_device,
             device=device,
             cfg=train_cfg,
             shuffle_seed=member_seed,
@@ -428,6 +477,8 @@ def fit_deep_ensemble_conditional_inr(
         "relative": _mean([float(item["relative"]) for item in records]),
         "mixup": _mean([float(item["mixup"]) for item in records]),
     }
+    if query_weight_stats is not None:
+        history.update(query_weight_stats)
     return model, history
 
 

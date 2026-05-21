@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 import inspect
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .config import DEFAULT_JOB_TEMPLATE_DIR, default_jobs_dir, default_mode, default_timeout_sec
+from .config import (
+    DEFAULT_JOB_TEMPLATE_DIR,
+    default_jobs_dir,
+    default_mode,
+    default_timeout_sec,
+    local_evaluation_max_workers,
+)
 from .condor_runner import run_condor_jobs
 from .job_files import prepare_job
 from .local_runner import run_local_job
@@ -23,6 +30,7 @@ def evaluate_population(
     timeout_sec: float | None = None,
     python_executable: str | Path = sys.executable,
     env: Mapping[str, str] | None = None,
+    local_max_workers: int | None = None,
     run_id: str | None = None,
     optimization_index: int | None = None,
     generation_index: int | None = None,
@@ -39,6 +47,11 @@ def evaluate_population(
     timeout_sec = default_timeout_sec() if timeout_sec is None else timeout_sec
 
     if mode == "local":
+        local_workers = (
+            local_evaluation_max_workers()
+            if local_max_workers is None
+            else max(1, int(local_max_workers))
+        )
         return _evaluate_population_local(
             population,
             jobs_dir=jobs_dir,
@@ -46,6 +59,7 @@ def evaluate_population(
             timeout_sec=timeout_sec,
             python_executable=python_executable,
             env=env,
+            local_max_workers=local_workers,
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=generation_index,
@@ -80,95 +94,153 @@ def _evaluate_population_local(
     timeout_sec: float,
     python_executable: str | Path,
     env: Mapping[str, str] | None,
+    local_max_workers: int,
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
 ) -> tuple[tuple[float, ...], ...]:
     jobs_dir = Path(jobs_dir)
-    costs_by_individual: list[tuple[float, ...] | None] = []
+    population_rows = tuple(_population_row(variables) for variables in population)
+    costs_by_individual: list[tuple[float, ...] | None] = [None] * len(population_rows)
     objective_width: int | None = None
 
-    for index, variables in enumerate(population):
-        population_row = _population_row(variables)
-        job: JobSpec | None = None
-        result: JobResult | None = None
+    def evaluate_one(index: int, population_row: tuple[Any, ...]) -> tuple[int, tuple[float, ...] | None]:
+        return _evaluate_one_local(
+            index=index,
+            population_row=population_row,
+            jobs_dir=jobs_dir,
+            job_template_dir=job_template_dir,
+            timeout_sec=timeout_sec,
+            python_executable=python_executable,
+            env=env,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
 
-        try:
-            job = _prepare_job(
-                population_row,
-                jobs_dir=jobs_dir,
-                job_template_dir=job_template_dir,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-                population_index=index,
-            )
-        except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
-            failure = _failed_result(
-                stage="prepare",
-                engine="local",
-                exc=exc,
-                population_row=population_row,
-                index=index,
-                jobs_dir=jobs_dir,
-                job=job,
-                result=result,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-            )
-            _best_effort_record_failure(failure)
-            costs_by_individual.append(None)
-            continue
+    outcomes: list[tuple[int, tuple[float, ...] | None]] = []
+    worker_count = min(max(1, int(local_max_workers)), max(1, len(population_rows)))
+    if worker_count <= 1 or len(population_rows) <= 1:
+        outcomes = [evaluate_one(index, row) for index, row in enumerate(population_rows)]
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="yadot-local-eval") as executor:
+            futures = {
+                executor.submit(evaluate_one, index, row): (index, row)
+                for index, row in enumerate(population_rows)
+            }
+            for future in as_completed(futures):
+                index, row = futures[future]
+                try:
+                    outcomes.append(future.result())
+                except Exception as exc:  # noqa: BLE001 - keep one worker failure from stopping a generation.
+                    failure = _failed_result(
+                        stage="local_worker",
+                        engine="local",
+                        exc=exc,
+                        population_row=row,
+                        index=index,
+                        jobs_dir=jobs_dir,
+                        job=None,
+                        result=None,
+                        run_id=run_id,
+                        optimization_index=optimization_index,
+                        generation_index=generation_index,
+                    )
+                    _best_effort_record_failure(failure)
+                    outcomes.append((index, None))
 
-        try:
-            result = run_local_job(job, timeout_sec=timeout_sec, python_executable=python_executable, env=env)
-        except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
-            failure = _failed_result(
-                stage="run",
-                engine="local",
-                exc=exc,
-                population_row=population_row,
-                index=index,
-                jobs_dir=jobs_dir,
-                job=job,
-                result=result,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-            )
-            _best_effort_record_failure(failure)
-            costs_by_individual.append(None)
-            continue
-
-        try:
-            costs = _finalize_result(result)
-        except Exception as exc:  # noqa: BLE001 - isolate recorded_data failures.
-            failure = _failed_result(
-                stage="record",
-                engine="local",
-                exc=exc,
-                population_row=population_row,
-                index=index,
-                jobs_dir=jobs_dir,
-                job=job,
-                result=result,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-            )
-            _best_effort_record_failure(failure)
-            costs_by_individual.append(None)
-            continue
-
+    for index, costs in outcomes:
         if costs is None:
-            costs_by_individual.append(None)
             continue
 
         objective_width = len(costs)
-        costs_by_individual.append(costs)
+        costs_by_individual[index] = costs
 
     return tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
+
+
+def _evaluate_one_local(
+    *,
+    index: int,
+    population_row: tuple[Any, ...],
+    jobs_dir: Path,
+    job_template_dir: str | Path,
+    timeout_sec: float,
+    python_executable: str | Path,
+    env: Mapping[str, str] | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+) -> tuple[int, tuple[float, ...] | None]:
+    job: JobSpec | None = None
+    result: JobResult | None = None
+
+    try:
+        job = _prepare_job(
+            population_row,
+            jobs_dir=jobs_dir,
+            job_template_dir=job_template_dir,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+            population_index=index,
+        )
+    except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
+        failure = _failed_result(
+            stage="prepare",
+            engine="local",
+            exc=exc,
+            population_row=population_row,
+            index=index,
+            jobs_dir=jobs_dir,
+            job=job,
+            result=result,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
+        _best_effort_record_failure(failure)
+        return index, None
+
+    try:
+        result = run_local_job(job, timeout_sec=timeout_sec, python_executable=python_executable, env=env)
+    except Exception as exc:  # noqa: BLE001 - isolate one failed individual.
+        failure = _failed_result(
+            stage="run",
+            engine="local",
+            exc=exc,
+            population_row=population_row,
+            index=index,
+            jobs_dir=jobs_dir,
+            job=job,
+            result=result,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
+        _best_effort_record_failure(failure)
+        return index, None
+
+    try:
+        costs = _finalize_result(result)
+    except Exception as exc:  # noqa: BLE001 - isolate recorded_data failures.
+        failure = _failed_result(
+            stage="record",
+            engine="local",
+            exc=exc,
+            population_row=population_row,
+            index=index,
+            jobs_dir=jobs_dir,
+            job=job,
+            result=result,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
+        _best_effort_record_failure(failure)
+        return index, None
+
+    return index, costs
 
 
 def _evaluate_population_distributed(

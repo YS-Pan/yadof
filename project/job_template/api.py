@@ -6,7 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Sequence
 
-from .calc_cost import RawDataItem, calculate_costs, get_objective_count as _get_objective_count
+from .calc_cost import RawDataItem, calculate_costs, rawdata_importance_weights
+from .calc_cost import get_objective_count as _get_objective_count
 from .calc_cost import get_objective_names as _get_objective_names
 from .parameters_constraints import get_parameters
 from .parameters_constraints_class import denormalize_values, normalize_values
@@ -80,3 +81,21 @@ def calculate_costs_from_raw_data(samples: Sequence[Sequence[RawDataItem]]) -> t
 
 def calc_costs_from_raw_data(samples: Sequence[Sequence[RawDataItem]]) -> tuple[tuple[float, ...], ...]:
     return calculate_cost(samples)
+
+
+def get_rawdata_importance_weights(
+    sample_rawdata: Sequence[RawDataItem],
+    *,
+    floor: float = 0.25,
+    boost: float = 2.0,
+) -> tuple[dict[str, object], ...]:
+    return rawdata_importance_weights(sample_rawdata, floor=floor, boost=boost)
+
+
+def calculate_rawdata_importance_weights(
+    sample_rawdata: Sequence[RawDataItem],
+    *,
+    floor: float = 0.25,
+    boost: float = 2.0,
+) -> tuple[dict[str, object], ...]:
+    return get_rawdata_importance_weights(sample_rawdata, floor=floor, boost=boost)

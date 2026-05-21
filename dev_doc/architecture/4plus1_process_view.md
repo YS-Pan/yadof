@@ -42,13 +42,14 @@ sequenceDiagram
     O->>R: get historical optimization results
     O->>S: train(generation_index)
     S->>R: get surrogate training data
-    S->>S: flatten rawData, build query table, train conditional INR ensemble
-    S->>T: calculate true costs from recorded rawData for audit
+    S->>S: flatten rawData, build query table, apply rawData importance weights, train conditional INR ensemble
+    S->>T: calculate true and predicted training costs for historical error audit
     S-->>O: checkpointed state
-    O->>S: predict_population(candidate pools)
+    O->>S: predict_population(alpha/beta candidate pools)
     S->>S: predict rawData with ensemble mean and member spread
     S->>T: calculate predicted costs from predicted rawData
-    S-->>O: costs and intervals
+    S-->>O: costs and ensemble min/max intervals
+    O->>O: select surrogate candidates with pooled NSGA-III survival and reserve exploration quota
     O->>E: evaluate selected real population
 ```
 
@@ -84,6 +85,10 @@ sequenceDiagram
 - Invalid rawData: `recorded_data.query` skips invalid completed rawData for history/training and exposes diagnostics.
 
 ## Concurrency Notes
-- Current local evaluation is sequential at the API level.
+- Local evaluation can run multiple independent workflow subprocesses at once when
+  `LOCAL_EVALUATION_MAX_WORKERS` is greater than 1. Each individual still follows
+  the same prepare -> run -> record path, and costs are returned in the original
+  population order. The worker count is re-read from `project/config.py` for each
+  local evaluation call, so a mid-run edit can take effect at the next generation.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
 - Distributed mode reuses the same record/finalize semantics: workers write job-local individual metadata and submit-side finalizers send compact records to `recorded_data`.

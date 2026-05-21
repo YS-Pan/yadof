@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from math import comb
 import random
 from typing import Sequence
 
 import numpy as np
-from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.algorithms.moo.nsga3 import NSGA3
 from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.core.individual import Individual
 from pymoo.core.population import Population
@@ -14,6 +15,7 @@ from pymoo.core.problem import Problem
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
+from pymoo.util.ref_dirs import get_reference_directions
 
 from project import config
 
@@ -26,8 +28,16 @@ from .gpsaf_misc import (
     history_variable_count,
     key,
     resolve_variable_count,
+    total_cost,
 )
 from .problem_info import ProblemInfo, from_job_template
+
+
+@dataclass(frozen=True)
+class ReferenceDirectionInfo:
+    method: str
+    partitions: int | None
+    directions: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -38,6 +48,7 @@ class PymooContext:
     generation_index: int
     baseline_optimizer: str
     problem_adapter: Problem
+    reference_directions: ReferenceDirectionInfo | None = None
 
 
 class UnitBoxProblem(Problem):
@@ -59,7 +70,12 @@ def _fitness_matrix(costs: Sequence[Sequence[float]], objective_count: int) -> n
         values = [float(value) for value in row]
         if len(values) < int(objective_count):
             values.extend([float("inf")] * (int(objective_count) - len(values)))
-        rows.append(values[: int(objective_count)])
+        rows.append(
+            [
+                float(value) if np.isfinite(float(value)) else 1.0e30
+                for value in values[: int(objective_count)]
+            ]
+        )
     return np.asarray(rows, dtype=float)
 
 
@@ -71,6 +87,45 @@ def _x_matrix(values: Sequence[Sequence[float]], variable_count: int) -> np.ndar
             values_.append(0.5)
         rows.append(values_)
     return np.asarray(rows, dtype=float)
+
+
+def _das_dennis_count(objective_count: int, partitions: int) -> int:
+    return int(comb(int(partitions) + int(objective_count) - 1, int(objective_count) - 1))
+
+
+def _choose_das_dennis_partitions(objective_count: int, population_size: int) -> int:
+    objective_count = max(2, int(objective_count))
+    population_size = max(1, int(population_size))
+    best_under: tuple[int, int] | None = None
+    best_any: tuple[int, int] | None = None
+    max_partitions = max(1, min(256, population_size * 2))
+    for partitions in range(1, max_partitions + 1):
+        count = _das_dennis_count(objective_count, partitions)
+        delta = abs(count - population_size)
+        if best_any is None or delta < best_any[0]:
+            best_any = (delta, partitions)
+        if count <= population_size and (best_under is None or delta < best_under[0]):
+            best_under = (delta, partitions)
+        if count > population_size * 2 and partitions > 1:
+            break
+    return int((best_under or best_any or (0, 1))[1])
+
+
+def _reference_directions(objective_count: int, population_size: int) -> ReferenceDirectionInfo | None:
+    if int(objective_count) < 2:
+        return None
+    method = str(getattr(config, "OPTIMIZE_NSGA3_REF_DIR_METHOD", "das-dennis"))
+    configured = getattr(config, "OPTIMIZE_NSGA3_PARTITIONS", None)
+    partitions = (
+        _choose_das_dennis_partitions(objective_count, population_size)
+        if configured is None
+        else max(1, int(configured))
+    )
+    directions = np.asarray(
+        get_reference_directions(method, int(objective_count), n_partitions=int(partitions)),
+        dtype=float,
+    )
+    return ReferenceDirectionInfo(method=method, partitions=int(partitions), directions=directions)
 
 
 def _make_algorithm(context: PymooContext):
@@ -96,7 +151,10 @@ def _make_algorithm(context: PymooContext):
             mutation=mutation,
             eliminate_duplicates=True,
         )
-    return NSGA2(
+    if context.reference_directions is None:
+        raise ValueError("NSGA-III requires reference directions for multi-objective optimization")
+    return NSGA3(
+        ref_dirs=context.reference_directions.directions,
         pop_size=int(context.population_size),
         n_offsprings=int(context.population_size),
         sampling=FloatRandomSampling(),
@@ -113,13 +171,15 @@ def make_context(
     seed: int,
     generation_index: int,
 ) -> PymooContext:
+    reference_directions = _reference_directions(problem.objective_count, population_size)
     return PymooContext(
         problem=problem,
         population_size=int(population_size),
         seed=int(seed),
         generation_index=int(generation_index),
-        baseline_optimizer="pymoo.GA" if int(problem.objective_count) <= 1 else "pymoo.NSGA2",
+        baseline_optimizer="pymoo.GA" if int(problem.objective_count) <= 1 else "pymoo.NSGA3",
         problem_adapter=UnitBoxProblem(problem),
+        reference_directions=reference_directions,
     )
 
 
@@ -238,6 +298,54 @@ def advance_population_with_records(
     return state
 
 
+def select_records_by_survival(
+    context: PymooContext,
+    records: Sequence[CandidateRecord],
+    n_survive: int,
+) -> list[CandidateRecord]:
+    n_survive = int(n_survive)
+    if n_survive <= 0:
+        return []
+    valid_records = [record for record in records if record.pred_costs]
+    if len(valid_records) <= n_survive:
+        return list(valid_records)
+    if int(context.problem.objective_count) <= 1:
+        return sorted(valid_records, key=lambda record: total_cost(record.pred_costs))[:n_survive]
+
+    individuals = []
+    for record_index, record in enumerate(valid_records):
+        individual = Individual(
+            X=np.asarray(_x_matrix([record.x], context.problem.variable_count)[0], dtype=float),
+            F=_fitness_matrix([record.pred_costs], context.problem.objective_count)[0],
+        )
+        individual.set("record_index", int(record_index))
+        individuals.append(individual)
+
+    algorithm = new_algorithm(context)
+    selected = algorithm.survival.do(
+        context.problem_adapter,
+        Population.create(*individuals),
+        n_survive=min(n_survive, len(individuals)),
+        algorithm=algorithm,
+        random_state=getattr(algorithm, "random_state", None),
+    )
+    selected_records = []
+    for individual in selected:
+        record_index = individual.get("record_index")
+        if record_index is None:
+            continue
+        selected_records.append(valid_records[int(record_index)])
+    if len(selected_records) < n_survive:
+        already = {id(record) for record in selected_records}
+        for record in valid_records:
+            if id(record) in already:
+                continue
+            selected_records.append(record)
+            if len(selected_records) >= n_survive:
+                break
+    return selected_records[:n_survive]
+
+
 def baseline_records(
     *,
     context: PymooContext,
@@ -309,10 +417,20 @@ def resolve_problem_info(variable_count: int | None, history: Sequence[HistoryRe
 
 
 def diagnostics(context: PymooContext) -> dict[str, object]:
-    return {
+    out: dict[str, object] = {
         "optimizer": "gpsaf",
         "baseline_optimizer": context.baseline_optimizer,
         "objective_count": int(context.problem.objective_count),
         "objective_names": tuple(context.problem.objective_names),
         "variable_count": int(context.problem.variable_count),
     }
+    if context.reference_directions is not None:
+        out.update(
+            {
+                "reference_direction_method": context.reference_directions.method,
+                "reference_direction_partitions": context.reference_directions.partitions,
+                "reference_direction_count": int(context.reference_directions.directions.shape[0]),
+                "requested_population_size": int(context.population_size),
+            }
+        )
+    return out

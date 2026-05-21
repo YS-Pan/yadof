@@ -137,3 +137,54 @@ def calculate_cost(sample_rawdata: Sequence[RawDataItem]) -> tuple[float, ...]:
 
 def calculate_costs(samples: Sequence[Sequence[RawDataItem]]) -> tuple[tuple[float, ...], ...]:
     return tuple(calculate_cost(sample) for sample in samples)
+
+
+def _axis_mask(size: int, axis_values: object, low: float, high: float) -> np.ndarray:
+    coords = np.asarray(axis_values, dtype=float).ravel()
+    if coords.size != int(size):
+        return np.ones((int(size),), dtype=bool)
+    lo, hi = sorted((float(low), float(high)))
+    return (coords >= lo) & (coords <= hi)
+
+
+def rawdata_importance_weights(
+    sample_rawdata: Sequence[RawDataItem],
+    *,
+    floor: float = 0.25,
+    boost: float = 2.0,
+) -> tuple[dict[str, np.ndarray], ...]:
+    """Return task-owned per-rawData weights for surrogate full-field training.
+
+    The full fields remain trainable everywhere, but the observation windows
+    used by the default objectives receive extra weight.
+    """
+
+    base = max(0.0, float(floor))
+    important = max(base, base + max(0.0, float(boost)))
+    out: list[dict[str, np.ndarray]] = []
+    for item in sample_rawdata:
+        loaded = validate_rawdata_item(load_rawdata_item(item))
+        metadata = metadata_from_item(loaded)
+        name = str(metadata.get("rawdata_name") or "")
+        values = np.asarray(loaded.get("values", ()), dtype=float)
+        if values.size == 0:
+            out.append({})
+            continue
+
+        weights = np.full(values.shape, base, dtype=np.float32)
+        if name == "summary":
+            weights[...] = important
+        elif name == "curve":
+            if values.ndim == 1:
+                mask = _axis_mask(values.shape[0], loaded.get("axis_0", ()), *CURVE_AXIS_RANGE)
+                weights[mask] = important
+            elif values.ndim >= 2:
+                mask = _axis_mask(values.shape[1], loaded.get("axis_1", ()), *CURVE_AXIS_RANGE)
+                for curve_idx in range(min(2, values.shape[0])):
+                    weights[curve_idx, mask] = important
+        elif name == "surface" and values.ndim >= 2:
+            mask0 = _axis_mask(values.shape[0], loaded.get("axis_0", ()), *SURFACE_AXIS_0_RANGE)
+            mask1 = _axis_mask(values.shape[1], loaded.get("axis_1", ()), *SURFACE_AXIS_1_RANGE)
+            weights[np.ix_(mask0, mask1)] = important
+        out.append({"values": weights})
+    return tuple(out)

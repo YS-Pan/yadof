@@ -6,12 +6,12 @@
 - Keep expensive evaluation outputs as rawData only; cost is a dynamic interpretation of rawData under the current task definition.
 
 ## Functionalities
-- `api.py` exposes parameter metadata, variable count, objective metadata, normalization helpers, job-file copying, and rawData cost calculation.
+- `api.py` exposes parameter metadata, variable count, objective metadata, normalization helpers, job-file copying, rawData cost calculation, and optional rawData importance weights for surrogate training.
 - `parameters_constraints.py` defines the current task's `PARAMETERS`.
 - `parameters_constraints_class.py` defines `Parameter`, normalization, denormalization, continuous intervals, and discrete values.
 - `workflow.py` converts raw variables into flat schema-valid `rawData/*.npz` files, writes job-local lifecycle metadata, and never saves cost.
 - `test_com.py` is the current pure-Python simulator stand-in for `variables -> rawData`.
-- `calc_cost.py` converts one sample's rawData items into three objective cost tuples: `target_match_cost`, `curve_magnitude_cost`, and `surface_reward_cost`.
+- `calc_cost.py` converts one sample's rawData items into three objective cost tuples: `target_match_cost`, `curve_magnitude_cost`, and `surface_reward_cost`. It also marks the summary, curve observation band, and surface center window as objective-relevant rawData slots for surrogate training.
 - `rawdata_contract.py` validates `.npz` metadata, shape, axis descriptors, schema version, and flat rawData directories.
 - `hfss_com.py` is retained as a real HFSS-adapter reference surface, but it is not copied into local test jobs by default.
 
@@ -22,6 +22,7 @@
 - Workflow lifecycle output is `individual_metadata.json` in the job folder, with `started_at`, `ended_at`, status, and run/generation context copied from `job_input.json`.
 - Each rawData `.npz` must contain a numeric `values` or `data` array and scalar JSON metadata with `schema_version`, `shape`, and optional ordered `axes`.
 - Cost API accepts samples shaped as `samples[sample][rawData_item]` and returns `samples[sample][objective_cost]`.
+- RawData importance API accepts one sample shaped as `sample[rawData_item]` and returns per-item weight arrays keyed by rawData array name. Weights emphasize objective-relevant windows while retaining a positive floor for the rest of each field.
 - The default test task returns three minimization costs, each bounded to `[0, 1]`.
 
 ## Non-Obvious Techniques
@@ -29,6 +30,7 @@
 - `workflow.py` owns the individual's evaluation timing. It writes `started_at` before rawData generation and `ended_at` after success or catchable failure.
 - rawData metadata should describe the data item only; do not echo the full variable vector or job metadata into every `.npz`.
 - Default cost shaping mirrors the old fanyufei workflow style: a tanh-based soft cost maps values near a goal to 0 and values near a worst threshold to 1.
+- Default rawData importance weights mirror the cost observation windows: both summary scalars, both curve channels inside `[0.46, 0.54]`, and the surface center window inside `[0.46, 0.54] x [0.46, 0.54]` receive extra surrogate-training weight.
 - `recorded_data` asks this module to normalize historical raw variables using current parameter ranges, which supports mid-run range edits.
 - The rawData contract is generic. Core framework code validates shape and metadata but should not infer physical meaning from axis names.
 - Job-copy behavior excludes module APIs and cost code, keeping copied jobs small and focused on rawData generation.

@@ -58,7 +58,6 @@ def test_surrogate_predicts_rawdata_then_costs_and_writes_conditional_inr_checkp
     if checkpoint_dir.is_dir():
         shutil.rmtree(checkpoint_dir)
     monkeypatch.setattr(config, "SURROGATE_CHECKPOINT_DIR", checkpoint_dir)
-    monkeypatch.setattr(config, "SURROGATE_EXACT_NEIGHBOR_RADIUS", 0.0)
     _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
 
@@ -73,7 +72,7 @@ def test_surrogate_predicts_rawdata_then_costs_and_writes_conditional_inr_checkp
     assert checkpoint["model_path"] == state.model_path.name
     assert any(len(call) == 1 for call in cost_calls)
     assert 100.0 <= prediction[0][0] <= 120.0
-    assert prediction[1][0][0] < prediction[0][0] < prediction[1][0][1]
+    assert prediction[1][0][0] <= prediction[1][0][1]
 
 
 def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
@@ -125,6 +124,7 @@ def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 1)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_GAMMA", 0.5)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0)
     _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
 
@@ -138,7 +138,9 @@ def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
     assert result.population == seen["population"]
     assert result.population != ((0.35, 0.30), (0.70, 0.65))
     assert result.diagnostics["alpha_batches"] == 2
+    assert result.diagnostics["alpha_selection"] == "nsga3_pooled_survival"
     assert result.diagnostics["beta_iterations"] == 1
+    assert result.diagnostics["beta_selection"] == "nsga3_pooled_survival"
     assert result.diagnostics["beta_cluster_size_max"] >= 1
     assert len(result.diagnostics["beta_cluster_sizes"]) == 2
     assert checkpoint_dir.joinpath("generation_0003.json").is_file()
@@ -180,6 +182,7 @@ def test_gpsaf_parameters_call_surrogate(monkeypatch):
 
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_BETA", 1)
+    monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0)
     result = run_one_generation(generation_index=2, population_size=2, random_seed=11)
 
     assert calls["train"] >= 1

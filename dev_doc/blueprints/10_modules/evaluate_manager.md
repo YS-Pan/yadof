@@ -7,7 +7,7 @@
 
 ## Functionalities
 - `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
-- Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows.
+- Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
 - Distributed mode prepares all jobs, writes HTCondor submit files, submits direct `workflow.py` payloads, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
 - `job_files.prepare_job()` copies job template files, denormalizes variables via `job_template.api`, writes `job_input.json` with run/generation context, and records `job_static_hash` in submit-side metadata.
 - `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
@@ -32,6 +32,7 @@
 - `evaluate_manager` adds runner diagnostics such as return code and stdout/stderr tails, while preserving workflow-written `started_at`/`ended_at`.
 - Individual records carry `optimization_index` and `generation_index` from optimizer context so downstream tools can group evaluations without joining through optimization metadata first.
 - Failure recording is best effort. If recording a failure also fails, generation evaluation still continues.
+- Local parallelism is at the individual/job level. Each worker still executes prepare -> run -> record for one candidate, while `recorded_data` locks serialize durable writes.
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
 - The Windows HTCondor submit pattern follows the debug reference: prefer direct `.py` executable submission over an absolute Python interpreter path, keep `run_as_owner = False`, and keep `load_profile = True` unless the user deliberately changes identity policy.

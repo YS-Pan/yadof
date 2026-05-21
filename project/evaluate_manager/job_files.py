@@ -67,9 +67,7 @@ def prepare_job(
         raise FileNotFoundError(f"job_template directory does not exist: {template_dir}")
 
     jobs_dir.mkdir(parents=True, exist_ok=True)
-    name = _unique_job_name(jobs_dir, job_name or new_job_name())
-    job_dir = jobs_dir / name
-    job_dir.mkdir()
+    name, job_dir = _create_unique_job_dir(jobs_dir, job_name or new_job_name())
 
     _copy_template(template_dir, job_dir)
     (job_dir / RAW_DATA_DIR_NAME).mkdir(exist_ok=True)
@@ -165,15 +163,18 @@ def _is_hash_excluded(rel_path: Path) -> bool:
     return parts[-1] in excluded_names
 
 
-def _unique_job_name(jobs_dir: Path, requested: str) -> str:
+def _create_unique_job_dir(jobs_dir: Path, requested: str) -> tuple[str, Path]:
     base = _sanitize_name(requested)
-    name = base
     counter = 1
-    while (jobs_dir / name).exists():
-        time.sleep(0.001)
-        counter += 1
-        name = f"{base}_{counter}"
-    return name
+    while True:
+        name = base if counter == 1 else f"{base}_{counter}"
+        job_dir = jobs_dir / name
+        try:
+            job_dir.mkdir()
+            return name, job_dir
+        except FileExistsError:
+            time.sleep(0.001)
+            counter += 1
 
 
 def _sanitize_name(value: str) -> str:

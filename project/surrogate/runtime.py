@@ -89,7 +89,12 @@ class SurrogateState:
     device: torch.device | None
     train_history: dict[str, object]
     training_flat_values: np.ndarray
+    query_weights: np.ndarray
     mean_relative_error: float
+    historical_relative_error_p50: tuple[float, ...]
+    historical_relative_error_p90: tuple[float, ...]
+    historical_relative_error_p95: tuple[float, ...]
+    historical_absolute_error_p90: tuple[float, ...]
     historical_true_costs: tuple[tuple[float, ...], ...]
     historical_predicted_costs: tuple[tuple[float, ...], ...]
 
@@ -435,13 +440,6 @@ def _x_matrix(population: Population | Sequence[Sequence[float]], input_dim: int
     return np.ascontiguousarray(np.clip(matrix, 0.0, 1.0), dtype=np.float32)
 
 
-def _pairwise_squared(left: np.ndarray, right: np.ndarray) -> np.ndarray:
-    left = np.ascontiguousarray(left, dtype=np.float64)
-    right = np.ascontiguousarray(right, dtype=np.float64)
-    diff = left[:, None, :] - right[None, :, :]
-    return np.sum(diff * diff, axis=2)
-
-
 def _fit_scaler(y: np.ndarray) -> TargetScaler:
     y = np.ascontiguousarray(y, dtype=np.float64)
     if y.ndim != 2:
@@ -468,6 +466,7 @@ def _train_config_from_project_config() -> INRTrainConfig:
         relative_loss_weight=float(
             getattr(config, "SURROGATE_INR_RELATIVE_LOSS_WEIGHT", defaults.relative_loss_weight)
         ),
+        relative_loss_eps=float(getattr(config, "SURROGATE_INR_RELATIVE_LOSS_EPS", defaults.relative_loss_eps)),
         x_latent_dim=int(getattr(config, "SURROGATE_INR_X_LATENT_DIM", defaults.x_latent_dim)),
         field_emb_dim=int(getattr(config, "SURROGATE_INR_FIELD_EMB_DIM", defaults.field_emb_dim)),
         coord_fourier_features=int(
@@ -512,25 +511,6 @@ def _predict_member_flats(state: SurrogateState, x: np.ndarray) -> np.ndarray:
     return state.scaler.inverse_members(scaled)
 
 
-def _snap_to_exact_neighbors(state: SurrogateState, x: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
-    if state.schema is None or not state.normalized_variables or y_pred.size == 0:
-        return y_pred
-    radius = float(getattr(config, "SURROGATE_EXACT_NEIGHBOR_RADIUS", 0.0))
-    if radius <= 0.0:
-        return y_pred
-    if state.training_flat_values.shape[1] != y_pred.shape[1]:
-        return y_pred
-
-    train_x = _x_matrix(state.normalized_variables)
-    snapped = np.ascontiguousarray(y_pred, dtype=np.float64).copy()
-    distances = np.sqrt(_pairwise_squared(np.ascontiguousarray(x, dtype=np.float64), train_x))
-    for row_idx, row_distances in enumerate(distances):
-        nearest_idx = int(np.argmin(row_distances))
-        if float(row_distances[nearest_idx]) <= radius:
-            snapped[row_idx] = state.training_flat_values[nearest_idx]
-    return snapped
-
-
 def _relative_errors(true_costs, pred_costs) -> tuple[tuple[float, ...], ...]:
     rows = []
     for true_row, pred_row in zip(true_costs, pred_costs):
@@ -542,9 +522,78 @@ def _relative_errors(true_costs, pred_costs) -> tuple[tuple[float, ...], ...]:
     return tuple(rows)
 
 
+def _absolute_errors(true_costs, pred_costs) -> tuple[tuple[float, ...], ...]:
+    rows = []
+    for true_row, pred_row in zip(true_costs, pred_costs):
+        row = []
+        for true_value, pred_value in zip(true_row, pred_row):
+            row.append(abs(float(pred_value) - float(true_value)))
+        rows.append(tuple(row))
+    return tuple(rows)
+
+
 def _mean_relative_error(true_costs, pred_costs) -> float:
     values = [value for row in _relative_errors(true_costs, pred_costs) for value in row if math.isfinite(value)]
     return float(sum(values) / len(values)) if values else 0.0
+
+
+def _quantile_by_objective(rows, quantile: float) -> tuple[float, ...]:
+    width = max((len(row) for row in rows), default=0)
+    out = []
+    for idx in range(width):
+        values = [float(row[idx]) for row in rows if idx < len(row) and math.isfinite(float(row[idx]))]
+        out.append(float(np.quantile(values, float(quantile))) if values else 0.0)
+    return tuple(out)
+
+
+def _flat_importance_weights(schema: RawDataSchema | None, raw_sample: RawSample | None) -> np.ndarray:
+    if schema is None or int(schema.flat_dim) == 0:
+        return np.zeros((0,), dtype=np.float32)
+    weights = np.ones((int(schema.flat_dim),), dtype=np.float32)
+    if raw_sample is None:
+        return weights
+
+    try:
+        job_template_api = importlib.import_module("project.job_template.api")
+        func = getattr(job_template_api, "get_rawdata_importance_weights", None)
+        if not callable(func):
+            func = getattr(job_template_api, "calculate_rawdata_importance_weights", None)
+        if not callable(func):
+            return weights
+        try:
+            raw_weights = func(
+                raw_sample,
+                floor=float(getattr(config, "SURROGATE_RAWDATA_IMPORTANCE_FLOOR", 0.25)),
+                boost=float(getattr(config, "SURROGATE_RAWDATA_IMPORTANCE_BOOST", 2.0)),
+            )
+        except TypeError:
+            raw_weights = func(raw_sample)
+    except Exception:
+        return weights
+
+    weight_items = tuple(dict(item) if isinstance(item, Mapping) else {} for item in raw_weights or ())
+    for slot in schema.modeled_slots:
+        if slot.item_index >= len(weight_items):
+            continue
+        raw_value = weight_items[slot.item_index].get(slot.key)
+        if raw_value is None:
+            continue
+        array = np.asarray(raw_value, dtype=np.float32)
+        if tuple(array.shape) != tuple(slot.shape):
+            continue
+        weights[slot.start : slot.end] = np.maximum(0.0, array.reshape(-1))
+    return np.ascontiguousarray(weights, dtype=np.float32)
+
+
+def _predict_costs_for_error_audit(
+    state: SurrogateState,
+    x: np.ndarray,
+) -> tuple[tuple[float, ...], ...]:
+    if state.schema is None or state.schema.flat_dim == 0 or state.model is None or x.shape[0] == 0:
+        return ()
+    member_flats = _predict_member_flats(state, x)
+    mean_flat = np.mean(member_flats, axis=0)
+    return _costs_from_raw(_raw_samples_from_flat(state.schema, mean_flat))
 
 
 def _schema_payload(schema: RawDataSchema | None) -> dict[str, object]:
@@ -580,6 +629,10 @@ def _write_checkpoint(state: SurrogateState) -> None:
         "model": state.model_name,
         "member_count": int(state.train_history.get("member_count", 0)),
         "mean_relative_error": float(state.mean_relative_error),
+        "historical_relative_error_p50": list(state.historical_relative_error_p50),
+        "historical_relative_error_p90": list(state.historical_relative_error_p90),
+        "historical_relative_error_p95": list(state.historical_relative_error_p95),
+        "historical_absolute_error_p90": list(state.historical_absolute_error_p90),
         "model_path": state.model_path.name,
         "artifact_dir": state.artifact_dir.name,
         "schema": _schema_payload(state.schema),
@@ -597,6 +650,7 @@ def _write_checkpoint(state: SurrogateState) -> None:
         "schema_flat_dim": np.asarray(0 if state.schema is None else state.schema.flat_dim, dtype=np.int64),
         "training_sample_count": np.asarray(state.sample_count, dtype=np.int64),
         "training_flat_values": np.ascontiguousarray(state.training_flat_values, dtype=np.float32),
+        "query_weights": np.ascontiguousarray(state.query_weights, dtype=np.float32),
     }
     if state.schema is not None:
         arrays["coord_table"] = np.ascontiguousarray(state.schema.coord_table, dtype=np.float32)
@@ -617,6 +671,7 @@ def train(*, generation_index: int = 0) -> SurrogateState:
     x = _x_matrix(data.normalized_variables)
     schema, y = _flatten_raw_samples(data.raw_data)
     true_costs = _costs_from_raw(data.raw_data) if data.raw_data else ()
+    query_weights = _flat_importance_weights(schema, data.raw_data[0] if data.raw_data else None)
 
     checkpoint_path = Path(config.SURROGATE_CHECKPOINT_DIR) / f"generation_{int(generation_index):04d}.json"
     artifact_dir = checkpoint_path.parent / f"generation_{int(generation_index):04d}_conditional_inr"
@@ -650,6 +705,7 @@ def train(*, generation_index: int = 0) -> SurrogateState:
             field_ids=schema.field_ids,
             device=device,
             train_cfg=train_cfg,
+            query_weights=query_weights,
             artifact_dir=artifact_dir,
             seed=int(getattr(config, "OPTIMIZE_RANDOM_SEED", 20260510)) + int(generation_index) * 1009,
         )
@@ -675,13 +731,50 @@ def train(*, generation_index: int = 0) -> SurrogateState:
         device=device,
         train_history=history,
         training_flat_values=np.ascontiguousarray(y, dtype=np.float64),
+        query_weights=np.ascontiguousarray(query_weights, dtype=np.float32),
         mean_relative_error=0.0,
+        historical_relative_error_p50=(),
+        historical_relative_error_p90=(),
+        historical_relative_error_p95=(),
+        historical_absolute_error_p90=(),
         historical_true_costs=true_costs,
-        historical_predicted_costs=true_costs,
+        historical_predicted_costs=(),
     )
 
-    pred_costs = true_costs
+    try:
+        pred_costs = _predict_costs_for_error_audit(state, x)
+    except Exception as exc:
+        pred_costs = ()
+        history = {**state.train_history, "error_audit_error": f"{exc.__class__.__name__}: {exc}"}
+        state = SurrogateState(
+            generation_index=state.generation_index,
+            sample_count=state.sample_count,
+            checkpoint_path=state.checkpoint_path,
+            model_path=state.model_path,
+            artifact_dir=state.artifact_dir,
+            model_name=state.model_name,
+            parameter_names=state.parameter_names,
+            normalized_variables=state.normalized_variables,
+            raw_data=state.raw_data,
+            schema=state.schema,
+            scaler=state.scaler,
+            model=state.model,
+            train_cfg=state.train_cfg,
+            device=state.device,
+            train_history=history,
+            training_flat_values=state.training_flat_values,
+            query_weights=state.query_weights,
+            mean_relative_error=state.mean_relative_error,
+            historical_relative_error_p50=state.historical_relative_error_p50,
+            historical_relative_error_p90=state.historical_relative_error_p90,
+            historical_relative_error_p95=state.historical_relative_error_p95,
+            historical_absolute_error_p90=state.historical_absolute_error_p90,
+            historical_true_costs=state.historical_true_costs,
+            historical_predicted_costs=state.historical_predicted_costs,
+        )
     mean_error = _mean_relative_error(true_costs, pred_costs)
+    rel_errors = _relative_errors(true_costs, pred_costs)
+    abs_errors = _absolute_errors(true_costs, pred_costs)
     state = SurrogateState(
         generation_index=state.generation_index,
         sample_count=state.sample_count,
@@ -699,7 +792,12 @@ def train(*, generation_index: int = 0) -> SurrogateState:
         device=state.device,
         train_history=state.train_history,
         training_flat_values=state.training_flat_values,
+        query_weights=state.query_weights,
         mean_relative_error=float(mean_error),
+        historical_relative_error_p50=_quantile_by_objective(rel_errors, 0.50),
+        historical_relative_error_p90=_quantile_by_objective(rel_errors, 0.90),
+        historical_relative_error_p95=_quantile_by_objective(rel_errors, 0.95),
+        historical_absolute_error_p90=_quantile_by_objective(abs_errors, 0.90),
         historical_true_costs=true_costs,
         historical_predicted_costs=pred_costs,
     )
@@ -728,7 +826,6 @@ def predict_raw_data(population) -> tuple[RawSample, ...]:
     x = _x_matrix(population, _state_input_dim(state))
     member_flats = _predict_member_flats(state, x)
     mean_flat = np.mean(member_flats, axis=0)
-    mean_flat = _snap_to_exact_neighbors(state, x, mean_flat)
     return _raw_samples_from_flat(state.schema, mean_flat)
 
 
@@ -744,7 +841,6 @@ def predict_population(population) -> tuple[tuple[tuple[float, ...], tuple[tuple
     x = _x_matrix(normalized_population, _state_input_dim(state))
     member_flats = _predict_member_flats(state, x)
     mean_flat = np.mean(member_flats, axis=0)
-    mean_flat = _snap_to_exact_neighbors(state, x, mean_flat)
     predicted_raw = _raw_samples_from_flat(state.schema, mean_flat)
     costs = _costs_from_raw(predicted_raw)
 
@@ -755,20 +851,22 @@ def predict_population(population) -> tuple[tuple[tuple[float, ...], tuple[tuple
             member_costs.append(np.asarray(_costs_from_raw(member_raw), dtype=np.float64))
         except Exception:
             continue
-    cost_std = (
-        np.std(np.stack(member_costs, axis=0), axis=0)
-        if member_costs
-        else np.zeros((len(costs), len(costs[0]) if costs else 0), dtype=np.float64)
-    )
+    if member_costs:
+        member_cost_matrix = np.stack(member_costs, axis=0)
+        interval_lower = np.min(member_cost_matrix, axis=0)
+        interval_upper = np.max(member_cost_matrix, axis=0)
+    else:
+        fallback = np.asarray(costs, dtype=np.float64)
+        interval_lower = fallback
+        interval_upper = fallback
 
-    relative_width = max(float(config.SURROGATE_ALPHA), float(state.mean_relative_error))
     out = []
     for row_idx, cost_row in enumerate(costs):
         intervals = []
         for cost_idx, value in enumerate(cost_row):
-            std = float(cost_std[row_idx, cost_idx]) if cost_std.size else 0.0
-            delta = max(std, abs(float(value)) * relative_width, relative_width)
-            intervals.append((float(value) - delta, float(value) + delta))
+            lo = float(interval_lower[row_idx, cost_idx])
+            hi = float(interval_upper[row_idx, cost_idx])
+            intervals.append((min(lo, hi), max(lo, hi)))
         out.append((tuple(float(value) for value in cost_row), tuple(intervals)))
     return tuple(out)
 

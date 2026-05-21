@@ -9,7 +9,7 @@
 - Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
 
 ## Logical Modules
-- `optimize`: asks for candidate evaluations and optional surrogate predictions.
+- `optimize`: uses GA for single-objective runs and NSGA-III reference-direction survival for multi-objective candidate generation, real evaluations, and optional surrogate-predicted candidate screening.
 - `evaluate_manager`: turns candidate rows into job execution and records results.
 - `job_template`: defines the current task and interprets rawData.
 - `recorded_data`: stores real raw evidence and serves derived historical views.
@@ -31,6 +31,9 @@
 - `recorded_data` never trusts old saved cost when returning history.
 - `surrogate` never bypasses rawData by learning only `variables -> cost`.
 - `surrogate` may learn normalized/scaled rawData internals, but public predictions are reconstructed rawData passed to `job_template.api` for cost.
+- `surrogate` historical error audits must use real model predictions rather than substituting true historical costs.
+- Exact-neighbor snapping or near-training-sample replacement is not part of the current surrogate contract and must not be added unless explicitly requested by the user.
+- Task-owned rawData importance weights may emphasize objective-relevant windows, but surrogate training must still retain full-field rawData coverage.
 - Failed records can exist and be inspected, but default optimization history uses completed records.
 - `evaluate_manager` may add runner diagnostics, but workflow-owned timing is read from the job folder before recording.
 - Default cost shaping follows the old fanyufei tanh-style soft objective mapping: goal-like values approach 0 and worst-threshold values approach 1.

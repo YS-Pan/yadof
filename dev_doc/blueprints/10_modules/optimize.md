@@ -1,7 +1,7 @@
 # Module blueprint: optimize
 
 ## Intent
-- Own the optimizer-facing API and the GPSAF-style search policy while staying independent from workflow, simulator, job execution, and rawData storage details.
+- Own the optimizer-facing API and the GPSAF-style search policy, using NSGA-III for multi-objective diversity while staying independent from workflow, simulator, job execution, and rawData storage details.
 - Work in normalized variable space and treat historical samples as advisory state supplied by `recorded_data`.
 - Support warm-started runs, optional surrogate assistance, and small optimization-level generation metadata.
 
@@ -9,8 +9,8 @@
 - `api.run_one_generation()` delegates one generation to `gpsaf.run_one_generation()`.
 - `api.run_generations()` wraps repeated generation execution, assigns a run id and optimization index, and records lightweight generation metadata through `recorded_data.api`.
 - `gpsaf.py` resolves problem width/objective width, builds a pymoo-backed context, chooses baseline or surrogate-assisted candidate generation, evaluates the chosen population, and optionally notifies surrogate retraining.
-- `gpsaf_pymoo.py` adapts GA/NSGA2 ask-tell behavior to the unit hypercube and reconstructs optimizer state from historical records.
-- `gpsaf_phases.py` implements surrogate alpha/beta candidate phases, uncertainty-aware comparisons, and graceful fallback when surrogate calls fail.
+- `gpsaf_pymoo.py` adapts GA/NSGA-III ask-tell behavior to the unit hypercube, chooses Das-Dennis reference directions near the requested population size, exposes NSGA-III survival for candidate pools, and reconstructs optimizer state from historical records.
+- `gpsaf_phases.py` implements surrogate alpha/beta pooled NSGA-III candidate phases, an exploration quota that bypasses surrogate selection, uncertainty diagnostics, and graceful fallback when surrogate calls fail.
 - `gpsaf_misc.py` imports public APIs dynamically, reads historical optimization results, calls `evaluate_manager.api` with run/generation context, and keeps cost comparison helpers small.
 - `problem_info.py` derives variable count, objective count, and objective names from `job_template.api`.
 - With the current default `job_template`, the optimizer sees three objectives and therefore uses the multi-objective pymoo path.
@@ -28,9 +28,12 @@
 - If history exists and surrogate assistance is disabled, the baseline optimizer still uses history to seed candidate generation.
 - If surrogate assistance is requested but unavailable, the optimizer records diagnostics and falls back to baseline candidates.
 - Individual evaluation records receive the same `optimization_index` and `generation_index` that optimizer generation metadata uses, so individual history can be grouped without reconstructing context from job names.
-- Multi-objective behavior is selected from the current objective count: GA for one objective, NSGA2 for multiple objectives.
+- Multi-objective behavior is selected from the current objective count: GA for one objective, NSGA-III for multiple objectives. NSGA-II compatibility is intentionally removed from the optimizer path.
+- Surrogate alpha selection predicts `alpha * population_size` candidates as one pool and applies NSGA-III survival instead of position-wise pairwise replacement.
+- Surrogate beta selection pools anchors with beta-generated predicted candidates and applies NSGA-III survival again.
+- `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves a small number of real-evaluation candidates from baseline offspring/random refill so a branch is not eliminated solely by a biased surrogate.
 
 ## Mutability Profile
-- GPSAF policy, pymoo operator parameters, and surrogate alpha/beta behavior are expected to evolve.
+- GPSAF policy, NSGA-III reference-direction controls, pymoo operator parameters, and surrogate alpha/beta/exploration behavior are expected to evolve.
 - API shapes should stay stable because tests, future launchers, and architecture docs depend on them.
 - This module should not absorb simulator, workflow, or recording behavior when adding features.
