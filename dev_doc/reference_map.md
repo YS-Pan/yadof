@@ -75,7 +75,7 @@ Closest reference files:
 
 Natural-language mapping: `evaluate_manager` is the v3 replacement for prepare/evaluate orchestration from fanyufei. `prepare_job.py` maps to job-folder creation and static hashing. `batch_eval.py` maps to generation evaluation, status collection, recording, and failure handling. The older combined project and HTCondor debug note are the active references for optional distributed mode, while local mode remains the default baseline.
 
-Current implementation note: `project/evaluate_manager/condor_runner.py` now adapts the `reference/20260124 combined/batch_eval.py` HTCondor submit/poll pattern to the v3 rawData-first contract. It keeps the debug reference's direct `workflow.py` executable pattern and Windows sandbox environment, but transfers `rawData/` plus `individual_metadata.json` instead of relying on `cost.json`.
+Current implementation note: `project/evaluate_manager/condor_runner.py` now adapts the `reference/20260124 combined/batch_eval.py` HTCondor submit/poll pattern to the v3 rawData-first contract. It keeps the Windows sandbox environment, uses the configured worker Python executable with `arguments = workflow.py`, and relies on HTCondor's default output transfer instead of relying on `cost.json`.
 
 ## `project/job_template`
 

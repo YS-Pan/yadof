@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import os
 import random
 from typing import Sequence
 
@@ -24,12 +25,27 @@ from .gpsaf_misc import (
 )
 
 
+def _progress(message: str) -> None:
+    if str(os.environ.get("YADOT_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        print(f"[yadof] {message}", flush=True)
+
+
 def try_train_surrogate(generation_index: int):
+    _progress(f"surrogate: training generation {int(generation_index)} start")
     try:
         surrogate_api = importlib.import_module("project.surrogate.api")
         state = surrogate_api.train(generation_index=int(generation_index))
     except Exception as exc:
+        _progress(f"surrogate: training generation {int(generation_index)} failed: {exc.__class__.__name__}: {exc}")
         return None, f"{exc.__class__.__name__}: {exc}"
+    history = getattr(state, "train_history", {}) or {}
+    sample_count = history.get("train_sample_count", "?")
+    query_count = history.get("query_count", "?")
+    member_count = history.get("member_count", "?")
+    _progress(
+        f"surrogate: training generation {int(generation_index)} finished; "
+        f"samples={sample_count}; queries={query_count}; members={member_count}"
+    )
     return state, None
 
 
@@ -44,6 +60,7 @@ def notify_surrogate_after_evaluation(generation_index: int) -> None:
 def predict_records(records: Sequence[CandidateRecord]) -> list[CandidateRecord]:
     if not records:
         return []
+    _progress(f"surrogate: predicting {len(records)} candidates")
     surrogate_api = importlib.import_module("project.surrogate.api")
     raw = surrogate_api.predict_population(tuple(record.x for record in records))
     predicted = []
@@ -270,6 +287,10 @@ def surrogate_population(
     population_size: int,
     seed: int,
 ) -> tuple[Population | None, dict[str, object]]:
+    _progress(
+        f"surrogate: selecting population; history={len(history)}; "
+        f"population_size={int(population_size)}"
+    )
     _state, error = try_train_surrogate(generation_index)
     if error is not None:
         return None, {"surrogate_error": error}

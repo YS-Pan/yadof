@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import sys
 import inspect
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -260,8 +261,11 @@ def _evaluate_population_distributed(
     prepared_jobs: list[JobSpec] = []
     prepared_positions: list[int] = []
     population_rows: list[tuple[Any, ...]] = []
+    population_items = tuple(population)
 
-    for index, variables in enumerate(population):
+    _progress(f"distributed: preparing {len(population_items)} jobs in {jobs_dir}")
+
+    for index, variables in enumerate(population_items):
         population_row = _population_row(variables)
         population_rows.append(population_row)
         costs_by_individual.append(None)
@@ -293,8 +297,11 @@ def _evaluate_population_distributed(
             continue
         prepared_positions.append(index)
         prepared_jobs.append(job)
+        if len(prepared_jobs) == 1 or len(prepared_jobs) % 25 == 0 or len(prepared_jobs) == len(population_items):
+            _progress(f"distributed: prepared {len(prepared_jobs)}/{len(population_items)} jobs")
 
     if prepared_jobs:
+        _progress(f"distributed: submitting {len(prepared_jobs)} prepared jobs")
         try:
             results = run_condor_jobs(tuple(prepared_jobs), timeout_sec=timeout_sec, env=env)
         except Exception as exc:  # noqa: BLE001 - backend-wide unexpected failure.
@@ -339,6 +346,8 @@ def _evaluate_population_distributed(
                 continue
             objective_width = len(costs)
             costs_by_individual[position] = costs
+    else:
+        _progress("distributed: no jobs were prepared")
 
     return tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
 
@@ -481,3 +490,8 @@ def _failure_job_name(index: int, timestamp: str) -> str:
 
 def _now_text() -> str:
     return datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+def _progress(message: str) -> None:
+    if str(os.environ.get("YADOT_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        print(f"[yadof] {message}", flush=True)

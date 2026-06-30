@@ -22,7 +22,7 @@ flowchart TD
 - Source code: `project/`.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
 - Optional adapter staging/reference files: `project/com_lib/`, not copied or imported by default.
-- Prepared jobs: default `project/jobs/`, configurable by `project/config.py`.
+- Prepared jobs: submit-side `project/jobs/` by default, configurable by `project/config.py`.
 - Per-job workflow lifecycle metadata: `project/jobs/<job_name>/individual_metadata.json`, written by the workflow and read by `evaluate_manager` during finalization.
 - Recorded individual metadata: `project/recorded_data/indMeta.jsonl`.
 - Recorded rawData: `project/recorded_data/rawData.npz`, a zip-based archive with members shaped like `job_name/file.npz`.
@@ -45,9 +45,16 @@ flowchart LR
 ```
 
 In the implemented HTCondor path, the submit side writes one `job.sub` per prepared
-job folder. The submit file uses `executable = workflow.py`, `transfer_executable =
-True`, sandboxed Windows profile/temp environment variables, and transfers
-`rawData/` plus `individual_metadata.json` back on exit.
+job folder. The submit file uses the configured worker Python executable with
+`arguments = workflow.py`, `transfer_executable = False`, and sandboxed Windows
+profile/temp environment variables. It does not set `transfer_output_files`, so
+HTCondor returns generated files such as `rawData/`, `individual_metadata.json`,
+and PyAEDT-created `batch.log` when they exist without holding the job if optional
+files are absent.
+Worker scratch placement is controlled by each worker's HTCondor `EXECUTE`
+directory. A worker RAM disk such as `R:\condor_execute` should be configured on
+the execute machines and advertised through worker ClassAd attributes; it is not
+the same setting as the submit-side `JOBS_DIR`.
 
 ## Physical Constraints
 - Local tests should not require HTCondor or simulator software.

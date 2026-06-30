@@ -114,10 +114,13 @@ def calculate_costs(
     status: str | None = "completed",
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
     samples = get_rawdata_samples(job_names=job_names, as_paths=False, status=status)
+    raw_variables_by_job = dict(get_raw_variables(status=status))
     rows: list[tuple[str, tuple[float, ...]]] = []
     for job_name, rawdata in samples:
+        if job_name not in raw_variables_by_job:
+            continue
         try:
-            costs = job_template_api.calculate_cost((rawdata,))
+            costs = job_template_api.calculate_cost((rawdata,), (raw_variables_by_job[job_name],))
         except BAD_RAWDATA_EXCEPTIONS:
             continue
         if costs:
@@ -137,6 +140,7 @@ def get_historical_results(*, status: str | None = "completed") -> tuple[tuple[s
 
 def get_surrogate_training_data() -> dict[str, object]:
     names = job_template_api.get_parameter_names()
+    raw_variables_by_job = dict(get_raw_variables(status="completed"))
     normalized_by_job = dict(get_normalized_variables(status="completed"))
     raw_rows = get_rawdata_samples(status="completed", as_paths=False)
 
@@ -146,7 +150,7 @@ def get_surrogate_training_data() -> dict[str, object]:
         if job_name not in normalized_by_job:
             continue
         try:
-            job_template_api.calculate_cost((rawdata,))
+            job_template_api.calculate_cost((rawdata,), (raw_variables_by_job[job_name],))
         except BAD_RAWDATA_EXCEPTIONS:
             continue
         variables.append(normalized_by_job[job_name])

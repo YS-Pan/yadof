@@ -180,6 +180,42 @@ def test_surrogate_raw_data_to_cost_shape_and_checkpoint(monkeypatch):
     assert state.historical_relative_error_p90
 
 
+def test_surrogate_flatten_raw_samples_fills_nonfinite_values():
+    from project.surrogate import runtime
+
+    samples = (
+        ({"rawData": np.asarray([1.0, np.nan, 3.0, np.inf], dtype=float)},),
+        ({"rawData": np.asarray([2.0, 4.0, np.nan, 8.0], dtype=float)},),
+    )
+
+    _schema, matrix = runtime._flatten_raw_samples(samples)
+
+    assert np.isfinite(matrix).all()
+    assert matrix.tolist() == [[1.0, 2.0, 3.0, 3.0], [2.0, 4.0, 6.0, 8.0]]
+
+
+def test_surrogate_training_data_drops_jobs_above_nonfinite_threshold(monkeypatch):
+    from project import config
+    from project.surrogate import runtime
+
+    monkeypatch.setattr(config, "SURROGATE_MAX_NONFINITE_FRACTION", 0.20)
+    data = runtime.TrainingData(
+        parameter_names=("x",),
+        normalized_variables=((0.1,), (0.2,), (0.3,)),
+        raw_data=(
+            ({"rawData": np.asarray([1.0, np.nan, 3.0, 4.0, 5.0], dtype=float)},),
+            ({"rawData": np.asarray([1.0, np.nan, np.nan, 4.0, 5.0], dtype=float)},),
+            ({"rawData": np.asarray([2.0, 3.0, 4.0, 5.0, 6.0], dtype=float)},),
+        ),
+    )
+
+    filtered, dropped = runtime._filter_training_data_by_nonfinite_fraction(data)
+
+    assert dropped == 1
+    assert filtered.normalized_variables == ((0.1,), (0.3,))
+    assert len(filtered.raw_data) == 2
+
+
 def test_surrogate_interval_is_member_cost_min_max(monkeypatch):
     recorded_pkg = _module(monkeypatch, "project.recorded_data")
     recorded_api = _module(monkeypatch, "project.recorded_data.api")

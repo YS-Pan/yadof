@@ -20,7 +20,7 @@
 - Parameter API returns names, ranges, units, and variable count.
 - Workflow input is either `variables.json` or `job_input.json` containing unnormalized variables.
 - Workflow output is one or more `.npz` files directly under `rawData/`; the current HFSS workflow writes S11 and realized-gain files for pin states 1 through 4.
-- Workflow lifecycle output is `individual_metadata.json` in the job folder, with `started_at`, `ended_at`, status, and run/generation context copied from `job_input.json`.
+- Workflow lifecycle output is `individual_metadata.json` in the job folder, with `started_at`, `ended_at`, status, rawData file names, and catchable exception details when the workflow fails before producing rawData.
 - Each rawData `.npz` must contain a numeric `values` or `data` array and scalar JSON metadata with `schema_version`, `shape`, and optional ordered `axes`.
 - Cost API accepts samples shaped as `samples[sample][rawData_item]` and returns `samples[sample][objective_cost]`.
 - RawData importance API accepts one sample shaped as `sample[rawData_item]` and returns per-item weight arrays keyed by rawData array name. Weights emphasize objective-relevant windows while retaining a positive floor for the rest of each field.
@@ -28,7 +28,7 @@
 
 ## Non-Obvious Techniques
 - `workflow.py` owns `variables -> rawData`; `calc_cost.py` owns `rawData -> cost`. Do not let workflow write `cost.json`.
-- `workflow.py` owns the individual's evaluation timing. It writes `started_at` before rawData generation and `ended_at` after success or catchable failure.
+- `workflow.py` owns the individual's evaluation timing. It writes `started_at` before rawData generation and `ended_at` after success or catchable failure; catchable failures include `error_type`, `error_message`, and a traceback tail for distributed diagnostics.
 - rawData metadata should describe the data item only; do not echo the full variable vector or job metadata into every `.npz`.
 - Default cost shaping mirrors the old fanyufei workflow style: a tanh-based soft cost maps values near a goal to 0 and values near a worst threshold to 1.
 - Current rawData importance weights mirror the cost observation windows: S11 values inside 2.40-2.48 GHz and gain values at target theta cuts receive extra surrogate-training weight.

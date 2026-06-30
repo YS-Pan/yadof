@@ -1,5 +1,0 @@
-__pycache__/
-*.py[cod]
-test/_pytest_tmp/
-test/_tmp_runtime/
-test/_contract_tmp/

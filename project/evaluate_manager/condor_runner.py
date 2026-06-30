@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -17,10 +18,13 @@ from .config import (
     CONDOR_SUBMIT_STDOUT_FILE_NAME,
     INDIVIDUAL_METADATA_FILE_NAME,
     RAW_DATA_DIR_NAME,
+    RAW_DATA_TRANSFER_ZIP_NAME,
     WORKFLOW_SCRIPT_NAME,
+    htcondor_executable_mode,
     htcondor_environment,
     htcondor_load_profile,
     htcondor_poll_sec,
+    htcondor_python_exe,
     htcondor_remove_exe,
     htcondor_request_cpus,
     htcondor_request_disk,
@@ -42,6 +46,7 @@ from .types import JobResult, JobSpec
 
 
 _CLUSTER_RE = re.compile(r"submitted to cluster\s+(\d+)", re.IGNORECASE)
+_RETURN_VALUE_RE = re.compile(r"Normal termination \(return value ([^)]+)\)", re.IGNORECASE)
 _TERMINAL_LOG_MARKERS = {
     "terminated": "Job terminated",
     "held": "Job was held",
@@ -58,15 +63,27 @@ _SUBMIT_ARTIFACTS = {
     CONDOR_CLUSTER_ID_FILE_NAME,
 }
 _RUNTIME_ARTIFACTS = {
-    INDIVIDUAL_METADATA_FILE_NAME,
     "metadata.json",
     "metaData.json",
     "metadata.json.tmp",
     "metaData.json.tmp",
+    INDIVIDUAL_METADATA_FILE_NAME,
+    f"{INDIVIDUAL_METADATA_FILE_NAME}.tmp",
     "cost.json",
     "calc_cost.py",
+    RAW_DATA_DIR_NAME,
+    RAW_DATA_TRANSFER_ZIP_NAME,
+    f"{RAW_DATA_TRANSFER_ZIP_NAME}.tmp",
 }
 _SANDBOX_ENV_DIRS = ("._home", "._appdata", "._localappdata", "._tmp")
+_BATCH_LOG_FILE_NAME = "batch.log"
+_WINDOWS_STATUS_MESSAGES = {
+    0xC0000022: (
+        "STATUS_ACCESS_DENIED",
+        "Windows denied starting the executable or loading one of its DLLs on the worker. "
+        "Check ACLs for the HTCondor slot account on the configured Python environment.",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -102,17 +119,33 @@ def run_condor_jobs(
 
     results_by_name: dict[str, JobResult] = {}
     pending: dict[str, CondorSubmission] = {}
-    for job in jobs:
+    total = len(jobs)
+    submit_failures = 0
+    _progress(f"htcondor: submitting {total} jobs")
+    _progress(f"htcondor: submit progress 0/{total}; queued=0; submit_failures=0; last_cluster=none")
+    for index, job in enumerate(jobs, start=1):
         try:
             submission = submit_condor_job(job, env=env)
         except Exception as exc:  # noqa: BLE001 - preserve per-individual failure isolation.
             results_by_name[job.name] = submit_failure_result(job, exc)
+            submit_failures += 1
+            _progress(f"htcondor: submit failed {index}/{total}: {job.name}")
             continue
         pending[job.name] = submission
+        if index == 1 or index % 25 == 0 or index == total:
+            cluster = submission.cluster_id if submission.cluster_id is not None else "unknown"
+            _progress(
+                f"htcondor: submit progress {index}/{total}; queued={len(pending)}; "
+                f"submit_failures={submit_failures}; last_cluster={cluster}"
+            )
 
     deadline = time.monotonic() + float(timeout_sec)
     poll_sec = max(0.1, htcondor_poll_sec())
+    last_report = 0.0
+    if pending:
+        _progress(f"htcondor: waiting for {len(pending)} jobs")
     while pending and time.monotonic() < deadline:
+        completed_now = 0
         for job_name, submission in list(pending.items()):
             terminal_reason = terminal_log_reason(submission.job.directory)
             if terminal_reason is None and not read_individual_metadata(submission.job.directory):
@@ -124,9 +157,15 @@ def run_condor_jobs(
                 terminal_reason=terminal_reason,
             )
             pending.pop(job_name, None)
+            completed_now += 1
+        now = time.monotonic()
+        if completed_now or now >= last_report + poll_sec:
+            _progress(f"htcondor: pending={len(pending)}/{total}")
+            last_report = now
         if pending:
             time.sleep(poll_sec)
 
+    timed_out_count = len(pending)
     for job_name, submission in list(pending.items()):
         remove_error = remove_condor_job(submission)
         results_by_name[job_name] = collect_condor_result(
@@ -137,11 +176,15 @@ def run_condor_jobs(
             remove_error=remove_error,
         )
         pending.pop(job_name, None)
+    if timed_out_count:
+        _progress(f"htcondor: timed out {timed_out_count} jobs")
+    _progress(f"htcondor: collected {len(results_by_name)}/{total} results")
 
     return tuple(results_by_name[job.name] for job in jobs)
 
 
 def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> CondorSubmission:
+    clear_stale_runtime_artifacts(job.directory)
     submit_file = write_condor_submit_file(job, env=env)
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(status="submitting", condor_submit_file=submit_file.name, condor_submitted_at=now_text())
@@ -195,21 +238,38 @@ def write_condor_submit_file(job: JobSpec, *, env: Mapping[str, str] | None = No
     if htcondor_run_as_owner() and htcondor_load_profile():
         raise ValueError("HTCondor Windows config cannot combine run_as_owner=True with load_profile=True")
 
-    for dirname in _SANDBOX_ENV_DIRS:
-        (job.directory / dirname).mkdir(exist_ok=True)
+    executable_mode = htcondor_executable_mode()
+    if executable_mode in {"workflow", "direct", "direct_py", "py"}:
+        direct_workflow = True
+    elif executable_mode in {"python", "interpreter", "python_exe"}:
+        direct_workflow = False
+    else:
+        raise ValueError(
+            "HTCONDOR_EXECUTABLE_MODE must be 'workflow' for direct workflow.py submission "
+            "or 'python' for explicit interpreter submission"
+        )
 
-    inputs = transfer_input_files(job.directory, executable_name=WORKFLOW_SCRIPT_NAME)
+    python_exe = htcondor_python_exe().strip()
+    if not direct_workflow and not python_exe:
+        raise ValueError("HTCONDOR_PYTHON_EXE is required when HTCONDOR_EXECUTABLE_MODE='python'")
+    prepare_sandbox_env_dirs(job.directory)
+    inputs = transfer_input_files(
+        job.directory,
+        executable_name=WORKFLOW_SCRIPT_NAME if direct_workflow else "",
+    )
     requirements = htcondor_requirements().strip()
-    environment = condor_environment_string(env)
+    submit_environment = condor_environment_string()
     lines: list[str] = [
         "# Auto-generated by project.evaluate_manager.condor_runner",
         "universe = vanilla",
-        f"executable = {WORKFLOW_SCRIPT_NAME}",
+        f"executable = {_quote_submit_atom(WORKFLOW_SCRIPT_NAME if direct_workflow else python_exe)}",
         "initialdir = .",
         "getenv = False",
     ]
-    if environment:
-        lines.append(f'environment = "{environment}"')
+    if not direct_workflow:
+        lines.append(f"arguments = {_quote_submit_atom(WORKFLOW_SCRIPT_NAME)}")
+    if submit_environment:
+        lines.append(f'environment = "{submit_environment}"')
     lines.append(f"load_profile = {_condor_bool(htcondor_load_profile())}")
     lines.append(f"run_as_owner = {_condor_bool(htcondor_run_as_owner())}")
     if requirements:
@@ -218,7 +278,7 @@ def write_condor_submit_file(job: JobSpec, *, env: Mapping[str, str] | None = No
         [
             "should_transfer_files = YES",
             "when_to_transfer_output = ON_EXIT",
-            "transfer_executable = True",
+            f"transfer_executable = {_condor_bool(direct_workflow)}",
         ]
     )
     if inputs:
@@ -232,7 +292,6 @@ def write_condor_submit_file(job: JobSpec, *, env: Mapping[str, str] | None = No
             f"request_memory = {htcondor_request_memory()}",
             f"request_disk = {htcondor_request_disk()}",
             "notification = never",
-            f"transfer_output_files = {RAW_DATA_DIR_NAME},{INDIVIDUAL_METADATA_FILE_NAME}",
             "queue 1",
             "",
         ]
@@ -249,20 +308,35 @@ def transfer_input_files(job_dir: Path, *, executable_name: str) -> tuple[str, .
             continue
         if path.name in _SUBMIT_ARTIFACTS or path.name in _RUNTIME_ARTIFACTS:
             continue
-        if path.name == RAW_DATA_DIR_NAME or path.name == "__pycache__":
+        if path.name == "__pycache__":
             continue
         files.append(_quote_submit_atom(path.name))
     return tuple(files)
 
 
-def condor_environment_string(extra_env: Mapping[str, str] | None = None) -> str:
-    parts: list[str] = []
-    configured = htcondor_environment().strip()
-    if configured:
-        parts.append(configured)
-    for key, value in dict(extra_env or {}).items():
-        parts.append(f"{key}={value}")
-    return ";".join(parts)
+def prepare_sandbox_env_dirs(job_dir: Path) -> None:
+    for name in _SANDBOX_ENV_DIRS:
+        (job_dir / name).mkdir(parents=True, exist_ok=True)
+
+
+def clear_stale_runtime_artifacts(job_dir: Path) -> None:
+    for name in (
+        INDIVIDUAL_METADATA_FILE_NAME,
+        f"{INDIVIDUAL_METADATA_FILE_NAME}.tmp",
+        RAW_DATA_TRANSFER_ZIP_NAME,
+        f"{RAW_DATA_TRANSFER_ZIP_NAME}.tmp",
+        "cost.json",
+    ):
+        (job_dir / name).unlink(missing_ok=True)
+
+
+def condor_environment_string() -> str:
+    environment = htcondor_environment().strip()
+    if not environment:
+        return ""
+    if any(char in environment for char in "\r\n"):
+        raise ValueError("HTCONDOR_ENVIRONMENT must be a single-line HTCondor environment string")
+    return environment.replace('"', '""')
 
 
 def parse_cluster_id(stdout: str) -> int | None:
@@ -289,8 +363,11 @@ def collect_condor_result(
     terminal_reason: str | None,
     remove_error: str | None = None,
 ) -> JobResult:
-    raw_paths = raw_data_paths(job.directory)
     individual_metadata = read_individual_metadata(job.directory)
+    hold_info = condor_hold_info(submission) if terminal_reason == "held" else {}
+    log_info = condor_log_info(job.directory)
+    restore_rawdata_transfer_zip(job.directory)
+    raw_paths = raw_data_paths(job.directory)
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(individual_metadata)
 
@@ -299,7 +376,12 @@ def collect_condor_result(
         error = f"HTCondor job exceeded timeout_sec while waiting for job-local outputs"
     elif terminal_reason in {"held", "aborted", "removed"}:
         status = "error"
-        error = f"HTCondor reported terminal state: {terminal_reason}"
+        hold_reason = str(hold_info.get("condor_hold_reason") or "")
+        error = (
+            f"HTCondor reported terminal state: {terminal_reason}: {hold_reason}"
+            if hold_reason
+            else f"HTCondor reported terminal state: {terminal_reason}"
+        )
     elif raw_paths and str(individual_metadata.get("status", "")).lower() != "error":
         status = "done"
         error = None
@@ -308,7 +390,21 @@ def collect_condor_result(
         error = str(individual_metadata.get("error_message") or "workflow reported error")
     else:
         status = "error"
-        error = f"HTCondor job finished without .npz files under {RAW_DATA_DIR_NAME}/"
+        return_value = log_info.get("condor_return_value")
+        if isinstance(return_value, int) and return_value != 0:
+            error = (
+                f"HTCondor job exited with return value {return_value}"
+                f"{_return_value_summary(log_info)} and wrote no .npz files under {RAW_DATA_DIR_NAME}/"
+            )
+        elif _workflow_reported_rawdata(individual_metadata):
+            error = (
+                "Workflow reported done and listed rawData files, but no .npz files were returned under "
+                f"{RAW_DATA_DIR_NAME}/. This usually means the job used the legacy Windows transfer contract "
+                f"that did not return nested {RAW_DATA_DIR_NAME}/*.npz files, or {RAW_DATA_TRANSFER_ZIP_NAME} "
+                "was not created/transferred."
+            )
+        else:
+            error = f"HTCondor job finished without .npz files under {RAW_DATA_DIR_NAME}/"
 
     metadata.update(
         status=status,
@@ -317,19 +413,125 @@ def collect_condor_result(
         raw_data_files=[path.name for path in raw_paths],
         stdout_tail=_read_tail(job.directory / CONDOR_STDOUT_FILE_NAME),
         stderr_tail=_read_tail(job.directory / CONDOR_STDERR_FILE_NAME),
+        batch_log_tail=_read_tail(job.directory / _BATCH_LOG_FILE_NAME),
         condor_cluster_id=submission.cluster_id,
         condor_submit_file=submission.submit_file.name,
         condor_log_file=CONDOR_LOG_FILE_NAME,
+        condor_log_tail=_read_tail(job.directory / CONDOR_LOG_FILE_NAME),
         condor_terminal_reason=terminal_reason,
         condor_submit_stdout_tail=tail(submission.stdout),
         condor_submit_stderr_tail=tail(submission.stderr),
     )
+    metadata.update(log_info)
+    metadata.update(hold_info)
     if error is not None:
         metadata["error"] = error
     if remove_error is not None:
         metadata["condor_remove_error"] = remove_error
     write_metadata(job.directory, metadata)
     return result_from_metadata(job, metadata, raw_paths)
+
+
+def condor_log_info(job_dir: Path) -> dict[str, object]:
+    log_path = job_dir / CONDOR_LOG_FILE_NAME
+    if not log_path.is_file():
+        return {}
+    text = log_path.read_text(encoding="utf-8", errors="ignore")
+    matches = _RETURN_VALUE_RE.findall(text)
+    if not matches:
+        return {}
+    raw_value = str(matches[-1]).strip()
+    try:
+        value = int(raw_value, 0)
+    except ValueError:
+        return {"condor_return_value": raw_value}
+    info: dict[str, object] = {"condor_return_value": value}
+    info.update(windows_return_code_details(value))
+    return info
+
+
+def restore_rawdata_transfer_zip(job_dir: Path) -> None:
+    archive_path = job_dir / RAW_DATA_TRANSFER_ZIP_NAME
+    if not archive_path.is_file():
+        return
+    import zipfile
+
+    raw_dir = job_dir / RAW_DATA_DIR_NAME
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        for member in archive.infolist():
+            member_name = member.filename.replace("\\", "/")
+            if member.is_dir() or "/" in member_name or not member_name.endswith(".npz"):
+                continue
+            target = raw_dir / Path(member_name).name
+            with archive.open(member, "r") as source, target.open("wb") as dest:
+                dest.write(source.read())
+
+
+def _workflow_reported_rawdata(individual_metadata: Mapping[str, object]) -> bool:
+    status = str(individual_metadata.get("status", "")).strip().lower()
+    raw_files = individual_metadata.get("raw_data_files")
+    return status == "done" and isinstance(raw_files, list) and bool(raw_files)
+
+
+def windows_return_code_details(value: int) -> dict[str, object]:
+    unsigned = int(value) & 0xFFFFFFFF
+    details: dict[str, object] = {"condor_return_value_hex": f"0x{unsigned:08X}"}
+    known = _WINDOWS_STATUS_MESSAGES.get(unsigned)
+    if known is not None:
+        name, explanation = known
+        details["condor_return_value_name"] = name
+        details["condor_return_value_explanation"] = explanation
+    return details
+
+
+def _return_value_summary(info: Mapping[str, object]) -> str:
+    parts: list[str] = []
+    hex_value = str(info.get("condor_return_value_hex") or "")
+    name = str(info.get("condor_return_value_name") or "")
+    explanation = str(info.get("condor_return_value_explanation") or "")
+    if hex_value:
+        parts.append(hex_value)
+    if name:
+        parts.append(name)
+    if explanation:
+        parts.append(explanation)
+    return "" if not parts else f" ({'; '.join(parts)})"
+
+
+def condor_hold_info(submission: CondorSubmission) -> dict[str, object]:
+    if submission.cluster_id is None:
+        return {}
+    try:
+        completed = subprocess.run(
+            [
+                "condor_q",
+                f"{submission.cluster_id}.0",
+                "-af",
+                "HoldReason",
+                "HoldReasonCode",
+                "HoldReasonSubCode",
+            ],
+            cwd=str(submission.job.directory),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        return {"condor_hold_query_error": str(exc)}
+    text = (completed.stdout or "").strip()
+    if completed.returncode != 0:
+        return {"condor_hold_query_error": (completed.stderr or completed.stdout or "").strip()}
+    if not text:
+        return {}
+    parts = text.split()
+    reason_width = max(0, len(parts) - 2)
+    reason = " ".join(parts[:reason_width]) if reason_width else text
+    info: dict[str, object] = {"condor_hold_reason": reason}
+    if len(parts) >= 2:
+        info["condor_hold_reason_code"] = parts[-2]
+        info["condor_hold_reason_subcode"] = parts[-1]
+    return info
 
 
 def submit_failure_result(job: JobSpec, exc: BaseException) -> JobResult:
@@ -370,10 +572,16 @@ def remove_condor_job(submission: CondorSubmission) -> str | None:
     return (completed.stderr or completed.stdout or f"condor_rm exited with {completed.returncode}").strip()
 
 
-def _read_tail(path: Path) -> str:
+def _read_tail(path: Path, limit: int = 4000) -> str:
     if not path.is_file():
         return ""
-    return tail(path.read_text(encoding="utf-8", errors="ignore"))
+    data = path.read_bytes()
+    for encoding in ("utf-8", "mbcs", "gbk"):
+        try:
+            return tail(data.decode(encoding), limit=limit)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return tail(data.decode("utf-8", errors="replace"), limit=limit)
 
 
 def _quote_submit_atom(value: str) -> str:
@@ -382,3 +590,8 @@ def _quote_submit_atom(value: str) -> str:
 
 def _condor_bool(value: bool) -> str:
     return "True" if value else "False"
+
+
+def _progress(message: str) -> None:
+    if str(os.environ.get("YADOT_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        print(f"[yadof] {message}", flush=True)

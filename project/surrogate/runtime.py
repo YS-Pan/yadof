@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import importlib
+import inspect
 import json
 import math
 from pathlib import Path
@@ -187,18 +188,36 @@ def _load_training_data() -> TrainingData:
     )
 
 
-def _costs_from_raw(raw_samples: Sequence[Sequence[RawDataItem]]) -> tuple[tuple[float, ...], ...]:
+def _costs_from_raw(
+    raw_samples: Sequence[Sequence[RawDataItem]],
+    normalized_variables: Sequence[Sequence[float]] | None = None,
+) -> tuple[tuple[float, ...], ...]:
     job_template_api = importlib.import_module("project.job_template.api")
-    raw_costs = _call_first(
-        job_template_api,
-        (
-            "calculate_costs_from_raw_data",
-            "calc_costs_from_raw_data",
-            "calculate_costs",
-            "calc_costs",
-            "calculate_cost",
-        ),
-        tuple(tuple(sample) for sample in raw_samples),
+    names = (
+        "calculate_costs_from_raw_data",
+        "calc_costs_from_raw_data",
+        "calculate_costs",
+        "calc_costs",
+        "calculate_cost",
+    )
+    cost_function = next((getattr(job_template_api, name, None) for name in names if callable(getattr(job_template_api, name, None))), None)
+    if cost_function is None:
+        raise AttributeError(f"{job_template_api.__name__} does not expose any of: {', '.join(names)}")
+
+    samples = tuple(tuple(sample) for sample in raw_samples)
+    signature = inspect.signature(cost_function)
+    accepts_raw_variables = "raw_variables" in signature.parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+    )
+    raw_variables = (
+        tuple(job_template_api.denormalize_variables(row) for row in normalized_variables)
+        if accepts_raw_variables and normalized_variables is not None
+        else None
+    )
+    raw_costs = (
+        cost_function(samples, raw_variables=raw_variables)
+        if accepts_raw_variables and raw_variables is not None
+        else cost_function(samples)
     )
     return tuple(tuple(float(value) for value in row) for row in raw_costs)
 
@@ -219,6 +238,72 @@ def _is_numeric_array(value: object) -> bool:
     except (TypeError, ValueError):
         return False
     return np.issubdtype(array.dtype, np.number) and array.dtype != np.dtype("O")
+
+
+def _finite_fill_vector(values: np.ndarray) -> np.ndarray:
+    vector = np.asarray(values, dtype=np.float64).reshape(-1)
+    if vector.size == 0 or np.isfinite(vector).all():
+        return np.ascontiguousarray(vector, dtype=np.float64)
+
+    finite = np.isfinite(vector)
+    if not np.any(finite):
+        return np.zeros_like(vector, dtype=np.float64)
+
+    indices = np.arange(vector.size, dtype=np.float64)
+    filled = np.interp(indices, indices[finite], vector[finite])
+    return np.ascontiguousarray(filled, dtype=np.float64)
+
+
+def _finite_fill_matrix(matrix: np.ndarray) -> np.ndarray:
+    matrix = np.asarray(matrix, dtype=np.float64)
+    if matrix.ndim != 2:
+        raise ValueError("surrogate target matrix must be two-dimensional")
+    if matrix.size == 0 or np.isfinite(matrix).all():
+        return np.ascontiguousarray(matrix, dtype=np.float64)
+    return np.stack([_finite_fill_vector(row) for row in matrix], axis=0)
+
+
+def _numeric_array_nonfinite_fraction(value: object) -> float | None:
+    if not _is_numeric_array(value):
+        return None
+    array = np.asarray(value, dtype=np.float64)
+    if array.size == 0:
+        return 0.0
+    return float(np.count_nonzero(~np.isfinite(array)) / array.size)
+
+
+def _sample_exceeds_nonfinite_fraction(raw_sample: RawSample, threshold: float) -> bool:
+    threshold = max(0.0, min(1.0, float(threshold)))
+    for item in raw_sample:
+        loaded = _load_rawdata_item(item)
+        for key, value in loaded.items():
+            if str(key) == "metadata":
+                continue
+            fraction = _numeric_array_nonfinite_fraction(value)
+            if fraction is not None and fraction > threshold:
+                return True
+    return False
+
+
+def _filter_training_data_by_nonfinite_fraction(data: TrainingData) -> tuple[TrainingData, int]:
+    threshold = float(getattr(config, "SURROGATE_MAX_NONFINITE_FRACTION", 0.20))
+    kept_variables: list[tuple[float, ...]] = []
+    kept_raw_data: list[RawSample] = []
+    dropped = 0
+    for variables, raw_sample in zip(data.normalized_variables, data.raw_data):
+        if _sample_exceeds_nonfinite_fraction(raw_sample, threshold):
+            dropped += 1
+            continue
+        kept_variables.append(tuple(float(value) for value in variables))
+        kept_raw_data.append(raw_sample)
+    return (
+        TrainingData(
+            parameter_names=data.parameter_names,
+            normalized_variables=tuple(kept_variables),
+            raw_data=tuple(kept_raw_data),
+        ),
+        int(dropped),
+    )
 
 
 def _normalize_samples(raw_samples: tuple[RawSample, ...]) -> tuple[tuple[dict[str, object], ...], ...]:
@@ -345,7 +430,7 @@ def _flatten_raw_samples(raw_samples: tuple[RawSample, ...]) -> tuple[RawDataSch
             if any(array.shape != shape for array in arrays):
                 raise ValueError(f"rawData array {key!r} changed shape between samples")
 
-            matrix = np.stack([array.reshape(-1) for array in arrays], axis=0)
+            matrix = _finite_fill_matrix(np.stack([array.reshape(-1) for array in arrays], axis=0))
             if matrix.shape[1] == 0:
                 continue
             spread = float(np.max(np.abs(matrix - matrix[0:1]))) if matrix.size else 0.0
@@ -667,6 +752,8 @@ def train(*, generation_index: int = 0) -> SurrogateState:
     data = _load_training_data()
     if len(data.normalized_variables) != len(data.raw_data):
         raise ValueError("surrogate training needs one rawData sample per normalized variable row")
+    raw_sample_count = len(data.raw_data)
+    data, dropped_nonfinite_samples = _filter_training_data_by_nonfinite_fraction(data)
 
     x = _x_matrix(data.normalized_variables)
     schema, y = _flatten_raw_samples(data.raw_data)
@@ -685,6 +772,9 @@ def train(*, generation_index: int = 0) -> SurrogateState:
         "model": MODEL_NAME,
         "member_count": 0,
         "train_sample_count": int(x.shape[0]),
+        "raw_sample_count_before_filter": int(raw_sample_count),
+        "dropped_nonfinite_samples": int(dropped_nonfinite_samples),
+        "nonfinite_drop_threshold": float(getattr(config, "SURROGATE_MAX_NONFINITE_FRACTION", 0.20)),
         "query_count": int(y.shape[1]),
         "device": "",
         "skipped": True,
@@ -711,6 +801,9 @@ def train(*, generation_index: int = 0) -> SurrogateState:
         )
         history["skipped"] = False
         history["artifact_dir"] = str(artifact_dir)
+        history["raw_sample_count_before_filter"] = int(raw_sample_count)
+        history["dropped_nonfinite_samples"] = int(dropped_nonfinite_samples)
+        history["nonfinite_drop_threshold"] = float(getattr(config, "SURROGATE_MAX_NONFINITE_FRACTION", 0.20))
     else:
         artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -842,13 +935,13 @@ def predict_population(population) -> tuple[tuple[tuple[float, ...], tuple[tuple
     member_flats = _predict_member_flats(state, x)
     mean_flat = np.mean(member_flats, axis=0)
     predicted_raw = _raw_samples_from_flat(state.schema, mean_flat)
-    costs = _costs_from_raw(predicted_raw)
+    costs = _costs_from_raw(predicted_raw, normalized_population)
 
     member_costs = []
     for member_idx in range(member_flats.shape[0]):
         try:
             member_raw = _raw_samples_from_flat(state.schema, member_flats[member_idx])
-            member_costs.append(np.asarray(_costs_from_raw(member_raw), dtype=np.float64))
+            member_costs.append(np.asarray(_costs_from_raw(member_raw, normalized_population), dtype=np.float64))
         except Exception:
             continue
     if member_costs:

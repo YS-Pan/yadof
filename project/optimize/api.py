@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from .gpsaf import OptimizationResult
 from . import gpsaf
 from .runner import job_names, new_run_id, next_optimization_index, now_text, record_generation_metadata
@@ -43,6 +45,7 @@ def run_generations(
     results: list[OptimizationResult] = []
     for offset in range(max(0, int(generations))):
         generation_index = int(start_generation) + offset
+        _progress(f"generation {generation_index}: start")
         started_at = now_text()
         before = job_names()
         result = run_one_generation(
@@ -65,7 +68,13 @@ def run_generations(
             jobs_after=after,
         )
         results.append(result)
+        _progress(f"generation {generation_index}: finished")
     return tuple(results)
+
+
+def _progress(message: str) -> None:
+    if str(os.environ.get("YADOT_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        print(f"[yadof] {message}", flush=True)
 
 
 __all__ = ["OptimizationResult", "run_one_generation", "run_generations"]

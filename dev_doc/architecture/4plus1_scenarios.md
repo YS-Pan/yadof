@@ -40,8 +40,8 @@
 ## Scenario 6: Distributed Evaluation
 1. `evaluate_manager` selects distributed mode through `EVALUATION_MODE = "distributed"` or an explicit API argument.
 2. It prepares the same job folder contract.
-3. `condor_runner.py` writes `job.sub` and calls `condor_submit` without changing the HTCondor installation.
-4. HTCondor workers run workflow logic and transfer rawData plus `individual_metadata.json` back to the job folder.
+3. `condor_runner.py` writes `job.sub`, then calls `condor_submit` without changing the HTCondor installation.
+4. HTCondor workers run workflow logic through the configured worker Python executable and transfer generated outputs back to the job folder.
 5. Finalization reuses the shared job metadata and `recorded_data` write path.
 6. Optimizer receives the same cost tuple shape as in local mode.
 

@@ -13,6 +13,9 @@ def _make_template(template_dir, *, workflow_body: str = "WORKFLOW_VERSION = 1\n
     (template_dir / "hfss_com.py").write_text("COM_VERSION = 1\n", encoding="utf-8", newline="\n")
     (template_dir / "Metal_recon_ant.aedt").write_bytes(b"model bytes v1\n")
     (template_dir / "calc_cost.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8", newline="\n")
+    (template_dir / "individual_metadata.json").write_text('{"status": "error"}\n', encoding="utf-8", newline="\n")
+    (template_dir / "rawData_outputs.zip").write_bytes(b"old zip")
+    (template_dir / "job.sub").write_text("queue 1\n", encoding="utf-8", newline="\n")
     (template_dir / "parameters_constraints.py").write_text(
         "\n".join(
             [
@@ -58,6 +61,9 @@ def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path
     assert len(first_hash) == 64
     assert not (first.directory / "cost.json").exists()
     assert not (first.directory / "calc_cost.py").exists()
+    assert not (first.directory / "individual_metadata.json").exists()
+    assert not (first.directory / "rawData_outputs.zip").exists()
+    assert not (first.directory / "job.sub").exists()
 
 
 @pytest.mark.parametrize(
@@ -107,3 +113,31 @@ def test_prepared_job_static_hash_ignores_runtime_artifacts(tmp_path):
     (job.directory / "_tmp" / "solver.tmp").write_bytes(b"temp")
 
     assert prepared_job_static_hash(job.directory) == original_hash
+
+
+def test_job_template_api_copy_skips_runtime_artifacts(tmp_path, monkeypatch):
+    from project.job_template import api as job_template_api
+
+    template_dir = tmp_path / "api_template"
+    template_dir.mkdir()
+    (template_dir / "workflow.py").write_text("# workflow\n", encoding="utf-8", newline="\n")
+    (template_dir / "individual_metadata.json").write_text('{"status": "error"}\n', encoding="utf-8", newline="\n")
+    (template_dir / "rawData_outputs.zip").write_bytes(b"old zip")
+    (template_dir / "job.sub").write_text("queue 1\n", encoding="utf-8", newline="\n")
+    (template_dir / "rawData").mkdir()
+    (template_dir / "rawData" / "old.npz").write_bytes(b"old data")
+    (template_dir / "._home").mkdir()
+    (template_dir / "._home" / "profile.txt").write_text("old profile\n", encoding="utf-8", newline="\n")
+
+    monkeypatch.setattr(job_template_api, "TEMPLATE_DIR", template_dir)
+    job_dir = tmp_path / "job"
+
+    job_template_api.copy_job_files(job_dir)
+
+    assert (job_dir / "workflow.py").is_file()
+    assert not (job_dir / "individual_metadata.json").exists()
+    assert not (job_dir / "rawData_outputs.zip").exists()
+    assert not (job_dir / "job.sub").exists()
+    assert not (job_dir / "._home").exists()
+    assert (job_dir / "rawData").is_dir()
+    assert not (job_dir / "rawData" / "old.npz").exists()

@@ -37,7 +37,7 @@ def test_prepare_failure_returns_inf_and_generation_continues(tmp_path, monkeypa
     monkeypatch.setattr(api, "run_local_job", run_local_job)
     monkeypatch.setattr(api, "record_result", record_result)
 
-    costs = api.evaluate_population(((0.0,), (1.0,)), jobs_dir=tmp_path, timeout_sec=1)
+    costs = api.evaluate_population(((0.0,), (1.0,)), mode="local", jobs_dir=tmp_path, timeout_sec=1)
 
     assert costs[0] == (math.inf, math.inf)
     assert costs[1] == (2.0, 3.0)
@@ -81,7 +81,7 @@ def test_record_failure_returns_inf_and_generation_continues(tmp_path, monkeypat
     monkeypatch.setattr(api, "run_local_job", run_local_job)
     monkeypatch.setattr(api, "record_result", record_result)
 
-    costs = api.evaluate_population(((0.0,), (1.0,)), jobs_dir=tmp_path, timeout_sec=1)
+    costs = api.evaluate_population(((0.0,), (1.0,)), mode="local", jobs_dir=tmp_path, timeout_sec=1)
 
     assert costs == ((math.inf,), (4.0,))
     assert len(recorded_failures) == 1
@@ -118,7 +118,7 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
     monkeypatch.setattr(api, "record_result", lambda result: (1.0,))
 
     population = ((0.25, 0.5, 0.75) + (0.5,) * (job_template_api.get_variable_count() - 3),)
-    costs = api.evaluate_population(population, timeout_sec=1)
+    costs = api.evaluate_population(population, mode="local", timeout_sec=1)
 
     assert costs == ((1.0,),)
     assert seen["job"].directory.parent == configured_jobs_dir
@@ -160,7 +160,12 @@ def test_local_evaluation_can_run_jobs_in_parallel(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "run_local_job", run_local_job)
     monkeypatch.setattr(api, "record_result", lambda result: (result.unnormalized_variables[0],))
 
-    costs = api.evaluate_population(((0.0,), (1.0,), (2.0,), (3.0,)), jobs_dir=tmp_path, timeout_sec=1)
+    costs = api.evaluate_population(
+        ((0.0,), (1.0,), (2.0,), (3.0,)),
+        mode="local",
+        jobs_dir=tmp_path,
+        timeout_sec=1,
+    )
 
     assert costs == ((0.0,), (1.0,), (2.0,), (3.0,))
     assert max_active >= 2

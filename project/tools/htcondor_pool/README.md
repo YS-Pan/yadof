@@ -51,10 +51,90 @@ condor_status
 condor_status -af Name Machine Cpus Memory OpSys
 ```
 
+## Worker R: execute directory
+
+To make HTCondor execute-side scratch folders run on each worker machine's
+`R:` RAM disk, run this file on every machine that has a startd slot:
+
+```cmd
+setup_worker_ramdisk_execute.cmd
+```
+
+For the current three-machine pool, run it on machine 1, machine 3, and machine
+6. Machine 1 is both submit/manager and worker, so it also needs this step.
+
+The script requests Administrator privileges, creates `R:\condor_execute`,
+grants access to system, administrators, and authenticated slot users, writes a
+managed HTCondor config block with:
+
+```text
+EXECUTE = R:/condor_execute
+YADOF_RAMDISK = True
+YADOF_EXECUTE_DIR = "R:/condor_execute"
+STARTD_ATTRS = YADOF_RAMDISK, YADOF_EXECUTE_DIR
+```
+
+Then it restarts HTCondor and prints `condor_config_val`/`condor_status`
+verification output. The script is safe to re-run; it replaces only its managed
+`# BEGIN YADOF RAMDISK EXECUTE` block.
+
+Do not set `project/config.py` `JOBS_DIR` to `R:\` for this purpose. `JOBS_DIR`
+is the submit-side job staging directory. Worker-side RAM-disk execution is
+controlled by HTCondor `EXECUTE` on each worker, and optimization jobs can match
+those workers with `TARGET.YADOF_RAMDISK =?= True`.
+
+Run this after the pool role setup scripts, and make sure the `R:` RAM disk
+exists before starting HTCondor. If `R:` is recreated after reboot, recreate it
+before the HTCondor service starts or re-run this script.
+
 If machine 1 only shows one slot, run `diagnose_pool.cmd` on machine 3 and 6.
 Check that `manager_ip.txt` exists, `Test-NetConnection` to machine 1 port
 `9618` succeeds, `DAEMON_LIST` is `MASTER, SHARED_PORT, STARTD`, and local
 `condor_*.exe` processes are running.
+
+## Worker declared resources and multi-job slots
+
+To control how many resources each worker advertises and allow one machine to
+run multiple jobs, edit the constants at the top of:
+
+```cmd
+setup_worker_declared_resources.cmd
+```
+
+Then run it on each execute-capable machine, including machine 1 if it should
+also run HFSS jobs. The key constants are:
+
+```cmd
+set "DECLARE_CPUS=6"
+set "DECLARE_MEMORY_MB=24576"
+set "DECLARE_DISK_MB=8192"
+set "EXECUTE_DIR=R:\condor_execute"
+set "WORKER_PYTHON_EXE=C:\ProgramData\miniconda3\envs\yadof\python.exe"
+set "PARTITIONABLE_SLOT=1"
+```
+
+`DECLARE_MEMORY_MB` is MB. `DECLARE_DISK_MB` is MB and should not exceed the
+usable size of the `R:` RAM disk. With `PARTITIONABLE_SLOT=1`, HTCondor creates
+one partitionable worker slot that can be split into multiple dynamic slots as
+jobs request CPU, memory, and disk.
+
+`WORKER_PYTHON_EXE` should match `project/config.py` `HTCONDOR_PYTHON_EXE`.
+The script grants read/execute access on that Python environment to
+Authenticated Users and Users, which avoids Windows worker holds such as
+`Permission denied` while executing `python.exe`.
+
+For example, if a worker declares 6 CPUs and 24576 MB memory, and each job
+requests 2 CPUs and 4096 MB memory in `project/config.py`, that worker can run
+up to three jobs before another resource becomes the limiting factor.
+
+After running the script, verify from machine 1:
+
+```cmd
+condor_status -af Name Machine Cpus Memory Disk State Activity YADOF_RAMDISK YADOF_DECLARED_CPUS YADOF_DECLARED_MEMORY_MB
+```
+
+If a worker shows `MEMORY` or `DISK` as not defined, or shows `0` in
+`condor_status`, run `setup_worker_declared_resources.cmd` on that worker.
 
 ## Adding more worker machines
 

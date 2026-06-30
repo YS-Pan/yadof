@@ -19,11 +19,20 @@ EXCLUDED_TEMPLATE_NAMES = {
     "api.py",
     "calc_cost.py",
     "cost.json",
+    "rawData_outputs.zip",
     "metadata.json",
     "metaData.json",
     "individual_metadata.json",
+    "individual_metadata.json.tmp",
+    "job.sub",
+    "stdout.txt",
+    "stderr.txt",
+    "condor.log",
+    "condor_submit.stdout.txt",
+    "condor_submit.stderr.txt",
+    "cluster.id",
 }
-EXCLUDED_TEMPLATE_DIRS = {"__pycache__", RAW_DATA_DIR_NAME}
+EXCLUDED_TEMPLATE_DIRS = {"__pycache__", "._appdata", "._home", "._localappdata", "._tmp", "_tmp", "history", RAW_DATA_DIR_NAME}
 HASH_EXCLUDED_NAMES = {
     "cost.json",
     "job_input.json",

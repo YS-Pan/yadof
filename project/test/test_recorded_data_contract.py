@@ -32,53 +32,34 @@ def _configure_recorded_api(recorded_api, root: Path) -> None:
 
 
 def _write_rawdata_set(raw_dir: Path, *, offset: float = 0.0) -> Path:
+    from project.job_template import calc_cost
+
     raw_dir.mkdir(parents=True, exist_ok=True)
     metadata_base = {
         "schema_version": RAWDATA_SCHEMA_VERSION,
         "variables": {"x0": 0.25, "x1": 0.5},
         "job_metadata": {"job_name": "repeated"},
     }
-    freq_axis = np.array([2.30, 2.39, 2.44, 2.49, 2.60])
-    theta_axis = np.array([-30.0, 0.0, 30.0])
-    for state in (1, 2, 3, 4):
+    freq_axis = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    for index, definition in enumerate(calc_cost.COST_DEFINITIONS, start=1):
+        goal = float(definition["goal"])
+        worst = float(definition["worst"])
+        value = goal - offset if goal > worst else goal + offset
+        rawdata_name = f"modal_{index:02d}"
         np.savez(
-            raw_dir / f"s11_pinState{state}.npz",
+            raw_dir / f"{rawdata_name}.npz",
             axis_Freq=freq_axis,
             unit_Freq=np.asarray("GHz"),
-            data=np.array([-3.0, -3.0, -12.0 + offset, -3.0, -3.0]),
+            data=np.full(freq_axis.shape, value, dtype=float),
             metadata=json.dumps(
                 {
                     **metadata_base,
-                    "rawdata_name": f"s11_pinState{state}",
+                    "rawdata_name": rawdata_name,
+                    "expression": str(definition["name"]),
                     "source": "test",
-                    "pin_state": state,
                     "shape": [5],
                     "axis_names": ["Freq"],
                     "axes": [{"index": 0, "size": 5, "name": "Freq", "values_key": "axis_Freq", "unit": "GHz"}],
-                }
-            ),
-        )
-    gain_values = {
-        1: [7.0 - offset, 0.0, 0.0 + offset],
-        2: [0.0 + offset, 0.0, 7.0 - offset],
-        3: [7.0 - offset, -15.0 + offset, 7.0 - offset],
-        4: [0.0, 8.0 - offset, 0.0],
-    }
-    for state, values in gain_values.items():
-        np.savez(
-            raw_dir / f"gain_pinState{state}.npz",
-            axis_Theta=theta_axis,
-            unit_Theta=np.asarray("deg"),
-            data=np.asarray(values, dtype=float),
-            metadata=json.dumps(
-                {
-                    **metadata_base,
-                    "rawdata_name": f"gain_pinState{state}",
-                    "source": "test",
-                    "pin_state": state,
-                    "shape": [3],
-                    "axis_names": ["Theta"],
-                    "axes": [{"index": 0, "size": 3, "name": "Theta", "values_key": "axis_Theta", "unit": "deg"}],
                 }
             ),
         )
@@ -89,7 +70,7 @@ def _write_invalid_rawdata_set(raw_dir: Path, *, metadata: dict[str, object], va
     raw_dir.mkdir(parents=True, exist_ok=True)
     _write_rawdata_set(raw_dir)
     np.savez(
-        raw_dir / "s11_pinState1.npz",
+        raw_dir / "modal_01.npz",
         data=np.asarray(values),
         metadata=json.dumps(metadata),
     )
@@ -153,10 +134,10 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     assert "started_at" not in record["job_metadata"]
     assert "ended_at" not in record["job_metadata"]
     assert record["job_metadata"]["nested"] == {"kept": True}
-    assert record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]["rawdata_name"] == "s11_pinState1"
-    assert record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
-    assert "variables" not in record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]
-    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]
+    assert record["rawdata_metadata"]["job_completed/modal_01.npz"]["rawdata_name"] == "modal_01"
+    assert record["rawdata_metadata"]["job_completed/modal_01.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
+    assert "variables" not in record["rawdata_metadata"]["job_completed/modal_01.npz"]
+    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/modal_01.npz"]
 
     rows = [
         json.loads(line)
@@ -169,14 +150,11 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     assert isinstance(rows[0]["recorded_at"], str)
     with zipfile.ZipFile(recorded_api.RAWDATA_ARCHIVE_PATH, "r") as archive:
         assert sorted(archive.namelist()) == [
-            "job_completed/gain_pinState1.npz",
-            "job_completed/gain_pinState2.npz",
-            "job_completed/gain_pinState3.npz",
-            "job_completed/gain_pinState4.npz",
-            "job_completed/s11_pinState1.npz",
-            "job_completed/s11_pinState2.npz",
-            "job_completed/s11_pinState3.npz",
-            "job_completed/s11_pinState4.npz",
+            "job_completed/modal_01.npz",
+            "job_completed/modal_02.npz",
+            "job_completed/modal_03.npz",
+            "job_completed/modal_04.npz",
+            "job_completed/modal_05.npz",
         ]
 
     history = recorded_api.get_optimization_history()
@@ -184,9 +162,9 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     job_name, normalized_variables, costs = history[0]
     assert job_name == "job_completed"
     assert normalized_variables == pytest.approx(_normalized_variables())
-    assert len(costs) == 4
+    assert len(costs) == 6
     assert all(0.0 <= value <= 1.0 for value in costs)
-    assert all(value < 0.1 for value in costs)
+    assert all(value <= 0.1 for value in costs)
     assert recorded_api.get_rawdata_diagnostics() == ()
 
 
@@ -209,13 +187,31 @@ def test_error_and_timeout_are_recorded_but_excluded_from_default_history(tmp_pa
     assert len(recorded_api.get_surrogate_training_data()["raw_data"]) == 1
 
 
+def test_recorded_costs_evaluate_configured_constraints_with_raw_variables(tmp_path, monkeypatch):
+    from project.job_template import calc_cost
+    from project.recorded_data import api as recorded_api
+
+    _configure_recorded_api(recorded_api, tmp_path / "recorded_data")
+    parameter_name = calc_cost.parameter_config.get_parameters()[0].name
+    monkeypatch.setattr(calc_cost.parameter_config, "CONSTRAINTS", (f"${parameter_name} - 1.5",))
+    raw_dir = _write_rawdata_set(tmp_path / "job_rawdata")
+    raw_variables = list(_raw_variables())
+    raw_variables[0] = 1.0
+
+    recorded_api.record_job_result("job_constrained", raw_variables, raw_dir)
+    costs = dict(recorded_api.calculate_costs())["job_constrained"]
+
+    assert len(costs) == 6
+    assert costs[-1] == pytest.approx(0.5)
+
+
 @pytest.mark.parametrize(
     ("metadata", "values"),
     (
         (
             {
                 "schema_version": RAWDATA_SCHEMA_VERSION,
-                "rawdata_name": "s11_pinState1",
+                "rawdata_name": "modal_01",
                 "source": "legacy",
                 "shape": [3],
                 "axes": {"time": "seconds"},
@@ -223,7 +219,7 @@ def test_error_and_timeout_are_recorded_but_excluded_from_default_history(tmp_pa
             [0.35, -0.45, 0.65],
         ),
         (
-            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "s11_pinState1", "source": "legacy", "shape": [2]},
+            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "modal_01", "source": "legacy", "shape": [2]},
             [0.35, -0.45, 0.65],
         ),
     ),
@@ -245,10 +241,10 @@ def test_incompatible_completed_rawdata_is_skipped_in_optimization_history(tmp_p
 
     assert tuple(row[0] for row in costs) == ("job_good",)
     assert tuple(row[0] for row in history) == ("job_good",)
-    assert len(history[0][2]) == 4
-    assert all(value < 0.1 for value in history[0][2])
+    assert len(history[0][2]) == 6
+    assert all(value <= 0.1 for value in history[0][2])
     assert tuple(row["job_name"] for row in diagnostics) == ("job_bad",)
-    assert diagnostics[0]["filename"] == "s11_pinState1.npz"
+    assert diagnostics[0]["filename"] == "modal_01.npz"
     assert diagnostics[0]["status"] == "skipped"
     assert diagnostics[0]["error_message"]
 
@@ -260,7 +256,7 @@ def test_incompatible_completed_rawdata_is_skipped_for_surrogate_training(tmp_pa
     _configure_recorded_api(recorded_api, record_root)
     bad_raw_dir = _write_invalid_rawdata_set(
         tmp_path / "bad_rawdata",
-        metadata={"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "s11_pinState1", "source": "legacy", "shape": [2]},
+        metadata={"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "modal_01", "source": "legacy", "shape": [2]},
         values=[0.35, -0.45, 0.65],
     )
     good_raw_dir = _write_rawdata_set(tmp_path / "good_rawdata")
@@ -297,7 +293,7 @@ def test_legacy_rawdata_missing_schema_version_is_skipped_and_diagnosed(tmp_path
     _configure_recorded_api(recorded_api, record_root)
     legacy_raw_dir = _write_invalid_rawdata_set(
         tmp_path / "legacy_rawdata",
-        metadata={"rawdata_name": "s11_pinState1", "source": "legacy", "shape": [3]},
+        metadata={"rawdata_name": "modal_01", "source": "legacy", "shape": [3]},
         values=[0.35, -0.45, 0.65],
     )
     good_raw_dir = _write_rawdata_set(tmp_path / "good_rawdata")
@@ -325,9 +321,6 @@ def test_corrupt_rawdata_archive_is_skipped_and_diagnosed(tmp_path):
     diagnostics = recorded_api.get_rawdata_diagnostics()
 
     assert tuple(row["job_name"] for row in diagnostics) == (
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
         "job_bad_archive",
         "job_bad_archive",
         "job_bad_archive",

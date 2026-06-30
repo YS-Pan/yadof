@@ -84,37 +84,52 @@ def test_explicit_variable_count_overrides_job_template_parameter_count(monkeypa
     assert calls == {"get_variable_count": 1, "get_objective_count": 1, "get_objective_names": 1}
 
 
-def test_default_job_template_width_matches_metal_recon_ant():
+def test_default_job_template_width_matches_newchoke_modal_task():
     from project.job_template import api as job_template_api
 
-    assert job_template_api.get_variable_count() == 19
+    assert job_template_api.get_variable_count() == 32
     assert job_template_api.get_parameter_names() == (
-        "feed_pad_r",
-        "feed_strip_patch_gap",
-        "feed_strip_w",
-        "feedline1_w",
-        "feedline2_l",
-        "feedline2_w",
-        "gnd_metal_match1_l",
-        "gnd_metal_match1_w",
-        "gnd_metal_match_gap",
-        "iso_slot_l",
-        "iso_slot_w",
-        "iso_slot_xposi",
-        "metal_match_w",
-        "metal_patch_x",
-        "metal_patch_y",
-        "metal_patch_zposi",
-        "patch_feed_strip_cut_l",
-        "phase_l2",
-        "phase_xposi",
+        "Ah1",
+        "Ah2",
+        "Ah3",
+        "Ah4",
+        "Ah5",
+        "Al1",
+        "Al2",
+        "Al3",
+        "Al4",
+        "Al5",
+        "Angle",
+        "chokeZshift",
+        "cornerH",
+        "cornerLen",
+        "cornerLen1",
+        "cornerWidth",
+        "cornerWidth1",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "N",
+        "rearPlasticLen",
+        "trump0Len",
+        "trump0Width",
+        "trumpH",
     )
-    assert job_template_api.get_objective_count() == 4
+    assert job_template_api.get_objective_count() == 6
     assert job_template_api.get_objective_names() == (
-        "cost_s11_band",
-        "cost_gain_steering",
-        "cost_gain_split",
-        "cost_gain_broadside",
+        "dB(mag(S(1:3,3:1))+mag(S(1:3,3:2)))",
+        "dB(mag(S(3:1,2:3))+mag(S(3:2,2:3)))",
+        "dB(S(1:3,2:3))",
+        "dB(mag(S(1:3,4:1))+mag(S(1:3,4:2)))",
+        "dB(mag(S(3:1,4:1))+mag(S(3:1,4:2))+mag(S(3:2,4:1))+mag(S(3:2,4:2)))",
+        "cost_constraints",
     )
 
 

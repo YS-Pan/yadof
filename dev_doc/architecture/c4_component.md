@@ -40,7 +40,7 @@ flowchart LR
 - `api.py`: backend selection, local per-individual worker-pool coordination, failure isolation, and ordered cost return.
 - `job_files.py`: copy template, write job input and run/generation context, compute static hash.
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
-- `condor_runner.py`: direct-`.py` HTCondor submit-file generation, submission, polling, timeout removal, and job-local result collection.
+- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, timeout removal, and job-local result collection.
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.

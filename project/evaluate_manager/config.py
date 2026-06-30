@@ -19,19 +19,22 @@ DEFAULT_MODE = "local"
 DEFAULT_LOCAL_EVALUATION_MAX_WORKERS = 1
 DEFAULT_HTCONDOR_SUBMIT_EXE = "condor_submit"
 DEFAULT_HTCONDOR_REMOVE_EXE = "condor_rm"
+DEFAULT_HTCONDOR_EXECUTABLE_MODE = "python"
+DEFAULT_HTCONDOR_PYTHON_EXE = ""
 DEFAULT_HTCONDOR_POLL_SEC = 30.0
 DEFAULT_HTCONDOR_REQUEST_CPUS = 4
 DEFAULT_HTCONDOR_REQUEST_MEMORY = "8GB"
 DEFAULT_HTCONDOR_REQUEST_DISK = "2GB"
-DEFAULT_HTCONDOR_ENVIRONMENT = (
-    "USERPROFILE=._home;HOME=._home;APPDATA=._appdata;LOCALAPPDATA=._localappdata;TEMP=._tmp;TMP=._tmp"
-)
+DEFAULT_HTCONDOR_ENVIRONMENT = ""
 DEFAULT_HTCONDOR_LOAD_PROFILE = True
 DEFAULT_HTCONDOR_RUN_AS_OWNER = False
 DEFAULT_HTCONDOR_REQUIREMENTS = '(OpSys == "WINDOWS")'
+DEFAULT_HTCONDOR_ALLOWED_MACHINES: tuple[str, ...] = ()
+DEFAULT_HTCONDOR_EXCLUDED_MACHINES: tuple[str, ...] = ()
 FINAL_STATUSES = {"done", "error", "timeout"}
 WORKFLOW_SCRIPT_NAME = "workflow.py"
 RAW_DATA_DIR_NAME = "rawData"
+RAW_DATA_TRANSFER_ZIP_NAME = "rawData_outputs.zip"
 INDIVIDUAL_METADATA_FILE_NAME = "individual_metadata.json"
 CONDOR_SUBMIT_FILE_NAME = "job.sub"
 CONDOR_STDOUT_FILE_NAME = "stdout.txt"
@@ -74,6 +77,17 @@ def htcondor_remove_exe() -> str:
     return str(os.environ.get("CONDOR_REMOVE_EXE") or getattr(project_config, "HTCONDOR_REMOVE_EXE", DEFAULT_HTCONDOR_REMOVE_EXE))
 
 
+def htcondor_python_exe() -> str:
+    return str(os.environ.get("CONDOR_PYTHON_EXE") or getattr(project_config, "HTCONDOR_PYTHON_EXE", DEFAULT_HTCONDOR_PYTHON_EXE))
+
+
+def htcondor_executable_mode() -> str:
+    return str(
+        os.environ.get("CONDOR_EXECUTABLE_MODE")
+        or getattr(project_config, "HTCONDOR_EXECUTABLE_MODE", DEFAULT_HTCONDOR_EXECUTABLE_MODE)
+    ).strip().lower()
+
+
 def htcondor_poll_sec() -> float:
     return float(os.environ.get("CONDOR_POLL_SEC") or getattr(project_config, "HTCONDOR_POLL_SEC", DEFAULT_HTCONDOR_POLL_SEC))
 
@@ -103,7 +117,26 @@ def htcondor_run_as_owner() -> bool:
 
 
 def htcondor_requirements() -> str:
-    return str(getattr(project_config, "HTCONDOR_REQUIREMENTS", DEFAULT_HTCONDOR_REQUIREMENTS))
+    parts: list[str] = []
+    base = str(getattr(project_config, "HTCONDOR_REQUIREMENTS", DEFAULT_HTCONDOR_REQUIREMENTS)).strip()
+    if base:
+        parts.append(base)
+    allowed = _string_tuple(
+        os.environ.get("CONDOR_ALLOWED_MACHINES")
+        or os.environ.get("YADOT_HTCONDOR_ALLOWED_MACHINES")
+        or getattr(project_config, "HTCONDOR_ALLOWED_MACHINES", DEFAULT_HTCONDOR_ALLOWED_MACHINES)
+    )
+    excluded = _string_tuple(
+        os.environ.get("CONDOR_EXCLUDED_MACHINES")
+        or os.environ.get("YADOT_HTCONDOR_EXCLUDED_MACHINES")
+        or getattr(project_config, "HTCONDOR_EXCLUDED_MACHINES", DEFAULT_HTCONDOR_EXCLUDED_MACHINES)
+    )
+    if allowed:
+        choices = " || ".join(f'Machine =?= "{_classad_string(machine)}"' for machine in allowed)
+        parts.append(f"({choices})")
+    for machine in excluded:
+        parts.append(f'(Machine =!= "{_classad_string(machine)}")')
+    return " && ".join(parts)
 
 
 def _fresh_project_config():
@@ -133,3 +166,22 @@ def _as_bool(value: Any, fallback: Any = False) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _string_tuple(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or text.lower() in {"*", "all", "none"}:
+            return ()
+        return tuple(item.strip() for item in text.split(",") if item.strip())
+    try:
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    except TypeError:
+        text = str(value).strip()
+        return (text,) if text else ()
+
+
+def _classad_string(value: str) -> str:
+    return str(value).replace("\\", "\\\\").replace('"', '\\"')

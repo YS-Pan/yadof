@@ -9,11 +9,13 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 try:
+    from project.job_template import api as job_template_api
     from project.recorded_data import api as recorded_data_api
 except ImportError:  # Allows running as ``python tools/viewCost.py`` from project/.
     PROJECT_ROOT = Path(__file__).resolve().parents[1]
     if str(PROJECT_ROOT.parent) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT.parent))
+    from project.job_template import api as job_template_api
     from project.recorded_data import api as recorded_data_api
 
 
@@ -176,9 +178,15 @@ def build_rows(recorded_api=recorded_data_api, *, status: str | None = "complete
     return rows
 
 
-def objective_names(rows: Sequence[dict[str, object]]) -> list[str]:
+def objective_names(rows: Sequence[dict[str, object]], objective_api=job_template_api) -> list[str]:
     first_costs = rows[0]["costs"]
-    return [f"objective_{idx + 1}" for idx in range(len(first_costs))]  # type: ignore[arg-type]
+    objective_count = len(first_costs)  # type: ignore[arg-type]
+    get_names = getattr(objective_api, "get_objective_names", None)
+    if callable(get_names):
+        names = [str(name) for name in get_names()]
+        if len(names) == objective_count:
+            return names
+    return [f"objective_{idx + 1}" for idx in range(objective_count)]
 
 
 def is_pareto_efficient(costs) -> object:

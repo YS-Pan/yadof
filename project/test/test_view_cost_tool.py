@@ -70,6 +70,17 @@ def test_build_rows_uses_recorded_data_history():
     assert "Pareto front:" in summary
 
 
+def test_objective_names_use_job_template_names():
+    class FakeObjectiveApi:
+        @staticmethod
+        def get_objective_names():
+            return ("cost_alpha", "cost_beta")
+
+    rows = [{"costs": (0.5, 0.8)}]
+
+    assert viewCost.objective_names(rows, FakeObjectiveApi) == ["cost_alpha", "cost_beta"]
+
+
 def test_build_rows_prefers_individual_context_over_opt_metadata():
     fake_api = FakeRecordedDataApi(
         history=(("job_a", (0.1, 0.2), (0.5, 0.8)),),
