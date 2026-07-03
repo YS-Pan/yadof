@@ -3,7 +3,7 @@
 ## Core Concepts
 - Optimization variable: normalized in `optimize`, raw/unnormalized in `recorded_data`.
 - rawData: one or more `.npz` files produced by a workflow.
-- Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. The current HFSS task returns four minimization costs in `[0, 1]`.
+- Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. The current HFSS task returns three minimization costs in `[0, 1]`.
 - Job: one real evaluation sandbox created by `evaluate_manager`.
 - Individual metadata: job-local lifecycle JSON written by `workflow.py`, including the evaluation start/end times when the workflow reaches those points.
 - Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
@@ -34,6 +34,7 @@
 - `surrogate` historical error audits must use real model predictions rather than substituting true historical costs.
 - Exact-neighbor snapping or near-training-sample replacement is not part of the current surrogate contract and must not be added unless explicitly requested by the user.
 - Task-owned rawData importance weights may emphasize objective-relevant windows, but surrogate training must still retain full-field rawData coverage.
+- Current HFSS far-field rawData is stored as full-matrix data by default; objective cost calculation may select phi/theta/frequency windows from that matrix, but it must not make the workflow export only those windows unless a task intentionally requests trace diagnostics.
 - Failed records can exist and be inspected, but default optimization history uses completed records.
 - `evaluate_manager` may add runner diagnostics, but workflow-owned timing is read from the job folder before recording.
 - Current HFSS cost shaping follows the old huangzetao/fanyufei tanh-style soft objective mapping: goal-like values approach 0 and worst-threshold values approach 1.

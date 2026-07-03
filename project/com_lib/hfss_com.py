@@ -181,6 +181,17 @@ def _trace_contract(sd: Any, expression: str, requested_primary_sweep_variable: 
     data = _extract_expression_y(sd, expression)
     axes_all, axis_arrays_all, axis_units_all = _axis_bundle(sd)
     axis_lengths = {ax: int(axis_arrays_all[ax].size) for ax in axes_all}
+    primary = str(getattr(sd, "primary_sweep", None) or requested_primary_sweep_variable or "").strip()
+    if primary in axis_lengths and axis_lengths[primary] == int(data.size):
+        return {
+            "data": data.reshape((axis_lengths[primary],)),
+            "axes": [primary],
+            "axis_arrays": {primary: axis_arrays_all[primary]},
+            "axis_units": {primary: axis_units_all.get(primary, "")},
+            "primary_sweep_variable": primary,
+            "data_contract": "trace",
+            "source": "SolutionData trace data",
+        }
     if len(axes_all) > 1:
         shape_all = tuple(axis_lengths[ax] for ax in axes_all)
         if int(np.prod(shape_all, dtype=np.int64)) == int(data.size):
@@ -193,7 +204,6 @@ def _trace_contract(sd: Any, expression: str, requested_primary_sweep_variable: 
                 "data_contract": "grid",
                 "source": "SolutionData trace data",
             }
-    primary = str(getattr(sd, "primary_sweep", None) or requested_primary_sweep_variable or "").strip()
     axis_name = primary if primary in axis_lengths and axis_lengths[primary] == int(data.size) else None
     if axis_name is None:
         matches = [ax for ax in axes_all if axis_lengths[ax] == int(data.size)]
@@ -327,17 +337,22 @@ def _export_solution_data_npz(
         for k, v in variations.items()
     }
     is_far_field = str(report_category or "") == "Far Fields"
+    wants_trace_contract = bool(str(primary_sweep_variable or "").strip())
     sd = hfss.post.get_solution_data(
         expressions=expression,
         setup_sweep_name=setup_sweep_name,
         report_category=report_category,
         context=context,
         variations=vrs,
-        primary_sweep_variable=None if is_far_field else primary_sweep_variable,
+        primary_sweep_variable=primary_sweep_variable,
     )
     if sd is None or sd is False:
         raise RuntimeError(f"get_solution_data returned {sd!r} for {expression!r}")
-    contract = _full_matrix_contract(sd, expression) if is_far_field else _trace_contract(sd, expression, primary_sweep_variable)
+    contract = (
+        _full_matrix_contract(sd, expression)
+        if is_far_field and not wants_trace_contract
+        else _trace_contract(sd, expression, primary_sweep_variable)
+    )
     data = np.asarray(contract["data"], dtype=float)
     axis_names = list(contract["axes"])
     meta = {

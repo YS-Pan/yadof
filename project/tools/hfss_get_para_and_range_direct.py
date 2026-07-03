@@ -23,7 +23,7 @@ ROOT_DIR = _THIS_FILE.parents[1]  # .../tools/ -> repo root
 JOB_TEMPLATE_DIR = ROOT_DIR / "job_template"
 PARAM_FILE = JOB_TEMPLATE_DIR / "parameters_constraints.py"
 HISTORY_DIR = ROOT_DIR / "history"
-DESIGN_NAME = "HFSSDesign1"
+DESIGN_NAME = "HFSSDesign4"
 
 # Type alias matching parameters_constraints_class.py
 RangeElem = Union[float, tuple[float, float]]
