@@ -6,7 +6,7 @@ import traceback
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from hfss_com import analyze, save_modal, set_hfss_temp_directory, set_variables, solver_exit, solver_init
+from hfss_com import analyze, save_farField, save_modal, set_hfss_temp_directory, set_variables, solver_exit, solver_init
 from parameters_constraints import get_parameters
 from worker_misc import (
     bootstrap_home_dirs,
@@ -23,8 +23,25 @@ from worker_misc import (
 
 
 BASE_DIR = Path(__file__).resolve().parent
-PROJECT_PATTERN = "*.aedt"
-DESIGN_NAME = "HFSSDesign1"
+PROJECT_NAME = "Newchoke20260620"
+PROJECT_PATH = BASE_DIR / f"{PROJECT_NAME}.aedt"
+DESIGN_NAME = "HFSSDesign4"
+SETUP_NAME = "Setup1"
+SWEEP_NAME = "Sweep"
+S11_SOLUTION_NAME = f"{SETUP_NAME} : {SWEEP_NAME}"
+FAR_FIELD_SOLUTION_NAME = f"{SETUP_NAME} : LastAdaptive"
+AXIAL_RATIO_SOLUTION_NAME = f"{SETUP_NAME} : {SWEEP_NAME}"
+FAR_FIELD_CONTEXT = "Infinite Sphere1"
+
+PIN_STATE_VAR = "pinState"
+PIN_STATES = (1, 2, 3)
+
+S11_EXPR = "dB(S(1,1))"
+GAIN_LHCP_EXPR = "dB(RealizedGainLHCP)"
+AXIAL_RATIO_EXPR = "dB(AxialRatioValue)"
+TARGET_FREQ_GHZ = 2.44
+TARGET_PHI_DEG = 90.0
+
 RAW_DATA_DIR = BASE_DIR / "rawData"
 RAW_DATA_TRANSFER_ZIP = BASE_DIR / "rawData_outputs.zip"
 TEMP_DIR = BASE_DIR / "_tmp"
@@ -34,20 +51,18 @@ DEFAULT_JOB_CPUCORE = 6
 DEFAULT_PARALLEL_TASKS = 1
 DEFAULT_NON_GRAPHICAL = True
 
-JOB_CPUCORE = 6
+JOB_CPUCORE = env_int("YADOT_HFSS_JOB_CPUCORE", DEFAULT_JOB_CPUCORE, minimum=1)
 PARALLEL_TASKS = env_int("YADOT_HFSS_PARALLEL_TASKS", DEFAULT_PARALLEL_TASKS, minimum=1)
 NON_GRAPHICAL = env_bool("YADOT_HFSS_NON_GRAPHICAL", DEFAULT_NON_GRAPHICAL)
 
-MODAL_EXPRESSIONS = (
-    "dB(mag(S(1:3,3:1))+mag(S(1:3,3:2)))",
-    "dB(mag(S(3:1,2:3))+mag(S(3:2,2:3)))",
-    "dB(S(1:3,2:3))",
-    "dB(mag(S(1:3,4:1))+mag(S(1:3,4:2)))",
-    "dB(mag(S(3:1,4:1))+mag(S(3:1,4:2))+mag(S(3:2,4:1))+mag(S(3:2,4:2)))",
-)
-
 
 def _hfss_variables(variables: Mapping[str, float] | Sequence[float]) -> dict[str, str]:
+    """Format the current individual variables for HFSS.
+
+    Parameter names and units come from parameters_constraints.py. Values come
+    from the job input written by evaluate_manager for this individual.
+    """
+
     parameters = get_parameters()
     units = {parameter.name: str(getattr(parameter, "unit", "") or "") for parameter in parameters}
     if isinstance(variables, Mapping):
@@ -60,19 +75,58 @@ def _hfss_variables(variables: Mapping[str, float] | Sequence[float]) -> dict[st
     return {str(name): f"{float(value):.17g}{units.get(str(name), '')}" for name, value in values}
 
 
-def _start_hfss(project_path: Path, hfss_variables: Mapping[str, str]):
-    hfss_app, *_ = solver_init(projectName=str(project_path), designName=DESIGN_NAME, non_graphical=NON_GRAPHICAL)
+def _start_hfss(hfss_variables: Mapping[str, str]):
+    hfss_app, *_ = solver_init(projectName=str(PROJECT_PATH), designName=DESIGN_NAME, non_graphical=NON_GRAPHICAL)
     set_hfss_temp_directory(hfss_app, TEMP_DIR)
     set_variables(hfss_app, hfss_variables)
     return hfss_app
 
 
+def _save_pin_state_rawdata(hfss_app, pin_state: int) -> None:
+    set_variables(hfss_app, {PIN_STATE_VAR: str(int(pin_state))})
+    analyze(hfss_app, analyzeSetup=SETUP_NAME, CPUcores=JOB_CPUCORE, ParallelTasks=PARALLEL_TASKS)
+
+    save_modal(
+        hfss_app,
+        S11_EXPR,
+        variations={"Freq": ["All"]},
+        setup=S11_SOLUTION_NAME,
+        out_dir=str(RAW_DATA_DIR),
+        output_name=f"s11_pinState{pin_state}",
+        metadata={"pin_state": pin_state, "hfss_quantity": "s11"},
+    )
+    save_farField(
+        hfss_app,
+        GAIN_LHCP_EXPR,
+        context=FAR_FIELD_CONTEXT,
+        variations={
+            "Theta": ["All"],
+            "Phi": ["All"],
+            "Freq": [f"{TARGET_FREQ_GHZ:g}GHz"],
+        },
+        setup=FAR_FIELD_SOLUTION_NAME,
+        out_dir=str(RAW_DATA_DIR),
+        output_name=f"gain_lhcp_pinState{pin_state}",
+        metadata={"pin_state": pin_state, "hfss_quantity": "realized_gain_lhcp"},
+    )
+    save_farField(
+        hfss_app,
+        AXIAL_RATIO_EXPR,
+        context=FAR_FIELD_CONTEXT,
+        variations={
+            "Theta": ["All"],
+            "Phi": ["All"],
+            "Freq": ["All"],
+        },
+        setup=AXIAL_RATIO_SOLUTION_NAME,
+        out_dir=str(RAW_DATA_DIR),
+        output_name=f"axial_ratio_pinState{pin_state}",
+        metadata={"pin_state": pin_state, "hfss_quantity": "axial_ratio"},
+    )
+
+
 def main() -> None:
     hfssApp = None
-    project_matches = sorted(BASE_DIR.glob(PROJECT_PATTERN))
-    if not project_matches:
-        raise FileNotFoundError(f"no AEDT project found under {BASE_DIR}")
-    project_path = project_matches[0]
     started_at = now_text()
     failed = False
 
@@ -96,15 +150,10 @@ def main() -> None:
     #========================================================Simulation Workflow Begin========================================================
     try:
         hfss_variables = _hfss_variables(load_variables(BASE_DIR))
-        hfssApp = _start_hfss(project_path, hfss_variables)
-        analyze(hfssApp, CPUcores=JOB_CPUCORE, ParallelTasks=PARALLEL_TASKS)
-        for expression in MODAL_EXPRESSIONS:
-            save_modal(
-                hfssApp,
-                expression,
-                variations={"Freq": ["All"]},
-                out_dir=str(RAW_DATA_DIR),
-            )
+        hfssApp = _start_hfss(hfss_variables)
+        for pin_state in PIN_STATES:
+            _save_pin_state_rawdata(hfssApp, pin_state)
+
         write_rawdata_transfer_zip(RAW_DATA_DIR, RAW_DATA_TRANSFER_ZIP)
         write_json(
             INDIVIDUAL_METADATA,
@@ -138,7 +187,7 @@ def main() -> None:
     finally:
         try:
             if hfssApp is not None:
-                solver_exit(hfssApp, save_project=True, cleanup_results=True, project_path=project_path)
+                solver_exit(hfssApp, save_project=True, cleanup_results=True, project_path=PROJECT_PATH)
         except Exception as cleanup_exc:
             if not failed:
                 write_json(
@@ -157,6 +206,7 @@ def main() -> None:
                 )
                 raise
             print(f"WARNING: solver_exit failed during cleanup: {cleanup_exc}", file=sys.stderr, flush=True)
+        shutil.rmtree(PROJECT_PATH.with_name(PROJECT_PATH.stem + ".aedtresults"), ignore_errors=True)
         shutil.rmtree(TEMP_DIR, ignore_errors=True)
     #========================================================Simulation Workflow End========================================================
 

@@ -3,7 +3,7 @@ setlocal EnableExtensions
 
 rem User-configurable launch constants.
 set "CONDA_ENV_NAME=yadof"
-set "GENERATION_COUNT=4"
+set "GENERATION_COUNT=50"
 set "START_GENERATION=0"
 
 cd /d "%~dp0"
