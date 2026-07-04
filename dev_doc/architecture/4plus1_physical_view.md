@@ -60,7 +60,7 @@ the same setting as the submit-side `JOBS_DIR`.
 - Local tests should not require HTCondor or simulator software.
 - Distributed tests should mock HTCondor command execution unless they are explicit environment smoke tests.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
-- The current default task requires PyAEDT/AEDT for real workflow execution; default tests should skip that smoke path unless explicitly enabled.
+- Real workflow smoke tests may require task-specific simulator software such as PyAEDT/AEDT; default tests should skip those paths unless explicitly enabled.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
 - `created_at` is not part of the individual record contract; job creation time can be inferred from time-based job folder names when needed.
 - `recorded_data` JSONL metadata writes and rawData archive updates must stay atomic because distributed finalization may introduce more concurrency.

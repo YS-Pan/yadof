@@ -11,6 +11,8 @@ below before changing code or documentation. The canonical entry point is
 
 When collecting project context, read these files in full:
 
+- `../user_doc/README.md`, then follow its reading instructions for user-facing
+  task setup context.
 - `spec 20260502.md`
 - every file in `architecture/`
 - `reference_map.md`
@@ -21,6 +23,11 @@ Read `toDo/` in full during the first `dev_doc` pass even when the user's curren
 instruction appears unrelated to every pending item. These files describe work that
 has not been done yet, and their purpose is to help the AI choose a technical route
 that will not fight likely future goals.
+
+Reading `dev_doc/` must include the `user_doc/README.md` pass above because framework
+changes can affect how users and AI assistants prepare tasks. Reading `user_doc/`
+alone must not trigger a `dev_doc/` pass; user-facing task setup docs are allowed to
+stand on their own.
 
 Read `blueprints/` in two passes:
 
@@ -54,6 +61,16 @@ documents from tools or scripts, preserve UTF-8 and avoid default-encoding comma
 that depend on the current Windows code page.
 
 ## Document Roles
+
+### `../user_doc/README.md`
+
+`user_doc/` is the companion user-facing documentation home. It explains how users
+and AI assistants should prepare task files, use `_com.py` adapters, write
+`workflow.py` and `calc_cost.py`, edit run config, smoke-test, and launch
+optimization.
+
+Read it and follow its instructions whenever collecting `dev_doc` context. Do not
+duplicate detailed user instructions here when they already belong under `user_doc/`.
 
 ### `spec 20260502.md`
 

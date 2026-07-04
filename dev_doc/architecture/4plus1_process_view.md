@@ -78,7 +78,7 @@ sequenceDiagram
 
 ## Failure Handling
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
-- Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; the current HFSS workflow also records child/AEDT process metadata for cleanup. Local runner adds return code, stdout/stderr tails, and rawData presence.
+- Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; simulator workflows may also record child-process metadata for cleanup. Local runner adds return code, stdout/stderr tails, and rawData presence.
 - Submit failure: HTCondor submission errors are captured as per-job `error` metadata. The project does not attempt to repair the local HTCondor installation.
 - Timeout: local runner terminates the process tree; HTCondor runner best-effort removes the submitted cluster id. Both record status `timeout` and preserve any returned job-local metadata.
 - Record failure: evaluation continues; returned row becomes `inf`.

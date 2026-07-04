@@ -35,7 +35,7 @@ flowchart TD
 - `evaluate_manager`: job preparation, local execution, optional HTCondor submission, workflow metadata collection, failure isolation, recording handoff.
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
 - `com_lib`: optional holding area for simulator/custom-code adapter source/reference copies. Files here are not runtime dependencies; when a task needs one, the user copies it into `job_template` so prepared jobs stay self-contained.
-- Current default `job_template`: HFSS/PyAEDT `Newchoke20260620.aedt` rawData generation plus three bounded reference objectives calculated after recording.
+- `job_template`: active task files for rawData generation plus task-owned objective costs calculated after recording. The framework does not fix simulator filename, rawData names, objective names, or objective count.
 - `recorded_data`: durable real-evaluation archive and dynamic historical views.
 - `surrogate`: rawData-first conditional INR ensemble training, audited rawData prediction, and ensemble member min/max cost interval generation.
 - `tools`: optional user workflows for visualization and maintenance.

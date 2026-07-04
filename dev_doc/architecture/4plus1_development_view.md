@@ -14,6 +14,17 @@ dev_doc/
   change_records/
   obsolete/
 
+user_doc/
+  README.md
+  optimization_workflow.md
+  workflow_typical_patterns.md
+  calc_cost_typical_patterns.md
+  com_lib/
+    README.md
+    hfss_com.md
+    test_com.md
+  config_and_run.md
+
 project/
   optimize/
   evaluate_manager/
@@ -54,6 +65,9 @@ project/
 
 ## Documentation Strategy
 - `dev_doc/README.md` is the documentation entry point and writing guide.
+- `user_doc/README.md` is the user-facing task documentation entry point. A
+  `dev_doc` pass must read it and follow its guide; a `user_doc` pass must not
+  read `dev_doc` unless the user separately asks for framework development context.
 - `dev_doc/spec 20260502.md` is the highest-level product and architecture contract.
 - `dev_doc/architecture/` captures current design views and must be read in full for context.
 - `dev_doc/blueprints/` captures generative module intent and non-obvious techniques; list all blueprint files first, then read relevant files in full.
@@ -62,4 +76,6 @@ project/
 - `dev_doc/toDo/` captures pending future work and must be read in full during the first `dev_doc` pass.
 - `dev_doc/change_records/` captures what changed and why; do not read it by default.
 - `dev_doc/obsolete/` is archival, including completed toDo handoffs, and should not be read by default.
+- User-facing workflow, adapter, cost, config, smoke-test, and launch instructions
+  belong under `user_doc/`; avoid duplicating those details in `dev_doc`.
 - After each code change, update relevant architecture and blueprint files, add a change record, and update terminology when a concept was misunderstood or a non-obvious term was introduced.

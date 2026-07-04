@@ -61,9 +61,9 @@ flowchart LR
 ```
 
 - `workflow.py`: raw variable input to flat rawData output plus workflow-owned `individual_metadata.json` lifecycle timestamps.
-- `calc_cost.py`: HFSS rawData to three bounded reference objective costs plus task-owned rawData importance weights for surrogate training. It consumes full-matrix far-field rawData by selecting objective phi/theta/frequency windows at calculation time.
+- `calc_cost.py`: task-owned rawData-to-cost logic plus optional rawData importance weights for surrogate training. It decides the current objective names/count and may select objective-relevant windows from richer rawData at calculation time.
 - `rawdata_contract.py`: `.npz` schema validation.
-- `hfss_com.py`: current HFSS/PyAEDT simulator adapter copied into real jobs because it lives in `job_template`; `project/com_lib/hfss_com.py` keeps a source/reference copy.
+- `hfss_com.py`: optional HFSS/PyAEDT simulator adapter. A workflow can copy it into `job_template` for active use, while `project/com_lib/hfss_com.py` keeps a source/reference copy.
 - `project/com_lib/test_com.py`: retained pure-Python simulator stand-in; it must be copied into `job_template` before a workflow can use it.
 
 ## Recorded Data Components

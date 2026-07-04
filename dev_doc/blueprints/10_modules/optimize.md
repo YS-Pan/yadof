@@ -13,7 +13,7 @@
 - `gpsaf_phases.py` implements surrogate alpha/beta pooled NSGA-III candidate phases, an exploration quota that bypasses surrogate selection, uncertainty diagnostics, and graceful fallback when surrogate calls fail.
 - `gpsaf_misc.py` imports public APIs dynamically, reads historical optimization results, calls `evaluate_manager.api` with run/generation context, and keeps cost comparison helpers small.
 - `problem_info.py` derives variable count, objective count, and objective names from `job_template.api`.
-- With the current default `job_template`, the optimizer sees three objectives and therefore uses the multi-objective pymoo path.
+- The optimizer selects single-objective or multi-objective behavior from the objective count reported by the active `job_template`.
 
 ## I/O Format
 - Input population rows are normalized floats in `[0, 1]`.

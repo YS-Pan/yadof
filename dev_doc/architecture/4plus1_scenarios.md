@@ -5,9 +5,9 @@
 2. User calls `project.optimize.api.run_one_generation()`.
 3. `optimize` has no history, so it samples normalized candidates.
 4. `evaluate_manager` prepares jobs with run/generation context and runs `workflow.py`.
-5. `workflow.py` writes each individual's start/end metadata inside the job folder and, for the current task, uses the copied HFSS adapter to write flat S11/gain rawData.
+5. `workflow.py` writes each individual's start/end metadata inside the job folder and uses any active copied adapter files to write task-specific flat rawData.
 6. `recorded_data` stores raw variables, rawData, compact metadata, optimization index, and generation index.
-7. Three bounded costs are calculated dynamically and returned to `optimize`.
+7. The current task costs are calculated dynamically and returned to `optimize`.
 
 ## Scenario 2: Resume From History
 1. `optimize` asks `recorded_data` for historical optimization results.

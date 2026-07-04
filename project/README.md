@@ -21,9 +21,9 @@ not stored as a durable source file.
   Distributed/HTCondor execution, timeout/failure isolation, and handoff to
   `recorded_data`.
 - `job_template/`: task-specific parameter definitions, workflow, rawData
-  contract, simulator model files, and rawData-to-cost logic. The current
-  template uses `Metal_recon_ant.aedt` and returns four bounded HFSS-derived
-  costs in `[0, 1]`.
+  contract, optional simulator/input files, and rawData-to-cost logic. The
+  active template decides which rawData items and objective costs exist for a
+  given optimization task.
 - `com_lib/`: optional adapter staging/reference files, including reference
   copies such as `hfss_com.py` and `test_com.py`. Jobs do not import this
   directory directly; copy a needed com file into `job_template/` before the

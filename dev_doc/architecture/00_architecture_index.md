@@ -47,7 +47,25 @@ dev_doc/
   obsolete/
 ```
 
+The user-facing documentation home is:
+
+```text
+user_doc/
+  README.md
+  optimization_workflow.md
+  workflow_typical_patterns.md
+  calc_cost_typical_patterns.md
+  com_lib/
+    README.md
+    hfss_com.md
+    test_com.md
+  config_and_run.md
+```
+
 `spec 20260502.md`, `architecture/`, `reference_map.md`, and `terminology.md` are
 full-read context sources. `toDo/` is also full-read so pending future goals can shape
 current implementation choices. `blueprints/` is listed first and read selectively.
 `change_records/` is historical and `obsolete/` is archival; neither is read by default.
+`dev_doc` context gathering also starts with `user_doc/README.md` and follows its
+reading guide for user-facing task setup context. A `user_doc`-only pass does not
+read `dev_doc`.

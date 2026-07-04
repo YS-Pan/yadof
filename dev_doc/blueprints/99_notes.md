@@ -10,7 +10,7 @@
 
 ## Current Implementation Notes
 - Local mode is implemented and remains the default; distributed/HTCondor is implemented as an optional backend that captures submit/runtime failures without repairing the host HTCondor installation.
-- Current runnable jobs use `project/job_template/hfss_com.py` with `job_template/Metal_recon_ant.aedt`; `project/com_lib/hfss_com.py` is the reference/source copy, and `project/com_lib/test_com.py` remains available only as a synthetic adapter reference.
+- Runnable jobs use whichever task files and active adapter files are placed in `project/job_template/`; `project/com_lib/hfss_com.py` is the HFSS reference/source copy, and `project/com_lib/test_com.py` remains available only as a synthetic adapter reference.
 - The current surrogate is a conditional INR rawData deep ensemble adapted from the `20260418 shorten` direction while preserving the v3 rawData-first public API.
 - The v3 surrogate keeps the small `api.py` surface from the earlier implementation, but `runtime.py` now delegates neural model construction/training/prediction to `surrogate/modeling.py`.
 - The current optimizer uses pymoo GA for single-objective runs and pymoo NSGA-III reference-direction mechanics for multi-objective runs inside a GPSAF-shaped flow.

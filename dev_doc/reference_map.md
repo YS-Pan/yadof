@@ -17,7 +17,7 @@ For the whole project, the primary references are:
 - `reference/20260418 shorten/prompt/_module.md`
 - `reference/20260319 huangzetao/job_template/workflow.py`
 - `reference/20260319 huangzetao/job_template/hfss_com.py`
-- `reference/20260319 huangzetao/job_template/Metal_recon_ant.aedt`
+- `reference/20260319 huangzetao/job_template/` historical simulator task assets
 - `reference/htcondor_windows_debug_reference.md`
 - `reference/GPSAF A Generalized Probabilistic Surrogate-Assisted Framework for Constrained Single- and Multi-objective Optimization.tex`
 
@@ -93,12 +93,12 @@ Closest reference files:
 - `reference/20260124 combined/job_template/hfss_com.py`
 - `reference/20260319 huangzetao/job_template/workflow.py`
 - `reference/20260319 huangzetao/job_template/hfss_com.py`
-- `reference/20260319 huangzetao/job_template/Metal_recon_ant.aedt`
+- `reference/20260319 huangzetao/job_template/` historical simulator task assets
 - `reference/20260319 huangzetao/parameters_constraints.py`
 - `reference/20260418 shorten/code/problem.py`
 - `reference/20260418 shorten/code/objectives.py`
 
-Natural-language mapping: `job_template` now uses the huangzetao `Metal_recon_ant` HFSS task as its closest runnable reference, while retaining the fanyufei worker/workflow and HFSS-adapter lineage. V3 still splits workflow and cost more strictly than the reference: workflow produces flat schema-valid rawData, and `calc_cost.py` computes the four old objective costs later. The shorten `problem.py` and `objectives.py` files remain historical references for synthetic problem outputs.
+Natural-language mapping: `job_template` uses the huangzetao HFSS files as the closest historical task reference, while active task files under `project/job_template/` are intentionally replaceable. V3 splits workflow and cost more strictly than the references: workflow produces flat schema-valid rawData, and `calc_cost.py` interprets that rawData into the current task objective tuple. The shorten `problem.py` and `objectives.py` files remain historical references for synthetic problem outputs.
 
 ## `project/recorded_data`
 

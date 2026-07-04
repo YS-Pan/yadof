@@ -3,7 +3,7 @@
 ## Core Concepts
 - Optimization variable: normalized in `optimize`, raw/unnormalized in `recorded_data`.
 - rawData: one or more `.npz` files produced by a workflow.
-- Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. The current HFSS task returns three minimization costs in `[0, 1]`.
+- Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. Objective names, count, physical meaning, and numeric scale are task-specific.
 - Job: one real evaluation sandbox created by `evaluate_manager`.
 - Individual metadata: job-local lifecycle JSON written by `workflow.py`, including the evaluation start/end times when the workflow reaches those points.
 - Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
