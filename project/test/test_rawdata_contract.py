@@ -122,6 +122,19 @@ def test_validate_rawdata_item_rejects_missing_metadata(tmp_path):
         validate_rawdata_item(path)
 
 
+def test_validate_rawdata_item_rejects_legacy_meta_key_without_metadata(tmp_path):
+    path = tmp_path / "legacy_meta_only.npz"
+    np.savez(
+        path,
+        values=np.asarray([1.0]),
+        meta=json.dumps({"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "legacy", "shape": [1]}),
+    )
+
+    with pytest.raises(RawDataContractError, match="metadata") as exc_info:
+        validate_rawdata_item(path)
+    assert exc_info.value.error_type == "missing_metadata"
+
+
 def test_validate_rawdata_item_rejects_missing_shape(tmp_path):
     path = _write_npz(
         tmp_path / "bad_missing_shape.npz",
@@ -265,6 +278,43 @@ def test_rawdata_view_range_indices_support_unit_conversion(tmp_path):
     indices = view.range_indices("Freq", 2.4, 2.48, converter=lambda values, _unit: values * 1e-3)
 
     assert indices.tolist() == [1, 2]
+
+
+def test_hfss_export_writes_only_metadata_array(tmp_path):
+    from project.job_template import hfss_com
+
+    class FakeSolutionData:
+        primary_sweep = "Freq"
+        intrinsics = {"Freq": ["2.40GHz", "2.48GHz"]}
+        units_sweeps = {"Freq": "GHz"}
+
+        @staticmethod
+        def data_real(_expression):
+            return np.asarray([-12.0, -10.0], dtype=float)
+
+    class FakePost:
+        @staticmethod
+        def get_solution_data(**_kwargs):
+            return FakeSolutionData()
+
+    class FakeHfss:
+        post = FakePost()
+
+    path = hfss_com.save_modal(
+        FakeHfss(),
+        "dB(S(1,1))",
+        setup="Setup1 : Sweep",
+        out_dir=str(tmp_path),
+        output_name="s11_test",
+    )
+
+    with np.load(path, allow_pickle=False) as data:
+        assert "metadata" in data.files
+        assert "meta" not in data.files
+        metadata = json.loads(str(data["metadata"].item()))
+
+    assert metadata["rawdata_name"] == "s11_test"
+    assert metadata["shape"] == [2]
 
 
 def test_rawdata_unit_converters():

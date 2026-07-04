@@ -111,6 +111,19 @@ def test_build_rows_prefers_individual_context_over_opt_metadata():
     assert rows[0]["job_static_hash"] == "hash_a"
 
 
+def test_plot_scaling_helpers_keep_dense_points_readable_and_axes_aligned():
+    assert viewCost._scatter_alpha(1000) == pytest.approx(0.6)
+    assert viewCost._scatter_alpha(64000) == pytest.approx(0.15)
+
+    left_ylim = (0.0, 1.05)
+    combined = (0.5, 1.0, 2.0)
+    right_ylim = viewCost._combined_axis_ylim(combined, left_ylim)
+    left_position = (1.0 - left_ylim[0]) / (left_ylim[1] - left_ylim[0])
+    right_position = (max(combined) - right_ylim[0]) / (right_ylim[1] - right_ylim[0])
+
+    assert right_position == pytest.approx(left_position)
+
+
 def test_build_rows_reports_empty_recorded_data():
     fake_api = FakeRecordedDataApi(())
 

@@ -56,7 +56,7 @@ def test_condor_submit_file_uses_direct_python_executable_and_rawdata_contract(t
     assert "APPDATA=._appdata" in text
     assert "LOCALAPPDATA=._localappdata" in text
     assert "TEMP=._tmp" in text
-    assert "YADOT_HFSS_NON_GRAPHICAL=1" in text
+    assert "YADOF_HFSS_NON_GRAPHICAL=1" in text
     assert "ANSYSLMD_LICENSE_FILE=1055@localhost" in text
     assert f"request_cpus = {project_config.HTCONDOR_REQUEST_CPUS}" in text
     assert f"request_memory = {project_config.HTCONDOR_REQUEST_MEMORY}" in text
@@ -158,8 +158,8 @@ def test_condor_submit_file_can_use_workflow_executable_opt_in(tmp_path, monkeyp
 def test_condor_requirements_can_be_relaxed_or_exclude_workers(monkeypatch):
     from project.evaluate_manager import config
 
-    monkeypatch.setenv("YADOT_HTCONDOR_ALLOWED_MACHINES", "all")
-    monkeypatch.setenv("YADOT_HTCONDOR_EXCLUDED_MACHINES", "DESKTOP-A2096,DESKTOP-A2093")
+    monkeypatch.setenv("YADOF_HTCONDOR_ALLOWED_MACHINES", "all")
+    monkeypatch.setenv("YADOF_HTCONDOR_EXCLUDED_MACHINES", "DESKTOP-A2096,DESKTOP-A2093")
 
     requirements = config.htcondor_requirements()
 

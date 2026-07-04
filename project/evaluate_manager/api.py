@@ -124,7 +124,7 @@ def _evaluate_population_local(
     if worker_count <= 1 or len(population_rows) <= 1:
         outcomes = [evaluate_one(index, row) for index, row in enumerate(population_rows)]
     else:
-        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="yadot-local-eval") as executor:
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="yadof-local-eval") as executor:
             futures = {
                 executor.submit(evaluate_one, index, row): (index, row)
                 for index, row in enumerate(population_rows)
@@ -493,5 +493,5 @@ def _now_text() -> str:
 
 
 def _progress(message: str) -> None:
-    if str(os.environ.get("YADOT_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
+    if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
         print(f"[yadof] {message}", flush=True)

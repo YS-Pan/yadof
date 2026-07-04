@@ -1,4 +1,4 @@
-# yadot project v3
+# yadof project v3
 
 `project/` contains the v3 modular optimization framework described by
 `../spec 20260502.md`.
@@ -64,12 +64,12 @@ pytest -q
 ```
 
 The real HFSS local-pipeline smoke test is skipped by default so ordinary test
-runs do not launch AEDT. Set `YADOT_RUN_HFSS_TESTS=1` when you intentionally
+runs do not launch AEDT. Set `YADOF_RUN_HFSS_TESTS=1` when you intentionally
 want to run that smoke path on a machine with PyAEDT/AEDT configured.
 
 ```powershell
-$env:YADOT_RUN_HFSS_TESTS = '1'
-$env:YADOT_HFSS_SMOKE_TIMEOUT_SEC = '5400'
+$env:YADOF_RUN_HFSS_TESTS = '1'
+$env:YADOF_HFSS_SMOKE_TIMEOUT_SEC = '5400'
 pytest -q project\test\test_real_local_pipeline.py
 ```
 

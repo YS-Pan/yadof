@@ -36,7 +36,7 @@
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
 - The Windows HTCondor submit pattern uses an explicit Python executable because Windows workers cannot reliably execute `.py` payloads directly under HTCondor. Keep `run_as_owner = False` and `load_profile = True` unless the user deliberately changes identity policy.
-- `YADOT_PROGRESS=1` enables coarse console progress for long distributed runs without making public API calls noisy by default.
+- `YADOF_PROGRESS=1` enables coarse console progress for long distributed runs without making public API calls noisy by default.
 
 ## Mutability Profile
 - Local execution details and HTCondor backend wiring may change.

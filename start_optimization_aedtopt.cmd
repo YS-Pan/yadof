@@ -63,10 +63,10 @@ if errorlevel 1 (
     goto :Fail
 )
 
-set "YADOT_GENERATIONS=%GENERATION_COUNT%"
-set "YADOT_START_GENERATION=%START_GENERATION%"
-set "YADOT_PROGRESS=1"
-set "YADOT_FAIL_ON_ALL_INF=1"
+set "YADOF_GENERATIONS=%GENERATION_COUNT%"
+set "YADOF_START_GENERATION=%START_GENERATION%"
+set "YADOF_PROGRESS=1"
+set "YADOF_FAIL_ON_ALL_INF=1"
 python -u "%~dp0start_optimization_from_config.py"
 set "RC=%errorlevel%"
 if not "%RC%"=="0" (

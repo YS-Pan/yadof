@@ -379,7 +379,6 @@ def _export_solution_data_npz(
     save_kw = {
         "data": data,
         "metadata": json.dumps(meta, ensure_ascii=True, default=str),
-        "meta": json.dumps(meta, ensure_ascii=True, default=str),
     }
     for ax in contract["axes"]:
         save_kw[f"axis_{ax}"] = np.asarray(contract["axis_arrays"][ax], dtype=float)

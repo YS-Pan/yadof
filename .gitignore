@@ -18,6 +18,5 @@
 /project/tools/cost_*.png
 /project/tools/time_*.png
 /project/test/_pytest_tmp*/
-/reference/*
-!/reference/how_to_create_new_project.md
 /obsolete/
+/temp/

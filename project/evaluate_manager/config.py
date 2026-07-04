@@ -123,12 +123,12 @@ def htcondor_requirements() -> str:
         parts.append(base)
     allowed = _string_tuple(
         os.environ.get("CONDOR_ALLOWED_MACHINES")
-        or os.environ.get("YADOT_HTCONDOR_ALLOWED_MACHINES")
+        or os.environ.get("YADOF_HTCONDOR_ALLOWED_MACHINES")
         or getattr(project_config, "HTCONDOR_ALLOWED_MACHINES", DEFAULT_HTCONDOR_ALLOWED_MACHINES)
     )
     excluded = _string_tuple(
         os.environ.get("CONDOR_EXCLUDED_MACHINES")
-        or os.environ.get("YADOT_HTCONDOR_EXCLUDED_MACHINES")
+        or os.environ.get("YADOF_HTCONDOR_EXCLUDED_MACHINES")
         or getattr(project_config, "HTCONDOR_EXCLUDED_MACHINES", DEFAULT_HTCONDOR_EXCLUDED_MACHINES)
     )
     if allowed:
@@ -142,7 +142,7 @@ def htcondor_requirements() -> str:
 def _fresh_project_config():
     try:
         config_path = Path(project_config.__file__)
-        spec = importlib.util.spec_from_file_location("_yadot_fresh_project_config", config_path)
+        spec = importlib.util.spec_from_file_location("_yadof_fresh_project_config", config_path)
         if spec is None or spec.loader is None:
             return project_config
         module = importlib.util.module_from_spec(spec)

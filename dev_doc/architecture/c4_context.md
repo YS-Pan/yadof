@@ -1,19 +1,19 @@
 # C4 Context
 
 ## Scope
-`yadot` is a local-first optimization framework for expensive simulation workflows. It coordinates optimization, job execution, rawData persistence, surrogate training, and optional user tools.
+`yadof` is a local-first optimization framework for expensive simulation workflows. It coordinates optimization, job execution, rawData persistence, surrogate training, and optional user tools.
 
 ## Context Diagram
 
 ```mermaid
 flowchart LR
-    User["User / researcher"] -->|edits task files and config| Yadot["yadot v3 project"]
-    User -->|launches tests, optimization, tools| Yadot
-    Yadot -->|runs workflow locally| Python["Local Python runtime"]
-    Yadot -->|optional distributed jobs| HTCondor["HTCondor cluster"]
-    Yadot -->|future real simulations| Simulator["Simulator adapters: HFSS, Maxwell, TwinBuilder, custom Python"]
-    Yadot -->|reads/writes| FS["Workspace filesystem: jobs, recorded_data, surrogate checkpoints"]
-    Tools["Optional plotting / maintenance tools"] -->|public APIs| Yadot
+    User["User / researcher"] -->|edits task files and config| Yadof["yadof v3 project"]
+    User -->|launches tests, optimization, tools| Yadof
+    Yadof -->|runs workflow locally| Python["Local Python runtime"]
+    Yadof -->|optional distributed jobs| HTCondor["HTCondor cluster"]
+    Yadof -->|future real simulations| Simulator["Simulator adapters: HFSS, Maxwell, TwinBuilder, custom Python"]
+    Yadof -->|reads/writes| FS["Workspace filesystem: jobs, recorded_data, surrogate checkpoints"]
+    Tools["Optional plotting / maintenance tools"] -->|public APIs| Yadof
 ```
 
 ## External Actors

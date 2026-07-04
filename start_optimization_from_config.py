@@ -19,8 +19,8 @@ def _bool_env(name: str) -> bool:
 
 
 def main() -> int:
-    generations = _int_env("YADOT_GENERATIONS", int(getattr(config, "OPTIMIZE_GENERATIONS", 1)))
-    start_generation = _int_env("YADOT_START_GENERATION", int(getattr(config, "OPTIMIZE_START_GENERATION", 0)))
+    generations = _int_env("YADOF_GENERATIONS", int(getattr(config, "OPTIMIZE_GENERATIONS", 1)))
+    start_generation = _int_env("YADOF_START_GENERATION", int(getattr(config, "OPTIMIZE_START_GENERATION", 0)))
 
     print("project config:", config.__file__, flush=True)
     print("evaluation mode:", config.EVALUATION_MODE, flush=True)
@@ -47,7 +47,7 @@ def main() -> int:
             f"costs={result.costs[:2]}",
             flush=True,
         )
-        if _bool_env("YADOT_FAIL_ON_ALL_INF") and _all_inf(result.costs):
+        if _bool_env("YADOF_FAIL_ON_ALL_INF") and _all_inf(result.costs):
             _print_recent_job_failures(Path(config.JOBS_DIR))
             raise RuntimeError(
                 f"generation {result.generation_index} produced no finite cost rows; "

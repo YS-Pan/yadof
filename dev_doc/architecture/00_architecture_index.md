@@ -1,6 +1,6 @@
 # Architecture Index
 
-This folder describes the v3 `yadot` architecture from multiple viewpoints. It is
+This folder describes the v3 `yadof` architecture from multiple viewpoints. It is
 part of the documentation home under `dev_doc/`.
 
 ## Reading Policy

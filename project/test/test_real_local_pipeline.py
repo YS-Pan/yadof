@@ -6,8 +6,8 @@ import pytest
 
 
 def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkeypatch):
-    if os.environ.get("YADOT_RUN_HFSS_TESTS") != "1":
-        pytest.skip("requires PyAEDT/AEDT; set YADOT_RUN_HFSS_TESTS=1 for a real HFSS smoke test")
+    if os.environ.get("YADOF_RUN_HFSS_TESTS") != "1":
+        pytest.skip("requires PyAEDT/AEDT; set YADOF_RUN_HFSS_TESTS=1 for a real HFSS smoke test")
 
     from project.evaluate_manager.api import evaluate_population
     from project.job_template import api as job_template_api
@@ -25,7 +25,7 @@ def test_real_local_pipeline_records_rawdata_without_cost_files(tmp_path, monkey
     costs = evaluate_population(
         population,
         jobs_dir=jobs_dir,
-        timeout_sec=float(os.environ.get("YADOT_HFSS_SMOKE_TIMEOUT_SEC", "1800")),
+        timeout_sec=float(os.environ.get("YADOF_HFSS_SMOKE_TIMEOUT_SEC", "1800")),
         run_id="pytest_run",
         optimization_index=4,
         generation_index=5,

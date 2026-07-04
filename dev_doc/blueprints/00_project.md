@@ -1,7 +1,7 @@
-# Prompt: yadot modular optimization framework
+# Prompt: yadof modular optimization framework
 
 ## Intent
-- Build the v3 `yadot` framework as a modular, recoverable optimization system under `project/`.
+- Build the v3 `yadof` framework as a modular, recoverable optimization system under `project/`.
 - Merge the mature job orchestration and recording ideas from `reference/20260403 fanyufei` with the surrogate-assisted optimization ideas from `reference/20260418 shorten`.
 - Keep the central modeling chain as `normalized variables -> rawData -> cost`, where cost is always derived from rawData through the current `job_template/calc_cost.py`.
 - Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and later local/distributed execution backends should not force a rewrite of the core optimizer.

@@ -593,5 +593,5 @@ def _condor_bool(value: bool) -> str:
 
 
 def _progress(message: str) -> None:
-    if str(os.environ.get("YADOT_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
+    if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
         print(f"[yadof] {message}", flush=True)

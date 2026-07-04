@@ -23,6 +23,8 @@ TOOLS_DIR = Path(__file__).resolve().parent
 MAX_VISIBLE_PARETO = 10
 TREND_LINE_ALPHA = 0.25
 TREND_LINE_WIDTH = 6.0
+SCATTER_ALPHA = 0.6
+MIN_SCATTER_ALPHA = 0.15
 OPT_LINE_COLOR = "black"
 HASH_LINE_COLOR = "#FFAA00"
 PLOT_COLORS = ["#FF0000", "#FFAA00", "#58A500", "#00BFE9", "#2000AA", "#960096", "#808080"]
@@ -249,6 +251,33 @@ def _hash_change_rows(rows: Sequence[dict[str, object]]) -> list[float]:
     return starts
 
 
+def _scatter_alpha(row_count: int, *, threshold: int = 1000) -> float:
+    row_count = max(1, int(row_count))
+    if row_count <= threshold:
+        return SCATTER_ALPHA
+    return max(MIN_SCATTER_ALPHA, SCATTER_ALPHA * math.sqrt(float(threshold) / float(row_count)))
+
+
+def _combined_axis_ylim(combined, left_ylim: tuple[float, float]) -> tuple[float, float]:
+    import numpy as np
+
+    combined_values = np.asarray(combined, dtype=float)
+    combined_min = min(0.0, float(np.min(combined_values)) * 1.05)
+    combined_max = max(0.0, float(np.max(combined_values)))
+    left_min, left_max = (float(left_ylim[0]), float(left_ylim[1]))
+    if not math.isfinite(left_min) or not math.isfinite(left_max) or left_max <= left_min:
+        return combined_min, max(combined_max * 1.05, 1.0)
+
+    one_position = (1.0 - left_min) / (left_max - left_min)
+    if one_position <= 0.0:
+        return combined_min, max(combined_max * 1.05, 1.0)
+    if one_position >= 1.0:
+        return combined_min, max(combined_max, combined_min + 1e-12)
+
+    axis_max = combined_min + (combined_max - combined_min) / one_position
+    return combined_min, max(axis_max, combined_max, combined_min + 1e-12)
+
+
 def _table_lines(headers: Sequence[str], rows: Sequence[Sequence[str]], right_align: Sequence[bool]) -> list[str]:
     widths = [len(text) for text in headers]
     for row in rows:
@@ -335,7 +364,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
 
     threshold = 1000
     markersize = 6.0 if len(rows) <= threshold else max(1.0, 6.0 * math.sqrt(threshold / len(rows)))
-    alpha = 0.6 if len(rows) <= threshold else max(0.3, 0.6 * math.sqrt(threshold / len(rows)))
+    alpha = _scatter_alpha(len(rows), threshold=threshold)
 
     fig, ax1 = plt.subplots(figsize=(12, 7))
     ax1.set_axisbelow(True)
@@ -360,7 +389,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
         ax1.scatter(
             x[~pareto_mask],
             y[~pareto_mask],
-            label=name,
+            label=None if np.any(pareto_mask) else name,
             marker=marker,
             edgecolors="none",
             facecolors=color,
@@ -381,6 +410,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
             ax1.scatter(
                 x[pareto_mask],
                 y[pareto_mask],
+                label=name,
                 marker=marker,
                 edgecolors=color,
                 facecolors="none",
@@ -421,7 +451,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
         x[~pareto_mask],
         combined[~pareto_mask],
         color="black",
-        label="Combined cost",
+        label=None if np.any(pareto_mask) else "Combined cost",
         marker="o",
         alpha=alpha,
         s=markersize**2,
@@ -440,6 +470,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
         ax2.scatter(
             x[pareto_mask],
             combined[pareto_mask],
+            label="Combined cost",
             facecolors="none",
             edgecolors="black",
             linewidths=1.5,
@@ -449,7 +480,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
         )
 
     ax2.set_ylabel("Combined cost")
-    ax2.set_ylim(min(0.0, float(np.min(combined)) * 1.05), max(float(np.max(combined)) * 1.05, len(names) * 1.1))
+    ax2.set_ylim(*_combined_axis_ylim(combined, ax1.get_ylim()))
 
     legend = {}
     handles1, labels1 = ax1.get_legend_handles_labels()
