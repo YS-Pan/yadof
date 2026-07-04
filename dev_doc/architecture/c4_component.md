@@ -97,5 +97,5 @@ flowchart LR
 ```
 
 - `runtime.py`: optimizer-facing service boundary; loads training data, flattens rawData into query-aligned numeric slots, applies task-owned importance weights, scales targets, reconstructs predicted rawData, calculates audited costs and ensemble member min/max intervals, and writes checkpoint summaries.
-- `modeling.py`: PyTorch conditional INR deep ensemble; owns Fourier coordinate features, field embeddings, weighted relative/full-field losses, member bootstrap/mixup training, member prediction, and model artifacts.
+- `modeling.py`: PyTorch conditional INR deep ensemble; owns Fourier coordinate features, field embeddings, importance-weighted stochastic query minibatches for large fields, weighted relative/full-field losses, member bootstrap/mixup training, member prediction, and model artifacts.
 - `api.py`: stable optimizer-facing exports.

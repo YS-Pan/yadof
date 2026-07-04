@@ -42,7 +42,7 @@ sequenceDiagram
     O->>R: get historical optimization results
     O->>S: train(generation_index)
     S->>R: get surrogate training data
-    S->>S: flatten rawData, build query table, apply rawData importance weights, train conditional INR ensemble
+    S->>S: flatten rawData, build query table, apply rawData importance weights, train conditional INR ensemble with stochastic query minibatches when needed
     S->>T: calculate true and predicted training costs for historical error audit
     S-->>O: checkpointed state
     O->>S: predict_population(alpha/beta candidate pools)

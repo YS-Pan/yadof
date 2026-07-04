@@ -257,3 +257,57 @@ def test_surrogate_interval_is_member_cost_min_max(monkeypatch):
 
     assert prediction[0] == (4.5,)
     assert prediction[1] == ((3.0, 6.0),)
+
+
+def test_inr_training_uses_weighted_query_minibatches(monkeypatch):
+    from project.surrogate import modeling
+
+    rng = np.random.default_rng(123)
+    x_train = rng.random((3, 2), dtype=np.float32)
+    y_train = rng.random((3, 20), dtype=np.float32)
+    coord_table = rng.uniform(-1.0, 1.0, size=(20, 3)).astype(np.float32)
+    field_ids = np.zeros((20,), dtype=np.int64)
+    query_weights = np.ones((20,), dtype=np.float32)
+    query_weights[:2] = 10.0
+
+    seen_query_counts = []
+    original_predict_train_batch = modeling._predict_train_batch
+
+    def spy_predict_train_batch(**kwargs):
+        seen_query_counts.append(int(kwargs["coords"].shape[0]))
+        return original_predict_train_batch(**kwargs)
+
+    monkeypatch.setattr(modeling, "_predict_train_batch", spy_predict_train_batch)
+    cfg = modeling.INRTrainConfig(
+        epochs=1,
+        ensemble_size=1,
+        batch_size=2,
+        x_latent_dim=4,
+        field_emb_dim=2,
+        coord_fourier_features=2,
+        hidden_dim=8,
+        hidden_layers=1,
+        train_query_chunk=3,
+        train_query_sample_count=5,
+        bootstrap_members=False,
+        relative_loss_weight=0.0,
+    )
+
+    _model, history = modeling.fit_deep_ensemble_conditional_inr(
+        input_dim=2,
+        n_fields=1,
+        X_train=x_train,
+        Y_train=y_train,
+        coord_table=coord_table,
+        field_ids=field_ids,
+        device=modeling.torch.device("cpu"),
+        train_cfg=cfg,
+        query_weights=query_weights,
+        seed=99,
+    )
+
+    assert seen_query_counts
+    assert max(seen_query_counts) <= 5
+    assert history["query_count"] == 20
+    assert history["train_query_count_per_step"] == 5
+    assert history["train_query_subsampled"] is True

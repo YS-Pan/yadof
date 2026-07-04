@@ -84,52 +84,36 @@ def test_explicit_variable_count_overrides_job_template_parameter_count(monkeypa
     assert calls == {"get_variable_count": 1, "get_objective_count": 1, "get_objective_names": 1}
 
 
-def test_default_job_template_width_matches_newchoke_modal_task():
+def test_default_job_template_width_matches_current_antenna_task():
     from project.job_template import api as job_template_api
 
-    assert job_template_api.get_variable_count() == 32
+    assert job_template_api.get_variable_count() == 19
     assert job_template_api.get_parameter_names() == (
-        "Ah1",
-        "Ah2",
-        "Ah3",
-        "Ah4",
-        "Ah5",
-        "Al1",
-        "Al2",
-        "Al3",
-        "Al4",
-        "Al5",
-        "Angle",
-        "chokeZshift",
-        "cornerH",
-        "cornerLen",
-        "cornerLen1",
-        "cornerWidth",
-        "cornerWidth1",
-        "D1",
-        "D2",
-        "D3",
-        "D4",
-        "D5",
-        "L1",
-        "L2",
-        "L3",
-        "L4",
-        "L5",
-        "N",
-        "rearPlasticLen",
-        "trump0Len",
-        "trump0Width",
-        "trumpH",
+        "dipole_gap",
+        "dipole_l",
+        "dipole_post_xposi",
+        "dipole_w",
+        "feedline1_l",
+        "feedline1_w",
+        "feedline2_xposi",
+        "feedline2_yposi",
+        "slot_l",
+        "slot_w",
+        "strip_l",
+        "strip_w",
+        "top_sub_zposi",
+        "yagi_l1",
+        "yagi_l2",
+        "yagi_w",
+        "yagi_w2",
+        "yagi_xmove",
+        "yagi_yposi",
     )
-    assert job_template_api.get_objective_count() == 6
+    assert job_template_api.get_objective_count() == 3
     assert job_template_api.get_objective_names() == (
-        "dB(mag(S(1:3,3:1))+mag(S(1:3,3:2)))",
-        "dB(mag(S(3:1,2:3))+mag(S(3:2,2:3)))",
-        "dB(S(1:3,2:3))",
-        "dB(mag(S(1:3,4:1))+mag(S(1:3,4:2)))",
-        "dB(mag(S(3:1,4:1))+mag(S(3:1,4:2))+mag(S(3:2,4:1))+mag(S(3:2,4:2)))",
-        "cost_constraints",
+        "cost_s11_band",
+        "cost_gain_lhcp_targets",
+        "cost_axial_ratio_targets",
     )
 
 

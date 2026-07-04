@@ -30,6 +30,7 @@ class INRTrainConfig:
     hidden_dim: int = 192
     hidden_layers: int = 3
     train_query_chunk: int = 4096
+    train_query_sample_count: int = 8192
     sample_batch_eval: int = 64
     query_batch_eval: int = 8192
     bootstrap_members: bool = True
@@ -249,6 +250,50 @@ def _weighted_smooth_l1(
     return (loss * weights).mean() / weights.mean().clamp_min(1e-12)
 
 
+def _query_subset_indices(
+    *,
+    n_queries: int,
+    sample_count: int,
+    rng: np.random.Generator,
+    sampling_probabilities: np.ndarray | None,
+) -> np.ndarray | None:
+    n_queries = _positive_int("n_queries", n_queries)
+    sample_count = _positive_int("train_query_sample_count", sample_count)
+    if sample_count >= n_queries:
+        return None
+    if sampling_probabilities is not None:
+        probabilities = np.asarray(sampling_probabilities, dtype=np.float64).reshape(-1)
+        if probabilities.size != n_queries:
+            raise ValueError("query sampling probabilities must align with query dimension")
+        choice = rng.choice(n_queries, size=sample_count, replace=False, p=probabilities)
+    else:
+        choice = rng.choice(n_queries, size=sample_count, replace=False)
+    choice.sort()
+    return np.ascontiguousarray(choice, dtype=np.int64)
+
+
+def _slice_targets(
+    matrix: np.ndarray,
+    row_indices: np.ndarray,
+    query_indices: np.ndarray | None,
+) -> np.ndarray:
+    if query_indices is None:
+        return np.ascontiguousarray(matrix[row_indices], dtype=np.float32)
+    return np.ascontiguousarray(matrix[np.ix_(row_indices, query_indices)], dtype=np.float32)
+
+
+def _sampling_probabilities_from_weights(weights_np: np.ndarray | None) -> np.ndarray | None:
+    if weights_np is None:
+        return None
+    probabilities = np.asarray(weights_np, dtype=np.float64).reshape(-1)
+    probabilities = np.where(np.isfinite(probabilities), probabilities, 0.0)
+    probabilities = np.maximum(probabilities, 0.0)
+    total = float(np.sum(probabilities))
+    if total <= 0.0:
+        return None
+    return np.ascontiguousarray(probabilities / total, dtype=np.float64)
+
+
 def _train_one_member(
     model: ConditionalRawDataINR,
     *,
@@ -257,13 +302,16 @@ def _train_one_member(
     coords_device: torch.Tensor,
     fields_device: torch.Tensor,
     query_weights_device: torch.Tensor | None,
+    query_sampling_probabilities: np.ndarray | None,
     device: torch.device,
     cfg: INRTrainConfig,
     shuffle_seed: int,
 ) -> dict[str, float]:
     epochs = _positive_int("epochs", cfg.epochs)
     batch_size = _positive_int("batch_size", cfg.batch_size)
+    train_query_sample_count = _positive_int("train_query_sample_count", cfg.train_query_sample_count)
     relative_weight = _nonnegative_float("relative_loss_weight", cfg.relative_loss_weight)
+    n_queries = _positive_int("query_count", Y_train.shape[1])
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs))
@@ -277,21 +325,42 @@ def _train_one_member(
 
         for start in range(0, X_train.shape[0], batch_size):
             idx = order[start : start + batch_size]
+            query_rng = np.random.default_rng(int(shuffle_seed) + epoch * 1000003 + start)
+            query_idx = _query_subset_indices(
+                n_queries=n_queries,
+                sample_count=train_query_sample_count,
+                rng=query_rng,
+                sampling_probabilities=query_sampling_probabilities,
+            )
+            if query_idx is None:
+                coords_batch = coords_device
+                fields_batch = fields_device
+                weights_batch = query_weights_device
+            else:
+                query_idx_device = torch.as_tensor(query_idx, dtype=torch.long, device=device)
+                coords_batch = coords_device.index_select(0, query_idx_device)
+                fields_batch = fields_device.index_select(0, query_idx_device)
+                weights_batch = (
+                    None
+                    if query_sampling_probabilities is not None or query_weights_device is None
+                    else query_weights_device.index_select(0, query_idx_device)
+                )
+
             x_batch = torch.from_numpy(np.ascontiguousarray(X_train[idx], dtype=np.float32)).to(device)
-            y_batch = torch.from_numpy(np.ascontiguousarray(Y_train[idx], dtype=np.float32)).to(device)
+            y_batch = torch.from_numpy(_slice_targets(Y_train, idx, query_idx)).to(device)
 
             pred = _predict_train_batch(
                 model=model,
                 x_batch=x_batch,
-                coords=coords_device,
-                fields=fields_device,
+                coords=coords_batch,
+                fields=fields_batch,
                 query_chunk=cfg.train_query_chunk,
             )
             value_loss = _weighted_smooth_l1(
                 pred,
                 y_batch,
                 beta=float(cfg.loss_beta),
-                query_weights=query_weights_device,
+                query_weights=weights_batch,
             )
             loss_terms = [value_loss]
             coeff_sum = 1.0
@@ -302,7 +371,7 @@ def _train_one_member(
                     pred / denom,
                     y_batch / denom,
                     beta=float(cfg.loss_beta),
-                    query_weights=query_weights_device,
+                    query_weights=weights_batch,
                 )
                 loss_terms.append(relative_weight * rel_loss)
                 coeff_sum += relative_weight
@@ -314,21 +383,21 @@ def _train_one_member(
                 lam_np = rng.uniform(0.10, 0.90, size=(idx.size, 1)).astype(np.float32)
                 lam = torch.from_numpy(lam_np).to(device)
                 x_other = torch.from_numpy(np.ascontiguousarray(X_train[other_idx], dtype=np.float32)).to(device)
-                y_other = torch.from_numpy(np.ascontiguousarray(Y_train[other_idx], dtype=np.float32)).to(device)
+                y_other = torch.from_numpy(_slice_targets(Y_train, other_idx, query_idx)).to(device)
                 x_mix = lam * x_batch + (1.0 - lam) * x_other
                 y_mix = lam * y_batch + (1.0 - lam) * y_other
                 pred_mix = _predict_train_batch(
                     model=model,
                     x_batch=x_mix,
-                    coords=coords_device,
-                    fields=fields_device,
+                    coords=coords_batch,
+                    fields=fields_batch,
                     query_chunk=cfg.train_query_chunk,
                 )
                 mix_loss = _weighted_smooth_l1(
                     pred_mix,
                     y_mix,
                     beta=float(cfg.loss_beta),
-                    query_weights=query_weights_device,
+                    query_weights=weights_batch,
                 )
                 loss_terms.append(mix_loss)
                 coeff_sum += 1.0
@@ -387,6 +456,7 @@ def fit_deep_ensemble_conditional_inr(
     if X_train.shape[0] == 0 or Y_train.shape[1] == 0:
         raise ValueError("surrogate training needs at least one sample and one query")
     query_weights_device = None
+    query_sampling_probabilities = None
     query_weight_stats: dict[str, float] | None = None
     if query_weights is not None:
         weights_np = np.asarray(query_weights, dtype=np.float32).reshape(-1)
@@ -402,6 +472,7 @@ def fit_deep_ensemble_conditional_inr(
             "query_weight_max": float(np.max(weights_np)),
         }
         query_weights_device = torch.from_numpy(np.ascontiguousarray(weights_np, dtype=np.float32)).to(device)
+        query_sampling_probabilities = _sampling_probabilities_from_weights(weights_np)
 
     if hasattr(torch, "set_float32_matmul_precision"):
         torch.set_float32_matmul_precision("high")
@@ -441,6 +512,7 @@ def fit_deep_ensemble_conditional_inr(
             coords_device=coords_device,
             fields_device=fields_device,
             query_weights_device=query_weights_device,
+            query_sampling_probabilities=query_sampling_probabilities,
             device=device,
             cfg=train_cfg,
             shuffle_seed=member_seed,
@@ -470,6 +542,8 @@ def fit_deep_ensemble_conditional_inr(
         "batch_size": int(train_cfg.batch_size),
         "train_sample_count": int(X_train.shape[0]),
         "query_count": int(Y_train.shape[1]),
+        "train_query_count_per_step": int(min(Y_train.shape[1], train_cfg.train_query_sample_count)),
+        "train_query_subsampled": bool(train_cfg.train_query_sample_count < Y_train.shape[1]),
         "device": str(device),
         "members": records,
         "loss": _mean([float(item["loss"]) for item in records]),

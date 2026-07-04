@@ -85,6 +85,10 @@ SURROGATE_INR_COORD_FOURIER_FEATURES = 24
 SURROGATE_INR_HIDDEN_DIM = 192
 SURROGATE_INR_HIDDEN_LAYERS = 3
 SURROGATE_INR_TRAIN_QUERY_CHUNK = 4096
+# Maximum rawData query points used per training step. Full rawData is still
+# retained and predicted; this only limits stochastic training backprop for
+# large 2D/3D fields on CPU-only machines.
+SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT = 8192
 SURROGATE_INR_SAMPLE_BATCH_EVAL = 64
 SURROGATE_INR_QUERY_BATCH_EVAL = 8192
 SURROGATE_INR_BOOTSTRAP_MEMBERS = True

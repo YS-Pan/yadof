@@ -7,7 +7,7 @@
 
 ## Functionalities
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
-- Default job-template tests assert the Metal_recon_ant parameter names, four objective names, and `[0, 1]` cost bounds using small HFSS-like rawData fixtures.
+- Default job-template tests assert the current antenna task parameter names, objective names, and `[0, 1]` cost bounds using small HFSS-like rawData fixtures. These assertions should follow the active `job_template` task rather than treating an old simulation filename as a framework constant.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
 - HTCondor tests cover submit-file generation, submit failure capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.

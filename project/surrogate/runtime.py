@@ -560,6 +560,9 @@ def _train_config_from_project_config() -> INRTrainConfig:
         hidden_dim=int(getattr(config, "SURROGATE_INR_HIDDEN_DIM", defaults.hidden_dim)),
         hidden_layers=int(getattr(config, "SURROGATE_INR_HIDDEN_LAYERS", defaults.hidden_layers)),
         train_query_chunk=int(getattr(config, "SURROGATE_INR_TRAIN_QUERY_CHUNK", defaults.train_query_chunk)),
+        train_query_sample_count=int(
+            getattr(config, "SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT", defaults.train_query_sample_count)
+        ),
         sample_batch_eval=int(getattr(config, "SURROGATE_INR_SAMPLE_BATCH_EVAL", defaults.sample_batch_eval)),
         query_batch_eval=int(getattr(config, "SURROGATE_INR_QUERY_BATCH_EVAL", defaults.query_batch_eval)),
         bootstrap_members=bool(getattr(config, "SURROGATE_INR_BOOTSTRAP_MEMBERS", defaults.bootstrap_members)),

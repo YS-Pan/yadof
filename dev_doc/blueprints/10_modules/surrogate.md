@@ -8,7 +8,7 @@
 ## Functionalities
 - `api.py` exports `train()`, `predict_population()`, and `evaluate_historical_errors()`.
 - `runtime.py` loads training data from `recorded_data.api`, validates and flattens rawData numeric arrays, asks `job_template.api` for task-owned rawData importance weights when available, builds query coordinates and field ids, scales targets, calls the INR trainer, reconstructs predicted rawData, audits historical prediction error, writes generation checkpoints, and caches the latest state in memory.
-- `modeling.py` defines the PyTorch conditional INR deep ensemble, including Fourier coordinate features, field embeddings, weighted full-field and relative losses, bootstrap/mixup member training, artifact saving, and member-level prediction.
+- `modeling.py` defines the PyTorch conditional INR deep ensemble, including Fourier coordinate features, field embeddings, importance-weighted stochastic query minibatches for large rawData fields, weighted full-field and relative losses, bootstrap/mixup member training, artifact saving, and member-level prediction.
 - `predict_raw_data()` reconstructs rawData items from predicted flattened arrays.
 - `predict_population()` converts predicted rawData to costs through `job_template.api` and returns both costs and cost intervals.
 - `evaluate_historical_errors()` returns the train-time relative-error audit used by optimizer-side diagnostics. The audit uses model predictions and must not substitute true historical costs.
@@ -20,7 +20,7 @@
 - RawData prediction output: samples shaped as `samples[sample][rawData_item]`.
 - Optimizer prediction output: `(costs, ((lower, upper), ...))` for each individual.
 - Checkpoints are `generation_*.json` summaries plus `generation_*_conditional_inr/` artifact folders under `config.SURROGATE_CHECKPOINT_DIR`.
-- Checkpoint JSON includes `mean_relative_error`, historical relative-error p50/p90/p95, and historical absolute-error p90. The auxiliary artifact stores target scaling, query table, training flat values, and query weights.
+- Checkpoint JSON includes `mean_relative_error`, historical relative-error p50/p90/p95, historical absolute-error p90, full query count, and training query count per step. The auxiliary artifact stores target scaling, query table, training flat values, and query weights.
 - INR artifact folders contain `inr_meta.json`, `member_*.pt`, and `model_aux.npz` with query-table, field-id, target-scaling, and training-flat-value payloads.
 
 ## Non-Obvious Techniques
@@ -32,7 +32,7 @@
 - Predicted rawData metadata is marked with `source = project.surrogate.runtime` and `surrogate_prediction = True`, while original variable echoes are removed.
 - Exact-neighbor snapping is intentionally absent. Do not reintroduce snapping or near-training-sample replacement unless the user explicitly asks for that feature.
 - Relative error uses `SURROGATE_RELATIVE_ERROR_EPS`; INR training also has a relative-loss term with `SURROGATE_INR_RELATIVE_LOSS_EPS` so small-magnitude rawData dimensions receive attention without letting near-zero background dominate.
-- Task-specific objective windows should be expressed through `job_template.api.get_rawdata_importance_weights()` where possible. The surrogate falls back to uniform query weights when a task does not provide this hook.
+- Task-specific objective windows should be expressed through `job_template.api.get_rawdata_importance_weights()` where possible. For large rawData fields, the same weights drive stochastic query minibatch sampling during training, so objective windows are still emphasized without backpropagating every far-field point in every batch. The surrogate falls back to uniform query sampling and weights when a task does not provide this hook.
 - If no schema/model is available, prediction returns `inf` costs with zero-width intervals rather than pretending to know a value.
 
 ## Mutability Profile
