@@ -41,20 +41,31 @@ for name, block in blocks.items():
 - or a sequence of floats.
 
 If fewer than the internal synthetic input dimension are provided, missing values are
-filled with `0.5`. Values are clipped into `[0, 1]`.
+filled with `0.5`. Values already in `[0, 1]` are used as normalized inputs. If the
+input appears to be raw task values outside `[0, 1]`, the adapter rescales that
+vector into `[0, 1]` before generating deterministic synthetic responses.
 
-## Output Blocks
+## Output Profiles
 
-The returned dictionary contains rawData-style blocks:
+The default profile is `profile="hfss_like"`. It mirrors the current HFSS-like
+`temp/jobs` rawData shape:
 
-- `summary`: scalar-like response channels,
-- `curve`: multi-channel curve data,
-- `surface`: two-dimensional surface data.
+- `s11_pinState1`, `s11_pinState2`, `s11_pinState3`: one-dimensional `Freq` traces.
+- `gain_lhcp_pinState1`, `gain_lhcp_pinState2`, `gain_lhcp_pinState3`: `Freq x Phi x Theta` grids with shape `1 x 73 x 73`.
+- `axial_ratio_pinState1`, `axial_ratio_pinState2`, `axial_ratio_pinState3`: `Freq x Phi x Theta` grids with shape `5 x 73 x 73`.
 
 Each block contains:
 
-- `arrays`: arrays that can be written into one `.npz` file,
-- `metadata`: rawData metadata that should receive `schema_version`, `rawdata_name`, and `shape` defaults before saving.
+- `arrays`: arrays that can be written into one `.npz` file, including `data`, axis arrays, and axis units,
+- `metadata`: rawData metadata with `schema_version`, `rawdata_name`, `shape`, `axis_names`, and ordered `axes` descriptors.
+
+A smaller legacy-style profile remains available for lightweight examples:
+
+```python
+blocks = evaluate_raw_data(variables, profile="generic")
+```
+
+That profile returns `summary`, `curve`, and `surface` blocks.
 
 This adapter is useful for checking `workflow.py`, `calc_cost.py`, `recorded_data`,
-and optimizer behavior without opening AEDT.
+optimizer behavior, and surrogate training without opening AEDT.

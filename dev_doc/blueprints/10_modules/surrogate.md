@@ -32,7 +32,7 @@
 - Predicted rawData metadata is marked with `source = project.surrogate.runtime` and `surrogate_prediction = True`, while original variable echoes are removed.
 - Exact-neighbor snapping is intentionally absent. Do not reintroduce snapping or near-training-sample replacement unless the user explicitly asks for that feature.
 - Relative error uses `SURROGATE_RELATIVE_ERROR_EPS`; INR training also has a relative-loss term with `SURROGATE_INR_RELATIVE_LOSS_EPS` so small-magnitude rawData dimensions receive attention without letting near-zero background dominate.
-- Task-specific objective windows should be expressed through `job_template.api.get_rawdata_importance_weights()` where possible. For large rawData fields, the same weights drive stochastic query minibatch sampling during training, so objective windows are still emphasized without backpropagating every far-field point in every batch. The surrogate falls back to uniform query sampling and weights when a task does not provide this hook.
+- Task-specific objective windows should be expressed through `job_template.api.get_rawdata_importance_weights()` where possible. Scalar and 1D rawData slots are always included in each training step, while large 2D/3D fields use weighted stochastic query minibatch sampling; objective windows are still emphasized without backpropagating every far-field point in every batch. The surrogate falls back to uniform query sampling and weights when a task does not provide this hook.
 - If no schema/model is available, prediction returns `inf` costs with zero-width intervals rather than pretending to know a value.
 
 ## Mutability Profile

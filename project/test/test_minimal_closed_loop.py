@@ -259,6 +259,22 @@ def test_surrogate_interval_is_member_cost_min_max(monkeypatch):
     assert prediction[1] == ((3.0, 6.0),)
 
 
+def test_runtime_marks_scalar_and_1d_slots_as_always_included_queries():
+    from project.surrogate.runtime import RawArraySlot, RawDataSchema, _always_include_query_indices
+
+    schema = RawDataSchema(
+        templates=({}, {}, {}),
+        modeled_slots=(
+            RawArraySlot(item_index=0, key="data", shape=(5,), dtype="float64", start=0, end=5, field_id=0),
+            RawArraySlot(item_index=1, key="data", shape=(4, 4), dtype="float64", start=5, end=21, field_id=1),
+            RawArraySlot(item_index=2, key="data", shape=(), dtype="float64", start=21, end=22, field_id=2),
+        ),
+        flat_dim=22,
+        coord_table=np.zeros((22, 3), dtype=np.float32),
+        field_ids=np.zeros((22,), dtype=np.int64),
+    )
+
+    assert tuple(_always_include_query_indices(schema)) == (0, 1, 2, 3, 4, 21)
 def test_inr_training_uses_weighted_query_minibatches(monkeypatch):
     from project.surrogate import modeling
 
@@ -266,15 +282,19 @@ def test_inr_training_uses_weighted_query_minibatches(monkeypatch):
     x_train = rng.random((3, 2), dtype=np.float32)
     y_train = rng.random((3, 20), dtype=np.float32)
     coord_table = rng.uniform(-1.0, 1.0, size=(20, 3)).astype(np.float32)
+    coord_table[:, 0] = np.arange(20, dtype=np.float32)
     field_ids = np.zeros((20,), dtype=np.int64)
     query_weights = np.ones((20,), dtype=np.float32)
     query_weights[:2] = 10.0
 
     seen_query_counts = []
+    seen_query_indices = []
     original_predict_train_batch = modeling._predict_train_batch
 
     def spy_predict_train_batch(**kwargs):
-        seen_query_counts.append(int(kwargs["coords"].shape[0]))
+        coords = kwargs["coords"].detach().cpu().numpy()
+        seen_query_counts.append(int(coords.shape[0]))
+        seen_query_indices.append(tuple(int(value) for value in coords[:, 0]))
         return original_predict_train_batch(**kwargs)
 
     monkeypatch.setattr(modeling, "_predict_train_batch", spy_predict_train_batch)
@@ -303,11 +323,16 @@ def test_inr_training_uses_weighted_query_minibatches(monkeypatch):
         device=modeling.torch.device("cpu"),
         train_cfg=cfg,
         query_weights=query_weights,
+        always_include_query_indices=np.asarray([0, 1], dtype=np.int64),
         seed=99,
     )
 
     assert seen_query_counts
-    assert max(seen_query_counts) <= 5
+    assert max(seen_query_counts) <= 7
+    assert all({0, 1}.issubset(indices) for indices in seen_query_indices)
     assert history["query_count"] == 20
-    assert history["train_query_count_per_step"] == 5
+    assert history["train_query_count_per_step"] == 7
+    assert history["train_query_sampled_count_per_step"] == 5
+    assert history["train_query_always_included_count"] == 2
+    assert history["train_query_sampleable_count"] == 18
     assert history["train_query_subsampled"] is True

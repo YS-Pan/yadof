@@ -673,6 +673,20 @@ def _flat_importance_weights(schema: RawDataSchema | None, raw_sample: RawSample
     return np.ascontiguousarray(weights, dtype=np.float32)
 
 
+def _always_include_query_indices(schema: RawDataSchema | None) -> np.ndarray:
+    """Return rawData query indices that should bypass stochastic subsampling."""
+
+    if schema is None or int(schema.flat_dim) == 0:
+        return np.zeros((0,), dtype=np.int64)
+    chunks = [
+        np.arange(int(slot.start), int(slot.end), dtype=np.int64)
+        for slot in schema.modeled_slots
+        if len(tuple(slot.shape)) <= 1
+    ]
+    if not chunks:
+        return np.zeros((0,), dtype=np.int64)
+    return np.ascontiguousarray(np.concatenate(chunks), dtype=np.int64)
+
 def _predict_costs_for_error_audit(
     state: SurrogateState,
     x: np.ndarray,
@@ -799,6 +813,7 @@ def train(*, generation_index: int = 0) -> SurrogateState:
             device=device,
             train_cfg=train_cfg,
             query_weights=query_weights,
+            always_include_query_indices=_always_include_query_indices(schema),
             artifact_dir=artifact_dir,
             seed=int(getattr(config, "OPTIMIZE_RANDOM_SEED", 20260510)) + int(generation_index) * 1009,
         )

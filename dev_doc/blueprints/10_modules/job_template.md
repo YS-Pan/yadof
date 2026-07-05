@@ -11,7 +11,7 @@
 - `parameters_constraints_class.py` defines `Parameter`, normalization, denormalization, continuous intervals, and discrete values.
 - `workflow.py` converts raw variables into flat schema-valid `rawData/*.npz` files, writes job-local lifecycle metadata, can import task-local adapter files from the same directory, and never saves cost.
 - `project/com_lib/hfss_com.py` is a source/reference copy for the HFSS adapter; a task can copy it into `project/job_template/` when its workflow needs HFSS.
-- `project/com_lib/test_com.py` is the retained pure-Python simulator stand-in for `variables -> rawData`, but it must be copied into `job_template` before a workflow can use it.
+- `project/com_lib/test_com.py` is the retained pure-Python simulator stand-in for `variables -> rawData`, including an HFSS-like profile that emits S11 traces plus `Freq x Phi x Theta` far-field grids for surrogate-speed tests; it must be copied into `job_template` before a workflow can use it.
 - `calc_cost.py` converts one sample's task rawData items into the current objective cost tuple. It also may mark objective-relevant rawData slots for surrogate training through task-owned importance weights.
 - `rawdata_contract.py` validates `.npz` metadata, shape, axis descriptors, schema version, and flat rawData directories.
 - Adapter files present in `job_template` are copied into prepared jobs with the workflow and are task-owned implementation details.

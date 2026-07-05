@@ -250,27 +250,56 @@ def _weighted_smooth_l1(
     return (loss * weights).mean() / weights.mean().clamp_min(1e-12)
 
 
+def _normalized_query_indices(indices: np.ndarray | None, n_queries: int) -> np.ndarray:
+    if indices is None:
+        return np.zeros((0,), dtype=np.int64)
+    values = np.asarray(indices, dtype=np.int64).reshape(-1)
+    if values.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    values = values[(values >= 0) & (values < int(n_queries))]
+    if values.size == 0:
+        return np.zeros((0,), dtype=np.int64)
+    return np.unique(values).astype(np.int64, copy=False)
+
+
 def _query_subset_indices(
     *,
     n_queries: int,
     sample_count: int,
     rng: np.random.Generator,
     sampling_probabilities: np.ndarray | None,
+    always_include_indices: np.ndarray | None = None,
 ) -> np.ndarray | None:
     n_queries = _positive_int("n_queries", n_queries)
     sample_count = _positive_int("train_query_sample_count", sample_count)
-    if sample_count >= n_queries:
+    always = _normalized_query_indices(always_include_indices, n_queries)
+    if always.size == n_queries:
         return None
+
+    if always.size:
+        sampleable_mask = np.ones((n_queries,), dtype=bool)
+        sampleable_mask[always] = False
+        sampleable = np.flatnonzero(sampleable_mask)
+    else:
+        sampleable = np.arange(n_queries, dtype=np.int64)
+
+    if sample_count >= sampleable.size:
+        return None
+
     if sampling_probabilities is not None:
         probabilities = np.asarray(sampling_probabilities, dtype=np.float64).reshape(-1)
         if probabilities.size != n_queries:
             raise ValueError("query sampling probabilities must align with query dimension")
-        choice = rng.choice(n_queries, size=sample_count, replace=False, p=probabilities)
+        pool_probabilities = probabilities[sampleable]
+        total = float(np.sum(pool_probabilities))
+        pool_probabilities = None if total <= 0.0 else pool_probabilities / total
+        choice = rng.choice(sampleable, size=sample_count, replace=False, p=pool_probabilities)
     else:
-        choice = rng.choice(n_queries, size=sample_count, replace=False)
+        choice = rng.choice(sampleable, size=sample_count, replace=False)
+    choice = np.concatenate((always, np.asarray(choice, dtype=np.int64))) if always.size else np.asarray(choice, dtype=np.int64)
+    choice = np.unique(choice)
     choice.sort()
     return np.ascontiguousarray(choice, dtype=np.int64)
-
 
 def _slice_targets(
     matrix: np.ndarray,
@@ -303,6 +332,7 @@ def _train_one_member(
     fields_device: torch.Tensor,
     query_weights_device: torch.Tensor | None,
     query_sampling_probabilities: np.ndarray | None,
+    always_include_query_indices: np.ndarray | None,
     device: torch.device,
     cfg: INRTrainConfig,
     shuffle_seed: int,
@@ -331,6 +361,7 @@ def _train_one_member(
                 sample_count=train_query_sample_count,
                 rng=query_rng,
                 sampling_probabilities=query_sampling_probabilities,
+                always_include_indices=always_include_query_indices,
             )
             if query_idx is None:
                 coords_batch = coords_device
@@ -433,6 +464,7 @@ def fit_deep_ensemble_conditional_inr(
     device: torch.device,
     train_cfg: INRTrainConfig,
     query_weights: np.ndarray | None = None,
+    always_include_query_indices: np.ndarray | None = None,
     artifact_dir: Path | None = None,
     seed: int = 0,
 ):
@@ -455,6 +487,14 @@ def fit_deep_ensemble_conditional_inr(
         raise ValueError("Y_train must be sampled on coord_table")
     if X_train.shape[0] == 0 or Y_train.shape[1] == 0:
         raise ValueError("surrogate training needs at least one sample and one query")
+    always_include_query_indices = _normalized_query_indices(always_include_query_indices, Y_train.shape[1])
+    sampleable_query_count = int(Y_train.shape[1] - always_include_query_indices.size)
+    sampled_query_count = int(min(sampleable_query_count, train_cfg.train_query_sample_count))
+    train_query_count_per_step = int(
+        Y_train.shape[1]
+        if sampled_query_count >= sampleable_query_count
+        else always_include_query_indices.size + sampled_query_count
+    )
     query_weights_device = None
     query_sampling_probabilities = None
     query_weight_stats: dict[str, float] | None = None
@@ -513,6 +553,7 @@ def fit_deep_ensemble_conditional_inr(
             fields_device=fields_device,
             query_weights_device=query_weights_device,
             query_sampling_probabilities=query_sampling_probabilities,
+            always_include_query_indices=always_include_query_indices,
             device=device,
             cfg=train_cfg,
             shuffle_seed=member_seed,
@@ -542,8 +583,11 @@ def fit_deep_ensemble_conditional_inr(
         "batch_size": int(train_cfg.batch_size),
         "train_sample_count": int(X_train.shape[0]),
         "query_count": int(Y_train.shape[1]),
-        "train_query_count_per_step": int(min(Y_train.shape[1], train_cfg.train_query_sample_count)),
-        "train_query_subsampled": bool(train_cfg.train_query_sample_count < Y_train.shape[1]),
+        "train_query_count_per_step": int(train_query_count_per_step),
+        "train_query_sampled_count_per_step": int(sampled_query_count),
+        "train_query_always_included_count": int(always_include_query_indices.size),
+        "train_query_sampleable_count": int(sampleable_query_count),
+        "train_query_subsampled": bool(sampled_query_count < sampleable_query_count),
         "device": str(device),
         "members": records,
         "loss": _mean([float(item["loss"]) for item in records]),

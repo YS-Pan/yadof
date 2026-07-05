@@ -34,7 +34,7 @@
 - HTCondor command settings may be overridden by matching legacy environment variables such as `CONDOR_SUBMIT_EXE`, `CONDOR_POLL_SEC`, `CONDOR_REQUEST_CPUS`, `CONDOR_REQUEST_MEMORY`, and `CONDOR_REQUEST_DISK`.
 - The default HTCondor environment follows the Windows debug reference and redirects profile/temp paths into job-local directories.
 - `SURROGATE_TORCH_DEVICE = "auto"` prefers CUDA, then XPU, then CPU; tests may force CPU and smaller INR dimensions for speed.
-- `SURROGATE_RAWDATA_IMPORTANCE_FLOOR` and `SURROGATE_RAWDATA_IMPORTANCE_BOOST` are passed to task-owned rawData importance hooks; they do not remove full-field training coverage. `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` caps how many flattened rawData query points are used per training step when a field is very large; prediction, reconstruction, checkpoints, and historical error audits still use the full query table.
+- `SURROGATE_RAWDATA_IMPORTANCE_FLOOR` and `SURROGATE_RAWDATA_IMPORTANCE_BOOST` are passed to task-owned rawData importance hooks; they do not remove full-field training coverage. `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` caps how many high-dimensional rawData query points are sampled per training step when fields are very large; scalar and 1D rawData slots are still always included, and prediction, reconstruction, checkpoints, and historical error audits still use the full query table.
 - `OPTIMIZE_NSGA3_REF_DIR_METHOD` and `OPTIMIZE_NSGA3_PARTITIONS` tune NSGA-III reference directions without reintroducing an algorithm-selection switch.
 - `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves real-evaluation candidates that bypass surrogate selection so surrogate bias cannot fully starve a tradeoff branch.
 
