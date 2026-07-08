@@ -5,6 +5,11 @@
 - Keep all tool behavior outside the core optimization dependency graph.
 - Surface recorded-data history in ways that help long campaigns be explained and debugged.
 
+## Historical Lineage
+- Cost/time viewers and maintenance tools descend from the fanyufei optional tools lineage.
+- HFSS parameter extraction keeps ideas from both fanyufei and huangzetao tooling while writing the current `Parameter` format.
+- Shorten-style interactive result inspection remains a useful idea, but current tools read through v3 APIs whenever possible.
+
 ## Functionalities
 - `viewCost.py` reads `recorded_data.api.get_historical_results()`, dynamically calculates current costs, prints a Pareto-oriented summary, and optionally saves a PNG plot.
 - `run_viewcost.bat` launches `viewCost.py` from the tools directory, activates the `yadof` conda environment, and falls back to `C:\ProgramData\miniconda3` when `conda` is not already on `PATH`.

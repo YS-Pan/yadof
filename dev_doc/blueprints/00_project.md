@@ -2,9 +2,16 @@
 
 ## Intent
 - Build the v3 `yadof` framework as a modular, recoverable optimization system under `project/`.
-- Merge the mature job orchestration and recording ideas from `reference/20260403 fanyufei` with the surrogate-assisted optimization ideas from `reference/20260418 shorten`.
+- Merge the mature job orchestration and recording ideas from older fanyufei-style workflows with the surrogate-assisted optimization ideas from the shorten-style experiments.
 - Keep the central modeling chain as `normalized variables -> rawData -> cost`, where cost is always derived from rawData through the current `job_template/calc_cost.py`.
-- Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and later local/distributed execution backends should not force a rewrite of the core optimizer.
+- Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and local/distributed execution backends should not force a rewrite of the core optimizer.
+
+## Historical Lineage
+- Mature campaign orchestration, prepared-job folders, JSONL-style recording, and optional plotting/maintenance tools come from the older fanyufei project lineage. Current contracts live in `evaluate_manager`, `recorded_data`, and `tools` blueprints rather than in old copied paths.
+- HTCondor execution experience comes from the older combined-project lineage plus the still-current `reference/htcondor_windows_debug_reference.md`. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
+- Surrogate-assisted generation, refreshed runtime state, cumulative archive thinking, and richer neural modeling come from the shorten experiment lineage, now reshaped around the v3 rawData-first API.
+- The active HFSS task and adapter style descend from earlier huangzetao/fanyufei task files, but simulator files, `_com.py` adapters, workflows, rawData names, and objectives are replaceable task inputs.
+- GPSAF supplies the optimizer's surrogate-assistance framing. The implementation keeps the GPSAF-shaped alpha/beta/gamma pressure controls while using pymoo GA/NSGA-III mechanics for candidate generation and diversity.
 
 ## Functionalities
 - `project.optimize` owns the optimization loop, NSGA-III multi-objective candidate generation, GPSAF-style history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
@@ -17,7 +24,7 @@
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
-- `dev_doc` owns project documentation guidance, including full-read context sources, selective blueprint reading, terminology, reference ancestry, and append-only change records.
+- `dev_doc` owns project documentation guidance, including current architecture contracts, selective blueprint reading, terminology, historical lineage, toDo handoffs, obsolete archives, and append-only change records.
 
 ## I/O Format
 - User-edited inputs are primarily `project/config.py`, task-specific files in `project/job_template/` such as `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and any active adapter files copied into `job_template/`.
@@ -26,6 +33,15 @@
 - Job folders contain copied runtime files, `job_input.json`, submit-side `metadata.json`/`metaData.json`, workflow-owned `individual_metadata.json`, and flat `rawData/*.npz` files. Jobs do not contain or save `cost.json`.
 - Recorded history is represented by append-only individual metadata in `project/recorded_data/indMeta.jsonl`, optimization-level metadata in `project/recorded_data/optMeta/optMeta.jsonl`, and a single zip-based `project/recorded_data/rawData.npz` archive whose members are shaped like `job_name/file.npz`.
 - Public cross-core-module calls go through `api.py` files only: `optimize/api.py`, `evaluate_manager/api.py`, `job_template/api.py`, `recorded_data/api.py`, and `surrogate/api.py`.
+
+## Core Invariants
+- Expensive evaluations produce rawData and metadata, not authoritative costs.
+- Cost and normalized historical variables are derived from stored raw evidence and the current task definition.
+- The core framework remains simulator-agnostic; adding Maxwell, TwinBuilder, custom Python, or multi-software workflows should happen through task files and adapters rather than core rewrites.
+- Complex per-individual workflows are allowed as long as their output contract is flat rawData plus metadata.
+- Past completed rawData may be reused after controlled task edits; users must remove or ignore old history when new task semantics make it misleading.
+- Individual failures, timeouts, submit failures, invalid rawData, and record failures should degrade to inspectable metadata and `inf` costs instead of crashing a whole generation.
+- Local mode must stay usable without HTCondor or real simulator software for default tests.
 
 ## Non-Obvious Techniques
 - Cost is deliberately not a persisted evaluation artifact. Any module that needs cost asks `recorded_data` or `job_template` to compute it from rawData using the current `calc_cost.py`.
@@ -45,7 +61,7 @@
 - `project/config.py` is mutable at campaign setup time and occasionally during tuning.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
-- `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/reference_map.md`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are documentation artifacts.
-- Update architecture and blueprint files when module responsibilities, contracts, I/O, persistence behavior, execution topology, or non-obvious techniques change.
+- `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are current documentation artifacts; `dev_doc/obsolete/` is archival.
+- Update architecture and blueprint files when module responsibilities, contracts, I/O, persistence behavior, execution topology, historical lineage, or non-obvious techniques change.
 - Add one `dev_doc/change_records/` file after each code change to explain what changed and why.
 - Update `dev_doc/terminology.md` when a change corrects a concept or introduces a non-obvious name.

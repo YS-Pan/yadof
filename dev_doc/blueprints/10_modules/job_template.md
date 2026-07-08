@@ -5,6 +5,11 @@
 - Allow each optimization campaign to replace task files without changing the framework core.
 - Keep expensive evaluation outputs as rawData only; cost is a dynamic interpretation of rawData under the current task definition.
 
+## Historical Lineage
+- HFSS workflow and adapter conventions descend from earlier huangzetao/fanyufei task templates, but active task files are intentionally replaceable.
+- The old workflow habit of writing final costs was split: current workflows write rawData only, while `calc_cost.py` owns rawData-to-cost interpretation.
+- Shorten-style synthetic problem/objective ideas remain useful as references for non-HFSS tasks and surrogate-friendly rawData shapes.
+
 ## Functionalities
 - `api.py` exposes parameter metadata, variable count, objective metadata, normalization helpers, job-file copying, rawData cost calculation, and optional rawData importance weights for surrogate training.
 - `parameters_constraints.py` defines the current task's `PARAMETERS`.

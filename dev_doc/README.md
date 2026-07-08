@@ -13,9 +13,7 @@ When collecting project context, read these files in full:
 
 - `../user_doc/README.md`, then follow its reading instructions for user-facing
   task setup context.
-- `spec 20260502.md`
 - every file in `architecture/`
-- `reference_map.md`
 - `terminology.md`
 - every Markdown file in `toDo/`
 
@@ -29,10 +27,11 @@ changes can affect how users and AI assistants prepare tasks. Reading `user_doc/
 alone must not trigger a `dev_doc/` pass; user-facing task setup docs are allowed to
 stand on their own.
 
-Read `blueprints/` in two passes:
+Read `blueprints/` in a targeted pass:
 
 1. List all filenames under `blueprints/`, `blueprints/10_modules/`, and `blueprints/20_files/` when that folder exists.
-2. Read only the blueprint files that match the modules or concepts being changed.
+2. Read `blueprints/00_project.md` when the work affects project-wide contracts, documentation rules, or multiple modules.
+3. Read the module or file blueprint files that match the modules or concepts being changed.
 
 Do not read `change_records/` by default. Use it only when you need the reason behind
 a past change, when a current change conflicts with old intent, or when the user asks
@@ -72,41 +71,15 @@ optimization.
 Read it and follow its instructions whenever collecting `dev_doc` context. Do not
 duplicate detailed user instructions here when they already belong under `user_doc/`.
 
-### `spec 20260502.md`
-
-The spec is the highest-level product and architecture contract. It explains the
-project goals, required capabilities, module boundaries, persistence rules, and
-non-negotiable invariants.
-
-Use it to answer:
-
-- What must the system be able to do?
-- Which design choices are intentional constraints?
-- Which behaviors must not be simplified away?
-
-Write it as a stable contract, not as a daily implementation log.
-
-Recommended structure:
-
-```text
-# Project Specification
-## Background
-## Goals
-## Terminology
-## Target Structure
-## Module Responsibilities
-## Communication Contracts
-## Data Persistence Rules
-## Error And Recovery Requirements
-## Extension Requirements
-## Core Invariants
-```
-
 ### `architecture/`
 
 Architecture documents describe the current system from several viewpoints. They
 should explain how the project is organized now, what boundaries matter, and how
 runtime/development flows work.
+
+The architecture folder is now the highest-priority current-view contract for
+system boundaries, persistence rules, runtime flows, recovery behavior, and
+core invariants.
 
 Use them to answer:
 
@@ -161,6 +134,8 @@ Use blueprint files to answer:
 - What shape should its inputs and outputs have?
 - Which implementation tricks are easy to lose?
 - Which parts are intended to change often?
+- Which historical implementation ideas or reference ancestors still matter for
+  this module?
 
 Recommended structure:
 
@@ -186,6 +161,10 @@ Recommended structure:
 Keep blueprint files module-level until the project stabilizes. Avoid file-level blueprint
 documents unless a single file has a complex contract that cannot be captured by the
 module blueprint.
+
+Historical reference ancestry belongs in the relevant project or module blueprint
+as natural-language context. Avoid maintaining a separate path map to old reference
+trees unless those paths are present and actively useful in the current workspace.
 
 ### `toDo/`
 
@@ -229,32 +208,6 @@ When the user asks the AI to execute a task described in `toDo/`, complete the c
 and documentation work first, then move the corresponding Markdown file to
 `obsolete/`. If only part of the future work is completed, update the remaining
 toDo file or split out a new time-named toDo file before archiving the completed one.
-
-### `reference_map.md`
-
-The reference map links current modules to their closest source references in
-`reference/`. It is not a copy plan. It exists so an AI can quickly find conceptual
-ancestors without bulk-reading old projects.
-
-Use it to answer:
-
-- Which old files are most relevant to this module?
-- Which old implementation ideas should be preserved?
-- Which references are historical only?
-
-Recommended structure:
-
-```text
-# Reference Map
-## project/ as a whole
-## project/module_name
-- Closest reference files
-- Natural-language mapping
-- Current implementation note, when useful
-```
-
-Update it when a module adopts a new reference, drops an old one, or changes which
-old project is conceptually closest.
 
 ### `terminology.md`
 

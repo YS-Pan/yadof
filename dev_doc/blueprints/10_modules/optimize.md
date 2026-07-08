@@ -5,6 +5,11 @@
 - Work in normalized variable space and treat historical samples as advisory state supplied by `recorded_data`.
 - Support warm-started runs, optional surrogate assistance, and small optimization-level generation metadata.
 
+## Historical Lineage
+- Warm-started campaign orchestration and optimizer/recording separation descend from the older fanyufei optimizer lineage.
+- Surrogate-assisted generation and archive-reuse ideas descend from the shorten experiment lineage.
+- GPSAF supplies the alpha/beta/gamma surrogate-assistance framing, while current candidate diversity is implemented with pymoo GA/NSGA-III mechanics.
+
 ## Functionalities
 - `api.run_one_generation()` delegates one generation to `gpsaf.run_one_generation()`.
 - `api.run_generations()` wraps repeated generation execution, assigns a run id and optimization index, and records lightweight generation metadata through `recorded_data.api`.

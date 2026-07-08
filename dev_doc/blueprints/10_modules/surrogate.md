@@ -5,6 +5,11 @@
 - Train only from real records stored in `recorded_data`.
 - Estimate uncertainty from the minimum and maximum objective costs predicted by deep-ensemble members without introducing a separate durable surrogate-result archive.
 
+## Historical Lineage
+- The richer rawData surrogate runtime, conditional modeling direction, and cumulative archive thinking descend from the shorten experiment lineage.
+- The small optimizer-facing surrogate integration surface preserves the earlier fanyufei-style idea that surrogate behavior should stay behind a narrow API.
+- Current implementation deliberately reshapes both lineages around the v3 rawData-first contract instead of the old workspace/archive layouts.
+
 ## Functionalities
 - `api.py` exports training, prediction, historical-error, and staggered-training scheduling functions: `train()`, `predict_population()`, `evaluate_historical_errors()`, `start_training()`, `wait_for_pending_training()`, `ensure_fresh_enough()`, `has_trained_state()`, and `latest_state_generation()`.
 - `runtime.py` loads training data from `recorded_data.api`, validates and flattens rawData numeric arrays, asks `job_template.api` for task-owned rawData importance weights when available, builds query coordinates and field ids, scales targets, calls the INR trainer, reconstructs predicted rawData, audits historical prediction error, writes checkpoints through `checkpoints.py`, records training metadata through `metadata.py`, and caches the latest state in memory.

@@ -5,6 +5,11 @@
 - Keep problem shape and objective schema out of config; those belong to `job_template.api`.
 - Make local/default behavior explicit while leaving optional distributed and surrogate-assisted tuning paths visible.
 
+## Historical Lineage
+- Optimizer and evaluation launch settings descend from fanyufei-style `optConfig` concepts.
+- Surrogate and generation-plan controls descend from shorten-style experiment configuration.
+- Current config keeps task shape and objective semantics out of global settings; those belong to `job_template.api`.
+
 ## Functionalities
 - Defines root paths such as `PROJECT_ROOT`, `JOBS_DIR`, and `SURROGATE_CHECKPOINT_DIR`.
 - Selects `EVALUATION_MODE`.

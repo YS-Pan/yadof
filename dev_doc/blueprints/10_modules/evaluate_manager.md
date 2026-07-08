@@ -5,6 +5,11 @@
 - Keep local execution usable by default while supporting distributed execution through an explicit HTCondor backend.
 - Treat every individual independently so one failed preparation, workflow run, timeout, or recording step does not stop the generation.
 
+## Historical Lineage
+- Prepared job folders, generation evaluation, status collection, and failure handling descend from the fanyufei prepare/evaluate lineage.
+- Optional HTCondor submission and polling behavior descend from the older combined-project lineage and the current `reference/htcondor_windows_debug_reference.md` notes.
+- Current local and distributed backends share the v3 rawData-first recording path rather than preserving separate legacy result schemas.
+
 ## Functionalities
 - `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
 - Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.

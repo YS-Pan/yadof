@@ -5,6 +5,10 @@
 - Keep job folders disposable after their rawData and metadata have been recorded.
 - Support both local execution and optional distributed execution with the same output contract.
 
+## Historical Lineage
+- Job folders descend from prepared-job layouts in the older fanyufei and combined execution flows.
+- In v3 they remain disposable execution sandboxes, while `recorded_data` owns durable raw evidence after finalization.
+
 ## Functionalities
 - Hold copied workflow/runtime files needed to run one evaluation.
 - Hold `job_input.json` with normalized and unnormalized variables.

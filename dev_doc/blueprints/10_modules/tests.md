@@ -5,6 +5,10 @@
 - Keep the default test path local and independent of HTCondor or accidental real HFSS launches; real HFSS smoke tests must be explicitly enabled.
 - Verify behavior from module public APIs whenever possible.
 
+## Historical Lineage
+- The test suite is driven by current v3 contracts plus old prompt invariants: local mode must work by default, rawData stays flat, cost is dynamic, failures are isolated, and surrogate remains rawData-first.
+- Old project tests are historical context only; current tests should verify public APIs and storage contracts in this workspace.
+
 ## Functionalities
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
 - Default job-template tests assert the current antenna task parameter names, objective names, and `[0, 1]` cost bounds using small HFSS-like rawData fixtures. These assertions should follow the active `job_template` task rather than treating an old simulation filename as a framework constant.

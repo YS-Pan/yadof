@@ -5,9 +5,7 @@
 ```text
 dev_doc/
   README.md
-  spec 20260502.md
   terminology.md
-  reference_map.md
   architecture/
   blueprints/
   toDo/
@@ -68,10 +66,9 @@ project/
 - `user_doc/README.md` is the user-facing task documentation entry point. A
   `dev_doc` pass must read it and follow its guide; a `user_doc` pass must not
   read `dev_doc` unless the user separately asks for framework development context.
-- `dev_doc/spec 20260502.md` is the highest-level product and architecture contract.
-- `dev_doc/architecture/` captures current design views and must be read in full for context.
-- `dev_doc/blueprints/` captures generative module intent and non-obvious techniques; list all blueprint files first, then read relevant files in full.
-- `dev_doc/reference_map.md` captures old-project ancestry and must be read in full for context.
+- `dev_doc/architecture/` captures current design views, core invariants, runtime flows, and system-level contracts; it must be read in full for context.
+- `dev_doc/blueprints/00_project.md` is the generative project-level contract.
+- `dev_doc/blueprints/` captures module intent, I/O, non-obvious techniques, mutability boundaries, and useful historical reference ancestry; list all blueprint files first, then read relevant files in full.
 - `dev_doc/terminology.md` captures project-specific concepts and must be read in full for context.
 - `dev_doc/toDo/` captures pending future work and must be read in full during the first `dev_doc` pass.
 - `dev_doc/change_records/` captures what changed and why; do not read it by default.

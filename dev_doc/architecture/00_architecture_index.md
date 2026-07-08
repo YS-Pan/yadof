@@ -31,15 +31,21 @@ normalized variables
 
 Cost and normalized historical variables are derived views, not durable source records.
 
+## Core Goals
+- Keep the framework simulator-agnostic: HFSS, other Ansys tools, custom Python, and multi-tool workflows are task choices rather than core assumptions.
+- Support complex expensive evaluations that may run several simulations, combine tools, or perform task-local sub-optimization before producing rawData.
+- Resume long campaigns from completed recorded rawData, recalculating normalized variables and costs with the current task definition.
+- Isolate prepare, workflow, timeout, submit, and recording failures so one bad individual does not stop the generation.
+- Allow controlled mid-campaign edits to parameter ranges, workflow files, simulator inputs, and `calc_cost.py`; users remain responsible for discarding old history when semantics drift too far.
+- Keep local execution usable without HTCondor while allowing the distributed backend to share the same job and recording contracts.
+
 ## Documentation Center
 The documentation home is:
 
 ```text
 dev_doc/
   README.md
-  spec 20260502.md
   terminology.md
-  reference_map.md
   architecture/
   blueprints/
   toDo/
@@ -62,10 +68,12 @@ user_doc/
   config_and_run.md
 ```
 
-`spec 20260502.md`, `architecture/`, `reference_map.md`, and `terminology.md` are
-full-read context sources. `toDo/` is also full-read so pending future goals can shape
-current implementation choices. `blueprints/` is listed first and read selectively.
-`change_records/` is historical and `obsolete/` is archival; neither is read by default.
+`architecture/` and `terminology.md` are full-read context sources. `toDo/` is also
+full-read so pending future goals can shape current implementation choices.
+`blueprints/` is listed first and read selectively, with `blueprints/00_project.md`
+serving as the generative project-level contract and module blueprints carrying
+historical reference ancestry when it is still useful. `change_records/` is
+historical and `obsolete/` is archival; neither is read by default.
 `dev_doc` context gathering also starts with `user_doc/README.md` and follows its
 reading guide for user-facing task setup context. A `user_doc`-only pass does not
 read `dev_doc`.

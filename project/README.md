@@ -1,10 +1,9 @@
 # yadof project v3
 
-`project/` contains the v3 modular optimization framework described by
-`../spec 20260502.md`.
+`project/` contains the v3 modular optimization framework described by the
+current architecture views and project/module blueprints under `../dev_doc/`.
 
 The central contract is:
-
 ```text
 normalized variables -> rawData -> cost
 ```
@@ -87,8 +86,8 @@ print(state.checkpoint_path)
 
 ## Useful Docs
 
+- Documentation entry point: `../dev_doc/README.md`
+- Architecture views and current invariants: `../dev_doc/architecture/`
 - Project blueprint overview: `../dev_doc/blueprints/00_project.md`
-- Module blueprints: `../dev_doc/blueprints/10_modules/`
-- Reference ancestry map: `../dev_doc/reference_map.md`
-- Architecture views: `../dev_doc/architecture/`
-- Highest-level specification: `../dev_doc/spec 20260502.md`
+- Module blueprints and historical lineage: `../dev_doc/blueprints/10_modules/`
+- Project terminology: `../dev_doc/terminology.md`

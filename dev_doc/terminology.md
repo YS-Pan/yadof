@@ -4,6 +4,17 @@ Only terms that need project context are listed here.
 
 | Term | Meaning In This Project |
 |---|---|
+| `expensive evaluation` | A real workflow run that converts task variables into rawData by calling a simulator, custom Python, or a multi-step task workflow. It does not create authoritative cost files. |
+| `rawData` | Task-owned evidence produced by `workflow.py`, usually one or more flat `rawData/*.npz` files. It is the durable source for later cost calculation and surrogate training. |
+| `cost` | Dynamic objective value tuple calculated from rawData by the current `job_template/calc_cost.py`. Cost is returned to callers but is not stored as durable source truth. |
+| `normalized_variables` | Optimizer-space values, usually floats in `[0, 1]`. Historical normalized values are calculated on demand by `recorded_data` from saved raw variables and current parameter ranges. |
+| `unnormalized_variables` | Task-space/raw variable values used by the workflow. These are stored durably once per individual in recorded data. |
+| `PARAMETERS` | The task-owned parameter definitions in `project/job_template/parameters_constraints.py`, exposed through `job_template.api` for variable names, ranges, units, normalization, and denormalization. |
+| `workflow.py` | The active task file that runs an expensive evaluation and writes rawData plus job-local lifecycle metadata. It must not write final costs. |
+| `calc_cost.py` | The active task file that interprets rawData into current objective costs and optional rawData importance weights for surrogate training. It is not copied into prepared job folders. |
+| `local mode` | Evaluation backend where `evaluate_manager` runs prepared jobs as local subprocesses. It is the default mode for tests and first debugging passes. |
+| `distributed mode` | Evaluation backend where `evaluate_manager` submits prepared jobs to HTCondor while preserving the same job folder and recording contract as local mode. |
+| `GPSAF` | The surrogate-assisted optimizer framing used by `project.optimize`, including alpha/beta/gamma surrogate pressure controls and real-evaluation validation of selected candidates. |
 | `individual` | One optimizer candidate after it has been turned into a real evaluation job. In code this is usually represented by a job folder and later by one `indMeta.jsonl` row. |
 | `individual_metadata.json` | A job-local JSON file written by `workflow.py`. It is the source of truth for an individual's `started_at`, `ended_at`, workflow status, and run/generation context that the workflow can see. |
 | `indMeta.jsonl` | Append-only recorded-data stream with one compact row per individual. It stores raw variables once, archived rawData member names, compact rawData metadata, workflow timing, status, and run/generation identifiers. |

@@ -5,6 +5,11 @@
 - Provide the optimizer and surrogate with current interpretations of history: normalized variables, rawData samples, and dynamically calculated costs.
 - Make completed, failed, errored, and timed-out job records inspectable through one append-only individual metadata stream.
 
+## Historical Lineage
+- Durable individual history, rawData archiving, and plotting-facing history contracts descend from the fanyufei batch/recording lineage.
+- Cumulative reusable archive ideas descend from the shorten archive lineage.
+- Current storage differs from both by refusing to persist cost or normalized variables as source data.
+
 ## Functionalities
 - `api.py` is the public entry point for recording jobs, listing records, querying raw variables, calculating normalized variables, loading rawData, calculating costs, and bundling surrogate training data.
 - `records.py` writes one compact individual metadata row into `indMeta.jsonl`, archives each source `.npz` into `rawData.npz` as `job_name/file.npz`, promotes workflow timing and run/generation identifiers, sanitizes metadata, and rejects duplicate jobs unless `overwrite=True`.
