@@ -29,7 +29,7 @@ stand on their own.
 
 Read `blueprints/` in a targeted pass:
 
-1. List all filenames under `blueprints/`, `blueprints/10_modules/`, and `blueprints/20_files/` when that folder exists.
+1. List all filenames under `blueprints/`, `blueprints/10_modules/`, and recursively under `blueprints/20_files/` when that folder exists.
 2. Read `blueprints/00_project.md` when the work affects project-wide contracts, documentation rules, or multiple modules.
 3. Read the module or file blueprint files that match the modules or concepts being changed.
 
@@ -160,7 +160,9 @@ Recommended structure:
 
 Keep blueprint files module-level until the project stabilizes. Avoid file-level blueprint
 documents unless a single file has a complex contract that cannot be captured by the
-module blueprint.
+module blueprint. File-level blueprints under `blueprints/20_files/` mirror the
+source path as folders, such as `blueprints/20_files/project/surrogate/runtime.py.md`;
+do not encode a path into one filename such as `project_surrogate_runtime.py.md`.
 
 Historical reference ancestry belongs in the relevant project or module blueprint
 as natural-language context. Avoid maintaining a separate path map to old reference

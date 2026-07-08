@@ -68,7 +68,11 @@ project/
   read `dev_doc` unless the user separately asks for framework development context.
 - `dev_doc/architecture/` captures current design views, core invariants, runtime flows, and system-level contracts; it must be read in full for context.
 - `dev_doc/blueprints/00_project.md` is the generative project-level contract.
-- `dev_doc/blueprints/` captures module intent, I/O, non-obvious techniques, mutability boundaries, and useful historical reference ancestry; list all blueprint files first, then read relevant files in full.
+- `dev_doc/blueprints/` captures module intent, I/O, non-obvious techniques,
+  mutability boundaries, and useful historical reference ancestry; list all blueprint
+  files first, then read relevant files in full. File-level blueprints under
+  `blueprints/20_files/` mirror source paths, for example
+  `blueprints/20_files/project/surrogate/runtime.py.md`.
 - `dev_doc/terminology.md` captures project-specific concepts and must be read in full for context.
 - `dev_doc/toDo/` captures pending future work and must be read in full during the first `dev_doc` pass.
 - `dev_doc/change_records/` captures what changed and why; do not read it by default.

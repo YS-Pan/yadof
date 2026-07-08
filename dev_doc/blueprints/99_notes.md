@@ -16,7 +16,11 @@
 - The current optimizer uses pymoo GA for single-objective runs and pymoo NSGA-III reference-direction mechanics for multi-objective runs inside a GPSAF-shaped flow.
 
 ## Documentation Maintenance
-- Keep module-level blueprint files as the overview layer. For stable modules, add file-level `.md` blueprints under `dev_doc/blueprints/20_files/` when a change introduces important per-file responsibilities.
+- Keep module-level blueprint files as the overview layer. For stable modules, add
+  file-level `.md` blueprints under `dev_doc/blueprints/20_files/` when a
+  change introduces important per-file responsibilities. File-level blueprint paths
+  mirror source paths, for example
+  `dev_doc/blueprints/20_files/project/surrogate/runtime.py.md`.
 - Update `dev_doc/architecture/` when module responsibilities, public APIs, data persistence, execution topology, or current-view invariants change.
 - Update `dev_doc/blueprints/` when module intent, I/O shape, non-obvious techniques, mutability boundaries, or useful historical lineage changes.
 - Add a time-named file under `dev_doc/change_records/` after each code change to describe what changed and why.
