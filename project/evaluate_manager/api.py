@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from .config import (
     DEFAULT_JOB_TEMPLATE_DIR,
@@ -35,6 +35,7 @@ def evaluate_population(
     run_id: str | None = None,
     optimization_index: int | None = None,
     generation_index: int | None = None,
+    after_jobs_submitted: Callable[[], object] | None = None,
 ) -> tuple[tuple[float, ...], ...]:
     """Evaluate a generation and return dynamically computed costs.
 
@@ -64,6 +65,7 @@ def evaluate_population(
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=generation_index,
+            after_jobs_submitted=after_jobs_submitted,
         )
     if mode == "distributed":
         return _evaluate_population_distributed(
@@ -75,6 +77,7 @@ def evaluate_population(
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=generation_index,
+            after_jobs_submitted=after_jobs_submitted,
         )
     raise ValueError(f"Unsupported evaluate_manager mode: {mode!r}")
 
@@ -99,6 +102,7 @@ def _evaluate_population_local(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
+    after_jobs_submitted: Callable[[], object] | None,
 ) -> tuple[tuple[float, ...], ...]:
     jobs_dir = Path(jobs_dir)
     population_rows = tuple(_population_row(variables) for variables in population)
@@ -157,7 +161,9 @@ def _evaluate_population_local(
         objective_width = len(costs)
         costs_by_individual[index] = costs
 
-    return tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
+    costs = tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
+    _run_after_jobs_submitted(after_jobs_submitted)
+    return costs
 
 
 def _evaluate_one_local(
@@ -254,6 +260,7 @@ def _evaluate_population_distributed(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
+    after_jobs_submitted: Callable[[], object] | None,
 ) -> tuple[tuple[float, ...], ...]:
     jobs_dir = Path(jobs_dir)
     costs_by_individual: list[tuple[float, ...] | None] = []
@@ -303,7 +310,15 @@ def _evaluate_population_distributed(
     if prepared_jobs:
         _progress(f"distributed: submitting {len(prepared_jobs)} prepared jobs")
         try:
-            results = run_condor_jobs(tuple(prepared_jobs), timeout_sec=timeout_sec, env=env)
+            if after_jobs_submitted is None:
+                results = run_condor_jobs(tuple(prepared_jobs), timeout_sec=timeout_sec, env=env)
+            else:
+                results = run_condor_jobs(
+                    tuple(prepared_jobs),
+                    timeout_sec=timeout_sec,
+                    env=env,
+                    after_jobs_submitted=after_jobs_submitted,
+                )
         except Exception as exc:  # noqa: BLE001 - backend-wide unexpected failure.
             results = tuple(
                 _failed_result(
@@ -349,8 +364,17 @@ def _evaluate_population_distributed(
     else:
         _progress("distributed: no jobs were prepared")
 
-    return tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
+    costs = tuple(costs if costs is not None else _inf_costs(objective_width) for costs in costs_by_individual)
+    return costs
 
+
+def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
+    if callback is None:
+        return
+    try:
+        callback()
+    except Exception as exc:  # noqa: BLE001 - training callbacks must not turn submitted jobs into failures.
+        _progress(f"after-submit callback failed: {exc.__class__.__name__}: {exc}")
 
 def _finalize_result(result: JobResult) -> tuple[float, ...] | None:
     costs = record_result(result)

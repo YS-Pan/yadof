@@ -8,7 +8,7 @@
 ## Functionalities
 - `api.run_one_generation()` delegates one generation to `gpsaf.run_one_generation()`.
 - `api.run_generations()` wraps repeated generation execution, assigns a run id and optimization index, and records lightweight generation metadata through `recorded_data.api`.
-- `gpsaf.py` resolves problem width/objective width, builds a pymoo-backed context, chooses baseline or surrogate-assisted candidate generation, evaluates the chosen population, and optionally notifies surrogate retraining.
+- `gpsaf.py` resolves problem width/objective width, builds a pymoo-backed context, chooses baseline or surrogate-assisted candidate generation from the latest already-trained surrogate state, evaluates the chosen population, and schedules new surrogate training after real jobs have been submitted.
 - `gpsaf_pymoo.py` adapts GA/NSGA-III ask-tell behavior to the unit hypercube, chooses Das-Dennis reference directions near the requested population size, exposes NSGA-III survival for candidate pools, and reconstructs optimizer state from historical records.
 - `gpsaf_phases.py` implements surrogate alpha/beta pooled NSGA-III candidate phases, an exploration quota that bypasses surrogate selection, uncertainty diagnostics, and graceful fallback when surrogate calls fail.
 - `gpsaf_misc.py` imports public APIs dynamically, reads historical optimization results, calls `evaluate_manager.api` with run/generation context, and keeps cost comparison helpers small.
@@ -32,6 +32,9 @@
 - Surrogate alpha selection predicts `alpha * population_size` candidates as one pool and applies NSGA-III survival instead of position-wise pairwise replacement.
 - Surrogate beta selection pools anchors with beta-generated predicted candidates and applies NSGA-III survival again.
 - `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves a small number of real-evaluation candidates from baseline offspring/random refill so a branch is not eliminated solely by a biased surrogate.
+
+- Staggered surrogate scheduling avoids the old double-train pattern. A generation uses the latest completed surrogate state for GPSAF candidate screening, submits real jobs, and then starts training for the just-submitted generation.
+- `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` bounds staleness. With the default value `2`, the optimizer allows one- and two-generation lag but blocks before submitting work that would use a three-generation-old model.
 
 ## Mutability Profile
 - GPSAF policy, NSGA-III reference-direction controls, pymoo operator parameters, and surrogate alpha/beta/exploration behavior are expected to evolve.

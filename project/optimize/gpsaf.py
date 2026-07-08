@@ -18,7 +18,7 @@ from .gpsaf_misc import (
     evaluate,
     history_records,
 )
-from .gpsaf_phases import notify_surrogate_after_evaluation, surrogate_population
+from .gpsaf_phases import ensure_surrogate_fresh_enough, notify_surrogate_after_submission, surrogate_population
 
 
 @dataclass(frozen=True)
@@ -73,6 +73,7 @@ def run_one_generation(
     source = "gpsaf_random"
 
     if history and _surrogate_requested():
+        diagnostics.update(ensure_surrogate_fresh_enough(int(generation_index)))
         population, surrogate_info = surrogate_population(
             history,
             context=context,
@@ -107,14 +108,18 @@ def run_one_generation(
         )
         population = population_from_records(records)
 
+    after_jobs_submitted = (
+        (lambda: notify_surrogate_after_submission(int(generation_index)))
+        if _surrogate_requested()
+        else None
+    )
     costs = evaluate(
         population,
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=int(generation_index),
+        after_jobs_submitted=after_jobs_submitted,
     )
-    if _surrogate_requested():
-        notify_surrogate_after_evaluation(int(generation_index))
     return OptimizationResult(
         generation_index=int(generation_index),
         population=population,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import importlib
 import inspect
 import json
@@ -13,6 +12,19 @@ import torch
 
 from project import config
 
+from .checkpoints import write_checkpoint
+from .metadata import monotonic_time, now_text, record_training_success
+from .types import (
+    Population,
+    RawArraySlot,
+    RawDataItem,
+    RawDataSchema,
+    RawSample,
+    SurrogateState,
+    TargetScaler,
+    TrainingData,
+)
+
 from .modeling import (
     INRTrainConfig,
     fit_deep_ensemble_conditional_inr,
@@ -20,88 +32,10 @@ from .modeling import (
 )
 
 
-Population = tuple[tuple[float, ...], ...]
-RawDataItem = Mapping[str, object] | str | Path
-RawSample = tuple[RawDataItem, ...]
 MODEL_NAME = "conditional_inr_rawdata_deep_ensemble"
 
 
-@dataclass(frozen=True)
-class TrainingData:
-    parameter_names: tuple[str, ...]
-    normalized_variables: Population
-    raw_data: tuple[RawSample, ...]
-
-
-@dataclass(frozen=True)
-class RawArraySlot:
-    item_index: int
-    key: str
-    shape: tuple[int, ...]
-    dtype: str
-    start: int
-    end: int
-    field_id: int
-
-
-@dataclass(frozen=True)
-class RawDataSchema:
-    templates: tuple[dict[str, object], ...]
-    modeled_slots: tuple[RawArraySlot, ...]
-    flat_dim: int
-    coord_table: np.ndarray
-    field_ids: np.ndarray
-
-    @property
-    def n_fields(self) -> int:
-        return int(max((slot.field_id for slot in self.modeled_slots), default=-1) + 1)
-
-
-@dataclass(frozen=True)
-class TargetScaler:
-    mean: np.ndarray
-    scale: np.ndarray
-
-    def transform(self, values: np.ndarray) -> np.ndarray:
-        return np.ascontiguousarray((values - self.mean) / self.scale, dtype=np.float32)
-
-    def inverse(self, values: np.ndarray) -> np.ndarray:
-        return np.ascontiguousarray(values * self.scale + self.mean, dtype=np.float64)
-
-    def inverse_members(self, values: np.ndarray) -> np.ndarray:
-        return np.ascontiguousarray(values * self.scale[None, None, :] + self.mean[None, None, :], dtype=np.float64)
-
-
-@dataclass(frozen=True)
-class SurrogateState:
-    generation_index: int
-    sample_count: int
-    checkpoint_path: Path
-    model_path: Path
-    artifact_dir: Path
-    model_name: str
-    parameter_names: tuple[str, ...]
-    normalized_variables: Population
-    raw_data: tuple[RawSample, ...]
-    schema: RawDataSchema | None
-    scaler: TargetScaler | None
-    model: object | None
-    train_cfg: INRTrainConfig | None
-    device: torch.device | None
-    train_history: dict[str, object]
-    training_flat_values: np.ndarray
-    query_weights: np.ndarray
-    mean_relative_error: float
-    historical_relative_error_p50: tuple[float, ...]
-    historical_relative_error_p90: tuple[float, ...]
-    historical_relative_error_p95: tuple[float, ...]
-    historical_absolute_error_p90: tuple[float, ...]
-    historical_true_costs: tuple[tuple[float, ...], ...]
-    historical_predicted_costs: tuple[tuple[float, ...], ...]
-
-
 _STATE: SurrogateState | None = None
-
 
 def _call_first(module, names: Iterable[str], *args, **kwargs):
     for name in names:
@@ -698,73 +632,11 @@ def _predict_costs_for_error_audit(
     return _costs_from_raw(_raw_samples_from_flat(state.schema, mean_flat))
 
 
-def _schema_payload(schema: RawDataSchema | None) -> dict[str, object]:
-    if schema is None:
-        return {"flat_dim": 0, "modeled_slots": []}
-    return {
-        "rawdata_item_count": len(schema.templates),
-        "flat_dim": int(schema.flat_dim),
-        "query_count": int(schema.coord_table.shape[0]),
-        "n_fields": int(schema.n_fields),
-        "modeled_slots": [
-            {
-                "item_index": int(slot.item_index),
-                "key": slot.key,
-                "shape": list(slot.shape),
-                "dtype": slot.dtype,
-                "start": int(slot.start),
-                "end": int(slot.end),
-                "field_id": int(slot.field_id),
-            }
-            for slot in schema.modeled_slots
-        ],
-    }
-
-
-def _write_checkpoint(state: SurrogateState) -> None:
-    state.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    state.artifact_dir.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "generation_index": int(state.generation_index),
-        "sample_count": int(state.sample_count),
-        "parameter_names": list(state.parameter_names),
-        "model": state.model_name,
-        "member_count": int(state.train_history.get("member_count", 0)),
-        "mean_relative_error": float(state.mean_relative_error),
-        "historical_relative_error_p50": list(state.historical_relative_error_p50),
-        "historical_relative_error_p90": list(state.historical_relative_error_p90),
-        "historical_relative_error_p95": list(state.historical_relative_error_p95),
-        "historical_absolute_error_p90": list(state.historical_absolute_error_p90),
-        "model_path": state.model_path.name,
-        "artifact_dir": state.artifact_dir.name,
-        "schema": _schema_payload(state.schema),
-        "train_cfg": None if state.train_cfg is None else asdict(state.train_cfg),
-        "train_history": state.train_history,
-        "note": "Surrogate predicts rawData arrays with a conditional INR deep ensemble; costs are dynamically derived through job_template.calc_cost.",
-    }
-    state.checkpoint_path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-        newline="\n",
-    )
-
-    arrays: dict[str, np.ndarray] = {
-        "schema_flat_dim": np.asarray(0 if state.schema is None else state.schema.flat_dim, dtype=np.int64),
-        "training_sample_count": np.asarray(state.sample_count, dtype=np.int64),
-        "training_flat_values": np.ascontiguousarray(state.training_flat_values, dtype=np.float32),
-        "query_weights": np.ascontiguousarray(state.query_weights, dtype=np.float32),
-    }
-    if state.schema is not None:
-        arrays["coord_table"] = np.ascontiguousarray(state.schema.coord_table, dtype=np.float32)
-        arrays["field_ids"] = np.ascontiguousarray(state.schema.field_ids, dtype=np.int64)
-    if state.scaler is not None:
-        arrays["target_mean"] = np.ascontiguousarray(state.scaler.mean, dtype=np.float32)
-        arrays["target_scale"] = np.ascontiguousarray(state.scaler.scale, dtype=np.float32)
-    np.savez_compressed(state.model_path, **arrays)
-
-
-def train(*, generation_index: int = 0) -> SurrogateState:
+def train(*, generation_index: int = 0, started_at: str | None = None) -> SurrogateState:
     global _STATE
+
+    training_started_at = now_text() if started_at is None else str(started_at)
+    started_monotonic = monotonic_time()
 
     data = _load_training_data()
     if len(data.normalized_variables) != len(data.raw_data):
@@ -912,17 +784,30 @@ def train(*, generation_index: int = 0) -> SurrogateState:
         historical_true_costs=true_costs,
         historical_predicted_costs=pred_costs,
     )
-    _write_checkpoint(state)
+    write_checkpoint(state)
+    ended_at = now_text()
+    record_training_success(
+        state,
+        started_at=training_started_at,
+        ended_at=ended_at,
+        duration_sec=monotonic_time() - started_monotonic,
+    )
     _STATE = state
     return state
 
 
-def _ensure_state() -> SurrogateState:
-    global _STATE
-    if _STATE is None:
-        _STATE = train(generation_index=0)
-    return _STATE
+def has_trained_state() -> bool:
+    return _STATE is not None
 
+
+def latest_state_generation() -> int | None:
+    return None if _STATE is None else int(_STATE.generation_index)
+
+
+def _require_state() -> SurrogateState:
+    if _STATE is None:
+        raise RuntimeError("surrogate model is not trained")
+    return _STATE
 
 def _state_input_dim(state: SurrogateState) -> int:
     if state.normalized_variables:
@@ -931,7 +816,7 @@ def _state_input_dim(state: SurrogateState) -> int:
 
 
 def predict_raw_data(population) -> tuple[RawSample, ...]:
-    state = _ensure_state()
+    state = _require_state()
     if state.schema is None or state.schema.flat_dim == 0:
         return tuple()
     x = _x_matrix(population, _state_input_dim(state))
@@ -941,7 +826,7 @@ def predict_raw_data(population) -> tuple[RawSample, ...]:
 
 
 def predict_population(population) -> tuple[tuple[tuple[float, ...], tuple[tuple[float, float], ...]], ...]:
-    state = _ensure_state()
+    state = _require_state()
     normalized_population = _as_population(population)
     if not normalized_population:
         return ()
@@ -983,5 +868,5 @@ def predict_population(population) -> tuple[tuple[tuple[float, ...], tuple[tuple
 
 
 def evaluate_historical_errors() -> tuple[tuple[float, ...], ...]:
-    state = _ensure_state()
+    state = _require_state()
     return _relative_errors(state.historical_true_costs, state.historical_predicted_costs)

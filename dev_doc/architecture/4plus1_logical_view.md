@@ -32,6 +32,7 @@
 - `surrogate` never bypasses rawData by learning only `variables -> cost`.
 - `surrogate` may learn normalized/scaled rawData internals, but public predictions are reconstructed rawData passed to `job_template.api` for cost.
 - `surrogate` historical error audits must use real model predictions rather than substituting true historical costs.
+- Surrogate prediction must use an already-trained state. Training is scheduled after real job submission, and prediction must not call 	rain() implicitly.
 - Exact-neighbor snapping or near-training-sample replacement is not part of the current surrogate contract and must not be added unless explicitly requested by the user.
 - Task-owned rawData importance weights may emphasize objective-relevant windows, but surrogate training must still retain full-field rawData coverage. For very large rawData fields, stochastic query minibatches may limit per-step backpropagation work while resampling from the full query table and leaving full-field prediction/reconstruction intact.
 - Current HFSS far-field rawData is stored as full-matrix data by default; objective cost calculation may select phi/theta/frequency windows from that matrix, but it must not make the workflow export only those windows unless a task intentionally requests trace diagnostics.

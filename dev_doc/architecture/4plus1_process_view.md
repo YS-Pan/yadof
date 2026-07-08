@@ -53,6 +53,12 @@ sequenceDiagram
     O->>E: evaluate selected real population
 ```
 
+## Staggered Surrogate Training
+- During a surrogate-assisted generation, `optimize` first checks whether the existing trained surrogate is fresh enough. The default lag rule allows one or two generations of lag, but blocks before a three-generation lag would be used.
+- Candidate screening uses the latest completed in-memory surrogate state. Prediction never auto-trains as a side effect.
+- Real jobs are prepared and submitted first. In distributed mode, `evaluate_manager.condor_runner` invokes the submit-side callback after all successful `condor_submit` calls and before polling job outputs.
+- The callback starts one background surrogate training job for the submitted generation. Training metadata goes to `recorded_data/optMeta/optMeta.jsonl` with `record_type = "surrogate_training"`.
+- If no trained surrogate exists yet, GPSAF falls back to baseline real candidates while the first staggered training pass is scheduled after evaluation submission.
 ## Distributed Evaluation Sequence
 
 ```mermaid

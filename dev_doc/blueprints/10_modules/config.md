@@ -12,7 +12,7 @@
 - Defines HTCondor command/resource/submit defaults for distributed evaluation.
 - Defines optimizer population, random seed, NSGA-III reference-direction controls, pymoo operator parameters, duplicate-key rounding, and refill behavior.
 - Defines surrogate model, torch device selection, conditional-INR training, target scaling, task-owned rawData importance weighting, stochastic training query limits, and error hyperparameters.
-- Defines GPSAF surrogate assistance controls: `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, `OPTIMIZE_SURROGATE_GAMMA`, and `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION`.
+- Defines GPSAF surrogate assistance controls: `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, `OPTIMIZE_SURROGATE_GAMMA`, `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION`, and `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`.
 
 ## I/O Format
 - Config values are imported directly by modules that need them.
@@ -37,6 +37,8 @@
 - `SURROGATE_RAWDATA_IMPORTANCE_FLOOR` and `SURROGATE_RAWDATA_IMPORTANCE_BOOST` are passed to task-owned rawData importance hooks; they do not remove full-field training coverage. `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` caps how many high-dimensional rawData query points are sampled per training step when fields are very large; scalar and 1D rawData slots are still always included, and prediction, reconstruction, checkpoints, and historical error audits still use the full query table.
 - `OPTIMIZE_NSGA3_REF_DIR_METHOD` and `OPTIMIZE_NSGA3_PARTITIONS` tune NSGA-III reference directions without reintroducing an algorithm-selection switch.
 - `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves real-evaluation candidates that bypass surrogate selection so surrogate bias cannot fully starve a tradeoff branch.
+
+- `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` is interpreted against completed surrogate training generations. The default `2` allows a model to trail real simulation by one or two generations, then forces a blocking catch-up before the next surrogate-assisted submission.
 
 ## Mutability Profile
 - Users may tune config often during experiments.

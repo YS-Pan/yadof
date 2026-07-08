@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import importlib
 import math
 import random
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 from project import config
 
@@ -156,8 +156,18 @@ def evaluate(
     run_id: str | None = None,
     optimization_index: int | None = None,
     generation_index: int | None = None,
+    after_jobs_submitted: Callable[[], object] | None = None,
 ) -> Costs:
     evaluate_api = importlib.import_module("project.evaluate_manager.api")
+    callback_ran = False
+
+    def wrapped_after_jobs_submitted():
+        nonlocal callback_ran
+        callback_ran = True
+        if after_jobs_submitted is not None:
+            return after_jobs_submitted()
+        return None
+
     try:
         raw_costs = call_first(
             evaluate_api,
@@ -167,6 +177,7 @@ def evaluate(
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=generation_index,
+            after_jobs_submitted=wrapped_after_jobs_submitted if after_jobs_submitted is not None else None,
         )
     except TypeError:
         raw_costs = call_first(
@@ -174,6 +185,8 @@ def evaluate(
             ("evaluate_generation", "evaluate_population", "evaluate"),
             population,
         )
+    if after_jobs_submitted is not None and not callback_ran:
+        after_jobs_submitted()
     return as_costs(raw_costs)
 
 

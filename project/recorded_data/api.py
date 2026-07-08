@@ -70,6 +70,15 @@ def list_optimization_metadata() -> tuple[dict[str, object], ...]:
     return _records.list_optimization_metadata()
 
 
+def record_surrogate_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
+    _sync_paths()
+    return _records.record_surrogate_metadata(metadata)
+
+
+def list_surrogate_metadata() -> tuple[dict[str, object], ...]:
+    _sync_paths()
+    return _records.list_surrogate_metadata()
+
 def get_job_names(*, status: str | None = None) -> tuple[str, ...]:
     _sync_paths()
     return _records.get_job_names(status=status)

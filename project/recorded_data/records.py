@@ -117,6 +117,19 @@ def record_optimization_metadata(metadata: Mapping[str, object]) -> dict[str, ob
     return record
 
 
+def record_surrogate_metadata(metadata: Mapping[str, object]) -> dict[str, object]:
+    payload = {"record_type": "surrogate_training", **dict(metadata)}
+    payload.setdefault("record_type", "surrogate_training")
+    return record_optimization_metadata(payload)
+
+
+def list_surrogate_metadata() -> tuple[dict[str, object], ...]:
+    return tuple(
+        dict(record)
+        for record in read_optimization_metadata()
+        if str(record.get("record_type")) == "surrogate_training"
+    )
+
 def list_records() -> tuple[dict[str, object], ...]:
     return tuple(dict(record) for record in read_individual_records())
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from .config import (
     CONDOR_CLUSTER_ID_FILE_NAME,
@@ -109,6 +109,7 @@ def run_condor_jobs(
     *,
     timeout_sec: float,
     env: Mapping[str, str] | None = None,
+    after_jobs_submitted: Callable[[], object] | None = None,
 ) -> tuple[JobResult, ...]:
     """Submit jobs to HTCondor, wait for job-local outputs, and collect results.
 
@@ -138,6 +139,9 @@ def run_condor_jobs(
                 f"htcondor: submit progress {index}/{total}; queued={len(pending)}; "
                 f"submit_failures={submit_failures}; last_cluster={cluster}"
             )
+
+    if pending:
+        _run_after_jobs_submitted(after_jobs_submitted)
 
     deadline = time.monotonic() + float(timeout_sec)
     poll_sec = max(0.1, htcondor_poll_sec())
@@ -182,6 +186,14 @@ def run_condor_jobs(
 
     return tuple(results_by_name[job.name] for job in jobs)
 
+
+def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
+    if callback is None:
+        return
+    try:
+        callback()
+    except Exception as exc:  # noqa: BLE001 - keep submitted jobs alive if training scheduling fails.
+        _progress(f"htcondor: after-submit callback failed: {exc.__class__.__name__}: {exc}")
 
 def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> CondorSubmission:
     clear_stale_runtime_artifacts(job.directory)

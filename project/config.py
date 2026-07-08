@@ -104,6 +104,10 @@ OPTIMIZE_SURROGATE_ALPHA = 3
 OPTIMIZE_SURROGATE_BETA = 3
 OPTIMIZE_SURROGATE_GAMMA = 0.5
 OPTIMIZE_SURROGATE_EXPLORATION_FRACTION = 0.10
+# The staggered surrogate schedule may use a model one or two generations behind
+# real evaluations. Before submitting work that would use a three-generation-old
+# model, the optimizer blocks until training catches up.
+OPTIMIZE_SURROGATE_MAX_TRAINING_LAG = 2
 
 OPTIMIZE_NSGA3_REF_DIR_METHOD = "das-dennis"
 OPTIMIZE_NSGA3_PARTITIONS = None

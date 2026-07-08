@@ -324,3 +324,50 @@ def test_distributed_mode_uses_condor_runner_and_shared_finalization(tmp_path, m
     assert costs == ((2.0, 3.0), (math.inf, math.inf))
     assert [result.status for result in recorded] == ["done", "error"]
     assert recorded[0].metadata["engine"] == "htcondor"
+
+def test_run_condor_jobs_calls_after_submit_callback_before_wait(tmp_path, monkeypatch):
+    from project.evaluate_manager import condor_runner
+    from project.evaluate_manager.condor_runner import CondorSubmission
+
+    job = _job(tmp_path)
+    (job.directory / "workflow.py").write_text("# test\n", encoding="utf-8", newline="\n")
+    (job.directory / "job_input.json").write_text("{}", encoding="utf-8", newline="\n")
+    events: list[str] = []
+
+    def fake_submit(job_spec, *, env=None):
+        events.append("submit")
+        submit_file = job_spec.directory / "job.sub"
+        submit_file.write_text("queue 1\n", encoding="utf-8", newline="\n")
+        return CondorSubmission(
+            job=job_spec,
+            submit_file=submit_file,
+            cluster_id=321,
+            submitted_at="2026-07-05T00:00:00+08:00",
+            stdout="submitted",
+            stderr="",
+        )
+
+    def fake_collect(job_spec, *, submission, timed_out, terminal_reason, remove_error=None):
+        events.append("collect")
+        from project.evaluate_manager.types import JobResult
+
+        return JobResult(
+            job_name=job_spec.name,
+            job_dir=job_spec.directory,
+            status="done",
+            unnormalized_variables=job_spec.unnormalized_variables,
+            metadata={"job_name": job_spec.name, "status": "done", "engine": "htcondor"},
+        )
+
+    monkeypatch.setattr(condor_runner, "submit_condor_job", fake_submit)
+    monkeypatch.setattr(condor_runner, "terminal_log_reason", lambda _job_dir: "terminated")
+    monkeypatch.setattr(condor_runner, "collect_condor_result", fake_collect)
+
+    results = condor_runner.run_condor_jobs(
+        (job,),
+        timeout_sec=1,
+        after_jobs_submitted=lambda: events.append("callback"),
+    )
+
+    assert results[0].status == "done"
+    assert events == ["submit", "callback", "collect"]

@@ -8,7 +8,7 @@
 ## Functionalities
 - `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
 - Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
-- Distributed mode prepares all jobs, writes HTCondor submit files, submits `workflow.py` through the configured worker Python executable, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
+- Distributed mode prepares all jobs, writes HTCondor submit files, submits `workflow.py` through the configured worker Python executable, runs an optional submit-side callback after all prepared jobs are submitted, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
 - `job_files.prepare_job()` copies job template files through `job_template.api`, including any active com files already placed in `job_template`, denormalizes variables via `job_template.api`, writes `job_input.json` with run/generation context, and records `job_static_hash` in submit-side metadata.
 - `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
 - `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, extracts Condor return-value/log tails when available, best-effort removes timed-out cluster ids, and collects `JobResult` objects.
@@ -37,6 +37,8 @@
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
 - The Windows HTCondor submit pattern uses an explicit Python executable because Windows workers cannot reliably execute `.py` payloads directly under HTCondor. Keep `run_as_owner = False` and `load_profile = True` unless the user deliberately changes identity policy.
 - `YADOF_PROGRESS=1` enables coarse console progress for long distributed runs without making public API calls noisy by default.
+
+- `after_jobs_submitted` callbacks are submit-side hooks. In distributed mode `condor_runner` calls the hook after all successful submissions and before polling; callback failures are logged but do not cancel already-submitted jobs.
 
 ## Mutability Profile
 - Local execution details and HTCondor backend wiring may change.

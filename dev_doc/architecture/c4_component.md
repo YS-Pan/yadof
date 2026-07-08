@@ -89,13 +89,19 @@ flowchart LR
 ```mermaid
 flowchart LR
     SurAPI["api.py"] --> Runtime["runtime.py"]
+    SurAPI --> Scheduler["scheduler.py"]
+    Scheduler --> Runtime
     Runtime --> Modeling["modeling.py"]
+    Runtime --> CheckpointIO["checkpoints.py"]
+    Runtime --> SurMeta["metadata.py"]
     Runtime --> RD["recorded_data.api"]
     Runtime --> JT["job_template.api"]
     Runtime --> Checkpoints["surrogate/checkpoints"]
     Modeling --> Checkpoints
 ```
 
-- `runtime.py`: optimizer-facing service boundary; loads training data, flattens rawData into query-aligned numeric slots, applies task-owned importance weights, scales targets, reconstructs predicted rawData, calculates audited costs and ensemble member min/max intervals, and writes checkpoint summaries.
+- `runtime.py`: optimizer-facing service boundary; loads training data, flattens rawData into query-aligned numeric slots, applies task-owned importance weights, scales targets, reconstructs predicted rawData, calculates audited costs and ensemble member min/max intervals, and delegates checkpoint/metadata writes.
+- `scheduler.py`: staggered training coordinator; starts background training after real jobs are submitted, waits for pending work when lag limits require it, and exposes latest-state freshness checks.
+- `checkpoints.py`, `metadata.py`, and `types.py`: checkpoint serialization, recorded surrogate-training metadata, and shared surrogate dataclasses/type aliases.
 - `modeling.py`: PyTorch conditional INR deep ensemble; owns Fourier coordinate features, field embeddings, importance-weighted stochastic query minibatches for large fields, weighted relative/full-field losses, member bootstrap/mixup training, member prediction, and model artifacts.
 - `api.py`: stable optimizer-facing exports.

@@ -494,3 +494,29 @@ def test_concurrent_recording_keeps_all_ind_meta_records(tmp_path):
     records = recorded_api.list_records()
     assert sorted(record["job_name"] for record in records) == [f"job_{index}" for index in range(4)]
     assert all(record["status"] == "error" for record in records)
+
+def test_surrogate_metadata_is_recorded_as_optimization_metadata(tmp_path, monkeypatch):
+    from project.recorded_data import api as recorded_api
+
+    root = tmp_path / "recorded_data"
+    monkeypatch.setattr(recorded_api, "MODULE_DIR", root)
+    monkeypatch.setattr(recorded_api, "IND_META_PATH", root / "indMeta.jsonl")
+    monkeypatch.setattr(recorded_api, "RAWDATA_ARCHIVE_PATH", root / "rawData.npz")
+    monkeypatch.setattr(recorded_api, "OPT_META_DIR", root / "optMeta")
+    monkeypatch.setattr(recorded_api, "OPT_META_PATH", root / "optMeta" / "optMeta.jsonl")
+
+    row = recorded_api.record_surrogate_metadata(
+        {
+            "generation_index": 4,
+            "status": "completed",
+            "sample_count": 12,
+            "mean_relative_error": 0.25,
+        }
+    )
+
+    assert row["record_type"] == "surrogate_training"
+    rows = recorded_api.list_surrogate_metadata()
+    assert len(rows) == 1
+    assert rows[0]["generation_index"] == 4
+    assert rows[0]["sample_count"] == 12
+    assert recorded_api.list_optimization_metadata()[0]["record_type"] == "surrogate_training"

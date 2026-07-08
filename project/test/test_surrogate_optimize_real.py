@@ -127,10 +127,13 @@ def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0)
     _configure_fast_inr(monkeypatch, config)
     runtime._STATE = None
+    runtime.train(generation_index=2)
 
     from project.optimize.api import run_one_generation
+    from project.surrogate.api import wait_for_pending_training
 
     result = run_one_generation(generation_index=3, population_size=2, random_seed=42)
+    wait_for_pending_training()
 
     assert result.source == "gpsaf_surrogate"
     assert result.surrogate_used is True
@@ -185,7 +188,7 @@ def test_gpsaf_parameters_call_surrogate(monkeypatch):
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.0)
     result = run_one_generation(generation_index=2, population_size=2, random_seed=11)
 
-    assert calls["train"] >= 1
+    assert calls["train"] == 1
     assert result.source == "gpsaf_surrogate"
     assert result.surrogate_used is True
     assert result.diagnostics["alpha_batches"] == 2
@@ -207,6 +210,7 @@ def test_gpsaf_falls_back_when_surrogate_is_unavailable(monkeypatch):
         ("job_bad", (0.9, 0.9), (10.0,)),
         ("job_good", (0.2, 0.3), (1.0,)),
     )
+    surrogate_api.has_trained_state = lambda: False
     surrogate_api.train = lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("model offline"))
     evaluate_api.evaluate_generation = lambda population: tuple((sum(individual),) for individual in population)
 
@@ -220,7 +224,8 @@ def test_gpsaf_falls_back_when_surrogate_is_unavailable(monkeypatch):
     assert result.source == "gpsaf_warm_start"
     assert result.surrogate_used is False
     assert result.population[0] == (0.2, 0.3)
-    assert "RuntimeError: model offline" in result.diagnostics["surrogate_error"]
+    assert result.diagnostics["surrogate_error"] == "no_trained_surrogate"
+    assert result.diagnostics["surrogate_mode"] == "waiting_for_first_staggered_training"
 
 
 def test_gpsaf_entrypoint_stays_small():

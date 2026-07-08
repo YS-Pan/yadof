@@ -31,7 +31,7 @@ stand on their own.
 
 Read `blueprints/` in two passes:
 
-1. List all filenames under `blueprints/` and `blueprints/10_modules/`.
+1. List all filenames under `blueprints/`, `blueprints/10_modules/`, and `blueprints/20_files/` when that folder exists.
 2. Read only the blueprint files that match the modules or concepts being changed.
 
 Do not read `change_records/` by default. Use it only when you need the reason behind

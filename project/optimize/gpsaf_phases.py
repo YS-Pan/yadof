@@ -49,13 +49,53 @@ def try_train_surrogate(generation_index: int):
     return state, None
 
 
-def notify_surrogate_after_evaluation(generation_index: int) -> None:
+def ensure_surrogate_fresh_enough(generation_index: int) -> dict[str, object]:
     try:
         surrogate_api = importlib.import_module("project.surrogate.api")
-        surrogate_api.train(generation_index=int(generation_index))
-    except Exception:
-        return
+        func = getattr(surrogate_api, "ensure_fresh_enough", None)
+        if not callable(func):
+            return {"surrogate_training_gate": "unavailable"}
+        status = func(int(generation_index))
+    except Exception as exc:  # noqa: BLE001 - a stale model should fall back, not stop the generation.
+        return {
+            "surrogate_training_gate": "failed",
+            "surrogate_training_gate_error": f"{exc.__class__.__name__}: {exc}",
+        }
+    return {
+        "surrogate_training_gate": str(getattr(status, "action", "unknown")),
+        "surrogate_training_pending_generation": getattr(status, "pending_generation_index", None),
+        "surrogate_training_latest_generation": getattr(status, "latest_completed_generation_index", None),
+        "surrogate_training_gate_error": str(getattr(status, "error", "")),
+    }
 
+
+def surrogate_state_ready() -> bool:
+    try:
+        surrogate_api = importlib.import_module("project.surrogate.api")
+        func = getattr(surrogate_api, "has_trained_state", None)
+        return True if not callable(func) else bool(func())
+    except Exception:
+        return False
+
+
+def notify_surrogate_after_submission(generation_index: int) -> None:
+    try:
+        surrogate_api = importlib.import_module("project.surrogate.api")
+        func = getattr(surrogate_api, "start_training", None)
+        if callable(func):
+            status = func(generation_index=int(generation_index), block=False)
+            _progress(
+                f"surrogate: background training request generation {int(generation_index)}; "
+                f"action={getattr(status, 'action', 'unknown')}"
+            )
+        else:
+            surrogate_api.train(generation_index=int(generation_index))
+    except Exception as exc:  # noqa: BLE001 - submitted jobs should keep running if scheduling fails.
+        _progress(f"surrogate: background training request failed: {exc.__class__.__name__}: {exc}")
+
+
+def notify_surrogate_after_evaluation(generation_index: int) -> None:
+    notify_surrogate_after_submission(generation_index)
 
 def predict_records(records: Sequence[CandidateRecord]) -> list[CandidateRecord]:
     if not records:
@@ -291,9 +331,11 @@ def surrogate_population(
         f"surrogate: selecting population; history={len(history)}; "
         f"population_size={int(population_size)}"
     )
-    _state, error = try_train_surrogate(generation_index)
-    if error is not None:
-        return None, {"surrogate_error": error}
+    if not surrogate_state_ready():
+        return None, {
+            "surrogate_error": "no_trained_surrogate",
+            "surrogate_mode": "waiting_for_first_staggered_training",
+        }
 
     rng = random.Random(int(seed) + int(generation_index) * 1009 + 17)
     base_state = survivor_state_from_history(context, history, population_size)

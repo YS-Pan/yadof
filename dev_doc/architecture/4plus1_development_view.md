@@ -50,7 +50,7 @@ project/
 - API files are module gateways and should stay small.
 - Internal helpers can change more freely if public API behavior and tests remain stable.
 - Task-specific edits should concentrate in `project/job_template/`. Simulator adapters may be kept in `project/com_lib/` as references, but enabled adapters must be copied into `project/job_template/`.
-- `project/surrogate/runtime.py` owns the cross-module API boundary; `project/surrogate/modeling.py` owns the conditional INR internals and should not import other core modules.
+- `project/surrogate/runtime.py` owns the training/prediction data flow; `project/surrogate/scheduler.py` owns staggered training coordination; `project/surrogate/checkpoints.py`, `metadata.py`, and `types.py` keep persistence and shared dataclasses out of the core runtime; `project/surrogate/modeling.py` owns the conditional INR internals and should not import other core modules.
 - Shared settings should stay in `project/config.py`, but task semantics should not move there.
 
 ## Test Strategy

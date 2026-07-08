@@ -26,7 +26,7 @@ flowchart TD
 - Per-job workflow lifecycle metadata: `project/jobs/<job_name>/individual_metadata.json`, written by the workflow and read by `evaluate_manager` during finalization.
 - Recorded individual metadata: `project/recorded_data/indMeta.jsonl`.
 - Recorded rawData: `project/recorded_data/rawData.npz`, a zip-based archive with members shaped like `job_name/file.npz`.
-- Recorded optimization metadata: `project/recorded_data/optMeta/optMeta.jsonl`.
+- Recorded optimization metadata: `project/recorded_data/optMeta/optMeta.jsonl`, including generation rows and surrogate-training metadata rows.
 - Surrogate checkpoints: `project/surrogate/checkpoints/generation_*.json`.
 - Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.

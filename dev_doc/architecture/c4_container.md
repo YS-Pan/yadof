@@ -37,7 +37,7 @@ flowchart TD
 - `com_lib`: optional holding area for simulator/custom-code adapter source/reference copies. Files here are not runtime dependencies; when a task needs one, the user copies it into `job_template` so prepared jobs stay self-contained.
 - `job_template`: active task files for rawData generation plus task-owned objective costs calculated after recording. The framework does not fix simulator filename, rawData names, objective names, or objective count.
 - `recorded_data`: durable real-evaluation archive and dynamic historical views.
-- `surrogate`: rawData-first conditional INR ensemble training, audited rawData prediction, and ensemble member min/max cost interval generation.
+- `surrogate`: rawData-first conditional INR ensemble training, audited rawData prediction, ensemble member min/max cost interval generation, staggered background training scheduling, and training metadata reporting.
 - `tools`: optional user workflows for visualization and maintenance.
 - `test`: local verification of contracts and failure behavior.
 
