@@ -19,4 +19,5 @@
 /project/tools/time_*.png
 /project/test/_pytest_tmp*/
 /obsolete/
-/temp/
+/temp/*
+!/temp/.gitkeep

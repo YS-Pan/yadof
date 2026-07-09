@@ -29,7 +29,7 @@
 
 ## Non-Obvious Techniques
 - `viewCost.py` intentionally reads costs through `recorded_data` instead of legacy `para_cost.jsonl` files.
-- Tool runner batch files should not assume the caller's working directory or a machine-specific install path; use the script directory plus PATH or existing environment-derived locations.
+- Tool runner batch files should not assume the caller's working directory or a machine-specific install path; use the script directory plus PATH, standard install discovery, explicit user arguments, or existing environment-derived locations. Tools must not require users to create new system environment variables as a prerequisite for running the project.
 - Static-hash changes are plotted from job metadata so task definition changes are visible on cost timelines.
 - `viewCost.py` scales dense scatter points by lowering marker opacity down to a smaller floor for very large histories, and scales the right combined-cost axis so the observed combined-cost maximum aligns vertically with individual cost `1.0` on the left axis.
 - Optimization and generation boundaries can now come directly from individual `optimization_index` and `generation_index` fields, with `optMeta` joins still useful for run-level diagnostics.

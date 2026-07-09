@@ -31,6 +31,7 @@ flowchart TD
 - Surrogate checkpoints: `project/surrogate/checkpoints/generation_*.json`.
 - Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.
+- Root temporary workspace: `temp/` is kept in git with a `.gitkeep` placeholder, while all other files under it are ignored. Use it for disposable diagnostics or manual scratch artifacts that should not become source.
 
 ## Optional Distributed Deployment
 
@@ -63,5 +64,6 @@ the same setting as the submit-side `JOBS_DIR`.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
 - Real workflow smoke tests may require task-specific simulator software such as PyAEDT/AEDT; default tests should skip those paths unless explicitly enabled.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
+- Machine-specific install locations must be discovered from repository-relative paths, explicit user arguments, standard install discovery, or existing environment variables. The project must not require users to add new system environment variables as a setup prerequisite.
 - `created_at` is not part of the individual record contract; job creation time can be inferred from time-based job folder names when needed.
 - `recorded_data` JSONL metadata writes and rawData archive updates must stay atomic because distributed finalization may introduce more concurrency.

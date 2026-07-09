@@ -41,6 +41,7 @@
 - `JOBS_DIR` is the submit-side runtime staging location for prepared job folders. Worker-side scratch placement is an HTCondor `EXECUTE` setting, not a `JOBS_DIR` setting.
 - When requiring RAM-disk workers, `HTCONDOR_REQUIREMENTS` can match the worker-advertised `YADOF_RAMDISK` attribute written by the pool setup tools.
 - The HTCondor submit executable is not a config setting. Distributed jobs use direct `workflow.py` submission with `transfer_executable = True`; Python interpreter access is a worker environment/file-association prerequisite, not a submit-file executable path.
+- Config defaults must not encode machine-specific absolute install paths or require project-specific system environment variables. Use repository-relative derived paths, explicit user-provided settings, or environment variables that the relevant external installer already creates.
 - `EVALUATION_TIMEOUT_SEC` is the generation-level wait budget for distributed evaluation, not just a single HFSS solve timeout. Large populations submitted in waves need a value large enough for the full generation to drain.
 - `HTCONDOR_REQUEST_MEMORY` is a scheduler reservation. It should be high enough for AEDT startup and solve memory so the pool does not overpack workers.
 - `EVALUATION_MODE` can be `local` or `distributed`; tests should still force local or monkeypatched behavior instead of requiring a real pool.
