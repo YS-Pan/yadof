@@ -18,7 +18,7 @@
 ## Boundary Rules
 - Internal files may call another core module only through that module's `api.py`.
 - Internal files should not call their own `api.py` just to reach another module.
-- `config.py` is an allowed direct dependency for shared settings.
+- `config_all.py` is the runtime shared-settings dependency; `config.py` is the short key override file.
 - `tools` and `test` have looser access rules but should not become runtime dependencies.
 
 ## Derived Data Rules

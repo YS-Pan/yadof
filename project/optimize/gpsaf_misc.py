@@ -6,7 +6,7 @@ import math
 import random
 from typing import Callable, Iterable, Sequence
 
-from project import config
+from project import config_all as config
 
 
 Population = tuple[tuple[float, ...], ...]

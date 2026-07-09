@@ -12,11 +12,11 @@
 
 ## Functionalities
 - `viewCost.py` reads `recorded_data.api.get_historical_results()`, dynamically calculates current costs, prints a Pareto-oriented summary, and optionally saves a PNG plot.
-- `run_viewcost.bat` launches `viewCost.py` from the tools directory, activates the `yadof` conda environment, and falls back to `C:\ProgramData\miniconda3` when `conda` is not already on `PATH`.
+- `run_viewcost.bat` launches `viewCost.py` from the tools directory and activates the `yadof` conda environment through the caller's Conda/PATH setup.
 - Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes. Legend entries for objective and combined-cost series use the same hollow marker style as the visible best Pareto points.
 - `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback.
 - `hfss_get_para_and_range.py` reads optimization-enabled variables from a `.aedt` file and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
-- `htcondor_pool/setup_worker_ramdisk_execute.cmd` configures each execute-capable Windows worker to use `R:\condor_execute` as its HTCondor `EXECUTE` directory and advertises `YADOF_RAMDISK = True` plus `YADOF_EXECUTE_DIR`.
+- `htcondor_pool/setup_worker_ramdisk_execute.cmd` configures each execute-capable Windows worker to use an explicit or temp-derived HTCondor `EXECUTE` directory and advertises `YADOF_RAMDISK = True` plus `YADOF_EXECUTE_DIR`.
 - `htcondor_pool/setup_worker_declared_resources.cmd` configures each execute-capable Windows worker's advertised `NUM_CPUS`, `MEMORY`, `DISK`, `EXECUTE`, partitionable-slot settings, and worker Python environment access from constants at the top of the CMD file.
 - Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
 
@@ -27,7 +27,7 @@
 
 ## Non-Obvious Techniques
 - `viewCost.py` intentionally reads costs through `recorded_data` instead of legacy `para_cost.jsonl` files.
-- Tool runner batch files should not assume the caller's working directory or an Anaconda Prompt PATH; use the script directory and a narrow known Miniconda fallback when needed.
+- Tool runner batch files should not assume the caller's working directory or a machine-specific install path; use the script directory plus PATH or existing environment-derived locations.
 - Static-hash changes are plotted from job metadata so task definition changes are visible on cost timelines.
 - `viewCost.py` scales dense scatter points by lowering marker opacity down to a smaller floor for very large histories, and scales the right combined-cost axis so the observed combined-cost maximum aligns vertically with individual cost `1.0` on the left axis.
 - Optimization and generation boundaries can now come directly from individual `optimization_index` and `generation_index` fields, with `optMeta` joins still useful for run-level diagnostics.

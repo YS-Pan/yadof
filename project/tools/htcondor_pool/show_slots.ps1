@@ -7,44 +7,61 @@ $scriptDir = Split-Path -Parent $PSCommandPath
 $managerIpFile = Join-Path $scriptDir "manager_ip.txt"
 $queryConfig = Join-Path $scriptDir "show_slots.condor_config"
 
-$condorRoot = if (Test-Path -LiteralPath "D:\condor" -PathType Container) {
-    "D:\condor"
-}
-elseif ($env:CONDOR_LOCATION) {
-    $env:CONDOR_LOCATION
-}
-else {
-    "D:\condor"
+function Get-CondorBinCandidates {
+    $dirs = New-Object System.Collections.Generic.List[string]
+    if ($env:CONDOR_LOCATION) {
+        $dirs.Add((Join-Path $env:CONDOR_LOCATION "bin"))
+    }
+    foreach ($dir in @(
+        "$env:ProgramFiles\HTCondor\bin",
+        "$env:ProgramFiles\Condor\bin"
+    )) {
+        if ($dir) {
+            $dirs.Add($dir)
+        }
+    }
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    if ($programFilesX86) {
+        $dirs.Add((Join-Path $programFilesX86 "HTCondor\bin"))
+        $dirs.Add((Join-Path $programFilesX86 "Condor\bin"))
+    }
+    return @($dirs | Where-Object { $_ } | Select-Object -Unique)
 }
 
-$condorBin = Join-Path $condorRoot "bin"
-$condorStatus = Join-Path $condorBin "condor_status.exe"
-
-if (-not (Test-Path -LiteralPath $condorStatus)) {
+function Find-CondorStatus {
     $cmd = Get-Command condor_status -ErrorAction SilentlyContinue
     if ($cmd) {
-        $condorStatus = $cmd.Source
+        return $cmd.Source
     }
-    else {
-        throw "Could not find condor_status.exe. Expected $condorStatus"
+    foreach ($dir in Get-CondorBinCandidates) {
+        $candidate = Join-Path $dir "condor_status.exe"
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
     }
+    throw "Could not find condor_status.exe. Put HTCondor on PATH, set CONDOR_LOCATION, or install it under Program Files."
 }
 
-$managerIp = $null
-if (Test-Path -LiteralPath $managerIpFile -PathType Leaf) {
-    $managerIp = @(Get-Content -LiteralPath $managerIpFile |
+function Read-ManagerIp {
+    if (-not (Test-Path -LiteralPath $managerIpFile -PathType Leaf)) {
+        return $null
+    }
+    return @(Get-Content -LiteralPath $managerIpFile |
         ForEach-Object { $_.Trim() } |
         Where-Object { $_ -and -not $_.StartsWith("#") } |
         Select-Object -First 1)[0]
 }
 
+$condorStatus = Find-CondorStatus
+$condorBin = Split-Path -Parent $condorStatus
+$condorRoot = Split-Path -Parent $condorBin
+$managerIp = Read-ManagerIp
+
 $configCandidates = @(
     [Environment]::GetEnvironmentVariable("CONDOR_CONFIG", "Machine"),
     $env:CONDOR_CONFIG,
     (Join-Path $condorRoot "condor_config"),
-    (Join-Path $condorRoot "etc\condor_config"),
-    "D:\condor\condor_config",
-    "D:\condor\etc\condor_config"
+    (Join-Path $condorRoot "etc\condor_config")
 ) | Where-Object { $_ } | Select-Object -Unique
 
 $condorConfig = $null
@@ -74,6 +91,7 @@ if (-not $condorConfig) {
 }
 
 $env:CONDOR_CONFIG = $condorConfig
+Write-Host "Using condor_status=$condorStatus"
 Write-Host "Using CONDOR_CONFIG=$condorConfig"
 
 Write-Host ""

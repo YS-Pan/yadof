@@ -22,7 +22,8 @@ flowchart TD
 - Source code: `project/`.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
 - Optional adapter staging/reference files: `project/com_lib/`, not copied or imported by default.
-- Prepared jobs: submit-side `project/jobs/` by default, configurable by `project/config.py`.
+- Prepared jobs: submit-side `project/jobs/` by default, configurable through the full config layer.
+- Per-job copied config: `project/jobs/<job_name>/config.py` and `project/jobs/<job_name>/config_all.py`, copied from the submit-side project during job preparation.
 - Per-job workflow lifecycle metadata: `project/jobs/<job_name>/individual_metadata.json`, written by the workflow and read by `evaluate_manager` during finalization.
 - Recorded individual metadata: `project/recorded_data/indMeta.jsonl`.
 - Recorded rawData: `project/recorded_data/rawData.npz`, a zip-based archive with members shaped like `job_name/file.npz`.
@@ -52,7 +53,7 @@ HTCondor returns generated files such as `rawData/`, `individual_metadata.json`,
 and PyAEDT-created `batch.log` when they exist without holding the job if optional
 files are absent.
 Worker scratch placement is controlled by each worker's HTCondor `EXECUTE`
-directory. A worker RAM disk such as `R:\condor_execute` should be configured on
+directory. A worker scratch or RAM-disk directory should be configured on
 the execute machines and advertised through worker ClassAd attributes; it is not
 the same setting as the submit-side `JOBS_DIR`.
 

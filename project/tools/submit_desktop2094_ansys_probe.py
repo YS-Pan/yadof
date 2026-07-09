@@ -19,7 +19,7 @@ REPO_ROOT = THIS_FILE.parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from project import config as project_config  # noqa: E402
+from project import config_all as project_config  # noqa: E402
 
 
 TARGET_MACHINE = "DESKTOP-2094"
@@ -277,16 +277,16 @@ def prepare_job(
     if target_slot:
         requirements += f' && (Name =?= "{target_slot}")'
     environment = (
-        "USERPROFILE=_home;"
-        "HOME=_home;"
-        "APPDATA=_appdata;"
-        "LOCALAPPDATA=_localappdata;"
-        "TEMP=_tmp;"
-        "TMP=_tmp;"
-        f"YADOF_2094_ACTION={action};"
-        f"YADOF_2094_SCRIPT={script_name};"
-        f"YADOF_2094_EVENT_HOURS={max(1, int(event_hours))};"
-        f"YADOF_2094_DRY_RUN={1 if dry_run else 0};"
+        "USERPROFILE=_home "
+        "HOME=_home "
+        "APPDATA=_appdata "
+        "LOCALAPPDATA=_localappdata "
+        "TEMP=_tmp "
+        "TMP=_tmp "
+        f"YADOF_2094_ACTION={action} "
+        f"YADOF_2094_SCRIPT={script_name} "
+        f"YADOF_2094_EVENT_HOURS={max(1, int(event_hours))} "
+        f"YADOF_2094_DRY_RUN={1 if dry_run else 0} "
         f"YADOF_2094_TIMEOUT_SEC={int(script_timeout_sec)}"
     )
     lines = [

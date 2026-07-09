@@ -4,7 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 import threading
 
-from project import config
+from project import config_all as config
 
 from . import metadata as surrogate_metadata
 

@@ -95,7 +95,7 @@ def test_record_failure_returns_inf_and_generation_continues(tmp_path, monkeypat
 
 
 def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatch):
-    from project import config
+    from project import config_all as config
     from project.evaluate_manager import api
     from project.evaluate_manager.types import JobResult, JobSpec
     from project.job_template import api as job_template_api
@@ -126,7 +126,7 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
 
 
 def test_local_evaluation_can_run_jobs_in_parallel(tmp_path, monkeypatch):
-    from project import config
+    from project import config_all as config
     from project.evaluate_manager import api
     from project.evaluate_manager.types import JobResult, JobSpec
 
@@ -155,7 +155,6 @@ def test_local_evaluation_can_run_jobs_in_parallel(tmp_path, monkeypatch):
             metadata={"job_name": job.name, "status": "done"},
         )
 
-    monkeypatch.setenv("LOCAL_EVALUATION_MAX_WORKERS", "2")
     monkeypatch.setattr(api, "prepare_job", prepare_job)
     monkeypatch.setattr(api, "run_local_job", run_local_job)
     monkeypatch.setattr(api, "record_result", lambda result: (result.unnormalized_variables[0],))
@@ -165,6 +164,7 @@ def test_local_evaluation_can_run_jobs_in_parallel(tmp_path, monkeypatch):
         mode="local",
         jobs_dir=tmp_path,
         timeout_sec=1,
+        local_max_workers=2,
     )
 
     assert costs == ((0.0,), (1.0,), (2.0,), (3.0,))

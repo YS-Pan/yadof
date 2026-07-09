@@ -40,7 +40,7 @@ def test_run_generations_calls_evaluate_and_writes_lightweight_metadata(monkeypa
     recorded_api.record_optimization_metadata = lambda metadata: opt_meta_rows.append(dict(metadata)) or dict(metadata)
     evaluate_api.evaluate_generation = evaluate_generation
 
-    from project import config
+    from project import config_all as config
     from project.optimize.api import run_generations
 
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1)

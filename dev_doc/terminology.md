@@ -12,6 +12,8 @@ Only terms that need project context are listed here.
 | `PARAMETERS` | The task-owned parameter definitions in `project/job_template/parameters_constraints.py`, exposed through `job_template.api` for variable names, ranges, units, normalization, and denormalization. |
 | `workflow.py` | The active task file that runs an expensive evaluation and writes rawData plus job-local lifecycle metadata. It must not write final costs. |
 | `calc_cost.py` | The active task file that interprets rawData into current objective costs and optional rawData importance weights for surrogate training. It is not copied into prepared job folders. |
+| `key config` | The short user-editable `project/config.py` file for routine campaign settings. It contains constants only and is copied into every prepared job folder. |
+| `full config` | The grouped `project/config_all.py` default surface imported by runtime modules. It imports matching overrides from `config.py` and is also copied into every prepared job folder. |
 | `local mode` | Evaluation backend where `evaluate_manager` runs prepared jobs as local subprocesses. It is the default mode for tests and first debugging passes. |
 | `distributed mode` | Evaluation backend where `evaluate_manager` submits prepared jobs to HTCondor while preserving the same job folder and recording contract as local mode. |
 | `GPSAF` | The surrogate-assisted optimizer framing used by `project.optimize`, including alpha/beta/gamma surrogate pressure controls and real-evaluation validation of selected candidates. |

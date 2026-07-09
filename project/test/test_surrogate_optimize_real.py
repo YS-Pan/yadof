@@ -51,7 +51,7 @@ def test_surrogate_predicts_rawdata_then_costs_and_writes_conditional_inr_checkp
 
     job_template_api.calculate_costs_from_raw_data = calculate_costs_from_raw_data
 
-    from project import config
+    from project import config_all as config
     from project.surrogate import runtime
 
     checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "surrogate_interpolation"
@@ -114,7 +114,7 @@ def test_surrogate_parameters_use_gpsaf_surrogate(monkeypatch):
 
     evaluate_api.evaluate_generation = evaluate_generation
 
-    from project import config
+    from project import config_all as config
     from project.surrogate import runtime
 
     checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "optimize_gpsaf_surrogate"
@@ -180,7 +180,7 @@ def test_gpsaf_parameters_call_surrogate(monkeypatch):
 
     surrogate_api.train = train
 
-    from project import config
+    from project import config_all as config
     from project.optimize.api import run_one_generation
 
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)
@@ -214,7 +214,7 @@ def test_gpsaf_falls_back_when_surrogate_is_unavailable(monkeypatch):
     surrogate_api.train = lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("model offline"))
     evaluate_api.evaluate_generation = lambda population: tuple((sum(individual),) for individual in population)
 
-    from project import config
+    from project import config_all as config
     from project.optimize.api import run_one_generation
 
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 2)

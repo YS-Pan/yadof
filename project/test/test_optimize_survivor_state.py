@@ -90,7 +90,7 @@ def test_single_objective_context_skips_nsga3_reference_directions():
 
 
 def test_surrogate_generation_uses_survivors_as_active_population(monkeypatch):
-    from project import config
+    from project import config_all as config
     from project.optimize import gpsaf_phases
 
     observed_active_sizes = []
@@ -138,7 +138,7 @@ def test_surrogate_generation_uses_survivors_as_active_population(monkeypatch):
 
 
 def test_surrogate_generation_reserves_exploration_quota(monkeypatch):
-    from project import config
+    from project import config_all as config
     from project.optimize import gpsaf_phases
 
     def fake_generate_candidate_pool(context, state, need, _used_keys, _rng, *, origin):

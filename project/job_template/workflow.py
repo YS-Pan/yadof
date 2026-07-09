@@ -8,6 +8,14 @@ from pathlib import Path
 
 from hfss_com import analyze, save_farField, save_modal, set_hfss_temp_directory, set_variables, solver_exit, solver_init
 from parameters_constraints import get_parameters
+
+try:
+    import config as job_config
+except ImportError:
+    try:
+        from project import config as job_config
+    except ImportError:
+        job_config = None
 from worker_misc import (
     bootstrap_home_dirs,
     env_bool,
@@ -47,13 +55,13 @@ RAW_DATA_TRANSFER_ZIP = BASE_DIR / "rawData_outputs.zip"
 TEMP_DIR = BASE_DIR / "_tmp"
 INDIVIDUAL_METADATA = BASE_DIR / "individual_metadata.json"
 
-DEFAULT_JOB_CPUCORE = 6
-DEFAULT_PARALLEL_TASKS = 1
-DEFAULT_NON_GRAPHICAL = True
+CONFIG_JOB_CPUCORE = int(getattr(job_config, "HFSS_JOB_CPUCORE", 1)) if job_config is not None else 1
+CONFIG_PARALLEL_TASKS = int(getattr(job_config, "HFSS_PARALLEL_TASKS", 1)) if job_config is not None else 1
+CONFIG_NON_GRAPHICAL = bool(getattr(job_config, "HFSS_NON_GRAPHICAL", True)) if job_config is not None else True
 
-JOB_CPUCORE = env_int("YADOF_HFSS_JOB_CPUCORE", DEFAULT_JOB_CPUCORE, minimum=1)
-PARALLEL_TASKS = env_int("YADOF_HFSS_PARALLEL_TASKS", DEFAULT_PARALLEL_TASKS, minimum=1)
-NON_GRAPHICAL = env_bool("YADOF_HFSS_NON_GRAPHICAL", DEFAULT_NON_GRAPHICAL)
+JOB_CPUCORE = env_int("YADOF_HFSS_JOB_CPUCORE", CONFIG_JOB_CPUCORE, minimum=1)
+PARALLEL_TASKS = env_int("YADOF_HFSS_PARALLEL_TASKS", CONFIG_PARALLEL_TASKS, minimum=1)
+NON_GRAPHICAL = env_bool("YADOF_HFSS_NON_GRAPHICAL", CONFIG_NON_GRAPHICAL)
 
 
 def _hfss_variables(variables: Mapping[str, float] | Sequence[float]) -> dict[str, str]:
@@ -134,7 +142,7 @@ def main() -> None:
     runtime_info = runtime_identity(
         BASE_DIR,
         environment={"runtime_ansys_license": "ANSYSLMD_LICENSE_FILE"},
-        extra={"runtime_hfss_job_cpucore": JOB_CPUCORE},
+        extra={"runtime_hfss_job_cpucore": JOB_CPUCORE, "runtime_hfss_parallel_tasks": PARALLEL_TASKS, "runtime_hfss_non_graphical": bool(NON_GRAPHICAL)},
     )
     prepare_rawdata_dir(RAW_DATA_DIR, RAW_DATA_TRANSFER_ZIP)
     write_json(

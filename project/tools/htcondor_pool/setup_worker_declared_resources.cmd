@@ -2,12 +2,12 @@
 setlocal EnableExtensions
 
 rem Edit these values per worker, then double-click this file.
-rem MEMORY is in MB. DISK is in MB and should not exceed the R: RAM disk size.
+rem MEMORY is in MB. DISK is in MB and should not exceed the worker scratch disk size.
 set "DECLARE_CPUS=6"
 set "DECLARE_MEMORY_MB=32000"
 set "DECLARE_DISK_MB=24000"
-set "EXECUTE_DIR=R:\condor_execute"
-set "WORKER_PYTHON_EXE=C:\ProgramData\miniconda3\envs\yadof\python.exe"
+set "EXECUTE_DIR=%TEMP%\condor_execute"
+set "WORKER_PYTHON_EXE=python"
 set "PARTITIONABLE_SLOT=1"
 set "RESTART_CONDOR=1"
 

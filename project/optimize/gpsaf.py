@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import random
 
-from project import config
+from project import config_all as config
 
 from .gpsaf_pymoo import (
     baseline_records,

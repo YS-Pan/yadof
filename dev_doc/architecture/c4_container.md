@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    Config["project/config.py"] --> Optimize["project/optimize"]
+    Config["project/config.py + config_all.py"] --> Optimize["project/optimize"]
     Config --> Evaluate["project/evaluate_manager"]
     Config --> Surrogate["project/surrogate"]
 
@@ -43,7 +43,7 @@ flowchart TD
 
 ## Primary Data Flow
 1. `optimize` creates normalized candidates.
-2. `evaluate_manager` prepares one job per candidate and denormalizes through `job_template`.
+2. `evaluate_manager` prepares one job per candidate, copies `config.py` and `config_all.py` into the job folder, and denormalizes through `job_template`.
 3. Job `workflow.py` runs either as a local subprocess or HTCondor payload, imports adapter files copied from `job_template`, writes `individual_metadata.json` at start/end, and writes flat rawData `.npz` files.
 4. `evaluate_manager` reads job-local metadata and sends job results to `recorded_data`.
 5. `recorded_data` stores raw evidence once per individual, archives rawData, and asks `job_template` for dynamic cost when needed.
@@ -51,6 +51,6 @@ flowchart TD
 
 ## Container Rules
 - Core modules communicate through each other's `api.py` files.
-- `config.py` may be imported directly as a small shared settings surface.
+- Runtime modules import `config_all.py` as the full shared settings surface, while `config.py` remains the short key override file.
 - `tools` may be flexible, but core modules and tests must not depend on tools.
 - `jobs` folders are runtime state, not source modules.

@@ -33,6 +33,7 @@ project/
   tools/
   test/
   config.py
+  config_all.py
 ```
 
 ## Dependency Direction
@@ -49,7 +50,7 @@ project/
 - Internal helpers can change more freely if public API behavior and tests remain stable.
 - Task-specific edits should concentrate in `project/job_template/`. Simulator adapters may be kept in `project/com_lib/` as references, but enabled adapters must be copied into `project/job_template/`.
 - `project/surrogate/runtime.py` owns the training/prediction data flow; `project/surrogate/scheduler.py` owns staggered training coordination; `project/surrogate/checkpoints.py`, `metadata.py`, and `types.py` keep persistence and shared dataclasses out of the core runtime; `project/surrogate/modeling.py` owns the conditional INR internals and should not import other core modules.
-- Shared settings should stay in `project/config.py`, but task semantics should not move there.
+- Shared settings are split between the key `project/config.py` and full `project/config_all.py`; task semantics should not move into either file.
 
 ## Test Strategy
 - Use local mode as the default verification path, but do not start real HFSS unless an explicit HFSS smoke-test flag or manual command requests it.

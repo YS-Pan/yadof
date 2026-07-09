@@ -141,9 +141,7 @@ $paths = @(
     $env:_CONDOR_SCRATCH_DIR,
     (Join-Path $env:USERPROFILE "Documents"),
     (Join-Path $env:USERPROFILE "Documents\Ansoft"),
-    "D:\Documents",
-    "D:\Documents\Ansoft",
-    "R:\condor_execute"
+    (Join-Path ([IO.Path]::GetTempPath()) "condor_execute")
 ) | Where-Object { $_ -and $_.Trim() } | Select-Object -Unique
 Write-JsonFile (Join-Path $OutputDir "directory_summaries.json") ($paths | ForEach-Object { Directory-Sample $_ })
 Write-JsonFile (Join-Path $OutputDir "write_access.json") ($paths | ForEach-Object { Test-WriteAccess $_ })

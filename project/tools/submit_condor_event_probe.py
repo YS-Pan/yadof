@@ -21,7 +21,7 @@ COLLECTOR_SOURCE = THIS_FILE.with_name("collect_ansys_event_logs.ps1")
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from project import config as project_config  # noqa: E402
+from project import config_all as project_config  # noqa: E402
 
 
 TARGET_MACHINE = "DESKTOP-A2096"
@@ -252,12 +252,12 @@ def prepare_job(hours: int) -> Path:
     base_requirement = str(project_config.HTCONDOR_REQUIREMENTS).strip()
     requirements = f'{base_requirement} && (Machine =?= "{TARGET_MACHINE}")'
     environment = (
-        "USERPROFILE=._home;"
-        "HOME=._home;"
-        "APPDATA=._appdata;"
-        "LOCALAPPDATA=._localappdata;"
-        "TEMP=._tmp;"
-        "TMP=._tmp;"
+        "USERPROFILE=._home "
+        "HOME=._home "
+        "APPDATA=._appdata "
+        "LOCALAPPDATA=._localappdata "
+        "TEMP=._tmp "
+        "TMP=._tmp "
         f"YADOF_EVENT_PROBE_HOURS={hours}"
     )
     submit_lines = [

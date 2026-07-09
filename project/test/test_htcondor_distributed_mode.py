@@ -22,7 +22,7 @@ def _job(tmp_path: Path, name: str = "job_001"):
 
 
 def test_condor_submit_file_uses_direct_python_executable_and_rawdata_contract(tmp_path):
-    from project import config as project_config
+    from project import config_all as project_config
     from project.evaluate_manager.condor_runner import write_condor_submit_file
 
     job = _job(tmp_path)
@@ -43,7 +43,7 @@ def test_condor_submit_file_uses_direct_python_executable_and_rawdata_contract(t
     submit_path = write_condor_submit_file(job, env={"EXTRA_FLAG": "1"})
     text = submit_path.read_text(encoding="utf-8")
 
-    assert "executable = C:/ProgramData/miniconda3/envs/yadof/python.exe" in text
+    assert "executable = python" in text
     assert "arguments = workflow.py" in text
     assert "transfer_executable = False" in text
     assert "transfer_output_files" not in text
@@ -139,7 +139,9 @@ def test_run_condor_jobs_records_submit_failure_without_fixing_condor(tmp_path, 
 def test_condor_submit_file_can_use_workflow_executable_opt_in(tmp_path, monkeypatch):
     from project.evaluate_manager.condor_runner import write_condor_submit_file
 
-    monkeypatch.setenv("CONDOR_EXECUTABLE_MODE", "workflow")
+    from project import config_all as project_config
+
+    monkeypatch.setattr(project_config, "HTCONDOR_EXECUTABLE_MODE", "workflow")
 
     job = _job(tmp_path)
     for name in ("workflow.py", "job_input.json"):
@@ -156,10 +158,11 @@ def test_condor_submit_file_can_use_workflow_executable_opt_in(tmp_path, monkeyp
 
 
 def test_condor_requirements_can_be_relaxed_or_exclude_workers(monkeypatch):
+    from project import config_all as project_config
     from project.evaluate_manager import config
 
-    monkeypatch.setenv("YADOF_HTCONDOR_ALLOWED_MACHINES", "all")
-    monkeypatch.setenv("YADOF_HTCONDOR_EXCLUDED_MACHINES", "DESKTOP-A2096,DESKTOP-A2093")
+    monkeypatch.setattr(project_config, "HTCONDOR_ALLOWED_MACHINES", ())
+    monkeypatch.setattr(project_config, "HTCONDOR_EXCLUDED_MACHINES", ("DESKTOP-A2096", "DESKTOP-A2093"))
 
     requirements = config.htcondor_requirements()
 

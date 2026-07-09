@@ -109,20 +109,18 @@ The workflow must not calculate final cost. The job folder should not contain
 
 ## 5. Edit `project/config.py`
 
-Common settings users edit:
+`project/config.py` is the short key config for settings that are likely to change between optimization campaigns. `project/config_all.py` contains the full grouped defaults and imports matching overrides from `config.py`.
+
+Common key settings users edit:
 
 - `EVALUATION_MODE`: `"local"` for local subprocess runs, `"distributed"` for HTCondor.
-- `JOBS_DIR`: where prepared job folders are written.
 - `EVALUATION_TIMEOUT_SEC`: generation-level timeout budget.
-- `LOCAL_EVALUATION_MAX_WORKERS`: local subprocess concurrency; keep it at `1` for simulators that cannot run safely in parallel.
-- `HTCONDOR_PYTHON_EXE`: Python executable available on every HTCondor worker.
+- `HTCONDOR_PYTHON_EXE`: Python executable name or path available on every HTCondor worker.
 - `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests.
+- `HFSS_JOB_CPUCORE`, `HFSS_PARALLEL_TASKS`, `HFSS_NON_GRAPHICAL`: HFSS runtime defaults copied into each prepared job.
 - `OPTIMIZE_POPULATION_SIZE`: number of real evaluations per generation.
-- `OPTIMIZE_SURROGATE_ALPHA` and `OPTIMIZE_SURROGATE_BETA`: surrogate-assistance pressure.
 
-Problem shape, variable names, and objective names come from `job_template`, not from
-`config.py`.
-
+Advanced settings such as `JOBS_DIR`, local worker concurrency, NSGA-III controls, and surrogate controls are in `project/config_all.py`. Problem shape, variable names, and objective names come from `job_template`, not from either config file.
 ## 6. Run A Smoke Test Before A Full Optimization
 
 Before a long run, test one individual.
@@ -130,14 +128,14 @@ Before a long run, test one individual.
 For a real workflow smoke test in local mode:
 
 ```powershell
-@'
+@"
 from project.evaluate_manager.api import evaluate_population
 from project.job_template import api as job_template_api
 
 population = ((0.5,) * job_template_api.get_variable_count(),)
 costs = evaluate_population(population, mode="local", timeout_sec=5400)
 print(costs)
-'@ | python -
+"@ | python -
 ```
 
 For a lightweight framework test that should not start HFSS:

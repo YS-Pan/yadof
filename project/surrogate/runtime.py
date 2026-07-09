@@ -10,7 +10,7 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 import torch
 
-from project import config
+from project import config_all as config
 
 from .checkpoints import write_checkpoint
 from .metadata import monotonic_time, now_text, record_training_success

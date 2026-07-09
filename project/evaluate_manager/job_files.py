@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from .config import RAW_DATA_DIR_NAME
+from .config import PROJECT_CONFIG_ALL_FILE_NAME, PROJECT_CONFIG_FILE_NAME, PROJECT_DIR, RAW_DATA_DIR_NAME
 from .types import JobSpec
 
 EXCLUDED_TEMPLATE_NAMES = {
@@ -79,6 +79,7 @@ def prepare_job(
     name, job_dir = _create_unique_job_dir(jobs_dir, job_name or new_job_name())
 
     _copy_template(template_dir, job_dir)
+    _copy_project_config(job_dir)
     (job_dir / RAW_DATA_DIR_NAME).mkdir(exist_ok=True)
     job_static_hash = prepared_job_static_hash(job_dir)
 
@@ -155,6 +156,12 @@ def _copy_template(template_dir: Path, job_dir: Path) -> None:
         elif path.is_file():
             shutil.copy2(path, target)
 
+
+def _copy_project_config(job_dir: Path) -> None:
+    for name in (PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_ALL_FILE_NAME):
+        source = PROJECT_DIR / name
+        if source.is_file():
+            shutil.copy2(source, job_dir / name)
 
 def _ignore_template_items(_dir: str, names: list[str]) -> set[str]:
     return {name for name in names if name in EXCLUDED_TEMPLATE_NAMES or name in EXCLUDED_TEMPLATE_DIRS}

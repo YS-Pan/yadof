@@ -25,7 +25,7 @@ echo Using conda: %CONDA_BAT%
 call :FindCondor
 if not defined CONDOR_BIN (
     echo ERROR: Could not find condor_submit.exe.
-    echo Install HTCondor, or set CONDOR_LOCATION to the HTCondor root, then run this file again.
+    echo Install HTCondor and make condor_submit available on PATH, then run this file again.
     goto :Fail
 )
 set "PATH=%CONDOR_BIN%;%PATH%"
@@ -96,18 +96,6 @@ for %%F in (
     "%ProgramData%\anaconda3\condabin\conda.bat"
     "%ProgramData%\mambaforge\condabin\conda.bat"
     "%ProgramData%\miniforge3\condabin\conda.bat"
-    "C:\miniconda3\condabin\conda.bat"
-    "C:\anaconda3\condabin\conda.bat"
-    "C:\mambaforge\condabin\conda.bat"
-    "C:\miniforge3\condabin\conda.bat"
-    "D:\miniconda3\condabin\conda.bat"
-    "D:\anaconda3\condabin\conda.bat"
-    "D:\mambaforge\condabin\conda.bat"
-    "D:\miniforge3\condabin\conda.bat"
-    "E:\miniconda3\condabin\conda.bat"
-    "E:\anaconda3\condabin\conda.bat"
-    "E:\mambaforge\condabin\conda.bat"
-    "E:\miniforge3\condabin\conda.bat"
 ) do (
     if exist "%%~F" (
         set "CONDA_BAT=%%~F"
@@ -144,11 +132,6 @@ if defined CONDOR_LOCATION (
 set "CONDOR_ROOT="
 set "CONDOR_BIN="
 for %%D in (
-    "D:\condor"
-    "C:\condor"
-    "C:\Condor"
-    "C:\Program Files\HTCondor"
-    "C:\Program Files\Condor"
     "%ProgramFiles%\HTCondor"
     "%ProgramFiles%\Condor"
 ) do (

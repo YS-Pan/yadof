@@ -45,7 +45,7 @@ Keep these boundaries:
 - `workflow.py` generates rawData only. It must not write `cost.json` or final costs.
 - `calc_cost.py` converts rawData into objective costs.
 - Files in `project/com_lib/` are adapter sources or references. A workflow uses an adapter only after the needed `_com.py` file is copied into `project/job_template/`.
-- `project/config.py` controls run settings such as local/distributed mode, job paths, population size, timeouts, and HTCondor resources.
+- `project/config.py` is the short key config, while `project/config_all.py` contains full run settings such as job paths, local/distributed mode, population size, timeouts, and HTCondor resources.
 - Historical rawData may be reused when `calc_cost.py` or parameter ranges change, but the user must delete or ignore old history if old rawData no longer represents the new task.
 
 ## Document Roles
@@ -75,7 +75,7 @@ Per-adapter usage notes for `_com.py` files in `workflow.py`. Start with
 
 ### `config_and_run.md`
 
-User-facing configuration and launch notes for `project/config.py`, smoke tests,
+User-facing configuration and launch notes for `project/config.py` plus `project/config_all.py`, smoke tests,
 and `start_optimization_aedtopt.cmd`.
 
 ## Maintenance Rules
@@ -84,7 +84,7 @@ Update `user_doc/` when a user-facing task setup step changes, especially when:
 
 - The expected shape of `workflow.py`, `calc_cost.py`, rawData `.npz` files, or adapter calls changes.
 - A new `_com.py` adapter is added for users to copy into `job_template`; add a matching `user_doc/com_lib/<adapter>.md`.
-- `project/config.py` gains or renames a setting users must edit before running.
+- `project/config.py` or `project/config_all.py` gains or renames a setting users must edit before running.
 - The recommended smoke-test or optimization launch command changes.
 
 Avoid duplicating framework architecture details from `dev_doc/`. If the same concept

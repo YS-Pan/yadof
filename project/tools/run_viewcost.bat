@@ -6,7 +6,6 @@ pushd "%~dp0"
 REM --- Activate conda environment: yadof ---
 set "ENV_NAME=yadof"
 for /f "delims=" %%i in ('conda info --base 2^>nul') do set "CONDA_BASE=%%i"
-if not defined CONDA_BASE if exist "C:\ProgramData\miniconda3\Scripts\activate.bat" set "CONDA_BASE=C:\ProgramData\miniconda3"
 if not defined CONDA_BASE (
     echo [ERROR] conda not found in PATH. Please run this from Anaconda Prompt or add conda to PATH.
     pause

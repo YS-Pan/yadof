@@ -94,7 +94,7 @@ sequenceDiagram
 - Local evaluation can run multiple independent workflow subprocesses at once when
   `LOCAL_EVALUATION_MAX_WORKERS` is greater than 1. Each individual still follows
   the same prepare -> run -> record path, and costs are returned in the original
-  population order. The worker count is re-read from `project/config.py` for each
+  population order. The worker count is re-read through the full config layer for each
   local evaluation call, so a mid-run edit can take effect at the next generation.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
 - Distributed mode reuses the same record/finalize semantics: workers write job-local individual metadata and submit-side finalizers send compact records to `recorded_data`.

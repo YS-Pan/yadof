@@ -118,7 +118,7 @@ def test_default_job_template_width_matches_current_antenna_task():
 
 
 def test_config_no_longer_owns_problem_shape():
-    from project import config
+    from project import config_all as config
 
     assert not hasattr(config, "OPTIMIZE_VARIABLE_COUNT")
     assert not hasattr(config, "OPTIMIZE_OBJECTIVE_COUNT")

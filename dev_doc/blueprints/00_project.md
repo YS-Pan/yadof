@@ -58,7 +58,7 @@
 
 ## Mutability Profile
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and active adapter files in `job_template/` are intentionally highly mutable between optimization tasks.
-- `project/config.py` is mutable at campaign setup time and occasionally during tuning.
+- `project/config.py` is mutable at campaign setup time and occasionally during tuning; `project/config_all.py` carries the full grouped defaults for advanced changes.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
 - `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are current documentation artifacts; `dev_doc/obsolete/` is archival.

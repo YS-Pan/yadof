@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ExecuteDir = "R:\condor_execute",
+    [string]$ExecuteDir = "",
 
     [switch]$NoRestart
 )
@@ -25,12 +25,6 @@ function Get-CondorBinCandidates {
         $dirs.Add((Join-Path $env:CONDOR_LOCATION "bin"))
     }
     foreach ($dir in @(
-        "D:\condor\bin",
-        "D:\Condor\bin",
-        "D:\HTCondor\bin",
-        "C:\Condor\bin",
-        "C:\condor\bin",
-        "C:\HTCondor\bin",
         "$env:ProgramFiles\Condor\bin",
         "$env:ProgramFiles\HTCondor\bin"
     )) {
@@ -130,17 +124,6 @@ function Get-CondorRootConfigCandidates {
         $candidates.Add((Join-Path $script:CondorRootDir "etc\condor_config"))
     }
 
-    foreach ($candidate in @(
-        "D:\condor\condor_config",
-        "D:\Condor\condor_config",
-        "D:\HTCondor\condor_config",
-        "C:\Condor\condor_config",
-        "C:\condor\condor_config",
-        "C:\HTCondor\condor_config"
-    )) {
-        $candidates.Add($candidate)
-    }
-
     return @($candidates | Where-Object { $_ } | Select-Object -Unique)
 }
 
@@ -162,8 +145,7 @@ function Ensure-CondorRootLoadsLocalConfig {
             throw "Could not locate HTCondor root config and could not infer the install root."
         }
         $rootConfig = Join-Path $script:CondorRootDir "condor_config"
-        Write-Warning "No HTCondor root config was found. Creating $rootConfig and setting system CONDOR_CONFIG to this file."
-        [Environment]::SetEnvironmentVariable("CONDOR_CONFIG", $rootConfig, "Machine")
+        Write-Warning "No HTCondor root config was found. Creating $rootConfig in the inferred install root."
         $env:CONDOR_CONFIG = $rootConfig
     }
 
@@ -222,20 +204,8 @@ function Get-CondorLocalConfigTarget {
     }
 
     $fallbacks = New-Object System.Collections.Generic.List[string]
-    if (Test-Path -LiteralPath "D:\condor" -PathType Container) {
-        $fallbacks.Add("D:\condor\condor_config.local")
-    }
     if ($script:CondorRootDir) {
         $fallbacks.Add((Join-Path $script:CondorRootDir "condor_config.local"))
-    }
-    foreach ($candidate in @(
-        "D:\Condor\condor_config.local",
-        "D:\HTCondor\condor_config.local",
-        "C:\Condor\condor_config.local",
-        "C:\condor\condor_config.local",
-        "C:\HTCondor\condor_config.local"
-    )) {
-        $fallbacks.Add($candidate)
     }
 
     foreach ($candidate in @($fallbacks | Select-Object -Unique)) {
@@ -293,7 +263,7 @@ function Ensure-ExecuteDirectory {
 
     $root = [IO.Path]::GetPathRoot($PathText)
     if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) {
-        throw "Required execute drive is not available: $root. Create or mount the R: RAM disk first."
+        throw "Required execute drive is not available: $root. Pass -ExecuteDir with an available worker scratch path."
     }
 
     New-Item -ItemType Directory -Force -Path $PathText | Out-Null
@@ -340,7 +310,11 @@ function Show-Verification {
 
 Assert-Administrator
 Initialize-CondorCommands
-Write-Host "YADOF worker RAM disk execute setup"
+if (-not $ExecuteDir) {
+    $ExecuteDir = Join-Path ([IO.Path]::GetTempPath()) "condor_execute"
+}
+
+Write-Host "YADOF worker execute setup"
 Write-Host "Target execute directory: $ExecuteDir"
 
 Ensure-ExecuteDirectory -PathText $ExecuteDir

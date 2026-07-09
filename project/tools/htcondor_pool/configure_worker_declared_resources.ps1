@@ -9,9 +9,9 @@ param(
     [Parameter(Mandatory = $true)]
     [int]$DeclaredDiskMb,
 
-    [string]$ExecuteDir = "R:\condor_execute",
+    [string]$ExecuteDir = "",
 
-    [string]$WorkerPythonExe = "C:\ProgramData\miniconda3\envs\yadof\python.exe",
+    [string]$WorkerPythonExe = "python",
 
     [string]$PartitionableSlot = "1",
 
@@ -39,12 +39,6 @@ function Find-CondorBinDir {
     }
 
     foreach ($dir in @(
-        "D:\condor\bin",
-        "D:\Condor\bin",
-        "D:\HTCondor\bin",
-        "C:\condor\bin",
-        "C:\Condor\bin",
-        "C:\HTCondor\bin",
         "$env:ProgramFiles\HTCondor\bin",
         "$env:ProgramFiles\Condor\bin"
     )) {
@@ -53,12 +47,24 @@ function Find-CondorBinDir {
         }
     }
 
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    if ($programFilesX86) {
+        foreach ($dir in @(
+            (Join-Path $programFilesX86 "HTCondor\bin"),
+            (Join-Path $programFilesX86 "Condor\bin")
+        )) {
+            if ($dir -and (Test-Path -LiteralPath (Join-Path $dir "condor_config_val.exe"))) {
+                return $dir
+            }
+        }
+    }
+
     $command = Get-Command condor_config_val.exe -ErrorAction SilentlyContinue
     if ($command) {
         return Split-Path -Parent $command.Source
     }
 
-    throw "Could not find condor_config_val.exe. Set CONDOR_LOCATION or install HTCondor first."
+    throw "Could not find condor_config_val.exe. Put HTCondor on PATH, set CONDOR_LOCATION, or install it under Program Files."
 }
 
 function Initialize-Condor {
@@ -92,7 +98,6 @@ function Ensure-RootLoadsLocalConfig {
     if (-not $rootConfig) {
         $rootConfig = Join-Path $script:CondorRootDir "condor_config"
         $env:CONDOR_CONFIG = $rootConfig
-        [Environment]::SetEnvironmentVariable("CONDOR_CONFIG", $rootConfig, "Machine")
     }
 
     $localForCondor = $LocalConfigPath -replace "\\", "/"
@@ -207,7 +212,14 @@ function Ensure-WorkerPythonAccess {
         return
     }
     if (-not (Test-Path -LiteralPath $PythonExe -PathType Leaf)) {
-        throw "Worker Python executable does not exist: $PythonExe"
+        $command = Get-Command $PythonExe -ErrorAction SilentlyContinue
+        if ($command -and $command.Source -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
+            $PythonExe = $command.Source
+        }
+        else {
+            Write-Warning "Worker Python executable '$PythonExe' was not resolved to a file. Skipping ACL grant; ensure slot users can execute Python."
+            return
+        }
     }
 
     $envRoot = Split-Path -Parent $PythonExe
@@ -263,6 +275,9 @@ if ($DeclaredDiskMb -lt 1) {
 
 Assert-Administrator
 Initialize-Condor
+if (-not $ExecuteDir) {
+    $ExecuteDir = Join-Path ([IO.Path]::GetTempPath()) "condor_execute"
+}
 
 $partitionable = [string]$PartitionableSlot -in @("1", "true", "True", "yes", "YES", "on", "ON")
 $localConfig = Get-LocalConfigPath

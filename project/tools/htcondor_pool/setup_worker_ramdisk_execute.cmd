@@ -8,14 +8,14 @@ if not "%errorlevel%"=="0" (
     exit /b
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0configure_worker_ramdisk_execute.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0configure_worker_ramdisk_execute.ps1" -ExecuteDir "%TEMP%\condor_execute"
 set "RC=%errorlevel%"
 echo.
 if not "%RC%"=="0" (
-    echo Worker R: execute setup failed with exit code %RC%.
-    echo Make sure R: exists on this machine, then run this file again.
+    echo Worker execute setup failed with exit code %RC%.
+    echo Pass an available execute path to configure_worker_ramdisk_execute.ps1 if the default temp path is not suitable.
 ) else (
-    echo Worker R: execute setup finished.
+    echo Worker execute setup finished.
 )
 pause
 exit /b %RC%

@@ -38,12 +38,6 @@ function Get-CondorBinCandidates {
         $dirs.Add((Join-Path $env:CONDOR_LOCATION "bin"))
     }
     foreach ($dir in @(
-        "D:\condor\bin",
-        "D:\Condor\bin",
-        "D:\HTCondor\bin",
-        "C:\Condor\bin",
-        "C:\condor\bin",
-        "C:\HTCondor\bin",
         "$env:ProgramFiles\Condor\bin",
         "$env:ProgramFiles\HTCondor\bin"
     )) {
@@ -487,17 +481,6 @@ function Get-CondorRootConfigCandidates {
         $candidates.Add((Join-Path $script:CondorRootDir "etc\condor_config"))
     }
 
-    foreach ($candidate in @(
-        "D:\condor\condor_config",
-        "D:\Condor\condor_config",
-        "D:\HTCondor\condor_config",
-        "C:\Condor\condor_config",
-        "C:\condor\condor_config",
-        "C:\HTCondor\condor_config"
-    )) {
-        $candidates.Add($candidate)
-    }
-
     return @($candidates | Where-Object { $_ } | Select-Object -Unique)
 }
 
@@ -519,13 +502,12 @@ function Ensure-CondorRootLoadsLocalConfig {
             throw "Could not locate HTCondor root config and could not infer the install root."
         }
         $rootConfig = Join-Path $script:CondorRootDir "condor_config"
-        Write-Warning "No HTCondor root config was found. Creating $rootConfig and setting system CONDOR_CONFIG to this file."
+        Write-Warning "No HTCondor root config was found. Creating $rootConfig in the inferred install root."
     }
 
     if (-not $DryRun) {
-        [Environment]::SetEnvironmentVariable("CONDOR_CONFIG", $rootConfig, "Machine")
         $env:CONDOR_CONFIG = $rootConfig
-        Write-Host "Set system CONDOR_CONFIG: $rootConfig"
+        Write-Host "Using CONDOR_CONFIG for this process: $rootConfig"
     }
 
     $localConfigForCondor = $LocalConfigPath -replace "\\", "/"
@@ -629,9 +611,6 @@ function Start-CondorMasterProcess {
 
 function Get-CondorConfigTarget {
     $preferredLocalConfigs = New-Object System.Collections.Generic.List[string]
-    if (Test-Path -LiteralPath "D:\condor" -PathType Container) {
-        $preferredLocalConfigs.Add("D:\condor\condor_config.local")
-    }
     if ($script:CondorRootDir) {
         $preferredLocalConfigs.Add((Join-Path $script:CondorRootDir "condor_config.local"))
     }
@@ -674,16 +653,6 @@ function Get-CondorConfigTarget {
     $fallbacks = New-Object System.Collections.Generic.List[string]
     if ($script:CondorRootDir) {
         $fallbacks.Add((Join-Path $script:CondorRootDir "condor_config.local"))
-    }
-    foreach ($candidate in @(
-        "D:\condor\condor_config.local",
-        "D:\Condor\condor_config.local",
-        "D:\HTCondor\condor_config.local",
-        "C:\Condor\condor_config.local",
-        "C:\condor\condor_config.local",
-        "C:\HTCondor\condor_config.local"
-    )) {
-        $fallbacks.Add($candidate)
     }
 
     foreach ($candidate in @($fallbacks | Select-Object -Unique)) {

@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from project.evaluate_manager.config import PROJECT_CONFIG_ALL_FILE_NAME, PROJECT_CONFIG_FILE_NAME, PROJECT_DIR
 from project.evaluate_manager.job_files import prepare_job, prepared_job_static_hash
 
 
@@ -65,6 +66,16 @@ def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path
     assert not (first.directory / "rawData_outputs.zip").exists()
     assert not (first.directory / "job.sub").exists()
 
+def test_prepare_job_copies_submit_side_config_files(tmp_path):
+    template_dir = _make_template(tmp_path / "template")
+    job = prepare_job(_values(0.1, 0.2, 0.3), jobs_dir=tmp_path / "jobs", job_template_dir=template_dir)
+
+    for name in (PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_ALL_FILE_NAME):
+        copied = job.directory / name
+        source = PROJECT_DIR / name
+        assert copied.is_file()
+        assert copied.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
+
 
 @pytest.mark.parametrize(
     ("changed_file", "new_content"),
@@ -85,6 +96,7 @@ def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path
         ),
     ],
 )
+
 def test_job_static_hash_changes_when_static_definition_changes(tmp_path, changed_file, new_content):
     template_dir = _make_template(tmp_path / "template")
     jobs_dir = tmp_path / "jobs"
