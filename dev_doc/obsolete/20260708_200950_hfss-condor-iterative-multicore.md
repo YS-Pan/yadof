@@ -1,3 +1,10 @@
+# Archived completion note
+
+Completed on 2026-07-09 by controlled HTCondor diagnostics. See `dev_doc/change_records/20260709_154004_hfss-condor-multicore-diagnosis.md` for the matrix, Windows Event Log evidence, and recommendation.
+
+The completion outcome is documented reproducibility rather than a code-side solver fix: the 08 Mixed Order + Iterative Solver AEDT crashes `hf3d.exe` with access violation `0xc0000005` under HTCondor when HFSS uses more than one core, while 08 one-core and 09 Direct Solver 2/6-core controls succeed under the same runner and worker.
+
+---
 # HFSS Condor Iterative Solver Multi-Core Diagnosis
 
 ## Context

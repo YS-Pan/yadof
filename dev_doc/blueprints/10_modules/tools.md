@@ -16,6 +16,7 @@
 - Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes. Legend entries for objective and combined-cost series use the same hollow marker style as the visible best Pareto points.
 - `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback.
 - `hfss_get_para_and_range.py` reads optimization-enabled variables from a `.aedt` file and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
+- `hfss_condor_multicore_diagnose.py` runs controlled HTCondor HFSS multicore diagnostics for the 08 Mixed Order + Iterative Solver and 09 Direct Solver AEDT controls, using temporary templates, matched submit/runtime cores, fixed memory requests, and Windows Event Log probes on failure.
 - `htcondor_pool/setup_worker_ramdisk_execute.cmd` configures each execute-capable Windows worker to use an explicit or temp-derived HTCondor `EXECUTE` directory and advertises `YADOF_RAMDISK = True` plus `YADOF_EXECUTE_DIR`.
 - `htcondor_pool/setup_worker_declared_resources.cmd` configures each execute-capable Windows worker's advertised `NUM_CPUS`, `MEMORY`, `DISK`, `EXECUTE`, partitionable-slot settings, and worker Python environment access from constants at the top of the CMD file.
 - Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
@@ -23,6 +24,7 @@
 ## I/O Format
 - Tool inputs come through public project APIs or user-provided command-line arguments.
 - Tool outputs may include console summaries, PNG plots under `project/tools/`, generated helper files, or external backups.
+- HFSS Condor diagnostics write ignored run artifacts under `temp/` and ignored job/event-probe folders under `project/jobs/`; durable conclusions belong in `dev_doc/change_records/`.
 - Tools may be flexible and inspect internal files when useful, but core runtime must not call tools.
 
 ## Non-Obvious Techniques
@@ -32,6 +34,7 @@
 - `viewCost.py` scales dense scatter points by lowering marker opacity down to a smaller floor for very large histories, and scales the right combined-cost axis so the observed combined-cost maximum aligns vertically with individual cost `1.0` on the left axis.
 - Optimization and generation boundaries can now come directly from individual `optimization_index` and `generation_index` fields, with `optMeta` joins still useful for run-level diagnostics.
 - The Pareto table is rendered in ASCII-safe text to keep terminal output robust.
+- `hfss_condor_multicore_diagnose.py` intentionally patches the imported config modules in-process instead of editing `project/config.py`; prepared jobs still copy the source `config.py` and `config_all.py`, while runtime HFSS core overrides come through the Condor environment recorded in `job.sub` and `individual_metadata.json`.
 - HFSS/PyAEDT parameter extraction is environment-sensitive. Design names are task-specific; passing an old or wrong design name can make PyAEDT select or create the wrong design context and return no optimization variables. If the project has exactly one design, prefer omitting `--design`; otherwise pass the active design explicitly.
 - AEDT startup also depends on the interactive Windows user profile and writable Ansys/PyAEDT folders. A VS Code click-run under the normal desktop user may succeed where a sandboxed or non-graphical command times out while starting gRPC or touching `Documents/Ansoft`. For Codex-run smoke checks, use the correct design name, allow a long timeout, and run outside the sandbox when AEDT needs the real user profile.
 - `hfss_get_para_and_range.py` archives the old `parameters_constraints.py` only after it has found variables to write, so a failed extraction should leave the current parameter file intact.
