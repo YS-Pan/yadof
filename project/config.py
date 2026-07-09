@@ -5,7 +5,6 @@ from __future__ import annotations
 EVALUATION_MODE = "distributed"  # "local" or "distributed"
 EVALUATION_TIMEOUT_SEC = 6 * 60 * 60
 
-HTCONDOR_PYTHON_EXE = "python"
 HTCONDOR_REQUEST_CPUS = 4
 HTCONDOR_REQUEST_MEMORY = "8GB"
 HTCONDOR_REQUEST_DISK = "5GB"

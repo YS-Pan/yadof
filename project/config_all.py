@@ -34,8 +34,6 @@ LOCAL_EVALUATION_MAX_WORKERS = getattr(key_config, "LOCAL_EVALUATION_MAX_WORKERS
 
 HTCONDOR_SUBMIT_EXE = getattr(key_config, "HTCONDOR_SUBMIT_EXE", "condor_submit")
 HTCONDOR_REMOVE_EXE = getattr(key_config, "HTCONDOR_REMOVE_EXE", "condor_rm")
-HTCONDOR_EXECUTABLE_MODE = getattr(key_config, "HTCONDOR_EXECUTABLE_MODE", "python")
-HTCONDOR_PYTHON_EXE = getattr(key_config, "HTCONDOR_PYTHON_EXE", "python")
 HTCONDOR_POLL_SEC = getattr(key_config, "HTCONDOR_POLL_SEC", 30.0)
 HTCONDOR_REQUEST_CPUS = getattr(key_config, "HTCONDOR_REQUEST_CPUS", 1)
 HTCONDOR_REQUEST_MEMORY = getattr(key_config, "HTCONDOR_REQUEST_MEMORY", "4GB")

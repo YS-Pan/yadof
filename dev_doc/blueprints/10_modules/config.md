@@ -27,10 +27,10 @@
 - `config.py` and `config_all.py` contain Python constants only. Do not add helper functions, environment parsers, task logic, or cost/workflow logic to either file.
 - Paths are `Path` objects rooted in `project/` when they are derived in `config_all.py`.
 - Numeric controls should be simple Python scalars.
-- Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_PYTHON_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
+- Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
 
 ## Non-Obvious Techniques
-- `project/config.py` is intentionally short. The current key surface includes evaluation mode/timeout, HTCondor Python and resources, HFSS core/runtime defaults, and population size.
+- `project/config.py` is intentionally short. The current key surface includes evaluation mode/timeout, HTCondor resources, HFSS core/runtime defaults, and population size.
 - `project/config_all.py` is the compatibility and discovery layer. Adding a new cross-module setting usually means adding it there first, then deciding whether it is important enough to expose in `config.py`.
 - `evaluate_manager` copies both config files into every prepared job folder so submitted jobs keep both the key campaign settings and full default context.
 - `workflow.py` reads the copied job-local `config.py` for HFSS defaults, then allows HTCondor environment variables such as `YADOF_HFSS_JOB_CPUCORE` to override runtime values.
@@ -40,7 +40,7 @@
 - Variable count and objective count are deliberately absent from config and resolved through `job_template.api`.
 - `JOBS_DIR` is the submit-side runtime staging location for prepared job folders. Worker-side scratch placement is an HTCondor `EXECUTE` setting, not a `JOBS_DIR` setting.
 - When requiring RAM-disk workers, `HTCONDOR_REQUIREMENTS` can match the worker-advertised `YADOF_RAMDISK` attribute written by the pool setup tools.
-- `HTCONDOR_PYTHON_EXE` defaults to `python`, letting each worker resolve Python from its own PATH. If an explicit path is used, it must be valid on every worker that can match the job.
+- The HTCondor submit executable is not a config setting. Distributed jobs use direct `workflow.py` submission with `transfer_executable = True`; Python interpreter access is a worker environment/file-association prerequisite, not a submit-file executable path.
 - `EVALUATION_TIMEOUT_SEC` is the generation-level wait budget for distributed evaluation, not just a single HFSS solve timeout. Large populations submitted in waves need a value large enough for the full generation to drain.
 - `HTCONDOR_REQUEST_MEMORY` is a scheduler reservation. It should be high enough for AEDT startup and solve memory so the pool does not overpack workers.
 - `EVALUATION_MODE` can be `local` or `distributed`; tests should still force local or monkeypatched behavior instead of requiring a real pool.

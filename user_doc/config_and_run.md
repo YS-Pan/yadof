@@ -19,7 +19,6 @@ Local mode is best for first smoke tests. If you need local concurrency for a pu
 
 ```python
 EVALUATION_MODE = "distributed"
-HTCONDOR_PYTHON_EXE = "python"
 HTCONDOR_REQUEST_CPUS = 4
 HTCONDOR_REQUEST_MEMORY = "8GB"
 HTCONDOR_REQUEST_DISK = "5GB"
@@ -28,7 +27,7 @@ HFSS_PARALLEL_TASKS = 1
 HFSS_NON_GRAPHICAL = True
 ```
 
-`HTCONDOR_PYTHON_EXE = "python"` means workers resolve Python from their own `PATH`. If your pool requires an explicit executable, use a path that is valid on every matching worker; do not hard-code a path from one submit machine unless every worker has the same layout.
+The generated submit file uses `executable = workflow.py` with `transfer_executable = True`. Do not set Python itself as the HTCondor submit `executable`; make sure the worker can run transferred `.py` files and that slot users can access the Python installation reached by the worker file association.
 
 For HFSS jobs, keep `HFSS_JOB_CPUCORE` aligned with `HTCONDOR_REQUEST_CPUS`. The submit file requests `HTCONDOR_REQUEST_CPUS`, and the generated HTCondor environment passes `HFSS_JOB_CPUCORE` to `workflow.py` as `YADOF_HFSS_JOB_CPUCORE`.
 

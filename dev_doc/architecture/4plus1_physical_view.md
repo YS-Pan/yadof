@@ -46,12 +46,12 @@ flowchart LR
 ```
 
 In the implemented HTCondor path, the submit side writes one `job.sub` per prepared
-job folder. The submit file uses the configured worker Python executable with
-`arguments = workflow.py`, `transfer_executable = False`, and sandboxed Windows
-profile/temp environment variables. It does not set `transfer_output_files`, so
-HTCondor returns generated files such as `rawData/`, `individual_metadata.json`,
-and PyAEDT-created `batch.log` when they exist without holding the job if optional
-files are absent.
+job folder. The submit file uses `executable = workflow.py`, `transfer_executable = True`,
+and sandboxed Windows profile/temp environment variables. It does not set
+a workflow argument line or make Python itself the HTCondor executable. It also does
+not set `transfer_output_files`, so HTCondor returns generated files such as `rawData/`,
+`individual_metadata.json`, and PyAEDT-created `batch.log` when they exist without
+holding the job if optional files are absent.
 Worker scratch placement is controlled by each worker's HTCondor `EXECUTE`
 directory. A worker scratch or RAM-disk directory should be configured on
 the execute machines and advertised through worker ClassAd attributes; it is not

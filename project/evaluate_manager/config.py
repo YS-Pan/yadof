@@ -18,8 +18,6 @@ DEFAULT_MODE = str(getattr(project_config, "EVALUATION_MODE", "local"))
 DEFAULT_LOCAL_EVALUATION_MAX_WORKERS = int(getattr(project_config, "LOCAL_EVALUATION_MAX_WORKERS", 1))
 DEFAULT_HTCONDOR_SUBMIT_EXE = str(getattr(project_config, "HTCONDOR_SUBMIT_EXE", "condor_submit"))
 DEFAULT_HTCONDOR_REMOVE_EXE = str(getattr(project_config, "HTCONDOR_REMOVE_EXE", "condor_rm"))
-DEFAULT_HTCONDOR_EXECUTABLE_MODE = str(getattr(project_config, "HTCONDOR_EXECUTABLE_MODE", "python"))
-DEFAULT_HTCONDOR_PYTHON_EXE = str(getattr(project_config, "HTCONDOR_PYTHON_EXE", "python"))
 DEFAULT_HTCONDOR_POLL_SEC = float(getattr(project_config, "HTCONDOR_POLL_SEC", 30.0))
 DEFAULT_HTCONDOR_REQUEST_CPUS = int(getattr(project_config, "HTCONDOR_REQUEST_CPUS", 1))
 DEFAULT_HTCONDOR_REQUEST_MEMORY = str(getattr(project_config, "HTCONDOR_REQUEST_MEMORY", "4GB"))
@@ -75,13 +73,6 @@ def htcondor_submit_exe() -> str:
 def htcondor_remove_exe() -> str:
     return str(getattr(project_config, "HTCONDOR_REMOVE_EXE", DEFAULT_HTCONDOR_REMOVE_EXE))
 
-
-def htcondor_python_exe() -> str:
-    return str(getattr(project_config, "HTCONDOR_PYTHON_EXE", DEFAULT_HTCONDOR_PYTHON_EXE))
-
-
-def htcondor_executable_mode() -> str:
-    return str(getattr(project_config, "HTCONDOR_EXECUTABLE_MODE", DEFAULT_HTCONDOR_EXECUTABLE_MODE)).strip().lower()
 
 
 def htcondor_poll_sec() -> float:

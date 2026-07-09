@@ -13,7 +13,7 @@
 - Input is prepared job specs.
 - Output is ordered `JobResult` rows.
 - Callback has no arguments and its return value is ignored.
-- Submit files use `executable = <configured python>`, `arguments = workflow.py`, `transfer_executable = False`, and `request_cpus`, `request_memory`, and `request_disk` from config.
+- Submit files use `executable = workflow.py`, omit the workflow argument line, set `transfer_executable = True`, and use `request_cpus`, `request_memory`, and `request_disk` from config.
 - `environment` is emitted as one quoted HTCondor environment string. Entries must be whitespace-separated inside that quoted string; semicolon-separated entries are not valid for the current submit style.
 
 ## Non-Obvious Techniques

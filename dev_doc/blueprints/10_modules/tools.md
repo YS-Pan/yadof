@@ -18,7 +18,7 @@
 - `hfss_get_para_and_range.py` reads optimization-enabled variables from a `.aedt` file and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
 - `hfss_condor_multicore_diagnose.py` runs controlled HTCondor HFSS multicore diagnostics for the 08 Mixed Order + Iterative Solver and 09 Direct Solver AEDT controls, using temporary templates, matched submit/runtime cores, fixed memory requests, and Windows Event Log probes on failure.
 - `htcondor_pool/setup_worker_ramdisk_execute.cmd` configures each execute-capable Windows worker to use an explicit or temp-derived HTCondor `EXECUTE` directory and advertises `YADOF_RAMDISK = True` plus `YADOF_EXECUTE_DIR`.
-- `htcondor_pool/setup_worker_declared_resources.cmd` configures each execute-capable Windows worker's advertised `NUM_CPUS`, `MEMORY`, `DISK`, `EXECUTE`, partitionable-slot settings, and worker Python environment access from constants at the top of the CMD file.
+- `htcondor_pool/setup_worker_declared_resources.cmd` configures each execute-capable Windows worker's advertised `NUM_CPUS`, `MEMORY`, `DISK`, `EXECUTE`, partitionable-slot settings, and optional Python environment ACL access for direct `.py` execution from constants at the top of the CMD file.
 - Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
 
 ## I/O Format
@@ -39,7 +39,7 @@
 - AEDT startup also depends on the interactive Windows user profile and writable Ansys/PyAEDT folders. A VS Code click-run under the normal desktop user may succeed where a sandboxed or non-graphical command times out while starting gRPC or touching `Documents/Ansoft`. For Codex-run smoke checks, use the correct design name, allow a long timeout, and run outside the sandbox when AEDT needs the real user profile.
 - `hfss_get_para_and_range.py` archives the old `parameters_constraints.py` only after it has found variables to write, so a failed extraction should leave the current parameter file intact.
 - The worker RAM-disk setup is an execute-machine HTCondor configuration step, not a submit-side `JOBS_DIR` setting. Run it on every machine with a startd slot, including a submit/manager machine that also executes jobs.
-- The worker declared-resource setup is also execute-machine local configuration. `MEMORY` is declared in MB, while the script accepts disk in MB and writes HTCondor `DISK` in KB. It also grants read/execute access to the configured Conda/Python environment so slot users can launch `python.exe`.
+- The worker declared-resource setup is also execute-machine local configuration. `MEMORY` is declared in MB, while the script accepts disk in MB and writes HTCondor `DISK` in KB. Its Python ACL helper is only for the worker interpreter reached by `.py` file association; it does not make Python the HTCondor submit `executable`.
 
 ## Mutability Profile
 - Tools can change quickly for user convenience.
