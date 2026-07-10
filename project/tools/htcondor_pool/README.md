@@ -82,7 +82,7 @@ set "PARTITIONABLE_SLOT=1"
 
 `DECLARE_MEMORY_MB` is MB. `DECLARE_DISK_MB` is MB and should not exceed the usable size of the worker scratch directory. With `PARTITIONABLE_SLOT=1`, HTCondor creates one partitionable worker slot that can be split into multiple dynamic slots as jobs request CPU, memory, and disk.
 
-`WORKER_PYTHON_EXE` should match the effective `HTCONDOR_PYTHON_EXE` from config. The script resolves command names such as `python` from PATH when possible and grants read/execute access to the resolved Python environment. If it cannot resolve the command to a file, it warns and skips the ACL grant; make sure slot users can execute Python before running real jobs.
+`WORKER_PYTHON_EXE` is only an ACL helper for the Python installation that Windows uses when a transferred `.py` file is executed. The script resolves command names such as `python` from PATH when possible and grants read/execute access to the resolved Python environment. It does not make Python the HTCondor submit `executable`; current yadof jobs submit `workflow.py` directly with `transfer_executable = True`. If it cannot resolve the command to a file, it warns and skips the ACL grant; make sure slot users can execute `.py` jobs before running real jobs.
 
 For example, if a worker declares 6 CPUs and 24576 MB memory, and each job requests 2 CPUs and 4096 MB memory in config, that worker can run up to three jobs before another resource becomes the limiting factor.
 

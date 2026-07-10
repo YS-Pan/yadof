@@ -55,12 +55,14 @@
 - GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves real-evaluation slots that bypass surrogate selection to reduce branch starvation.
 - Multi-objective optimizer diagnostics include `pymoo.NSGA3`, requested population size, reference-direction method, partition count, and reference-direction count.
 - HTCondor distributed evaluation uses the same job folder and recording contract as local mode. Submit failures, stale daemons, credential errors, or broken pool topology are captured as job metadata; the project does not try to repair the installed HTCondor environment.
+- Portability is a core contract. Source code, config defaults, launchers, and tools must not assume fixed absolute install paths, and must not require users to create new system environment variables before first use. They may rely on repository-derived paths, explicit parameters, standard install discovery, and environment variables already provided by installed tools such as Conda, Ansys, or HTCondor.
 
 ## Mutability Profile
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and active adapter files in `job_template/` are intentionally highly mutable between optimization tasks.
 - `project/config.py` is mutable at campaign setup time and occasionally during tuning; `project/config_all.py` carries the full grouped defaults for advanced changes.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
+- Root `temp/` is a retained scratch directory: keep `temp/.gitkeep` tracked and ignore other contents.
 - `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are current documentation artifacts; `dev_doc/obsolete/` is archival.
 - Update architecture and blueprint files when module responsibilities, contracts, I/O, persistence behavior, execution topology, historical lineage, or non-obvious techniques change.
 - Add one `dev_doc/change_records/` file after each code change to explain what changed and why.

@@ -73,9 +73,9 @@ sequenceDiagram
     O->>E: evaluate_population(..., mode="distributed")
     E->>J: prepare all job folders with the local job contract
     E->>C: submit prepared jobs
-    C->>J: write job.sub with executable = workflow.py
+    C->>J: write job.sub with executable = workflow.py and transfer_executable = True
     C->>H: condor_submit job.sub
-    H->>J: worker python runs workflow.py; HTCondor returns generated outputs on exit
+    H->>J: HTCondor runs transferred workflow.py directly; generated outputs return on exit
     C->>J: poll condor.log and complete job-local outputs
     C-->>E: JobResult rows
     E->>R: record_job_result through the shared finalization path

@@ -217,13 +217,13 @@ function Ensure-WorkerPythonAccess {
             $PythonExe = $command.Source
         }
         else {
-            Write-Warning "Worker Python executable '$PythonExe' was not resolved to a file. Skipping ACL grant; ensure slot users can execute Python."
+            Write-Warning "Python ACL helper target '$PythonExe' was not resolved to a file. Skipping ACL grant; ensure slot users can execute transferred .py jobs."
             return
         }
     }
 
     $envRoot = Split-Path -Parent $PythonExe
-    Write-Host "Granting execute/read access for worker Python environment: $envRoot"
+    Write-Host "Granting execute/read access for Python environment used by .py jobs: $envRoot"
 
     $icacls = Join-Path $env:SystemRoot "System32\icacls.exe"
     $aclOutput = & $icacls $envRoot /grant "*S-1-5-11:(OI)(CI)RX" "*S-1-5-32-545:(OI)(CI)RX" /T
@@ -289,7 +289,7 @@ Write-Host "Declared CPUs: $DeclaredCpus"
 Write-Host "Declared memory MB: $DeclaredMemoryMb"
 Write-Host "Declared disk MB: $DeclaredDiskMb"
 Write-Host "Execute dir: $ExecuteDir"
-Write-Host "Worker Python exe: $WorkerPythonExe"
+Write-Host "Python ACL helper target: $WorkerPythonExe"
 Write-Host "Partitionable slot: $partitionable"
 Write-Host "Local config: $localConfig"
 

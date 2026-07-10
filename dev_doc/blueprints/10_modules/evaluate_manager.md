@@ -13,7 +13,7 @@
 ## Functionalities
 - `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
 - Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
-- Distributed mode prepares all jobs, writes HTCondor submit files, submits the job-local `workflow.py` as the direct executable by default, runs an optional submit-side callback after all prepared jobs are submitted, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
+- Distributed mode prepares all jobs, writes HTCondor submit files, submits the prepared job-local `workflow.py` directly as the transferred executable, runs an optional submit-side callback after all prepared jobs are submitted, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
 - `job_files.prepare_job()` copies job template files through `job_template.api`, copies both submit-side config files (`config.py` and `config_all.py`) into the job folder, denormalizes variables via `job_template.api`, writes `job_input.json` with run/generation context, and records `job_static_hash` in submit-side metadata.
 - `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
 - `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, extracts Condor return-value/log tails when available, best-effort removes timed-out cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
@@ -26,7 +26,7 @@
 - Prepared job input: `job_input.json` with `job_name`, `normalized_variables`, `unnormalized_variables`, and `evaluation_context` containing `run_id`, `optimization_index`, `generation_index`, and `population_index` when available.
 - Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
 - Raw outputs: top-level `.npz` files under each job's `rawData/` directory.
-- HTCondor submit file: `job.sub` with `executable = workflow.py`, `transfer_executable = True`, no `arguments` line in default mode, and a quoted whitespace-separated environment string for sandboxed Windows profile/temp variables and HFSS runtime defaults. `transfer_output_files` is intentionally omitted so HTCondor returns generated files, including PyAEDT-created `batch.log` when present, without holding the job if optional files are absent. Interpreter mode remains available as an explicit fallback through `HTCONDOR_EXECUTABLE_MODE = "python"`.
+- HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, and a quoted whitespace-separated environment string for sandboxed Windows profile/temp variables and HFSS runtime defaults. `transfer_output_files` is intentionally omitted so HTCondor returns generated files, including PyAEDT-created `batch.log` when present, without holding the job if optional files are absent.
 - Public output: `population[individual][objective_cost]`, with `inf` rows for failures whose objective width cannot be recovered.
 
 ## Non-Obvious Techniques
@@ -41,7 +41,7 @@
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
 - In distributed mode, returned nested `rawData/*.npz` files are the primary rawData path. `rawData_outputs.zip` is a legacy/fallback transfer archive and a bad fallback zip must become per-job diagnostics rather than a generation-wide exception.
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
-- The Windows HTCondor submit pattern uses the configured Python executable, defaulting to `python` so workers can resolve their own environment. Keep `run_as_owner = False` and `load_profile = True` unless the user deliberately changes identity policy.
+- The Windows HTCondor submit pattern uses direct `workflow.py` submission with `transfer_executable = True`; the earlier interpreter-as-executable pattern is intentionally not supported. Keep `run_as_owner = False` and `load_profile = True` unless the user deliberately changes identity policy.
 - `YADOF_PROGRESS=1` enables coarse console progress for long distributed runs without making public API calls noisy by default.
 
 - `after_jobs_submitted` callbacks are submit-side hooks. In distributed mode `condor_runner` calls the hook after all successful submissions and before polling; callback failures are logged but do not cancel already-submitted jobs.

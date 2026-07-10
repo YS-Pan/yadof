@@ -31,6 +31,7 @@ flowchart TD
 - Surrogate checkpoints: `project/surrogate/checkpoints/generation_*.json`.
 - Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.
+- Root temporary workspace: `temp/` is kept in git with a `.gitkeep` placeholder, while all other files under it are ignored. Use it for disposable diagnostics or manual scratch artifacts that should not become source.
 
 ## Optional Distributed Deployment
 
@@ -46,12 +47,12 @@ flowchart LR
 ```
 
 In the implemented HTCondor path, the submit side writes one `job.sub` per prepared
-job folder. The submit file uses the job-local `workflow.py` as the executable with
-`transfer_executable = True` and sandboxed Windows profile/temp environment variables.
-It does not set `transfer_output_files`, so
-HTCondor returns generated files such as `rawData/`, `individual_metadata.json`,
-and PyAEDT-created `batch.log` when they exist without holding the job if optional
-files are absent.
+job folder. The submit file uses `executable = workflow.py`, `transfer_executable = True`,
+and sandboxed Windows profile/temp environment variables. It does not set
+a workflow argument line or make Python itself the HTCondor executable. It also does
+not set `transfer_output_files`, so HTCondor returns generated files such as `rawData/`,
+`individual_metadata.json`, and PyAEDT-created `batch.log` when they exist without
+holding the job if optional files are absent.
 Worker scratch placement is controlled by each worker's HTCondor `EXECUTE`
 directory. A worker scratch or RAM-disk directory should be configured on
 the execute machines and advertised through worker ClassAd attributes; it is not
@@ -63,5 +64,6 @@ the same setting as the submit-side `JOBS_DIR`.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
 - Real workflow smoke tests may require task-specific simulator software such as PyAEDT/AEDT; default tests should skip those paths unless explicitly enabled.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
+- Machine-specific install locations must be discovered from repository-relative paths, explicit user arguments, standard install discovery, or existing environment variables. The project must not require users to add new system environment variables as a setup prerequisite.
 - `created_at` is not part of the individual record contract; job creation time can be inferred from time-based job folder names when needed.
 - `recorded_data` JSONL metadata writes and rawData archive updates must stay atomic because distributed finalization may introduce more concurrency.
