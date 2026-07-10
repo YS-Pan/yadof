@@ -152,14 +152,23 @@ def run_condor_jobs(
         completed_now = 0
         for job_name, submission in list(pending.items()):
             terminal_reason = terminal_log_reason(submission.job.directory)
-            if terminal_reason is None and not read_individual_metadata(submission.job.directory):
+            individual_metadata = read_individual_metadata(submission.job.directory)
+            if terminal_reason is None and not _job_local_outputs_ready(submission.job.directory, individual_metadata):
                 continue
-            results_by_name[job_name] = collect_condor_result(
-                submission.job,
-                submission=submission,
-                timed_out=False,
-                terminal_reason=terminal_reason,
-            )
+            try:
+                results_by_name[job_name] = collect_condor_result(
+                    submission.job,
+                    submission=submission,
+                    timed_out=False,
+                    terminal_reason=terminal_reason,
+                )
+            except Exception as exc:  # noqa: BLE001 - isolate one bad returned payload.
+                results_by_name[job_name] = collect_failure_result(
+                    submission.job,
+                    submission=submission,
+                    exc=exc,
+                    terminal_reason=terminal_reason,
+                )
             pending.pop(job_name, None)
             completed_now += 1
         now = time.monotonic()
@@ -377,9 +386,12 @@ def collect_condor_result(
 ) -> JobResult:
     individual_metadata = read_individual_metadata(job.directory)
     hold_info = condor_hold_info(submission) if terminal_reason == "held" else {}
-    log_info = condor_log_info(job.directory)
-    restore_rawdata_transfer_zip(job.directory)
     raw_paths = raw_data_paths(job.directory)
+    zip_restore_error = None
+    if not raw_paths:
+        zip_restore_error = restore_rawdata_transfer_zip(job.directory)
+        raw_paths = raw_data_paths(job.directory)
+    log_info = condor_log_info(job.directory)
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(individual_metadata)
 
@@ -438,6 +450,8 @@ def collect_condor_result(
     metadata.update(hold_info)
     if error is not None:
         metadata["error"] = error
+    if zip_restore_error is not None:
+        metadata["rawdata_transfer_zip_error"] = zip_restore_error
     if remove_error is not None:
         metadata["condor_remove_error"] = remove_error
     write_metadata(job.directory, metadata)
@@ -462,22 +476,91 @@ def condor_log_info(job_dir: Path) -> dict[str, object]:
     return info
 
 
-def restore_rawdata_transfer_zip(job_dir: Path) -> None:
+def collect_failure_result(
+    job: JobSpec,
+    *,
+    submission: CondorSubmission,
+    exc: BaseException,
+    terminal_reason: str | None,
+) -> JobResult:
+    raw_paths = raw_data_paths(job.directory)
+    metadata = base_metadata(job, engine="htcondor")
+    metadata.update(read_individual_metadata(job.directory))
+    metadata.update(
+        status="error",
+        failure_stage="collect",
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+        error=f"HTCondor result collection failed: {type(exc).__name__}: {exc}",
+        runner_finished_at=now_text(),
+        raw_data_files=[path.name for path in raw_paths],
+        stdout_tail=_read_tail(job.directory / CONDOR_STDOUT_FILE_NAME),
+        stderr_tail=_read_tail(job.directory / CONDOR_STDERR_FILE_NAME),
+        batch_log_tail=_read_tail(job.directory / _BATCH_LOG_FILE_NAME),
+        condor_cluster_id=submission.cluster_id,
+        condor_submit_file=submission.submit_file.name,
+        condor_log_file=CONDOR_LOG_FILE_NAME,
+        condor_log_tail=_read_tail(job.directory / CONDOR_LOG_FILE_NAME),
+        condor_terminal_reason=terminal_reason,
+        condor_submit_stdout_tail=tail(submission.stdout),
+        condor_submit_stderr_tail=tail(submission.stderr),
+    )
+    metadata.update(condor_log_info(job.directory))
+    write_metadata(job.directory, metadata)
+    return result_from_metadata(job, metadata, raw_paths)
+
+
+def restore_rawdata_transfer_zip(job_dir: Path) -> str | None:
     archive_path = job_dir / RAW_DATA_TRANSFER_ZIP_NAME
     if not archive_path.is_file():
-        return
+        return None
     import zipfile
 
     raw_dir = job_dir / RAW_DATA_DIR_NAME
     raw_dir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(archive_path, "r") as archive:
-        for member in archive.infolist():
-            member_name = member.filename.replace("\\", "/")
-            if member.is_dir() or "/" in member_name or not member_name.endswith(".npz"):
-                continue
-            target = raw_dir / Path(member_name).name
-            with archive.open(member, "r") as source, target.open("wb") as dest:
-                dest.write(source.read())
+    try:
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            for member in archive.infolist():
+                member_name = member.filename.replace("\\", "/")
+                if member.is_dir() or "/" in member_name or not member_name.endswith(".npz"):
+                    continue
+                target = raw_dir / Path(member_name).name
+                with archive.open(member, "r") as source, target.open("wb") as dest:
+                    dest.write(source.read())
+    except (OSError, zipfile.BadZipFile) as exc:
+        return f"could not restore {RAW_DATA_TRANSFER_ZIP_NAME}: {exc}"
+    return None
+
+
+def _job_local_outputs_ready(job_dir: Path, individual_metadata: Mapping[str, object]) -> bool:
+    if not individual_metadata:
+        return False
+    status = str(individual_metadata.get("status", "")).strip().lower()
+    if status == "done":
+        raw_files = individual_metadata.get("raw_data_files")
+        raw_paths = raw_data_paths(job_dir)
+        if isinstance(raw_files, list) and raw_files:
+            reported = {Path(str(name)).name for name in raw_files}
+            returned = {path.name for path in raw_paths}
+            if reported.issubset(returned):
+                return True
+        elif raw_paths:
+            return True
+        return _rawdata_transfer_zip_is_readable(job_dir)
+    return status == "error"
+
+
+def _rawdata_transfer_zip_is_readable(job_dir: Path) -> bool:
+    archive_path = job_dir / RAW_DATA_TRANSFER_ZIP_NAME
+    if not archive_path.is_file():
+        return False
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            return archive.testzip() is None
+    except (OSError, zipfile.BadZipFile):
+        return False
 
 
 def _workflow_reported_rawdata(individual_metadata: Mapping[str, object]) -> bool:

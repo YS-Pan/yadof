@@ -239,6 +239,74 @@ def test_condor_result_restores_rawdata_transfer_zip(tmp_path):
     assert (job.directory / "rawData" / "curve.npz").read_bytes() == b"npz bytes"
 
 
+def test_condor_result_ignores_bad_transfer_zip_when_nested_rawdata_exists(tmp_path):
+    from project.evaluate_manager.condor_runner import CondorSubmission, collect_condor_result
+
+    job = _job(tmp_path)
+    submit_file = job.directory / "job.sub"
+    submit_file.write_text("queue 1\n", encoding="utf-8", newline="\n")
+    (job.directory / "condor.log").write_text(
+        "... Job terminated. (1) Normal termination (return value 0) ...\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (job.directory / "individual_metadata.json").write_text(
+        '{"status":"done","raw_data_files":["curve.npz"]}\n',
+        encoding="utf-8",
+        newline="\n",
+    )
+    raw_dir = job.directory / "rawData"
+    raw_dir.mkdir()
+    (raw_dir / "curve.npz").write_bytes(b"already returned")
+    (job.directory / "rawData_outputs.zip").write_bytes(b"not a zip")
+    submission = CondorSubmission(
+        job=job,
+        submit_file=submit_file,
+        cluster_id=123,
+        submitted_at="2026-05-29T00:00:00+08:00",
+        stdout="Submitting job(s).\n1 job(s) submitted to cluster 123.\n",
+        stderr="",
+    )
+
+    result = collect_condor_result(job, submission=submission, timed_out=False, terminal_reason="terminated")
+
+    assert result.status == "done"
+    assert result.raw_data_paths == (raw_dir / "curve.npz",)
+    assert "rawdata_transfer_zip_error" not in result.metadata
+
+
+def test_condor_result_reports_bad_transfer_zip_without_raising(tmp_path):
+    from project.evaluate_manager.condor_runner import CondorSubmission, collect_condor_result
+
+    job = _job(tmp_path)
+    submit_file = job.directory / "job.sub"
+    submit_file.write_text("queue 1\n", encoding="utf-8", newline="\n")
+    (job.directory / "condor.log").write_text(
+        "... Job terminated. (1) Normal termination (return value 0) ...\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (job.directory / "individual_metadata.json").write_text(
+        '{"status":"done","raw_data_files":["curve.npz"]}\n',
+        encoding="utf-8",
+        newline="\n",
+    )
+    (job.directory / "rawData_outputs.zip").write_bytes(b"not a zip")
+    submission = CondorSubmission(
+        job=job,
+        submit_file=submit_file,
+        cluster_id=123,
+        submitted_at="2026-05-29T00:00:00+08:00",
+        stdout="Submitting job(s).\n1 job(s) submitted to cluster 123.\n",
+        stderr="",
+    )
+
+    result = collect_condor_result(job, submission=submission, timed_out=False, terminal_reason="terminated")
+
+    assert result.status == "error"
+    assert "rawData_outputs.zip" in result.metadata["rawdata_transfer_zip_error"]
+    assert "Workflow reported done and listed rawData files" in result.metadata["error"]
+
 def test_condor_result_explains_legacy_missing_nested_rawdata(tmp_path):
     from project.evaluate_manager.condor_runner import CondorSubmission, collect_condor_result
 
@@ -374,3 +442,47 @@ def test_run_condor_jobs_calls_after_submit_callback_before_wait(tmp_path, monke
 
     assert results[0].status == "done"
     assert events == ["submit", "callback", "collect"]
+
+def test_run_condor_jobs_isolates_collect_failure(tmp_path, monkeypatch):
+    from project.evaluate_manager import condor_runner
+    from project.evaluate_manager.condor_runner import CondorSubmission
+    from project.evaluate_manager.types import JobResult
+
+    first = _job(tmp_path, "job_001")
+    second = _job(tmp_path, "job_002")
+    events: list[str] = []
+
+    def fake_submit(job_spec, *, env=None):
+        submit_file = job_spec.directory / "job.sub"
+        submit_file.write_text("queue 1\n", encoding="utf-8", newline="\n")
+        return CondorSubmission(
+            job=job_spec,
+            submit_file=submit_file,
+            cluster_id=100 if job_spec.name == "job_001" else 101,
+            submitted_at="2026-07-05T00:00:00+08:00",
+            stdout="submitted",
+            stderr="",
+        )
+
+    def fake_collect(job_spec, *, submission, timed_out, terminal_reason, remove_error=None):
+        events.append(job_spec.name)
+        if job_spec.name == "job_001":
+            raise RuntimeError("bad returned payload")
+        return JobResult(
+            job_name=job_spec.name,
+            job_dir=job_spec.directory,
+            status="done",
+            unnormalized_variables=job_spec.unnormalized_variables,
+            metadata={"job_name": job_spec.name, "status": "done", "engine": "htcondor"},
+        )
+
+    monkeypatch.setattr(condor_runner, "submit_condor_job", fake_submit)
+    monkeypatch.setattr(condor_runner, "terminal_log_reason", lambda _job_dir: "terminated")
+    monkeypatch.setattr(condor_runner, "collect_condor_result", fake_collect)
+
+    results = condor_runner.run_condor_jobs((first, second), timeout_sec=1)
+
+    assert [result.status for result in results] == ["error", "done"]
+    assert results[0].metadata["failure_stage"] == "collect"
+    assert results[0].metadata["error_message"] == "bad returned payload"
+    assert events == ["job_001", "job_002"]

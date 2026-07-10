@@ -76,7 +76,7 @@ sequenceDiagram
     C->>J: write job.sub with executable = worker python and arguments = workflow.py
     C->>H: condor_submit job.sub
     H->>J: worker python runs workflow.py; HTCondor returns generated outputs on exit
-    C->>J: poll condor.log and job-local outputs
+    C->>J: poll condor.log and complete job-local outputs
     C-->>E: JobResult rows
     E->>R: record_job_result through the shared finalization path
     E-->>O: dynamic cost rows or inf rows
@@ -86,6 +86,7 @@ sequenceDiagram
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
 - Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; simulator workflows may also record child-process metadata for cleanup. Local runner adds return code, stdout/stderr tails, and rawData presence.
 - Submit failure: HTCondor submission errors are captured as per-job `error` metadata. The project does not attempt to repair the local HTCondor installation.
+- Result collection failure: HTCondor collection errors, including invalid legacy `rawData_outputs.zip` fallback archives, are captured as per-job `error` metadata. Already-returned nested `rawData/*.npz` files take precedence over the fallback zip.
 - Timeout: local runner terminates the process tree; HTCondor runner best-effort removes the submitted cluster id. Both record status `timeout` and preserve any returned job-local metadata.
 - Record failure: evaluation continues; returned row becomes `inf`.
 - Invalid rawData: `recorded_data.query` skips invalid completed rawData for history/training and exposes diagnostics.
