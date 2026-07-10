@@ -115,7 +115,8 @@ Common key settings users edit:
 
 - `EVALUATION_MODE`: `"local"` for local subprocess runs, `"distributed"` for HTCondor.
 - `EVALUATION_TIMEOUT_SEC`: generation-level timeout budget.
-- `HTCONDOR_PYTHON_EXE`: Python executable name or path available on every HTCondor worker.
+- `HTCONDOR_EXECUTABLE_MODE`: `"workflow"` for direct `workflow.py` submission, or `"python"` for interpreter submission.
+- `HTCONDOR_PYTHON_EXE`: Python executable name or path used only when `HTCONDOR_EXECUTABLE_MODE = "python"`.
 - `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests.
 - `HFSS_JOB_CPUCORE`, `HFSS_PARALLEL_TASKS`, `HFSS_NON_GRAPHICAL`: HFSS runtime defaults copied into each prepared job.
 - `OPTIMIZE_POPULATION_SIZE`: number of real evaluations per generation.

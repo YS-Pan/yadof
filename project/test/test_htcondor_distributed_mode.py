@@ -21,7 +21,7 @@ def _job(tmp_path: Path, name: str = "job_001"):
     )
 
 
-def test_condor_submit_file_uses_direct_python_executable_and_rawdata_contract(tmp_path):
+def test_condor_submit_file_uses_workflow_executable_and_rawdata_contract(tmp_path):
     from project import config_all as project_config
     from project.evaluate_manager.condor_runner import write_condor_submit_file
 
@@ -43,9 +43,9 @@ def test_condor_submit_file_uses_direct_python_executable_and_rawdata_contract(t
     submit_path = write_condor_submit_file(job, env={"EXTRA_FLAG": "1"})
     text = submit_path.read_text(encoding="utf-8")
 
-    assert "executable = python" in text
-    assert "arguments = workflow.py" in text
-    assert "transfer_executable = False" in text
+    assert "executable = workflow.py" in text
+    assert "arguments = workflow.py" not in text
+    assert "transfer_executable = True" in text
     assert "transfer_output_files" not in text
     assert "run_as_owner = False" in text
     assert "load_profile = True" in text
@@ -68,7 +68,7 @@ def test_condor_submit_file_uses_direct_python_executable_and_rawdata_contract(t
         assert 'Machine =?= "DESKTOP-A2091"' not in text
     assert 'TARGET.YADOF_RAMDISK =?= True' in text
     transfer_line = next(line for line in text.splitlines() if line.startswith("transfer_input_files = "))
-    assert "workflow.py" in transfer_line
+    assert "workflow.py" not in transfer_line
     assert "rawData" not in transfer_line
     assert "individual_metadata.json" not in transfer_line
     assert "rawData_outputs.zip" not in transfer_line
@@ -136,12 +136,12 @@ def test_run_condor_jobs_records_submit_failure_without_fixing_condor(tmp_path, 
     assert result.metadata["error_message"] == "condor_submit is not healthy"
 
 
-def test_condor_submit_file_can_use_workflow_executable_opt_in(tmp_path, monkeypatch):
+def test_condor_submit_file_can_use_python_executable_opt_in(tmp_path, monkeypatch):
     from project.evaluate_manager.condor_runner import write_condor_submit_file
 
     from project import config_all as project_config
 
-    monkeypatch.setattr(project_config, "HTCONDOR_EXECUTABLE_MODE", "workflow")
+    monkeypatch.setattr(project_config, "HTCONDOR_EXECUTABLE_MODE", "python")
 
     job = _job(tmp_path)
     for name in ("workflow.py", "job_input.json"):
@@ -150,11 +150,11 @@ def test_condor_submit_file_can_use_workflow_executable_opt_in(tmp_path, monkeyp
     submit_path = write_condor_submit_file(job)
     text = submit_path.read_text(encoding="utf-8")
 
-    assert "executable = workflow.py" in text
-    assert "arguments = workflow.py" not in text
-    assert "transfer_executable = True" in text
+    assert f"executable = {project_config.HTCONDOR_PYTHON_EXE}" in text
+    assert "arguments = workflow.py" in text
+    assert "transfer_executable = False" in text
     transfer_line = next(line for line in text.splitlines() if line.startswith("transfer_input_files = "))
-    assert "workflow.py" not in transfer_line
+    assert "workflow.py" in transfer_line
 
 
 def test_condor_requirements_can_be_relaxed_or_exclude_workers(monkeypatch):
@@ -307,6 +307,7 @@ def test_condor_result_reports_bad_transfer_zip_without_raising(tmp_path):
     assert "rawData_outputs.zip" in result.metadata["rawdata_transfer_zip_error"]
     assert "Workflow reported done and listed rawData files" in result.metadata["error"]
 
+
 def test_condor_result_explains_legacy_missing_nested_rawdata(tmp_path):
     from project.evaluate_manager.condor_runner import CondorSubmission, collect_condor_result
 
@@ -442,6 +443,7 @@ def test_run_condor_jobs_calls_after_submit_callback_before_wait(tmp_path, monke
 
     assert results[0].status == "done"
     assert events == ["submit", "callback", "collect"]
+
 
 def test_run_condor_jobs_isolates_collect_failure(tmp_path, monkeypatch):
     from project.evaluate_manager import condor_runner

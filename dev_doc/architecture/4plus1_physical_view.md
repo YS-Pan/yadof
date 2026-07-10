@@ -46,9 +46,9 @@ flowchart LR
 ```
 
 In the implemented HTCondor path, the submit side writes one `job.sub` per prepared
-job folder. The submit file uses the configured worker Python executable with
-`arguments = workflow.py`, `transfer_executable = False`, and sandboxed Windows
-profile/temp environment variables. It does not set `transfer_output_files`, so
+job folder. The submit file uses the job-local `workflow.py` as the executable with
+`transfer_executable = True` and sandboxed Windows profile/temp environment variables.
+It does not set `transfer_output_files`, so
 HTCondor returns generated files such as `rawData/`, `individual_metadata.json`,
 and PyAEDT-created `batch.log` when they exist without holding the job if optional
 files are absent.
