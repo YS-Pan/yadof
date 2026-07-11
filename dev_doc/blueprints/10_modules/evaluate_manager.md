@@ -7,7 +7,7 @@
 
 ## Historical Lineage
 - Prepared job folders, generation evaluation, status collection, and failure handling descend from the fanyufei prepare/evaluate lineage.
-- Optional HTCondor submission and polling behavior descend from the older combined-project lineage and the current `reference/htcondor_windows_debug_reference.md` notes.
+- Optional HTCondor submission and polling behavior descend from the older combined-project lineage and the current `reference/htcondor/` notes.
 - Current local and distributed backends share the v3 rawData-first recording path rather than preserving separate legacy result schemas.
 
 ## Functionalities
@@ -41,7 +41,7 @@
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
 - In distributed mode, returned nested `rawData/*.npz` files are the primary rawData path. `rawData_outputs.zip` is a legacy/fallback transfer archive and a bad fallback zip must become per-job diagnostics rather than a generation-wide exception.
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
-- The Windows HTCondor submit pattern uses direct `workflow.py` submission with `transfer_executable = True`; the earlier interpreter-as-executable pattern is intentionally not supported. Keep `run_as_owner = False` and `load_profile = True` unless the user deliberately changes identity policy.
+- The Windows HTCondor submit pattern uses direct `workflow.py` submission with `transfer_executable = True`; the earlier interpreter-as-executable pattern is intentionally not supported. Keep `run_as_owner = False` and `load_profile = True`. `run_as_owner=True` is not a deployable project fix because office/personal workstations have different owners and any machine may submit or execute jobs.
 - `YADOF_PROGRESS=1` enables coarse console progress for long distributed runs without making public API calls noisy by default.
 
 - `after_jobs_submitted` callbacks are submit-side hooks. In distributed mode `condor_runner` calls the hook after all successful submissions and before polling; callback failures are logged but do not cancel already-submitted jobs.

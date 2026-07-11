@@ -75,12 +75,17 @@ sequenceDiagram
     E->>C: submit prepared jobs
     C->>J: write job.sub with executable = workflow.py and transfer_executable = True
     C->>H: condor_submit job.sub
-    H->>J: HTCondor runs transferred workflow.py directly; generated outputs return on exit
+    H->>J: HTCondor runs transferred workflow.py directly under a slot user; generated outputs return on exit
     C->>J: poll condor.log and complete job-local outputs
     C-->>E: JobResult rows
     E->>R: record_job_result through the shared finalization path
     E-->>O: dynamic cost rows or inf rows
 ```
+
+Distributed Windows jobs are expected to run with `run_as_owner = False` and
+`load_profile = True`. The process contract must not depend on running the payload
+as the submitter's desktop owner because deployed office workstations have different
+owners and may all act as submit or execute machines.
 
 ## Failure Handling
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.

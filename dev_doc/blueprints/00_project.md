@@ -8,7 +8,7 @@
 
 ## Historical Lineage
 - Mature campaign orchestration, prepared-job folders, JSONL-style recording, and optional plotting/maintenance tools come from the older fanyufei project lineage. Current contracts live in `evaluate_manager`, `recorded_data`, and `tools` blueprints rather than in old copied paths.
-- HTCondor execution experience comes from the older combined-project lineage plus the still-current `reference/htcondor_windows_debug_reference.md`. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
+- HTCondor execution experience comes from the older combined-project lineage plus the current `reference/htcondor/` notes. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
 - Surrogate-assisted generation, refreshed runtime state, cumulative archive thinking, and richer neural modeling come from the shorten experiment lineage, now reshaped around the v3 rawData-first API.
 - The active HFSS task and adapter style descend from earlier huangzetao/fanyufei task files, but simulator files, `_com.py` adapters, workflows, rawData names, and objectives are replaceable task inputs.
 - GPSAF supplies the optimizer's surrogate-assistance framing. The implementation keeps the GPSAF-shaped alpha/beta/gamma pressure controls while using pymoo GA/NSGA-III mechanics for candidate generation and diversity.
@@ -55,6 +55,10 @@
 - GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves real-evaluation slots that bypass surrogate selection to reduce branch starvation.
 - Multi-objective optimizer diagnostics include `pymoo.NSGA3`, requested population size, reference-direction method, partition count, and reference-direction count.
 - HTCondor distributed evaluation uses the same job folder and recording contract as local mode. Submit failures, stale daemons, credential errors, or broken pool topology are captured as job metadata; the project does not try to repair the installed HTCondor environment.
+- Windows HTCondor execution must target slot-user jobs with `run_as_owner = False`
+  and `load_profile = True`. The deployment pool consists of many office/personal
+  workstations with different interactive owners, and any workstation may submit or
+  execute jobs, so owner execution is not a deployable fix path.
 - Portability is a core contract. Source code, config defaults, launchers, and tools must not assume fixed absolute install paths, and must not require users to create new system environment variables before first use. They may rely on repository-derived paths, explicit parameters, standard install discovery, and environment variables already provided by installed tools such as Conda, Ansys, or HTCondor.
 
 ## Mutability Profile

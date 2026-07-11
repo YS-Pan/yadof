@@ -53,6 +53,11 @@ a workflow argument line or make Python itself the HTCondor executable. It also 
 not set `transfer_output_files`, so HTCondor returns generated files such as `rawData/`,
 `individual_metadata.json`, and PyAEDT-created `batch.log` when they exist without
 holding the job if optional files are absent.
+Windows distributed execution targets HTCondor's slot-user model:
+`run_as_owner = False` and `load_profile = True`. This is a deployment contract, not
+only a local debug preference. The expected pool contains many office/personal
+workstations with different interactive owners, and any workstation may submit or
+execute work, so owner execution cannot be required or used as a general fix path.
 Worker scratch placement is controlled by each worker's HTCondor `EXECUTE`
 directory. A worker scratch or RAM-disk directory should be configured on
 the execute machines and advertised through worker ClassAd attributes; it is not
@@ -61,6 +66,9 @@ the same setting as the submit-side `JOBS_DIR`.
 ## Physical Constraints
 - Local tests should not require HTCondor or simulator software.
 - Distributed tests should mock HTCondor command execution unless they are explicit environment smoke tests.
+- Distributed Windows jobs must remain compatible with slot-user execution. Do not
+  design normal runtime behavior that requires `run_as_owner=True`, cross-machine
+  owner credentials, or running jobs as the submitting desktop user.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
 - Real workflow smoke tests may require task-specific simulator software such as PyAEDT/AEDT; default tests should skip those paths unless explicitly enabled.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.

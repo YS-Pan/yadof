@@ -16,6 +16,8 @@ Only terms that need project context are listed here.
 | `full config` | The grouped `project/config_all.py` default surface imported by runtime modules. It imports matching overrides from `config.py` and is also copied into every prepared job folder. |
 | `local mode` | Evaluation backend where `evaluate_manager` runs prepared jobs as local subprocesses. It is the default mode for tests and first debugging passes. |
 | `distributed mode` | Evaluation backend where `evaluate_manager` submits prepared jobs to HTCondor while preserving the same job folder and recording contract as local mode. |
+| `slot user` | The low-privilege Windows account used by HTCondor to run a job on an execute workstation, such as `condor-slot1_1`. This is the target runtime identity for distributed Windows jobs in this project. |
+| `run_as_owner` | HTCondor submit setting that asks Windows HTCondor to run a job as the submitting user. It must remain `False` for the project's normal distributed workflow because the deployment pool contains many personal/office workstations with different owners. |
 | `GPSAF` | The surrogate-assisted optimizer framing used by `project.optimize`, including alpha/beta/gamma surrogate pressure controls and real-evaluation validation of selected candidates. |
 | `individual` | One optimizer candidate after it has been turned into a real evaluation job. In code this is usually represented by a job folder and later by one `indMeta.jsonl` row. |
 | `individual_metadata.json` | A job-local JSON file written by `workflow.py`. It is the source of truth for an individual's `started_at`, `ended_at`, workflow status, and run/generation context that the workflow can see. |
