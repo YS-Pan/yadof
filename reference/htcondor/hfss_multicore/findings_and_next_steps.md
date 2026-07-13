@@ -2,13 +2,15 @@
 
 ## Consolidated Finding
 
-The 08 Mixed Order plus Iterative Solver profile is unstable when HFSS uses more
-than one core under Windows HTCondor slot-user execution.
+The 08 Mixed Order plus Iterative Solver profile failed because HTCondor 25.4
+injected `OMP_THREAD_LIMIT` with the provisioned CPU count. Removing only that name
+from `STARTER_NUM_THREADS_ENV_VARS` allowed the profile to complete multicore under
+the normal Windows slot-user execution path.
 
-The same project can complete multicore in direct local workflow, and other solver
-profiles can complete multicore under HTCondor. The problem is not simply "HFSS is
-broken" or "HTCondor cannot run HFSS"; it is a narrower interaction between this
-solver profile, multicore HFSS, and the Condor slot-user context.
+The same project already completed multicore in direct local workflow, and other
+solver profiles completed multicore under HTCondor. Real jobs now isolate the
+trigger to the starter-created OpenMP environment rather than the slot-user
+identity, scratch path, desktop, priority, or CPU affinity.
 
 ## Deployment Constraint
 
@@ -34,30 +36,22 @@ load_profile = True
 - `load_profile=False` as a practical slot-user path.
 - Under-requesting Condor CPUs as a workaround.
 
-## Operational Workarounds
+## Production Fix
 
-- For the 08 Mixed Order plus Iterative Solver profile under HTCondor, keep
-  `HFSS_JOB_CPUCORE = 1`.
-- Use a Direct Solver profile when multicore HTCondor throughput is more important
-  than preserving the exact 08 solver configuration.
-- Run the 08 multicore workflow directly on a local desktop when that is acceptable.
+Configure every HFSS worker with the validated list in
+`../20260713_hfss_fix_experiments.md`, reconfigure the startd, and verify the
+effective list does not contain `OMP_THREAD_LIMIT`. The repository pool setup and
+declared-resource scripts now write this setting, and
+`setup_worker_hfss_compat.cmd` updates an existing worker without changing its slot
+or pool-role configuration.
 
-## Future Fix Directions Within Policy
+## Follow-Up Validation
 
-These directions keep slot-user execution and do not rely on owner execution.
-
-1. Build a repeatable worker slot-user AEDT preflight that starts AEDT under the
-   slot user, records HKCU/Ansys profile state, and confirms a tiny solve before
-   production runs.
-2. Investigate whether a neutral AEDT profile or ACF template can be installed per
-   worker for slot users without copying a specific desktop owner's HKCU state.
-3. Test narrower ACF/DSO variants that preserve multicore but avoid only the
-   unstable HFSS distribution path, rather than disabling all distribution types.
-4. Capture `hf3d` crash dumps or Windows Error Reporting artifacts for the 08
-   multicore slot-user crash and compare them with direct local multicore solves.
-5. If no slot-user multicore fix is found, encode this as a task-level policy:
-   this solver profile uses one core under HTCondor, while other solver profiles may
-   use multicore after smoke validation.
+1. Run one profile 08 two-core acceptance job after configuring each worker.
+2. Re-audit the official default thread-variable list after every HTCondor upgrade.
+3. Keep `OMP_THREAD_LIMIT` excluded until the same profile passes a controlled run
+   with it present on the upgraded HTCondor/AEDT combination.
+4. Preserve the one-core fallback for unvalidated workers.
 
 ## Evidence To Preserve For Future Runs
 
@@ -73,6 +67,6 @@ These directions keep slot-user execution and do not rely on owner execution.
 
 ## Current Bottom Line
 
-The project should keep the slot-user HTCondor design and treat the 08 multicore
-failure as a solver/profile/runtime-context compatibility problem. The safe current
-workaround is one HFSS core for that exact profile under HTCondor.
+The project keeps the slot-user HTCondor design. Multicore profile 08 is supported
+on workers where `OMP_THREAD_LIMIT` has been removed from
+`STARTER_NUM_THREADS_ENV_VARS` and a real acceptance job has passed.

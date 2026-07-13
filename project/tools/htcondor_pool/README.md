@@ -12,6 +12,36 @@ Each `.cmd` requests Administrator privileges, detects the local IPv4 address, w
 
 The scripts do not require HTCondor to be in `PATH`. They search existing environment-derived locations: `PATH`, `CONDOR_LOCATION`, Program Files install locations, and the registered Windows service path. If HTCondor has no `LOCAL_CONFIG_FILE`, the setup script writes `condor_config.local` under the detected HTCondor install root and makes that root config load it. For a custom install directory, pass it to the script that accepts a `-CondorLocation` argument or set `CONDOR_LOCATION` in the current shell before running the `.cmd`.
 
+## HFSS OpenMP compatibility
+
+Run this on every execute machine that may run HFSS 2024.1 jobs:
+
+```cmd
+setup_worker_hfss_compat.cmd
+```
+
+HTCondor 25.4 automatically injects `OMP_THREAD_LIMIT` with the provisioned CPU
+count. That variable causes a repeatable `hf3d.exe` access violation for the
+project's Mixed Order plus Iterative Solver profile when more than one CPU is
+used. The compatibility script removes only `OMP_THREAD_LIMIT` from
+`STARTER_NUM_THREADS_ENV_VARS`, reconfigures the startd, and verifies the effective
+value. It does not change pool roles, slot resources, or the required
+`run_as_owner=False` identity policy.
+
+The normal pool-role and declared-resource setup scripts also write the same
+setting. The standalone compatibility script is the safest way to update an
+existing worker without reapplying its other configuration.
+
+Verify from an Administrator PowerShell prompt:
+
+```powershell
+condor_config_val STARTER_NUM_THREADS_ENV_VARS
+```
+
+The output must not contain `OMP_THREAD_LIMIT`. After an HTCondor upgrade, compare
+the new official default list with the retained list in the script before rolling
+the upgrade across the pool.
+
 `add_condor_to_path.cmd` is now a lookup/check helper. It does not create system environment variables or persist PATH changes:
 
 ```cmd

@@ -77,6 +77,11 @@ Each execute workstation should be configured so its slot users can:
 - load enough Windows profile and system environment state for AEDT/PyAEDT startup;
 - return job-local outputs through HTCondor's default output transfer.
 
+Workers that run HFSS 2024.1 must also exclude `OMP_THREAD_LIMIT` from
+`STARTER_NUM_THREADS_ENV_VARS`. Keep the other standard thread variables so they
+continue to reflect provisioned CPUs. See `20260713_hfss_fix_experiments.md` for the
+validated list and real-job evidence.
+
 ## Non-Goals
 
 - Running all jobs as the desktop owner.

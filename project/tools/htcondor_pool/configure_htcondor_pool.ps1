@@ -796,7 +796,7 @@ function Show-PostSetupConfig {
     $condorConfigVal = $script:CondorCommands["condor_config_val"]
     Write-Host ""
     Write-Host "Post-setup HTCondor config:"
-    foreach ($name in @("CONDOR_HOST", "COLLECTOR_HOST", "DAEMON_LIST", "NETWORK_INTERFACE", "ALLOW_ADVERTISE_STARTD", "LOCAL_CONFIG_FILE")) {
+    foreach ($name in @("CONDOR_HOST", "COLLECTOR_HOST", "DAEMON_LIST", "NETWORK_INTERFACE", "ALLOW_ADVERTISE_STARTD", "STARTER_NUM_THREADS_ENV_VARS", "LOCAL_CONFIG_FILE")) {
         $result = Invoke-NativeCommand -FilePath $condorConfigVal -Arguments @($name)
         $value = ($result.StdOut -split "\r?\n" | Select-Object -First 1)
         if (-not $value) {
@@ -853,6 +853,9 @@ KILL = FALSE
 WANT_SUSPEND = FALSE
 WANT_VACATE = FALSE
 
+# HFSS 2024.1 Iterative Solver crashes when HTCondor injects OMP_THREAD_LIMIT.
+STARTER_NUM_THREADS_ENV_VARS = CUBACORES GOMAXPROCS JULIA_NUM_THREADS MKL_NUM_THREADS NUMEXPR_NUM_THREADS OMP_NUM_THREADS OPENBLAS_NUM_THREADS PYTHON_CPU_COUNT ROOT_MAX_THREADS TF_LOOP_PARALLEL_ITERATIONS TF_NUM_THREADS
+
 NUM_SLOTS = 1
 NUM_SLOTS_TYPE_1 = 1
 SLOT_TYPE_1 = cpus=$JobCpus, ram=$JobMemoryMb, disk=90%
@@ -862,7 +865,7 @@ SLOT_TYPE_1_PARTITIONABLE = FALSE
 
 Assert-Administrator
 Initialize-CondorCommands
-Write-Host "YADOF HTCondor pool setup script version: 20260527-open-lan-authz"
+Write-Host "YADOF HTCondor pool setup script version: 20260713-hfss-omp-compat"
 
 $primary = Get-PrimaryIPv4
 $ownIp = [string]$primary.IPAddress

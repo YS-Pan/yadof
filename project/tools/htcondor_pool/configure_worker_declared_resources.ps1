@@ -247,7 +247,7 @@ function Show-Verification {
     $configVal = Join-Path $script:CondorBinDir "condor_config_val.exe"
     Write-Host ""
     Write-Host "Post-setup config values:"
-    foreach ($name in @("NUM_CPUS", "MEMORY", "DISK", "EXECUTE", "START", "SLOT_TYPE_1", "NUM_SLOTS_TYPE_1", "SLOT_TYPE_1_PARTITIONABLE", "STARTD_ATTRS")) {
+    foreach ($name in @("NUM_CPUS", "MEMORY", "DISK", "EXECUTE", "START", "SLOT_TYPE_1", "NUM_SLOTS_TYPE_1", "SLOT_TYPE_1_PARTITIONABLE", "STARTER_NUM_THREADS_ENV_VARS", "STARTD_ATTRS")) {
         $value = (& $configVal $name 2>$null | Select-Object -First 1)
         if (-not $value) {
             $value = "<empty>"
@@ -321,6 +321,8 @@ YADOF_EXECUTE_DIR = "$executeForCondor"
 YADOF_DECLARED_CPUS = $DeclaredCpus
 YADOF_DECLARED_MEMORY_MB = $DeclaredMemoryMb
 YADOF_DECLARED_DISK_MB = $DeclaredDiskMb
+# HFSS 2024.1 Iterative Solver crashes when HTCondor injects OMP_THREAD_LIMIT.
+STARTER_NUM_THREADS_ENV_VARS = CUBACORES GOMAXPROCS JULIA_NUM_THREADS MKL_NUM_THREADS NUMEXPR_NUM_THREADS OMP_NUM_THREADS OPENBLAS_NUM_THREADS PYTHON_CPU_COUNT ROOT_MAX_THREADS TF_LOOP_PARALLEL_ITERATIONS TF_NUM_THREADS
 STARTD_ATTRS = YADOF_RAMDISK, YADOF_EXECUTE_DIR, YADOF_DECLARED_CPUS, YADOF_DECLARED_MEMORY_MB, YADOF_DECLARED_DISK_MB
 $($slotLines -join [Environment]::NewLine)
 "@
