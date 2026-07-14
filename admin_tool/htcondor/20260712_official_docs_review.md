@@ -46,7 +46,7 @@ The online manual version seen during this pass was 25.11.0.
 
 ## Constraints From Existing Project Notes
 
-Keep these constraints from the current `reference/htcondor/` material:
+Keep these constraints from the current `admin_tool/htcondor/` material:
 
 - `run_as_owner=True` is not a production fix path.
 - `load_profile=False` already failed early and is not a viable current path for

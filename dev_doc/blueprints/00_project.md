@@ -8,7 +8,7 @@
 
 ## Historical Lineage
 - Mature campaign orchestration, prepared-job folders, JSONL-style recording, and optional plotting/maintenance tools come from the older fanyufei project lineage. Current contracts live in `evaluate_manager`, `recorded_data`, and `tools` blueprints rather than in old copied paths.
-- HTCondor execution experience comes from the older combined-project lineage plus the current `reference/htcondor/` notes. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
+- HTCondor execution experience comes from the older combined-project lineage plus the current `admin_tool/htcondor/` notes. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
 - Surrogate-assisted generation, refreshed runtime state, cumulative archive thinking, and richer neural modeling come from the shorten experiment lineage, now reshaped around the v3 rawData-first API.
 - The active HFSS task and adapter style descend from earlier huangzetao/fanyufei task files, but simulator files, `_com.py` adapters, workflows, rawData names, and objectives are replaceable task inputs.
 - GPSAF supplies the optimizer's surrogate-assistance framing. The implementation keeps the GPSAF-shaped alpha/beta/gamma pressure controls while using pymoo GA/NSGA-III mechanics for candidate generation and diversity.
@@ -21,7 +21,7 @@
 - Active workflow adapters live in `project/job_template` so prepared jobs are self-contained. `project/com_lib` is only a staging/reference area for adapter source/reference copies such as `hfss_com.py` and retained synthetic `test_com.py`.
 - `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
-- `project.tools` remains optional and user-launched; core runtime and tests must not depend on it.
+- `project.tools` remains optional and user-launched; core runtime and tests must not depend on it. System-environment and HTCondor-pool configuration belong in `admin_tool/`, outside `project.tools`.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
 - `dev_doc` owns project documentation guidance, including current architecture contracts, selective blueprint reading, terminology, historical lineage, toDo handoffs, obsolete archives, and append-only change records.

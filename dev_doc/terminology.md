@@ -30,6 +30,8 @@ Only terms that need project context are listed here.
 | `optimization_index` | Numeric ordinal for an optimization run. It is stored on each individual and in generation-level metadata. |
 | `generation_index` | Numeric generation number inside an optimization run. It is stored on each individual and in generation-level metadata. |
 | `population_index` | Zero-based position of an individual inside the evaluated population sent to `evaluate_manager`. |
+| `user` | A person who prepares optimization tasks, configures and runs campaigns, and inspects results. Users do not install, configure, repair, or maintain the system environment. |
+| `administrator` | A person responsible for installing yadof and dependencies and for configuring and maintaining infrastructure such as the HTCondor cluster's software and hardware. Administrator-only resources are kept under `admin_tool/`. |
 | `dev_doc` | Documentation home for project specification, architecture views, generative blueprints, reference ancestry, terminology, change records, and obsolete notes. |
 | `user_doc` | User-facing documentation home for preparing optimization tasks, choosing adapter files, writing `workflow.py` and `calc_cost.py`, editing run config, smoke testing, and launching optimization. Reading `dev_doc` includes `user_doc`, but reading `user_doc` alone does not include `dev_doc`. |
 | `blueprint` | A generative module document under `dev_doc/blueprints/`. Its goal is to let an AI recreate equivalent behavior from the document, not merely describe the current source file. |

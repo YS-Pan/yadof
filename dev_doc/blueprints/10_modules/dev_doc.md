@@ -3,6 +3,8 @@
 ## Intent
 - Own the project's development documentation system under `dev_doc/`.
 - Give AI agents and human maintainers a clear reading order before code changes.
+- Define the boundary between users, who run campaigns, and administrators, who
+  maintain the execution environment.
 - Preserve the distinction between current architecture contracts, generative blueprints, terminology, future-work handoffs, historical change records, and archival notes.
 - Keep historical reference ancestry inside the relevant project/module blueprints when it remains useful, instead of maintaining a separate active path map.
 - Coordinate with `user_doc/`, the separate user-facing documentation home for task setup and run instructions.
@@ -20,6 +22,8 @@
 - `toDo/` stores time-named future-work handoffs that are always read during the first `dev_doc` pass.
 - `change_records/` stores time-named records explaining what changed and why.
 - `obsolete/` stores archival planning and diagnostic material that is not read by default, including completed toDo handoffs and retired active documents.
+- `../admin_tool/README.md` indexes administrator-only environment and HTCondor-pool
+  resources. Those resources are not part of `project/tools/` or user task setup.
 
 ## I/O Format
 - Default context gathering reads all files in `architecture/`, `terminology.md`, and every Markdown file in `toDo/` in full.

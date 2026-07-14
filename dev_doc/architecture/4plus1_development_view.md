@@ -23,6 +23,11 @@ user_doc/
     test_com.md
   config_and_run.md
 
+admin_tool/
+  README.md
+  htcondor/
+  htcondor_pool/
+
 project/
   optimize/
   evaluate_manager/
@@ -43,7 +48,9 @@ project/
 - `surrogate` depends on `recorded_data.api` and `job_template.api`.
 - `job_template` should not depend on other core modules.
 - `job_template/workflow.py` may depend on adapter files that are in `job_template` itself. `com_lib` is only a staging/reference location and is not copied by `job_template.api`.
-- `tools` and `test` may depend on public APIs across modules.
+- `tools` and `test` may depend on public APIs across modules. `project/tools/`
+  contains user tools only; administrator-only environment and cluster tools belong
+  under `admin_tool/` and remain outside the runtime dependency graph.
 
 ## Development Boundaries
 - API files are module gateways and should stay small.
@@ -52,6 +59,9 @@ project/
 - `project/surrogate/runtime.py` owns the training/prediction data flow; `project/surrogate/scheduler.py` owns staggered training coordination; `project/surrogate/checkpoints.py`, `metadata.py`, and `types.py` keep persistence and shared dataclasses out of the core runtime; `project/surrogate/modeling.py` owns the conditional INR internals and should not import other core modules.
 - Shared settings are split between the key `project/config.py` and full `project/config_all.py`; task semantics should not move into either file.
 - Core code, docs, launchers, and tools must stay portable across machines. Do not hard-code machine-specific absolute install paths, and do not introduce a requirement that users create new system environment variables before using the project. Prefer paths derived from the repository, explicit command arguments, and environment variables that external installers already provide, such as existing Conda, Ansys, or HTCondor PATH/installation variables.
+- Users run against an environment already prepared by an administrator. Package
+  installation, dependency repair, and HTCondor software/hardware configuration are
+  administrator responsibilities, documented under `admin_tool/`.
 
 ## Test Strategy
 - Use local mode as the default verification path, but do not start real HFSS unless an explicit HFSS smoke-test flag or manual command requests it.
@@ -68,6 +78,8 @@ project/
 - `user_doc/README.md` is the user-facing task documentation entry point. A
   `dev_doc` pass must read it and follow its guide; a `user_doc` pass must not
   read `dev_doc` unless the user separately asks for framework development context.
+- `admin_tool/README.md` is the entry point for administrator-only environment and
+  HTCondor-pool resources. These are not user task-setup instructions.
 - `dev_doc/architecture/` captures current design views, core invariants, runtime flows, and system-level contracts; it must be read in full for context.
 - `dev_doc/blueprints/00_project.md` is the generative project-level contract.
 - `dev_doc/blueprints/` captures module intent, I/O, non-obvious techniques,

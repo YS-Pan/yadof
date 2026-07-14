@@ -20,6 +20,8 @@ flowchart TD
 
 ## Runtime Locations
 - Source code: `project/`.
+- Administrator-only environment and cluster resources: `admin_tool/`. These scripts
+  configure external systems and are never imported by the project runtime.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
 - Optional adapter staging/reference files: `project/com_lib/`, not copied or imported by default.
 - Prepared jobs: submit-side `project/jobs/` by default, configurable through the full config layer.
@@ -62,6 +64,10 @@ Worker scratch placement is controlled by each worker's HTCondor `EXECUTE`
 directory. A worker scratch or RAM-disk directory should be configured on
 the execute machines and advertised through worker ClassAd attributes; it is not
 the same setting as the submit-side `JOBS_DIR`.
+
+An administrator installs yadof and its dependencies and configures or maintains
+the HTCondor software and hardware. A user uses the resulting environment but does
+not perform those system-administration actions.
 
 ## Physical Constraints
 - Local tests should not require HTCondor or simulator software.

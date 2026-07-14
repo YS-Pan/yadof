@@ -103,7 +103,7 @@ reproduced the crash. Therefore the verified control point is the execute worker
 Apply the setting on every worker that may execute HFSS jobs:
 
 ```cmd
-project\tools\htcondor_pool\setup_worker_hfss_compat.cmd
+admin_tool\htcondor_pool\setup_worker_hfss_compat.cmd
 ```
 
 The normal pool and declared-resource setup scripts also emit the setting. Verify

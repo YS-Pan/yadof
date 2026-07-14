@@ -23,6 +23,7 @@ flowchart TD
     Surrogate -->|rawData to cost| Template
 
     Tools["project/tools"] -->|inspect via public API| Recorded
+    AdminResources["admin_tool/"] -.->|configure external environment| HTCondor
     Tests["project/test"] -->|verify contracts| Optimize
     Tests --> Evaluate
     Tests --> Template
@@ -38,7 +39,11 @@ flowchart TD
 - `job_template`: active task files for rawData generation plus task-owned objective costs calculated after recording. The framework does not fix simulator filename, rawData names, objective names, or objective count.
 - `recorded_data`: durable real-evaluation archive and dynamic historical views.
 - `surrogate`: rawData-first conditional INR ensemble training, audited rawData prediction, ensemble member min/max cost interval generation, staggered background training scheduling, and training metadata reporting.
-- `tools`: optional user workflows for visualization and maintenance.
+- `tools`: optional user workflows for visualization, task preparation, and result
+  inspection. `project/tools/` excludes system-administration tools.
+- `admin_tool/`: administrator-only HTCondor configuration scripts and operational
+  documentation. It configures the external environment and is not a runtime
+  container or a dependency of project code.
 - `test`: local verification of contracts and failure behavior.
 
 ## Primary Data Flow

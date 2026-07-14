@@ -9,6 +9,8 @@
 flowchart LR
     User["User / researcher"] -->|edits task files and config| Yadof["yadof v3 project"]
     User -->|launches tests, optimization, tools| Yadof
+    Administrator["Administrator"] -->|installs and maintains| Environment["Python, dependencies, HTCondor pool"]
+    Environment --> Yadof
     Yadof -->|runs workflow locally| Python["Local Python runtime"]
     Yadof -->|optional distributed jobs| HTCondor["HTCondor cluster"]
     Yadof -->|future real simulations| Simulator["Simulator adapters: HFSS, Maxwell, TwinBuilder, custom Python"]
@@ -17,7 +19,8 @@ flowchart LR
 ```
 
 ## External Actors
-- User: edits task definitions, decides when old history is still valid, launches runs, inspects results.
+- User: prepares task definitions, decides when old history is still valid, launches runs, and inspects results. A user does not configure or maintain the system environment.
+- Administrator: installs yadof and dependencies, and configures and maintains HTCondor cluster software and hardware. Administrator actions are outside the normal campaign workflow.
 - Local Python runtime: executes the current `workflow.py` in isolated job folders.
 - Simulator adapters: future or optional adapters that turn variables into rawData.
 - HTCondor: optional distributed backend used by `evaluate_manager` when `EVALUATION_MODE = "distributed"`.

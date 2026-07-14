@@ -4,7 +4,7 @@
 - Existing code under `project/` is the implementation source for current module boundaries.
 - `dev_doc/architecture/` is the current-view contract source for system boundaries, runtime flows, persistence rules, and core invariants.
 - `dev_doc/blueprints/00_project.md` is the generative project-level contract; module and file blueprints preserve module intent, I/O, non-obvious techniques, mutability boundaries, and useful historical lineage.
-- Current files under `reference/` are read only when the active docs or task point to them. Old reference-project ancestry should be treated as natural-language lineage in blueprints, not as a live path map.
+- Current files under `admin_tool/` are read only when the active docs or task point to them. They contain administrator-only operational resources; historical project ancestry should be treated as natural-language lineage in blueprints, not as a live path map.
 - `dev_doc/README.md` defines the current documentation reading policy.
 - `dev_doc/toDo/` is read in full on the first `dev_doc` pass so pending future work can influence current implementation choices.
 

@@ -17,6 +17,10 @@ Local mode is best for first smoke tests. If you need local concurrency for a pu
 
 ## Common Distributed Settings
 
+This section assumes an administrator has already installed yadof and its
+dependencies and has configured the HTCondor pool. Users select and use that
+environment; they do not configure or repair its software or hardware.
+
 ```python
 EVALUATION_MODE = "distributed"
 HTCONDOR_REQUEST_CPUS = 4

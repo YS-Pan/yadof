@@ -3,6 +3,25 @@
 `dev_doc/` stores the project documents that help an AI or human maintainer understand
 what the project is, how it is shaped, and why it changed over time.
 
+## System Roles
+
+Only two roles interact with this codebase. Every tool and operational document
+must be assigned to one of them.
+
+### User
+
+A **user** uses yadof to prepare optimization tasks, configure and run campaigns,
+and inspect their results. A user may edit task files and campaign settings, but
+does not install, configure, repair, or maintain the system environment.
+
+### Administrator
+
+An **administrator** configures and maintains the environment in which yadof runs.
+This includes installing the package and its dependencies, and configuring or
+maintaining the HTCondor cluster's software and hardware. Administrator-only
+documents and tools live in `../admin_tool/`; they must not be placed in
+`project/tools/`.
+
 The documents in this folder are not all read with the same priority. Use the rules
 below before changing code or documentation. The canonical entry point is
 `dev_doc/README.md`.
@@ -43,7 +62,7 @@ completed toDo handoff.
 
 ## Encoding And Mojibake
 
-Markdown files in `dev_doc/` and `reference/` should be treated as UTF-8 text. Some
+Markdown files in `dev_doc/` and `admin_tool/` should be treated as UTF-8 text. Some
 documents contain Chinese, and reading them with a local ANSI/default code page can
 produce mojibake instead of readable text.
 
@@ -51,7 +70,7 @@ When using PowerShell, prefer explicit UTF-8 reads:
 
 ```powershell
 Get-Content -Raw -Encoding UTF8 dev_doc/README.md
-Get-Content -Raw -Encoding UTF8 reference/how_to_create_new_project.md
+Get-Content -Raw -Encoding UTF8 admin_tool/README.md
 ```
 
 If text appears garbled, do not edit based on the garbled display. Re-read the file

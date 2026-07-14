@@ -1,8 +1,9 @@
-# HTCondor Reference Index
+# HTCondor Administrator Index
 
 ## Purpose
 
-This folder is the current entry point for HTCondor-related reference material.
+This folder is the current entry point for administrator-only HTCondor operational
+material.
 It consolidates older Windows pool bring-up notes and the HFSS multicore diagnosis
 into topic-oriented files that can grow without turning one document into a
 catch-all log.
@@ -23,7 +24,7 @@ catch-all log.
 ## Structure
 
 ```text
-reference/htcondor/
+admin_tool/htcondor/
   README.md
   20260712_official_docs_review.md
   20260712_official_docs_deep_dive.md

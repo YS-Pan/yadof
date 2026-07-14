@@ -7,7 +7,7 @@
 
 ## Historical Lineage
 - Prepared job folders, generation evaluation, status collection, and failure handling descend from the fanyufei prepare/evaluate lineage.
-- Optional HTCondor submission and polling behavior descend from the older combined-project lineage and the current `reference/htcondor/` notes.
+- Optional HTCondor submission and polling behavior descend from the older combined-project lineage and the current `admin_tool/htcondor/` notes.
 - Current local and distributed backends share the v3 rawData-first recording path rather than preserving separate legacy result schemas.
 
 ## Functionalities

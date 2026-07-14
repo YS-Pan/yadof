@@ -3,7 +3,8 @@
 ## Scope
 
 This file records the live debugging pass for the Condor-specific HFSS multicore
-failure described in `reference/hfss_condor_multicore_diagnosis_reference.md`.
+failure described in the adjacent historical
+`hfss_condor_multicore_diagnosis_reference.md` record.
 It focuses on changes or tests made after that reference was written.
 
 ## Starting Evidence

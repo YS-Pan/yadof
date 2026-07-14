@@ -34,7 +34,8 @@ not stored as a durable source file.
 - `surrogate/`: rawData-first surrogate training, prediction, ensemble member
   min/max intervals, and per-generation checkpoints.
 - `tools/`: optional user-launched utilities. Core runtime does not import or
-  depend on tools.
+  depend on tools. System-environment and HTCondor-pool administration tools are
+  kept separately under `../admin_tool/`.
 - `test/`: pytest coverage for local closed-loop behavior, rawData contracts,
   failure handling, dynamic history interpretation, surrogate behavior, and
   tools.
