@@ -7,7 +7,7 @@
 
 ```mermaid
 flowchart LR
-    User["User / researcher"] -->|edits task files and config| Yadof["yadof v3 project"]
+    User["User / researcher"] -->|edits task files and config| Yadof["yadof project"]
     User -->|launches tests, optimization, tools| Yadof
     Administrator["Administrator"] -->|installs and maintains| Environment["Python, dependencies, HTCondor pool"]
     Environment --> Yadof

@@ -103,12 +103,12 @@ project/
   trigger items for incidental, low-priority improvements; they may be applied when
   normal in-scope work reveals a matching occurrence, but must not cause a dedicated
   repository search or scope expansion.
-- Each automatic toDo is checked when read. The default obsolete policy evaluates
-  time and validity together: more than seven days after the filename timestamp OR
-  invalidation by major project changes is enough to archive it. A custom time limit
-  may replace seven days without disabling the validity check. A `manual` rule
-  disables both automatic conditions. Fully completed manual and automatic toDos
-  still move to `obsolete/`.
+- Each automatic toDo is checked when read. The default obsolete policy uses the
+  filename timestamp and a seven-day limit. A document may configure a different
+  time limit and/or an objective user-defined condition; the latter is absent by
+  default and must not be inferred from project changes. A `manual` rule disables
+  automatic obsoletion. Fully completed manual and automatic toDos still move to
+  `obsolete/`.
 - `dev_doc/change_records/` captures what changed and why; do not read it by default.
 - `dev_doc/obsolete/` is archival, including completed toDo handoffs, and should not be read by default.
 - User-facing workflow, adapter, cost, config, smoke-test, and launch instructions

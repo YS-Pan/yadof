@@ -18,6 +18,7 @@ from hfss_com import (
     save_modal,
     save_nearField,
     set_hfss_temp_directory,
+    set_para,
     set_variables,
     solver_exit,
     solver_init,
@@ -69,19 +70,15 @@ set_variables(
 Project variables begin with `$`; design variables do not. HFSS values should include
 units when the AEDT variable expects units.
 
-Typical conversion from yadof raw variables:
+For optimization variables, use the assigned values in the job-local parameter
+snapshot directly:
 
 ```python
-from parameters_constraints import get_parameters
-
-
-def hfss_variables(raw_variables):
-    parameters = get_parameters()
-    return {
-        parameter.name: f"{float(value):.17g}{parameter.unit}"
-        for parameter, value in zip(parameters, raw_variables)
-    }
+set_para(hfss_app)
 ```
+
+Use `set_variables()` separately for task-local state changes that are not optimizer
+parameters, such as selecting a simulator mode during the workflow.
 
 ## Analyze
 

@@ -1,12 +1,12 @@
 # Module blueprint: tests
 
 ## Intent
-- Protect the v3 contracts while the implementation is still moving quickly.
+- Protect the current contracts while the implementation is still moving quickly.
 - Keep the default test path local, software-agnostic, and independent of HTCondor or real simulator launches.
 - Verify behavior from module public APIs whenever possible.
 
 ## Historical Lineage
-- The test suite is driven by current v3 contracts plus old prompt invariants: local mode must work by default, rawData stays flat, cost is dynamic, failures are isolated, and surrogate remains rawData-first.
+- The test suite is driven by current contracts plus durable prompt invariants: local mode must work by default, rawData stays flat, cost is dynamic, failures are isolated, and surrogate remains rawData-first.
 - Old project tests are historical context only; current tests should verify public APIs and storage contracts in this workspace.
 
 ## Functionalities
@@ -15,6 +15,9 @@
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
 - HTCondor tests cover submit-file generation, submit failure capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
+- Parameter handoff tests validate assigned continuous/discrete/mixed values,
+  same-process range refresh, job-local snapshots, definition-only static hashes,
+  historical re-normalization, and local/distributed absence of JSON variable inputs.
 - Surrogate tests verify rawData-first prediction, conditional-INR checkpoint/artifact writing, GPSAF integration, and fallback behavior.
 - Optimizer tests verify NSGA-III reference-direction diagnostics, absence of NSGA-II optimizer imports, pooled surrogate survival, and the surrogate exploration quota.
 - Surrogate tests verify historical error audit, non-zero imperfect-model error reporting, ensemble min/max interval output, and task-owned rawData importance weights.

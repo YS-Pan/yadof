@@ -19,9 +19,11 @@ import json
 
 import numpy as np
 
+from parameters_constraints import get_parameters
 from test_com import evaluate_raw_data
 
-blocks = evaluate_raw_data(load_variables(BASE_DIR))
+variables = {parameter.name: parameter.value for parameter in get_parameters()}
+blocks = evaluate_raw_data(variables)
 for name, block in blocks.items():
     arrays = dict(block["arrays"])
     metadata = dict(block["metadata"])
@@ -59,7 +61,7 @@ Each block contains:
 - `arrays`: arrays that can be written into one `.npz` file, including `data`, axis arrays, and axis units,
 - `metadata`: rawData metadata with `schema_version`, `rawdata_name`, `shape`, `axis_names`, and ordered `axes` descriptors.
 
-A smaller legacy-style profile remains available for lightweight examples:
+A smaller generic profile is available for lightweight examples:
 
 ```python
 blocks = evaluate_raw_data(variables, profile="generic")

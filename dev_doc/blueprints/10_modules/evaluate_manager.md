@@ -8,13 +8,17 @@
 ## Historical Lineage
 - Prepared job folders, generation evaluation, status collection, and failure handling descend from the fanyufei prepare/evaluate lineage.
 - Optional HTCondor submission and polling behavior descend from the older combined-project lineage and the current `admin_tool/htcondor_doc/` notes.
-- Current local and distributed backends share the v3 rawData-first recording path rather than preserving separate legacy result schemas.
+- Current local and distributed backends share the rawData-first recording path rather than preserving separate result schemas.
 
 ## Functionalities
 - `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
 - Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
 - Distributed mode prepares all jobs, writes HTCondor submit files, submits the prepared job-local `workflow.py` directly as the transferred executable, runs an optional submit-side callback after all prepared jobs are submitted, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
-- `job_files.prepare_job()` copies job template files through `job_template.api`, copies the cache-free submit-side `project/config/` package into the job folder, denormalizes variables via `job_template.api`, writes `job_input.json` with run/generation context, and records `job_static_hash` in submit-side metadata.
+- `job_files.prepare_job()` copies job template files, calls
+  `job_template.api.materialize_job_parameters()` with the requested template
+  directory and normalized row, uses the returned raw values for `JobSpec`, copies
+  the cache-free submit-side `project/config/` package, writes run/generation
+  context to submit-side metadata, and records `job_static_hash`.
 - `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
 - `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, extracts Condor return-value/log tails when available, best-effort removes timed-out cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
 - `job_result.py` provides shared helpers for reading/writing job metadata, discovering rawData files, promoting workflow metadata, and constructing `JobResult`.
@@ -23,7 +27,10 @@
 
 ## I/O Format
 - Input: `population[individual][normalized_variable]`.
-- Prepared job input: `job_input.json` with `job_name`, `normalized_variables`, `unnormalized_variables`, and `evaluation_context` containing `run_id`, `optimization_index`, `generation_index`, and `population_index` when available.
+- Prepared job parameter input: `parameters_constraints.py` with name, ranges, unit,
+  assigned `normalized_value`, assigned raw `value`, and constraints. Submit-side
+  metadata carries `run_id`, `optimization_index`, `generation_index`, and
+  `population_index` when available.
 - Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
 - Raw outputs: top-level `.npz` files under each job's `rawData/` directory.
 - HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
@@ -32,7 +39,9 @@
 ## Non-Obvious Techniques
 - `calc_cost.py` is excluded from job copies. Jobs generate rawData only; cost is derived after recording.
 - `calc_cost.py` is excluded from job copies, while active adapter files already placed in `job_template` are copied because workflow execution needs them in the job folder. The current active adapter is `hfss_com.py`.
-- `job_static_hash` excludes `rawData`, metadata, `job_input.json`, and other runtime files so it reflects static task definition, not individual values.
+- `job_static_hash` excludes rawData, metadata, and other runtime files. It hashes a
+  definition-only parameter signature so assigned values do not affect the hash,
+  while name, ranges, unit, and constraints do.
 - `created_at` is not recorded. If job creation time is needed, infer it from the time-based job folder name.
 - `evaluate_manager` adds runner diagnostics such as return code, stdout/stderr tails, Condor log tails, and optional `batch.log` tails, while preserving workflow-written `started_at`/`ended_at`.
 - Individual records carry `optimization_index` and `generation_index` from optimizer context so downstream tools can group evaluations without joining through optimization metadata first.

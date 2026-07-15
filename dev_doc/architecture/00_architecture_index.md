@@ -1,6 +1,6 @@
 # Architecture Index
 
-This folder describes the v3 `yadof` architecture from multiple viewpoints. It is
+This folder describes the current `yadof` architecture from multiple viewpoints. It is
 part of the documentation home under `dev_doc/`.
 
 ## Reading Policy
@@ -76,8 +76,9 @@ the prompt explicitly names a file whose instructions should be executed. Files
 under `toDo/auto/` are automatic-trigger, low-priority opportunistic cleanup: they
 may run only when current work naturally exposes a matching occurrence, and they
 use one of two obsolete policies from `dev_doc/README.md`: automatic, where expiry
-by time OR invalidation is sufficient, or manual, which disables both automatic
-conditions.
+by time or satisfaction of an explicitly configured user condition is sufficient,
+or manual, which disables automatic obsoletion. No extra user condition exists by
+default.
 `blueprints/` is listed first and read selectively, with `blueprints/00_project.md`
 serving as the generative project-level contract and module blueprints carrying
 historical reference ancestry when it is still useful. `change_records/` is

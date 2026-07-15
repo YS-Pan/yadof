@@ -12,10 +12,11 @@ sequenceDiagram
     participant C as job_template calc_cost
 
     O->>E: evaluate_population(normalized population, run/generation context)
-    E->>T: denormalize through job_template.api
-    E->>J: copy template, write job_input.json and submit-side metadata
+    E->>T: fresh-load current parameter definition and materialize assigned values
+    T->>J: write assigned parameters_constraints.py snapshot
+    E->>J: copy remaining template/config files and write submit-side metadata
     E->>J: run workflow.py subprocess
-    J->>T: workflow reads raw variables
+    J->>T: workflow reads parameter.value from its assigned snapshot
     T->>J: write individual_metadata.json started_at
     T->>J: import copied job_template adapter and write flat rawData/*.npz
     T->>J: update individual_metadata.json ended_at/status
@@ -102,5 +103,8 @@ owners and may all act as submit or execute machines.
   the same prepare -> run -> record path, and costs are returned in the original
   population order. The worker count is re-read through the full config layer for each
   local evaluation call, so a mid-run edit can take effect at the next generation.
+- Parameter loading uses a fresh isolated module namespace for every query or job
+  preparation. Concurrent local preparation does not reload a shared module or
+  mutate a shared import path, and a range edit is visible to the next prepared job.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
 - Distributed mode reuses the same record/finalize semantics: workers write job-local individual metadata and submit-side finalizers send compact records to `recorded_data`.

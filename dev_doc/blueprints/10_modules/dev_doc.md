@@ -59,12 +59,12 @@
   low-priority, location-unknown cleanup: a matching issue may be fixed when normal
   work naturally exposes it in the current scope, but an agent must not search the
   repository or expand the task solely for the automatic toDo.
-- Automatic toDos have two obsolete policies. The default automatic policy checks
-  time and validity in parallel: seven days after the filename timestamp OR a major
-  project change that invalidates the content is sufficient to archive the file. A
-  custom time limit replaces seven days but does not disable the validity condition.
-  An explicit `manual` policy disables both automatic conditions. Completion still
-  archives either trigger type.
+- Automatic toDos have two obsolete policies. The default automatic policy uses a
+  seven-day filename-based time limit and no extra condition. A document may define
+  a different time limit and/or an objective user-chosen condition; satisfaction of
+  either configured condition archives it. Agents must not infer a condition from
+  project changes or subjective invalidity. An explicit `manual` policy disables
+  automatic obsoletion. Completion still archives either trigger type.
 - `user_doc/` prevents user task instructions from being duplicated throughout development docs. `dev_doc` may mention user-facing behavior from an architecture or maintainer perspective, but detailed "what the user should do" instructions belong under `user_doc`.
 - Terminology is updated only for project-specific concepts, corrected misunderstandings, or names that are not intuitive from ordinary software usage.
 

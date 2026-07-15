@@ -464,8 +464,8 @@ def _load_parameters_py_value_only(path: str) -> dict[str, str]:
     out = {}
     for p in params:
         name, unit, value = str(p.name), str(getattr(p, "unit", "") or ""), float(p.value)
-        if math.isnan(value):
-            raise ValueError(f"Parameter {name!r} value is NaN")
+        if not math.isfinite(value):
+            raise ValueError(f"Parameter {name!r} value must be finite")
         out[name] = f"{value:g}{unit}" if unit else f"{value:g}"
     return out
 

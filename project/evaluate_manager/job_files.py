@@ -35,7 +35,6 @@ EXCLUDED_TEMPLATE_NAMES = {
 EXCLUDED_TEMPLATE_DIRS = {"__pycache__", "._appdata", "._home", "._localappdata", "._tmp", "_tmp", "history", RAW_DATA_DIR_NAME}
 HASH_EXCLUDED_NAMES = {
     "cost.json",
-    "job_input.json",
     "metadata.json",
     "metadata.json.tmp",
     "metaData.json",
@@ -78,27 +77,18 @@ def prepare_job(
     jobs_dir.mkdir(parents=True, exist_ok=True)
     name, job_dir = _create_unique_job_dir(jobs_dir, job_name or new_job_name())
 
+    normalized_values = tuple(float(x) for x in variables)
     _copy_template(template_dir, job_dir)
+    values = _materialize_parameters(template_dir, job_dir, normalized_values)
     _copy_project_config(job_dir)
     (job_dir / RAW_DATA_DIR_NAME).mkdir(exist_ok=True)
     job_static_hash = prepared_job_static_hash(job_dir)
 
-    normalized_values = tuple(float(x) for x in variables)
-    values = _denormalize_variables(normalized_values)
     evaluation_context = _evaluation_context(
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=generation_index,
         population_index=population_index,
-    )
-    _write_json(
-        job_dir / "job_input.json",
-        {
-            "job_name": name,
-            "normalized_variables": list(normalized_values),
-            "unnormalized_variables": list(values),
-            "evaluation_context": evaluation_context,
-        },
     )
     metadata = {
         "job_name": name,
@@ -133,7 +123,8 @@ def prepared_job_static_hash(job_dir: str | Path) -> str:
         rel_path = path.relative_to(root)
         if _is_hash_excluded(rel_path):
             continue
-        data_hash = hashlib.sha256(path.read_bytes()).digest()
+        data = _static_file_bytes(path, rel_path)
+        data_hash = hashlib.sha256(data).digest()
         digest.update(b"FILE\n")
         digest.update(rel_path.as_posix().encode("utf-8"))
         digest.update(b"\n")
@@ -219,16 +210,34 @@ def _copy_template_via_api(template_dir: Path, job_dir: Path) -> bool:
     return True
 
 
-def _denormalize_variables(normalized_values: tuple[float, ...]) -> tuple[float, ...]:
-    try:
-        job_template_api = importlib.import_module("project.job_template.api")
-    except ModuleNotFoundError:
-        return normalized_values
+def _materialize_parameters(
+    template_dir: Path,
+    job_dir: Path,
+    normalized_values: tuple[float, ...],
+) -> tuple[float, ...]:
+    job_template_api = importlib.import_module("project.job_template.api")
+    materialize = getattr(job_template_api, "materialize_job_parameters", None)
+    if not callable(materialize):
+        raise RuntimeError("project.job_template.api.materialize_job_parameters is required")
+    values = materialize(
+        normalized_values,
+        source_dir=template_dir,
+        job_dir=job_dir,
+    )
+    return tuple(float(value) for value in values)
 
-    denormalize = getattr(job_template_api, "denormalize_variables", None)
-    if not callable(denormalize):
-        return normalized_values
-    return tuple(float(value) for value in denormalize(normalized_values))
+
+def _static_file_bytes(path: Path, rel_path: Path) -> bytes:
+    if rel_path.as_posix().lower() != "parameters_constraints.py":
+        return path.read_bytes()
+    job_template_api = importlib.import_module("project.job_template.api")
+    signature = job_template_api.get_parameter_definition_signature(path)
+    return json.dumps(
+        signature,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
 def _write_json(path: Path, data) -> None:

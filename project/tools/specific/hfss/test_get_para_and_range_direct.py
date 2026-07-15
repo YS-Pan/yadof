@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 
+import pytest
+
 from project.tools.specific.hfss import get_para_and_range_direct as generator
 
 
@@ -24,8 +26,8 @@ def test_generated_parameters_use_current_parameter_api():
     assert "normValue" not in source
 
 
-def test_legacy_template_is_migrated_and_constraints_are_preserved():
-    legacy = """
+def test_noncurrent_template_is_rejected_instead_of_migrated():
+    old_source = """
 from parameters_constraints_class import para
 
 PARAMETERS = (
@@ -37,10 +39,35 @@ CONSTRAINTS = (
 )
 """
 
-    source = generator._build_parameters_constraints_text(_parameters(), legacy)
+    with pytest.raises(ValueError, match="current Parameter contract"):
+        generator._build_parameters_constraints_text(_parameters(), old_source)
 
-    ast.parse(source)
-    assert "Parameter('length', ((1, 2),), unit='mm')" in source
-    assert '"$length - 1.2"' in source
-    assert "def get_parameters()" in source
-    assert "para(" not in source
+
+def test_direct_parser_tolerates_non_utf8_bytes(tmp_path):
+    aedt_path = tmp_path / "model.aedt"
+    aedt_path.write_bytes(
+        b"VariableProp('length', 'VariableProp', '', '1.5mm')\n"
+        b"\xff\xfe embedded payload\n"
+        b"length(i=true, int=false, Min='1mm', Max='2mm', Level='[1 : 2] mm')\n"
+    )
+
+    parameters = generator._collect_parameters_from_aedt_file(aedt_path)
+
+    assert parameters == [generator.OptParam("length", ((1.0, 2.0),), 1.5, "mm")]
+
+
+def test_single_aedt_scan_uses_the_only_project(tmp_path):
+    expected = tmp_path / "only.aedt"
+    expected.write_bytes(b"")
+
+    assert generator._scan_single_aedt_file(tmp_path) == expected
+
+
+def test_single_aedt_scan_requires_an_unambiguous_project(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        generator._scan_single_aedt_file(tmp_path)
+
+    (tmp_path / "one.aedt").write_bytes(b"")
+    (tmp_path / "two.aedt").write_bytes(b"")
+    with pytest.raises(RuntimeError, match="Multiple .aedt projects"):
+        generator._scan_single_aedt_file(tmp_path)

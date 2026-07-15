@@ -1,11 +1,48 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import shutil
 
 import pytest
 
 from project.evaluate_manager.config import PROJECT_CONFIG_DIR_NAME, PROJECT_DIR
 from project.evaluate_manager.job_files import prepare_job, prepared_job_static_hash
+
+
+def _parameter_source(
+    *,
+    x0_name: str = "x0",
+    x0_max: float = 2.0,
+    x0_unit: str = "",
+    constraints: tuple[str, ...] = (),
+) -> str:
+    constraint_lines = "\n".join(f"    {constraint!r}," for constraint in constraints)
+    return "\n".join(
+        [
+            "from __future__ import annotations",
+            "",
+            "try:",
+            "    from .parameters_constraints_class import Parameter",
+            "except ImportError:",
+            "    from parameters_constraints_class import Parameter",
+            "",
+            "PARAMETERS = (",
+            f"    Parameter({x0_name!r}, ((-2.0, {x0_max}),), unit={x0_unit!r}),",
+            "    Parameter('x1', ((-2.0, 2.0),), unit=''),",
+            "    Parameter('x2', ((0.0, 1.0),), unit=''),",
+            ")",
+            "",
+            "CONSTRAINTS = (",
+            constraint_lines,
+            ")",
+            "",
+            "",
+            "def get_parameters() -> tuple[Parameter, ...]:",
+            "    return tuple(PARAMETERS)",
+            "",
+        ]
+    )
 
 
 def _make_template(template_dir, *, workflow_body: str = "WORKFLOW_VERSION = 1\n", x0_max: float = 2.0):
@@ -17,17 +54,11 @@ def _make_template(template_dir, *, workflow_body: str = "WORKFLOW_VERSION = 1\n
     (template_dir / "individual_metadata.json").write_text('{"status": "error"}\n', encoding="utf-8", newline="\n")
     (template_dir / "rawData_outputs.zip").write_bytes(b"old zip")
     (template_dir / "job.sub").write_text("queue 1\n", encoding="utf-8", newline="\n")
+    from project.job_template import parameters_constraints_class
+
+    shutil.copy2(Path(parameters_constraints_class.__file__), template_dir / "parameters_constraints_class.py")
     (template_dir / "parameters_constraints.py").write_text(
-        "\n".join(
-            [
-                "PARAMETERS = (",
-                f"    ('x0', ((-2.0, {x0_max}),), ''),",
-                "    ('x1', ((-2.0, 2.0),), ''),",
-                "    ('x2', ((0.0, 1.0),), ''),",
-                ")",
-                "",
-            ]
-        ),
+        _parameter_source(x0_max=x0_max),
         encoding="utf-8",
         newline="\n",
     )
@@ -41,9 +72,7 @@ def _metadata(job_dir, name="metadata.json"):
 
 
 def _values(x0: float, x1: float, x2: float) -> tuple[float, ...]:
-    from project.job_template import api as job_template_api
-
-    return (x0, x1, x2) + (0.5,) * (job_template_api.get_variable_count() - 3)
+    return (x0, x1, x2)
 
 
 def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path):
@@ -65,6 +94,9 @@ def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path
     assert not (first.directory / "individual_metadata.json").exists()
     assert not (first.directory / "rawData_outputs.zip").exists()
     assert not (first.directory / "job.sub").exists()
+    assert not (first.directory / "job_input.json").exists()
+    assert not (first.directory / "variables.json").exists()
+    assert not (first.directory / "parameters_values.py").exists()
 
 def test_prepare_job_copies_submit_side_config_package(tmp_path):
     template_dir = _make_template(tmp_path / "template")
@@ -98,16 +130,7 @@ def test_prepare_job_copies_submit_side_config_package(tmp_path):
         ("workflow.py", "WORKFLOW_VERSION = 2\n"),
         (
             "parameters_constraints.py",
-            "\n".join(
-                [
-                    "PARAMETERS = (",
-                    "    ('x0', ((-2.0, 3.0),), ''),",
-                    "    ('x1', ((-2.0, 2.0),), ''),",
-                    "    ('x2', ((0.0, 1.0),), ''),",
-                    ")",
-                    "",
-                ]
-            ),
+            _parameter_source(x0_max=3.0),
         ),
     ],
 )
@@ -128,7 +151,6 @@ def test_prepared_job_static_hash_ignores_runtime_artifacts(tmp_path):
     job = prepare_job(_values(0.1, 0.2, 0.3), jobs_dir=tmp_path / "jobs", job_template_dir=template_dir)
     original_hash = prepared_job_static_hash(job.directory)
 
-    (job.directory / "job_input.json").write_text('{"normalized_variables": [9, 9, 9]}', encoding="utf-8")
     (job.directory / "metadata.json").write_text('{"status": "running"}', encoding="utf-8")
     (job.directory / "metaData.json").write_text('{"status": "running"}', encoding="utf-8")
     (job.directory / "individual_metadata.json").write_text('{"status": "done"}', encoding="utf-8")
@@ -140,6 +162,26 @@ def test_prepared_job_static_hash_ignores_runtime_artifacts(tmp_path):
     (job.directory / "_tmp" / "solver.tmp").write_bytes(b"temp")
 
     assert prepared_job_static_hash(job.directory) == original_hash
+
+
+@pytest.mark.parametrize(
+    "changed_source",
+    (
+        _parameter_source(x0_name="renamed"),
+        _parameter_source(x0_max=3.0),
+        _parameter_source(x0_unit="mm"),
+        _parameter_source(constraints=("x0 - x1",)),
+    ),
+)
+def test_parameter_definition_fields_change_static_hash(tmp_path, changed_source):
+    template_dir = _make_template(tmp_path / "template")
+    before = prepare_job(_values(0.25, 0.5, 0.75), jobs_dir=tmp_path / "jobs", job_template_dir=template_dir)
+    before_hash = _metadata(before.directory)["job_static_hash"]
+
+    (template_dir / "parameters_constraints.py").write_text(changed_source, encoding="utf-8", newline="\n")
+    after = prepare_job(_values(0.25, 0.5, 0.75), jobs_dir=tmp_path / "jobs", job_template_dir=template_dir)
+
+    assert _metadata(after.directory)["job_static_hash"] != before_hash
 
 
 def test_job_template_api_copy_skips_runtime_artifacts(tmp_path, monkeypatch):

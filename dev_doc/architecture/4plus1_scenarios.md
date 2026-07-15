@@ -4,8 +4,12 @@
 1. User edits `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, and any needed adapter file placed in `project/job_template`.
 2. User calls `project.optimize.api.run_one_generation()`.
 3. `optimize` has no history, so it samples normalized candidates.
-4. `evaluate_manager` prepares jobs with run/generation context and runs `workflow.py`.
-5. `workflow.py` writes each individual's start/end metadata inside the job folder and uses any active copied adapter files to write task-specific flat rawData.
+4. `evaluate_manager` fresh-loads the current parameter definitions, materializes an
+   assigned job-local parameter snapshot with run/generation context in submit-side
+   metadata, and runs `workflow.py`.
+5. `workflow.py` reads `parameter.value` from that snapshot, writes each individual's
+   start/end metadata, and uses any active copied adapter files to write task-specific
+   flat rawData.
 6. `recorded_data` stores raw variables, rawData, compact metadata, optimization index, and generation index.
 7. The current task costs are calculated dynamically and returned to `optimize`.
 
@@ -32,10 +36,13 @@
 
 ## Scenario 5: Modify Task Mid-Campaign
 1. User changes parameter ranges, workflow, simulator file, or `calc_cost.py`.
-2. New jobs get a different static hash when copied static inputs change.
-3. Old rawData remains stored.
-4. Historical normalized variables and costs are recalculated under the current task definition.
-5. If the change makes old rawData semantically invalid, the user manually removes or ignores old records.
+2. The next job fresh-loads the edited ranges and receives assigned raw values
+   calculated from those ranges; no optimization-process restart is required.
+3. New jobs get a different static hash when parameter definitions or other static
+   inputs change, while different assigned individual values share the same hash.
+4. Old rawData remains stored.
+5. Historical normalized variables and costs are recalculated under the current task definition.
+6. If the change makes old rawData semantically invalid, the user manually removes or ignores old records.
 
 ## Scenario 6: Distributed Evaluation
 1. `evaluate_manager` selects distributed mode through `EVALUATION_MODE = "distributed"` or an explicit API argument.

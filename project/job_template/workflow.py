@@ -3,11 +3,9 @@ from __future__ import annotations
 import shutil
 import sys
 import traceback
-from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from hfss_com import analyze, save_farField, save_modal, set_hfss_temp_directory, set_variables, solver_exit, solver_init
-from parameters_constraints import get_parameters
+from hfss_com import analyze, save_farField, save_modal, set_hfss_temp_directory, set_para, set_variables, solver_exit, solver_init
 
 try:
     from config.specific import hfss as job_config
@@ -20,7 +18,6 @@ from worker_misc import (
     bootstrap_home_dirs,
     env_bool,
     env_int,
-    load_variables,
     now_text,
     prepare_rawdata_dir,
     raw_data_file_names,
@@ -64,29 +61,10 @@ PARALLEL_TASKS = env_int("YADOF_HFSS_PARALLEL_TASKS", CONFIG_PARALLEL_TASKS, min
 NON_GRAPHICAL = env_bool("YADOF_HFSS_NON_GRAPHICAL", CONFIG_NON_GRAPHICAL)
 
 
-def _hfss_variables(variables: Mapping[str, float] | Sequence[float]) -> dict[str, str]:
-    """Format the current individual variables for HFSS.
-
-    Parameter names and units come from parameters_constraints.py. Values come
-    from the job input written by evaluate_manager for this individual.
-    """
-
-    parameters = get_parameters()
-    units = {parameter.name: str(getattr(parameter, "unit", "") or "") for parameter in parameters}
-    if isinstance(variables, Mapping):
-        values = variables.items()
-    else:
-        raw_values = tuple(float(value) for value in variables)
-        if len(raw_values) != len(parameters):
-            raise ValueError(f"expected {len(parameters)} variables, got {len(raw_values)}")
-        values = zip((parameter.name for parameter in parameters), raw_values)
-    return {str(name): f"{float(value):.17g}{units.get(str(name), '')}" for name, value in values}
-
-
-def _start_hfss(hfss_variables: Mapping[str, str]):
+def _start_hfss():
     hfss_app, *_ = solver_init(projectName=str(PROJECT_PATH), designName=DESIGN_NAME, non_graphical=NON_GRAPHICAL)
     set_hfss_temp_directory(hfss_app, TEMP_DIR)
-    set_variables(hfss_app, hfss_variables)
+    set_para(hfss_app)
     return hfss_app
 
 
@@ -157,8 +135,7 @@ def main() -> None:
 
     #========================================================Simulation Workflow Begin========================================================
     try:
-        hfss_variables = _hfss_variables(load_variables(BASE_DIR))
-        hfssApp = _start_hfss(hfss_variables)
+        hfssApp = _start_hfss()
         for pin_state in PIN_STATES:
             _save_pin_state_rawdata(hfssApp, pin_state)
 

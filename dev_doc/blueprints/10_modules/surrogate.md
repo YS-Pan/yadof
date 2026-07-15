@@ -8,7 +8,7 @@
 ## Historical Lineage
 - The richer rawData surrogate runtime, conditional modeling direction, and cumulative archive thinking descend from the shorten experiment lineage.
 - The small optimizer-facing surrogate integration surface preserves the earlier fanyufei-style idea that surrogate behavior should stay behind a narrow API.
-- Current implementation deliberately reshapes both lineages around the v3 rawData-first contract instead of the old workspace/archive layouts.
+- Current implementation deliberately reshapes both lineages around the rawData-first contract instead of the old workspace/archive layouts.
 
 ## Functionalities
 - `api.py` exports training, prediction, historical-error, and staggered-training scheduling functions: `train()`, `predict_population()`, `evaluate_historical_errors()`, `start_training()`, `wait_for_pending_training()`, `ensure_fresh_enough()`, `has_trained_state()`, and `latest_state_generation()`.

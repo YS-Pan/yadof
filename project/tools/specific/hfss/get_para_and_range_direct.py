@@ -23,7 +23,6 @@ ROOT_DIR = _THIS_FILE.parents[3]  # .../project/tools/specific/hfss/ -> project/
 JOB_TEMPLATE_DIR = ROOT_DIR / "job_template"
 PARAM_FILE = JOB_TEMPLATE_DIR / "parameters_constraints.py"
 HISTORY_DIR = ROOT_DIR / "history"
-DESIGN_NAME = "HFSSDesign4"
 
 # Type alias matching parameters_constraints_class.py
 RangeElem = Union[float, tuple[float, float]]
@@ -89,36 +88,23 @@ def _replace_top_level_assignment(source_text: str, *, target_name: str, replace
     return "".join(lines[:start]) + replacement_block + "".join(lines[end_exclusive:])
 
 
-def _top_level_assignment_block(source_text: str, target_name: str) -> str | None:
-    tree = ast.parse(source_text)
-    for node in tree.body:
-        targets = node.targets if isinstance(node, ast.Assign) else (node.target,) if isinstance(node, ast.AnnAssign) else ()
-        if any(isinstance(target, ast.Name) and target.id == target_name for target in targets):
-            lines = source_text.splitlines(keepends=True)
-            return "".join(lines[node.lineno - 1 : node.end_lineno])
-    return None
-
-
-def _uses_legacy_parameter_format(source_text: str) -> bool:
+def _validate_current_parameter_format(source_text: str) -> None:
     tree = ast.parse(source_text)
     has_get_parameters = any(
         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "get_parameters"
         for node in tree.body
     )
-    uses_para = any(
-        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "para"
+    uses_parameter = any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Parameter"
         for node in ast.walk(tree)
     )
-    return uses_para or not has_get_parameters
+    if not has_get_parameters or not uses_parameter:
+        raise ValueError("existing parameters_constraints.py does not use the current Parameter contract")
 
 
-def _default_parameters_constraints_text(
-    parameters_block: str,
-    constraints_block: str | None = None,
-) -> str:
+def _default_parameters_constraints_text(parameters_block: str) -> str:
     if not parameters_block.endswith("\n"):
         parameters_block += "\n"
-    constraints_block = (constraints_block or "CONSTRAINTS: tuple[str, ...] = ()").strip()
 
     return (
         '"""\n'
@@ -133,7 +119,7 @@ def _default_parameters_constraints_text(
         "    from parameters_constraints_class import Parameter\n"
         "\n"
         f"{parameters_block}\n"
-        f"{constraints_block}\n"
+        "CONSTRAINTS: tuple[str, ...] = ()\n"
         "\n"
         "\n"
         "def get_parameters() -> tuple[Parameter, ...]:\n"
@@ -389,7 +375,9 @@ def _collect_parameters_from_aedt_file(aedt_path: Path) -> list[OptParam]:
     Falls back to ``Min`` / ``Max`` (continuous) when ``Level`` is absent
     or unparseable.
     """
-    text = aedt_path.read_text(encoding="utf-8")
+    # AEDT files are text-based but can contain embedded non-UTF-8 payloads.
+    # Surrogate escapes preserve valid Unicode and leave the ASCII syntax parseable.
+    text = aedt_path.read_bytes().decode("utf-8", errors="surrogateescape")
 
     # ---- 1. current values from every VariableProp line ----
     var_current_values: dict[str, str] = {}
@@ -565,18 +553,14 @@ def _build_parameters_block(params: list[OptParam]) -> str:
 
 def _build_parameters_constraints_text(params: list[OptParam], template_text: str | None) -> str:
     parameters_block = _build_parameters_block(params)
-    if template_text and not _uses_legacy_parameter_format(template_text):
+    if template_text:
+        _validate_current_parameter_format(template_text)
         return _replace_top_level_assignment(
             template_text,
             target_name="PARAMETERS",
             replacement_block=parameters_block,
         )
-    constraints_block = (
-        _top_level_assignment_block(template_text, "CONSTRAINTS")
-        if template_text
-        else None
-    )
-    return _default_parameters_constraints_text(parameters_block, constraints_block)
+    return _default_parameters_constraints_text(parameters_block)
 
 
 # =========================================================
@@ -709,7 +693,7 @@ def main(argv: list[str] | None = None) -> int:
         hfss = None
         try:
             hfss = _open_hfss_project(
-                project_path, design_name=DESIGN_NAME,
+                project_path, design_name=args.design,
                 non_graphical=non_graphical, quiet=quiet,
             )
             params = _collect_optimization_parameters(hfss)
@@ -727,10 +711,7 @@ def main(argv: list[str] | None = None) -> int:
             "Check your HFSS variable optimization settings."
         )
 
-    try:
-        new_text = _build_parameters_constraints_text(params, template_text)
-    except (SyntaxError, ValueError):
-        new_text = _default_parameters_constraints_text(_build_parameters_block(params))
+    new_text = _build_parameters_constraints_text(params, template_text)
 
     # Write to a temp file first, then archive old, then atomically move temp into place
     timestamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")

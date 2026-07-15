@@ -12,7 +12,7 @@
 ## Historical Lineage
 - Cost/time viewers and maintenance tools descend from the fanyufei optional tools lineage.
 - HFSS parameter extraction keeps ideas from both fanyufei and huangzetao tooling while writing the current `Parameter` format.
-- Shorten-style interactive result inspection remains a useful idea, but current tools read through v3 APIs whenever possible.
+- Shorten-style interactive result inspection remains a useful idea, but current tools read through current APIs whenever possible.
 
 ## Functionalities
 - `viewCost.py` reads `recorded_data.api.get_historical_results()`, dynamically calculates current costs, prints a Pareto-oriented summary, and optionally saves a PNG plot.
@@ -20,7 +20,11 @@
 - Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes. Legend entries for objective and combined-cost series use the same hollow marker style as the visible best Pareto points.
 - `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback.
 - `specific/hfss/get_para_and_range.py` reads optimization-enabled variables through PyAEDT and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
-- `specific/hfss/get_para_and_range_direct.py` first parses AEDT optimization definitions directly, including discrete ranges, and falls back to PyAEDT when needed.
+- `specific/hfss/get_para_and_range_direct.py` scans `job_template` when exactly one
+  `.aedt` file exists, parses AEDT optimization definitions directly (including
+  discrete ranges and files containing embedded non-UTF-8 bytes), and falls back to
+  PyAEDT when needed. Explicit `--project` and `--design` arguments override
+  autodetection.
 - Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
 
 ## I/O Format

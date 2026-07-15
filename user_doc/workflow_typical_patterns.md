@@ -8,7 +8,7 @@ framework code.
 
 A good workflow does these things:
 
-- reads variables from `job_input.json` or `variables.json`,
+- reads assigned values from the job-local `parameters_constraints.py`,
 - writes `individual_metadata.json` with `status`, `started_at`, and `ended_at`,
 - writes rawData `.npz` files directly under `rawData/`,
 - writes `rawData_outputs.zip` after rawData is produced so distributed jobs can transfer outputs,
@@ -29,8 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
+from parameters_constraints import get_parameters
 from worker_misc import (
-    load_variables,
     now_text,
     prepare_rawdata_dir,
     raw_data_file_names,
@@ -69,10 +69,11 @@ def main() -> None:
     write_json(INDIVIDUAL_METADATA, {"status": "running", "started_at": started_at})
 
     try:
-        variables = load_variables(BASE_DIR)
+        parameters = get_parameters()
+        variables = {parameter.name: parameter.value for parameter in parameters}
         # Convert variables -> rawData here.
         x = np.linspace(0.0, 1.0, 101)
-        y = np.sin(float(tuple(variables)[0]) * x)
+        y = np.sin(float(next(iter(variables.values()))) * x)
         _save_rawdata("response_curve", y, x)
 
         write_rawdata_transfer_zip(RAW_DATA_DIR, RAW_DATA_TRANSFER_ZIP)

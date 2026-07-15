@@ -39,5 +39,5 @@
 
 ## Mutability Profile
 - Individual metadata, optimization metadata, and rawData archive schema changes need explicit migration thinking.
-- Query helper aliases may grow to support older or future callers, but `api.py` should remain the stable public face.
+- Query helpers may grow for current callers, but `api.py` should remain the stable public face; do not add old-version aliases by default.
 - Storage layout and locking behavior should change only with tests that cover duplicate, concurrent, failed, archived, and invalid rawData cases.

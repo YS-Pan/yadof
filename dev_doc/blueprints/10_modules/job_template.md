@@ -11,9 +11,15 @@
 - Shorten-style synthetic problem/objective ideas remain useful as references for non-HFSS tasks and surrogate-friendly rawData shapes.
 
 ## Functionalities
-- `api.py` exposes parameter metadata, variable count, objective metadata, normalization helpers, job-file copying, rawData cost calculation, and optional rawData importance weights for surrogate training.
-- `parameters_constraints.py` defines the current task's `PARAMETERS`.
-- `parameters_constraints_class.py` defines `Parameter`, normalization, denormalization, continuous intervals, and discrete values.
+- `api.py` exposes fresh parameter queries, isolated parameter-file loading,
+  definition-only hash signatures, job-local parameter materialization, objective
+  metadata, normalization helpers, job-file copying, rawData cost calculation, and
+  optional rawData importance weights for surrogate training.
+- Canonical `parameters_constraints.py` defines the current task's unassigned
+  `PARAMETERS`; each job-local file is a definition snapshot with that individual's
+  `normalized_value` and raw `value` assigned.
+- `parameters_constraints_class.py` defines the mutable `Parameter` assignment
+  state, normalization, denormalization, continuous intervals, and discrete values.
 - `workflow.py` converts raw variables into flat schema-valid `rawData/*.npz` files, reads its matching job-local module under `config/specific/` for simulator defaults when present, writes job-local lifecycle metadata, can import task-local adapter files from the same directory, and never saves cost.
 - `project/com_lib/hfss_com.py` is the synchronized reusable reference copy for the HFSS adapter; a task can copy it into `project/job_template/` when its workflow needs HFSS. Reusable fixes validated in the active copy should be copied back without task-only assumptions.
 - `project/com_lib/test_com.py` is the retained pure-Python simulator stand-in for `variables -> rawData`, including an HFSS-like profile that emits S11 traces plus `Freq x Phi x Theta` far-field grids for surrogate-speed tests; it must be copied into `job_template` before a workflow can use it.
@@ -22,8 +28,10 @@
 - Adapter files present in `job_template` are copied into prepared jobs with the workflow and are task-owned implementation details.
 
 ## I/O Format
-- Parameter API returns names, ranges, units, and variable count.
-- Workflow input is either `variables.json` or `job_input.json` containing unnormalized variables.
+- Parameter API returns fresh names, ranges, units, constraints, and variable count.
+- Job materialization accepts one normalized row and returns the raw values written
+  into the same job-local `parameters_constraints.py` snapshot.
+- Workflow input is the assigned `parameter.value` fields in that snapshot.
 - Workflow output is one or more task-defined `.npz` files directly under `rawData/`.
 - Workflow lifecycle output is `individual_metadata.json` in the job folder, with `started_at`, `ended_at`, status, rawData file names, runtime HFSS defaults such as core count, and catchable exception details when the workflow fails before producing rawData.
 - Each rawData `.npz` must contain a numeric `values` or `data` array and scalar JSON metadata under the canonical `metadata` key with `schema_version`, `shape`, and optional ordered `axes`. Do not also write a duplicate `meta` array.
@@ -40,6 +48,12 @@
 - `calc_cost.py` must treat full-matrix Far Fields as the default rawData shape. It selects `Phi=90deg`, target `Theta`, and target `Freq` only while deriving objective curves; it should reduce any remaining non-objective axes at calculation time instead of requiring workflow exports to be trace-only.
 - RawData importance weights should mirror the current task's objective-relevant windows while retaining a positive weight floor for the rest of each field.
 - `recorded_data` asks this module to normalize historical raw variables using current parameter ranges, which supports mid-run range edits.
+- Parameter queries and job materialization execute the requested parameter file in
+  a fresh isolated module namespace. They do not reuse a long-lived imported
+  `PARAMETERS` object, mutate `sys.path`, or reload shared modules during concurrent
+  preparation.
+- A canonical file may leave assignment fields as NaN. A materialized job must have
+  finite normalized/raw assignments and a parameter count matching its candidate.
 - The rawData contract is generic. Core framework code validates shape and metadata but should not infer physical meaning from axis names.
 - Job-copy behavior excludes module APIs and cost code, but `evaluate_manager` adds the cache-free submit-side `config/` package beside the copied workflow so each job keeps generic and software-specific run configuration.
 - Task files are intentionally replaceable by user or AI-generated code before a new campaign.

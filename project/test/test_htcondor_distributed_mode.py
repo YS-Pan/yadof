@@ -28,7 +28,6 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     job = _job(tmp_path)
     for name in (
         "workflow.py",
-        "job_input.json",
         "parameters_constraints.py",
         "parameters_constraints_class.py",
         "rawdata_contract.py",
@@ -76,7 +75,9 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     assert "._tmp" in transfer_line
     for name in ("._home", "._appdata", "._localappdata", "._tmp"):
         assert (job.directory / name).is_dir()
-    assert "job_input.json" in text
+    assert "parameters_constraints.py" in text
+    assert "parameters_constraints_class.py" in text
+    assert "job_input.json" not in text
     assert "solver_adapter.py" in text
     assert "calc_cost.py" not in text
     assert "cost.json" not in text
@@ -90,7 +91,7 @@ def test_submit_condor_job_clears_stale_runtime_artifacts_before_submit(tmp_path
     from project.evaluate_manager import condor_runner
 
     job = _job(tmp_path)
-    for name in ("workflow.py", "job_input.json"):
+    for name in ("workflow.py", "parameters_constraints.py", "parameters_constraints_class.py"):
         (job.directory / name).write_text("# test\n", encoding="utf-8", newline="\n")
     (job.directory / "individual_metadata.json").write_text('{"status":"error"}\n', encoding="utf-8", newline="\n")
     (job.directory / "rawData_outputs.zip").write_bytes(b"old zip")
@@ -118,7 +119,7 @@ def test_run_condor_jobs_records_submit_failure_without_fixing_condor(tmp_path, 
 
     job = _job(tmp_path)
     (job.directory / "workflow.py").write_text("# test\n", encoding="utf-8", newline="\n")
-    (job.directory / "job_input.json").write_text("{}", encoding="utf-8", newline="\n")
+    (job.directory / "parameters_constraints.py").write_text("# test\n", encoding="utf-8", newline="\n")
 
     def missing_condor(*_args, **_kwargs):
         raise OSError("condor_submit is not healthy")
@@ -380,7 +381,7 @@ def test_run_condor_jobs_calls_after_submit_callback_before_wait(tmp_path, monke
 
     job = _job(tmp_path)
     (job.directory / "workflow.py").write_text("# test\n", encoding="utf-8", newline="\n")
-    (job.directory / "job_input.json").write_text("{}", encoding="utf-8", newline="\n")
+    (job.directory / "parameters_constraints.py").write_text("# test\n", encoding="utf-8", newline="\n")
     events: list[str] = []
 
     def fake_submit(job_spec, *, env=None):

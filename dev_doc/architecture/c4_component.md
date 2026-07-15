@@ -38,7 +38,9 @@ flowchart LR
 ```
 
 - `api.py`: backend selection, local per-individual worker-pool coordination, failure isolation, and ordered cost return.
-- `job_files.py`: copy template, copy the cache-free `config/` package, write job input and run/generation context, compute static hash.
+- `job_files.py`: copy the template, ask `job_template.api` to fresh-load and
+  materialize one assigned parameter snapshot, copy the cache-free `config/`
+  package, write run/generation metadata, and compute the static hash.
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
 - `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, timeout removal, and job-local result collection.
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
@@ -60,7 +62,15 @@ flowchart LR
     ComLib["project/com_lib/hfss_com.py and test_com.py"] -. source/reference copies .-> ActiveCom
 ```
 
-- `workflow.py`: raw variable input to flat rawData output plus workflow-owned `individual_metadata.json` lifecycle timestamps and runtime HFSS defaults loaded from job-local config/environment.
+- `parameters_constraints_class.py`: current parameter definitions plus per-job
+  `normalized_value` and raw `value` assignment, forward denormalization, and reverse
+  normalization for historical raw variables.
+- `api.py`: fresh parameter-file loading, current parameter queries, job-local
+  parameter materialization, definition-only hash signatures, cost calculation, and
+  job copying.
+- `workflow.py`: assigned values from job-local `parameters_constraints.py` to flat
+  rawData output, plus workflow-owned `individual_metadata.json` lifecycle timestamps
+  and runtime HFSS defaults loaded from job-local config/environment.
 - `calc_cost.py`: task-owned rawData-to-cost logic plus optional rawData importance weights for surrogate training. It decides the current objective names/count and may select objective-relevant windows from richer rawData at calculation time.
 - `rawdata_contract.py`: `.npz` schema validation.
 - `hfss_com.py`: optional HFSS/PyAEDT simulator adapter. A workflow can copy it into `job_template` for active use, while `project/com_lib/hfss_com.py` keeps the synchronized reusable reference copy.

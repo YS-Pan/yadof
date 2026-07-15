@@ -12,7 +12,7 @@ flowchart TD
     Optimize -->|read history| Recorded["project/recorded_data"]
     Optimize -->|optional predict/train| Surrogate
 
-    Evaluate -->|copy template, denormalize| Template["project/job_template"]
+    Evaluate -->|fresh-load and materialize assigned parameter snapshot| Template["project/job_template"]
     User -->|optionally stages adapter files| ComLib["project/com_lib"]
     Evaluate -->|create/run locally or submit to HTCondor| Jobs["project/jobs runtime folders"]
     Jobs -->|workflow writes rawData and individual metadata| Jobs
@@ -49,8 +49,14 @@ flowchart TD
 
 ## Primary Data Flow
 1. `optimize` creates normalized candidates.
-2. `evaluate_manager` prepares one job per candidate, copies the cache-free `project/config/` package into the job folder, and denormalizes through `job_template`.
-3. Job `workflow.py` runs either as a local subprocess or HTCondor payload, imports adapter files copied from `job_template`, writes `individual_metadata.json` at start/end, and writes flat rawData `.npz` files.
+2. `evaluate_manager` prepares one job per candidate, asks `job_template.api` to
+   fresh-load the requested template directory, writes a job-local
+   `parameters_constraints.py` containing assigned normalized/raw values, and copies
+   the cache-free `project/config/` package into the job folder.
+3. Job `workflow.py` runs either as a local subprocess or HTCondor payload, reads
+   assigned values only from its job-local parameter snapshot, imports adapter files
+   copied from `job_template`, writes `individual_metadata.json` at start/end, and
+   writes flat rawData `.npz` files.
 4. `evaluate_manager` reads job-local metadata and sends job results to `recorded_data`.
 5. `recorded_data` stores raw evidence once per individual, archives rawData, and asks `job_template` for dynamic cost when needed.
 6. `surrogate` trains a conditional INR ensemble from recorded rawData, with task-owned importance weights for objective-relevant windows, and predicts rawData for optimizer-side candidate screening.

@@ -249,23 +249,27 @@ Recommended toDo structure:
 - How to recognize completion and whether any follow-up should remain.
 
 ## Obsolete Rule
-- Automatic toDos only: omit for the default automatic rule, state a custom time
-  limit if needed, or state `manual` to disable automatic obsoletion.
+- Automatic toDos only: omit for the default seven-day time limit with no extra
+  condition; state a custom time limit and/or an explicit user-defined condition,
+  or state `manual` to disable automatic obsoletion.
 ```
 
 Automatic toDos have these additional stale-document rules. Apply the applicable
 rule whenever an automatic toDo is read, before treating it as active work:
 
-1. **Automatic: time OR validity (default).** Check both conditions every time the
-   document is read and move it to `obsolete/` as soon as either condition is true:
+1. **Automatic: time OR configured condition (default).** Check every configured
+   condition when the document is read and move it to `obsolete/` as soon as one is
+   true:
    - **Time:** use the timestamp in the filename as the creation time. When the
      document has no obsolete-related annotation, the time limit is seven days. A
      document may state a different duration or date in `## Obsolete Rule`.
-   - **Validity:** regardless of whether the time limit has passed, move the document
-     to `obsolete/` when large project changes have made its content no longer valid.
+   - **User-defined condition:** a document may state an objective, user-chosen
+     condition such as "after task X is completed". This condition is optional and
+     is absent by default. Do not invent one from project changes or from a subjective
+     judgment that the document is no longer valid.
 2. **Manual.** When `## Obsolete Rule` says `manual`, do not archive the document
-   automatically because of either age or invalidation. It remains until explicitly
-   retired or its work is completed.
+   automatically because of age or a configured condition. It remains until
+   explicitly retired or its work is completed.
 
 These are stale-document rules; they do not replace completion handling. After a
 manual toDo is explicitly triggered, or an automatic toDo is opportunistically
@@ -345,7 +349,7 @@ Recommended record structure:
 ### `obsolete/`
 
 `obsolete/` stores old plans, old diagnostics, completed toDo handoffs, automatic
-toDos retired by age or invalidation, and drafts that are no longer active design
+toDos retired by age or a configured condition, and drafts that are no longer active design
 input.
 
 Use it to answer:

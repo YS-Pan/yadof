@@ -7,7 +7,7 @@ import platform
 import subprocess
 import sys
 import zipfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -119,15 +119,6 @@ def runtime_identity(
     return identity
 
 
-def load_variables(base_dir: str | Path) -> Mapping[str, float] | Sequence[float]:
-    base_dir = Path(base_dir)
-    variables_path = base_dir / "variables.json"
-    if variables_path.is_file():
-        return json.loads(variables_path.read_text(encoding="utf-8"))
-    payload = json.loads((base_dir / "job_input.json").read_text(encoding="utf-8"))
-    return payload["unnormalized_variables"] if "unnormalized_variables" in payload else payload["raw_variables"]
-
-
 def prepare_rawdata_dir(raw_data_dir: str | Path, transfer_zip: str | Path) -> None:
     raw_data_dir, transfer_zip = Path(raw_data_dir), Path(transfer_zip)
     raw_data_dir.mkdir(parents=True, exist_ok=True)
@@ -154,7 +145,6 @@ __all__ = [
     "env_bool",
     "env_float",
     "env_int",
-    "load_variables",
     "now_text",
     "prepare_rawdata_dir",
     "raw_data_file_names",

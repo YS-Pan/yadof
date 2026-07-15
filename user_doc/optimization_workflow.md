@@ -28,8 +28,10 @@ python project\tools\specific\hfss\get_para_and_range_direct.py --project projec
 ```
 
 If the `.aedt` project has exactly one design, `--design` can usually be omitted.
-The direct tool tries to read optimization-enabled variables and writes the current
-`Parameter(...)` format.
+If `project/job_template/` contains exactly one `.aedt` file, `--project` can also be
+omitted; otherwise specify it explicitly. The direct tool tolerates embedded
+non-UTF-8 bytes while reading AEDT text, tries to read optimization-enabled
+variables, and writes the current `Parameter(...)` format.
 
 Constraints still need to be written by the user or by an AI assistant. A constraint
 expression should be non-negative when it is satisfied. For example:
@@ -65,6 +67,9 @@ def get_parameters() -> tuple[Parameter, ...]:
 
 Continuous ranges use `(low, high)`. Discrete choices use plain values. Mixed ranges
 are also allowed because each range element maps to one segment of normalized `[0, 1]`.
+The canonical task file leaves `value` and `normalized_value` unassigned. Each
+prepared job receives its own `parameters_constraints.py` snapshot with both fields
+filled from that individual's normalized row and the ranges current at prepare time.
 
 ## 3. Copy Needed `_com.py` Files Into `job_template`
 
@@ -91,7 +96,7 @@ meant to be self-contained.
 
 `workflow.py` owns:
 
-- reading the current individual variables,
+- reading assigned values from the job-local `parameters_constraints.py`,
 - calling HFSS or custom code,
 - writing one or more `.npz` files directly under `rawData/`,
 - writing `individual_metadata.json`,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Iterable
 
 
@@ -13,11 +14,17 @@ def _coerce_range_element(value: object) -> RangeElement:
     if isinstance(value, (tuple, list)):
         if len(value) != 2:
             raise ValueError(f"range tuple must have length 2, got {value!r}")
-        return (float(value[0]), float(value[1]))
-    return float(value)
+        item = (float(value[0]), float(value[1]))
+        if not all(math.isfinite(number) for number in item):
+            raise ValueError(f"range values must be finite, got {value!r}")
+        return item
+    item = float(value)
+    if not math.isfinite(item):
+        raise ValueError(f"range value must be finite, got {value!r}")
+    return item
 
 
-@dataclass(frozen=True)
+@dataclass(init=False)
 class Parameter:
     """One optimization parameter.
 
@@ -28,18 +35,44 @@ class Parameter:
 
     name: str
     ranges: tuple[RangeElement, ...]
+    value: float
+    normalized_value: float
     unit: str = ""
 
-    def __init__(self, name: str, ranges: Iterable[object], unit: str = "") -> None:
+    def __init__(
+        self,
+        name: str,
+        ranges: Iterable[object],
+        *,
+        value: float = float("nan"),
+        normalized_value: float = float("nan"),
+        unit: str = "",
+    ) -> None:
         coerced = tuple(_coerce_range_element(item) for item in ranges)
         if not coerced:
             raise ValueError(f"parameter {name!r} must define at least one range")
-        object.__setattr__(self, "name", str(name))
-        object.__setattr__(self, "ranges", coerced)
-        object.__setattr__(self, "unit", str(unit))
+        assigned_value = float(value)
+        assigned_normalized_value = float(normalized_value)
+        if math.isinf(assigned_value):
+            raise ValueError(f"parameter {name!r} value must be finite or NaN")
+        if math.isinf(assigned_normalized_value):
+            raise ValueError(f"parameter {name!r} normalized_value must be finite or NaN")
+        self.name = str(name)
+        self.ranges = coerced
+        self.value = assigned_value
+        self.normalized_value = assigned_normalized_value
+        self.unit = str(unit)
 
-    def denormalize(self, normalized_value: float, *, clip: bool = True) -> float:
-        x = float(normalized_value)
+    def denormalize(
+        self,
+        normalized_value: float | None = None,
+        *,
+        clip: bool = True,
+        update: bool = True,
+    ) -> float:
+        x = self.normalized_value if normalized_value is None else float(normalized_value)
+        if not math.isfinite(x):
+            raise ValueError(f"parameter {self.name!r} normalized_value must be finite")
         if clip:
             x = min(1.0, max(0.0, x))
 
@@ -51,11 +84,18 @@ class Parameter:
         range_item = self.ranges[index]
         if isinstance(range_item, tuple):
             lo, hi = range_item
-            return float(lo + (hi - lo) * position)
-        return float(range_item)
+            raw_value = float(lo + (hi - lo) * position)
+        else:
+            raw_value = float(range_item)
+        if update:
+            self.normalized_value = x
+            self.value = raw_value
+        return raw_value
 
     def normalize(self, raw_value: float, *, clip: bool = True) -> float:
         value = float(raw_value)
+        if not math.isfinite(value):
+            raise ValueError(f"parameter {self.name!r} value must be finite")
         count = len(self.ranges)
         candidates: list[tuple[float, float]] = []
 
@@ -103,5 +143,5 @@ def denormalize_values(parameters: Iterable[Parameter], normalized_values: Itera
     values = tuple(float(value) for value in normalized_values)
     if len(params) != len(values):
         raise ValueError(f"expected {len(params)} values, got {len(values)}")
-    return tuple(param.denormalize(value) for param, value in zip(params, values))
+    return tuple(param.denormalize(value, update=False) for param, value in zip(params, values))
 
