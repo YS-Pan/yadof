@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -327,10 +328,14 @@ def _export_solution_data_npz(
     setup: str | None = None,
     sweep: str | None = None,
     out_dir: str = "rawData",
+    output_name: str | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> str:
     out_dir = os.path.abspath(out_dir)
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"{_sanitize_filename(expression)}.npz")
+    rawdata_name = _sanitize_filename(output_name or expression)
+    rawdata_name = rawdata_name[:-4] if rawdata_name.lower().endswith(".npz") else rawdata_name
+    path = os.path.join(out_dir, f"{rawdata_name}.npz")
     setup_sweep_name = _build_setup_sweep_name(hfss, setup, sweep)
     vrs = None if not variations else {
         str(k): [str(x) for x in (v if isinstance(v, (list, tuple, np.ndarray)) else [v])]
@@ -355,9 +360,10 @@ def _export_solution_data_npz(
     )
     data = np.asarray(contract["data"], dtype=float)
     axis_names = list(contract["axes"])
-    meta = {
+    meta = dict(metadata or {})
+    meta.update({
         "schema_version": RAWDATA_SCHEMA_VERSION,
-        "rawdata_name": _sanitize_filename(expression),
+        "rawdata_name": rawdata_name,
         "expression": expression,
         "report_category": report_category,
         "context": context,
@@ -373,7 +379,7 @@ def _export_solution_data_npz(
         "shape": [int(x) for x in data.shape],
         "data_contract": contract["data_contract"],
         "source": contract["source"],
-    }
+    })
     if contract.get("active_intrinsic"):
         meta["active_intrinsic"] = contract["active_intrinsic"]
     save_kw = {
@@ -514,6 +520,8 @@ def save_modal(
     setup: str | None = None,
     sweep: str | None = None,
     out_dir: str = "rawData",
+    output_name: str | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> str:
     return _export_solution_data_npz(
         hfssApp,
@@ -524,6 +532,8 @@ def save_modal(
         setup=setup,
         sweep=sweep,
         out_dir=out_dir,
+        output_name=output_name,
+        metadata=metadata,
     )
 
 
@@ -537,6 +547,8 @@ def save_nearField(
     setup: str | None = None,
     sweep: str | None = None,
     out_dir: str = "rawData",
+    output_name: str | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> str:
     return _export_solution_data_npz(
         hfssApp,
@@ -548,6 +560,8 @@ def save_nearField(
         setup=setup,
         sweep=sweep,
         out_dir=out_dir,
+        output_name=output_name,
+        metadata=metadata,
     )
 
 
@@ -561,6 +575,8 @@ def save_farField(
     setup: str | None = None,
     sweep: str | None = None,
     out_dir: str = "rawData",
+    output_name: str | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> str:
     return _export_solution_data_npz(
         hfssApp,
@@ -572,6 +588,8 @@ def save_farField(
         setup=setup,
         sweep=sweep,
         out_dir=out_dir,
+        output_name=output_name,
+        metadata=metadata,
     )
 
 
@@ -584,6 +602,8 @@ def save_antPara(
     setup: str | None = None,
     sweep: str | None = None,
     out_dir: str = "rawData",
+    output_name: str | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> str:
     return _export_solution_data_npz(
         hfssApp,
@@ -594,6 +614,8 @@ def save_antPara(
         setup=setup,
         sweep=sweep,
         out_dir=out_dir,
+        output_name=output_name,
+        metadata=metadata,
     )
 
 

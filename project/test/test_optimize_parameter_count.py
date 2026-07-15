@@ -84,41 +84,8 @@ def test_explicit_variable_count_overrides_job_template_parameter_count(monkeypa
     assert calls == {"get_variable_count": 1, "get_objective_count": 1, "get_objective_names": 1}
 
 
-def test_default_job_template_width_matches_current_antenna_task():
-    from project.job_template import api as job_template_api
-
-    assert job_template_api.get_variable_count() == 19
-    assert job_template_api.get_parameter_names() == (
-        "dipole_gap",
-        "dipole_l",
-        "dipole_post_xposi",
-        "dipole_w",
-        "feedline1_l",
-        "feedline1_w",
-        "feedline2_xposi",
-        "feedline2_yposi",
-        "slot_l",
-        "slot_w",
-        "strip_l",
-        "strip_w",
-        "top_sub_zposi",
-        "yagi_l1",
-        "yagi_l2",
-        "yagi_w",
-        "yagi_w2",
-        "yagi_xmove",
-        "yagi_yposi",
-    )
-    assert job_template_api.get_objective_count() == 3
-    assert job_template_api.get_objective_names() == (
-        "cost_s11_band",
-        "cost_gain_lhcp_targets",
-        "cost_axial_ratio_targets",
-    )
-
-
 def test_config_no_longer_owns_problem_shape():
-    from project import config_all as config
+    from project.config import all as config
 
     assert not hasattr(config, "OPTIMIZE_VARIABLE_COUNT")
     assert not hasattr(config, "OPTIMIZE_OBJECTIVE_COUNT")

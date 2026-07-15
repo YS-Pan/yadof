@@ -2,7 +2,7 @@
 
 ## Intent
 - Protect the v3 contracts while the implementation is still moving quickly.
-- Keep the default test path local and independent of HTCondor or accidental real HFSS launches; real HFSS smoke tests must be explicitly enabled.
+- Keep the default test path local, software-agnostic, and independent of HTCondor or real simulator launches.
 - Verify behavior from module public APIs whenever possible.
 
 ## Historical Lineage
@@ -11,7 +11,7 @@
 
 ## Functionalities
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
-- Default job-template tests assert the current antenna task parameter names, objective names, and `[0, 1]` cost bounds using small HFSS-like rawData fixtures. These assertions should follow the active `job_template` task rather than treating an old simulation filename as a framework constant.
+- Framework tests use generic task doubles and neutral rawData fixtures. They must not assert the active task's parameter names/count, objective names/count, simulator expressions, model filename, or expected task results.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
 - HTCondor tests cover submit-file generation, submit failure capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
@@ -24,9 +24,12 @@
 - Tests use pytest and temporary directories.
 - Basic command is `pytest -q`.
 - Tests may monkeypatch public APIs to isolate module behavior.
+- `project/test/README.md` is the direct contributor-facing scope rule for the generic test directory.
 
 ## Non-Obvious Techniques
-- Tests intentionally avoid requiring real HFSS, HTCondor, or expensive simulation software unless a real-HFSS smoke-test flag is set.
+- Tests under `project/test/` must not contain current-task or simulator-specific scenarios, even behind an opt-in flag.
+- If a current task temporarily needs a regression or smoke test before package separation, place it under the ignored root `temp/` directory and assume it may be deleted at any time. After package/workspace separation, keep and run such tests inside that task's workspace.
+- Software-specific helper/adapter tests may live beside the software-specific code under `project/tools/specific/<software>/` or `project/com_lib/`; they are not part of the generic default `project/test/` suite.
 - Tests for distributed mode should mock `condor_submit`/runner behavior unless they are explicit environment smoke tests requested by the user.
 - Runtime temp directories are ignored through `pyproject.toml` pytest settings.
 - Tests assert that problem shape comes from `job_template`, not from global config.
@@ -34,5 +37,5 @@
 
 ## Mutability Profile
 - Add tests when changing shared contracts, storage layout, failure semantics, or surrogate API behavior.
-- Pure task-specific changes in `job_template` may need narrower tests than core module changes.
+- Do not add task-specific tests under `project/test/`. Use `temp/` now or the task workspace after package separation.
 - Generated runtime data under test temp folders should not become source documentation.

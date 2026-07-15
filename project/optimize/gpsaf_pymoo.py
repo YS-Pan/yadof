@@ -17,7 +17,7 @@ from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.util.ref_dirs import get_reference_directions
 
-from project import config_all as config
+from project.config import all as config
 
 from .gpsaf_misc import (
     CandidateRecord,

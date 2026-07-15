@@ -22,7 +22,7 @@ def _job(tmp_path: Path, name: str = "job_001"):
 
 
 def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract(tmp_path):
-    from project import config_all as project_config
+    from project.config import all as project_config
     from project.evaluate_manager.condor_runner import write_condor_submit_file
 
     job = _job(tmp_path)
@@ -32,7 +32,7 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
         "parameters_constraints.py",
         "parameters_constraints_class.py",
         "rawdata_contract.py",
-        "hfss_com.py",
+        "solver_adapter.py",
         "calc_cost.py",
     ):
         (job.directory / name).write_text("# test\n", encoding="utf-8", newline="\n")
@@ -56,8 +56,6 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     assert "APPDATA=._appdata" in text
     assert "LOCALAPPDATA=._localappdata" in text
     assert "TEMP=._tmp" in text
-    assert "YADOF_HFSS_NON_GRAPHICAL=1" in text
-    assert "ANSYSLMD_LICENSE_FILE=1055@localhost" in text
     assert f"request_cpus = {project_config.HTCONDOR_REQUEST_CPUS}" in text
     assert f"request_memory = {project_config.HTCONDOR_REQUEST_MEMORY}" in text
     assert 'Machine != "DESKTOP-A2091"' not in text
@@ -79,7 +77,7 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     for name in ("._home", "._appdata", "._localappdata", "._tmp"):
         assert (job.directory / name).is_dir()
     assert "job_input.json" in text
-    assert "hfss_com.py" in text
+    assert "solver_adapter.py" in text
     assert "calc_cost.py" not in text
     assert "cost.json" not in text
     assert not (job.directory / "run_workflow.cmd").exists()
@@ -137,7 +135,7 @@ def test_run_condor_jobs_records_submit_failure_without_fixing_condor(tmp_path, 
 
 
 def test_condor_requirements_can_be_relaxed_or_exclude_workers(monkeypatch):
-    from project import config_all as project_config
+    from project.config import all as project_config
     from project.evaluate_manager import config
 
     monkeypatch.setattr(project_config, "HTCONDOR_ALLOWED_MACHINES", ())

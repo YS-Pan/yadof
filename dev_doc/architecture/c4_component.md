@@ -34,11 +34,11 @@ flowchart LR
     LocalRunner --> Types
     CondorRunner --> Types
     RDClient --> Types
-    EvalAPI --> EvalConfig["config_all.py via evaluate_manager/config.py"]
+    EvalAPI --> EvalConfig["project.config.all via evaluate_manager/config.py"]
 ```
 
 - `api.py`: backend selection, local per-individual worker-pool coordination, failure isolation, and ordered cost return.
-- `job_files.py`: copy template, copy `config.py` and `config_all.py`, write job input and run/generation context, compute static hash.
+- `job_files.py`: copy template, copy the cache-free `config/` package, write job input and run/generation context, compute static hash.
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
 - `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, timeout removal, and job-local result collection.
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
@@ -63,7 +63,7 @@ flowchart LR
 - `workflow.py`: raw variable input to flat rawData output plus workflow-owned `individual_metadata.json` lifecycle timestamps and runtime HFSS defaults loaded from job-local config/environment.
 - `calc_cost.py`: task-owned rawData-to-cost logic plus optional rawData importance weights for surrogate training. It decides the current objective names/count and may select objective-relevant windows from richer rawData at calculation time.
 - `rawdata_contract.py`: `.npz` schema validation.
-- `hfss_com.py`: optional HFSS/PyAEDT simulator adapter. A workflow can copy it into `job_template` for active use, while `project/com_lib/hfss_com.py` keeps a source/reference copy.
+- `hfss_com.py`: optional HFSS/PyAEDT simulator adapter. A workflow can copy it into `job_template` for active use, while `project/com_lib/hfss_com.py` keeps the synchronized reusable reference copy.
 - `project/com_lib/test_com.py`: retained pure-Python simulator stand-in; it must be copied into `job_template` before a workflow can use it.
 
 ## Recorded Data Components

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 
-from project.tools import hfss_get_para_and_range_direct as generator
+from project.tools.specific.hfss import get_para_and_range_direct as generator
 
 
 def _parameters():

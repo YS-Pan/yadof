@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from .config import PROJECT_CONFIG_ALL_FILE_NAME, PROJECT_CONFIG_FILE_NAME, PROJECT_DIR, RAW_DATA_DIR_NAME
+from .config import PROJECT_CONFIG_DIR_NAME, PROJECT_DIR, RAW_DATA_DIR_NAME
 from .types import JobSpec
 
 EXCLUDED_TEMPLATE_NAMES = {
@@ -158,10 +158,14 @@ def _copy_template(template_dir: Path, job_dir: Path) -> None:
 
 
 def _copy_project_config(job_dir: Path) -> None:
-    for name in (PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_ALL_FILE_NAME):
-        source = PROJECT_DIR / name
-        if source.is_file():
-            shutil.copy2(source, job_dir / name)
+    source = PROJECT_DIR / PROJECT_CONFIG_DIR_NAME
+    if source.is_dir():
+        shutil.copytree(
+            source,
+            job_dir / PROJECT_CONFIG_DIR_NAME,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
 
 def _ignore_template_items(_dir: str, names: list[str]) -> set[str]:
     return {name for name in names if name in EXCLUDED_TEMPLATE_NAMES or name in EXCLUDED_TEMPLATE_DIRS}

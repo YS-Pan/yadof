@@ -17,8 +17,9 @@
   multi-program workflows.
 - HFSS, Ansys, or a single adapter should be identified as a current example or a
   task-specific implementation wherever that distinction matters.
-- Task- or software-specific content discovered in code outside the four permitted
-  task files should be reported without changing that code.
+- Task- or software-specific content discovered in code outside the permitted task
+  files and explicitly specific directories should be reported without changing
+  that code.
 
 ## Guidance
 
@@ -46,22 +47,29 @@
   exposes code that violates the boundary below, leave the code unchanged and
   report the finding in the current response with its file path and a concise
   explanation.
-- Only these code files may contain content tied to a particular task or software:
+- These task files may contain content tied to a particular task or software:
   - `project/job_template/calc_cost.py`
   - `project/job_template/hfss_com.py`
   - `project/job_template/workflow.py`
   - `project/job_template/parameters_constraints.py`
-- Task- or software-specific content in any other code file harms Yadof's
+- These directories are also exempt because their explicit responsibility is to
+  hold reusable, software-specific settings, tools, or adapter references:
+  - `project/config/specific/`
+  - `project/tools/specific/`
+  - `project/com_lib/`
+- Task- or software-specific content in any other code path harms Yadof's
   generality and must be reported. This includes concrete task filenames,
   assumptions tied to one simulator or vendor, and logic that assumes only one
   task-local `*_com.py` adapter.
-- Do not report one of the four permitted files merely because it contains
-  task- or software-specific content; that specificity belongs there.
+- Do not report one of the permitted files or anything below the three exempt
+  directories merely because it contains task- or software-specific content; that
+  specificity belongs there. The exemption does not extend to `project/test/` or
+  to generic config/tools modules outside the `specific/` subdirectories.
 
 ## Completion Rule
 - Correct each matching documentation occurrence that normal in-scope work exposes.
-- Report each matching code occurrence outside the four-file allowlist, but do not
-  modify it under this automatic toDo.
+- Report each matching code occurrence outside the permitted files and exempt
+  directories, but do not modify it under this automatic toDo.
 - Keep this automatic toDo active for other incidental occurrences until its
   automatic obsolete policy archives it; one local correction does not imply that
   every document has been reviewed.

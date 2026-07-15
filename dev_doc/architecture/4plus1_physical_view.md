@@ -23,9 +23,10 @@ flowchart TD
 - Administrator-only environment and cluster resources: `admin_tool/`. These scripts
   configure external systems and are never imported by the project runtime.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
-- Optional adapter staging/reference files: `project/com_lib/`, not copied or imported by default.
+- Optional adapter staging/reference files: `project/com_lib/`, not copied or imported by default. Reusable active-adapter fixes are synchronized back here after task-only assumptions are excluded.
+- Generic tools: `project/tools/`; simulator-specific tools: `project/tools/specific/<software>/`.
 - Prepared jobs: submit-side `project/jobs/` by default, configurable through the full config layer.
-- Per-job copied config: `project/jobs/<job_name>/config.py` and `project/jobs/<job_name>/config_all.py`, copied from the submit-side project during job preparation.
+- Per-job copied config package: `project/jobs/<job_name>/config/`, copied from submit-side `project/config/` without caches. It includes `key.py`, `all.py`, and active modules under `specific/`.
 - Per-job workflow lifecycle metadata: `project/jobs/<job_name>/individual_metadata.json`, written by the workflow and read by `evaluate_manager` during finalization.
 - Recorded individual metadata: `project/recorded_data/indMeta.jsonl`.
 - Recorded rawData: `project/recorded_data/rawData.npz`, a zip-based archive with members shaped like `job_name/file.npz`.
@@ -76,7 +77,7 @@ not perform those system-administration actions.
   design normal runtime behavior that requires `run_as_owner=True`, cross-machine
   owner credentials, or running jobs as the submitting desktop user.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
-- Real workflow smoke tests may require task-specific simulator software such as PyAEDT/AEDT; default tests should skip those paths unless explicitly enabled.
+- Real workflow smoke tests may require task-specific simulator software. They are disposable checks under root `temp/` in the current layout and belong in the task workspace after package separation; they are not committed under `project/test/`.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
 - Machine-specific install locations must be discovered from repository-relative paths, explicit user arguments, standard install discovery, or existing environment variables. The project must not require users to add new system environment variables as a setup prerequisite.
 - `created_at` is not part of the individual record contract; job creation time can be inferred from time-based job folder names when needed.

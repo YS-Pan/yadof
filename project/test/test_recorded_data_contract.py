@@ -11,10 +11,39 @@ import pytest
 from project.job_template.rawdata_contract import RAWDATA_SCHEMA_VERSION
 
 
-def _normalized_variables() -> tuple[float, ...]:
+@pytest.fixture(autouse=True)
+def _generic_task_contract(monkeypatch):
+    """Keep recorded-data tests independent from the active optimization task."""
+
     from project.job_template import api as job_template_api
 
-    return (0.25, 0.5, 0.75) + (0.5,) * (job_template_api.get_variable_count() - 3)
+    names = ("x0", "x1", "x2")
+    monkeypatch.setattr(job_template_api, "get_parameter_names", lambda: names)
+    monkeypatch.setattr(job_template_api, "get_variable_count", lambda: len(names))
+    def scale(values, factor):
+        values = tuple(float(value) for value in values)
+        if len(values) != len(names):
+            raise ValueError(f"expected {len(names)} variables, got {len(values)}")
+        return tuple(value * factor for value in values)
+
+    monkeypatch.setattr(job_template_api, "normalize_variables", lambda values: scale(values, 0.1))
+    monkeypatch.setattr(job_template_api, "denormalize_variables", lambda values: scale(values, 10.0))
+
+    def calculate_cost(samples, raw_variables=None):
+        from project.job_template.rawdata_contract import validate_rawdata_item
+
+        del raw_variables
+        validated = tuple(tuple(validate_rawdata_item(item) for item in sample) for sample in samples)
+        return tuple(
+            (float(np.mean(np.asarray(sample[0]["data"], dtype=float))),)
+            for sample in validated
+        )
+
+    monkeypatch.setattr(job_template_api, "calculate_cost", calculate_cost)
+
+
+def _normalized_variables() -> tuple[float, ...]:
+    return (0.25, 0.5, 0.75)
 
 
 def _raw_variables() -> tuple[float, ...]:
@@ -32,106 +61,31 @@ def _configure_recorded_api(recorded_api, root: Path) -> None:
 
 
 def _write_rawdata_set(raw_dir: Path, *, offset: float = 0.0) -> Path:
-    from project.job_template import calc_cost
-
     raw_dir.mkdir(parents=True, exist_ok=True)
-    metadata_base = {
-        "schema_version": RAWDATA_SCHEMA_VERSION,
-        "variables": {"x0": 0.25, "x1": 0.5},
-        "job_metadata": {"job_name": "repeated"},
-    }
-
-    freq_axis = np.asarray([2.40, 2.42, 2.44, 2.46, 2.48], dtype=float)
-    gain_freq_axis = np.asarray([calc_cost.GAIN_TARGET_FREQ_GHZ], dtype=float)
-    gain_theta_axis = np.asarray([-30.0, 0.0, 30.0], dtype=float)
-    axial_theta_axis = np.asarray([-14.0, 0.0, 14.0], dtype=float)
-    phi_axis = np.asarray([0.0, calc_cost.TARGET_PHI_DEG, 180.0], dtype=float)
-
-    def write_item(rawdata_name: str, data, axes, *, expression: str, pin_state: int) -> None:
-        axis_descriptors = [
+    values = np.asarray([0.1, 0.2, 0.3], dtype=float) + float(offset)
+    np.savez(
+        raw_dir / "response.npz",
+        data=values,
+        axis_sample=np.arange(values.size, dtype=float),
+        metadata=json.dumps(
             {
-                "index": index,
-                "size": int(len(values)),
-                "name": name,
-                "values_key": f"axis_{name}",
-                "unit": unit,
+                "schema_version": RAWDATA_SCHEMA_VERSION,
+                "rawdata_name": "response",
+                "source": "generic_test",
+                "shape": [values.size],
+                "axes": [
+                    {
+                        "index": 0,
+                        "size": values.size,
+                        "name": "sample",
+                        "values_key": "axis_sample",
+                    }
+                ],
+                "variables": {"x0": 0.25, "x1": 0.5},
+                "job_metadata": {"job_name": "repeated"},
             }
-            for index, (name, values, unit) in enumerate(axes)
-        ]
-        payload = {
-            "data": np.asarray(data, dtype=float),
-            "metadata": json.dumps(
-                {
-                    **metadata_base,
-                    "rawdata_name": rawdata_name,
-                    "expression": expression,
-                    "source": "test",
-                    "pin_state": int(pin_state),
-                    "shape": list(np.asarray(data).shape),
-                    "axis_names": [name for name, _values, _unit in axes],
-                    "axes": axis_descriptors,
-                }
-            ),
-        }
-        for name, values, unit in axes:
-            payload[f"axis_{name}"] = np.asarray(values, dtype=float)
-            payload[f"unit_{name}"] = np.asarray(unit)
-        np.savez(raw_dir / f"{rawdata_name}.npz", **payload)
-
-    for state in calc_cost.PIN_STATES:
-        write_item(
-            f"s11_pinState{state}",
-            np.full(freq_axis.shape, -15.0 + offset, dtype=float),
-            (("Freq", freq_axis, "GHz"),),
-            expression="dB(S(1,1))",
-            pin_state=state,
-        )
-
-        gain = np.full((gain_freq_axis.size, gain_theta_axis.size, phi_axis.size), -2.0, dtype=float)
-        gain_theta_index = int(np.flatnonzero(gain_theta_axis == calc_cost.GAIN_TARGET_THETA_BY_STATE[state])[0])
-        phi_index = int(np.flatnonzero(phi_axis == calc_cost.TARGET_PHI_DEG)[0])
-        gain[:, gain_theta_index, phi_index] = 8.0 - offset
-        write_item(
-            f"gain_lhcp_pinState{state}",
-            gain,
-            (
-                ("Freq", gain_freq_axis, "GHz"),
-                ("Theta", gain_theta_axis, "deg"),
-                ("Phi", phi_axis, "deg"),
-            ),
-            expression="dB(RealizedGainLHCP)",
-            pin_state=state,
-        )
-
-        axial_ratio = np.full((freq_axis.size, axial_theta_axis.size, phi_axis.size), 20.0, dtype=float)
-        axial_theta_index = int(np.flatnonzero(axial_theta_axis == calc_cost.AXIAL_RATIO_TARGET_THETA_BY_STATE[state])[0])
-        axial_ratio[:, axial_theta_index, phi_index] = 0.0 + offset
-        np.savez(
-            raw_dir / f"axial_ratio_pinState{state}.npz",
-            data=axial_ratio,
-            axis_Freq=freq_axis,
-            unit_Freq=np.asarray("GHz"),
-            axis_Theta=axial_theta_axis,
-            unit_Theta=np.asarray("deg"),
-            axis_Phi=phi_axis,
-            unit_Phi=np.asarray("deg"),
-            metadata=json.dumps(
-                {
-                    **metadata_base,
-                    "rawdata_name": f"axial_ratio_pinState{state}",
-                    "expression": "dB(AxialRatioValue)",
-                    "source": "test",
-                    "pin_state": int(state),
-                    "shape": list(axial_ratio.shape),
-                    "axis_names": ["Freq", "Theta", "Phi"],
-                    "axes": [
-                        {"index": 0, "size": freq_axis.size, "name": "Freq", "values_key": "axis_Freq", "unit": "GHz"},
-                        {"index": 1, "size": axial_theta_axis.size, "name": "Theta", "values_key": "axis_Theta", "unit": "deg"},
-                        {"index": 2, "size": phi_axis.size, "name": "Phi", "values_key": "axis_Phi", "unit": "deg"},
-                    ],
-                }
-            ),
-        )
+        ),
+    )
     return raw_dir
 
 
@@ -139,7 +93,7 @@ def _write_invalid_rawdata_set(raw_dir: Path, *, metadata: dict[str, object], va
     raw_dir.mkdir(parents=True, exist_ok=True)
     _write_rawdata_set(raw_dir)
     np.savez(
-        raw_dir / "s11_pinState1.npz",
+        raw_dir / "response.npz",
         data=np.asarray(values),
         metadata=json.dumps(metadata),
     )
@@ -203,10 +157,10 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     assert "started_at" not in record["job_metadata"]
     assert "ended_at" not in record["job_metadata"]
     assert record["job_metadata"]["nested"] == {"kept": True}
-    assert record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]["rawdata_name"] == "s11_pinState1"
-    assert record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
-    assert "variables" not in record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]
-    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/s11_pinState1.npz"]
+    assert record["rawdata_metadata"]["job_completed/response.npz"]["rawdata_name"] == "response"
+    assert record["rawdata_metadata"]["job_completed/response.npz"]["schema_version"] == RAWDATA_SCHEMA_VERSION
+    assert "variables" not in record["rawdata_metadata"]["job_completed/response.npz"]
+    assert "job_metadata" not in record["rawdata_metadata"]["job_completed/response.npz"]
 
     rows = [
         json.loads(line)
@@ -218,26 +172,14 @@ def test_completed_record_enters_history_and_jsonl_archive_has_metadata(tmp_path
     assert rows[0]["job_name"] == "job_completed"
     assert isinstance(rows[0]["recorded_at"], str)
     with zipfile.ZipFile(recorded_api.RAWDATA_ARCHIVE_PATH, "r") as archive:
-        assert sorted(archive.namelist()) == [
-            "job_completed/axial_ratio_pinState1.npz",
-            "job_completed/axial_ratio_pinState2.npz",
-            "job_completed/axial_ratio_pinState3.npz",
-            "job_completed/gain_lhcp_pinState1.npz",
-            "job_completed/gain_lhcp_pinState2.npz",
-            "job_completed/gain_lhcp_pinState3.npz",
-            "job_completed/s11_pinState1.npz",
-            "job_completed/s11_pinState2.npz",
-            "job_completed/s11_pinState3.npz",
-        ]
+        assert archive.namelist() == ["job_completed/response.npz"]
 
     history = recorded_api.get_optimization_history()
     assert len(history) == 1
     job_name, normalized_variables, costs = history[0]
     assert job_name == "job_completed"
     assert normalized_variables == pytest.approx(_normalized_variables())
-    assert len(costs) == 3
-    assert all(0.0 <= value <= 1.0 for value in costs)
-    assert all(value <= 0.1 for value in costs)
+    assert costs == pytest.approx((0.2,))
     assert recorded_api.get_rawdata_diagnostics() == ()
 
 
@@ -260,31 +202,13 @@ def test_error_and_timeout_are_recorded_but_excluded_from_default_history(tmp_pa
     assert len(recorded_api.get_surrogate_training_data()["raw_data"]) == 1
 
 
-def test_recorded_costs_evaluate_configured_constraints_with_raw_variables(tmp_path, monkeypatch):
-    from project.job_template import calc_cost
-    from project.recorded_data import api as recorded_api
-
-    _configure_recorded_api(recorded_api, tmp_path / "recorded_data")
-    parameter_name = calc_cost.parameter_config.get_parameters()[0].name
-    monkeypatch.setattr(calc_cost.parameter_config, "CONSTRAINTS", (f"${parameter_name} - 1.5",))
-    raw_dir = _write_rawdata_set(tmp_path / "job_rawdata")
-    raw_variables = list(_raw_variables())
-    raw_variables[0] = 1.0
-
-    recorded_api.record_job_result("job_constrained", raw_variables, raw_dir)
-    costs = dict(recorded_api.calculate_costs())["job_constrained"]
-
-    assert len(costs) == 4
-    assert costs[-1] == pytest.approx(0.5)
-
-
 @pytest.mark.parametrize(
     ("metadata", "values"),
     (
         (
             {
                 "schema_version": RAWDATA_SCHEMA_VERSION,
-                "rawdata_name": "s11_pinState1",
+                "rawdata_name": "response",
                 "source": "legacy",
                 "shape": [3],
                 "axes": {"time": "seconds"},
@@ -292,7 +216,7 @@ def test_recorded_costs_evaluate_configured_constraints_with_raw_variables(tmp_p
             [0.35, -0.45, 0.65],
         ),
         (
-            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "s11_pinState1", "source": "legacy", "shape": [2]},
+            {"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "response", "source": "legacy", "shape": [2]},
             [0.35, -0.45, 0.65],
         ),
     ),
@@ -314,10 +238,9 @@ def test_incompatible_completed_rawdata_is_skipped_in_optimization_history(tmp_p
 
     assert tuple(row[0] for row in costs) == ("job_good",)
     assert tuple(row[0] for row in history) == ("job_good",)
-    assert len(history[0][2]) == 3
-    assert all(value <= 0.1 for value in history[0][2])
+    assert history[0][2] == pytest.approx((0.2,))
     assert tuple(row["job_name"] for row in diagnostics) == ("job_bad",)
-    assert diagnostics[0]["filename"] == "s11_pinState1.npz"
+    assert diagnostics[0]["filename"] == "response.npz"
     assert diagnostics[0]["status"] == "skipped"
     assert diagnostics[0]["error_message"]
 
@@ -329,7 +252,7 @@ def test_incompatible_completed_rawdata_is_skipped_for_surrogate_training(tmp_pa
     _configure_recorded_api(recorded_api, record_root)
     bad_raw_dir = _write_invalid_rawdata_set(
         tmp_path / "bad_rawdata",
-        metadata={"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "s11_pinState1", "source": "legacy", "shape": [2]},
+        metadata={"schema_version": RAWDATA_SCHEMA_VERSION, "rawdata_name": "response", "source": "legacy", "shape": [2]},
         values=[0.35, -0.45, 0.65],
     )
     good_raw_dir = _write_rawdata_set(tmp_path / "good_rawdata")
@@ -366,7 +289,7 @@ def test_legacy_rawdata_missing_schema_version_is_skipped_and_diagnosed(tmp_path
     _configure_recorded_api(recorded_api, record_root)
     legacy_raw_dir = _write_invalid_rawdata_set(
         tmp_path / "legacy_rawdata",
-        metadata={"rawdata_name": "s11_pinState1", "source": "legacy", "shape": [3]},
+        metadata={"rawdata_name": "response", "source": "legacy", "shape": [3]},
         values=[0.35, -0.45, 0.65],
     )
     good_raw_dir = _write_rawdata_set(tmp_path / "good_rawdata")
@@ -393,17 +316,7 @@ def test_corrupt_rawdata_archive_is_skipped_and_diagnosed(tmp_path):
     assert recorded_api.get_optimization_history() == ()
     diagnostics = recorded_api.get_rawdata_diagnostics()
 
-    assert tuple(row["job_name"] for row in diagnostics) == (
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-        "job_bad_archive",
-    )
+    assert tuple(row["job_name"] for row in diagnostics) == ("job_bad_archive",)
     assert {row["error_type"] for row in diagnostics} == {"unreadable_rawdata"}
 
 

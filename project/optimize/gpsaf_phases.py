@@ -6,7 +6,7 @@ import os
 import random
 from typing import Sequence
 
-from project import config_all as config
+from project.config import all as config
 
 from .gpsaf_pymoo import (
     PymooContext,

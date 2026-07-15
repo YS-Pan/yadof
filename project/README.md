@@ -26,20 +26,24 @@ not stored as a durable source file.
 - `com_lib/`: optional adapter staging/reference files, including reference
   copies such as `hfss_com.py` and `test_com.py`. Jobs do not import this
   directory directly; copy a needed com file into `job_template/` before the
-  workflow uses it.
+  workflow uses it. Reusable fixes made to an active adapter should be synced
+  back to its `com_lib` reference copy.
 - `recorded_data/`: durable archive of job names, raw variables, individual
   metadata in `indMeta.jsonl`, optimization metadata in `optMeta/`, and all
   rawData `.npz` members inside one `rawData.npz` archive. Normalized variables
   and costs are calculated dynamically through APIs.
 - `surrogate/`: rawData-first surrogate training, prediction, ensemble member
   min/max intervals, and per-generation checkpoints.
-- `tools/`: optional user-launched utilities. Core runtime does not import or
-  depend on tools. System-environment and HTCondor-pool administration tools are
-  kept separately under `../admin_tool/`.
+- `tools/`: optional user-launched utilities. Generic tools stay directly under
+  this folder; simulator-specific tools live under `tools/specific/<software>/`.
+  Core runtime does not depend on tools. System-environment and HTCondor-pool
+  administration tools are kept separately under `../admin_tool/`.
 - `test/`: pytest coverage for local closed-loop behavior, rawData contracts,
   failure handling, dynamic history interpretation, surrogate behavior, and
   tools.
-- `config.py`: shared runtime and optimizer settings. Problem shape and
+- `config/`: layered settings. `key.py` contains routine campaign choices,
+  `all.py` provides the complete generic settings surface, and
+  `specific/<software>.py` owns simulator-specific settings. Problem shape and
   objective names come from `job_template.api`, not from config.
 
 ## API Boundary
@@ -54,8 +58,9 @@ recorded_data/api.py
 surrogate/api.py
 ```
 
-`config.py` is the main allowed direct cross-module import. `job_template/`
-files are intentionally mutable between optimization tasks.
+`project.config.all` is the full shared-settings import. Software-specific code
+reads its matching module under `project.config.specific`. `job_template/` files
+are intentionally mutable between optimization tasks.
 
 ## Quick Smoke Commands
 
@@ -63,15 +68,10 @@ files are intentionally mutable between optimization tasks.
 pytest -q
 ```
 
-The real HFSS local-pipeline smoke test is skipped by default so ordinary test
-runs do not launch AEDT. Set `YADOF_RUN_HFSS_TESTS=1` when you intentionally
-want to run that smoke path on a machine with PyAEDT/AEDT configured.
-
-```powershell
-$env:YADOF_RUN_HFSS_TESTS = '1'
-$env:YADOF_HFSS_SMOKE_TIMEOUT_SEC = '5400'
-pytest -q project\test\test_real_local_pipeline.py
-```
+The committed suite contains framework-contract tests only. Tests tied to the
+current optimization task do not belong under `project/test/`; use the ignored
+root `temp/` directory for disposable task checks. After package/workspace
+separation, run those checks from the relevant workspace instead.
 
 ```powershell
 @'

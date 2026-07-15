@@ -10,10 +10,10 @@ from hfss_com import analyze, save_farField, save_modal, set_hfss_temp_directory
 from parameters_constraints import get_parameters
 
 try:
-    import config as job_config
+    from config.specific import hfss as job_config
 except ImportError:
     try:
-        from project import config as job_config
+        from project.config.specific import hfss as job_config
     except ImportError:
         job_config = None
 from worker_misc import (

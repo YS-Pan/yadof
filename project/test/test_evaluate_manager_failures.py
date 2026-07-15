@@ -95,7 +95,7 @@ def test_record_failure_returns_inf_and_generation_continues(tmp_path, monkeypat
 
 
 def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatch):
-    from project import config_all as config
+    from project.config import all as config
     from project.evaluate_manager import api
     from project.evaluate_manager.types import JobResult, JobSpec
     from project.job_template import api as job_template_api
@@ -126,7 +126,7 @@ def test_default_jobs_dir_reads_project_config_at_call_time(tmp_path, monkeypatc
 
 
 def test_local_evaluation_can_run_jobs_in_parallel(tmp_path, monkeypatch):
-    from project import config_all as config
+    from project.config import all as config
     from project.evaluate_manager import api
     from project.evaluate_manager.types import JobResult, JobSpec
 

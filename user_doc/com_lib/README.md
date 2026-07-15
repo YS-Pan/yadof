@@ -7,6 +7,11 @@ not active just because it exists there. To use an adapter in a task, copy the n
 `*_com.py` file into `project/job_template/`, then import it from `workflow.py` by
 same-directory name.
 
+When an active adapter receives a reusable fix, validate that the change contains no
+task-only project/design/objective assumptions, then synchronize it back to the
+matching `project/com_lib/` reference. Task-local experiments may remain only in
+`job_template/`.
+
 ## Reading Guide
 
 When choosing, copying, or calling a simulator/custom adapter, read this file first.

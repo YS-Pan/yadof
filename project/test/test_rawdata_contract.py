@@ -280,43 +280,6 @@ def test_rawdata_view_range_indices_support_unit_conversion(tmp_path):
     assert indices.tolist() == [1, 2]
 
 
-def test_hfss_export_writes_only_metadata_array(tmp_path):
-    from project.job_template import hfss_com
-
-    class FakeSolutionData:
-        primary_sweep = "Freq"
-        intrinsics = {"Freq": ["2.40GHz", "2.48GHz"]}
-        units_sweeps = {"Freq": "GHz"}
-
-        @staticmethod
-        def data_real(_expression):
-            return np.asarray([-12.0, -10.0], dtype=float)
-
-    class FakePost:
-        @staticmethod
-        def get_solution_data(**_kwargs):
-            return FakeSolutionData()
-
-    class FakeHfss:
-        post = FakePost()
-
-    path = hfss_com.save_modal(
-        FakeHfss(),
-        "dB(S(1,1))",
-        setup="Setup1 : Sweep",
-        out_dir=str(tmp_path),
-        output_name="s11_test",
-    )
-
-    with np.load(path, allow_pickle=False) as data:
-        assert "metadata" in data.files
-        assert "meta" not in data.files
-        metadata = json.loads(str(data["metadata"].item()))
-
-    assert metadata["rawdata_name"] == "s11_test"
-    assert metadata["shape"] == [2]
-
-
 def test_rawdata_unit_converters():
     assert frequency_to_ghz(np.asarray([2400.0]), "MHz").tolist() == [2.4]
     assert angle_to_degrees(np.asarray([np.pi]), "rad").tolist() == pytest.approx([180.0])

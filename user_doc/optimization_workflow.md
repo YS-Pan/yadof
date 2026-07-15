@@ -24,7 +24,7 @@ optional constraints.
 For HFSS tasks, variables can often be generated from the `.aedt` file:
 
 ```powershell
-python project\tools\hfss_get_para_and_range_direct.py --project project\job_template\your_model.aedt --design YourDesignName
+python project\tools\specific\hfss\get_para_and_range_direct.py --project project\job_template\your_model.aedt --design YourDesignName
 ```
 
 If the `.aedt` project has exactly one design, `--design` can usually be omitted.
@@ -107,9 +107,9 @@ meant to be self-contained.
 The workflow must not calculate final cost. The job folder should not contain
 `cost.json`.
 
-## 5. Edit `project/config.py`
+## 5. Edit `project/config/key.py` And Any Active Specific Config
 
-`project/config.py` is the short key config for settings that are likely to change between optimization campaigns. `project/config_all.py` contains the full grouped defaults and imports matching overrides from `config.py`.
+`project/config/key.py` is the short generic key config for settings that are likely to change between optimization campaigns. `project/config/all.py` contains the full grouped generic defaults and imports matching overrides from `key.py`. Settings tied to external software live under `project/config/specific/`; the current HFSS task uses `project/config/specific/hfss.py`.
 
 Common key settings users edit:
 
@@ -117,10 +117,9 @@ Common key settings users edit:
 - `EVALUATION_TIMEOUT_SEC`: generation-level timeout budget.
 - `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests.
 - HTCondor submit files run `workflow.py` directly as the transferred executable; do not configure Python itself as the submit executable.
-- `HFSS_JOB_CPUCORE`, `HFSS_PARALLEL_TASKS`, `HFSS_NON_GRAPHICAL`: HFSS runtime defaults copied into each prepared job.
 - `OPTIMIZE_POPULATION_SIZE`: number of real evaluations per generation.
 
-Advanced settings such as `JOBS_DIR`, local worker concurrency, NSGA-III controls, and surrogate controls are in `project/config_all.py`. Problem shape, variable names, and objective names come from `job_template`, not from either config file.
+For the current HFSS adapter, edit `HFSS_JOB_CPUCORE`, `HFSS_PARALLEL_TASKS`, and `HFSS_NON_GRAPHICAL` in `project/config/specific/hfss.py` when needed. Advanced generic settings such as `JOBS_DIR`, local worker concurrency, NSGA-III controls, and surrogate controls are in `project/config/all.py`. Problem shape, variable names, and objective names come from `job_template`, not from config.
 ## 6. Run A Smoke Test Before A Full Optimization
 
 Before a long run, test one individual.

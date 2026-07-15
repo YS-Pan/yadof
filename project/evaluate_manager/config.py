@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from project import config_all as project_config
+    from project.config import all as project_config
 except ImportError:  # Allows running from inside the project package directory.
-    from .. import config_all as project_config
+    from ..config import all as project_config
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_JOBS_DIR = PROJECT_DIR / "jobs"
@@ -30,8 +30,9 @@ DEFAULT_HTCONDOR_ALLOWED_MACHINES: tuple[str, ...] = tuple(getattr(project_confi
 DEFAULT_HTCONDOR_EXCLUDED_MACHINES: tuple[str, ...] = tuple(getattr(project_config, "HTCONDOR_EXCLUDED_MACHINES", ()))
 FINAL_STATUSES = {"done", "error", "timeout"}
 WORKFLOW_SCRIPT_NAME = "workflow.py"
-PROJECT_CONFIG_FILE_NAME = "config.py"
-PROJECT_CONFIG_ALL_FILE_NAME = "config_all.py"
+PROJECT_CONFIG_DIR_NAME = "config"
+PROJECT_CONFIG_KEY_FILE_NAME = "key.py"
+PROJECT_CONFIG_ALL_FILE_NAME = "all.py"
 RAW_DATA_DIR_NAME = "rawData"
 RAW_DATA_TRANSFER_ZIP_NAME = "rawData_outputs.zip"
 INDIVIDUAL_METADATA_FILE_NAME = "individual_metadata.json"
@@ -120,10 +121,14 @@ def htcondor_requirements() -> str:
 
 def _fresh_project_config():
     try:
-        import project.config as key_config
-        import project.config_all as all_config
+        from project.config import all as all_config
+        from project.config import key as key_config
+        from project.config import specific as specific_config
+        from project.config.specific import hfss as hfss_config
 
         importlib.reload(key_config)
+        importlib.reload(hfss_config)
+        importlib.reload(specific_config)
         return importlib.reload(all_config)
     except Exception:
         return project_config

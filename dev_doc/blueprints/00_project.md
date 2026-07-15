@@ -18,12 +18,12 @@
 - `project.evaluate_manager` converts normalized individuals into job folders, denormalizes variables through `job_template.api`, passes run/generation context, runs local jobs or submits HTCondor jobs, reads workflow-owned individual metadata, records failures, and returns in-memory costs to the optimizer.
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, rawData-to-cost calculation, and optional rawData importance weights for surrogate training.
 - The framework does not fix a default optimization task, simulator model filename, rawData names, or objective names. Those are task-specific and come from the active files in `project/job_template/`, especially `workflow.py`, `calc_cost.py`, and `parameters_constraints.py`.
-- Active workflow adapters live in `project/job_template` so prepared jobs are self-contained. `project/com_lib` is only a staging/reference area for adapter source/reference copies such as `hfss_com.py` and retained synthetic `test_com.py`.
+- Active workflow adapters live in `project/job_template` so prepared jobs are self-contained. `project/com_lib` is only a staging/reference area for adapter source/reference copies such as `hfss_com.py` and retained synthetic `test_com.py`; reusable fixes from an active adapter are synchronized back after task-only assumptions are excluded.
 - `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
-- `project.tools` remains optional and user-launched; core runtime and tests must not depend on it. System-environment and HTCondor-pool configuration belong in `admin_tool/`, outside `project.tools`.
-- `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
-- `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
+- `project.tools` remains optional and user-launched; generic tools stay at its root and simulator-specific tools live under `project.tools.specific.<software>`. Core runtime and generic tests must not depend on tools. System-environment and HTCondor-pool configuration belong in `admin_tool/`.
+- `project.config` is a package: `key.py` holds routine generic settings, `all.py` holds the complete generic surface, and `specific/` contains simulator-specific extensions.
+- `project.test` verifies generic framework contracts only: local closed-loop orchestration through task doubles, rawData contracts, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and generic tool compatibility. Current-task tests belong in ignored `temp/` now and in the workspace after package separation.
 - `dev_doc` owns project documentation guidance, including current architecture
   contracts, selective blueprint reading, terminology, historical lineage,
   manual and automatic toDo handoffs, obsolete archives, and append-only change
@@ -31,7 +31,7 @@
   are only opportunistic during already in-scope work and have stale-document rules.
 
 ## I/O Format
-- User-edited inputs are primarily `project/config.py`, task-specific files in `project/job_template/` such as `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and any active adapter files copied into `job_template/`.
+- User-edited inputs are primarily `project/config/key.py`, the active software settings under `project/config/specific/`, and task-specific files in `project/job_template/` such as `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and copied active adapters.
 - Optimizer input and output use normalized float tuples shaped as `population[individual][variable]`.
 - Evaluator input is a generation of normalized float tuples; evaluator output is cost tuples shaped as `population[individual][objective_cost]`.
 - Job folders contain copied runtime files, `job_input.json`, submit-side `metadata.json`/`metaData.json`, workflow-owned `individual_metadata.json`, and flat `rawData/*.npz` files. Jobs do not contain or save `cost.json`.
@@ -67,7 +67,7 @@
 
 ## Mutability Profile
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and active adapter files in `job_template/` are intentionally highly mutable between optimization tasks.
-- `project/config.py` is mutable at campaign setup time and occasionally during tuning; `project/config_all.py` carries the full grouped defaults for advanced changes.
+- `project/config/key.py` and the active files under `project/config/specific/` are mutable at campaign setup time and during tuning; `project/config/all.py` carries the full grouped generic defaults.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
 - Root `temp/` is a retained scratch directory: keep `temp/.gitkeep` tracked and ignore other contents.

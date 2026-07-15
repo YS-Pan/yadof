@@ -102,7 +102,7 @@ def test_default_optimize_does_not_call_surrogate(monkeypatch):
 
     surrogate_api.train = fail_train
 
-    from project import config_all as config
+    from project.config import all as config
     from project.optimize.api import run_one_generation
 
     monkeypatch.setattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1)
@@ -141,7 +141,7 @@ def test_surrogate_raw_data_to_cost_shape_and_checkpoint(monkeypatch):
 
     job_template_api.calculate_costs_from_raw_data = calculate_costs_from_raw_data
 
-    from project import config_all as config
+    from project.config import all as config
     from project.surrogate import runtime
 
     checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "surrogate_checkpoints"
@@ -195,7 +195,7 @@ def test_surrogate_flatten_raw_samples_fills_nonfinite_values():
 
 
 def test_surrogate_training_data_drops_jobs_above_nonfinite_threshold(monkeypatch):
-    from project import config_all as config
+    from project.config import all as config
     from project.surrogate import runtime
 
     monkeypatch.setattr(config, "SURROGATE_MAX_NONFINITE_FRACTION", 0.20)
@@ -237,7 +237,7 @@ def test_surrogate_interval_is_member_cost_min_max(monkeypatch):
         (float(sum(sample[0]["rawData"])),) for sample in samples
     )
 
-    from project import config_all as config
+    from project.config import all as config
     from project.surrogate import runtime
 
     checkpoint_dir = Path.cwd() / "project" / "test" / "_pytest_tmp" / "surrogate_member_interval"

@@ -14,8 +14,8 @@
 - `api.py` exposes parameter metadata, variable count, objective metadata, normalization helpers, job-file copying, rawData cost calculation, and optional rawData importance weights for surrogate training.
 - `parameters_constraints.py` defines the current task's `PARAMETERS`.
 - `parameters_constraints_class.py` defines `Parameter`, normalization, denormalization, continuous intervals, and discrete values.
-- `workflow.py` converts raw variables into flat schema-valid `rawData/*.npz` files, reads job-local `config.py` for HFSS defaults when present, writes job-local lifecycle metadata, can import task-local adapter files from the same directory, and never saves cost.
-- `project/com_lib/hfss_com.py` is a source/reference copy for the HFSS adapter; a task can copy it into `project/job_template/` when its workflow needs HFSS.
+- `workflow.py` converts raw variables into flat schema-valid `rawData/*.npz` files, reads its matching job-local module under `config/specific/` for simulator defaults when present, writes job-local lifecycle metadata, can import task-local adapter files from the same directory, and never saves cost.
+- `project/com_lib/hfss_com.py` is the synchronized reusable reference copy for the HFSS adapter; a task can copy it into `project/job_template/` when its workflow needs HFSS. Reusable fixes validated in the active copy should be copied back without task-only assumptions.
 - `project/com_lib/test_com.py` is the retained pure-Python simulator stand-in for `variables -> rawData`, including an HFSS-like profile that emits S11 traces plus `Freq x Phi x Theta` far-field grids for surrogate-speed tests; it must be copied into `job_template` before a workflow can use it.
 - `calc_cost.py` converts one sample's task rawData items into the current objective cost tuple. It also may mark objective-relevant rawData slots for surrogate training through task-owned importance weights.
 - `rawdata_contract.py` validates `.npz` metadata, shape, axis descriptors, schema version, and flat rawData directories.
@@ -41,7 +41,7 @@
 - RawData importance weights should mirror the current task's objective-relevant windows while retaining a positive weight floor for the rest of each field.
 - `recorded_data` asks this module to normalize historical raw variables using current parameter ranges, which supports mid-run range edits.
 - The rawData contract is generic. Core framework code validates shape and metadata but should not infer physical meaning from axis names.
-- Job-copy behavior excludes module APIs and cost code, but `evaluate_manager` adds the submit-side `config.py` and `config_all.py` beside the copied workflow so each job keeps the run configuration that produced it.
+- Job-copy behavior excludes module APIs and cost code, but `evaluate_manager` adds the cache-free submit-side `config/` package beside the copied workflow so each job keeps generic and software-specific run configuration.
 - Task files are intentionally replaceable by user or AI-generated code before a new campaign.
 
 ## Mutability Profile

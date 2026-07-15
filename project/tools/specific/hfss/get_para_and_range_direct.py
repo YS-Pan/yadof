@@ -1,4 +1,4 @@
-# tools/hfss_get_para_and_range.py
+# tools/specific/hfss/get_para_and_range_direct.py
 from __future__ import annotations
 
 import argparse
@@ -19,7 +19,7 @@ from typing import Any, Iterable, Union
 # Paths
 # =========================================================
 _THIS_FILE = Path(__file__).resolve()
-ROOT_DIR = _THIS_FILE.parents[1]  # .../tools/ -> repo root
+ROOT_DIR = _THIS_FILE.parents[3]  # .../project/tools/specific/hfss/ -> project/
 JOB_TEMPLATE_DIR = ROOT_DIR / "job_template"
 PARAM_FILE = JOB_TEMPLATE_DIR / "parameters_constraints.py"
 HISTORY_DIR = ROOT_DIR / "history"
@@ -648,7 +648,7 @@ def _archive_old_param_file_if_any(*, timestamp: str) -> Path | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="hfss_get_para_and_range.py",
+        prog="get_para_and_range_direct.py",
         description=(
             "Read optimization-included variables (name/value/ranges) from job_template/*.aedt "
             "and regenerate job_template/parameters_constraints.py.  "

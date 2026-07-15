@@ -5,7 +5,7 @@ import math
 import os
 from pathlib import Path
 
-from project import config_all as config
+from project.config import all as config
 from project.optimize.api import run_generations
 
 

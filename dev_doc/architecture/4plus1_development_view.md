@@ -30,6 +30,10 @@ admin_tool/
   htcondor_pool/
 
 project/
+  config/
+    key.py
+    all.py
+    specific/
   optimize/
   evaluate_manager/
   job_template/
@@ -37,9 +41,8 @@ project/
   recorded_data/
   surrogate/
   tools/
+    specific/
   test/
-  config.py
-  config_all.py
 ```
 
 ## Dependency Direction
@@ -49,7 +52,8 @@ project/
 - `surrogate` depends on `recorded_data.api` and `job_template.api`.
 - `job_template` should not depend on other core modules.
 - `job_template/workflow.py` may depend on adapter files that are in `job_template` itself. `com_lib` is only a staging/reference location and is not copied by `job_template.api`.
-- `tools` and `test` may depend on public APIs across modules. `project/tools/`
+- Generic `tools` and `test` may depend on public APIs across modules. Simulator-
+  specific tools belong under `project/tools/specific/<software>/`; `project/tools/`
   contains user tools only; administrator-only environment and cluster tools belong
   under `admin_tool/` and remain outside the runtime dependency graph.
 
@@ -58,20 +62,20 @@ project/
 - Internal helpers can change more freely if public API behavior and tests remain stable.
 - Task-specific edits should concentrate in `project/job_template/`. Simulator adapters may be kept in `project/com_lib/` as references, but enabled adapters must be copied into `project/job_template/`.
 - `project/surrogate/runtime.py` owns the training/prediction data flow; `project/surrogate/scheduler.py` owns staggered training coordination; `project/surrogate/checkpoints.py`, `metadata.py`, and `types.py` keep persistence and shared dataclasses out of the core runtime; `project/surrogate/modeling.py` owns the conditional INR internals and should not import other core modules.
-- Shared settings are split between the key `project/config.py` and full `project/config_all.py`; task semantics should not move into either file.
+- Shared settings are split between generic `project/config/key.py`, full `project/config/all.py`, and software-specific extensions under `project/config/specific/`. Task semantics must not move into generic config files.
 - Core code, docs, launchers, and tools must stay portable across machines. Do not hard-code machine-specific absolute install paths, and do not introduce a requirement that users create new system environment variables before using the project. Prefer paths derived from the repository, explicit command arguments, and environment variables that external installers already provide, such as existing Conda, Ansys, or HTCondor PATH/installation variables.
 - Users run against an environment already prepared by an administrator. Package
   installation, dependency repair, and HTCondor software/hardware configuration are
   administrator responsibilities, documented under `admin_tool/`.
 
 ## Test Strategy
-- Use local mode as the default verification path, but do not start real HFSS unless an explicit HFSS smoke-test flag or manual command requests it.
+- Use local, generic task doubles as the default verification path; `project/test/` must not start or encode assumptions about a real simulator or the active optimization task.
 - Protect rawData schema and recorded-data persistence with contract tests.
 - Use monkeypatched APIs for optimizer unit behavior where full local jobs would be too heavy.
 - Surrogate tests may force smaller CPU INR settings so contract tests stay fast while the default config remains usable for real runs.
 - Optimizer tests should cover NSGA-III reference-direction diagnostics, pooled surrogate survival, and the surrogate exploration quota without running expensive full campaigns.
 - Surrogate tests should verify historical error audit, ensemble min/max interval output, and task-owned rawData importance weights with monkeypatched or small training data.
-- Avoid adding tests that require real HFSS or HTCondor for the default suite.
+- Do not add current-task or simulator-specific tests under `project/test/`. Use ignored `temp/` for disposable task checks now; after package separation, run them in the relevant workspace. Software-specific adapter/tool tests may live beside code in the explicitly specific directories.
 - HTCondor behavior should be covered with submit-file and monkeypatched-runner tests by default; real pool diagnostics are manual or explicit smoke checks.
 
 ## Documentation Strategy

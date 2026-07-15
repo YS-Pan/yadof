@@ -4,7 +4,9 @@ Use this adapter for HFSS/PyAEDT workflows.
 
 The source/reference copy is `project/com_lib/hfss_com.py`. The workflow uses the
 active copy at `project/job_template/hfss_com.py`, so copy the file into
-`job_template` before importing it from `workflow.py`.
+`job_template` before importing it from `workflow.py`. The two copies are currently
+synchronized; reusable adapter fixes validated in the active copy should be copied
+back to `com_lib` after excluding task-only assumptions.
 
 ## Import Pattern
 

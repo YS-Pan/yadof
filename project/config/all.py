@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-try:
-    from . import config as key_config
-except ImportError:
-    import config as key_config
+from . import key as key_config
+from .specific import htcondor_environment_entries as _specific_environment_entries
 
 # =============================================================================
 # Derived project paths
 # =============================================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 JOBS_DIR = getattr(key_config, "JOBS_DIR", PROJECT_ROOT / "jobs")
 SURROGATE_CHECKPOINT_DIR = getattr(
     key_config,
@@ -44,21 +41,6 @@ HTCONDOR_REQUIREMENTS = getattr(key_config, "HTCONDOR_REQUIREMENTS", '(OpSys == 
 HTCONDOR_ALLOWED_MACHINES = tuple(getattr(key_config, "HTCONDOR_ALLOWED_MACHINES", ()))
 HTCONDOR_EXCLUDED_MACHINES = tuple(getattr(key_config, "HTCONDOR_EXCLUDED_MACHINES", ()))
 
-# =============================================================================
-# Workflow-side HFSS defaults passed into prepared jobs
-# =============================================================================
-
-HFSS_JOB_CPUCORE = getattr(key_config, "HFSS_JOB_CPUCORE", HTCONDOR_REQUEST_CPUS)
-HFSS_PARALLEL_TASKS = getattr(key_config, "HFSS_PARALLEL_TASKS", 1)
-HFSS_NON_GRAPHICAL = getattr(key_config, "HFSS_NON_GRAPHICAL", True)
-HFSS_PIN_RETRIES = getattr(key_config, "HFSS_PIN_RETRIES", 1)
-HFSS_RETRY_CPUCORE = getattr(key_config, "HFSS_RETRY_CPUCORE", 1)
-ANSYS_LICENSE_SERVER = getattr(
-    key_config,
-    "ANSYS_LICENSE_SERVER",
-    os.environ.get("ANSYSLMD_LICENSE_FILE", "1055@localhost"),
-)
-
 _HTCONDOR_BASE_ENVIRONMENT = (
     "USERPROFILE=._home",
     "HOME=._home",
@@ -66,19 +48,11 @@ _HTCONDOR_BASE_ENVIRONMENT = (
     "LOCALAPPDATA=._localappdata",
     "TEMP=._tmp",
     "TMP=._tmp",
-    f"YADOF_HFSS_JOB_CPUCORE={int(HFSS_JOB_CPUCORE)}",
-    f"YADOF_HFSS_PARALLEL_TASKS={int(HFSS_PARALLEL_TASKS)}",
-    f"YADOF_HFSS_NON_GRAPHICAL={1 if bool(HFSS_NON_GRAPHICAL) else 0}",
-    f"YADOF_HFSS_PIN_RETRIES={int(HFSS_PIN_RETRIES)}",
-    f"YADOF_HFSS_RETRY_CPUCORE={int(HFSS_RETRY_CPUCORE)}",
 )
 HTCONDOR_ENVIRONMENT = getattr(
     key_config,
     "HTCONDOR_ENVIRONMENT",
-    " ".join(
-        _HTCONDOR_BASE_ENVIRONMENT
-        + ((f"ANSYSLMD_LICENSE_FILE={ANSYS_LICENSE_SERVER}",) if ANSYS_LICENSE_SERVER else ())
-    ),
+    " ".join(_HTCONDOR_BASE_ENVIRONMENT + tuple(_specific_environment_entries())),
 )
 
 # =============================================================================

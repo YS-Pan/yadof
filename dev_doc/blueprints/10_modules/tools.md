@@ -3,6 +3,7 @@
 ## Intent
 - Provide optional, user-launched utilities for inspecting project data and preparing
   task inputs.
+- Separate generic utilities from tools tied to one simulator or vendor.
 - Keep all tool behavior outside the core optimization dependency graph.
 - Surface recorded-data history in ways that help long campaigns be explained and debugged.
 - Exclude environment-installation and HTCondor-pool configuration; those are
@@ -18,11 +19,13 @@
 - `run_viewcost.bat` launches `viewCost.py` from the tools directory and activates the `yadof` conda environment through the caller's Conda/PATH setup.
 - Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes. Legend entries for objective and combined-cost series use the same hollow marker style as the visible best Pareto points.
 - `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback.
-- `hfss_get_para_and_range.py` reads optimization-enabled variables from a `.aedt` file and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
+- `specific/hfss/get_para_and_range.py` reads optimization-enabled variables through PyAEDT and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
+- `specific/hfss/get_para_and_range_direct.py` first parses AEDT optimization definitions directly, including discrete ranges, and falls back to PyAEDT when needed.
 - Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
 
 ## I/O Format
 - Tool inputs come through public project APIs or user-provided command-line arguments.
+- Generic tools live directly under `project/tools/`; tools tied to external software live under `project/tools/specific/<software>/` and use names that do not repeat the software directory prefix.
 - Tool outputs may include console summaries, PNG plots under `project/tools/`, generated helper files, or external backups.
 - Tools may be flexible and inspect internal files when useful, but core runtime must not call tools.
 - Administrator-only scripts must not be added here. Put them under `admin_tool/` with
@@ -37,9 +40,11 @@
 - The Pareto table is rendered in ASCII-safe text to keep terminal output robust.
 - HFSS/PyAEDT parameter extraction is environment-sensitive. Design names are task-specific; passing an old or wrong design name can make PyAEDT select or create the wrong design context and return no optimization variables. If the project has exactly one design, prefer omitting `--design`; otherwise pass the active design explicitly.
 - AEDT startup also depends on the interactive Windows user profile and writable Ansys/PyAEDT folders. A VS Code click-run under the normal desktop user may succeed where a sandboxed or non-graphical command times out while starting gRPC or touching `Documents/Ansoft`. For Codex-run smoke checks, use the correct design name, allow a long timeout, and run outside the sandbox when AEDT needs the real user profile.
-- `hfss_get_para_and_range.py` archives the old `parameters_constraints.py` only after it has found variables to write, so a failed extraction should leave the current parameter file intact.
+- `specific/hfss/get_para_and_range.py` archives the old `parameters_constraints.py` only after it has found variables to write, so a failed extraction should leave the current parameter file intact.
+- Software-specific tests may stay beside these tools; the default framework test suite under `project/test/` remains software-agnostic.
 
 ## Mutability Profile
 - Tools can change quickly for user convenience.
+- A tool must move under `specific/<software>/` as soon as its behavior or dependency is tied to that software; generic tools must not import specific tools.
 - Tool changes should not force changes to `optimize`, `evaluate_manager`, `job_template`, `recorded_data`, or `surrogate`.
 - If a tool depends on a public API shape, add or update tests before changing that API.

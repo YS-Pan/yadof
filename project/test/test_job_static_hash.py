@@ -4,15 +4,15 @@ import json
 
 import pytest
 
-from project.evaluate_manager.config import PROJECT_CONFIG_ALL_FILE_NAME, PROJECT_CONFIG_FILE_NAME, PROJECT_DIR
+from project.evaluate_manager.config import PROJECT_CONFIG_DIR_NAME, PROJECT_DIR
 from project.evaluate_manager.job_files import prepare_job, prepared_job_static_hash
 
 
 def _make_template(template_dir, *, workflow_body: str = "WORKFLOW_VERSION = 1\n", x0_max: float = 2.0):
     template_dir.mkdir(parents=True, exist_ok=True)
     (template_dir / "workflow.py").write_text(workflow_body, encoding="utf-8", newline="\n")
-    (template_dir / "hfss_com.py").write_text("COM_VERSION = 1\n", encoding="utf-8", newline="\n")
-    (template_dir / "Metal_recon_ant.aedt").write_bytes(b"model bytes v1\n")
+    (template_dir / "solver_adapter.py").write_text("ADAPTER_VERSION = 1\n", encoding="utf-8", newline="\n")
+    (template_dir / "model.input").write_bytes(b"model bytes v1\n")
     (template_dir / "calc_cost.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8", newline="\n")
     (template_dir / "individual_metadata.json").write_text('{"status": "error"}\n', encoding="utf-8", newline="\n")
     (template_dir / "rawData_outputs.zip").write_bytes(b"old zip")
@@ -66,15 +66,30 @@ def test_job_static_hash_is_written_and_stable_across_individual_values(tmp_path
     assert not (first.directory / "rawData_outputs.zip").exists()
     assert not (first.directory / "job.sub").exists()
 
-def test_prepare_job_copies_submit_side_config_files(tmp_path):
+def test_prepare_job_copies_submit_side_config_package(tmp_path):
     template_dir = _make_template(tmp_path / "template")
     job = prepare_job(_values(0.1, 0.2, 0.3), jobs_dir=tmp_path / "jobs", job_template_dir=template_dir)
 
-    for name in (PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_ALL_FILE_NAME):
-        copied = job.directory / name
-        source = PROJECT_DIR / name
-        assert copied.is_file()
-        assert copied.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
+    copied_dir = job.directory / PROJECT_CONFIG_DIR_NAME
+    source_dir = PROJECT_DIR / PROJECT_CONFIG_DIR_NAME
+
+    assert copied_dir.is_dir()
+    source_files = {
+        path.relative_to(source_dir)
+        for path in source_dir.rglob("*.py")
+        if "__pycache__" not in path.parts
+    }
+    copied_files = {
+        path.relative_to(copied_dir)
+        for path in copied_dir.rglob("*.py")
+        if "__pycache__" not in path.parts
+    }
+    assert copied_files == source_files
+    for relative_path in source_files:
+        assert (copied_dir / relative_path).read_text(encoding="utf-8") == (
+            source_dir / relative_path
+        ).read_text(encoding="utf-8")
+    assert not tuple(copied_dir.rglob("__pycache__"))
 
 
 @pytest.mark.parametrize(
