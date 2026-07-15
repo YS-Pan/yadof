@@ -56,6 +56,10 @@ a workflow argument line or make Python itself the HTCondor executable. It also 
 not set `transfer_output_files`, so HTCondor returns generated files such as `rawData/`,
 `individual_metadata.json`, and PyAEDT-created `batch.log` when they exist without
 holding the job if optional files are absent.
+The submit side also queries final job ClassAds through `condor_history` to record
+memory/disk observations. Those records drive the next generation's effective
+memory/disk requests; the source config remains unchanged and CPU request remains
+manual.
 Windows distributed execution targets HTCondor's slot-user model:
 `run_as_owner = False` and `load_profile = True`. This is a deployment contract, not
 only a local debug preference. The expected pool contains many office/personal

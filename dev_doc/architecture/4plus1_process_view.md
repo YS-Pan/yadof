@@ -77,8 +77,8 @@ sequenceDiagram
     C->>J: write job.sub with executable = workflow.py and transfer_executable = True
     C->>H: condor_submit job.sub
     H->>J: HTCondor runs transferred workflow.py directly under a slot user; generated outputs return on exit
-    C->>J: poll condor.log and complete job-local outputs
-    C-->>E: JobResult rows
+    C->>J: poll condor.log, return job-local outputs, and read final resource ClassAd
+    C-->>E: JobResult rows with requested/observed resources when available
     E->>R: record_job_result through the shared finalization path
     E-->>O: dynamic cost rows or inf rows
 ```

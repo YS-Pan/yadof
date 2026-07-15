@@ -20,7 +20,11 @@
   the cache-free submit-side `project/config/` package, writes run/generation
   context to submit-side metadata, and records `job_static_hash`.
 - `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
-- `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, extracts Condor return-value/log tails when available, best-effort removes timed-out cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
+- `resource_requests.py` derives a per-job memory/disk request from prior recorded
+  HTCondor measurements while preserving the user-selected CPU request. It uses
+  unindexed distributed smoke records for generation zero and the same run's
+  preceding generation thereafter.
+- `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, queries final Condor ClassAd resource usage when available, extracts Condor return-value/log tails, best-effort removes timed-out cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
 - `job_result.py` provides shared helpers for reading/writing job metadata, discovering rawData files, promoting workflow metadata, and constructing `JobResult`.
 - `recorded_data_client.record_result()` adapts `JobResult` to supported `recorded_data.api` functions and retrieves dynamically computed costs when possible.
 - `types.py` defines immutable `JobSpec` and `JobResult` records for internal handoff.
@@ -31,7 +35,7 @@
   assigned `normalized_value`, assigned raw `value`, and constraints. Submit-side
   metadata carries `run_id`, `optimization_index`, `generation_index`, and
   `population_index` when available.
-- Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
+- Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, calculated resource-request source/values, returned Condor memory/disk/CPU measurements when available, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
 - Raw outputs: top-level `.npz` files under each job's `rawData/` directory.
 - HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
 - Public output: `population[individual][objective_cost]`, with `inf` rows for failures whose objective width cannot be recovered.
@@ -48,6 +52,12 @@
 - Failure recording is best effort. If recording a failure also fails, generation evaluation still continues.
 - Local parallelism is at the individual/job level. Each worker still executes prepare -> run -> record for one candidate, while `recorded_data` locks serialize durable writes.
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
+- The adaptive resource controller never rewrites source config. It treats
+  `HTCONDOR_REQUEST_MEMORY` and `HTCONDOR_REQUEST_DISK` as safe fallbacks when a
+  distributed smoke test or previous generation has no usable ClassAd measurement.
+- Generated submit files carry bounded doubling retry ladders for memory and disk.
+  HTCondor may restart an evicted job from the beginning, so this is a safety net
+  for the trimmed tail rather than a replacement for a realistic normal request.
 - In distributed mode, returned nested `rawData/*.npz` files are the primary rawData path. `rawData_outputs.zip` is a legacy/fallback transfer archive and a bad fallback zip must become per-job diagnostics rather than a generation-wide exception.
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
 - The Windows HTCondor submit pattern uses direct `workflow.py` submission with `transfer_executable = True`; the earlier interpreter-as-executable pattern is intentionally not supported. Keep `run_as_owner = False` and `load_profile = True`. `run_as_owner=True` is not a deployable project fix because office/personal workstations have different owners and any machine may submit or execute jobs.

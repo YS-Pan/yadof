@@ -68,6 +68,10 @@
 - GPSAF surrogate pressure is controlled by `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, and `OPTIMIZE_SURROGATE_GAMMA`; `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` reserves real-evaluation slots that bypass surrogate selection to reduce branch starvation.
 - Multi-objective optimizer diagnostics include `pymoo.NSGA3`, requested population size, reference-direction method, partition count, and reference-direction count.
 - HTCondor distributed evaluation uses the same job folder and recording contract as local mode. Submit failures, stale daemons, credential errors, or broken pool topology are captured as job metadata; the project does not try to repair the installed HTCondor environment.
+- Distributed jobs record final HTCondor ClassAd memory/disk/CPU observations in
+  metadata. The next generation's memory/disk submit request is derived from those
+  observations with a documented smoke/bootstrap and high-tail-trimming policy;
+  CPU request remains manual.
 - Windows HTCondor execution must target slot-user jobs with `run_as_owner = False`
   and `load_profile = True`. The deployment pool consists of many office/personal
   workstations with different interactive owners, and any workstation may submit or

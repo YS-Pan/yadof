@@ -24,6 +24,7 @@ def _job(tmp_path: Path, name: str = "job_001"):
 def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract(tmp_path):
     from project.config import all as project_config
     from project.evaluate_manager.condor_runner import write_condor_submit_file
+    from project.evaluate_manager.resource_requests import request_for_job
 
     job = _job(tmp_path)
     for name in (
@@ -55,8 +56,12 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     assert "APPDATA=._appdata" in text
     assert "LOCALAPPDATA=._localappdata" in text
     assert "TEMP=._tmp" in text
-    assert f"request_cpus = {project_config.HTCONDOR_REQUEST_CPUS}" in text
-    assert f"request_memory = {project_config.HTCONDOR_REQUEST_MEMORY}" in text
+    resource_request = request_for_job(job)
+    assert f"request_cpus = {resource_request.cpus}" in text
+    assert f"request_memory = {resource_request.memory_text}" in text
+    assert f"request_disk = {resource_request.disk_text}" in text
+    assert f"retry_request_memory = {resource_request.memory_retry_text}" in text
+    assert f"retry_request_disk = {resource_request.disk_retry_text}" in text
     assert 'Machine != "DESKTOP-A2091"' not in text
     if project_config.HTCONDOR_ALLOWED_MACHINES:
         for machine in project_config.HTCONDOR_ALLOWED_MACHINES:

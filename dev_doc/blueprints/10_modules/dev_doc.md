@@ -39,7 +39,9 @@
   project-wide work and the relevant module/file blueprint files in full.
 - `toDo/` filenames should start with `YYYYMMDD_HHMMSS_` followed by a short
   description. This timestamp is mandatory under `toDo/auto/` because it is the
-  portable creation time used by the default seven-day expiry rule.
+  local wall-clock creation time used by the default seven-day expiry rule. Time
+  expiry is strict: an item is stale only after the timestamp plus its duration,
+  not at the exact deadline.
 - `change_records/` filenames start with `YYYYMMDD_HHMMSS_` followed by a short description.
 - Change records use sections: `Context`, `Change`, `Rationale`, `Impact`, and optional `Follow-Up`.
 
@@ -60,11 +62,13 @@
   work naturally exposes it in the current scope, but an agent must not search the
   repository or expand the task solely for the automatic toDo.
 - Automatic toDos have two obsolete policies. The default automatic policy uses a
-  seven-day filename-based time limit and no extra condition. A document may define
-  a different time limit and/or an objective user-chosen condition; satisfaction of
-  either configured condition archives it. Agents must not infer a condition from
-  project changes or subjective invalidity. An explicit `manual` policy disables
-  automatic obsoletion. Completion still archives either trigger type.
+  seven-day filename-based time limit and no extra condition. The filename's leading
+  `YYYYMMDD_HHMMSS` is parsed as local time, and the comparison is strictly after
+  the deadline. A document may define a different time limit and/or an objective
+  user-chosen condition; satisfaction of either configured condition archives it.
+  Agents must not infer a condition from project changes or subjective invalidity.
+  An explicit `manual` policy disables automatic obsoletion. Completion still
+  archives either trigger type.
 - `user_doc/` prevents user task instructions from being duplicated throughout development docs. `dev_doc` may mention user-facing behavior from an architecture or maintainer perspective, but detailed "what the user should do" instructions belong under `user_doc`.
 - Terminology is updated only for project-specific concepts, corrected misunderstandings, or names that are not intuitive from ordinary software usage.
 

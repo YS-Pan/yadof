@@ -13,7 +13,9 @@
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
 - Framework tests use generic task doubles and neutral rawData fixtures. They must not assert the active task's parameter names/count, objective names/count, simulator expressions, model filename, or expected task results.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
-- HTCondor tests cover submit-file generation, submit failure capture, and distributed-mode finalization through monkeypatched command execution.
+- HTCondor tests cover submit-file generation, adaptive resource-request selection,
+  ClassAd resource-metadata capture, submit failure capture, and distributed-mode
+  finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
 - Parameter handoff tests validate assigned continuous/discrete/mixed values,
   same-process range refresh, job-local snapshots, definition-only static hashes,

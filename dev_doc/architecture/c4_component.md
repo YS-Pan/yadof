@@ -42,7 +42,9 @@ flowchart LR
   materialize one assigned parameter snapshot, copy the cache-free `config/`
   package, write run/generation metadata, and compute the static hash.
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
-- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, timeout removal, and job-local result collection.
+- `resource_requests.py`: generation-aware adaptive HTCondor memory/disk request
+  calculation from recorded Condor measurements; CPU remains manual.
+- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, timeout removal, final ClassAd resource collection, and job-local result collection.
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.

@@ -7,7 +7,8 @@ import os
 from .. import key as key_config
 
 
-HFSS_JOB_CPUCORE = int(getattr(key_config, "HTCONDOR_REQUEST_CPUS", 1))
+HFSS_CPUCORE_MULTIPLIER = max(1, int(getattr(key_config, "HFSS_CPUCORE_MULTIPLIER", 2)))
+HFSS_JOB_CPUCORE = max(1, int(getattr(key_config, "HTCONDOR_REQUEST_CPUS", 1)) * HFSS_CPUCORE_MULTIPLIER)
 HFSS_PARALLEL_TASKS = 1
 HFSS_NON_GRAPHICAL = True
 HFSS_PIN_RETRIES = 1

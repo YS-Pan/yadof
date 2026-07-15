@@ -120,11 +120,12 @@ Common key settings users edit:
 
 - `EVALUATION_MODE`: `"local"` for local subprocess runs, `"distributed"` for HTCondor.
 - `EVALUATION_TIMEOUT_SEC`: generation-level timeout budget.
-- `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests.
+- `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests. CPU remains manual; memory and disk are bootstrap values for automatic calibration when Condor has no usable prior measurement.
+- `HTCONDOR_REQUEST_DISK_MULTIPLIER`: an extra disk safety factor (default `1.0`). Raise it, for example to `2.0`, when worker scratch space is plentiful; keep it at `1.0` for constrained disks or RAM disks.
 - HTCondor submit files run `workflow.py` directly as the transferred executable; do not configure Python itself as the submit executable.
 - `OPTIMIZE_POPULATION_SIZE`: number of real evaluations per generation.
 
-For the current HFSS adapter, edit `HFSS_JOB_CPUCORE`, `HFSS_PARALLEL_TASKS`, and `HFSS_NON_GRAPHICAL` in `project/config/specific/hfss.py` when needed. Advanced generic settings such as `JOBS_DIR`, local worker concurrency, NSGA-III controls, and surrogate controls are in `project/config/all.py`. Problem shape, variable names, and objective names come from `job_template`, not from config.
+For the current HFSS adapter, edit `HFSS_CPUCORE_MULTIPLIER`, `HFSS_PARALLEL_TASKS`, and `HFSS_NON_GRAPHICAL` in `project/config/specific/hfss.py` when needed. The default core multiplier is `2`, so a manual Condor request of `3` CPUs gives HFSS `6` solver cores. Advanced generic settings such as automatic resource calibration, `JOBS_DIR`, local worker concurrency, NSGA-III controls, and surrogate controls are in `project/config/all.py`. Problem shape, variable names, and objective names come from `job_template`, not from config.
 ## 6. Run A Smoke Test Before A Full Optimization
 
 Before a long run, test one individual.

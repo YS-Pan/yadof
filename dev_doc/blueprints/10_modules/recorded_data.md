@@ -19,7 +19,7 @@
 - `rawdata_store.py`, `paths.py`, and `utils.py` provide path configuration, zip-based rawData archive loading, repeated-variable metadata scrubbing, metadata extraction, and JSON-safe serialization.
 
 ## I/O Format
-- Stored individual metadata fields include `job_name`, `status`, `raw_variables`, `rawdata_files`, `rawdata_metadata`, `started_at`, `ended_at` when provided by the workflow, `run_id`, `optimization_index`, `generation_index`, `population_index`, `job_metadata`, and `recorded_at`.
+- Stored individual metadata fields include `job_name`, `status`, `raw_variables`, `rawdata_files`, `rawdata_metadata`, `started_at`, `ended_at` when provided by the workflow, `run_id`, `optimization_index`, `generation_index`, `population_index`, `job_metadata`, and `recorded_at`. HTCondor job metadata may include the effective request and observed ClassAd memory/disk/CPU fields used by the next generation's resource calibration.
 - `rawdata_files` stores archive member names such as `job_name/summary.npz`.
 - Valid record statuses are centralized in `paths.py`.
 - Completed history for optimization is returned as `(job_name, normalized_variables, costs)`.

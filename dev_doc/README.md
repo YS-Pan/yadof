@@ -220,7 +220,11 @@ YYYYMMDD_HHMMSS_short-description.md
 ```
 
 The timestamp is mandatory for automatic toDos because it is their portable
-creation time for the default expiry rule. Manual toDos should use the same format,
+creation time for the default expiry rule. Parse the leading `YYYYMMDD_HHMMSS` as a
+local wall-clock timestamp. A time expiry is strict: archive only after the exact
+timestamp plus its duration, not at that instant. For example,
+`20260715_204210_example.md` with a two-day limit remains active at
+`2026-07-17 20:42:10` and is stale immediately after it. Manual toDos should use the same format,
 but older manual filenames remain valid.
 
 Examples:
@@ -260,9 +264,11 @@ rule whenever an automatic toDo is read, before treating it as active work:
 1. **Automatic: time OR configured condition (default).** Check every configured
    condition when the document is read and move it to `obsolete/` as soon as one is
    true:
-   - **Time:** use the timestamp in the filename as the creation time. When the
-     document has no obsolete-related annotation, the time limit is seven days. A
-     document may state a different duration or date in `## Obsolete Rule`.
+   - **Time:** use the leading `YYYYMMDD_HHMMSS` filename timestamp as the local
+     creation time. When the document has no obsolete-related annotation, the time
+     limit is seven days. A document may state a different duration or date in
+     `## Obsolete Rule`. Archive only when the read time is strictly later than the
+     resulting deadline; equality with the deadline is not obsolete.
    - **User-defined condition:** a document may state an objective, user-chosen
      condition such as "after task X is completed". This condition is optional and
      is absent by default. Do not invent one from project changes or from a subjective

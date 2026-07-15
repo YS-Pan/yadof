@@ -86,8 +86,9 @@ parameters, such as selecting a simulator mode during the workflow.
 analyze(hfss_app, analyzeSetup="YourSetup", CPUcores=4, ParallelTasks=1)
 ```
 
-Keep `CPUcores` aligned with `YADOF_HFSS_JOB_CPUCORE` and the HTCondor CPU request
-when running distributed jobs.
+Keep `CPUcores` aligned with `YADOF_HFSS_JOB_CPUCORE`. In the current HFSS config
+that value is the manual HTCondor CPU request times `HFSS_CPUCORE_MULTIPLIER`, so it
+may intentionally be greater than the scheduler request.
 
 ## Save Modal Data
 

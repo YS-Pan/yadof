@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -21,12 +22,10 @@ from .config import (
     RAW_DATA_TRANSFER_ZIP_NAME,
     WORKFLOW_SCRIPT_NAME,
     htcondor_environment,
+    htcondor_history_exe,
     htcondor_load_profile,
     htcondor_poll_sec,
     htcondor_remove_exe,
-    htcondor_request_cpus,
-    htcondor_request_disk,
-    htcondor_request_memory,
     htcondor_requirements,
     htcondor_run_as_owner,
     htcondor_submit_exe,
@@ -40,6 +39,7 @@ from .job_result import (
     tail,
     write_metadata,
 )
+from .resource_requests import HTCondorResourceRequest, request_for_job
 from .types import JobResult, JobSpec
 
 
@@ -205,9 +205,19 @@ def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
 
 def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> CondorSubmission:
     clear_stale_runtime_artifacts(job.directory)
-    submit_file = write_condor_submit_file(job, env=env)
+    resource_request = request_for_job(job)
+    submit_file = write_condor_submit_file(job, env=env, resource_request=resource_request)
     metadata = base_metadata(job, engine="htcondor")
-    metadata.update(status="submitting", condor_submit_file=submit_file.name, condor_submitted_at=now_text())
+    metadata.update(
+        status="submitting",
+        condor_submit_file=submit_file.name,
+        condor_submitted_at=now_text(),
+        condor_requested_cpus=resource_request.cpus,
+        condor_requested_memory_mib=resource_request.memory_mib,
+        condor_requested_disk_kib=resource_request.disk_kib,
+        condor_resource_request_source=resource_request.source,
+        condor_resource_calibration_sample_count=resource_request.sample_count,
+    )
     write_metadata(job.directory, metadata)
 
     try:
@@ -254,10 +264,16 @@ def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> 
     )
 
 
-def write_condor_submit_file(job: JobSpec, *, env: Mapping[str, str] | None = None) -> Path:
+def write_condor_submit_file(
+    job: JobSpec,
+    *,
+    env: Mapping[str, str] | None = None,
+    resource_request: HTCondorResourceRequest | None = None,
+) -> Path:
     if htcondor_run_as_owner() and htcondor_load_profile():
         raise ValueError("HTCondor Windows config cannot combine run_as_owner=True with load_profile=True")
 
+    resource_request = resource_request or request_for_job(job)
     prepare_sandbox_env_dirs(job.directory)
     inputs = transfer_input_files(job.directory, executable_name=WORKFLOW_SCRIPT_NAME)
     requirements = htcondor_requirements().strip()
@@ -289,14 +305,17 @@ def write_condor_submit_file(job: JobSpec, *, env: Mapping[str, str] | None = No
             f"output = {CONDOR_STDOUT_FILE_NAME}",
             f"error = {CONDOR_STDERR_FILE_NAME}",
             f"log = {CONDOR_LOG_FILE_NAME}",
-            f"request_cpus = {htcondor_request_cpus()}",
-            f"request_memory = {htcondor_request_memory()}",
-            f"request_disk = {htcondor_request_disk()}",
+            f"request_cpus = {resource_request.cpus}",
+            f"request_memory = {resource_request.memory_text}",
+            f"request_disk = {resource_request.disk_text}",
             "notification = never",
-            "queue 1",
-            "",
         ]
     )
+    if resource_request.memory_retry_mib:
+        lines.append(f"retry_request_memory = {resource_request.memory_retry_text}")
+    if resource_request.disk_retry_kib:
+        lines.append(f"retry_request_disk = {resource_request.disk_retry_text}")
+    lines.extend(("queue 1", ""))
     path = job.directory / CONDOR_SUBMIT_FILE_NAME
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     return path
@@ -372,6 +391,7 @@ def collect_condor_result(
         zip_restore_error = restore_rawdata_transfer_zip(job.directory)
         raw_paths = raw_data_paths(job.directory)
     log_info = condor_log_info(job.directory)
+    resource_usage = condor_resource_usage(submission)
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(individual_metadata)
 
@@ -427,6 +447,7 @@ def collect_condor_result(
         condor_submit_stderr_tail=tail(submission.stderr),
     )
     metadata.update(log_info)
+    metadata.update(resource_usage)
     metadata.update(hold_info)
     if error is not None:
         metadata["error"] = error
@@ -454,6 +475,80 @@ def condor_log_info(job_dir: Path) -> dict[str, object]:
     info: dict[str, object] = {"condor_return_value": value}
     info.update(windows_return_code_details(value))
     return info
+
+
+def condor_resource_usage(submission: CondorSubmission) -> dict[str, object]:
+    """Read final HTCondor resource measurements without changing job state."""
+
+    if submission.cluster_id is None:
+        return {}
+    job_id = f"{submission.cluster_id}.0"
+    errors: list[str] = []
+    for source, command in (
+        ("condor_history", [htcondor_history_exe(), job_id, "-limit", "1", "-json"]),
+        ("condor_q", ["condor_q", job_id, "-json"]),
+    ):
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(submission.job.directory),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as exc:
+            errors.append(f"{source}: {exc}")
+            continue
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or f"exit {completed.returncode}").strip()
+            errors.append(f"{source}: {detail}")
+            continue
+        ad = _first_condor_json_ad(completed.stdout or "")
+        if ad is None:
+            continue
+        info = _resource_usage_from_ad(ad)
+        if info:
+            info["condor_resource_usage_source"] = source
+            return info
+    return {"condor_resource_usage_query_error": "; ".join(errors)} if errors else {}
+
+
+def _first_condor_json_ad(text: str) -> Mapping[str, object] | None:
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(decoded, list):
+        return decoded[0] if decoded and isinstance(decoded[0], Mapping) else None
+    return decoded if isinstance(decoded, Mapping) else None
+
+
+def _resource_usage_from_ad(ad: Mapping[str, object]) -> dict[str, object]:
+    field_map = {
+        "MemoryUsage": "condor_memory_usage_mib",
+        "DiskUsage": "condor_disk_usage_kib",
+        "ResidentSetSize": "condor_resident_set_size_kib",
+        "CpusUsage": "condor_cpus_usage",
+        "RequestMemory": "condor_reported_request_memory_mib",
+        "RequestDisk": "condor_reported_request_disk_kib",
+        "RequestCpus": "condor_reported_request_cpus",
+    }
+    info: dict[str, object] = {}
+    for ad_name, metadata_name in field_map.items():
+        value = _finite_resource_value(ad.get(ad_name))
+        if value is not None:
+            info[metadata_name] = value
+    return info
+
+
+def _finite_resource_value(value: object) -> int | float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not parsed >= 0.0 or parsed == float("inf"):
+        return None
+    return int(parsed) if parsed.is_integer() else parsed
 
 
 def collect_failure_result(
