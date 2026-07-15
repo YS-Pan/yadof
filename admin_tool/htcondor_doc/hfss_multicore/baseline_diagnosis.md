@@ -1,5 +1,8 @@
 # HFSS Multicore Baseline Diagnosis
 
+> Historical baseline evidence. The failure described here was resolved by the
+> later starter-thread setting; see `README.md` for current guidance.
+
 ## Scope
 
 This file consolidates the baseline findings from the original HFSS/HTCondor

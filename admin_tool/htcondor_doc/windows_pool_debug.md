@@ -16,6 +16,18 @@ run_as_owner = False
 The payload is a self-contained job-local `workflow.py`. Python itself is not named
 as the HTCondor `executable` in the normal submit file.
 
+## Pool Naming And Network Interface
+
+Set `CONDOR_HOST` to a stable, resolvable DNS name for the central manager. Every
+submit and execute node must resolve it. Do not pin `CONDOR_HOST` to a DHCP address
+or copy an address discovered on another machine.
+
+Keep `COLLECTOR_HOST = $(CONDOR_HOST):9618` and use `NETWORK_INTERFACE = *` unless
+an administrator has a deliberate multi-interface policy. `NETWORK_INTERFACE`
+selects a local network interface; it is not the collector hostname. A full Windows
+service restart is required after correcting a stale interface binding. The pool
+tool implements this policy; see `../htcondor_pool/README.md`.
+
 ## Keep Three Questions Separate
 
 Pool health:
@@ -91,9 +103,9 @@ AEDT's job-local document paths remain inside the execute sandbox.
 4. Inspect `condor.log` for allocated `Cpus`, `Memory`, slot name, execute scratch,
    and termination reason.
 5. Inspect payload stdout/stderr and returned metadata.
-6. On a single-machine pool, inspect live files under `C:\condor\execute` while the
-   job is still running; HTCondor may remove the scratch directory quickly after
-   output transfer.
+6. On a single-machine pool, inspect live files under the worker's configured
+   `EXECUTE` directory while the job is still running; HTCondor may remove the
+   scratch directory quickly after output transfer.
 7. For AEDT/HFSS jobs, preserve `batch.log`, PyAEDT logs, `individual_metadata.json`,
    `job.sub`, `condor.log`, and the copied config snapshot.
 

@@ -9,6 +9,7 @@ dev_doc/
   architecture/
   blueprints/
   toDo/
+    auto/
   change_records/
   obsolete/
 
@@ -25,7 +26,7 @@ user_doc/
 
 admin_tool/
   README.md
-  htcondor/
+  htcondor_doc/
   htcondor_pool/
 
 project/
@@ -79,7 +80,10 @@ project/
   `dev_doc` pass must read it and follow its guide; a `user_doc` pass must not
   read `dev_doc` unless the user separately asks for framework development context.
 - `admin_tool/README.md` is the entry point for administrator-only environment and
-  HTCondor-pool resources. These are not user task-setup instructions.
+  HTCondor-pool resources. `admin_tool/htcondor_pool/htcondor_pool.ps1` configures
+  one parameterized manager or worker node in one managed block; its optional
+  diagnostic action remains outside the runtime graph. These are not user
+  task-setup instructions.
 - `dev_doc/architecture/` captures current design views, core invariants, runtime flows, and system-level contracts; it must be read in full for context.
 - `dev_doc/blueprints/00_project.md` is the generative project-level contract.
 - `dev_doc/blueprints/` captures module intent, I/O, non-obvious techniques,
@@ -88,7 +92,19 @@ project/
   `blueprints/20_files/` mirror source paths, for example
   `blueprints/20_files/project/surrogate/runtime.py.md`.
 - `dev_doc/terminology.md` captures project-specific concepts and must be read in full for context.
-- `dev_doc/toDo/` captures pending future work and must be read in full during the first `dev_doc` pass.
+- `dev_doc/toDo/` captures pending future work and must be read recursively in full
+  during the first `dev_doc` pass. Files directly in that folder use the default
+  manual trigger and execute only when the prompt explicitly requests the
+  instructions from a particular file. `dev_doc/toDo/auto/` contains automatic
+  trigger items for incidental, low-priority improvements; they may be applied when
+  normal in-scope work reveals a matching occurrence, but must not cause a dedicated
+  repository search or scope expansion.
+- Each automatic toDo is checked when read. The default obsolete policy evaluates
+  time and validity together: more than seven days after the filename timestamp OR
+  invalidation by major project changes is enough to archive it. A custom time limit
+  may replace seven days without disabling the validity check. A `manual` rule
+  disables both automatic conditions. Fully completed manual and automatic toDos
+  still move to `obsolete/`.
 - `dev_doc/change_records/` captures what changed and why; do not read it by default.
 - `dev_doc/obsolete/` is archival, including completed toDo handoffs, and should not be read by default.
 - User-facing workflow, adapter, cost, config, smoke-test, and launch instructions

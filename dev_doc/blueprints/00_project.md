@@ -8,7 +8,7 @@
 
 ## Historical Lineage
 - Mature campaign orchestration, prepared-job folders, JSONL-style recording, and optional plotting/maintenance tools come from the older fanyufei project lineage. Current contracts live in `evaluate_manager`, `recorded_data`, and `tools` blueprints rather than in old copied paths.
-- HTCondor execution experience comes from the older combined-project lineage plus the current `admin_tool/htcondor/` notes. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
+- HTCondor execution experience comes from the older combined-project lineage plus the current `admin_tool/htcondor_doc/` notes. Distributed mode must reuse the local job/recording contract and capture pool failures as metadata instead of repairing the host installation.
 - Surrogate-assisted generation, refreshed runtime state, cumulative archive thinking, and richer neural modeling come from the shorten experiment lineage, now reshaped around the v3 rawData-first API.
 - The active HFSS task and adapter style descend from earlier huangzetao/fanyufei task files, but simulator files, `_com.py` adapters, workflows, rawData names, and objectives are replaceable task inputs.
 - GPSAF supplies the optimizer's surrogate-assistance framing. The implementation keeps the GPSAF-shaped alpha/beta/gamma pressure controls while using pymoo GA/NSGA-III mechanics for candidate generation and diversity.
@@ -24,7 +24,11 @@
 - `project.tools` remains optional and user-launched; core runtime and tests must not depend on it. System-environment and HTCondor-pool configuration belong in `admin_tool/`, outside `project.tools`.
 - `project.config` holds cross-module settings such as evaluation mode, job path, optimizer population size, GPSAF controls, and surrogate hyperparameters.
 - `project.test` verifies the local closed loop, rawData contract, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and tool compatibility.
-- `dev_doc` owns project documentation guidance, including current architecture contracts, selective blueprint reading, terminology, historical lineage, toDo handoffs, obsolete archives, and append-only change records.
+- `dev_doc` owns project documentation guidance, including current architecture
+  contracts, selective blueprint reading, terminology, historical lineage,
+  manual and automatic toDo handoffs, obsolete archives, and append-only change
+  records. Root-level toDos require an explicit prompt trigger; `toDo/auto/` items
+  are only opportunistic during already in-scope work and have stale-document rules.
 
 ## I/O Format
 - User-edited inputs are primarily `project/config.py`, task-specific files in `project/job_template/` such as `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and any active adapter files copied into `job_template/`.
@@ -67,7 +71,11 @@
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
 - Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
 - Root `temp/` is a retained scratch directory: keep `temp/.gitkeep` tracked and ignore other contents.
-- `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/terminology.md`, and `dev_doc/change_records/` are current documentation artifacts; `dev_doc/obsolete/` is archival.
+- `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/terminology.md`,
+  `dev_doc/toDo/`, and `dev_doc/change_records/` are current documentation
+  artifacts; `dev_doc/obsolete/` is archival. Manual toDos live directly under
+  `toDo/`; automatic toDos live under `toDo/auto/` and use either automatic
+  time-OR-validity obsoletion or an explicitly manual obsolete policy.
 - Update architecture and blueprint files when module responsibilities, contracts, I/O, persistence behavior, execution topology, historical lineage, or non-obvious techniques change.
 - Add one `dev_doc/change_records/` file after each code change to explain what changed and why.
 - Update `dev_doc/terminology.md` when a change corrects a concept or introduces a non-obvious name.

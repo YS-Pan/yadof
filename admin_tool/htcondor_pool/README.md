@@ -1,139 +1,135 @@
-# HTCondor pool setup scripts
+# HTCondor pool-node tool
 
-Run these scripts on the physical machines, in this order:
+`htcondor_pool.ps1` is the only setup and diagnostic tool in this folder.  One
+`Configure` invocation writes the node role, firewall rule, execute directory,
+resource declaration, slot layout, optional Python ACL, and optional starter-thread
+override into one managed HTCondor configuration block, then performs one full
+HTCondor restart.
 
-1. On machine 1: `setup_machine_1_manager.cmd`
-2. On machine 3: `setup_machine_3_worker.cmd`
-3. On machine 6: `setup_machine_6_worker.cmd`
+Run it from an elevated Administrator PowerShell session on each node.  It finds
+HTCondor from `PATH`, `CONDOR_LOCATION`, normal Program Files locations, or its
+Windows service.  For a custom installation, pass `-CondorLocation <install-root>`.
+It does not persist `PATH` or create system environment variables. If HTCondor was
+installed without a Windows service, it starts the discovered `condor_master.exe`
+directly after writing the configuration.
 
-Do not pass command-line arguments for the standard three-machine setup. Machine 1 automatically detects its own LAN IP and writes it to `manager_ip.txt` in this folder. Machine 3 and 6 read that file automatically when they join the pool. If the folder is copied instead of shared, run machine 1 first, then copy the updated folder including `manager_ip.txt` to machine 3 and 6.
+## Before configuring nodes
 
-Each `.cmd` requests Administrator privileges, detects the local IPv4 address, writes an HTCondor local config block, opens Windows Firewall TCP port `9618` for the detected local subnet, and restarts HTCondor. If no HTCondor Windows service is registered, the setup script starts `condor_master.exe` directly from the detected `bin` directory. Re-running a worker script after a mistaken manager setup overwrites the managed config block and restarts local HTCondor processes from the detected `bin` directory.
+Choose a stable, resolvable name for the central manager, preferably a LAN DNS
+record such as `condor-collector.example.local`.  Every submit and execute node
+must resolve this name to the manager's current address.  In a network without DNS,
+use a consistent hosts mapping or DHCP address reservation on every node.
 
-The scripts do not require HTCondor to be in `PATH`. They search existing environment-derived locations: `PATH`, `CONDOR_LOCATION`, Program Files install locations, and the registered Windows service path. If HTCondor has no `LOCAL_CONFIG_FILE`, the setup script writes `condor_config.local` under the detected HTCondor install root and makes that root config load it. For a custom install directory, pass it to the script that accepts a `-CondorLocation` argument or set `CONDOR_LOCATION` in the current shell before running the `.cmd`.
+`CONDOR_HOST` is the manager's reachable name.  It is not a local interface
+selection.  The tool writes `NETWORK_INTERFACE = *` by default so HTCondor follows
+active interfaces instead of retaining a DHCP address.  Do not put the manager
+hostname into `NETWORK_INTERFACE`.  See
+[`temp/HTCondor_collector_主机名网络配置总结.md`](../../temp/HTCondor_collector_主机名网络配置总结.md)
+for the reasoning and verification commands.
 
-## HFSS OpenMP compatibility
+The firewall and HTCondor allow scope are derived from the route-selected IPv4
+network by default.  On a multi-network machine, pass `-AllowedNetwork` and, when
+needed, `-AllowedHostPattern` explicitly.  `-AdvertiseAddress` only selects the
+local address used to derive those defaults; it is never written into
+`NETWORK_INTERFACE`.
 
-Run this on every execute machine that may run HFSS 2024.1 jobs:
+## Configure the manager
 
-```cmd
-setup_worker_hfss_compat.cmd
+A manager that only schedules and submits jobs needs no resource arguments:
+
+```powershell
+.\htcondor_pool.ps1 -Action Configure -Role Manager `
+    -ManagerHost condor-collector.example.local
 ```
 
-HTCondor 25.4 automatically injects `OMP_THREAD_LIMIT` with the provisioned CPU
-count. That variable causes a repeatable `hf3d.exe` access violation for the
-project's Mixed Order plus Iterative Solver profile when more than one CPU is
-used. The compatibility script removes only `OMP_THREAD_LIMIT` from
-`STARTER_NUM_THREADS_ENV_VARS`, reconfigures the startd, and verifies the effective
-value. It does not change pool roles, slot resources, or the required
-`run_as_owner=False` identity policy.
+If that same computer should execute jobs, add `-EnableExecute` and declare the
+capacity that HTCondor may allocate.  `DeclaredMemoryMb` and `DeclaredDiskMb` are
+MB; disk capacity must fit in the selected execute directory.
 
-The normal pool-role and declared-resource setup scripts also write the same
-setting. The standalone compatibility script is the safest way to update an
-existing worker without reapplying its other configuration.
+```powershell
+.\htcondor_pool.ps1 -Action Configure -Role Manager `
+    -ManagerHost condor-collector.example.local `
+    -EnableExecute `
+    -DeclaredCpus 8 `
+    -DeclaredMemoryMb 24576 `
+    -DeclaredDiskMb 51200 `
+    -ExecuteDir 'E:\htcondor_execute' `
+    -PythonExecutable 'C:\Python311\python.exe'
+```
 
-Verify from an Administrator PowerShell prompt:
+## Configure each worker
+
+Run one command per execute machine.  Use the same manager name and choose the
+resource values and scratch location for that particular machine.
+
+```powershell
+.\htcondor_pool.ps1 -Action Configure -Role Worker `
+    -ManagerHost condor-collector.example.local `
+    -DeclaredCpus 8 `
+    -DeclaredMemoryMb 24576 `
+    -DeclaredDiskMb 51200 `
+    -ExecuteDir 'E:\htcondor_execute' `
+    -PythonExecutable 'C:\Python311\python.exe'
+```
+
+Execute nodes use one partitionable slot.  HTCondor carves dynamic slots from the
+declared CPU, memory, and disk capacity as jobs request resources.  The tool also
+advertises `YADOF_EXECUTE_READY`, `YADOF_EXECUTE_DIR`, and the declared capacities;
+these are descriptive worker attributes, not submit-side job paths.
+
+`JOBS_DIR` in the yadof project remains the submit-side staging location.  It must
+not be repointed at a worker's `EXECUTE` directory.
+
+## Optional starter-thread override
+
+Do not add simulator-specific policy to every pool by default.  If a validated
+workload requires excluding a starter-injected thread variable, request that exact
+exclusion when configuring the affected execute node:
+
+```powershell
+.\htcondor_pool.ps1 -Action Configure -Role Worker `
+    -ManagerHost condor-collector.example.local `
+    -DeclaredCpus 8 -DeclaredMemoryMb 24576 -DeclaredDiskMb 51200 `
+    -ExecuteDir 'E:\htcondor_execute' `
+    -ExcludeStarterThreadVariable OMP_THREAD_LIMIT
+```
+
+The tool reads the installed HTCondor list and removes only the requested names; it
+does not embed a version-specific default list.  If the effective list cannot be
+read, pass the approved baseline with one or more `-StarterThreadVariable` values.
+Repeat the exclusion whenever the managed node configuration is reapplied.  Verify
+the actual value after every HTCondor upgrade:
 
 ```powershell
 condor_config_val STARTER_NUM_THREADS_ENV_VARS
 ```
 
-The output must not contain `OMP_THREAD_LIMIT`. After an HTCondor upgrade, compare
-the new official default list with the retained list in the script before rolling
-the upgrade across the pool.
+## Inspect and troubleshoot
 
-`add_condor_to_path.cmd` is now a lookup/check helper. It does not create system environment variables or persist PATH changes:
+The diagnostic mode is read-only and can run without elevation.  It prints the
+effective configuration and queries the visible slots using either the supplied
+manager name or the configured `CONDOR_HOST`.
 
-```cmd
-add_condor_to_path.cmd
+```powershell
+.\htcondor_pool.ps1 -Action Diagnose `
+    -ManagerHost condor-collector.example.local
 ```
 
-For a custom install root:
+For a safe review of the configuration that would be written, add `-DryRun` to a
+`Configure` command.  `-VerificationTimeoutSec 0` skips only the post-restart
+collector wait; it does not skip configuration verification output.
 
-```cmd
-add_condor_to_path.cmd "<HTCondor install root>"
-```
+## Deployment contract
 
-The worker scripts first read `manager_ip.txt`. If that file is missing or points to an unreachable host, they fall back to scanning the local subnet for an HTCondor collector on port `9618`.
-
-After all three finish, verify from machine 1:
-
-```cmd
-show_slots.cmd
-condor_status
-condor_status -af Name Machine Cpus Memory OpSys
-```
-
-## Worker execute directory
-
-To configure each execute-capable worker's HTCondor `EXECUTE` directory and advertise it as a yadof-capable scratch location, run this file on every machine that has a startd slot:
-
-```cmd
-setup_worker_ramdisk_execute.cmd
-```
-
-For the current three-machine pool, run it on machine 1, machine 3, and machine 6. Machine 1 is both submit/manager and worker, so it also needs this step.
-
-The script requests Administrator privileges, uses the temp-derived execute path passed by the CMD wrapper unless you pass another path to `configure_worker_ramdisk_execute.ps1`, grants access to system, administrators, and authenticated slot users, writes a managed HTCondor config block with:
+This tool configures the HTCondor environment only.  Yadof distributed jobs retain
+their Windows slot-user contract:
 
 ```text
-EXECUTE = <worker scratch path>
-YADOF_RAMDISK = True
-YADOF_EXECUTE_DIR = "<worker scratch path>"
-STARTD_ATTRS = YADOF_RAMDISK, YADOF_EXECUTE_DIR
+run_as_owner = False
+load_profile = True
 ```
 
-Then it restarts HTCondor and prints `condor_config_val`/`condor_status` verification output. The script is safe to re-run; it replaces only its managed `# BEGIN YADOF RAMDISK EXECUTE` block.
-
-Do not set `project/config.py` or `project/config_all.py` `JOBS_DIR` to the worker scratch directory for this purpose. `JOBS_DIR` is the submit-side job staging directory. Worker-side execution is controlled by HTCondor `EXECUTE` on each worker, and optimization jobs can match those workers with `TARGET.YADOF_RAMDISK =?= True`.
-
-Run this after the pool role setup scripts, and make sure the chosen worker scratch directory exists before starting HTCondor. If it is recreated after reboot, recreate it before the HTCondor service starts or re-run this script.
-
-If machine 1 only shows one slot, run `diagnose_pool.cmd` on machine 3 and 6. Check that `manager_ip.txt` exists, `Test-NetConnection` to machine 1 port `9618` succeeds, `DAEMON_LIST` is `MASTER, SHARED_PORT, STARTD`, and local `condor_*.exe` processes are running.
-
-## Worker declared resources and multi-job slots
-
-To control how many resources each worker advertises and allow one machine to run multiple jobs, edit the constants at the top of:
-
-```cmd
-setup_worker_declared_resources.cmd
-```
-
-Then run it on each execute-capable machine, including machine 1 if it should also run HFSS jobs. The key constants are:
-
-```cmd
-set "DECLARE_CPUS=6"
-set "DECLARE_MEMORY_MB=32000"
-set "DECLARE_DISK_MB=24000"
-set "EXECUTE_DIR=%TEMP%\condor_execute"
-set "WORKER_PYTHON_EXE=python"
-set "PARTITIONABLE_SLOT=1"
-```
-
-`DECLARE_MEMORY_MB` is MB. `DECLARE_DISK_MB` is MB and should not exceed the usable size of the worker scratch directory. With `PARTITIONABLE_SLOT=1`, HTCondor creates one partitionable worker slot that can be split into multiple dynamic slots as jobs request CPU, memory, and disk.
-
-`WORKER_PYTHON_EXE` is only an ACL helper for the Python installation that Windows uses when a transferred `.py` file is executed. The script resolves command names such as `python` from PATH when possible and grants read/execute access to the resolved Python environment. It does not make Python the HTCondor submit `executable`; current yadof jobs submit `workflow.py` directly with `transfer_executable = True`. If it cannot resolve the command to a file, it warns and skips the ACL grant; make sure slot users can execute `.py` jobs before running real jobs.
-
-For example, if a worker declares 6 CPUs and 24576 MB memory, and each job requests 2 CPUs and 4096 MB memory in config, that worker can run up to three jobs before another resource becomes the limiting factor.
-
-After running the script, verify from machine 1:
-
-```cmd
-condor_status -af Name Machine Cpus Memory Disk State Activity YADOF_RAMDISK YADOF_DECLARED_CPUS YADOF_DECLARED_MEMORY_MB
-```
-
-If a worker shows `MEMORY` or `DISK` as not defined, or shows `0` in `condor_status`, run `setup_worker_declared_resources.cmd` on that worker.
-
-## Adding more worker machines
-
-To add another machine to the same HTCondor pool later:
-
-1. Install HTCondor on the new machine and make sure its commands are visible through PATH, `CONDOR_LOCATION`, Program Files, or the Windows service registration.
-2. Copy this whole `htcondor_pool` folder to the new machine.
-3. Make sure the copied folder contains the current `manager_ip.txt` generated by machine 1. If machine 1's IP changed, re-run `setup_machine_1_manager.cmd` on machine 1 first, then copy the new `manager_ip.txt`.
-4. Run a worker setup script on the new machine. You can reuse `setup_machine_3_worker.cmd`; the machine label is only a local marker and does not affect HTCondor matching. If you want a clearer label, copy `setup_machine_3_worker.cmd` to a new name such as `setup_machine_7_worker.cmd` and change both `-MachineLabel 3` occurrences inside it to `-MachineLabel 7`.
-5. Verify from machine 1 with `show_slots.cmd`. The new machine should appear as another `slot1@...` row.
-
-Only machine 1 should run `setup_machine_1_manager.cmd`. Every additional machine should run a worker script. The new machine must be able to reach machine 1 on TCP port `9618`.
-
-Re-run the matching script if a machine receives a new IP address.
+Do not use owner execution as a general cluster repair path.  See
+[`../htcondor_doc/deployment_contract.md`](../htcondor_doc/deployment_contract.md)
+and [`../htcondor_doc/windows_pool_debug.md`](../htcondor_doc/windows_pool_debug.md)
+for the deployment and debugging policy.

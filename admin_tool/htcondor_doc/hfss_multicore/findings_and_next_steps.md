@@ -1,5 +1,8 @@
 # HFSS Multicore Findings And Next Steps
 
+> Historical consolidation. The applicable production instruction now lives in
+> `README.md`; this file remains only as supporting evidence.
+
 ## Consolidated Finding
 
 The 08 Mixed Order plus Iterative Solver profile failed because HTCondor 25.4
@@ -42,8 +45,8 @@ Configure every HFSS worker with the validated list in
 `../20260713_hfss_fix_experiments.md`, reconfigure the startd, and verify the
 effective list does not contain `OMP_THREAD_LIMIT`. The repository pool setup and
 declared-resource scripts now write this setting, and
-`setup_worker_hfss_compat.cmd` updates an existing worker without changing its slot
-or pool-role configuration.
+the generic pool-node tool preserves role, slot, execute-directory, and resource
+settings in one managed configuration block.
 
 ## Follow-Up Validation
 

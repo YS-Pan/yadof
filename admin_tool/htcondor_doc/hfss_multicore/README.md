@@ -28,7 +28,10 @@ The 09 Direct Solver control works under HTCondor with multiple cores.
 
 ## Production Guidance
 
-- Apply `setup_worker_hfss_compat.cmd` on every HFSS execute worker.
+- Reapply the worker node configuration with
+  `-ExcludeStarterThreadVariable OMP_THREAD_LIMIT` on every affected execute
+  worker. See `../../htcondor_pool/README.md`; the setup tool reads the installed
+  HTCondor list rather than embedding a fixed version-specific list.
 - Verify `condor_config_val STARTER_NUM_THREADS_ENV_VARS` does not contain
   `OMP_THREAD_LIMIT`.
 - Keep `run_as_owner=False` and `load_profile=True`.
@@ -44,11 +47,8 @@ not yet received or validated the compatibility setting.
 
 ## Files
 
-- `baseline_diagnosis.md` - original controlled matrix and direct-local contrast.
-- `20260711_followup.md` - additional debug probes and eliminated hypotheses.
-- `findings_and_next_steps.md` - consolidated interpretation and future work that
-  respects the deployment contract.
-- `../20260713_hfss_fix_experiments.md` - successful fix runs, full experiment
-  matrix, and worker deployment setting.
+- `baseline_diagnosis.md`, `20260711_followup.md`, and
+  `../20260713_hfss_fix_experiments.md` preserve the controlled experiment evidence.
+  They are historical records, not a configuration procedure.
 
 Original source notes are preserved under `../archive/`.

@@ -1,5 +1,9 @@
 # 2026-07-12 Official HTCondor Docs Review
 
+> Historical investigation record. Its candidate experiments were resolved or
+> superseded by `20260713_hfss_fix_experiments.md`; use the current administrator
+> index and pool-tool documentation for operating instructions.
+
 ## Scope
 
 This note records a targeted read of the official HTCondor documentation after the
@@ -46,7 +50,7 @@ The online manual version seen during this pass was 25.11.0.
 
 ## Constraints From Existing Project Notes
 
-Keep these constraints from the current `admin_tool/htcondor/` material:
+Keep these constraints from the current `admin_tool/htcondor_doc/` material:
 
 - `run_as_owner=True` is not a production fix path.
 - `load_profile=False` already failed early and is not a viable current path for

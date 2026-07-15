@@ -12,19 +12,13 @@ catch-all log.
 
 1. `deployment_contract.md` - durable deployment and identity policy.
 2. `windows_pool_debug.md` - Windows HTCondor bring-up and debugging checklist.
-3. `hfss_multicore/README.md` - current HFSS multicore case status.
-4. `20260712_official_docs_review.md` - official HTCondor documentation findings
-   and candidate next experiments for the HFSS multicore case.
-5. `20260712_official_docs_deep_dive.md` - version-aware follow-up for HTCondor
-   25.4, including nested scratch, Windows process priority, effective-config audit,
-   and a refined experiment order.
-6. `20260713_hfss_fix_experiments.md` - real Condor/HFSS experiment matrix and the
-   validated `OMP_THREAD_LIMIT` worker fix.
+3. `../htcondor_pool/README.md` - one-node configuration and diagnostic tool.
+4. `hfss_multicore/README.md` - optional HFSS multicore compatibility policy.
 
 ## Structure
 
 ```text
-admin_tool/htcondor/
+admin_tool/htcondor_doc/
   README.md
   20260712_official_docs_review.md
   20260712_official_docs_deep_dive.md
@@ -61,6 +55,11 @@ as every possible submitter's Windows account.
 
 Files under `archive/` preserve original notes and may contain conclusions that were
 later superseded. Prefer the current documents above for design decisions.
+
+The dated investigation files in this directory and in `hfss_multicore/` also
+preserve evidence. The 2026-07-13 experiment established the current HFSS
+workaround, so earlier candidate test orders must not be used as current operating
+instructions. They remain available only to explain how the conclusion was reached.
 
 ## Adding New Files
 

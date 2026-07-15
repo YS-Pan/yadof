@@ -1,5 +1,9 @@
 # 2026-07-12 HTCondor Official Docs Deep Dive
 
+> Historical investigation record. The proposed test sequence was completed or
+> superseded by the later validated workaround; it is retained as evidence rather
+> than as a current deployment procedure.
+
 ## Scope
 
 This is a second, version-aware pass through the official HTCondor documentation.

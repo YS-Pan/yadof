@@ -19,19 +19,27 @@
   as `blueprints/20_files/project/surrogate/runtime.py.md`, and should hold
   file-specific historical reference ancestry when needed.
 - `terminology.md` defines project-specific names and conceptual boundaries.
-- `toDo/` stores time-named future-work handoffs that are always read during the first `dev_doc` pass.
+- `toDo/` stores time-named future-work handoffs that are always read recursively
+  during the first `dev_doc` pass. Root Markdown files are manual-trigger handoffs;
+  `toDo/auto/` holds automatic-trigger handoffs for low-priority problems that
+  should be fixed only when normal work happens to reveal their location.
 - `change_records/` stores time-named records explaining what changed and why.
 - `obsolete/` stores archival planning and diagnostic material that is not read by default, including completed toDo handoffs and retired active documents.
 - `../admin_tool/README.md` indexes administrator-only environment and HTCondor-pool
   resources. Those resources are not part of `project/tools/` or user task setup.
 
 ## I/O Format
-- Default context gathering reads all files in `architecture/`, `terminology.md`, and every Markdown file in `toDo/` in full.
+- Default context gathering reads all files in `architecture/`, `terminology.md`, and
+  every Markdown file in `toDo/` recursively in full. Reading a manual toDo does not
+  authorize its execution; an automatic toDo is evaluated only after its obsolete
+  policy is applied.
 - Default `dev_doc` context gathering also reads `../user_doc/README.md` and follows its instructions for user-facing task setup files.
 - Default context gathering lists all files in `blueprints/`, including recursive
   files under `blueprints/20_files/`, then reads `blueprints/00_project.md` for
   project-wide work and the relevant module/file blueprint files in full.
-- `toDo/` filenames should start with `YYYYMMDD_HHMMSS_` followed by a short description when possible.
+- `toDo/` filenames should start with `YYYYMMDD_HHMMSS_` followed by a short
+  description. This timestamp is mandatory under `toDo/auto/` because it is the
+  portable creation time used by the default seven-day expiry rule.
 - `change_records/` filenames start with `YYYYMMDD_HHMMSS_` followed by a short description.
 - Change records use sections: `Context`, `Change`, `Rationale`, `Impact`, and optional `Follow-Up`.
 
@@ -44,6 +52,19 @@
   separators with underscores.
 - Change records are intentionally excluded from default reading so historical detail does not drown out current contracts.
 - ToDo files are intentionally included in default reading so future goals can shape today's technical route before implementation begins.
+- Manual trigger is the default and is encoded by direct placement under `toDo/`.
+  Its instructions execute only when the prompt explicitly requests execution of
+  that particular file; merely reading or mentioning it is not a trigger.
+- Automatic trigger is encoded by placement under `toDo/auto/`. It supports
+  low-priority, location-unknown cleanup: a matching issue may be fixed when normal
+  work naturally exposes it in the current scope, but an agent must not search the
+  repository or expand the task solely for the automatic toDo.
+- Automatic toDos have two obsolete policies. The default automatic policy checks
+  time and validity in parallel: seven days after the filename timestamp OR a major
+  project change that invalidates the content is sufficient to archive the file. A
+  custom time limit replaces seven days but does not disable the validity condition.
+  An explicit `manual` policy disables both automatic conditions. Completion still
+  archives either trigger type.
 - `user_doc/` prevents user task instructions from being duplicated throughout development docs. `dev_doc` may mention user-facing behavior from an architecture or maintainer perspective, but detailed "what the user should do" instructions belong under `user_doc`.
 - Terminology is updated only for project-specific concepts, corrected misunderstandings, or names that are not intuitive from ordinary software usage.
 
@@ -51,6 +72,8 @@
 - `README.md` should change when documentation workflow changes.
 - `architecture/` and `blueprints/` should change alongside code when module contracts, responsibilities, I/O, persistence behavior, execution topology, historical lineage, or important implementation techniques change.
 - `user_doc/` should change when user-facing task setup, adapter usage, workflow, cost, config, smoke-test, or launch instructions change.
-- `toDo/` receives pending future-work handoffs and should be moved to `obsolete/` when the corresponding work is completed.
+- `toDo/` receives pending future-work handoffs. Manual items stay at its root and
+  automatic items go under `toDo/auto/`; completed items and stale automatic items
+  should be moved to `obsolete/` according to their respective rules.
 - `change_records/` is append-only in normal work.
 - `obsolete/` is archival and should rarely be edited except when retiring active documents or completed handoffs.

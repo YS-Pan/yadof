@@ -1,5 +1,9 @@
 # 2026-07-13 HFSS Multicore Fix Experiments
 
+> Historical experiment evidence. The current operational instruction is in
+> `hfss_multicore/README.md`, which uses the generic pool tool rather than a
+> dedicated HFSS setup script.
+
 ## Outcome
 
 The profile 08 HTCondor multicore crash is reproducibly avoided by preventing the
@@ -44,11 +48,10 @@ It also completed all three solves, returned 0, and produced all nine expected
 files. Solve times were approximately 2 minutes per pin state, consistent with the
 successful direct-local reference.
 
-The setting was then applied permanently to this worker with
-`configure_worker_hfss_compat.ps1`. Cluster `4248` was submitted without a
-temporary configuration wrapper and passed the same three-pin-state acceptance
-test. Its final environment retained the other thread values at 2 and left
-`OMP_THREAD_LIMIT` absent.
+The setting was then applied permanently to that worker. Cluster `4248` was
+submitted without a temporary configuration wrapper and passed the same
+three-pin-state acceptance test. Its final environment retained the other thread
+values at 2 and left `OMP_THREAD_LIMIT` absent.
 
 Evidence directories:
 
@@ -100,14 +103,9 @@ did not remove the variable. Cluster `4247` recorded the final value as 2 and
 reproduced the crash. Therefore the verified control point is the execute worker's
 `STARTER_NUM_THREADS_ENV_VARS`, not YADOF's submit environment.
 
-Apply the setting on every worker that may execute HFSS jobs:
-
-```cmd
-admin_tool\htcondor_pool\setup_worker_hfss_compat.cmd
-```
-
-The normal pool and declared-resource setup scripts also emit the setting. Verify
-after deployment:
+Apply the setting with the generic pool-node tool while configuring every affected
+worker; the current procedure is in `hfss_multicore/README.md`. Verify after
+deployment:
 
 ```powershell
 condor_config_val STARTER_NUM_THREADS_ENV_VARS

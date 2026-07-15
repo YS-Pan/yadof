@@ -14,7 +14,7 @@ worker resources, and execution directories.
 
 ## Contents
 
-- `htcondor/`: deployment policy, operational guidance, investigations, and
+- `htcondor_doc/`: deployment policy, operational guidance, investigations, and
   historical evidence for the HTCondor environment.
 - `htcondor_pool/`: executable Windows scripts for setting up, configuring, and
   diagnosing HTCondor manager and worker machines. Start with

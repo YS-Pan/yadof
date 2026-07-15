@@ -34,12 +34,14 @@ When collecting project context, read these files in full:
   task setup context.
 - every file in `architecture/`
 - `terminology.md`
-- every Markdown file in `toDo/`
+- every Markdown file under `toDo/`, recursively, including `toDo/auto/`
 
 Read `toDo/` in full during the first `dev_doc` pass even when the user's current
 instruction appears unrelated to every pending item. These files describe work that
 has not been done yet, and their purpose is to help the AI choose a technical route
-that will not fight likely future goals.
+that will not fight likely future goals. Reading a manual toDo is context gathering,
+not authorization to execute it. While reading automatic toDos, apply their obsolete
+rules first and only then consider whether the current work naturally triggers one.
 
 Reading `dev_doc/` must include the `user_doc/README.md` pass above because framework
 changes can affect how users and AI assistants prepare tasks. Reading `user_doc/`
@@ -194,17 +196,39 @@ yet. A file may describe one task or a cluster of related tasks. It is part of t
 default context-reading set because pending work can affect today's implementation
 choice even when today's request is not directly about that future task.
 
+ToDos have two trigger types. Placement is the authoritative trigger declaration:
+
+- **Manual trigger** is the default. Manual toDos live directly under `toDo/`.
+  Reading or mentioning one does not trigger its instructions. Execute it only when
+  the user's prompt explicitly says to execute the instructions in that particular
+  file. All toDos that existed before `toDo/auto/` was introduced are manual.
+- **Automatic trigger** is opt-in. Automatic toDos live under `toDo/auto/`. They are
+  for worthwhile but low-priority cleanup whose exact source location is not known,
+  such as a style or formatting defect. Do not search the repository solely to find
+  occurrences and do not broaden the user's task for one. If normal work naturally
+  exposes a matching occurrence in files already in scope, and the change is safe
+  within that scope, apply the toDo opportunistically. Otherwise leave it pending.
+
+Both trigger types are read recursively during the first `dev_doc` pass. Manual
+toDos may still shape implementation choices, but they must not add unrequested
+work to the current task.
+
 Filename format:
 
 ```text
 YYYYMMDD_HHMMSS_short-description.md
 ```
 
+The timestamp is mandatory for automatic toDos because it is their portable
+creation time for the default expiry rule. Manual toDos should use the same format,
+but older manual filenames remain valid.
+
 Examples:
 
 ```text
 20260519_193400_nsga3-surrogate-handoff.md
 20260602_143000_surrogate-cache-policy.md
+auto/20260714_120000_normalize-incidental-formatting.md
 ```
 
 Recommended toDo structure:
@@ -223,12 +247,32 @@ Recommended toDo structure:
 
 ## Completion Rule
 - How to recognize completion and whether any follow-up should remain.
+
+## Obsolete Rule
+- Automatic toDos only: omit for the default automatic rule, state a custom time
+  limit if needed, or state `manual` to disable automatic obsoletion.
 ```
 
-When the user asks the AI to execute a task described in `toDo/`, complete the code
-and documentation work first, then move the corresponding Markdown file to
-`obsolete/`. If only part of the future work is completed, update the remaining
-toDo file or split out a new time-named toDo file before archiving the completed one.
+Automatic toDos have these additional stale-document rules. Apply the applicable
+rule whenever an automatic toDo is read, before treating it as active work:
+
+1. **Automatic: time OR validity (default).** Check both conditions every time the
+   document is read and move it to `obsolete/` as soon as either condition is true:
+   - **Time:** use the timestamp in the filename as the creation time. When the
+     document has no obsolete-related annotation, the time limit is seven days. A
+     document may state a different duration or date in `## Obsolete Rule`.
+   - **Validity:** regardless of whether the time limit has passed, move the document
+     to `obsolete/` when large project changes have made its content no longer valid.
+2. **Manual.** When `## Obsolete Rule` says `manual`, do not archive the document
+   automatically because of either age or invalidation. It remains until explicitly
+   retired or its work is completed.
+
+These are stale-document rules; they do not replace completion handling. After a
+manual toDo is explicitly triggered, or an automatic toDo is opportunistically
+triggered, complete the code and documentation work first and then move the fully
+completed Markdown file to `obsolete/`. If only part of the work is completed,
+update the remaining toDo or split out a new time-named toDo before archiving the
+completed portion.
 
 ### `terminology.md`
 
@@ -300,8 +344,9 @@ Recommended record structure:
 
 ### `obsolete/`
 
-`obsolete/` stores old plans, old diagnostics, completed toDo handoffs, and drafts
-that are no longer active design input.
+`obsolete/` stores old plans, old diagnostics, completed toDo handoffs, automatic
+toDos retired by age or invalidation, and drafts that are no longer active design
+input.
 
 Use it to answer:
 
@@ -329,6 +374,7 @@ After each code change:
 For documentation-only changes, still update architecture/blueprints when the documentation
 system itself changes, and add a change record.
 
-When adding new future work, put it under `toDo/` rather than `change_records/`.
-`change_records/` explains completed changes; `toDo/` describes pending work that
-should influence future technical choices.
+When adding new future work, put manual-trigger work directly under `toDo/` and
+automatic-trigger work under `toDo/auto/`, rather than putting either in
+`change_records/`. `change_records/` explains completed changes; `toDo/` describes
+pending work that should influence future technical choices.

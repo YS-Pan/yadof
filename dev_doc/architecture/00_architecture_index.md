@@ -49,6 +49,7 @@ dev_doc/
   architecture/
   blueprints/
   toDo/
+    auto/
   change_records/
   obsolete/
 ```
@@ -69,7 +70,14 @@ user_doc/
 ```
 
 `architecture/` and `terminology.md` are full-read context sources. `toDo/` is also
-full-read so pending future goals can shape current implementation choices.
+read recursively in full so pending future goals can shape current implementation
+choices. Files directly under `toDo/` are manual-trigger items and execute only when
+the prompt explicitly names a file whose instructions should be executed. Files
+under `toDo/auto/` are automatic-trigger, low-priority opportunistic cleanup: they
+may run only when current work naturally exposes a matching occurrence, and they
+use one of two obsolete policies from `dev_doc/README.md`: automatic, where expiry
+by time OR invalidation is sufficient, or manual, which disables both automatic
+conditions.
 `blueprints/` is listed first and read selectively, with `blueprints/00_project.md`
 serving as the generative project-level contract and module blueprints carrying
 historical reference ancestry when it is still useful. `change_records/` is
