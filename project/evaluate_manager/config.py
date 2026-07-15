@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 try:
@@ -124,14 +125,22 @@ def _fresh_project_config():
         from project.config import all as all_config
         from project.config import key as key_config
         from project.config import specific as specific_config
-        from project.config.specific import hfss as hfss_config
 
         importlib.reload(key_config)
-        importlib.reload(hfss_config)
-        importlib.reload(specific_config)
+        _reload_specific_config_modules(specific_config)
         return importlib.reload(all_config)
     except Exception:
         return project_config
+
+
+def _reload_specific_config_modules(specific_config: ModuleType) -> None:
+    """Refresh active extensions without coupling generic code to a simulator."""
+
+    prefix = f"{specific_config.__name__}."
+    for extension in tuple(vars(specific_config).values()):
+        if isinstance(extension, ModuleType) and extension.__name__.startswith(prefix):
+            importlib.reload(extension)
+    importlib.reload(specific_config)
 
 
 def _first_config_value(names: tuple[str, ...], fallback: Any, *, config_module=None) -> Any:

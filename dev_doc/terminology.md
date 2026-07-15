@@ -13,8 +13,8 @@ Only terms that need project context are listed here.
 | `assigned parameter snapshot` | The job-local `parameters_constraints.py` materialized from the canonical file and one normalized candidate row. It is the workflow's only optimizer-variable input and the source of the same raw values stored in `JobSpec` and recorded history. |
 | `workflow.py` | The active task file that runs an expensive evaluation and writes rawData plus job-local lifecycle metadata. It must not write final costs. |
 | `calc_cost.py` | The active task file that interprets rawData into current objective costs and optional rawData importance weights for surrogate training. It is not copied into prepared job folders. |
-| `key config` | The short user-editable `project/config.py` file for routine campaign settings. It contains constants only and is copied into every prepared job folder. |
-| `full config` | The grouped `project/config_all.py` default surface imported by runtime modules. It imports matching overrides from `config.py` and is also copied into every prepared job folder. |
+| `key config` | The short user-editable `project/config/key.py` file for routine generic campaign settings. It contains constants only and is copied into every prepared job folder as part of the config package. |
+| `full config` | The grouped `project/config/all.py` generic default surface imported by runtime modules. It imports matching overrides from `key.py`, composes active extensions from `specific/`, and is copied into every prepared job folder as part of the config package. |
 | `local mode` | Evaluation backend where `evaluate_manager` runs prepared jobs as local subprocesses. It is the default mode for tests and first debugging passes. |
 | `distributed mode` | Evaluation backend where `evaluate_manager` submits prepared jobs to HTCondor while preserving the same job folder and recording contract as local mode. |
 | `slot user` | The low-privilege Windows account used by HTCondor to run a job on an execute workstation, such as `condor-slot1_1`. This is the target runtime identity for distributed Windows jobs in this project. |

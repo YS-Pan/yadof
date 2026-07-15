@@ -17,6 +17,9 @@
 - `project/config/all.py` imports `key.py`, groups all generic defaults by area, and uses matching names from `key.py` as overrides.
 - `project/config/specific/` owns settings tied to a simulator or vendor. The current `hfss.py` owns HFSS/PyAEDT runtime defaults and its HTCondor environment contribution.
 - `project/config/specific/__init__.py` is the extension boundary through which active specific modules contribute settings such as HTCondor environment entries without embedding simulator names in generic config code.
+- Generic config consumers that need a refresh reload extensions exposed through
+  `config.specific` before reloading `all.py`; they must not import a concrete
+  `specific/<software>.py` module.
 - Defines derived root paths such as `PROJECT_ROOT`, `JOBS_DIR`, and `SURROGATE_CHECKPOINT_DIR` in the full config.
 - Selects `EVALUATION_MODE` and timeout behavior.
 - Defines local evaluation worker count for parallel-safe local workflows.

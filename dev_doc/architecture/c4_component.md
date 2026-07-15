@@ -46,6 +46,9 @@ flowchart LR
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.
+- `config.py`: generic evaluation settings accessors. Its refresh path reloads the
+  active extensions exposed by `config.specific` before the full config surface,
+  without naming a simulator-specific module.
 
 ## Job Template Components
 

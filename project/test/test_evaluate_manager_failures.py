@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import threading
 import time
+from types import ModuleType
 
 
 def test_prepare_failure_returns_inf_and_generation_continues(tmp_path, monkeypatch):
@@ -186,3 +187,24 @@ def test_local_worker_config_is_read_fresh(monkeypatch):
 
     assert eval_config.local_evaluation_max_workers() == 3
     assert eval_config.local_evaluation_max_workers() == 5
+
+
+def test_specific_config_refreshes_registered_extensions(monkeypatch):
+    from project.evaluate_manager import config as eval_config
+
+    specific_config = ModuleType("project.config.specific")
+    active_extension = ModuleType("project.config.specific.example")
+    unrelated_module = ModuleType("project.unrelated")
+    specific_config.example = active_extension
+    specific_config.unrelated = unrelated_module
+    reloaded: list[ModuleType] = []
+
+    monkeypatch.setattr(
+        eval_config.importlib,
+        "reload",
+        lambda module: reloaded.append(module) or module,
+    )
+
+    eval_config._reload_specific_config_modules(specific_config)
+
+    assert reloaded == [active_extension, specific_config]
