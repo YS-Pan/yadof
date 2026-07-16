@@ -119,8 +119,10 @@ The workflow must not calculate final cost. The job folder should not contain
 Common key settings users edit:
 
 - `EVALUATION_MODE`: `"local"` for local subprocess runs, `"distributed"` for HTCondor.
-- `EVALUATION_TIMEOUT_SEC`: generation-level timeout budget.
+- `EVALUATION_TIMEOUT_SEC`: whole-generation wait budget in distributed mode.
+- `OPTIMIZE_SMOKE_TEST_ENABLED`: whether the normal launcher runs one real midpoint smoke individual before optimization. It defaults to `True`; the smoke job has no timeout.
 - `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests. CPU remains manual; memory and disk are bootstrap values for automatic calibration when Condor has no usable prior measurement.
+- `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`: per-individual Condor timeout policy. The defaults are `"auto"` and one hour; `"fixed"` always uses the configured hour.
 - `HTCONDOR_REQUEST_DISK_MULTIPLIER`: an extra disk safety factor (default `1.0`). Raise it, for example to `2.0`, when worker scratch space is plentiful; keep it at `1.0` for constrained disks or RAM disks.
 - HTCondor submit files run `workflow.py` directly as the transferred executable; do not configure Python itself as the submit executable.
 - `OPTIMIZE_POPULATION_SIZE`: number of real evaluations per generation.
@@ -134,26 +136,25 @@ For a real workflow smoke test in local mode:
 
 ```powershell
 @"
-from project.evaluate_manager.api import evaluate_population
-from project.job_template import api as job_template_api
-
-population = ((0.5,) * job_template_api.get_variable_count(),)
-costs = evaluate_population(population, mode="local", timeout_sec=5400)
-print(costs)
+from project.evaluate_manager.api import run_smoke_test
+print(run_smoke_test(mode="local"))
 "@ | python -
 ```
 
-For a lightweight framework test that should not start HFSS:
+For the reusable source test suite, which may include synthetic HFSS parser/adapter
+contracts but must not start HFSS or encode the active optimization task:
 
 ```powershell
 pytest -q
 ```
 
-When the smoke test is healthy, run the configured optimization:
+Run the configured optimization:
 
 ```powershell
 .\start_optimization_aedtopt.cmd
 ```
+
+With the default `OPTIMIZE_SMOKE_TEST_ENABLED = True`, this launcher first runs the same one-individual smoke test in the configured mode with no timeout and starts generation zero only after it succeeds. Set the key-config value to `False` to skip it. In that case, generation-zero auto memory, disk, and per-job timeout calibration treat the user-entered values as the smoke measurements before applying their bootstrap multipliers.
 
 For a direct Python launch, set environment variables and call the launcher:
 

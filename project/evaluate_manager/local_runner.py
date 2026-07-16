@@ -22,7 +22,7 @@ from .types import JobResult, JobSpec
 def run_local_job(
     job: JobSpec,
     *,
-    timeout_sec: float,
+    timeout_sec: float | None,
     python_executable: str | Path = sys.executable,
     env: Mapping[str, str] | None = None,
 ) -> JobResult:
@@ -51,7 +51,7 @@ def run_local_job(
 
     timed_out = False
     try:
-        stdout, stderr = proc.communicate(timeout=float(timeout_sec))
+        stdout, stderr = proc.communicate(timeout=None if timeout_sec is None else float(timeout_sec))
     except subprocess.TimeoutExpired:
         timed_out = True
         _terminate_process_tree(proc)

@@ -40,6 +40,7 @@ from .job_result import (
     write_metadata,
 )
 from .resource_requests import HTCondorResourceRequest, request_for_job
+from .time_limits import HTCondorTimeLimit, time_limit_for_job
 from .types import JobResult, JobSpec
 
 
@@ -106,7 +107,7 @@ class CondorSubmitError(RuntimeError):
 def run_condor_jobs(
     jobs: Sequence[JobSpec],
     *,
-    timeout_sec: float,
+    timeout_sec: float | None,
     env: Mapping[str, str] | None = None,
     after_jobs_submitted: Callable[[], object] | None = None,
 ) -> tuple[JobResult, ...]:
@@ -142,12 +143,12 @@ def run_condor_jobs(
     if pending:
         _run_after_jobs_submitted(after_jobs_submitted)
 
-    deadline = time.monotonic() + float(timeout_sec)
+    deadline = None if timeout_sec is None else time.monotonic() + float(timeout_sec)
     poll_sec = max(0.1, htcondor_poll_sec())
     last_report = 0.0
     if pending:
         _progress(f"htcondor: waiting for {len(pending)} jobs")
-    while pending and time.monotonic() < deadline:
+    while pending and (deadline is None or time.monotonic() < deadline):
         completed_now = 0
         for job_name, submission in list(pending.items()):
             terminal_reason = terminal_log_reason(submission.job.directory)
@@ -206,7 +207,13 @@ def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
 def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> CondorSubmission:
     clear_stale_runtime_artifacts(job.directory)
     resource_request = request_for_job(job)
-    submit_file = write_condor_submit_file(job, env=env, resource_request=resource_request)
+    time_limit = time_limit_for_job(job)
+    submit_file = write_condor_submit_file(
+        job,
+        env=env,
+        resource_request=resource_request,
+        time_limit=time_limit,
+    )
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(
         status="submitting",
@@ -217,6 +224,9 @@ def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> 
         condor_requested_disk_kib=resource_request.disk_kib,
         condor_resource_request_source=resource_request.source,
         condor_resource_calibration_sample_count=resource_request.sample_count,
+        condor_allowed_execute_duration_sec=time_limit.seconds,
+        condor_time_limit_source=time_limit.source,
+        condor_time_calibration_sample_count=time_limit.sample_count,
     )
     write_metadata(job.directory, metadata)
 
@@ -269,11 +279,13 @@ def write_condor_submit_file(
     *,
     env: Mapping[str, str] | None = None,
     resource_request: HTCondorResourceRequest | None = None,
+    time_limit: HTCondorTimeLimit | None = None,
 ) -> Path:
     if htcondor_run_as_owner() and htcondor_load_profile():
         raise ValueError("HTCondor Windows config cannot combine run_as_owner=True with load_profile=True")
 
     resource_request = resource_request or request_for_job(job)
+    time_limit = time_limit or time_limit_for_job(job)
     prepare_sandbox_env_dirs(job.directory)
     inputs = transfer_input_files(job.directory, executable_name=WORKFLOW_SCRIPT_NAME)
     requirements = htcondor_requirements().strip()
@@ -315,6 +327,8 @@ def write_condor_submit_file(
         lines.append(f"retry_request_memory = {resource_request.memory_retry_text}")
     if resource_request.disk_retry_kib:
         lines.append(f"retry_request_disk = {resource_request.disk_retry_text}")
+    if time_limit.seconds is not None:
+        lines.append(f"allowed_execute_duration = {time_limit.seconds}")
     lines.extend(("queue 1", ""))
     path = job.directory / CONDOR_SUBMIT_FILE_NAME
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
@@ -385,6 +399,7 @@ def collect_condor_result(
 ) -> JobResult:
     individual_metadata = read_individual_metadata(job.directory)
     hold_info = condor_hold_info(submission) if terminal_reason == "held" else {}
+    timeout_hold = terminal_reason == "held" and _is_timeout_hold(hold_info)
     raw_paths = raw_data_paths(job.directory)
     zip_restore_error = None
     if not raw_paths:
@@ -392,12 +407,20 @@ def collect_condor_result(
         raw_paths = raw_data_paths(job.directory)
     log_info = condor_log_info(job.directory)
     resource_usage = condor_resource_usage(submission)
+    if timeout_hold:
+        timeout_remove_error = remove_condor_job(submission)
+        if remove_error is None:
+            remove_error = timeout_remove_error
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(individual_metadata)
 
+    effective_timed_out = bool(timed_out or timeout_hold)
     if timed_out:
         status = "timeout"
         error = f"HTCondor job exceeded timeout_sec while waiting for job-local outputs"
+    elif timeout_hold:
+        status = "timeout"
+        error = "HTCondor job exceeded allowed_execute_duration and was not retried"
     elif terminal_reason in {"held", "aborted", "removed"}:
         status = "error"
         hold_reason = str(hold_info.get("condor_hold_reason") or "")
@@ -432,7 +455,7 @@ def collect_condor_result(
 
     metadata.update(
         status=status,
-        timed_out=timed_out,
+        timed_out=effective_timed_out,
         runner_finished_at=now_text(),
         raw_data_files=[path.name for path in raw_paths],
         stdout_tail=_read_tail(job.directory / CONDOR_STDOUT_FILE_NAME),
@@ -449,6 +472,8 @@ def collect_condor_result(
     metadata.update(log_info)
     metadata.update(resource_usage)
     metadata.update(hold_info)
+    if timeout_hold:
+        metadata["condor_timeout_enforced_by"] = "allowed_execute_duration"
     if error is not None:
         metadata["error"] = error
     if zip_restore_error is not None:
@@ -532,6 +557,8 @@ def _resource_usage_from_ad(ad: Mapping[str, object]) -> dict[str, object]:
         "RequestMemory": "condor_reported_request_memory_mib",
         "RequestDisk": "condor_reported_request_disk_kib",
         "RequestCpus": "condor_reported_request_cpus",
+        "RemoteWallClockTime": "condor_remote_wall_clock_sec",
+        "CumulativeSuspensionTime": "condor_cumulative_suspension_sec",
     }
     info: dict[str, object] = {}
     for ad_name, metadata_name in field_map.items():
@@ -702,6 +729,14 @@ def condor_hold_info(submission: CondorSubmission) -> dict[str, object]:
         info["condor_hold_reason_code"] = parts[-2]
         info["condor_hold_reason_subcode"] = parts[-1]
     return info
+
+
+def _is_timeout_hold(hold_info: Mapping[str, object]) -> bool:
+    try:
+        code = int(hold_info.get("condor_hold_reason_code"))
+    except (TypeError, ValueError):
+        return False
+    return code in {46, 47}
 
 
 def submit_failure_result(job: JobSpec, exc: BaseException) -> JobResult:

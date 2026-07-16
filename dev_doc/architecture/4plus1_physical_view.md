@@ -57,9 +57,12 @@ not set `transfer_output_files`, so HTCondor returns generated files such as `ra
 `individual_metadata.json`, and PyAEDT-created `batch.log` when they exist without
 holding the job if optional files are absent.
 The submit side also queries final job ClassAds through `condor_history` to record
-memory/disk observations. Those records drive the next generation's effective
-memory/disk requests; the source config remains unchanged and CPU request remains
-manual.
+memory/disk observations and cumulative remote wall-clock/suspension time. Those
+records drive the next generation's effective memory/disk requests and per-job
+execution limit; the source config remains unchanged and CPU request remains
+manual. Normal jobs carry `allowed_execute_duration`, while the unindexed smoke job
+omits it. A duration hold is removed by the submit side after it is recorded as a
+timeout.
 Windows distributed execution targets HTCondor's slot-user model:
 `run_as_owner = False` and `load_profile = True`. This is a deployment contract, not
 only a local debug preference. The expected pool contains many office/personal
@@ -82,6 +85,7 @@ not perform those system-administration actions.
   owner credentials, or running jobs as the submitting desktop user.
 - Real simulator adapters may require Windows-only COM automation and installed applications.
 - Real workflow smoke tests may require task-specific simulator software. They are disposable checks under root `temp/` in the current layout and belong in the task workspace after package separation; they are not committed under `project/test/`.
+- Maintained automated test modules live only under `project/test/`; software-specific source directories and adapter directories do not contain colocated tests.
 - Job path should be configurable so users can move high-write runtime folders to faster storage.
 - Machine-specific install locations must be discovered from repository-relative paths, explicit user arguments, standard install discovery, or existing environment variables. The project must not require users to add new system environment variables as a setup prerequisite.
 - `created_at` is not part of the individual record contract; job creation time can be inferred from time-based job folder names when needed.

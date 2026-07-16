@@ -27,7 +27,7 @@
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; generic tools stay at its root and simulator-specific tools live under `project.tools.specific.<software>`. Core runtime and generic tests must not depend on tools. System-environment and HTCondor-pool configuration belong in `admin_tool/`.
 - `project.config` is a package: `key.py` holds routine generic settings, `all.py` holds the complete generic surface, and `specific/` contains simulator-specific extensions.
-- `project.test` verifies generic framework contracts only: local closed-loop orchestration through task doubles, rawData contracts, failure isolation, dynamic cost/normalization behavior, surrogate behavior, and generic tool compatibility. Current-task tests belong in ignored `temp/` now and in the workspace after package separation.
+- `project.test` is the sole source location for maintained automated tests. It verifies generic framework contracts and may also verify reusable software-specific adapters or tools with mocks and synthetic inputs. It never encodes the current task's concrete files, objectives, variable shape, or expected physical results. Current-task tests and their resources belong in ignored `temp/` now and in the task workspace after package separation.
 - `dev_doc` owns project documentation guidance, including current architecture
   contracts, selective blueprint reading, terminology, historical lineage,
   manual and automatic toDo handoffs, obsolete archives, and append-only change
@@ -52,6 +52,7 @@
 - Complex per-individual workflows are allowed as long as their output contract is flat rawData plus metadata.
 - Past completed rawData may be reused after controlled task edits; users must remove or ignore old history when new task semantics make it misleading.
 - Individual failures, timeouts, submit failures, invalid rawData, and record failures should degrade to inspectable metadata and `inf` costs instead of crashing a whole generation.
+- The normal launcher may run one configurable no-timeout smoke individual before optimization. Distributed normal jobs have scheduler-enforced per-job execution limits distinct from the submit-side generation wait budget.
 - Local mode must stay usable without HTCondor or real simulator software for default tests.
 
 ## Non-Obvious Techniques
@@ -72,6 +73,10 @@
   metadata. The next generation's memory/disk submit request is derived from those
   observations with a documented smoke/bootstrap and high-tail-trimming policy;
   CPU request remains manual.
+- Distributed jobs also record cumulative remote wall-clock and suspension time.
+  `allowed_execute_duration` is omitted for smoke and calculated per normal job from
+  either the configured fixed hour or the automatic smoke/preceding-generation
+  policy. Duration holds are terminal timeout results and are removed without retry.
 - Windows HTCondor execution must target slot-user jobs with `run_as_owner = False`
   and `load_profile = True`. The deployment pool consists of many office/personal
   workstations with different interactive owners, and any workstation may submit or

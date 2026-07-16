@@ -3,21 +3,24 @@ from __future__ import annotations
 import shutil
 import sys
 import traceback
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from hfss_com import analyze, save_farField, save_modal, set_hfss_temp_directory, set_para, set_variables, solver_exit, solver_init
+from parameters_constraints import get_parameters
 
 try:
-    from config.specific import hfss as job_config
+    import config as job_config
 except ImportError:
     try:
-        from project.config.specific import hfss as job_config
+        from project import config as job_config
     except ImportError:
         job_config = None
 from worker_misc import (
     bootstrap_home_dirs,
     env_bool,
     env_int,
+    load_variables,
     now_text,
     prepare_rawdata_dir,
     raw_data_file_names,
@@ -51,20 +54,64 @@ RAW_DATA_DIR = BASE_DIR / "rawData"
 RAW_DATA_TRANSFER_ZIP = BASE_DIR / "rawData_outputs.zip"
 TEMP_DIR = BASE_DIR / "_tmp"
 INDIVIDUAL_METADATA = BASE_DIR / "individual_metadata.json"
+PARAMETER_VALUES_FILE = BASE_DIR / "parameters_values.py"
 
 CONFIG_JOB_CPUCORE = int(getattr(job_config, "HFSS_JOB_CPUCORE", 1)) if job_config is not None else 1
 CONFIG_PARALLEL_TASKS = int(getattr(job_config, "HFSS_PARALLEL_TASKS", 1)) if job_config is not None else 1
 CONFIG_NON_GRAPHICAL = bool(getattr(job_config, "HFSS_NON_GRAPHICAL", True)) if job_config is not None else True
 
+# The job-local config and generated HTCondor environment share this setting.
 JOB_CPUCORE = env_int("YADOF_HFSS_JOB_CPUCORE", CONFIG_JOB_CPUCORE, minimum=1)
 PARALLEL_TASKS = env_int("YADOF_HFSS_PARALLEL_TASKS", CONFIG_PARALLEL_TASKS, minimum=1)
 NON_GRAPHICAL = env_bool("YADOF_HFSS_NON_GRAPHICAL", CONFIG_NON_GRAPHICAL)
 
 
-def _start_hfss():
+def _hfss_variables(variables: Mapping[str, float] | Sequence[float]) -> dict[str, str]:
+    """Format the current individual variables for HFSS.
+
+    Parameter names and units come from parameters_constraints.py. Values come
+    from the job input written by evaluate_manager for this individual.
+    """
+
+    parameters = get_parameters()
+    units = {parameter.name: str(getattr(parameter, "unit", "") or "") for parameter in parameters}
+    if isinstance(variables, Mapping):
+        values = variables.items()
+    else:
+        raw_values = tuple(float(value) for value in variables)
+        if len(raw_values) != len(parameters):
+            raise ValueError(f"expected {len(parameters)} variables, got {len(raw_values)}")
+        values = zip((parameter.name for parameter in parameters), raw_values)
+    return {str(name): f"{float(value):.17g}{units.get(str(name), '')}" for name, value in values}
+
+
+def _write_parameter_values_file(variables: Mapping[str, float] | Sequence[float]) -> Path:
+    """Materialize current values in the format consumed by set_para."""
+
+    values = _hfss_variables(variables)
+    lines = [
+        "class _Parameter:",
+        "    def __init__(self, name, unit, value):",
+        "        self.name = name",
+        "        self.unit = unit",
+        "        self.value = value",
+        "",
+        "PARAMETERS = (",
+    ]
+    for parameter in get_parameters():
+        name = parameter.name
+        unit = str(getattr(parameter, "unit", "") or "")
+        raw_value = values[name][: -len(unit)] if unit else values[name]
+        lines.append(f"    _Parameter({name!r}, {unit!r}, {float(raw_value)!r}),")
+    lines.extend((")", ""))
+    PARAMETER_VALUES_FILE.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+    return PARAMETER_VALUES_FILE
+
+
+def _start_hfss(parameter_values_file: Path):
     hfss_app, *_ = solver_init(projectName=str(PROJECT_PATH), designName=DESIGN_NAME, non_graphical=NON_GRAPHICAL)
     set_hfss_temp_directory(hfss_app, TEMP_DIR)
-    set_para(hfss_app)
+    set_para(hfss_app, str(parameter_values_file))
     return hfss_app
 
 
@@ -135,7 +182,8 @@ def main() -> None:
 
     #========================================================Simulation Workflow Begin========================================================
     try:
-        hfssApp = _start_hfss()
+        parameter_values_file = _write_parameter_values_file(load_variables(BASE_DIR))
+        hfssApp = _start_hfss(parameter_values_file)
         for pin_state in PIN_STATES:
             _save_pin_state_rawdata(hfssApp, pin_state)
 
@@ -193,6 +241,7 @@ def main() -> None:
             print(f"WARNING: solver_exit failed during cleanup: {cleanup_exc}", file=sys.stderr, flush=True)
         shutil.rmtree(PROJECT_PATH.with_name(PROJECT_PATH.stem + ".aedtresults"), ignore_errors=True)
         shutil.rmtree(TEMP_DIR, ignore_errors=True)
+        PARAMETER_VALUES_FILE.unlink(missing_ok=True)
     #========================================================Simulation Workflow End========================================================
 
 

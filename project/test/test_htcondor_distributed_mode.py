@@ -62,6 +62,7 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     assert f"request_disk = {resource_request.disk_text}" in text
     assert f"retry_request_memory = {resource_request.memory_retry_text}" in text
     assert f"retry_request_disk = {resource_request.disk_retry_text}" in text
+    assert "allowed_execute_duration = 3600" in text
     assert 'Machine != "DESKTOP-A2091"' not in text
     if project_config.HTCONDOR_ALLOWED_MACHINES:
         for machine in project_config.HTCONDOR_ALLOWED_MACHINES:
@@ -88,6 +89,19 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     assert "cost.json" not in text
     assert not (job.directory / "run_workflow.cmd").exists()
     assert not (job.directory / "batch.log").exists()
+
+
+def test_smoke_submit_file_has_no_allowed_execute_duration(tmp_path):
+    from dataclasses import replace
+
+    from project.evaluate_manager.condor_runner import write_condor_submit_file
+
+    job = replace(_job(tmp_path), generation_index=None)
+    (job.directory / "workflow.py").write_text("# test\n", encoding="utf-8", newline="\n")
+
+    text = write_condor_submit_file(job).read_text(encoding="utf-8")
+
+    assert "allowed_execute_duration" not in text
 
 
 def test_submit_condor_job_clears_stale_runtime_artifacts_before_submit(tmp_path, monkeypatch):
@@ -289,6 +303,47 @@ def test_condor_result_reports_bad_transfer_zip_without_raising(tmp_path):
     assert result.status == "error"
     assert "rawData_outputs.zip" in result.metadata["rawdata_transfer_zip_error"]
     assert "Workflow reported done and listed rawData files" in result.metadata["error"]
+
+
+def test_allowed_execute_duration_hold_is_timeout_and_is_not_retried(tmp_path, monkeypatch):
+    from project.evaluate_manager import condor_runner
+    from project.evaluate_manager.condor_runner import CondorSubmission, collect_condor_result
+
+    job = _job(tmp_path)
+    submit_file = job.directory / "job.sub"
+    submit_file.write_text("queue 1\n", encoding="utf-8", newline="\n")
+    removed = []
+    submission = CondorSubmission(
+        job=job,
+        submit_file=submit_file,
+        cluster_id=123,
+        submitted_at="2026-07-16T00:00:00+08:00",
+        stdout="submitted",
+        stderr="",
+    )
+    monkeypatch.setattr(
+        condor_runner,
+        "condor_hold_info",
+        lambda _submission: {
+            "condor_hold_reason": "The job exceeded allowed execution time",
+            "condor_hold_reason_code": "47",
+            "condor_hold_reason_subcode": "0",
+        },
+    )
+    monkeypatch.setattr(
+        condor_runner,
+        "condor_resource_usage",
+        lambda _submission: {"condor_remote_wall_clock_sec": 3600},
+    )
+    monkeypatch.setattr(condor_runner, "remove_condor_job", lambda item: removed.append(item.cluster_id))
+
+    result = collect_condor_result(job, submission=submission, timed_out=False, terminal_reason="held")
+
+    assert result.status == "timeout"
+    assert result.metadata["timed_out"] is True
+    assert result.metadata["condor_timeout_enforced_by"] == "allowed_execute_duration"
+    assert "was not retried" in result.metadata["error"]
+    assert removed == [123]
 
 
 def test_condor_result_explains_legacy_missing_nested_rawdata(tmp_path):

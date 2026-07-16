@@ -48,6 +48,75 @@ def evaluate_population(
     jobs_dir = default_jobs_dir() if jobs_dir is None else jobs_dir
     timeout_sec = default_timeout_sec() if timeout_sec is None else timeout_sec
 
+    return _dispatch_population(
+        population,
+        mode=mode,
+        jobs_dir=jobs_dir,
+        job_template_dir=job_template_dir,
+        timeout_sec=float(timeout_sec),
+        python_executable=python_executable,
+        env=env,
+        local_max_workers=local_max_workers,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        after_jobs_submitted=after_jobs_submitted,
+    )
+
+
+def run_smoke_test(
+    *,
+    mode: str | None = None,
+    jobs_dir: str | Path | None = None,
+    job_template_dir: str | Path = DEFAULT_JOB_TEMPLATE_DIR,
+    normalized_variables: Iterable[float] | None = None,
+    python_executable: str | Path = sys.executable,
+    env: Mapping[str, str] | None = None,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
+) -> tuple[tuple[float, ...], ...]:
+    """Run one midpoint individual with no generation or per-job time limit."""
+
+    if normalized_variables is None:
+        from project.job_template import api as job_template_api
+
+        signature = job_template_api.get_parameter_definition_signature(
+            Path(job_template_dir) / "parameters_constraints.py"
+        )
+        normalized_variables = (0.5,) * len(tuple(signature["parameters"]))
+
+    return _dispatch_population(
+        (tuple(float(value) for value in normalized_variables),),
+        mode=(default_mode() if mode is None else mode).strip().lower(),
+        jobs_dir=default_jobs_dir() if jobs_dir is None else jobs_dir,
+        job_template_dir=job_template_dir,
+        timeout_sec=None,
+        python_executable=python_executable,
+        env=env,
+        local_max_workers=1,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=None,
+        after_jobs_submitted=None,
+    )
+
+
+def _dispatch_population(
+    population: Iterable[Iterable[float]],
+    *,
+    mode: str,
+    jobs_dir: str | Path,
+    job_template_dir: str | Path,
+    timeout_sec: float | None,
+    python_executable: str | Path,
+    env: Mapping[str, str] | None,
+    local_max_workers: int | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+    after_jobs_submitted: Callable[[], object] | None,
+) -> tuple[tuple[float, ...], ...]:
+
     if mode == "local":
         local_workers = (
             local_evaluation_max_workers()
@@ -95,7 +164,7 @@ def _evaluate_population_local(
     *,
     jobs_dir: str | Path,
     job_template_dir: str | Path,
-    timeout_sec: float,
+    timeout_sec: float | None,
     python_executable: str | Path,
     env: Mapping[str, str] | None,
     local_max_workers: int,
@@ -172,7 +241,7 @@ def _evaluate_one_local(
     population_row: tuple[Any, ...],
     jobs_dir: Path,
     job_template_dir: str | Path,
-    timeout_sec: float,
+    timeout_sec: float | None,
     python_executable: str | Path,
     env: Mapping[str, str] | None,
     run_id: str | None,
@@ -255,7 +324,7 @@ def _evaluate_population_distributed(
     *,
     jobs_dir: str | Path,
     job_template_dir: str | Path,
-    timeout_sec: float,
+    timeout_sec: float | None,
     env: Mapping[str, str] | None,
     run_id: str | None,
     optimization_index: int | None,

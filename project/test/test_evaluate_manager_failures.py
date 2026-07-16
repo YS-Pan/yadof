@@ -7,6 +7,30 @@ import time
 from types import ModuleType
 
 
+def test_smoke_test_dispatches_one_individual_without_timeout(tmp_path, monkeypatch):
+    from project.evaluate_manager import api
+
+    calls = []
+
+    def fake_local(population, **kwargs):
+        calls.append((tuple(population), kwargs))
+        return ((0.25,),)
+
+    monkeypatch.setattr(api, "_evaluate_population_local", fake_local)
+
+    costs = api.run_smoke_test(
+        mode="local",
+        jobs_dir=tmp_path,
+        normalized_variables=(0.5, 0.5),
+    )
+
+    assert costs == ((0.25,),)
+    assert calls[0][0] == ((0.5, 0.5),)
+    assert calls[0][1]["timeout_sec"] is None
+    assert calls[0][1]["generation_index"] is None
+    assert calls[0][1]["local_max_workers"] == 1
+
+
 def test_prepare_failure_returns_inf_and_generation_continues(tmp_path, monkeypatch):
     from project.evaluate_manager import api
     from project.evaluate_manager.types import JobResult, JobSpec

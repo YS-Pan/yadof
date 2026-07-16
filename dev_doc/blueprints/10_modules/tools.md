@@ -45,7 +45,7 @@
 - HFSS/PyAEDT parameter extraction is environment-sensitive. Design names are task-specific; passing an old or wrong design name can make PyAEDT select or create the wrong design context and return no optimization variables. If the project has exactly one design, prefer omitting `--design`; otherwise pass the active design explicitly.
 - AEDT startup also depends on the interactive Windows user profile and writable Ansys/PyAEDT folders. A VS Code click-run under the normal desktop user may succeed where a sandboxed or non-graphical command times out while starting gRPC or touching `Documents/Ansoft`. For Codex-run smoke checks, use the correct design name, allow a long timeout, and run outside the sandbox when AEDT needs the real user profile.
 - `specific/hfss/get_para_and_range.py` archives the old `parameters_constraints.py` only after it has found variables to write, so a failed extraction should leave the current parameter file intact.
-- Software-specific tests may stay beside these tools; the default framework test suite under `project/test/` remains software-agnostic.
+- Reusable software-specific tool tests live under `project/test/`, not beside these tools. They use synthetic inputs or mocks and remain independent of the active optimization task and installed simulator software.
 
 ## Mutability Profile
 - Tools can change quickly for user convenience.

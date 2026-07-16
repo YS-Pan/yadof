@@ -13,7 +13,7 @@
 - `hfss_com.py` is the reusable HFSS/PyAEDT adapter reference. Its current contents are synchronized from the active `project/job_template/hfss_com.py` after reusable adapter fixes are validated.
 - `test_com.py` is a pure-Python simulator stand-in that can be copied into a task for synthetic workflow development and surrogate tests outside the generic framework suite.
 - Additional adapters use descriptive `*_com.py` names and may target another simulator, a custom program, or one step in a multi-program workflow.
-- Adapter-specific contract tests may live in `project/com_lib/`; they are run explicitly and are not part of the software-agnostic `project/test/` test path.
+- Reusable adapter-specific contract tests live under `project/test/`, not in `project/com_lib/`. They use synthetic inputs or mocks and remain independent of the active optimization task.
 
 ## I/O Format
 - Files in `project/com_lib/` are importable references for development and explicit tests, but active workflows must not import them through `project.com_lib`.

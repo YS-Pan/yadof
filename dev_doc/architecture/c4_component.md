@@ -44,7 +44,8 @@ flowchart LR
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
 - `resource_requests.py`: generation-aware adaptive HTCondor memory/disk request
   calculation from recorded Condor measurements; CPU remains manual.
-- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, timeout removal, final ClassAd resource collection, and job-local result collection.
+- `time_limits.py`: per-job HTCondor execution-limit calculation. Smoke jobs are unlimited; normal jobs use fixed or generation-aware automatic limits from recorded execution time.
+- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, generation-budget timeout removal, `allowed_execute_duration` hold handling, final ClassAd resource/time collection, and job-local result collection.
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.

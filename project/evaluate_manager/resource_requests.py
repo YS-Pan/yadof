@@ -91,6 +91,19 @@ def request_for_job(job: JobSpec) -> HTCondorResourceRequest:
         if disk_values:
             disk_kib = _scaled_quantity(_trimmed_high(disk_values), bootstrap_multiplier * disk_multiplier)
         source = calibration_source
+    elif (
+        _generation_index(job) == 0
+        and _as_bool(getattr(project_config, "HTCONDOR_RESOURCE_AUTODETECT_ENABLED", True))
+        and not _as_bool(getattr(project_config, "OPTIMIZE_SMOKE_TEST_ENABLED", True))
+    ):
+        bootstrap_multiplier = _positive_float(
+            getattr(project_config, "HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER", 2.0),
+            "HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER",
+        )
+        memory_mib = _scaled_quantity(base_memory_mib, bootstrap_multiplier)
+        disk_kib = _scaled_quantity(base_disk_kib, bootstrap_multiplier * disk_multiplier)
+        source = "configured_smoke_fallback"
+        sample_count = 1
 
     retry_doublings = _nonnegative_int(
         getattr(project_config, "HTCONDOR_RESOURCE_RETRY_DOUBLINGS", 4),
@@ -113,6 +126,10 @@ def _calibration_measurements(job: JobSpec) -> tuple[tuple[list[float], list[flo
     generation_index = _generation_index(job)
     if generation_index is None:
         return None, "smoke_default"
+    if generation_index == 0 and not _as_bool(
+        getattr(project_config, "OPTIMIZE_SMOKE_TEST_ENABLED", True)
+    ):
+        return None, "smoke_disabled"
 
     target_generation = None if generation_index == 0 else generation_index - 1
     memory_values: list[float] = []

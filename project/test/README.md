@@ -1,20 +1,34 @@
-# Framework Test Scope
+# Test Scope And Placement
 
-`project/test/` contains only reusable yadof framework-contract tests. Tests here
-must be independent of the active optimization task and of any particular simulator
-or vendor.
+`project/test/` is the only source location for maintained automated tests. Do not
+place pytest modules beside implementation code, including under
+`project/tools/specific/<software>/` or `project/com_lib/`.
 
-Do not add assertions about the current task's parameter names or count, objective
-names or count, model/input filenames, simulator expressions, adapter-specific
-arrays, or expected physical results. Use generic task doubles, neutral filenames,
-and schema-valid synthetic rawData when a framework test needs task behavior.
+Tests here may cover either generic framework behavior or reusable behavior tied to
+a particular simulator, vendor, adapter, or software-specific tool. A
+software-specific test must remain independent of the active optimization task. It
+should use mocks, synthetic data, and generated temporary resource names, and it
+must not require the real external software during the default `pytest -q` run.
 
-Tests for a simulator-specific tool or reusable adapter may live beside that code
-under `project/tools/specific/<software>/` or `project/com_lib/` and are run
-explicitly. They are not part of the default `pytest -q` path.
+A test is task-specific when it encodes assumptions belonging to one optimization
+task rather than to a reusable framework or software integration contract. Do not
+put such tests in `project/test/`. Task-specific assumptions include, but are not
+limited to:
 
-If the active optimization task needs a temporary regression or real-workflow smoke
-test in the current repository layout, put it under the ignored root `temp/`
-directory. Files there are disposable and may be deleted at any time. After yadof
-uses an installed package plus user workspaces, keep and run task-specific tests in
-the corresponding workspace instead.
+- a concrete task input or model filename, such as a particular `.aedt` filename or
+  design name;
+- a concrete objective or measurement, such as `S11`, or a task's expected physical
+  result;
+- the active task's exact optimization-variable count, names, ranges, or units;
+- importing, executing, or inspecting the active files under `project/job_template/`
+  to assert the behavior of the current task.
+
+Neutral generated filenames and minimal synthetic variable/objective shapes are
+allowed when they exist only to exercise a reusable contract and do not reproduce
+the active task.
+
+If a current optimization task needs a regression or real-workflow smoke test, put
+the test and every supporting model/input file under the ignored root `temp/`
+directory. Everything under `temp/` except `.gitkeep` is disposable and must remain
+safe to delete at any time. After yadof uses an installed package plus user
+workspaces, keep and run task-specific tests in the corresponding workspace instead.

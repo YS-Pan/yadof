@@ -6,6 +6,7 @@
 - Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. Objective names, count, physical meaning, and numeric scale are task-specific.
 - Job: one real evaluation sandbox created by `evaluate_manager`.
 - Individual metadata: job-local lifecycle JSON written by `workflow.py`, including the evaluation start/end times when the workflow reaches those points.
+- Per-job execution limit: the HTCondor-side `allowed_execute_duration` applied to one normal distributed individual. It is separate from the submit-side whole-generation wait budget; smoke jobs have no such limit.
 - Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
 
 ## Logical Modules
@@ -38,4 +39,5 @@
 - Current HFSS far-field rawData is stored as full-matrix data by default; objective cost calculation may select phi/theta/frequency windows from that matrix, but it must not make the workflow export only those windows unless a task intentionally requests trace diagnostics.
 - Failed records can exist and be inspected, but default optimization history uses completed records.
 - `evaluate_manager` may add runner diagnostics, but workflow-owned timing is read from the job folder before recording.
+- A Condor hold with code 46 or 47 is a timeout result. The submit side records it and removes the held job so the timed-out individual is not retried.
 - Current HFSS cost shaping follows the old huangzetao/fanyufei tanh-style soft objective mapping: goal-like values approach 0 and worst-threshold values approach 1.

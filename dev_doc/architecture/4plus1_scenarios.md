@@ -58,3 +58,10 @@
 3. The relevant `dev_doc/blueprints/` files are updated when the change affects module intent, I/O, non-obvious techniques, or mutability boundaries.
 4. A new file is appended under `dev_doc/change_records/` with a date-time prefix and a short description.
 5. `dev_doc/terminology.md` is updated if the change corrects a concept or introduces a non-obvious name.
+
+## Scenario 8: Launch With Automatic Time Calibration
+1. `start_optimization_from_config.py` reads `OPTIMIZE_SMOKE_TEST_ENABLED` from the key/full config surface.
+2. When enabled, it evaluates one midpoint individual in the configured backend with no timeout and stops before optimization if the smoke result has no finite cost.
+3. Generation zero submits each normal Condor job with `allowed_execute_duration = smoke duration * HTCONDOR_JOB_TIMEOUT_MULTIPLIER`.
+4. Each following generation derives its limit from the preceding generation after the configured top-tail trim; timed-out records participate as infinity under the documented finite-fallback rule.
+5. When smoke is disabled, the user-entered memory, disk, and one-hour timeout baselines stand in for smoke measurements and receive their configured bootstrap multipliers.

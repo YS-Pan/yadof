@@ -11,7 +11,7 @@
 - Current local and distributed backends share the rawData-first recording path rather than preserving separate result schemas.
 
 ## Functionalities
-- `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`.
+- `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`; `api.run_smoke_test()` runs one midpoint individual without a generation or per-job timeout.
 - Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
 - Distributed mode prepares all jobs, writes HTCondor submit files, submits the prepared job-local `workflow.py` directly as the transferred executable, runs an optional submit-side callback after all prepared jobs are submitted, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
 - `job_files.prepare_job()` copies job template files, calls
@@ -24,7 +24,8 @@
   HTCondor measurements while preserving the user-selected CPU request. It uses
   unindexed distributed smoke records for generation zero and the same run's
   preceding generation thereafter.
-- `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, queries final Condor ClassAd resource usage when available, extracts Condor return-value/log tails, best-effort removes timed-out cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
+- `time_limits.py` derives `allowed_execute_duration` from the configured fixed baseline or from smoke/preceding-generation execution durations with high-tail trimming and timeout-as-infinity handling.
+- `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, queries final Condor ClassAd resource/time usage when available, extracts Condor return-value/log tails, removes duration-held or generation-timeout cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
 - `job_result.py` provides shared helpers for reading/writing job metadata, discovering rawData files, promoting workflow metadata, and constructing `JobResult`.
 - `recorded_data_client.record_result()` adapts `JobResult` to supported `recorded_data.api` functions and retrieves dynamically computed costs when possible.
 - `types.py` defines immutable `JobSpec` and `JobResult` records for internal handoff.
@@ -37,7 +38,7 @@
   `population_index` when available.
 - Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, calculated resource-request source/values, returned Condor memory/disk/CPU measurements when available, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
 - Raw outputs: top-level `.npz` files under each job's `rawData/` directory.
-- HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
+- HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, a normal-job `allowed_execute_duration`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. Smoke omits the time limit. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
 - Public output: `population[individual][objective_cost]`, with `inf` rows for failures whose objective width cannot be recovered.
 
 ## Non-Obvious Techniques
@@ -55,6 +56,10 @@
 - The adaptive resource controller never rewrites source config. It treats
   `HTCONDOR_REQUEST_MEMORY` and `HTCONDOR_REQUEST_DISK` as safe fallbacks when a
   distributed smoke test or previous generation has no usable ClassAd measurement.
+- The adaptive time controller also never rewrites config. It records the effective
+  limit/source/sample count in job metadata, uses Condor execution duration when
+  available, and falls back to workflow timestamps. Duration hold codes 46/47 are
+  recorded as `timeout`, removed from the queue, and never retried.
 - Generated submit files carry bounded doubling retry ladders for memory and disk.
   HTCondor may restart an evicted job from the beginning, so this is a safety net
   for the trimmed tail rather than a replacement for a realistic normal request.

@@ -18,6 +18,7 @@
   doubling retry ladder for both resources.
 - Fall back to configured bootstrap quantities when no usable HTCondor metadata is
   present; do not write back to `key.py` or `all.py`.
+- When the launch smoke test is disabled, treat the configured memory/disk quantities as synthetic smoke measurements and apply the normal generation-zero bootstrap multiplier.
 
 ## I/O Format
 

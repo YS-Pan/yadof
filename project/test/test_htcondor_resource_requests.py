@@ -29,6 +29,7 @@ def _configure_defaults(monkeypatch):
     monkeypatch.setattr(project_config, "HTCONDOR_RESOURCE_TRIM_TOP_FRACTION", 0.05)
     monkeypatch.setattr(project_config, "HTCONDOR_RESOURCE_RETRY_DOUBLINGS", 4)
     monkeypatch.setattr(project_config, "HTCONDOR_REQUEST_DISK_MULTIPLIER", 1.0)
+    monkeypatch.setattr(project_config, "OPTIMIZE_SMOKE_TEST_ENABLED", True)
 
 
 def test_hfss_solver_core_count_uses_the_specific_multiplier():
@@ -123,6 +124,36 @@ def test_missing_calibration_uses_configured_values_and_disk_multiplier(tmp_path
     assert request.source == "configured_default"
 
 
+def test_disabled_smoke_treats_configured_resources_as_smoke_measurements(tmp_path, monkeypatch):
+    from project.config import all as project_config
+    from project.evaluate_manager import resource_requests
+
+    _configure_defaults(monkeypatch)
+    monkeypatch.setattr(project_config, "OPTIMIZE_SMOKE_TEST_ENABLED", False)
+    monkeypatch.setattr(project_config, "HTCONDOR_REQUEST_DISK_MULTIPLIER", 1.5)
+    monkeypatch.setattr(
+        resource_requests.recorded_data_api,
+        "list_records",
+        lambda: (
+            {
+                "status": "completed",
+                "job_metadata": {
+                    "engine": "htcondor",
+                    "condor_memory_usage_mib": 999,
+                    "condor_disk_usage_kib": 9999,
+                },
+            },
+        ),
+    )
+
+    request = resource_requests.request_for_job(_job(tmp_path, generation_index=0))
+
+    assert request.memory_mib == 20
+    assert request.disk_kib == 300
+    assert request.source == "configured_smoke_fallback"
+    assert request.sample_count == 1
+
+
 def test_condor_history_usage_is_promoted_to_runner_metadata(tmp_path, monkeypatch):
     from project.evaluate_manager import condor_runner
     from project.evaluate_manager.condor_runner import CondorSubmission
@@ -146,7 +177,8 @@ def test_condor_history_usage_is_promoted_to_runner_metadata(tmp_path, monkeypat
             returncode=0,
             stdout=(
                 '[{"MemoryUsage": 1536, "DiskUsage": 4096, "ResidentSetSize": 1572864, '
-                '"CpusUsage": 1.25, "RequestMemory": 2048, "RequestDisk": 8192, "RequestCpus": 3}]'
+                '"CpusUsage": 1.25, "RequestMemory": 2048, "RequestDisk": 8192, "RequestCpus": 3, '
+                '"RemoteWallClockTime": 125.5, "CumulativeSuspensionTime": 5}]'
             ),
             stderr="",
         )
@@ -163,5 +195,7 @@ def test_condor_history_usage_is_promoted_to_runner_metadata(tmp_path, monkeypat
         "condor_reported_request_memory_mib": 2048,
         "condor_reported_request_disk_kib": 8192,
         "condor_reported_request_cpus": 3,
+        "condor_remote_wall_clock_sec": 125.5,
+        "condor_cumulative_suspension_sec": 5,
         "condor_resource_usage_source": "condor_history",
     }

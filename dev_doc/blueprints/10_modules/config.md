@@ -21,10 +21,10 @@
   `config.specific` before reloading `all.py`; they must not import a concrete
   `specific/<software>.py` module.
 - Defines derived root paths such as `PROJECT_ROOT`, `JOBS_DIR`, and `SURROGATE_CHECKPOINT_DIR` in the full config.
-- Selects `EVALUATION_MODE` and timeout behavior.
+- Selects `EVALUATION_MODE`, the optional launch smoke test, the submit-side generation wait budget, and the HTCondor per-job timeout mode/baseline.
 - Defines local evaluation worker count for parallel-safe local workflows.
 - Defines HTCondor command/resource/submit defaults for distributed evaluation,
-  including automatic memory/disk calibration parameters.
+  including automatic memory/disk calibration and per-job time-limit parameters.
 - Keeps workflow-side simulator defaults out of generic `key.py` and `all.py`.
 - Defines optimizer population, random seed, NSGA-III reference-direction controls, pymoo operator parameters, duplicate-key rounding, and refill behavior.
 - Defines surrogate model, torch device selection, conditional-INR training, target scaling, task-owned rawData importance weighting, stochastic training query limits, and error hyperparameters.
@@ -35,10 +35,10 @@
 - `key.py` and `all.py` must remain software-agnostic. `key.py` contains constants only; `all.py` may contain generic composition helpers but not task logic or simulator-named settings.
 - Paths are `Path` objects rooted in `project/` when they are derived in `all.py`, whose file now lives one directory below the project root.
 - Numeric controls should be simple Python scalars.
-- Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_HISTORY_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`, `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER`, `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION`, `HTCONDOR_RESOURCE_RETRY_DOUBLINGS`, `HTCONDOR_REQUEST_DISK_MULTIPLIER`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
+- Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `OPTIMIZE_SMOKE_TEST_ENABLED`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_HISTORY_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`, `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER`, `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION`, `HTCONDOR_RESOURCE_RETRY_DOUBLINGS`, `HTCONDOR_REQUEST_DISK_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`, `HTCONDOR_JOB_TIMEOUT_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
 
 ## Non-Obvious Techniques
-- `project/config/key.py` is intentionally short. Its current surface includes evaluation mode/timeout, generic HTCondor resources, and population size.
+- `project/config/key.py` is intentionally short. Its current surface includes evaluation mode/generation timeout, the optional smoke switch, generic HTCondor resources, the auto/fixed per-job timeout baseline, and population size.
 - `project/config/all.py` is the generic discovery layer. Adding a new cross-module setting usually means adding it there first, then deciding whether it belongs in `key.py` or a `specific/<software>.py` module.
 - `evaluate_manager` copies the complete `project/config/` package into every prepared job folder, excluding caches, so submitted jobs retain generic and active software-specific context.
 - The active HFSS `workflow.py` reads job-local `config.specific.hfss`, then allows the corresponding HTCondor environment variables to override runtime values.
@@ -55,6 +55,7 @@
 - The HTCondor submit executable is not a config setting. Distributed jobs use direct `workflow.py` submission with `transfer_executable = True`; Python interpreter access is a worker environment/file-association prerequisite, not a submit-file executable path.
 - Config defaults must not encode machine-specific absolute install paths or require project-specific system environment variables. Use repository-relative derived paths, explicit user-provided settings, or environment variables that the relevant external installer already creates.
 - `EVALUATION_TIMEOUT_SEC` is the generation-level wait budget for distributed evaluation, not just a single HFSS solve timeout. Large populations submitted in waves need a value large enough for the full generation to drain.
+- `HTCONDOR_JOB_TIMEOUT_SEC` is a separate one-individual baseline and defaults to one hour. `HTCONDOR_JOB_TIMEOUT_MODE = "auto"` is the default; its multiplier (`2.0`) and top trim (`0.10`) remain advanced settings in `all.py`. Smoke has no time limit. If smoke is disabled, the baseline is treated as its measured duration for generation-zero calibration.
 - `HTCONDOR_REQUEST_MEMORY` is a scheduler reservation. It should be high enough for AEDT startup and solve memory so the pool does not overpack workers.
 - `HTCONDOR_REQUEST_MEMORY` and `HTCONDOR_REQUEST_DISK` are bootstrap values for
   `evaluate_manager.resource_requests`. A distributed smoke test supplies the
@@ -63,6 +64,7 @@
   the prior generation's highest remaining memory/disk measurement after removing
   `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION` from the top. Disk additionally applies
   `HTCONDOR_REQUEST_DISK_MULTIPLIER` after calibration.
+- If smoke is disabled, automatic memory/disk calibration likewise treats the user-entered bootstrap requests as smoke measurements and applies `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER` for generation zero.
 - `HTCONDOR_RESOURCE_RETRY_DOUBLINGS` limits the finite `2x`, `4x`, ... retry
   ladder emitted for both memory and disk. The bounded ladder keeps an accidental
   unlimited request from entering a submit file while allowing unusual jobs to

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from project.config import all as config
+from project.evaluate_manager.api import run_smoke_test
 from project.optimize.api import run_generations
 
 
@@ -29,6 +30,18 @@ def main() -> int:
     print("random seed:", config.OPTIMIZE_RANDOM_SEED, flush=True)
     print("generation count:", generations, flush=True)
     print("start generation:", start_generation, flush=True)
+    smoke_test_enabled = bool(getattr(config, "OPTIMIZE_SMOKE_TEST_ENABLED", True))
+    print("smoke test enabled:", smoke_test_enabled, flush=True)
+
+    if smoke_test_enabled:
+        print("starting smoke test (one midpoint individual, no timeout)", flush=True)
+        smoke_costs = run_smoke_test(mode=config.EVALUATION_MODE)
+        print("smoke test costs:", smoke_costs, flush=True)
+        if _all_inf(smoke_costs):
+            _print_recent_job_failures(Path(config.JOBS_DIR))
+            raise RuntimeError("smoke test produced no finite cost rows; optimization was not started")
+        print("smoke test finished successfully", flush=True)
+
     print("starting optimization", flush=True)
 
     results = run_generations(

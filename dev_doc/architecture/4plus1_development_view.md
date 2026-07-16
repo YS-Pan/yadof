@@ -52,10 +52,12 @@ project/
 - `surrogate` depends on `recorded_data.api` and `job_template.api`.
 - `job_template` should not depend on other core modules.
 - `job_template/workflow.py` may depend on adapter files that are in `job_template` itself. `com_lib` is only a staging/reference location and is not copied by `job_template.api`.
-- Generic `tools` and `test` may depend on public APIs across modules. Simulator-
-  specific tools belong under `project/tools/specific/<software>/`; `project/tools/`
-  contains user tools only; administrator-only environment and cluster tools belong
-  under `admin_tool/` and remain outside the runtime dependency graph.
+- `tools` and `test` may depend on public APIs across modules. Simulator-specific
+  tools belong under `project/tools/specific/<software>/`, while all maintained
+  automated tests, including software-specific tests, belong under `project/test/`.
+  `project/tools/` contains user tools only; administrator-only environment and
+  cluster tools belong under `admin_tool/` and remain outside the runtime dependency
+  graph.
 
 ## Development Boundaries
 - API files are module gateways and should stay small.
@@ -69,13 +71,15 @@ project/
   administrator responsibilities, documented under `admin_tool/`.
 
 ## Test Strategy
-- Use local, generic task doubles as the default verification path; `project/test/` must not start or encode assumptions about a real simulator or the active optimization task.
+- `project/test/` is the only source location for maintained automated tests. Do not place pytest modules beside implementation code, including software-specific tools or adapters.
+- Use local, generic task doubles as the default verification path. Reusable tests for a particular simulator, adapter, or software-specific tool may also live under `project/test/`, but they must use mocks or synthetic data and must not require the external software during the default test run.
 - Protect rawData schema and recorded-data persistence with contract tests.
 - Use monkeypatched APIs for optimizer unit behavior where full local jobs would be too heavy.
 - Surrogate tests may force smaller CPU INR settings so contract tests stay fast while the default config remains usable for real runs.
 - Optimizer tests should cover NSGA-III reference-direction diagnostics, pooled surrogate survival, and the surrogate exploration quota without running expensive full campaigns.
 - Surrogate tests should verify historical error audit, ensemble min/max interval output, and task-owned rawData importance weights with monkeypatched or small training data.
-- Do not add current-task or simulator-specific tests under `project/test/`. Use ignored `temp/` for disposable task checks now; after package separation, run them in the relevant workspace. Software-specific adapter/tool tests may live beside code in the explicitly specific directories.
+- Do not add current-task tests under `project/test/`. A test is current-task-specific when it hard-codes a concrete model/input filename or design, a concrete objective such as `S11`, the active task's exact variable count/names/ranges/units, expected physical results, or assertions against active `project/job_template/` task files. Neutral generated resource names and minimal synthetic problem shapes remain valid reusable fixtures.
+- Put a task-specific test and all of its supporting files under ignored root `temp/`, where they must remain safe to delete at any time; after package separation, keep them in the relevant task workspace.
 - HTCondor behavior should be covered with submit-file and monkeypatched-runner tests by default; real pool diagnostics are manual or explicit smoke checks.
 
 ## Documentation Strategy
