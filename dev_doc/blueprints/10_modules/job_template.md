@@ -41,6 +41,9 @@
 
 ## Non-Obvious Techniques
 - `workflow.py` owns `variables -> rawData`; `calc_cost.py` owns `rawData -> cost`. Do not let workflow write `cost.json`.
+- A simulator workflow must consume the assigned job-local
+  `parameters_constraints.py` snapshot directly. It must not reconstruct individual
+  values from a removed or parallel job-input channel.
 - `workflow.py` owns the individual's evaluation timing. It writes `started_at` before rawData generation and `ended_at` after success or catchable failure; catchable failures include `error_type`, `error_message`, and a traceback tail for distributed diagnostics.
 - rawData metadata should describe the data item only; do not echo the full variable vector or job metadata into every `.npz`. The only accepted metadata payload key is `metadata`; `meta` is not a compatibility alias.
 - Default cost shaping mirrors the old fanyufei workflow style: a tanh-based soft cost maps values near a goal to 0 and values near a worst threshold to 1.

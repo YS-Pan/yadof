@@ -138,6 +138,11 @@ adapter:
 A workflow should use adapter functions only to produce rawData. Final objective
 costs still belong in `calc_cost.py`.
 
+When an adapter accepts a parameter file, pass the job-local
+`parameters_constraints.py` directly. That file is already the assigned snapshot
+for the current individual; do not reconstruct a second parameter file from legacy
+job-input helpers.
+
 ## Error Handling
 
 Prefer one top-level `try` block around the simulation section. On failure:

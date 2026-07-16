@@ -74,9 +74,10 @@ flowchart LR
 - `api.py`: fresh parameter-file loading, current parameter queries, job-local
   parameter materialization, definition-only hash signatures, cost calculation, and
   job copying.
-- `workflow.py`: assigned values from job-local `parameters_constraints.py` to flat
-  rawData output, plus workflow-owned `individual_metadata.json` lifecycle timestamps
-  and runtime HFSS defaults loaded from job-local config/environment.
+- `workflow.py`: passes the assigned job-local `parameters_constraints.py` snapshot
+  directly to the simulator adapter, produces flat rawData output, owns
+  `individual_metadata.json` lifecycle timestamps, and loads runtime HFSS defaults
+  from job-local config/environment.
 - `calc_cost.py`: task-owned rawData-to-cost logic plus optional rawData importance weights for surrogate training. It decides the current objective names/count and may select objective-relevant windows from richer rawData at calculation time.
 - `rawdata_contract.py`: `.npz` schema validation.
 - `hfss_com.py`: optional HFSS/PyAEDT simulator adapter. A workflow can copy it into `job_template` for active use, while `project/com_lib/hfss_com.py` keeps the synchronized reusable reference copy.
