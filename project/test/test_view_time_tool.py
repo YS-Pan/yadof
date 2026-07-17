@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -150,6 +152,34 @@ def test_view_time_source_does_not_reference_legacy_jsonl_inputs():
     assert "indMeta.jsonl" not in source
     assert "para_cost.jsonl" not in source
     assert "optMeta.jsonl" not in source
+    assert "sys.path" not in source
+
+
+def test_view_time_import_does_not_require_numpy():
+    code = f"""
+import builtins
+
+real_import = builtins.__import__
+def blocked_import(name, *args, **kwargs):
+    if name == 'numpy' or name.startswith('numpy.'):
+        raise ModuleNotFoundError("blocked numpy import", name='numpy')
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = blocked_import
+from project.tools import viewTime as module
+print(type(module.recorded_data_api).__name__)
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(viewTime.__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "_RecordedTimingApi" in completed.stdout
 
 
 def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):

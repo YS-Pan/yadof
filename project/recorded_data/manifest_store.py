@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 from . import paths
-from .utils import json_ready
-
 _PROCESS_LOCK = threading.RLock()
 _LOCK_STATE = threading.local()
 
@@ -109,6 +107,8 @@ def read_optimization_metadata() -> list[dict[str, object]]:
 
 
 def append_jsonl_unlocked(path: Path, data: Mapping[str, object]) -> None:
+    from .utils import json_ready
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as stream:
         stream.write(json.dumps(json_ready(dict(data)), ensure_ascii=False, sort_keys=True) + "\n")
@@ -127,6 +127,8 @@ def write_individual_records_unlocked(records: Iterable[Mapping[str, object]]) -
 
 
 def _write_jsonl_unlocked(path: Path, records: Iterable[Mapping[str, object]]) -> None:
+    from .utils import json_ready
+
     path.parent.mkdir(parents=True, exist_ok=True)
     text = "".join(
         json.dumps(json_ready(dict(record)), ensure_ascii=False, sort_keys=True) + "\n"

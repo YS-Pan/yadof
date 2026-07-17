@@ -146,6 +146,12 @@ def test_view_cost_source_does_not_reference_legacy_jsonl_inputs():
     assert "para_cost.jsonl" not in source
     assert "optMeta.jsonl" not in source
     assert "indMeta.jsonl" not in source
+    assert "sys.path" not in source
+
+
+def test_view_cost_uses_larger_plot_fonts():
+    assert viewCost.PLOT_FONT_SIZE == 14
+    assert viewCost.PLOT_LEGEND_FONT_SIZE == 12
 
 
 def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):

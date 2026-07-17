@@ -8,15 +8,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Mapping, Sequence
 
-try:
-    from project.job_template import api as job_template_api
-    from project.recorded_data import api as recorded_data_api
-except ImportError:  # Allows running as ``python tools/viewCost.py`` from project/.
-    PROJECT_ROOT = Path(__file__).resolve().parents[1]
-    if str(PROJECT_ROOT.parent) not in sys.path:
-        sys.path.insert(0, str(PROJECT_ROOT.parent))
-    from project.job_template import api as job_template_api
-    from project.recorded_data import api as recorded_data_api
+if __package__:
+    from ._package_bootstrap import ensure_project_package
+else:  # Allows running this file directly.
+    from _package_bootstrap import ensure_project_package
+
+ensure_project_package()
+
+from project.job_template import api as job_template_api
+from project.recorded_data import api as recorded_data_api
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -29,6 +29,8 @@ OPT_LINE_COLOR = "black"
 HASH_LINE_COLOR = "#FFAA00"
 PLOT_COLORS = ["#FF0000", "#FFAA00", "#58A500", "#00BFE9", "#2000AA", "#960096", "#808080"]
 PLOT_MARKERS = ["o", "s", "D", "^", "v", "<", ">"]
+PLOT_FONT_SIZE = 14
+PLOT_LEGEND_FONT_SIZE = 12
 
 
 class ViewCostError(RuntimeError):
@@ -359,7 +361,7 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
     hash_change_rows = _hash_change_rows(rows)
 
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 12
+    plt.rcParams["font.size"] = PLOT_FONT_SIZE
     plt.rcParams["axes.prop_cycle"] = cycler("color", PLOT_COLORS)
 
     threshold = 1000
@@ -487,7 +489,13 @@ def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None 
     handles2, labels2 = ax2.get_legend_handles_labels()
     for handle, label in list(zip(handles1, labels1)) + list(zip(handles2, labels2)):
         legend.setdefault(label, handle)
-    ax1.legend(list(legend.values()), list(legend.keys()), loc="lower left", frameon=True, fontsize=10)
+    ax1.legend(
+        list(legend.values()),
+        list(legend.keys()),
+        loc="lower left",
+        frameon=True,
+        fontsize=PLOT_LEGEND_FONT_SIZE,
+    )
     ax1.set_title("Optimization costs from recorded_data")
 
     fig.tight_layout()

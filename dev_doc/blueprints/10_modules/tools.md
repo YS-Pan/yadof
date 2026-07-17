@@ -18,7 +18,7 @@
 - `viewCost.py` reads `recorded_data.api.get_historical_results()`, dynamically calculates current costs, prints a Pareto-oriented summary, and optionally saves a PNG plot.
 - `run_viewcost.bat` launches `viewCost.py` from the tools directory and activates the `yadof` conda environment through the caller's Conda/PATH setup.
 - Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes. Legend entries for objective and combined-cost series use the same hollow marker style as the visible best Pareto points.
-- `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback.
+- `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback. It uses the lightweight recorded-data manifest reader so importing timing summaries does not load NumPy-dependent cost code. When the invoking interpreter lacks plotting dependencies, it may re-run through the existing `HTCONDOR_PYTHON_EXE` environment interpreter.
 - `specific/hfss/get_para_and_range.py` reads optimization-enabled variables through PyAEDT and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
 - `specific/hfss/get_para_and_range_direct.py` scans `job_template` when exactly one
   `.aedt` file exists, parses AEDT optimization definitions directly (including
@@ -38,6 +38,7 @@
 ## Non-Obvious Techniques
 - `viewCost.py` intentionally reads costs through `recorded_data` instead of legacy `para_cost.jsonl` files.
 - Tool runner batch files should not assume the caller's working directory or a machine-specific install path; use the script directory plus PATH, standard install discovery, explicit user arguments, or existing environment-derived locations. Tools must not require users to create new system environment variables as a prerequisite for running the project.
+- Direct source-file launches bootstrap the `project` package from its package directory without inserting the repository root into `sys.path`.
 - Static-hash changes are plotted from job metadata so task definition changes are visible on cost timelines.
 - `viewCost.py` scales dense scatter points by lowering marker opacity down to a smaller floor for very large histories, and scales the right combined-cost axis so the observed combined-cost maximum aligns vertically with individual cost `1.0` on the left axis.
 - Optimization and generation boundaries can now come directly from individual `optimization_index` and `generation_index` fields, with `optMeta` joins still useful for run-level diagnostics.

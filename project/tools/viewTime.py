@@ -2,19 +2,35 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
+import subprocess
 import sys
 from collections.abc import Sequence as SequenceABC
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Mapping, Sequence
 
-try:
-    from project.recorded_data import api as recorded_data_api
-except ImportError:  # Allows running as ``python tools/viewTime.py`` from project/.
-    PROJECT_ROOT = Path(__file__).resolve().parents[1]
-    if str(PROJECT_ROOT.parent) not in sys.path:
-        sys.path.insert(0, str(PROJECT_ROOT.parent))
-    from project.recorded_data import api as recorded_data_api
+if __package__:
+    from ._package_bootstrap import ensure_project_package
+else:  # Allows running this file directly.
+    from _package_bootstrap import ensure_project_package
+
+ensure_project_package()
+
+from project.recorded_data import manifest_store as _manifest_store
+
+
+class _RecordedTimingApi:
+    @staticmethod
+    def list_records() -> tuple[dict[str, object], ...]:
+        return tuple(_manifest_store.read_individual_records())
+
+    @staticmethod
+    def list_optimization_metadata() -> tuple[dict[str, object], ...]:
+        return tuple(_manifest_store.read_optimization_metadata())
+
+
+recorded_data_api = _RecordedTimingApi()
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -328,8 +344,32 @@ def _import_plot_modules():
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError as exc:
-        raise ViewTimeError("matplotlib is required to render viewTime PNG output") from exc
+        raise ViewTimeError("matplotlib and numpy are required to render viewTime PNG output") from exc
     return plt, np, mdates
+
+
+def _alternate_plotting_python() -> Path | None:
+    configured = os.environ.get("HTCONDOR_PYTHON_EXE", "").strip()
+    if not configured:
+        return None
+    candidate = Path(configured)
+    if not candidate.is_file():
+        return None
+    try:
+        if candidate.resolve() == Path(sys.executable).resolve():
+            return None
+    except OSError:
+        return None
+    return candidate
+
+
+def _rerun_with_plotting_python(argv: Sequence[str], executable: Path) -> int:
+    print(f"viewTime: rerunning with plotting environment: {executable}", file=sys.stderr)
+    completed = subprocess.run(
+        [str(executable), str(Path(__file__).resolve()), *argv],
+        check=False,
+    )
+    return int(completed.returncode)
 
 
 def plot_rows(rows: Sequence[dict[str, object]], output_path: str | Path | None = None) -> Path:
@@ -456,6 +496,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    effective_argv = list(sys.argv[1:] if argv is None else argv)
+    if not args.summary_only:
+        try:
+            _import_plot_modules()
+        except ViewTimeError:
+            alternate = _alternate_plotting_python()
+            if alternate is not None:
+                return _rerun_with_plotting_python(effective_argv, alternate)
     status = _as_filter_status(args.status)
     try:
         rows = build_rows(status=status)

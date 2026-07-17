@@ -16,6 +16,7 @@
 - `records.py` also records optimization-level rows in `optMeta/optMeta.jsonl`, including surrogate-training metadata rows written through `record_surrogate_metadata()`.
 - `query.py` reads raw variables, normalizes them through `job_template.api`, loads rawData members from the archive, calculates costs through `job_template.api`, filters invalid rawData, and builds training bundles.
 - `manifest_store.py` now owns JSONL file locking, atomic rewrites, append helpers, and status normalization.
+- Read-only manifest access remains standard-library-only; NumPy-aware JSON conversion is loaded lazily by manifest write operations.
 - `rawdata_store.py`, `paths.py`, and `utils.py` provide path configuration, zip-based rawData archive loading, repeated-variable metadata scrubbing, metadata extraction, and JSON-safe serialization.
 
 ## I/O Format
