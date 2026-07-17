@@ -182,9 +182,20 @@ function Initialize-Condor {
 function Get-CondorConfigValue {
     param([Parameter(Mandatory = $true)][string]$Name)
 
-    $value = & $script:CondorCommands["condor_config_val"] $Name 2>$null |
-        Select-Object -First 1
-    if ($LASTEXITCODE -eq 0 -and $null -ne $value) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell can promote native stderr to a terminating error when
+        # the requested macro is undefined.  Undefined optional macros are normal.
+        $ErrorActionPreference = "Continue"
+        $output = & $script:CondorCommands["condor_config_val"] $Name 2>$null
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    $value = $output | Select-Object -First 1
+    if ($exitCode -eq 0 -and $null -ne $value) {
         return ([string]$value).Trim()
     }
     return ""
@@ -654,8 +665,16 @@ function Show-PoolStatus {
     }
     Write-Host ""
     Write-Host "Visible execute slots:"
-    & $script:CondorCommands["condor_status"] @poolArguments -af Name Machine Cpus Memory Disk State Activity OpSys YADOF_EXECUTE_READY 2>$null | Out-Host
-    if ($LASTEXITCODE -ne 0) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $script:CondorCommands["condor_status"] @poolArguments -af Name Machine Cpus Memory Disk State Activity OpSys YADOF_EXECUTE_READY 2>$null | Out-Host
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($exitCode -ne 0) {
         Write-Warning "condor_status could not query the pool yet. Verify manager reachability and wait for daemon registration."
     }
 }
@@ -668,8 +687,16 @@ function Wait-ForPoolStatus {
     }
     $deadline = (Get-Date).AddSeconds($VerificationTimeoutSec)
     do {
-        & $script:CondorCommands["condor_status"] -pool "${Endpoint}:$Port" -any -limit 1 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) {
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            & $script:CondorCommands["condor_status"] -pool "${Endpoint}:$Port" -any -limit 1 2>$null | Out-Null
+            $exitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($exitCode -eq 0) {
             Show-PoolStatus -Endpoint $Endpoint
             return
         }

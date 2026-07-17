@@ -6,8 +6,8 @@ EVALUATION_MODE = "distributed"  # "local" or "distributed"
 EVALUATION_TIMEOUT_SEC = 12 * 60 * 60
 OPTIMIZE_SMOKE_TEST_ENABLED = True
 
-HTCONDOR_REQUEST_CPUS = 1
-HTCONDOR_REQUEST_MEMORY = "12GB"
+HTCONDOR_REQUEST_CPUS = 2
+HTCONDOR_REQUEST_MEMORY = "6GB"
 HTCONDOR_REQUEST_DISK = "5GB"
 # "auto" calibrates each generation from the smoke test or preceding generation.
 HTCONDOR_JOB_TIMEOUT_MODE = "auto"  # "auto" or "fixed"

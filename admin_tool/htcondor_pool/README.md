@@ -108,7 +108,10 @@ condor_config_val STARTER_NUM_THREADS_ENV_VARS
 
 The diagnostic mode is read-only and can run without elevation.  It prints the
 effective configuration and queries the visible slots using either the supplied
-manager name or the configured `CONDOR_HOST`.
+manager name or the configured `CONDOR_HOST`.  Optional macros may be undefined on
+a fresh installation; the tool reports them as `<undefined>` instead of treating
+`condor_config_val`'s nonzero exit as a PowerShell failure.  An unavailable
+collector is likewise reported as a warning so diagnosis can complete.
 
 ```powershell
 .\htcondor_pool.ps1 -Action Diagnose `
