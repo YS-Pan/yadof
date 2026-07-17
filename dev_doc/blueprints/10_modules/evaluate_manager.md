@@ -24,8 +24,12 @@
   HTCondor measurements while preserving the user-selected CPU request. It uses
   unindexed distributed smoke records for generation zero and the same run's
   preceding generation thereafter.
+- `resource_retries.py` owns the removable yadof-side retry policy for standard
+  HTCondor memory/disk resource holds: classify numeric hold codes, keep independent
+  retry counts, double only the exhausted request, record attempt history, and clear
+  stale attempt outputs before a fresh cluster is submitted.
 - `time_limits.py` derives `allowed_execute_duration` from the configured fixed baseline or from smoke/preceding-generation execution durations with high-tail trimming and timeout-as-infinity handling.
-- `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, queries final Condor ClassAd resource/time usage when available, extracts Condor return-value/log tails, removes duration-held or generation-timeout cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
+- `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, delegates memory/disk retry decisions and cleanup to `resource_retries.py`, submits fresh clusters when requested, queries final Condor ClassAd resource/time usage when available, extracts Condor return-value/log tails, removes held or generation-timeout cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
 - `job_result.py` provides shared helpers for reading/writing job metadata, discovering rawData files, promoting workflow metadata, and constructing `JobResult`.
 - `recorded_data_client.record_result()` adapts `JobResult` to supported `recorded_data.api` functions and retrieves dynamically computed costs when possible.
 - `types.py` defines immutable `JobSpec` and `JobResult` records for internal handoff.
@@ -38,7 +42,7 @@
   `population_index` when available.
 - Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, calculated resource-request source/values, returned Condor memory/disk/CPU measurements when available, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
 - Raw outputs: top-level `.npz` files under each job's `rawData/` directory.
-- HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, a normal-job `allowed_execute_duration`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. Smoke omits the time limit. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
+- HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, one concrete `request_memory`/`request_disk`, no Condor-native resource retry directives, a normal-job `allowed_execute_duration`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. Smoke omits the time limit. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
 - Public output: `population[individual][objective_cost]`, with `inf` rows for failures whose objective width cannot be recovered.
 
 ## Non-Obvious Techniques
@@ -60,9 +64,13 @@
   limit/source/sample count in job metadata, uses Condor execution duration when
   available, and falls back to workflow timestamps. Duration hold codes 46/47 are
   recorded as `timeout`, removed from the queue, and never retried.
-- Generated submit files carry bounded doubling retry ladders for memory and disk.
-  HTCondor may restart an evicted job from the beginning, so this is a safety net
-  for the trimmed tail rather than a replacement for a realistic normal request.
+- All memory/disk request changes are yadof-side policy. Numeric hold code 34 with
+  subcode 102 or 104 enters the removable `resource_retries.py` state machine. The
+  runner removes the old cluster before resetting attempt outputs and resubmitting
+  the same job with only memory or disk doubled. `YADOF_RESOURCE_RETRY_DOUBLINGS`
+  limits each resource independently; timeout/workflow/submit failures and other
+  holds are terminal and never use this retry path. All attempts share the original
+  generation wait deadline.
 - In distributed mode, returned nested `rawData/*.npz` files are the primary rawData path. `rawData_outputs.zip` is a legacy/fallback transfer archive and a bad fallback zip must become per-job diagnostics rather than a generation-wide exception.
 - HTCondor submit failures are treated as evaluation failures. The project captures diagnostics but does not attempt to repair daemon, pool, credential, or topology problems in the installed HTCondor environment.
 - The Windows HTCondor submit pattern uses direct `workflow.py` submission with `transfer_executable = True`; the earlier interpreter-as-executable pattern is intentionally not supported. Keep `run_as_owner = False` and `load_profile = True`. `run_as_owner=True` is not a deployable project fix because office/personal workstations have different owners and any machine may submit or execute jobs.

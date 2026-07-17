@@ -75,9 +75,15 @@ sequenceDiagram
     E->>J: prepare all job folders with the local job contract
     E->>C: submit prepared jobs
     C->>J: write job.sub with executable = workflow.py and transfer_executable = True
+    C->>J: write one concrete memory/disk request and no Condor retry directives
     C->>J: add generation-aware allowed_execute_duration for normal jobs; omit it for smoke
     C->>H: condor_submit job.sub
     H->>J: HTCondor runs transferred workflow.py directly under a slot user; generated outputs return on exit
+    alt held for memory or disk exhaustion
+        C->>H: read standard hold code and ClassAd usage, then remove old cluster
+        C->>J: clear attempt outputs and record yadof retry history
+        C->>H: submit same individual with only exhausted resource doubled
+    end
     C->>J: poll condor.log, return job-local outputs, and read final resource/time ClassAd
     C-->>E: JobResult rows with requested/observed resources and execution duration when available
     E->>R: record_job_result through the shared finalization path
@@ -93,6 +99,7 @@ owners and may all act as submit or execute machines.
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
 - Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; simulator workflows may also record child-process metadata for cleanup. Local runner adds return code, stdout/stderr tails, and rawData presence.
 - Submit failure: HTCondor submission errors are captured as per-job `error` metadata. The project does not attempt to repair the local HTCondor installation.
+- Resource exhaustion: a standard memory/disk out-of-resources hold is removed and handled only by yadof. Yadof doubles the exhausted request and makes a fresh submission until that resource's configured retry count is exhausted. Cleanup or resubmission failure is terminal for that individual; workflow errors, timeouts, and other holds do not enter this path.
 - Result collection failure: HTCondor collection errors, including invalid legacy `rawData_outputs.zip` fallback archives, are captured as per-job `error` metadata. Already-returned nested `rawData/*.npz` files take precedence over the fallback zip.
 - Timeout: local runner terminates the process tree. A normal HTCondor job is limited by the scheduler-side `allowed_execute_duration`; hold code 46/47 is recorded as `timeout` and the held job is removed without retry. The submit-side whole-generation deadline remains a separate safety budget and best-effort removes any jobs still pending. Smoke jobs deliberately have neither timeout.
 - Record failure: evaluation continues; returned row becomes `inf`.
@@ -110,3 +117,4 @@ owners and may all act as submit or execute machines.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
 - Distributed mode reuses the same record/finalize semantics: workers write job-local individual metadata and submit-side finalizers send compact records to `recorded_data`.
 - Automatic per-job time limits use the newest smoke execution time for generation zero and the preceding generation for later jobs. The controller trims the configured high tail, treats timed-out rows as infinity, and falls back to the configured one-hour baseline when no finite calibration exists. When smoke is disabled, that baseline is treated as the smoke measurement and receives the normal bootstrap multiplier.
+- Automatic generation-to-generation memory/disk calibration and held-job request doublings are both yadof policies. HTCondor enforces only the concrete request in each submission; all retry attempts for an individual share the original generation-level deadline.

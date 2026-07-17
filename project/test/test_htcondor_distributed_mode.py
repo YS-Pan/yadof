@@ -60,8 +60,8 @@ def test_condor_submit_file_uses_direct_workflow_executable_and_rawdata_contract
     assert f"request_cpus = {resource_request.cpus}" in text
     assert f"request_memory = {resource_request.memory_text}" in text
     assert f"request_disk = {resource_request.disk_text}" in text
-    assert f"retry_request_memory = {resource_request.memory_retry_text}" in text
-    assert f"retry_request_disk = {resource_request.disk_retry_text}" in text
+    assert "retry_request_memory" not in text
+    assert "retry_request_disk" not in text
     assert "allowed_execute_duration = 3600" in text
     assert 'Machine != "DESKTOP-A2091"' not in text
     if project_config.HTCONDOR_ALLOWED_MACHINES:
@@ -128,6 +128,7 @@ def test_submit_condor_job_clears_stale_runtime_artifacts_before_submit(tmp_path
     submission = condor_runner.submit_condor_job(job)
 
     assert submission.cluster_id == 456
+    assert submission.resource_request is not None
     assert not (job.directory / "individual_metadata.json").exists()
     assert not (job.directory / "rawData_outputs.zip").exists()
     assert not (job.directory / "cost.json").exists()

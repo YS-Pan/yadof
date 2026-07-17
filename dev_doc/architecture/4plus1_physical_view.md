@@ -60,7 +60,11 @@ The submit side also queries final job ClassAds through `condor_history` to reco
 memory/disk observations and cumulative remote wall-clock/suspension time. Those
 records drive the next generation's effective memory/disk requests and per-job
 execution limit; the source config remains unchanged and CPU request remains
-manual. Normal jobs carry `allowed_execute_duration`, while the unindexed smoke job
+manual. Each submit file carries only the current concrete memory/disk request and
+does not use HTCondor-native resource-retry directives. If a job is held under the
+standard memory/disk out-of-resources codes, the submit-side yadof process removes
+that cluster, clears attempt outputs, and makes a fresh submission with only the
+exhausted resource doubled. Normal jobs carry `allowed_execute_duration`, while the unindexed smoke job
 omits it. A duration hold is removed by the submit side after it is recorded as a
 timeout.
 Windows distributed execution targets HTCondor's slot-user model:

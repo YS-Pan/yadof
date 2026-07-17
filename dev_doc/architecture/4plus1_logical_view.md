@@ -7,6 +7,7 @@
 - Job: one real evaluation sandbox created by `evaluate_manager`.
 - Individual metadata: job-local lifecycle JSON written by `workflow.py`, including the evaluation start/end times when the workflow reaches those points.
 - Per-job execution limit: the HTCondor-side `allowed_execute_duration` applied to one normal distributed individual. It is separate from the submit-side whole-generation wait budget; smoke jobs have no such limit.
+- Yadof resource retry: a fresh Condor submission of the same prepared individual after a standard memory- or disk-exhaustion hold. Only the exhausted request is doubled, and memory/disk retry budgets are independent.
 - Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
 
 ## Logical Modules
@@ -40,4 +41,5 @@
 - Failed records can exist and be inspected, but default optimization history uses completed records.
 - `evaluate_manager` may add runner diagnostics, but workflow-owned timing is read from the job folder before recording.
 - A Condor hold with code 46 or 47 is a timeout result. The submit side records it and removes the held job so the timed-out individual is not retried.
+- Condor submit files carry one concrete memory/disk request and no native resource-retry ladder. Yadof alone changes resource requests: generation calibration selects the initial request, while `resource_retries.py` handles bounded per-individual memory/disk doublings after resource holds.
 - Current HFSS cost shaping follows the old huangzetao/fanyufei tanh-style soft objective mapping: goal-like values approach 0 and worst-threshold values approach 1.

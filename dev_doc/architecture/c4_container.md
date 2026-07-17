@@ -33,7 +33,7 @@ flowchart TD
 
 ## Container Responsibilities
 - `optimize`: NSGA-III search policy for multi-objective runs, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
-- `evaluate_manager`: job preparation, local execution, optional HTCondor submission, workflow metadata collection, failure isolation, recording handoff.
+- `evaluate_manager`: job preparation, local execution, optional HTCondor submission, yadof-managed memory/disk retry submissions, workflow metadata collection, failure isolation, and recording handoff.
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
 - `com_lib`: optional holding area for simulator/custom-code adapter source/reference copies. Files here are not runtime dependencies; when a task needs one, the user copies it into `job_template` so prepared jobs stay self-contained. Reusable active-adapter fixes are synchronized back into the matching reference copy.
 - `job_template`: active task files for rawData generation plus task-owned objective costs calculated after recording. The framework does not fix simulator filename, rawData names, objective names, or objective count.

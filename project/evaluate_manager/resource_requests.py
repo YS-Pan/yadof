@@ -35,8 +35,6 @@ class HTCondorResourceRequest:
     cpus: int
     memory_mib: int
     disk_kib: int
-    memory_retry_mib: tuple[int, ...]
-    disk_retry_kib: tuple[int, ...]
     source: str
     sample_count: int
 
@@ -48,17 +46,8 @@ class HTCondorResourceRequest:
     def disk_text(self) -> str:
         return f"{self.disk_kib}KB"
 
-    @property
-    def memory_retry_text(self) -> str:
-        return ", ".join(f"{value}MB" for value in self.memory_retry_mib)
-
-    @property
-    def disk_retry_text(self) -> str:
-        return ", ".join(f"{value}KB" for value in self.disk_retry_kib)
-
-
 def request_for_job(job: JobSpec) -> HTCondorResourceRequest:
-    """Return the CPU, memory, disk, and retry values for one Condor job.
+    """Return the initial CPU, memory, and disk values for one Condor job.
 
     A normal distributed smoke test has no ``generation_index``.  Generation zero
     consumes those smoke-test measurements; later generations consume only the
@@ -105,16 +94,10 @@ def request_for_job(job: JobSpec) -> HTCondorResourceRequest:
         source = "configured_smoke_fallback"
         sample_count = 1
 
-    retry_doublings = _nonnegative_int(
-        getattr(project_config, "HTCONDOR_RESOURCE_RETRY_DOUBLINGS", 4),
-        "HTCONDOR_RESOURCE_RETRY_DOUBLINGS",
-    )
     return HTCondorResourceRequest(
         cpus=max(1, int(htcondor_request_cpus())),
         memory_mib=memory_mib,
         disk_kib=disk_kib,
-        memory_retry_mib=_doubling_series(memory_mib, retry_doublings),
-        disk_retry_kib=_doubling_series(disk_kib, retry_doublings),
         source=source,
         sample_count=sample_count,
     )
@@ -207,10 +190,6 @@ def _scaled_quantity(value: float | int, multiplier: float) -> int:
     return max(1, math.ceil(float(value) * multiplier))
 
 
-def _doubling_series(value: int, count: int) -> tuple[int, ...]:
-    return tuple(int(value) * (2**step) for step in range(1, count + 1))
-
-
 def _as_positive_number(value: object) -> float | None:
     try:
         parsed = float(value)
@@ -233,16 +212,6 @@ def _fraction(value: object) -> float:
         raise ValueError(f"HTCONDOR_RESOURCE_TRIM_TOP_FRACTION must be between 0 and 1, got {value!r}") from exc
     if not math.isfinite(parsed) or not 0.0 <= parsed < 1.0:
         raise ValueError(f"HTCONDOR_RESOURCE_TRIM_TOP_FRACTION must be between 0 and 1, got {value!r}")
-    return parsed
-
-
-def _nonnegative_int(value: object, setting_name: str) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}") from exc
-    if parsed < 0:
-        raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
     return parsed
 
 

@@ -35,7 +35,7 @@
 - `key.py` and `all.py` must remain software-agnostic. `key.py` contains constants only; `all.py` may contain generic composition helpers but not task logic or simulator-named settings.
 - Paths are `Path` objects rooted in `project/` when they are derived in `all.py`, whose file now lives one directory below the project root.
 - Numeric controls should be simple Python scalars.
-- Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `OPTIMIZE_SMOKE_TEST_ENABLED`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_HISTORY_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`, `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER`, `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION`, `HTCONDOR_RESOURCE_RETRY_DOUBLINGS`, `HTCONDOR_REQUEST_DISK_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`, `HTCONDOR_JOB_TIMEOUT_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
+- Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `OPTIMIZE_SMOKE_TEST_ENABLED`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_HISTORY_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`, `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER`, `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION`, `YADOF_RESOURCE_RETRY_DOUBLINGS`, `HTCONDOR_REQUEST_DISK_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`, `HTCONDOR_JOB_TIMEOUT_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
 
 ## Non-Obvious Techniques
 - `project/config/key.py` is intentionally short. Its current surface includes evaluation mode/generation timeout, the optional smoke switch, generic HTCondor resources, the auto/fixed per-job timeout baseline, and population size.
@@ -65,10 +65,10 @@
   `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION` from the top. Disk additionally applies
   `HTCONDOR_REQUEST_DISK_MULTIPLIER` after calibration.
 - If smoke is disabled, automatic memory/disk calibration likewise treats the user-entered bootstrap requests as smoke measurements and applies `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER` for generation zero.
-- `HTCONDOR_RESOURCE_RETRY_DOUBLINGS` limits the finite `2x`, `4x`, ... retry
-  ladder emitted for both memory and disk. The bounded ladder keeps an accidental
-  unlimited request from entering a submit file while allowing unusual jobs to
-  retry after a resource eviction.
+- `YADOF_RESOURCE_RETRY_DOUBLINGS` defaults to `4` and limits fresh yadof
+  resubmissions after standard memory or disk exhaustion. The counts are independent
+  per resource, each retry doubles only the exhausted request, and `0` disables this
+  retry behavior. No Condor-native retry ladder is emitted.
 - `EVALUATION_MODE` can be `local` or `distributed`; tests should still force local or monkeypatched behavior instead of requiring a real pool.
 - `LOCAL_EVALUATION_MAX_WORKERS` defaults to 1 to preserve simulator safety; raising it enables local per-individual subprocess parallelism for workflows that can run concurrently.
 - `SURROGATE_TORCH_DEVICE = "auto"` prefers CUDA, then XPU, then CPU; tests may force CPU and smaller INR dimensions for speed.

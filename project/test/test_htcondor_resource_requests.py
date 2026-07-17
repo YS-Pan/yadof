@@ -27,7 +27,6 @@ def _configure_defaults(monkeypatch):
     monkeypatch.setattr(project_config, "HTCONDOR_RESOURCE_AUTODETECT_ENABLED", True)
     monkeypatch.setattr(project_config, "HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER", 2.0)
     monkeypatch.setattr(project_config, "HTCONDOR_RESOURCE_TRIM_TOP_FRACTION", 0.05)
-    monkeypatch.setattr(project_config, "HTCONDOR_RESOURCE_RETRY_DOUBLINGS", 4)
     monkeypatch.setattr(project_config, "HTCONDOR_REQUEST_DISK_MULTIPLIER", 1.0)
     monkeypatch.setattr(project_config, "OPTIMIZE_SMOKE_TEST_ENABLED", True)
 
@@ -68,8 +67,6 @@ def test_generation_zero_uses_smoke_measurements_with_bootstrap_and_disk_multipl
     assert request.disk_kib == 6144
     assert request.source == "smoke_calibration"
     assert request.sample_count == 1
-    assert request.memory_retry_mib == (2048, 4096, 8192, 16384)
-    assert request.disk_retry_kib == (12288, 24576, 49152, 98304)
 
 
 def test_later_generation_discards_highest_configured_fraction_from_its_own_run(tmp_path, monkeypatch):

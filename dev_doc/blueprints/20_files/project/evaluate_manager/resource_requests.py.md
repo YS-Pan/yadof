@@ -14,8 +14,7 @@
 - Remove the highest configured fraction of each measurement series, select the
   remaining maximum, and apply the bootstrap multiplier only between smoke and
   generation zero.
-- Apply the extra disk multiplier after the selected disk amount and emit a finite
-  doubling retry ladder for both resources.
+- Apply the extra disk multiplier after the selected disk amount.
 - Fall back to configured bootstrap quantities when no usable HTCondor metadata is
   present; do not write back to `key.py` or `all.py`.
 - When the launch smoke test is disabled, treat the configured memory/disk quantities as synthetic smoke measurements and apply the normal generation-zero bootstrap multiplier.
@@ -25,8 +24,8 @@
 - Input: one `JobSpec` and the public `recorded_data.api.list_records()` rows.
 - Relevant recorded metadata fields: `engine = "htcondor"`,
   `condor_memory_usage_mib`, and `condor_disk_usage_kib`.
-- Output: immutable `HTCondorResourceRequest` with CPU integer, MiB/KiB quantities,
-  retry sequences, calibration source, and sample count. The text properties use
+- Output: immutable `HTCondorResourceRequest` with CPU integer, one concrete
+  MiB/KiB request, calibration source, and sample count. The text properties use
   HTCondor-compatible `MB` and `KB` units.
 
 ## Non-Obvious Techniques
@@ -42,7 +41,8 @@
 
 ## Mutability Profile
 
-- Quantity parsing, history-selection rules, and submit-file retry semantics are
-  shared backend contracts and require focused unit tests for changes.
+- Quantity parsing and history-selection rules are shared backend contracts and
+  require focused unit tests for changes. Held-job retry policy belongs only in
+  `resource_retries.py`.
 - Defaults belong in `project/config/all.py`; users may override the disk safety
   factor through the short key config.

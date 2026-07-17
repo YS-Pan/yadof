@@ -40,6 +40,14 @@ from .job_result import (
     write_metadata,
 )
 from .resource_requests import HTCondorResourceRequest, request_for_job
+from .resource_retries import (
+    YadofResourceRetryState,
+    decide_resource_retry,
+    new_resource_retry_state,
+    reset_job_for_resource_retry,
+    resource_hold_kind,
+    resource_retry_metadata,
+)
 from .time_limits import HTCondorTimeLimit, time_limit_for_job
 from .types import JobResult, JobSpec
 
@@ -94,6 +102,7 @@ class CondorSubmission:
     submitted_at: str
     stdout: str
     stderr: str
+    resource_request: HTCondorResourceRequest | None = None
 
 
 class CondorSubmitError(RuntimeError):
@@ -120,6 +129,7 @@ def run_condor_jobs(
 
     results_by_name: dict[str, JobResult] = {}
     pending: dict[str, CondorSubmission] = {}
+    retry_states: dict[str, YadofResourceRetryState] = {}
     total = len(jobs)
     submit_failures = 0
     _progress(f"htcondor: submitting {total} jobs")
@@ -155,12 +165,83 @@ def run_condor_jobs(
             individual_metadata = read_individual_metadata(submission.job.directory)
             if terminal_reason is None and not _job_local_outputs_ready(submission.job.directory, individual_metadata):
                 continue
+            preloaded_hold_info: Mapping[str, object] | None = None
+            preloaded_resource_usage: Mapping[str, object] | None = None
+            extra_metadata: Mapping[str, object] | None = None
+            remove_error: str | None = None
+            if terminal_reason == "held":
+                preloaded_hold_info = condor_hold_info(submission)
+                exhausted_resource = resource_hold_kind(preloaded_hold_info)
+                if exhausted_resource is not None:
+                    preloaded_resource_usage = condor_resource_usage(submission)
+                    state = retry_states.get(job_name)
+                    if state is None:
+                        state = new_resource_retry_state(submission.resource_request or request_for_job(submission.job))
+                    remove_error = (
+                        "cannot retry a resource-held job without a Condor cluster id"
+                        if submission.cluster_id is None
+                        else remove_condor_job(submission)
+                    )
+                    if remove_error is None:
+                        decision = decide_resource_retry(
+                            state,
+                            hold_info=preloaded_hold_info,
+                            resource_usage=preloaded_resource_usage,
+                            cluster_id=submission.cluster_id,
+                        )
+                        if decision is not None:
+                            retry_states[job_name] = decision.state
+                            extra_metadata = resource_retry_metadata(decision.state)
+                            if decision.should_retry:
+                                try:
+                                    reset_job_for_resource_retry(submission.job.directory)
+                                except Exception as exc:  # noqa: BLE001 - isolate one retry cleanup failure.
+                                    results_by_name[job_name] = collect_failure_result(
+                                        submission.job,
+                                        submission=submission,
+                                        exc=exc,
+                                        terminal_reason=terminal_reason,
+                                        extra_metadata=extra_metadata,
+                                    )
+                                    pending.pop(job_name, None)
+                                    completed_now += 1
+                                    continue
+                                try:
+                                    pending[job_name] = submit_condor_job(
+                                        submission.job,
+                                        env=env,
+                                        resource_request=decision.state.request,
+                                        resource_retry_metadata=extra_metadata,
+                                    )
+                                except Exception as exc:  # noqa: BLE001 - preserve per-individual isolation.
+                                    results_by_name[job_name] = submit_failure_result(submission.job, exc)
+                                    pending.pop(job_name, None)
+                                    submit_failures += 1
+                                    completed_now += 1
+                                    _progress(f"htcondor: resource retry submit failed: {job_name}")
+                                    continue
+                                _progress(
+                                    f"htcondor: yadof retry {job_name}; resource={decision.resource}; "
+                                    f"memory={decision.state.request.memory_text}; "
+                                    f"disk={decision.state.request.disk_text}"
+                                )
+                                continue
+            collection_options: dict[str, object] = {}
+            if remove_error is not None:
+                collection_options["remove_error"] = remove_error
+            if preloaded_hold_info is not None:
+                collection_options["preloaded_hold_info"] = preloaded_hold_info
+            if preloaded_resource_usage is not None:
+                collection_options["preloaded_resource_usage"] = preloaded_resource_usage
+            if extra_metadata is not None:
+                collection_options["extra_metadata"] = extra_metadata
             try:
                 results_by_name[job_name] = collect_condor_result(
                     submission.job,
                     submission=submission,
                     timed_out=False,
                     terminal_reason=terminal_reason,
+                    **collection_options,
                 )
             except Exception as exc:  # noqa: BLE001 - isolate one bad returned payload.
                 results_by_name[job_name] = collect_failure_result(
@@ -168,6 +249,7 @@ def run_condor_jobs(
                     submission=submission,
                     exc=exc,
                     terminal_reason=terminal_reason,
+                    extra_metadata=extra_metadata,
                 )
             pending.pop(job_name, None)
             completed_now += 1
@@ -204,9 +286,15 @@ def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
     except Exception as exc:  # noqa: BLE001 - keep submitted jobs alive if training scheduling fails.
         _progress(f"htcondor: after-submit callback failed: {exc.__class__.__name__}: {exc}")
 
-def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> CondorSubmission:
+def submit_condor_job(
+    job: JobSpec,
+    *,
+    env: Mapping[str, str] | None = None,
+    resource_request: HTCondorResourceRequest | None = None,
+    resource_retry_metadata: Mapping[str, object] | None = None,
+) -> CondorSubmission:
     clear_stale_runtime_artifacts(job.directory)
-    resource_request = request_for_job(job)
+    resource_request = resource_request or request_for_job(job)
     time_limit = time_limit_for_job(job)
     submit_file = write_condor_submit_file(
         job,
@@ -228,6 +316,8 @@ def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> 
         condor_time_limit_source=time_limit.source,
         condor_time_calibration_sample_count=time_limit.sample_count,
     )
+    if resource_retry_metadata is not None:
+        metadata.update(resource_retry_metadata)
     write_metadata(job.directory, metadata)
 
     try:
@@ -271,6 +361,7 @@ def submit_condor_job(job: JobSpec, *, env: Mapping[str, str] | None = None) -> 
         submitted_at=str(metadata["condor_submitted_at"]),
         stdout=stdout,
         stderr=stderr,
+        resource_request=resource_request,
     )
 
 
@@ -323,10 +414,6 @@ def write_condor_submit_file(
             "notification = never",
         ]
     )
-    if resource_request.memory_retry_mib:
-        lines.append(f"retry_request_memory = {resource_request.memory_retry_text}")
-    if resource_request.disk_retry_kib:
-        lines.append(f"retry_request_disk = {resource_request.disk_retry_text}")
     if time_limit.seconds is not None:
         lines.append(f"allowed_execute_duration = {time_limit.seconds}")
     lines.extend(("queue 1", ""))
@@ -396,9 +483,16 @@ def collect_condor_result(
     timed_out: bool,
     terminal_reason: str | None,
     remove_error: str | None = None,
+    preloaded_hold_info: Mapping[str, object] | None = None,
+    preloaded_resource_usage: Mapping[str, object] | None = None,
+    extra_metadata: Mapping[str, object] | None = None,
 ) -> JobResult:
     individual_metadata = read_individual_metadata(job.directory)
-    hold_info = condor_hold_info(submission) if terminal_reason == "held" else {}
+    hold_info = (
+        dict(preloaded_hold_info)
+        if preloaded_hold_info is not None
+        else condor_hold_info(submission) if terminal_reason == "held" else {}
+    )
     timeout_hold = terminal_reason == "held" and _is_timeout_hold(hold_info)
     raw_paths = raw_data_paths(job.directory)
     zip_restore_error = None
@@ -406,13 +500,19 @@ def collect_condor_result(
         zip_restore_error = restore_rawdata_transfer_zip(job.directory)
         raw_paths = raw_data_paths(job.directory)
     log_info = condor_log_info(job.directory)
-    resource_usage = condor_resource_usage(submission)
+    resource_usage = (
+        dict(preloaded_resource_usage)
+        if preloaded_resource_usage is not None
+        else condor_resource_usage(submission)
+    )
     if timeout_hold:
         timeout_remove_error = remove_condor_job(submission)
         if remove_error is None:
             remove_error = timeout_remove_error
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(individual_metadata)
+    if extra_metadata is not None:
+        metadata.update(extra_metadata)
 
     effective_timed_out = bool(timed_out or timeout_hold)
     if timed_out:
@@ -584,10 +684,13 @@ def collect_failure_result(
     submission: CondorSubmission,
     exc: BaseException,
     terminal_reason: str | None,
+    extra_metadata: Mapping[str, object] | None = None,
 ) -> JobResult:
     raw_paths = raw_data_paths(job.directory)
     metadata = base_metadata(job, engine="htcondor")
     metadata.update(read_individual_metadata(job.directory))
+    if extra_metadata is not None:
+        metadata.update(extra_metadata)
     metadata.update(
         status="error",
         failure_stage="collect",

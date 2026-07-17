@@ -122,6 +122,7 @@ Common key settings users edit:
 - `EVALUATION_TIMEOUT_SEC`: whole-generation wait budget in distributed mode.
 - `OPTIMIZE_SMOKE_TEST_ENABLED`: whether the normal launcher runs one real midpoint smoke individual before optimization. It defaults to `True`; the smoke job has no timeout.
 - `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests. CPU remains manual; memory and disk are bootstrap values for automatic calibration when Condor has no usable prior measurement.
+- `YADOF_RESOURCE_RETRY_DOUBLINGS`: maximum number of yadof-managed request doublings after an individual is held for memory or disk exhaustion. It defaults to `4` in `all.py`; memory and disk limits are counted independently.
 - `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`: per-individual Condor timeout policy. The defaults are `"auto"` and one hour; `"fixed"` always uses the configured hour.
 - `HTCONDOR_REQUEST_DISK_MULTIPLIER`: an extra disk safety factor (default `1.0`). Raise it, for example to `2.0`, when worker scratch space is plentiful; keep it at `1.0` for constrained disks or RAM disks.
 - HTCondor submit files run `workflow.py` directly as the transferred executable; do not configure Python itself as the submit executable.

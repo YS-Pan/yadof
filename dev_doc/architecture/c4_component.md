@@ -28,6 +28,9 @@ flowchart LR
     EvalAPI --> LocalRunner["local_runner.py"]
     EvalAPI --> CondorRunner["condor_runner.py"]
     EvalAPI --> RDClient["recorded_data_client.py"]
+    CondorRunner --> ResourceRequests["resource_requests.py"]
+    CondorRunner --> ResourceRetries["resource_retries.py"]
+    CondorRunner --> TimeLimits["time_limits.py"]
     LocalRunner --> JobResult["job_result.py"]
     CondorRunner --> JobResult
     JobFiles --> Types["types.py"]
@@ -43,9 +46,18 @@ flowchart LR
   package, write run/generation metadata, and compute the static hash.
 - `local_runner.py`: subprocess workflow execution, timeout handling, and job-local `individual_metadata.json` collection.
 - `resource_requests.py`: generation-aware adaptive HTCondor memory/disk request
-  calculation from recorded Condor measurements; CPU remains manual.
+  calculation from recorded Condor measurements; it returns one concrete request
+  and CPU remains manual.
+- `resource_retries.py`: removable yadof-side state machine for standard HTCondor
+  out-of-memory/out-of-disk holds. It doubles only the exhausted resource, bounds
+  retries independently, records attempt history, and clears attempt outputs before
+  a fresh submission.
 - `time_limits.py`: per-job HTCondor execution-limit calculation. Smoke jobs are unlimited; normal jobs use fixed or generation-aware automatic limits from recorded execution time.
-- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling, generation-budget timeout removal, `allowed_execute_duration` hold handling, final ClassAd resource/time collection, and job-local result collection.
+- `condor_runner.py`: Windows HTCondor submit-file generation, submission, polling,
+  yadof resource-retry orchestration, generation-budget timeout removal,
+  `allowed_execute_duration` hold handling, final ClassAd resource/time collection,
+  and job-local result collection. Submit files contain no Condor-native resource
+  retry directives.
 - `job_result.py`: shared metadata, rawData discovery, and `JobResult` construction helpers used by local and HTCondor backends.
 - `recorded_data_client.py`: adapter to `recorded_data.api`.
 - `types.py`: immutable job handoff objects.

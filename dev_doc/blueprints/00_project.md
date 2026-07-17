@@ -73,6 +73,11 @@
   metadata. The next generation's memory/disk submit request is derived from those
   observations with a documented smoke/bootstrap and high-tail-trimming policy;
   CPU request remains manual.
+- HTCondor receives one concrete memory/disk request per submission and no native
+  retry ladder. Yadof owns all resource-request changes: generation calibration
+  selects the initial request, and a removable `evaluate_manager.resource_retries`
+  state machine freshly resubmits standard memory/disk resource holds with only the
+  exhausted request doubled and a finite independent retry count.
 - Distributed jobs also record cumulative remote wall-clock and suspension time.
   `allowed_execute_duration` is omitted for smoke and calculated per normal job from
   either the configured fixed hour or the automatic smoke/preceding-generation

@@ -17,8 +17,9 @@
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
 - HTCondor tests cover submit-file generation, adaptive resource/time selection,
   no-timeout smoke submission, ClassAd resource/time metadata capture, duration-hold
-  classification/removal, submit failure capture, and distributed-mode finalization
-  through monkeypatched command execution.
+  classification/removal, absence of native resource-retry directives, yadof
+  memory/disk hold classification and bounded fresh resubmission, submit failure
+  capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
 - Parameter handoff tests validate assigned continuous/discrete/mixed values,
   same-process range refresh, job-local snapshots, definition-only static hashes,

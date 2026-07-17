@@ -57,7 +57,19 @@ If `OPTIMIZE_SMOKE_TEST_ENABLED = False`, generation zero treats the user-entere
 
 The submitter never rewrites your source config. It writes the calculated effective values and their source into each job's metadata, so a missing or unreadable Condor measurement safely falls back to the configured bootstrap values. `HTCONDOR_REQUEST_DISK_MULTIPLIER` is applied after either calculation; it is `1.0` by default and can be raised when scratch capacity is deliberately abundant.
 
-Generated `job.sub` files also set `retry_request_memory` and `retry_request_disk` to doubling steps through `HTCONDOR_RESOURCE_RETRY_DOUBLINGS` (default four steps: `2x`, `4x`, `8x`, `16x`). HTCondor restarts a job after an over-limit eviction using the next value, so choose a sensible initial request: an underestimated long job may lose its prior work on retry.
+Generated `job.sub` files contain only one concrete `request_memory` and
+`request_disk`; they do not use HTCondor's `retry_request_*` settings. If HTCondor
+holds a job with the standard out-of-resources code for memory or disk, yadof
+removes that cluster and submits the same prepared individual again with only the
+exhausted resource doubled. Memory and disk retry counts are independent.
+
+`YADOF_RESOURCE_RETRY_DOUBLINGS` in `all.py` limits these fresh submissions per
+resource and defaults to `4`, giving at most `2x`, `4x`, `8x`, and `16x` requests
+after the initial attempt. Set it to `0` to disable resource retries. The job's
+metadata records every attempt and the final exhausted resource. Workflow errors,
+submit failures, timeouts, and unrelated Condor holds are never resource-retried.
+Each retry starts the workflow from the beginning and remains inside the original
+whole-generation wait budget, so the initial request should still be realistic.
 
 ### Automatic Per-Job Timeouts
 

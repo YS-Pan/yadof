@@ -49,8 +49,9 @@
 2. It prepares the same job folder contract.
 3. `condor_runner.py` writes `job.sub`, then calls `condor_submit` without changing the HTCondor installation.
 4. HTCondor workers run the transferred `workflow.py` executable directly and transfer generated outputs back to the job folder.
-5. Finalization reuses the shared job metadata and `recorded_data` write path.
-6. Optimizer receives the same cost tuple shape as in local mode.
+5. If HTCondor holds an attempt for standard memory or disk exhaustion, yadof removes the old cluster and freshly submits the same prepared individual with only that resource doubled; no `retry_request_*` directives are present in `job.sub`.
+6. Finalization reuses the shared job metadata and `recorded_data` write path, including yadof retry history when applicable.
+7. Optimizer receives the same cost tuple shape as in local mode.
 
 ## Scenario 7: Code Change With Documentation Update
 1. AI or user changes source behavior, module contracts, persistence behavior, or important implementation technique.

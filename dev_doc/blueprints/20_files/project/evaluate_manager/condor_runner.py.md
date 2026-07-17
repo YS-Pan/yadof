@@ -9,13 +9,16 @@
 - Invoke an optional `after_jobs_submitted` callback after successful submissions and before polling outputs.
 - Poll terminal job state or complete returned outputs, collect rawData and metadata, query final `condor_history`/held-job ClassAds for resource and execution-time measurements, and turn failures/timeouts into `JobResult` rows.
 - Recognize `allowed_execute_duration` hold codes 46/47 as timeouts, capture their diagnostics, and remove the held job so it cannot be retried.
+- Delegate standard memory/disk resource-hold decisions and attempt cleanup to
+  `resource_retries.py`, remove the old cluster, and submit a fresh cluster with the
+  returned concrete request while preserving retry metadata.
 - Isolate per-job collection failures so one bad returned payload cannot fail the whole generation.
 
 ## I/O Format
 - Input is prepared job specs.
 - Output is ordered `JobResult` rows.
 - Callback has no arguments and its return value is ignored.
-- Submit files use `executable = workflow.py`, omit the workflow argument line, set `transfer_executable = True`, and use the calculated `request_cpus`, `request_memory`, and `request_disk` values. They also emit bounded `retry_request_memory` and `retry_request_disk` doubling ladders. Normal generation jobs emit the calculated `allowed_execute_duration`; smoke jobs omit it.
+- Submit files use `executable = workflow.py`, omit the workflow argument line, set `transfer_executable = True`, and use the calculated `request_cpus`, `request_memory`, and `request_disk` values. They do not emit Condor-native resource retry directives. Normal generation jobs emit the calculated `allowed_execute_duration`; smoke jobs omit it.
 - `environment` is emitted as one quoted HTCondor environment string. Entries must be whitespace-separated inside that quoted string; semicolon-separated entries are not valid for the current submit style.
 
 ## Non-Obvious Techniques
@@ -28,6 +31,13 @@
   `CumulativeSuspensionTime`, and related request/CPU values as diagnostics but
   never turns an unavailable history query into a result-collection failure.
 - Nested `rawData/*.npz` files take precedence over `rawData_outputs.zip`. The zip is only a fallback for older transfer behavior, and restore failures are recorded in metadata instead of escaping from collection.
+- A resource retry is a new cluster, not a Condor restart inside the old cluster. The
+  old held cluster must be removed before attempt outputs are reset, and every retry
+  remains inside the original generation-level deadline. Timeout, workflow, submit,
+  cleanup, and non-resource hold failures are never resource-retried.
 
 ## Mutability Profile
 - HTCondor submit details may change, but the callback location must remain after submission and before waiting if staggered training is to keep the cluster busy.
+- Keep resource policy in `resource_retries.py`; the runner should contain only the
+  minimal orchestration needed to query, remove, reset, and resubmit so native
+  Condor retry support can replace it cleanly later.
