@@ -10,17 +10,33 @@ flowchart LR
     Console --> Resources["resources.py"]
     RootDocs["root dev_doc + user_doc"] -->|build-time mapping| Resources
     Templates["_resources/templates"] --> Resources
+    Templates --> Init["workspace_init.py"]
     Workspace["workspace.py"] --> Config["config.py"]
     Config --> TaskLoader["task_loader.py"]
     Workspace --> JobTemplate["yadof/job_template"]
     TaskLoader --> JobTemplate
+    Marker["workspace_manifest.py"] --> Init
+    Init --> Config
+    Init --> TaskLoader
+    Check["workspace_check.py"] --> Marker
+    Check --> Config
+    Check --> TaskLoader
+    Console --> Init
+    Console --> Check
+    Console --> Smoke["smoke_test.py + yadof smoke-test"]
+    Smoke --> PackagedEvaluate["yadof.evaluate_manager"]
+    PackagedEvaluate --> Config
+    PackagedEvaluate --> JobTemplate
+    PackagedEvaluate --> WorkspaceJobs["workspace/jobs"]
 ```
 
 - `pyproject.toml`: PEP 517 backend, distribution metadata, dependency layers,
   package selection, resource mapping, and the `yadof` console entry point.
 - `_version.py`: single literal runtime/distribution version source.
-- `cli.py` and `__main__.py`: standard-library help, version, and non-GUI document
-  output with consistent process streams/status.
+- `cli.py` and `__main__.py`: standard-library argument dispatch for help, version,
+  non-GUI document output, init, check, and local smoke with consistent
+  streams/status. Runtime-dependent modules remain lazy imports so
+  help/version/docs work without extras.
 - `resources.py`: `importlib.resources` lookup of installed read-only content plus a
   checkout-only fallback to the same authoritative root docs.
 - `workspace.py`: immutable absolute paths for config, task inputs, jobs, recorded
@@ -32,9 +48,52 @@ flowchart LR
 - `task_loader.py`: per-load source compilation and temporary import resolution for
   workspace-local absolute/relative imports without permanent `sys.path` or module
   cache changes.
+- `workspace_manifest.py`: strict portable `.yadof/workspace.json` schema carrying
+  workspace, package, template, and rawData contract versions without installation
+  paths.
+- `workspace_init.py`: validates bundled template metadata/content, checks exact
+  target conflicts, creates a staged workspace, validates config/task/workflow
+  syntax, and publishes without overwrite. The marker is published last for an
+  existing directory and created files are rolled back on failure.
+- `workspace_check.py`: report-only structure/marker/config/task/static-rawData and
+  selected-backend diagnostics. It parses but never imports or executes workflow;
+  external commands are located with read-only discovery and never invoked.
 - `yadof.job_template`: installed `Parameter`, normalization/materialization API,
   rawData contract/views, generic cost helpers, and workspace-explicit task queries.
   User-owned parameter/workflow/cost/adapters/assets remain in the workspace.
+- `smoke_test.py`: compares marker-selected task files byte-for-byte with the
+  bundled generic template. Only that unchanged generic task runs without
+  `--real-task`; edited/additional/external payloads require explicit execution
+  intent.
+
+## Packaged Local Evaluate Manager Components
+
+```mermaid
+flowchart LR
+    EvalAPI["api.py"] --> JobFiles["job_files.py"]
+    EvalAPI --> LocalRunner["local_runner.py"]
+    EvalAPI --> JobResult["job_result.py"]
+    JobFiles --> WorkerFiles["worker_files/worker_misc.py"]
+    JobFiles --> Types["types.py"]
+    LocalRunner --> JobResult
+    JobResult --> Types
+    EvalAPI --> DynamicCost["yadof.job_template cost API"]
+```
+
+- `api.py`: explicit-workspace population/local-smoke entry points, fresh config
+  loading, ordered local concurrency, cost derivation, and per-individual `inf`
+  isolation. It has no `project.*` or recorded-data dependency.
+- `job_files.py`: collision-safe package/task composition, assigned parameter
+  materialization, package worker/config injection, definition-only static hashing,
+  and yadof/workspace/config provenance.
+- `worker_files/worker_misc.py`: stable copied worker helpers migrated from the old
+  task template. Workspace tasks may use the reserved `worker_misc.py` import but
+  may not replace that filename.
+- `local_runner.py`: subprocess execution with process-tree timeout, bytecode-cache
+  suppression, rawData validation, no-`cost.json` enforcement, and merged workflow/
+  runner metadata.
+- `job_result.py` and `types.py`: preserved `JobSpec`/`JobResult` and metadata/result
+  handoff shapes for local now and distributed later.
 
 ## Optimize Components
 
@@ -56,7 +115,7 @@ flowchart LR
 - `problem_info.py`: variable/objective metadata from `job_template.api`.
 - `runner.py`: generation metadata helpers.
 
-## Evaluate Manager Components
+## Transitional Source Evaluate Manager Components
 
 ```mermaid
 flowchart LR
@@ -76,6 +135,9 @@ flowchart LR
     EvalAPI --> EvalConfig["project.config.all via evaluate_manager/config.py"]
 ```
 
+- These `project.evaluate_manager` components remain for the source optimizer,
+  recorded-data, and HTCondor transition path. New workspace-local calls use the
+  packaged components above; later stages move persistence and distributed pieces.
 - `api.py`: backend selection, local per-individual worker-pool coordination, failure isolation, and ordered cost return.
 - `job_files.py`: copy the template, ask `job_template.api` to fresh-load and
   materialize one assigned parameter snapshot, copy the cache-free `config/`

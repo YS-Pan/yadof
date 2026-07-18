@@ -3,8 +3,10 @@
 `project/` contains the current modular optimization runtime described by the
 architecture views and project/module blueprints under `../dev_doc/`. The
 installable package and workspace/config/task-loading foundation lives under
-`../src/yadof/`; runtime modules remain here until their ordered package-migration
-stages are completed.
+`../src/yadof/`; it now includes safe generic workspace init/check, packaged job
+preparation/local evaluation, and standalone local smoke. This tree remains the
+transitional optimization, recording, surrogate, and distributed runtime until
+their ordered package-migration stages are completed.
 
 The central contract is:
 ```text
@@ -19,9 +21,9 @@ not stored as a durable source file.
 
 - `optimize/`: optimizer-facing entry points, GPSAF-style search, history warm
   start, and optional surrogate-assisted candidate selection.
-- `evaluate_manager/`: job creation, local execution, optional
-  Distributed/HTCondor execution, timeout/failure isolation, and handoff to
-  `recorded_data`.
+- `evaluate_manager/`: transitional source-layout local/HTCondor execution and
+  recording handoff for the not-yet-migrated optimizer. New installed workspace
+  local calls use `yadof.evaluate_manager` under `../src/`.
 - `job_template/`: task-specific parameter definitions, workflow, rawData
   contract, optional simulator/input files, and rawData-to-cost logic. The
   active template decides which rawData items and objective costs exist for a

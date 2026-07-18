@@ -11,12 +11,19 @@ A good workflow does these things:
 - reads assigned values from the job-local `parameters_constraints.py`,
 - writes `individual_metadata.json` with `status`, `started_at`, and `ended_at`,
 - writes rawData `.npz` files directly under `rawData/`,
-- writes `rawData_outputs.zip` after rawData is produced so distributed jobs can transfer outputs,
 - records exception details when possible,
 - exits with an error when the workflow failed,
 - never writes `cost.json` and never calculates final objective costs.
 
-Use helpers from `worker_misc.py`; that file is copied into each job.
+Use helpers from `worker_misc.py`; the installed package copies that stable file into
+each prepared job. Do not place your own `worker_misc.py` or
+`yadof_worker_config.json` in workspace `job_template/`: those filenames are
+reserved and job preparation rejects a collision instead of overwriting it.
+
+Current packaged local jobs consume the returned `rawData/` directory directly and
+do not require `rawData_outputs.zip`. The helper can still create that archive for
+the transitional source distributed path; package step 8 defines the final
+distributed transfer rule.
 
 ## Minimal Skeleton
 

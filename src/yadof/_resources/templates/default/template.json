@@ -1,7 +1,25 @@
 {
   "schema_version": 1,
   "name": "default",
-  "status": "foundation",
-  "description": "Software-neutral workspace template resources completed by package step 3.",
-  "files": []
+  "template_version": 1,
+  "rawdata_schema_version": 1,
+  "description": "Minimal runnable, software-neutral pure-Python workspace.",
+  "files": [
+    {
+      "source": "workspace/config.py",
+      "destination": "config.py"
+    },
+    {
+      "source": "workspace/job_template/parameters_constraints.py",
+      "destination": "job_template/parameters_constraints.py"
+    },
+    {
+      "source": "workspace/job_template/workflow.py",
+      "destination": "job_template/workflow.py"
+    },
+    {
+      "source": "workspace/job_template/calc_cost.py",
+      "destination": "job_template/calc_cost.py"
+    }
+  ]
 }

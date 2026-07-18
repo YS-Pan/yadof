@@ -1,8 +1,14 @@
 # Default Workspace Template Resource
 
-This bundled resource reserves the software-neutral default workspace template.
-The package foundation exposes it read-only; the later workspace initialization
-stage defines and validates the generated config and task files.
+This bundled resource defines the software-neutral default workspace used by
+`yadof init`. Its manifest lists the user-owned files published into a workspace;
+framework APIs remain installed under `yadof` and are not copied.
 
-No simulator, vendor, model file, objective, adapter, or active optimization task is
-selected by this resource.
+The starter task evaluates a generic numeric input with pure Python/NumPy and writes
+schema-valid rawData for a generic objective. It selects no simulator, vendor,
+model/input filename, adapter, or physical result.
+
+An unchanged initialized copy is the only task that `yadof smoke-test` runs without
+`--real-task`. Prepared jobs receive package worker support separately; the
+workspace template does not contain `worker_misc.py` or other framework runtime
+implementations.

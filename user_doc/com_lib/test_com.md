@@ -4,7 +4,8 @@ Use this adapter when you want a pure-Python stand-in for an expensive simulator
 It does not calculate cost; it returns rawData-like blocks.
 
 The source/reference copy is `project/com_lib/test_com.py`. To use it in a workflow,
-copy it to `project/job_template/test_com.py`.
+copy it to the active task's `job_template/test_com.py` (for example,
+`path/to/workspace/job_template/test_com.py` for installed local evaluation).
 
 ## Import Pattern
 

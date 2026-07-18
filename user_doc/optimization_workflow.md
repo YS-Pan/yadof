@@ -1,8 +1,10 @@
 # User Workflow For A New Optimization Task
 
-> Package transition note: installed workspace/config/task-loading APIs are now
-> available, but initialization and evaluation are later stages. Use the current
-> `project/` paths below for real runs until those commands are documented as current.
+> Package transition note: `yadof init PATH` creates a generic package-era starter,
+> `yadof check --workspace PATH` diagnoses it without execution, and
+> `yadof smoke-test --workspace PATH --mode local` now runs one real local midpoint
+> individual with no timeout. Full optimization, history, and distributed execution
+> still use the source-tree procedure below until their later migration stages.
 
 This is the normal user-side path for turning a simulation or custom evaluator into
 a yadof optimization run.
@@ -137,7 +139,25 @@ For the current HFSS adapter, edit `HFSS_CPUCORE_MULTIPLIER`, `HFSS_PARALLEL_TAS
 
 Before a long run, test one individual.
 
-For a real workflow smoke test in local mode:
+For a package-era workspace whose task files are still the unchanged generic starter:
+
+```powershell
+yadof smoke-test --workspace path\to\workspace --mode local
+```
+
+After you edit any task file or add one or more adapters/assets, use the explicit
+real-task confirmation:
+
+```powershell
+yadof smoke-test --workspace path\to\workspace --mode local --real-task
+```
+
+This command executes `workflow.py` and may launch external or expensive software.
+It always evaluates exactly one parameter-space midpoint with no timeout, creates a
+job only after the safety check passes, and reports failure when no finite cost is
+returned. Inspect the newest folder under the workspace's effective `JOBS_DIR`.
+
+For the transitional source-tree runtime only, the direct Python equivalent remains:
 
 ```powershell
 @"

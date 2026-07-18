@@ -1,10 +1,17 @@
 # Config And Run
 
 > Package transition note: installed `yadof` now provides help, version,
-> documentation commands, and workspace/config/task-loading Python APIs. Runtime
-> consumers have not migrated, so the source-tree configuration and launch
-> instructions below remain current. See `package_foundation.md` for the installed
-> boundary and future workspace `config.py` precedence.
+> documentation, safe `init`/`check`, and workspace/config/task-loading Python APIs.
+> Packaged job preparation, local evaluation, and standalone local smoke have also
+> migrated. Full optimization, history, and distributed consumers have not, so the
+> source-tree campaign configuration and launch instructions below remain current.
+> See `package_foundation.md` for the installed workspace boundary and root
+> `config.py` precedence.
+
+For a package-era workspace, run `yadof check --workspace PATH` after editing its
+root `config.py`. This validates the selected backend's prerequisites without
+submitting jobs or repairing the environment. The remaining sections describe the
+temporarily unmigrated `project/config/` runtime.
 
 `project/config/key.py` is the short, user-editable generic key config for a normal optimization campaign. `project/config/all.py` contains the full set of generic defaults grouped by area. Settings tied to one simulator live under `project/config/specific/`; the current HFSS task uses `project/config/specific/hfss.py`. Task physics, variables, objective names, rawData shape, and cost definitions still belong in `project/job_template/`.
 
@@ -19,6 +26,11 @@ OPTIMIZE_SMOKE_TEST_ENABLED = True
 ```
 
 Local mode is best for first smoke tests. `OPTIMIZE_SMOKE_TEST_ENABLED` controls whether the normal optimization launcher runs one real midpoint individual before generation zero. The smoke test has no timeout. If you need local concurrency for a pure-Python or otherwise parallel-safe workflow, set `LOCAL_EVALUATION_MAX_WORKERS` in `all.py` or add that setting to `key.py`. Keep it at `1` for workflows whose external programs are not safe to run concurrently.
+
+For an installed workspace, `LOCAL_EVALUATION_MAX_WORKERS` and
+`EVALUATION_TIMEOUT_SEC` are reloaded from root `config.py` for each normal packaged
+local population call. Standalone `yadof smoke-test` overrides the worker count to
+one and disables timeout without rewriting the file.
 
 `JOBS_DIR` is the submit-side prepared-job folder. Worker scratch placement is an HTCondor execute-machine setting, not `JOBS_DIR`.
 
@@ -97,7 +109,12 @@ The generated submit file uses HTCondor's `allowed_execute_duration`. A job that
 
 The default `HTCONDOR_ENVIRONMENT` in `all.py` uses HTCondor's quoted, whitespace-separated environment syntax. It combines generic Windows profile/temp entries with environment entries contributed by active modules under `config/specific/`.
 
-When `evaluate_manager` prepares a distributed or local job folder, it copies the cache-free `project/config/` package into that job folder. This keeps generic key/default settings and active software-specific context with the job payload.
+The transitional source `project.evaluate_manager` still copies the cache-free
+`project/config/` package into source-layout jobs. Packaged local jobs do not copy
+package config source. They contain `yadof_worker_config.json` with only effective
+local mode, timeout, and worker count plus yadof/workspace provenance. Task-local
+software settings needed by workflow execution should be task files/assets until a
+later distributed worker contract defines additional packaged context.
 
 ## Optimizer Settings
 
@@ -111,13 +128,30 @@ Advanced optimizer and surrogate settings, including random seeds, NSGA-III cont
 
 ## Smoke Tests
 
+The installed one-individual local smoke path is:
+
+```powershell
+yadof smoke-test --workspace path\to\workspace --mode local
+```
+
+That direct form is accepted only for the exact unchanged generic starter. For any
+edited task or additional adapter/asset, explicitly acknowledge real execution:
+
+```powershell
+yadof smoke-test --workspace path\to\workspace --mode local --real-task
+```
+
+Both forms evaluate exactly one midpoint individual with no timeout. The second can
+launch a simulator or custom program. This is distinct from the package/framework
+self-test command below.
+
 A lightweight default test run uses reusable framework and software-integration tests. Software-specific tests use synthetic inputs or mocks; the suite does not start real simulator software or contain current-task checks:
 
 ```powershell
 pytest -q
 ```
 
-A one-individual real local smoke test:
+A transitional source-tree one-individual real local smoke test:
 
 ```powershell
 @"

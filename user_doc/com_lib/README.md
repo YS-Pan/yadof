@@ -4,8 +4,9 @@ This folder documents `_com.py` adapter files one file at a time.
 
 `project/com_lib/` is the adapter source/reference library. A file in that folder is
 not active just because it exists there. To use an adapter in a task, copy the needed
-`*_com.py` file into `project/job_template/`, then import it from `workflow.py` by
-same-directory name.
+`*_com.py` file into the active task's `job_template/` (under `project/` for the
+transitional source runtime or under the selected installed workspace), then import
+it from `workflow.py` by same-directory name.
 
 When an active adapter receives a reusable fix, validate that the change contains no
 task-only project/design/objective assumptions, then synchronize it back to the
@@ -32,10 +33,14 @@ Normal flow:
 
 ```text
 project/com_lib/some_com.py
-  -> copy to project/job_template/some_com.py
+  -> copy to selected workspace/job_template/some_com.py
   -> workflow.py imports from some_com
-  -> evaluate_manager copies some_com.py into each job folder
+  -> yadof.evaluate_manager copies it and any other active adapters/assets into each local job
 ```
+
+Multiple task-local adapters are supported. Do not name an adapter
+`worker_misc.py` or `yadof_worker_config.json`; those job-root filenames are
+reserved for package worker support and composition fails rather than overwriting.
 
 Use same-directory imports in `workflow.py`:
 

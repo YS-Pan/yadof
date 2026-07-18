@@ -2,8 +2,9 @@
 
 ## Intent
 - Build `yadof` as a modular, recoverable optimization framework. The installable
-  package foundation lives under `src/yadof/`; current runtime modules remain under
-  `project/` until their ordered migrations are completed.
+  package foundation and local evaluator live under `src/yadof/`; persistence,
+  optimization, surrogate, and distributed runtime modules remain under `project/`
+  until their ordered migrations are completed.
 - Merge the mature job orchestration and recording ideas from older fanyufei-style workflows with the surrogate-assisted optimization ideas from the shorten-style experiments.
 - Keep the central modeling chain as `normalized variables -> rawData -> cost`, where cost is always derived from rawData through the current `job_template/calc_cost.py`.
 - Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and local/distributed execution backends should not force a rewrite of the core optimizer.
@@ -17,13 +18,16 @@
 
 ## Functionalities
 - The `src/yadof` package foundation owns the distribution/import/command name,
-  single version source, minimal help/version/document CLI, and read-only packaged
-  documentation/template resources. It also owns explicit workspace paths,
-  package-default/workspace-override configuration, fresh isolated task-module
-  loading, and stable parameter/rawData/cost-helper support. It neither imports nor
-  aliases the current `project.*` runtime.
+  single version source, help/version/document/init/check/local-smoke CLI, and read-only packaged
+  documentation/versioned-template resources. It also owns explicit workspace paths,
+  safe initialization/diagnosis, package-default/workspace-override configuration,
+  fresh isolated task-module loading, and stable parameter/rawData/cost-helper
+  support. `yadof.evaluate_manager` now owns workspace job composition, local
+  subprocess execution, rawData validation, and dynamic local cost return. Package
+  code neither imports nor aliases the current `project.*` runtime.
 - `project.optimize` owns the optimization loop, NSGA-III multi-objective candidate generation, GPSAF-style history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
-- `project.evaluate_manager` converts normalized individuals into job folders, asks
+- `project.evaluate_manager` remains the transitional optimizer/recording/HTCondor
+  path until later package stages. It converts normalized individuals into source-layout job folders, asks
   `job_template.api` to fresh-load and materialize assigned parameter snapshots,
   passes run/generation context, runs local jobs or submits HTCondor jobs, reads
   workflow-owned individual metadata, records failures, and returns in-memory costs
@@ -39,6 +43,10 @@
   workspace root and every task/runtime path. `yadof.config.load_config` returns an
   immutable effective config with source precedence; `yadof.task_loader` and
   `yadof.job_template` query current user task modules without shared import state.
+- `yadof.workspace_init` validates and safely publishes the bundled generic starter;
+  `yadof.workspace_manifest` owns portable versioned provenance; and
+  `yadof.workspace_check` reports structure/config/task/rawData/backend state without
+  executing workflow or repairing the environment.
 - `project.test` is the sole source location for maintained automated tests. It verifies generic framework contracts and may also verify reusable software-specific adapters or tools with mocks and synthetic inputs. It never encodes the current task's concrete files, objectives, variable shape, or expected physical results. Current-task tests and their resources belong in ignored `temp/` now and in the task workspace after package separation.
 - `dev_doc` owns project documentation guidance, including current architecture
   contracts, selective blueprint reading, terminology, historical lineage,
@@ -47,16 +55,27 @@
   are only opportunistic during already in-scope work and have stale-document rules.
 
 ## I/O Format
-- Current installed foundation commands are `yadof --help`, `yadof version`, and
-  `yadof docs user|dev`. They require no workspace and produce console output only.
+- Current installed commands are `yadof --help`, `yadof version`,
+  `yadof docs user|dev`, `yadof init [PATH]`, and
+  `yadof check [--workspace PATH]`, plus
+  `yadof smoke-test [--workspace PATH] [--mode local] [--real-task]`. Information
+  commands are read-only; init writes only the selected workspace, check is
+  report-only, and smoke executes exactly one no-timeout midpoint workflow.
 - Current installed Python APIs include `WorkspaceContext`, `load_config`, isolated
   task-module loading, installed `Parameter`/rawData/cost helpers, and workspace-
-  explicit parameter/objective/cost queries. They do not yet prepare or execute a
-  job; that remains a later package stage.
+  explicit parameter/objective/cost queries. `yadof.evaluate_manager` adds explicit-
+  workspace `prepare_job`, `evaluate_population`, and `run_smoke_test` local APIs.
 - A package-era workspace contains short root `config.py`; task-owned
   `job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, active
   adapters, and arbitrary assets; and workspace-local jobs, records, checkpoints,
   logs, and tool output. Relative configured paths resolve from the workspace root.
+- A packaged local job contains workspace workflow/adapters/assets, one assigned
+  parameter snapshot, package `worker_misc.py`, compact effective worker JSON,
+  lifecycle/runner metadata, and flat rawData. It never contains submit-side
+  `calc_cost.py`, a full package config source copy, or authoritative `cost.json`.
+- An initialized workspace also contains `.yadof/workspace.json` with workspace,
+  yadof, template, and rawData schema versions. The bundled template itself is
+  simulator/vendor-neutral and its user copy contains no framework implementations.
 - Wheel builds map the authoritative root `dev_doc/` and `user_doc/` trees under
   `yadof/_resources/docs/`; sdists retain those root trees for reproducible wheel
   builds. The source tree does not maintain duplicate document copies under `src/`.
@@ -74,6 +93,13 @@
 - Installed package resources are read-only inputs. Foundation commands must not
   create jobs, records, checkpoints, logs, plots, or temporary state beside package
   code.
+- Init must treat every template destination as user content: existing destinations
+  are exact conflicts; a complete marked workspace is confirmed without writes; an
+  incomplete marked workspace is reported but not repaired. Generation is validated
+  before publish, and the marker cannot appear before all required files.
+- Check never executes `workflow.py`, starts evaluation, installs a dependency, or
+  modifies Python/simulator/HTCondor configuration. Missing backend prerequisites
+  are errors that direct the user to an administrator.
 - The current directory is only the default workspace selector. Once selected, all
   paths are absolute and derive from that workspace unless a config/API value is an
   explicit absolute override. No user-data path derives from package `__file__`.
@@ -83,6 +109,11 @@
 - Task source and local helper imports are recompiled for every query, use temporary
   namespaces, and leave `sys.path` plus unrelated/global module cache state unchanged.
 - Expensive evaluations produce rawData and metadata, not authoritative costs.
+- Package job composition fails on case-insensitive collisions with reserved
+  `worker_misc.py` or `yadof_worker_config.json`; it never silently chooses one copy.
+- Standalone smoke runs the unchanged generic starter directly, but any task edit or
+  additional adapter/asset requires explicit `--real-task` intent because execution
+  may launch external or expensive software.
 - Cost and normalized historical variables are derived from stored raw evidence and the current task definition.
 - The core framework remains simulator-agnostic; adding Maxwell, TwinBuilder, custom Python, or multi-software workflows should happen through task files and adapters rather than core rewrites.
 - Complex per-individual workflows are allowed as long as their output contract is flat rawData plus metadata.
@@ -103,11 +134,25 @@
   relying on `.pyc` timestamp/size validity, then restores same-named pre-existing
   modules. This makes rapid edits visible and prevents two workspaces with identical
   helper names from contaminating each other.
+- Init reads a manifest mapping safe relative package resources to user destinations,
+  writes/validates a sibling stage, then uses directory replacement for a new root
+  or exclusive per-file creation plus marker-last publication for an existing root.
+  A failed existing-root publish rolls back only paths created by that attempt.
+- Check reuses normal config/task validators, parses workflow source with `ast`
+  instead of importing it, validates an already-present task-local rawData directory,
+  and uses executable discovery rather than subprocess calls for backend checks.
 - Cost is deliberately not a persisted evaluation artifact. Any module that needs cost asks `recorded_data` or `job_template` to compute it from rawData using the current `calc_cost.py`.
 - Normalized historical variables are also derived data. `recorded_data` stores raw variables and uses current `job_template` parameter ranges to calculate normalized variables on demand.
 - `job_static_hash` captures copied static job inputs. For the assigned parameter
   snapshot it hashes only name, ranges, unit, and constraints, so mid-run definition
   changes are visible without making every individual unique by hash.
+- Package local preparation copies the old stable `worker_misc.py` implementation
+  as an installed resource, recursively preserves non-conflicting task adapters and
+  arbitrary assets, and writes only a source-annotated local mode/timeout/worker-
+  count summary rather than copying the package config module.
+- Local subprocesses disable bytecode writes, run in their workspace job directory,
+  terminate the process tree on timeout, validate flat rawData, and turn a workflow-
+  created `cost.json` into an error while removing the forbidden file.
 - rawData directories must stay flat. Each `.npz` is one rawData unit and must include schema-versioned metadata.
 - Workflow lifecycle time is owned by the individual job: `workflow.py` writes `started_at` and `ended_at` into `individual_metadata.json`, and `evaluate_manager` only reads and forwards it.
 - Variable values are stored once as individual `raw_variables`; repeated variable payloads are scrubbed from rawData metadata and job metadata before appending `indMeta.jsonl`.
@@ -137,8 +182,9 @@
 
 ## Mutability Profile
 - `pyproject.toml`, root `README.md`, and `src/yadof/` currently define the package
-  and workspace/task-loading foundation. Package source grows by moving runtime
-  modules in later stages, not by adding `project.*` compatibility wrappers.
+  and workspace init/check/config/task-loading/local-evaluation foundation. Package source grows by
+  moving runtime modules in later stages, not by adding `project.*` compatibility
+  wrappers.
 - Workspace `config.py` and task modules are user-owned and highly mutable; the
   installed workspace/config/task-loader/job-template APIs are shared contracts and
   should change carefully.

@@ -11,6 +11,8 @@
 
 ## Functionalities
 - Hold copied workflow/runtime files needed to run one evaluation.
+- Hold package-owned `worker_misc.py` and compact `yadof_worker_config.json`; these
+  names are reserved and cannot be supplied by a workspace task.
 - Hold one `parameters_constraints.py` snapshot with the current task definition and
   this individual's assigned normalized/raw values.
 - Hold `individual_metadata.json` written by `workflow.py` with lifecycle timing, status, and run/generation context.
@@ -19,15 +21,20 @@
 - In distributed mode, provide the filesystem rendezvous point where HTCondor jobs return outputs.
 
 ## I/O Format
-- Input files are copied from `job_template` plus generated job input/metadata.
+- Input files are composed from non-conflicting workspace task payload, package
+  worker support, assigned parameters, compact effective config, and job metadata.
 - Output files are metadata and `.npz` rawData files only.
 - `individual_metadata.json` is the authoritative job-local source for `started_at` and `ended_at`; `metadata.json` and `metaData.json` are submit-side/merged views.
 - Cost files such as `cost.json` are outside the current contract.
+- Submit-side workspace `calc_cost.py` is not copied; the local submit process uses
+  it only after validated rawData returns.
 
 ## Non-Obvious Techniques
 - Jobs are not a Python package or active module; they are runtime state.
 - The static hash is calculated after parameter materialization but uses a
   definition-only signature for the parameter snapshot.
+- The static hash also ignores the path/provenance-bearing worker-config JSON, so
+  workspace location and individual assignment do not change task identity.
 - The static hash ignores `individual_metadata.json` because it is runtime state, not static task definition.
 - Recorded-data ingestion should be able to consume job outputs even when the job status is error or timeout.
 

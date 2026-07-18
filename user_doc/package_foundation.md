@@ -1,4 +1,4 @@
-# Installed Package And Workspace Foundation
+# Installed Package, Workspace, And Local Evaluation
 
 Yadof now has an installable package foundation named `yadof`. The distribution,
 Python import, and console command use the same name, and the current version is
@@ -30,8 +30,8 @@ prepared by an administrator and are not pip dependencies.
 
 ## Available Installed Commands
 
-This foundation stage deliberately exposes only commands that do not need a task
-workspace or the not-yet-migrated runtime:
+The installed package exposes repository-independent information, workspace
+preparation/diagnosis, and explicit local workflow evaluation:
 
 ```powershell
 yadof --help
@@ -39,21 +39,61 @@ yadof --version
 yadof version
 yadof docs user
 yadof docs dev
+yadof init [PATH]
+yadof check --workspace PATH
+yadof smoke-test --workspace PATH --mode local [--real-task]
 ```
 
 The document commands print UTF-8 entry content. They do not open a GUI and do not
 write into the installed package.
 
+`yadof init` defaults to the current directory. It creates only:
+
+```text
+config.py
+job_template/
+  parameters_constraints.py
+  workflow.py
+  calc_cost.py
+.yadof/
+  workspace.json
+```
+
+The starter is a minimal pure-Python/NumPy task with generic `input_value` and
+`objective` placeholders. It selects no simulator, vendor, adapter, model, or
+physical result. Initialization validates a temporary copy before publishing it.
+Existing target files stop initialization and are listed exactly; unrelated files
+are preserved. Repeating `init` on a complete matching workspace confirms it without
+rewriting config, task files, or history. It is not an upgrade or repair command.
+
+`yadof check` reports the workspace directory and marker, effective config, task
+parameter/objective imports, `workflow.py` syntax, any task-local flat `rawData`
+directory that already exists, and read-only prerequisites for the selected local
+or distributed backend. It never imports or executes `workflow.py`, creates runtime
+directories, runs a simulator, installs dependencies, or changes HTCondor. A missing
+distributed executable is an administrator action reported as an error.
+
+`yadof smoke-test` is intentionally different: it executes `workflow.py` for exactly
+one deterministic midpoint individual, with no generation index and no timeout. An
+unchanged generic starter can run directly. If any task file was edited or any
+adapter/asset was added, the command refuses before creating a job unless you add
+`--real-task`. That flag is explicit intent to run a task that may launch a simulator,
+custom program, or otherwise expensive workflow. Package self-tests such as
+`pytest -q` do not run this real-task path.
+
 ## Current Transition Boundary
 
-Optimization, evaluation, history, surrogate, and user-tool runtime modules still
-live under `project/`. Continue using the source-tree workflow in
-`optimization_workflow.md` and `config_and_run.md` until their ordered package
-migration steps replace those entry points.
+Workspace job preparation and local evaluation now live under
+`yadof.evaluate_manager`. Optimization, recorded history, surrogate, user tools,
+and distributed evaluation still live under `project/`. Continue using the
+source-tree full-campaign workflow in `optimization_workflow.md` and
+`config_and_run.md` until their ordered package stages replace those entry points.
 
-The package foundation does not provide a `project.*` compatibility alias and does
-not yet implement `yadof init`, `check`, `smoke-test`, `run`, history, view, or task
-commands. Their absence is intentional rather than an installation error.
+The package does not provide a `project.*` compatibility alias and does not yet
+implement `run`, history, view, task-editing, or distributed-smoke commands. Their
+absence is intentional rather than an installation error. `init` and `check` never
+evaluate; `smoke-test` evaluates once but does not record campaign history or start
+optimization.
 
 ## Available Workspace Python APIs
 
@@ -62,6 +102,7 @@ boundary without creating runtime state:
 
 ```python
 from yadof import WorkspaceContext, load_config
+from yadof.evaluate_manager import evaluate_population, run_smoke_test
 from yadof.job_template import validate_task
 
 workspace = WorkspaceContext.from_path("path/to/workspace")
@@ -74,6 +115,12 @@ task = validate_task(config.workspace)
 print(config.describe())
 print(task.parameter_names)
 print(task.objective_names)
+
+# Exactly one midpoint individual, local, no timeout:
+print(run_smoke_test(config.workspace))
+
+# Normal local rows use effective timeout/worker settings:
+print(evaluate_population(config.workspace, ((0.25,), (0.75,))))
 ```
 
 Omitting the path selects the current directory. `WorkspaceContext` resolves root
@@ -100,8 +147,21 @@ adapters, simulator/custom inputs, lookup tables, and other assets. Stable
 imports; each query reloads current source without permanently changing `sys.path`
 or sharing local modules with another workspace.
 
-This stage does not prepare or run a job. The forthcoming `init`, `check`, local
-evaluation, and run stages will consume these APIs.
+Prepared jobs are created only below the effective `JOBS_DIR`. Each job combines:
+
+- the assigned `parameters_constraints.py` snapshot,
+- workspace `workflow.py`, every non-conflicting task-local adapter, and arbitrary
+  task assets/resources,
+- package-owned `worker_misc.py`,
+- `yadof_worker_config.json` containing only yadof/workspace provenance and effective
+  local mode, timeout, and worker count.
+
+The package reserves `worker_misc.py` and `yadof_worker_config.json` in a task
+payload; a same-named workspace file is an error and is never overwritten.
+Submit-side `calc_cost.py` is not copied. A workflow writes flat rawData and lifecycle
+metadata only, then the submit process validates rawData and derives the returned
+cost tuple through the current workspace `calc_cost.py`. A workflow-created
+`cost.json` makes the job fail and is removed.
 
 ## Packaged Documentation
 

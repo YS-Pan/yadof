@@ -11,15 +11,28 @@ src/yadof/
   _version.py
   cli.py
   workspace.py
+  workspace_manifest.py
+  workspace_init.py
+  workspace_check.py
+  smoke_test.py
   config.py
   task_loader.py
+  evaluate_manager/
+    api.py
+    job_files.py
+    job_result.py
+    local_runner.py
+    types.py
+    worker_files/worker_misc.py
   job_template/
     api.py
     parameters_constraints_class.py
     rawdata_contract.py
     cost_misc.py
   resources.py
-  _resources/templates/
+  _resources/templates/default/
+    template.json
+    workspace/
 
 workspace/  # selected explicitly; not repository/package source
   config.py
@@ -31,6 +44,7 @@ workspace/  # selected explicitly; not repository/package source
   jobs/
   recorded_data/
   .yadof/
+    workspace.json
     surrogate/checkpoints/
     logs/
     tool_output/
@@ -79,22 +93,36 @@ project/
 ```
 
 `src/yadof/` now contains the installable package/resource foundation plus explicit
-workspace, effective-config, isolated task-loader, parameter, rawData, and cost-helper
-contracts. The optimization runtime remains under `project/` until later
-package-conversion steps move each module with its contracts and tests. New packaged
-code uses only the `yadof` namespace; there is no `project.*` compatibility alias.
+workspace, effective-config, isolated task-loader, safe init/check, parameter,
+rawData, cost-helper, prepared-job, local-evaluation, and standalone-smoke
+contracts. Persistence, optimization, surrogate, and distributed execution remain
+under `project/` until later package-conversion steps move each module with their
+contracts and tests.
+New packaged code uses only the `yadof` namespace; there is no `project.*`
+compatibility alias.
 
 ## Dependency Direction
-- The package-foundation CLI depends only on `yadof` version/resource modules and
-  the Python standard library. It must not import the still-unmigrated `project/`
-  runtime.
+- The package-foundation parser/help/version/docs path depends only on `yadof`
+  version/resource modules and the Python standard library. Init/check lazily import
+  NumPy-backed workspace contracts only when invoked. No CLI path imports the
+  still-unmigrated `project/` runtime.
 - `yadof.workspace`, `yadof.config`, and `yadof.task_loader` depend only on package
   code and the standard library. `yadof.job_template` adds NumPy-backed rawData and
   cost helpers, but never imports the current `project/` tree.
+- `yadof.evaluate_manager` depends on packaged config/workspace/job-template APIs
+  and standard-library subprocess/resource helpers. It imports no `project.*`
+  module and has no recorded-data dependency before package step 5.
+- Package worker files are immutable inputs read through `importlib.resources` and
+  copied into workspace jobs. Workspace task payload copies recursively around an
+  explicit exclusion/reserved-name policy; no installed path becomes writable.
 - Workspace `parameters_constraints.py` and `calc_cost.py` use installed
   `yadof.job_template` support. User task files are loaded from the selected
   workspace in fresh temporary namespaces; no workspace remains on `sys.path` or
   in the global module cache after a load.
+- Bundled templates are immutable package resources. Their manifest explicitly maps
+  safe relative sources to destinations and carries a positive template/rawData
+  schema version. Init validates bytes in a sibling stage directory and never treats
+  the installed resource tree as writable state.
 - `optimize` depends on public APIs from `evaluate_manager`, `recorded_data`, `surrogate`, and `job_template` metadata.
 - `evaluate_manager` depends on `job_template.api` and `recorded_data.api`.
 - `recorded_data` depends on `job_template.api` for normalization and cost calculation.
@@ -118,6 +146,19 @@ code uses only the `yadof` namespace; there is no `project.*` compatibility alia
   `config.py`, then temporary in-memory overrides. All effective task/runtime paths
   belong to `WorkspaceContext`; relative path values resolve from its root and only
   explicit absolute values may escape that root.
+- `.yadof/workspace.json` is the only init-completion marker. It carries portable
+  version/provenance fields, is published last into an existing directory, and is
+  never used as permission to overwrite or repair mutable task files.
+- `check` is a diagnostic boundary: task imports may validate parameter/objective
+  APIs, workflow is syntax-parsed only, backend programs are located but not run,
+  and no installation/repair behavior belongs in this command.
+- `smoke-test` is an execution boundary, not an extension of check. It executes one
+  midpoint local workflow without timeout. Exact unchanged generic template bytes
+  are the only implicit-safe case; other tasks require `--real-task`.
+- Prepared jobs receive `worker_misc.py` and `yadof_worker_config.json` from package
+  code. These names are reserved at workspace task root. The JSON contains only
+  local mode/timeout/worker-count values with sources plus version/workspace
+  provenance, never a copy of package config source.
 - Core code, docs, launchers, and tools must stay portable across machines. Do not hard-code machine-specific absolute install paths, and do not introduce a requirement that users create new system environment variables before using the project. Prefer paths derived from the repository, explicit command arguments, and environment variables that external installers already provide, such as existing Conda, Ansys, or HTCondor PATH/installation variables.
 - Users run against an environment already prepared by an administrator. Package
   installation, dependency repair, and HTCondor software/hardware configuration are
@@ -141,12 +182,23 @@ code uses only the `yadof` namespace; there is no `project.*` compatibility alia
 - Put a task-specific test and all of its supporting files under ignored root `temp/`, where they must remain safe to delete at any time; after package separation, keep them in the relevant task workspace.
 - HTCondor behavior should be covered with submit-file and monkeypatched-runner tests by default; real pool diagnostics are manual or explicit smoke checks.
 - `project/test/test_package_foundation.py` protects distribution metadata, the
-  minimal CLI, version/resource access, wheel/sdist contents, repository-external
-  clean installation, and unchanged read-only package files. Artifact checks run
-  when the declared development build tools are installed.
+  foundation CLI, version/resource access, wheel/sdist contents, repository-external
+  clean installation, external init/check, and unchanged read-only package files.
+  Artifact checks run when the declared development build tools are installed.
 - `project/test/test_workspace_config_task_loaders.py` protects config precedence,
   validation, path resolution, assigned parameter snapshots, same-process edits,
   and complete two-workspace import/cache isolation.
+- `project/test/test_workspace_init_check_cli.py` protects exact generic-template
+  contents, marker portability, idempotence/conflicts, user-content preservation,
+  non-interactive execution, validation/publish rollback, static rawData/backend
+  diagnostics, and the no-workflow-execution boundary.
+- `project/test/test_packaged_local_evaluation.py` protects package/task composition,
+  multiple adapters/assets, reserved collisions, assigned values, definition-only
+  static hashing, provenance/effective config, success/failure/timeout isolation,
+  no-cost boundaries, and standalone smoke safety/exactly-one behavior.
+- Package artifact integration additionally runs successful, failed, and timed-out
+  local jobs from an installed wheel outside the repository while site-packages is
+  non-writable, then compares package hashes.
 
 ## Documentation Strategy
 - `dev_doc/README.md` is the documentation entry point and writing guide.

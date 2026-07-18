@@ -39,29 +39,34 @@ Cost and normalized historical variables are derived views, not durable source r
 - Allow controlled mid-campaign edits to parameter ranges, workflow files, simulator inputs, and `calc_cost.py`; users remain responsible for discarding old history when semantics drift too far.
 - Keep local execution usable without HTCondor while allowing the distributed backend to share the same job and recording contracts.
 
-## Current Package And Workspace Foundation
+## Current Package, Workspace, And Local Evaluation
 
-The repository now has an installable distribution boundary without yet moving the
-runtime modules. The second package stage adds explicit workspace, configuration,
-and task-loading contracts:
+The repository now has an installable distribution boundary with workspace-local
+job preparation and local evaluation. The fourth package stage composes immutable
+package worker support with one workspace's mutable task payload and runs the real
+workflow/rawData/current-cost path without package writes:
 
 ```text
 pyproject.toml
-  -> src/yadof/ (version + minimal CLI + read-only resources)
+  -> src/yadof/ (version + CLI + read-only resources)
   -> WorkspaceContext + package-default/workspace-override config
   -> installed job-template framework support + isolated task-module loading
+  -> versioned generic template + workspace marker + init/check
+  -> packaged job preparation + local subprocess evaluation + standalone smoke
   -> wheel/sdist
 
-workspace/ (explicit future writable task/runtime boundary)
-project/   (current optimization runtime; migrated in later ordered steps)
+workspace/ (task inputs plus prepared local jobs)
+project/   (recording/optimization/surrogate/distributed transition runtime)
 ```
 
-The installed `yadof` command currently provides help, version, and packaged
-documentation entry points. Public Python APIs can resolve a workspace, merge and
-validate its `config.py`, and load its submit-side task modules without package
-writes or cross-workspace import state. The CLI does not yet initialize or run a
-workspace, and the package does not alias `project.*` or claim that evaluation,
-optimization, persistence, or user-tool migration is complete.
+The installed `yadof` command provides help, version, packaged documentation,
+`init`, `check`, and `smoke-test --mode local`. Init validates a neutral starter in a sibling temporary
+directory and publishes without overwriting user content; check validates marker,
+config/task contracts, workflow syntax, static rawData, and backend prerequisites
+without running the workflow or repairing the environment. Smoke executes exactly
+one midpoint individual without a timeout; edited/external tasks require
+`--real-task`. The package does not alias `project.*`. Persistence, optimization,
+surrogate, user-tool, and distributed-worker migration remain later stages.
 
 ## Documentation Center
 The documentation home is:

@@ -20,6 +20,9 @@
   adapters, simulator/custom inputs, lookup tables, and other task assets. It does
   not contain framework `api.py`, the parameter class, rawData contract, or generic
   cost helpers.
+- The default bundled workspace template supplies only those three task files. Its
+  generic parameter/objective names and pure-Python/NumPy workflow are placeholders,
+  not a selected simulator, adapter, model, physical result, or active campaign.
 - `yadof.task_loader` fresh-loads submit-side task modules. It supports sibling
   absolute imports and package-relative imports, even when two workspaces use the
   same helper names, without a permanent `sys.path` entry or module-cache residue.
@@ -38,6 +41,9 @@
 - `calc_cost.py` converts one sample's task rawData items into the current objective cost tuple. It also may mark objective-relevant rawData slots for surrogate training through task-owned importance weights.
 - `rawdata_contract.py` validates `.npz` metadata, shape, axis descriptors, schema version, and flat rawData directories.
 - Adapter files present in `job_template` are copied into prepared jobs with the workflow and are task-owned implementation details.
+- Stable workflow helpers such as `worker_misc.py` are installed package worker
+  support, not workspace task files. The package copies them into each job under a
+  reserved filename after proving the task payload does not collide.
 
 ## I/O Format
 - Every installed job-template query takes an explicit workspace/context first.
@@ -53,6 +59,9 @@
 - Workflow input is the assigned `parameter.value` fields in that snapshot.
 - Workflow output is one or more task-defined `.npz` files directly under `rawData/`.
 - Workflow lifecycle output is `individual_metadata.json` in the job folder, with `started_at`, `ended_at`, status, rawData file names, runtime HFSS defaults such as core count, and catchable exception details when the workflow fails before producing rawData.
+- `yadof_worker_config.json` is package-generated local worker context. It contains
+  yadof/workspace provenance and only effective local evaluation mode, timeout, and
+  worker count with sources; task code must not expect a copied package config tree.
 - Each rawData `.npz` must contain a numeric `values` or `data` array and scalar JSON metadata under the canonical `metadata` key with `schema_version`, `shape`, and optional ordered `axes`. Do not also write a duplicate `meta` array.
 - Cost API accepts samples shaped as `samples[sample][rawData_item]` and returns `samples[sample][objective_cost]`.
 - RawData importance API accepts one sample shaped as `sample[rawData_item]` and returns per-item weight arrays keyed by rawData array name. Weights emphasize objective-relevant windows while retaining a positive floor for the rest of each field.
@@ -65,6 +74,10 @@
   collisions, and never edits `sys.path`.
 - Task validation imports parameters and cost policy but only checks that
   `workflow.py` exists; it must not launch an expensive workflow as a side effect.
+- Workspace init additionally syntax-parses staged `workflow.py`; workspace check
+  syntax-parses the current workflow and explicitly reports that it was not imported
+  or executed. An already-present task-local `rawData/` directory is checked with the
+  same flat schema validator, but neither command creates or evaluates rawData.
 - `workflow.py` owns `variables -> rawData`; `calc_cost.py` owns `rawData -> cost`. Do not let workflow write `cost.json`.
 - A simulator workflow must consume the assigned job-local
   `parameters_constraints.py` snapshot directly. It must not reconstruct individual
@@ -83,7 +96,10 @@
 - A canonical file may leave assignment fields as NaN. A materialized job must have
   finite normalized/raw assignments and a parameter count matching its candidate.
 - The rawData contract is generic. Core framework code validates shape and metadata but should not infer physical meaning from axis names.
-- Job-copy behavior excludes module APIs and cost code, but `evaluate_manager` adds the cache-free submit-side `config/` package beside the copied workflow so each job keeps generic and software-specific run configuration.
+- Package job-copy behavior excludes framework APIs, canonical parameters, runtime
+  artifacts, and cost code. It recursively preserves arbitrary nested task assets
+  and multiple adapters, adds an assigned parameter snapshot plus package
+  `worker_misc.py`, and adds compact JSON rather than a full config package.
 - Task files are intentionally replaceable by user or AI-generated code before a new campaign.
 
 ## Mutability Profile

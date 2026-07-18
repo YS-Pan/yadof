@@ -11,15 +11,31 @@
 - Current local and distributed backends share the rawData-first recording path rather than preserving separate result schemas.
 
 ## Functionalities
-- `api.evaluate_population()` selects the configured backend (`local` or `distributed`) and returns cost tuples to `optimize`; `api.run_smoke_test()` runs one midpoint individual without a generation or per-job timeout.
-- Local mode prepares a job, runs `workflow.py`, reads the job-local `individual_metadata.json`, records the result through `recorded_data.api`, and converts failures to `inf` cost rows. When `LOCAL_EVALUATION_MAX_WORKERS > 1`, multiple independent individuals run concurrently while preserving output order.
+- `yadof.evaluate_manager.api.evaluate_population(workspace, ...)` fresh-loads the
+  workspace config and supports the packaged local backend. It returns objective
+  tuples in input order; `run_smoke_test(workspace, ...)` runs exactly one midpoint
+  individual without a generation or per-job timeout.
+- Packaged local mode prepares a workspace job, runs `workflow.py`, reads job-local
+  lifecycle metadata, validates flat rawData, calculates cost through the current
+  workspace `calc_cost.py`, and converts per-individual failures to correctly sized
+  `inf` rows. It does not persist recorded history before package step 5. When
+  `LOCAL_EVALUATION_MAX_WORKERS > 1`, independent individuals run concurrently.
+- `project.evaluate_manager` remains the transitional source optimizer/recording/
+  distributed path. Its local behavior still records through `recorded_data.api`
+  until those consumers move; it is not imported or aliased by the package API.
 - Distributed mode prepares all jobs, writes HTCondor submit files, submits the prepared job-local `workflow.py` directly as the transferred executable, runs an optional submit-side callback after all prepared jobs are submitted, waits for job-local outputs, records results through the same finalization path, and converts failed/timeout rows to `inf`.
-- `job_files.prepare_job()` copies job template files, calls
-  `job_template.api.materialize_job_parameters()` with the requested template
-  directory and normalized row, uses the returned raw values for `JobSpec`, copies
-  the cache-free submit-side `project/config/` package, writes run/generation
-  context to submit-side metadata, and records `job_static_hash`.
-- `local_runner.run_local_job()` launches the copied workflow in the job directory, enforces timeout, captures stdout/stderr tails, reads workflow-owned lifecycle metadata, and discovers flat `rawData/*.npz` outputs.
+- `yadof.evaluate_manager.job_files.prepare_job()` copies all non-runtime workspace
+  task files/assets except submit-side `calc_cost.py`, rejects case-insensitive
+  collisions with package-reserved `worker_misc.py` and
+  `yadof_worker_config.json`, materializes assigned parameters through the package
+  job-template API, copies package worker support, writes only a compact effective
+  worker config/provenance summary, and records `job_static_hash`.
+- Packaged `local_runner.run_local_job()` launches the copied workflow in the job
+  directory with bytecode writes disabled, enforces process-tree timeout, captures
+  stdout/stderr tails, reads workflow-owned lifecycle metadata, validates flat
+  `rawData/*.npz`, and rejects/removes a workflow-created `cost.json`.
+- The source `project.evaluate_manager` job/runner/recording behavior remains for
+  current optimizer and HTCondor callers until their later ordered migrations.
 - `resource_requests.py` derives a per-job memory/disk request from prior recorded
   HTCondor measurements while preserving the user-selected CPU request. It uses
   unindexed distributed smoke records for generation zero and the same run's
@@ -41,13 +57,22 @@
   metadata carries `run_id`, `optimization_index`, `generation_index`, and
   `population_index` when available.
 - Job metadata: `metadata.json` and `metaData.json` contain submit-side status, engine, static hash, runner diagnostics, calculated resource-request source/values, returned Condor memory/disk/CPU measurements when available, and merged workflow lifecycle fields. The workflow-owned source for `started_at` and `ended_at` is `individual_metadata.json`.
+- Packaged local metadata additionally carries installed `yadof_version`, a
+  `workspace_identity` with resolved root and portable marker, and an
+  `effective_config_summary` limited to mode, timeout, and local worker count with
+  each value's source. The same subset is copied as `yadof_worker_config.json`.
 - Raw outputs: top-level `.npz` files under each job's `rawData/` directory.
 - HTCondor submit file: `job.sub` with `executable = workflow.py`, no workflow argument line, `transfer_executable = True`, one concrete `request_memory`/`request_disk`, no Condor-native resource retry directives, a normal-job `allowed_execute_duration`, and a quoted whitespace-separated environment string composed from generic sandboxed Windows profile/temp entries plus active `config/specific/` contributions. Smoke omits the time limit. `transfer_output_files` is intentionally omitted so HTCondor returns generated files without holding the job if optional files are absent.
 - Public output: `population[individual][objective_cost]`, with `inf` rows for failures whose objective width cannot be recovered.
 
 ## Non-Obvious Techniques
-- `calc_cost.py` is excluded from job copies. Jobs generate rawData only; cost is derived after recording.
-- `calc_cost.py` is excluded from job copies, while active adapter files already placed in `job_template` are copied because workflow execution needs them in the job folder. The current active adapter is `hfss_com.py`.
+- `calc_cost.py` is excluded from every job copy. Jobs generate rawData only; the
+  transitional source path derives cost after recording.
+- In the package local path, cost is derived immediately after validated workflow
+  output and returned in memory; recording is deliberately deferred to step 5.
+- Active task-local adapters and arbitrary assets are recursively copied because a
+  workflow may use one or several programs. Package worker support wins no collision:
+  a reserved-name task file is rejected before any job directory is created.
 - `job_static_hash` excludes rawData, metadata, and other runtime files. It hashes a
   definition-only parameter signature so assigned values do not affect the hash,
   while name, ranges, unit, and constraints do.
@@ -55,7 +80,12 @@
 - `evaluate_manager` adds runner diagnostics such as return code, stdout/stderr tails, Condor log tails, and optional `batch.log` tails, while preserving workflow-written `started_at`/`ended_at`.
 - Individual records carry `optimization_index` and `generation_index` from optimizer context so downstream tools can group evaluations without joining through optimization metadata first.
 - Failure recording is best effort. If recording a failure also fails, generation evaluation still continues.
-- Local parallelism is at the individual/job level. Each worker still executes prepare -> run -> record for one candidate, while `recorded_data` locks serialize durable writes.
+- Packaged local cost-calculation failure is per-individual and becomes metadata plus
+  `inf`; static task/config validation and reserved-name collisions fail before
+  batch execution because they affect every individual.
+- Local parallelism is at the individual/job level. Packaged workers execute
+  prepare -> run -> dynamic cost; transitional source workers execute prepare ->
+  run -> record, with `recorded_data` locks serializing durable writes.
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
 - The adaptive resource controller never rewrites source config. It treats
   `HTCONDOR_REQUEST_MEMORY` and `HTCONDOR_REQUEST_DISK` as safe fallbacks when a
@@ -79,6 +109,8 @@
 - `after_jobs_submitted` callbacks are submit-side hooks. In distributed mode `condor_runner` calls the hook after all successful submissions and before polling; callback failures are logged but do not cancel already-submitted jobs.
 
 ## Mutability Profile
+- `src/yadof/evaluate_manager` owns the stable package-era local contract;
+  `project/evaluate_manager` retains transitional recording/distributed code.
 - Local execution details and HTCondor backend wiring may change.
 - Job metadata and `JobResult` shape should change cautiously because recorded-data ingestion and tests consume them.
 - Template-copy exclusions must stay aligned with the rawData-first and no-cost-file contract.

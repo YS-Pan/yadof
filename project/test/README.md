@@ -9,6 +9,21 @@ temporarily unmigrated `project/` runtime. Workspace tests must create neutral
 temporary workspaces and must verify that no task/config/module state leaks between
 them.
 
+`test_workspace_init_check_cli.py` owns package step 3 contracts: generic starter
+contents, marker portability, idempotence, conflict reporting, preservation of user
+content, non-interactive behavior, temporary/publish failure cleanup, static
+diagnostics, backend prerequisite reporting, and proof that `check` does not execute
+`workflow.py`. Artifact tests also run init/check from an installed wheel outside the
+repository and reject framework implementation files in the generated workspace.
+
+`test_packaged_local_evaluation.py` owns package step 4 contracts: complete task
+payload/multiple-adapter copy, reserved worker filename conflicts, assigned values,
+definition-only static hashes, yadof/workspace/effective-config provenance, no
+submit-side cost files, dynamic local cost return, failure/timeout isolation, and
+standalone smoke help/safety/exactly-one behavior. Artifact tests also run success,
+failure, and short-timeout jobs from an installed wheel outside the repository with
+site-packages made non-writable.
+
 Tests here may cover either generic framework behavior or reusable behavior tied to
 a particular simulator, vendor, adapter, or software-specific tool. A
 software-specific test must remain independent of the active optimization task. It

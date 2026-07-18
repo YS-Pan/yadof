@@ -29,11 +29,16 @@ development, architecture changes, or maintainer reasoning, start from
 
 ## Core User Rules
 
-The installed package foundation currently supplies `yadof --help`, version,
-read-only documentation lookup, and Python APIs for explicit workspace paths,
-effective config, and isolated task queries. Workspace initialization and runtime
-CLI commands arrive in later package stages, so the source-tree workflow below
-remains current for optimization runs during this transition.
+The installed package foundation supplies `yadof --help`, version, read-only
+documentation lookup, `yadof init`, `yadof check`, and Python APIs for explicit
+workspace paths, effective config, isolated task queries, prepared local jobs, and
+local evaluation. Initialization creates a neutral starter task without overwriting
+user content; checking diagnoses it without running the workflow. `yadof smoke-test`
+runs exactly one local midpoint individual with no timeout. The unchanged starter
+runs directly, while edited/external tasks require `--real-task`. Optimization,
+history, surrogate, user-tool, and distributed commands arrive in later package
+stages, so the source-tree workflow below remains current for full campaigns during
+this transition.
 
 The normal task path is:
 
@@ -59,9 +64,9 @@ Keep these boundaries:
 
 ### `package_foundation.md`
 
-Installation metadata, dependency extras, and the small set of commands currently
-available from an installed wheel, plus the explicit workspace/config/task-loading
-Python boundary available before runtime migration is complete.
+Installation metadata, dependency extras, safe init/check commands, and the explicit
+workspace/config/task-loading Python boundary available before runtime migration is
+complete.
 
 ### `optimization_workflow.md`
 

@@ -5,11 +5,16 @@
 ```mermaid
 flowchart TD
     Package["src/yadof: package foundation"] --> PackageDocs["read-only packaged dev_doc/user_doc"]
-    Package --> PackageCLI["yadof help/version/docs"]
+    Package --> PackageCLI["yadof help/version/docs/init/check"]
     Package --> WorkspaceAPI["workspace + effective config"]
     Package --> TaskAPI["isolated task loader + stable job-template support"]
+    Package --> WorkspaceLifecycle["versioned template + marker + safe publish/check"]
+    Package --> LocalEvaluate["packaged job preparation + local evaluation + smoke"]
     Workspace["selected writable workspace"] --> WorkspaceAPI
     Workspace --> TaskAPI
+    WorkspaceLifecycle --> Workspace
+    LocalEvaluate --> WorkspaceJobs["workspace/jobs runtime folders"]
+    Workspace --> LocalEvaluate
 
     Config["project/config: key + all + specific"] --> Optimize["project/optimize"]
     Config --> Evaluate["project/evaluate_manager"]
@@ -39,16 +44,25 @@ flowchart TD
 ```
 
 ## Container Responsibilities
-- `src/yadof` package foundation: distribution metadata handoff, the single runtime
-  version, minimal repository-independent CLI, read-only document/template resource
-  access, explicit workspace/config/task loading, and installed job-template
-  framework support. It does not import or wrap the current `project/` runtime.
-- Selected workspace: future package-era user boundary containing short `config.py`,
-  user-owned task files/assets, and workspace-local runtime paths. The current
-  package APIs can validate and query this boundary, while evaluation/persistence
-  migration remains in later steps.
+- `src/yadof` package and local runtime: distribution metadata handoff, the single runtime
+  version, repository-independent CLI, read-only document/versioned-template
+  resources, explicit workspace/config/task loading, safe init/check, and installed
+  job-template framework support. It also owns workspace job composition, local
+  subprocess execution, dynamic local cost return, and the standalone safe smoke
+  command. It does not import or wrap the current `project/` runtime.
+- Selected workspace: package-era user boundary containing short
+  `config.py`, a portable `.yadof/workspace.json` marker, user-owned task files/assets,
+  prepared local jobs, and workspace-local runtime paths. Init/check create and
+  validate this boundary; packaged local evaluation now writes only below its jobs
+  path. Persistence and other runtime state migrate in later steps.
 - `optimize`: NSGA-III search policy for multi-objective runs, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
-- `evaluate_manager`: job preparation, local execution, optional HTCondor submission, yadof-managed memory/disk retry submissions, workflow metadata collection, failure isolation, and recording handoff.
+- `yadof.evaluate_manager`: authoritative package-era job preparation and local
+  execution. It merges package worker support with workspace payload, calculates
+  current costs from returned rawData, and isolates each local failure without
+  persisting history yet.
+- `project.evaluate_manager`: transitional source runtime used by the not-yet-migrated
+  optimizer/recording/distributed path. Its HTCondor behavior remains current until
+  later stages move those responsibilities.
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
 - `com_lib`: optional holding area for simulator/custom-code adapter source/reference copies. Files here are not runtime dependencies; when a task needs one, the user copies it into `job_template` so prepared jobs stay self-contained. Reusable active-adapter fixes are synchronized back into the matching reference copy.
 - `job_template`: active task files for rawData generation plus task-owned objective costs calculated after recording. The framework does not fix simulator filename, rawData names, objective names, or objective count.
@@ -63,6 +77,22 @@ flowchart TD
 - `test`: local verification of contracts and failure behavior.
 
 ## Primary Data Flow
+
+Package local/smoke flow:
+
+1. The caller selects an explicit workspace and loads current effective config.
+2. `yadof.evaluate_manager` rejects task collisions with reserved package worker
+   filenames, copies all other task adapters/assets except submit-side `calc_cost.py`,
+   materializes assigned parameters, and adds package `worker_misc.py` plus a small
+   effective-worker JSON summary.
+3. The local subprocess runs `workflow.py` in the prepared workspace job, producing
+   flat rawData and lifecycle metadata only.
+4. The submit process validates rawData and derives the cost tuple through the
+   workspace's freshly loaded `calc_cost.py`. No record/archive write occurs before
+   package step 5.
+
+The transitional source optimization flow remains:
+
 1. `optimize` creates normalized candidates.
 2. `evaluate_manager` prepares one job per candidate, asks `job_template.api` to
    fresh-load the requested template directory, writes a job-local
@@ -84,6 +114,20 @@ flowchart TD
   override; no user-data path derives from package `__file__`.
 - Workspace config and task modules are fresh snapshots. Temporary CLI/API overrides
   never rewrite config, and task imports do not survive in global import state.
+- Init validates a staged workspace and publishes the marker last when adding files
+  to an existing directory. Existing targets are conflicts; rollback removes only
+  files/directories created by that init attempt. Repeated init never upgrades or
+  repairs user files.
+- Check is report-only: it may import parameter/cost modules as contract validation
+  but only parses `workflow.py`; it never installs software, launches evaluation, or
+  mutates the workspace.
+- Package job composition reserves `worker_misc.py` and
+  `yadof_worker_config.json`; a same-named workspace task file is an actionable
+  error, never an overwrite. Task-local adapters and arbitrary assets otherwise
+  copy recursively, while `calc_cost.py`, runtime rawData, and cost files do not.
+- Prepared-job provenance records installed yadof version, workspace root/marker,
+  definition-only static hash, and only the effective local worker settings needed
+  for diagnosis. It never copies package config source into the workspace.
 - Core modules communicate through each other's `api.py` files.
 - Runtime modules import `project.config.all` as the full generic settings surface; routine generic overrides live in `key.py`, while simulator settings and environment contributions stay below `config/specific/`.
 - `tools` may be flexible, but core modules and tests must not depend on tools.

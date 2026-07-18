@@ -17,6 +17,11 @@
 - Workspace/config/task-loader tests validate absolute path resolution, no
   construction writes, precedence/source reporting, unknown/type/mode/task-path
   errors, explicit relative/absolute overrides, and non-mutating temporary values.
+- Init/check tests validate exact generic starter contents and portable marker,
+  empty/current/explicit paths, idempotence, user edits/history preservation, exact
+  conflicts, incomplete marked workspaces, non-interactive behavior, staged and
+  existing-root publish rollback, actionable diagnostics, and proof that workflow
+  is never imported or executed.
 - One-process tests alternate two workspaces with same-named local modules, edit
   config/task helpers without sleeping or changing source size, and prove fresh
   results plus unchanged `sys.path`, restored `sys.modules`, and no task bytecode
@@ -24,10 +29,26 @@
 - Artifact integration builds wheel and sdist, inspects their allow/deny content,
   installs the wheel without dependencies into a clean external virtual environment,
   makes package files non-writable, and runs help/version/document commands.
+- A runtime-capable external virtual environment installs the wheel outside the
+  repository, makes package files non-writable, runs init/check, verifies the
+  generated task contains no framework/evaluator/optimizer/recorder/surrogate
+  implementation, and compares installed package hashes before/after.
+- The same installed-wheel environment runs the generic local smoke successfully,
+  verifies edited-task refusal, then executes explicit failure and short-timeout
+  local cases while package hashes remain unchanged.
+- Packaged local evaluator tests cover complete task resource/multiple-adapter copy,
+  reserved worker filename collisions, assigned values, definition-only static
+  hashing, version/workspace/effective-config provenance, no `calc_cost.py` or
+  `cost.json`, dynamic costs, ordered failure isolation, process timeout, and
+  exactly-one/no-timeout smoke semantics.
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
 - Framework tests use generic task doubles and neutral rawData fixtures. They must not assert the active task's parameter names/count, objective names/count, simulator expressions, model filename, or expected task results.
 - Software-specific tests may verify reusable adapters, file formats, and tools. They use mocks, synthetic data, and generated temporary resource names instead of the active task or a real simulator launch.
 - Failure tests ensure individual prepare/run/record failures return `inf` rows and allow the generation to continue.
+- Standalone smoke tests ensure help warns about real execution, distinguishes
+  package self-tests, allows the exact unchanged generic starter, requires
+  `--real-task` for every edited/additional task payload, creates no refused job,
+  and reports success/failure with stable exit streams.
 - HTCondor tests cover submit-file generation, adaptive resource/time selection,
   no-timeout smoke submission, ClassAd resource/time metadata capture, duration-hold
   classification/removal, absence of native resource-retry directives, yadof
@@ -58,6 +79,9 @@
 - The read-only clean-install check also resolves workspace writable paths, loads
   effective config, and imports a task module with a local helper. It asserts those
   actions change neither the installed-package hashes nor global `sys.path`.
+- Failure-cleanup tests inject errors before validation publication and during
+  exclusive existing-root publication. They assert the stage/new parent directories
+  or attempt-created files are removed while unrelated user content remains.
 - No maintained pytest module lives beside production code. `project/test/` is the only test source directory, including for software-specific helpers and adapters.
 - Tests under `project/test/` must not contain current-task scenarios, even behind an opt-in flag. Task specificity includes concrete task filenames/designs, concrete objectives such as `S11`, the active task's exact variable count/names/ranges/units, expected physical results, and assertions against active `project/job_template/` task files.
 - Neutral generated filenames and minimal synthetic variable/objective shapes are allowed when they exercise a reusable contract rather than reproduce the active task.
@@ -71,6 +95,13 @@
 - `project/test/test_workspace_config_task_loaders.py` is the focused contract suite
   for package step 2. Keep future workspace APIs explicit and extend this suite when
   adding a new writable path, config setting type, or task loading behavior.
+- `project/test/test_workspace_init_check_cli.py` is the focused package step 3
+  suite. Extend it whenever marker/template schema, publish/rollback behavior,
+  findings, backend prerequisite checks, or CLI safety boundaries change.
+- `project/test/test_packaged_local_evaluation.py` is the focused package step 4
+  suite. Extend it whenever worker-reserved names, composition exclusions,
+  provenance/config summary, local runner semantics, or standalone smoke safety
+  changes.
 - Add tests when changing shared contracts, storage layout, failure semantics, or surrogate API behavior.
 - Do not add task-specific tests under `project/test/`. Use `temp/` now or the task workspace after package separation.
 - Add software-specific tests under `project/test/`, never next to the implementation they cover.

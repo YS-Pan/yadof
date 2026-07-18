@@ -23,6 +23,14 @@
   validates uppercase names/types/modes/resources/task paths, merges precedence as
   package default < workspace config < temporary override, and reports each final
   value's source.
+- `yadof init` creates a deliberately short config that selects local mode and a
+  small smoke-oriented population while relying on package defaults for the full
+  surface. `yadof check` loads the same effective config and diagnoses the selected
+  backend without applying overrides or rewriting the file.
+- `yadof.evaluate_manager` reloads the effective config for every population/smoke
+  call. Packaged local jobs receive only mode, effective timeout, and local worker
+  count with provenance; `run_smoke_test` temporarily forces local mode, one worker,
+  and no timeout without rewriting workspace config.
 - Relative configured paths resolve from the workspace root. Only an explicit
   absolute context/config/override value may place a path elsewhere. The loader
   never derives writable paths from installed package locations and never rewrites
@@ -69,9 +77,15 @@
   root, task directory, and required task filenames before batch work;
   `yadof.job_template.validate_task` performs parameter/objective module validation
   without importing or running `workflow.py`.
+- Init/check reuse this loader rather than duplicating config semantics. Init loads
+  only staged generic content before publication; check reports load errors and then
+  skips task/backend checks that require a valid config.
 - `project/config/key.py` is intentionally short. Its current surface includes evaluation mode/generation timeout, the optional smoke switch, generic HTCondor resources, the auto/fixed per-job timeout baseline, and population size.
 - `project/config/all.py` is the generic discovery layer. Adding a new cross-module setting usually means adding it there first, then deciding whether it belongs in `key.py` or a `specific/<software>.py` module.
-- `evaluate_manager` copies the complete `project/config/` package into every prepared job folder, excluding caches, so submitted jobs retain generic and active software-specific context.
+- The transitional source evaluator still copies `project/config/`. The packaged
+  local evaluator does not copy package config source; it writes a compact
+  `yadof_worker_config.json` containing only effective worker-side local settings
+  needed for diagnosis/execution.
 - The active HFSS `workflow.py` reads job-local `config.specific.hfss`, then allows the corresponding HTCondor environment variables to override runtime values.
 - The default HTCondor environment follows quoted, whitespace-separated HTCondor syntax. Do not use semicolon-separated entries in the quoted environment string.
 - `HTCONDOR_REQUEST_CPUS` stays a manual scheduler request. The current HFSS

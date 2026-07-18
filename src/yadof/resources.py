@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from importlib.resources import files
 from pathlib import Path
 from typing import Literal
@@ -72,3 +73,49 @@ def template_names() -> tuple[str, ...]:
     if not root.is_dir():
         return ()
     return tuple(sorted(child.name for child in root.iterdir() if child.is_dir()))
+
+
+def template_root(name: str) -> Traversable:
+    """Return one bundled workspace template directory without extracting it."""
+
+    if not name or name not in template_names():
+        choices = ", ".join(template_names()) or "none"
+        raise ResourceNotFoundError(
+            f"unknown workspace template {name!r}; available templates: {choices}"
+        )
+    root = _embedded_root().joinpath("templates").joinpath(name)
+    if not root.is_dir():
+        raise ResourceNotFoundError(f"workspace template resource is missing: {name}")
+    return root
+
+
+def read_template_manifest(name: str) -> dict[str, object]:
+    """Read and decode one bundled template's JSON manifest."""
+
+    manifest = template_root(name).joinpath("template.json")
+    if not manifest.is_file():
+        raise ResourceNotFoundError(
+            f"workspace template {name!r} has no template.json manifest"
+        )
+    try:
+        decoded = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ResourceNotFoundError(
+            f"workspace template {name!r} has an invalid manifest: {exc}"
+        ) from exc
+    if not isinstance(decoded, dict):
+        raise ResourceNotFoundError(
+            f"workspace template {name!r} manifest must be a JSON object"
+        )
+    return decoded
+
+
+__all__ = [
+    "DocumentationKind",
+    "ResourceNotFoundError",
+    "documentation_entry",
+    "read_documentation_entry",
+    "read_template_manifest",
+    "template_names",
+    "template_root",
+]

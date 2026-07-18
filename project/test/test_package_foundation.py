@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -17,7 +18,11 @@ import zipfile
 import pytest
 import yadof
 from yadof import cli
-from yadof.resources import read_documentation_entry, template_names
+from yadof.resources import (
+    read_documentation_entry,
+    read_template_manifest,
+    template_names,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -138,6 +143,184 @@ def _verify_clean_external_install(wheel_path: Path) -> None:
                     path.chmod(mode | stat.S_IWUSR)
 
 
+def _verify_external_workspace_commands(wheel_path: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="yadof-workspace-wheel-test-") as temporary_dir:
+        external_root = Path(temporary_dir)
+        environment_dir = external_root / "runtime-environment"
+        venv.EnvBuilder(
+            with_pip=True,
+            clear=True,
+            system_site_packages=True,
+        ).create(environment_dir)
+        python_executable, yadof_executable = _venv_commands(environment_dir)
+        install = _run(
+            [str(python_executable), "-m", "pip", "install", "--no-deps", str(wheel_path)],
+            cwd=external_root,
+        )
+        assert install.returncode == 0, install.stdout + install.stderr
+
+        outside_dir = external_root / "outside-repository"
+        outside_dir.mkdir()
+        package_query = _run(
+            [
+                str(python_executable),
+                "-c",
+                "import pathlib, yadof; print(pathlib.Path(yadof.__file__).resolve().parent)",
+            ],
+            cwd=outside_dir,
+        )
+        assert package_query.returncode == 0, package_query.stdout + package_query.stderr
+        installed_package_dir = Path(package_query.stdout.strip())
+        assert environment_dir.resolve() in installed_package_dir.parents
+        assert REPOSITORY_ROOT.resolve() not in installed_package_dir.parents
+
+        original_modes = {
+            path: stat.S_IMODE(path.stat().st_mode)
+            for path in installed_package_dir.rglob("*")
+            if path.is_file()
+        }
+        before_hashes = _file_hashes(installed_package_dir)
+        try:
+            for path, mode in original_modes.items():
+                path.chmod(mode & ~stat.S_IWUSR & ~stat.S_IWGRP & ~stat.S_IWOTH)
+
+            workspace = outside_dir / "generic-workspace"
+            initialized = _run(
+                [str(yadof_executable), "init", str(workspace)],
+                cwd=outside_dir,
+            )
+            assert initialized.returncode == 0, initialized.stdout + initialized.stderr
+            assert initialized.stderr == ""
+            checked = _run(
+                [str(yadof_executable), "check", "--workspace", str(workspace)],
+                cwd=outside_dir,
+            )
+            assert checked.returncode == 0, checked.stdout + checked.stderr
+            assert "Workspace check passed" in checked.stdout
+            assert checked.stderr == ""
+
+            smoke_help = _run(
+                [str(yadof_executable), "smoke-test", "--help"],
+                cwd=outside_dir,
+            )
+            assert smoke_help.returncode == 0, smoke_help.stdout + smoke_help.stderr
+            assert "exactly one individual" in smoke_help.stdout
+            assert "no timeout" in smoke_help.stdout
+            assert "package self-tests" in smoke_help.stdout
+            assert "launch simulator or custom software" in smoke_help.stdout
+
+            smoke = _run(
+                [str(yadof_executable), "smoke-test", "--workspace", str(workspace)],
+                cwd=outside_dir,
+            )
+            assert smoke.returncode == 0, smoke.stdout + smoke.stderr
+            assert "Smoke test succeeded for exactly one individual" in smoke.stdout
+            assert smoke.stderr == ""
+            jobs_dir = workspace / "jobs"
+            jobs = tuple(path for path in jobs_dir.iterdir() if path.is_dir())
+            assert len(jobs) == 1
+            successful_job = jobs[0]
+            successful_metadata = json.loads(
+                (successful_job / "metadata.json").read_text(encoding="utf-8")
+            )
+            assert successful_metadata["status"] == "done"
+            assert successful_metadata["timed_out"] is False
+            assert successful_metadata["yadof_version"] == yadof.__version__
+            assert successful_metadata["workspace_identity"]["root"] == str(workspace.resolve())
+            assert successful_metadata["effective_config_summary"]["EVALUATION_TIMEOUT_SEC"]["value"] is None
+            assert (successful_job / "worker_misc.py").is_file()
+            assert (successful_job / "yadof_worker_config.json").is_file()
+            assert not (successful_job / "calc_cost.py").exists()
+            assert not (successful_job / "cost.json").exists()
+
+            workflow_path = workspace / "job_template/workflow.py"
+            workflow_path.write_text(
+                workflow_path.read_text(encoding="utf-8") + "\n# edited task\n",
+                encoding="utf-8",
+            )
+            refused = _run(
+                [str(yadof_executable), "smoke-test", "--workspace", str(workspace)],
+                cwd=outside_dir,
+            )
+            assert refused.returncode == 1
+            assert "--real-task" in refused.stderr
+            assert len(tuple(path for path in jobs_dir.iterdir() if path.is_dir())) == 1
+
+            workflow_path.write_text(
+                "raise RuntimeError('installed workflow failure')\n",
+                encoding="utf-8",
+            )
+            failed = _run(
+                [
+                    str(yadof_executable),
+                    "smoke-test",
+                    "--workspace",
+                    str(workspace),
+                    "--real-task",
+                ],
+                cwd=outside_dir,
+            )
+            assert failed.returncode == 1
+            assert "no finite objective cost" in failed.stderr
+            failed_job = sorted(
+                (path for path in jobs_dir.iterdir() if path.is_dir()),
+                key=lambda path: path.name,
+            )[-1]
+            assert json.loads((failed_job / "metadata.json").read_text(encoding="utf-8"))["status"] == "error"
+
+            workflow_path.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
+            timeout_check = _run(
+                [
+                    str(python_executable),
+                    "-c",
+                    (
+                        "import json, math; from pathlib import Path; "
+                        "from yadof.evaluate_manager import evaluate_population; "
+                        f"root=Path({str(workspace)!r}); "
+                        "costs=evaluate_population(root, ((0.5,),), mode='local', timeout_sec=0.1); "
+                        "assert costs == ((math.inf,),); "
+                        "job=sorted((root/'jobs').iterdir())[-1]; "
+                        "meta=json.loads((job/'metadata.json').read_text(encoding='utf-8')); "
+                        "assert meta['status'] == 'timeout' and meta['timed_out'] is True"
+                    ),
+                ],
+                cwd=outside_dir,
+                timeout=30,
+            )
+            assert timeout_check.returncode == 0, timeout_check.stdout + timeout_check.stderr
+
+            workspace_paths = {
+                path.relative_to(workspace).as_posix()
+                for path in workspace.rglob("*")
+            }
+            assert {
+                ".yadof/workspace.json",
+                "config.py",
+                "job_template/calc_cost.py",
+                "job_template/parameters_constraints.py",
+                "job_template/workflow.py",
+            } <= workspace_paths
+            for forbidden in (
+                "job_template/api.py",
+                "job_template/parameters_constraints_class.py",
+                "job_template/rawdata_contract.py",
+                "job_template/cost_misc.py",
+                "optimize",
+                "evaluate_manager",
+                "recorded_data",
+                "surrogate",
+            ):
+                assert forbidden not in workspace_paths
+            assert not any("__pycache__" in path for path in workspace_paths)
+            marker_text = (workspace / ".yadof/workspace.json").read_text(encoding="utf-8")
+            assert str(installed_package_dir) not in marker_text
+            assert _file_hashes(installed_package_dir) == before_hashes
+        finally:
+            for path, mode in original_modes.items():
+                if path.exists():
+                    path.chmod(mode | stat.S_IWUSR)
+
+
 def test_package_metadata_and_source_resources() -> None:
     metadata = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
@@ -153,6 +336,9 @@ def test_package_metadata_and_source_resources() -> None:
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith("# user_doc README")
     assert template_names() == ("default",)
+    manifest = read_template_manifest("default")
+    assert manifest["name"] == "default"
+    assert manifest["template_version"] == 1
 
     template_root = REPOSITORY_ROOT / "src" / "yadof" / "_resources" / "templates" / "default"
     template_text = "\n".join(
@@ -201,12 +387,34 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/workspace.py" in wheel_names
         assert "yadof/config.py" in wheel_names
         assert "yadof/task_loader.py" in wheel_names
+        assert "yadof/workspace_manifest.py" in wheel_names
+        assert "yadof/workspace_init.py" in wheel_names
+        assert "yadof/workspace_check.py" in wheel_names
+        assert "yadof/smoke_test.py" in wheel_names
+        assert "yadof/evaluate_manager/__init__.py" in wheel_names
+        assert "yadof/evaluate_manager/api.py" in wheel_names
+        assert "yadof/evaluate_manager/job_files.py" in wheel_names
+        assert "yadof/evaluate_manager/job_result.py" in wheel_names
+        assert "yadof/evaluate_manager/local_runner.py" in wheel_names
+        assert "yadof/evaluate_manager/types.py" in wheel_names
+        assert "yadof/evaluate_manager/worker_files/worker_misc.py" in wheel_names
         assert "yadof/job_template/api.py" in wheel_names
         assert "yadof/job_template/parameters_constraints_class.py" in wheel_names
         assert "yadof/job_template/rawdata_contract.py" in wheel_names
         assert "yadof/job_template/cost_misc.py" in wheel_names
         assert "yadof/_resources/templates/default/README.md" in wheel_names
         assert "yadof/_resources/templates/default/template.json" in wheel_names
+        assert "yadof/_resources/templates/default/workspace/config.py" in wheel_names
+        assert (
+            "yadof/_resources/templates/default/workspace/job_template/"
+            "parameters_constraints.py"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/templates/default/workspace/job_template/workflow.py"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/templates/default/workspace/job_template/calc_cost.py"
+        ) in wheel_names
         assert "yadof/_resources/docs/dev_doc/README.md" in wheel_names
         assert "yadof/_resources/docs/user_doc/README.md" in wheel_names
         entry_points_name = next(name for name in wheel_names if name.endswith(".dist-info/entry_points.txt"))
@@ -235,3 +443,4 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert not any("__pycache__" in name or name.endswith((".pyc", ".pyo")) for name in sdist_names)
 
     _verify_clean_external_install(wheel_path)
+    _verify_external_workspace_commands(wheel_path)

@@ -71,16 +71,23 @@
 1. A developer installs the declared development build tools.
 2. A PEP 517 frontend builds wheel and sdist from `pyproject.toml`.
 3. The artifacts contain the `yadof` namespace, one version value, console entry
-   point, software-neutral template foundation, explicit workspace/config/task
-   loaders, stable job-template framework helpers, and authoritative documentation.
+   point, versioned software-neutral starter, init/check, explicit workspace/config/
+   task loaders, stable job-template framework helpers, packaged local evaluator,
+   standalone local smoke command, and authoritative documentation.
 4. Artifact inspection rejects the current task/runtime tree, simulator model files,
    jobs, history, checkpoints, caches, and secrets.
 5. A clean virtual environment outside the repository installs the wheel without
    repository `PYTHONPATH` and runs help, version, and both document commands.
 6. The same commands leave non-writable installed package files unchanged.
-7. In the same external environment, a workspace context resolves all writable
-   paths away from site-packages and can load config plus a local-importing task
-   module without changing the installed package or `sys.path`.
+7. In an external runtime-capable environment, the installed command initializes
+   and checks a generic workspace outside the repository while site-packages is
+   non-writable.
+8. The generated workspace contains its marker and three user task files but no
+   framework `api.py`, parameter class, rawData contract, evaluator, optimizer,
+   recorder, or surrogate implementation; installed package hashes remain unchanged.
+9. With site-packages still non-writable, the installed smoke command executes the
+   generic workflow once; edited failure and short-timeout cases remain isolated in
+   workspace jobs and still leave package hashes unchanged.
 
 ## Scenario 10: Alternate Two Workspaces In One Process
 1. A caller builds or loads the effective config for workspace A.
@@ -94,3 +101,40 @@
    source size would otherwise permit stale bytecode reuse.
 6. Switching back to B returns B's unchanged values, and `sys.path` plus unrelated
    pre-existing `sys.modules` entries are identical to their original state.
+
+## Scenario 11: Initialize And Check A Workspace
+
+1. A user runs `yadof init PATH` on a new or empty directory.
+2. Init loads the bundled manifest, finds no target conflicts, writes a sibling
+   stage, validates marker/config/parameters/objectives/workflow syntax, then
+   publishes the workspace. The marker records versions but no machine path.
+3. The user edits `config.py` or task files and repeats init; init confirms the
+   complete matching workspace and changes nothing.
+4. If an unmarked directory already contains a template target, init prints each
+   exact conflict and creates no marker or partial template. If a marked workspace
+   is missing a required user file, init reports it but does not recreate it.
+5. The user runs `yadof check --workspace PATH`. Check reports structure, marker,
+   config, parameter/objective imports, workflow syntax, static rawData, and selected
+   backend prerequisites.
+6. Check never imports/executes workflow, submits a job, installs a command, repairs
+   HTCondor, or mutates the workspace. Missing external prerequisites are actionable
+   administrator-facing errors.
+
+## Scenario 12: Prepare And Smoke A Package Workspace Locally
+
+1. A user runs `yadof smoke-test --workspace PATH --mode local` on an unchanged
+   initialized generic workspace.
+2. The command confirms the task files exactly match the bundled generic starter,
+   selects one normalized midpoint individual, and disables timeout.
+3. `yadof.evaluate_manager` rejects reserved filename collisions, then copies the
+   workspace workflow, any task adapters/assets, package `worker_misc.py`, compact
+   effective worker config, and an assigned parameter snapshot into
+   `workspace/jobs/<job_name>/`. Submit-side `calc_cost.py` is excluded.
+4. The local Python subprocess writes lifecycle metadata and flat rawData. The
+   runner validates both, rejects/removes any `cost.json`, and preserves stdout/
+   stderr diagnostics.
+5. The submit process freshly loads workspace `calc_cost.py`, derives one cost tuple,
+   and reports success. It does not write recorded history in this stage.
+6. If task bytes were edited or extra task assets/adapters were added, the CLI
+   creates no job until the user repeats with `--real-task`, whose help explicitly
+   warns that workflow execution may launch expensive external software.

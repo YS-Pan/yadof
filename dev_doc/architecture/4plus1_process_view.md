@@ -23,6 +23,42 @@ The source-checkout resource fallback reads the same root documentation only for
 development. An installed wheel resolves embedded resources first and does not
 depend on the repository or its current directory.
 
+## Workspace Initialization And Diagnosis
+
+```mermaid
+sequenceDiagram
+    participant U as User / CLI
+    participant I as workspace init
+    participant T as bundled template
+    participant S as sibling stage directory
+    participant W as selected workspace
+    participant C as workspace check
+
+    U->>I: yadof init optional PATH
+    I->>T: load and validate manifest plus file bytes
+    I->>W: inspect marker, target conflicts, and path obstructions
+    alt complete matching marker
+        I-->>U: confirm; change nothing
+    else conflict or incomplete marked workspace
+        I-->>U: list exact paths; change nothing
+    else safe new workspace
+        I->>S: write template and portable marker
+        I->>S: load config/task and parse workflow syntax
+        I->>W: atomic directory replace or exclusive files; marker last
+        I-->>U: initialized
+    end
+    U->>C: yadof check --workspace PATH
+    C->>W: read marker/config/task/static rawData and parse workflow
+    C->>C: locate selected backend prerequisites without invoking them
+    C-->>U: actionable report and success/failure status
+```
+
+All generation validation happens before publish. A failed publish into an existing
+directory rolls back only files and directories created by that attempt; unrelated
+user content remains untouched. `check` is report-only: it creates no directories,
+does not execute `workflow.py`, and does not install or repair Python, simulators, or
+HTCondor.
+
 ## Workspace, Config, And Task Loading
 
 ```mermaid
@@ -52,7 +88,41 @@ for sibling absolute/relative imports. The finder and every workspace-owned
 `sys.modules` entry are removed after the query, so edits are visible on the next
 load and alternating workspaces cannot exchange task state.
 
-## Local Evaluation Sequence
+## Packaged Local Evaluation And Standalone Smoke
+
+```mermaid
+sequenceDiagram
+    participant U as API / yadof smoke-test
+    participant C as effective config + smoke safety
+    participant E as yadof.evaluate_manager
+    participant P as prepared workspace job
+    participant W as local workflow subprocess
+    participant T as workspace calc_cost
+
+    U->>C: select explicit workspace and local overrides
+    C->>C: for CLI, compare task with bundled generic starter
+    alt edited/additional/external task without --real-task
+        C-->>U: refuse before creating a job
+    else explicit or unchanged generic task
+        U->>E: population or exactly one midpoint smoke row
+        E->>E: fresh-load config/task and reject reserved filename collisions
+        E->>P: copy task assets/adapters except calc_cost; materialize assigned parameters
+        E->>P: add package worker_misc + compact worker config + provenance/static hash
+        E->>W: run workflow.py in job directory
+        W->>P: lifecycle metadata + flat rawData only
+        E->>P: validate rawData and reject/remove cost.json
+        E->>T: calculate current costs from returned rawData
+        T-->>E: one objective tuple per individual
+        E-->>U: ordered tuples; per-individual failure/timeout becomes inf
+    end
+```
+
+Normal local population calls use the effective timeout and worker count. The
+standalone smoke path always forces one worker, one deterministic midpoint row, no
+generation index, and no timeout. It does not run package self-tests and does not
+write recorded history; package step 5 adds persistence.
+
+## Transitional Source Local Evaluation Sequence
 
 ```mermaid
 sequenceDiagram
@@ -148,6 +218,15 @@ as the submitter's desktop owner because deployed office workstations have diffe
 owners and may all act as submit or execute machines.
 
 ## Failure Handling
+- Packaged composition failure: reserved worker-name collisions are detected once
+  before population work and reported directly. Candidate-specific preparation
+  failures remain isolated as `inf`.
+- Packaged local workflow failure: the runner combines workflow lifecycle metadata
+  with return code/stdout/stderr tails. Invalid/nested rawData or a workflow-created
+  `cost.json` makes that individual an error; the forbidden cost file is removed.
+- Packaged local timeout: the workflow process tree is terminated, job metadata is
+  marked `timeout`, and other individuals continue. Standalone smoke deliberately
+  supplies no timeout.
 - Prepare failure: `evaluate_manager` creates a synthetic failure result if possible, records best effort, and returns `inf`.
 - Workflow failure: `workflow.py` writes failure status and `ended_at` into `individual_metadata.json` when it can; simulator workflows may also record child-process metadata for cleanup. Local runner adds return code, stdout/stderr tails, and rawData presence.
 - Submit failure: HTCondor submission errors are captured as per-job `error` metadata. The project does not attempt to repair the local HTCondor installation.

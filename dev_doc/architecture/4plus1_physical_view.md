@@ -1,29 +1,34 @@
 # 4+1 Physical View
 
-## Current Local Deployment
+## Package-Era Local Deployment
 
 ```mermaid
 flowchart TD
     Workstation["Windows workstation"]
-    Repo["Workspace repo"]
+    Package["read-only installed yadof"]
+    Workspace["selected writable workspace"]
     Python["Python interpreter"]
-    Jobs["project/jobs/"]
-    Records["project/recorded_data/"]
-    Checkpoints["project/surrogate/checkpoints/"]
+    Jobs["workspace/jobs/"]
 
-    Workstation --> Repo
-    Repo --> Python
+    Workstation --> Package
+    Workstation --> Workspace
+    Package --> Python
+    Workspace --> Python
     Python --> Jobs
-    Python --> Records
-    Python --> Checkpoints
 ```
+
+The transitional source optimizer still writes `project/jobs/`, records, and
+checkpoints until their later package stages; new installed local/smoke calls use
+only the selected workspace jobs path.
 
 ## Runtime Locations
 - Installable package foundation source: `src/yadof/`; built wheels install its
-  CLI/version/resources plus workspace/config/task-loader and stable job-template
-  framework support into the Python environment.
-- Current optimization runtime source: `project/` until the remaining ordered
-  package migration steps are completed.
+  CLI/version/resources plus workspace/config/task-loader, safe init/check, and
+  stable job-template framework support into the Python environment.
+- Packaged local runtime source: `src/yadof/evaluate_manager/`, including copied
+  worker support under `worker_files/`. Installed files are read-only inputs.
+- Current persistence/optimization/surrogate/distributed source: `project/` until
+  the remaining ordered package migration steps are completed.
 - Administrator-only environment and cluster resources: `admin_tool/`. These scripts
   configure external systems and are never imported by the project runtime.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
@@ -44,13 +49,22 @@ flowchart TD
   logs, and tool output are represented by absolute `WorkspaceContext` paths.
   Relative config paths resolve from this root; explicit absolute overrides may
   select a different writable volume.
+- Package-era prepared local jobs: `workspace/jobs/<job_name>/`. Each contains the
+  assigned parameter snapshot, workspace workflow/adapters/assets, package-owned
+  `worker_misc.py`, compact `yadof_worker_config.json`, lifecycle/runner metadata,
+  and flat rawData. It contains neither submit-side `calc_cost.py` nor `cost.json`.
+- Initialized-workspace provenance: `.yadof/workspace.json`, containing only schema
+  and version identifiers. It contains no package installation or other
+  machine-specific absolute path. Init/check keep runtime directories lazy;
+  evaluation creates only the effective workspace jobs directory.
 
-## Installed Package Foundation
+## Installed Package And Local Runtime
 
 - `yadof` wheel/sdist version is read from `src/yadof/_version.py`.
-- The wheel contains `yadof --help`, `yadof version`, `yadof docs user|dev`, the
-  software-neutral template resource foundation, and build-time snapshots of the
-  authoritative documentation trees.
+- The wheel contains `yadof --help`, `yadof version`, `yadof docs user|dev`,
+  `yadof init`, `yadof check`, `yadof smoke-test --mode local`, packaged local job
+  preparation/execution, the versioned software-neutral template, and
+  build-time snapshots of the authoritative documentation trees.
 - The wheel also contains `WorkspaceContext`, the effective config loader, the
   source-fresh isolated task loader, and stable `yadof.job_template` parameter,
   rawData, and cost helpers. None creates or discovers writable state beside the
@@ -62,6 +76,12 @@ flowchart TD
 - Clean-install tests also construct a workspace and load config/task modules while
   site-packages is non-writable, verifying writable paths remain workspace-owned and
   the installed package hash remains unchanged.
+- A second wheel-installed external test initializes and checks the generic
+  workspace, verifies marker portability, rejects framework-side implementations in
+  user `job_template/`, and again leaves installed package content unchanged.
+- That read-only installed-wheel test also runs the unchanged generic smoke task,
+  then edited-task failure and short-timeout API cases outside the repository. All
+  jobs remain in the external workspace and installed package hashes stay unchanged.
 
 ## Optional Distributed Deployment
 

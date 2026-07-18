@@ -2,8 +2,8 @@
 
 ## Context
 
-- This is step 3 of 10 and depends on step 2 being completed and archived.
-- The workspace loaders now need a safe, repeatable way to create and diagnose a
+- This was step 3 of 10 and depended on step 2 being completed and archived.
+- The workspace loaders needed a safe, repeatable way to create and diagnose a
   user-owned task directory.
 
 ## Goal
@@ -54,3 +54,8 @@
 
 - Installed `yadof init` and `yadof check` satisfy the safe workspace contract and
   their help/errors are actionable. Archive this file, then execute step 4.
+
+## Completion Note
+
+- Completed and archived on 2026-07-18. The next step remains manual and was not
+  executed as part of this task.
