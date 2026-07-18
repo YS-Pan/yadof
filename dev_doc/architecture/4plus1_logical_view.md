@@ -42,8 +42,10 @@
   safe init/check, explicit workspace/config/task-loading APIs, and installed
   parameter/rawData/cost-helper contracts.
 - `yadof.evaluate_manager`: package-era job preparation, local subprocess execution,
-  rawData validation, dynamic cost return, and local failure/timeout isolation.
-  Recording remains a later workspace migration.
+  rawData validation/recording, dynamic cost return, and local failure/timeout/
+  recording isolation.
+- `yadof.recorded_data`: package-era workspace-explicit evidence storage and dynamic
+  historical views with no package-relative or cross-workspace state.
 - `optimize`: uses GA for single-objective runs and NSGA-III reference-direction survival for multi-objective candidate generation, real evaluations, and optional surrogate-predicted candidate screening.
 - `evaluate_manager`: turns candidate rows into job execution and records results.
 - `job_template`: defines the current task and interprets rawData.
@@ -57,6 +59,8 @@
 - Every packaged API that reads task or runtime state receives a workspace/context
   explicitly. Config and task loading cannot fall back to a package-relative or
   current `project/` path.
+- Same-named jobs in separate workspaces resolve to separate manifests, locks, and
+  archive members. Reads do not retain task/config modules from an earlier workspace.
 - Package worker filenames are reserved inputs. Composition fails before creating a
   job when the workspace owns a case-insensitively matching `worker_misc.py` or
   `yadof_worker_config.json`; no precedence or overwrite fallback exists.
@@ -88,6 +92,9 @@
   contains rawData and metadata only, and the submit process calculates cost from
   the current workspace policy.
 - `recorded_data` never trusts old saved cost when returning history.
+- Recorded-data JSONL and archive temporary files live beside their workspace-owned
+  targets; locks serialize writers across threads/processes and atomic replacement
+  prevents readers from observing a partial file.
 - `surrogate` never bypasses rawData by learning only `variables -> cost`.
 - `surrogate` may learn normalized/scaled rawData internals, but public predictions are reconstructed rawData passed to `job_template.api` for cost.
 - `surrogate` historical error audits must use real model predictions rather than substituting true historical costs.

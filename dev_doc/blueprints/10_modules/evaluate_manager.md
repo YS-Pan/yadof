@@ -18,8 +18,9 @@
 - Packaged local mode prepares a workspace job, runs `workflow.py`, reads job-local
   lifecycle metadata, validates flat rawData, calculates cost through the current
   workspace `calc_cost.py`, and converts per-individual failures to correctly sized
-  `inf` rows. It does not persist recorded history before package step 5. When
-  `LOCAL_EVALUATION_MAX_WORKERS > 1`, independent individuals run concurrently.
+  `inf` rows. Before deriving cost it records every completed/error/timeout result
+  best effort through `yadof.recorded_data`. When `LOCAL_EVALUATION_MAX_WORKERS > 1`,
+  independent individuals run concurrently.
 - `project.evaluate_manager` remains the transitional source optimizer/recording/
   distributed path. Its local behavior still records through `recorded_data.api`
   until those consumers move; it is not imported or aliased by the package API.
@@ -47,7 +48,9 @@
 - `time_limits.py` derives `allowed_execute_duration` from the configured fixed baseline or from smoke/preceding-generation execution durations with high-tail trimming and timeout-as-infinity handling.
 - `condor_runner.run_condor_jobs()` generates `job.sub`, calls `condor_submit`, captures submit diagnostics, polls job outputs/`condor.log`, queries hold details for held jobs, delegates memory/disk retry decisions and cleanup to `resource_retries.py`, submits fresh clusters when requested, queries final Condor ClassAd resource/time usage when available, extracts Condor return-value/log tails, removes held or generation-timeout cluster ids, and collects `JobResult` objects while isolating per-job collection failures.
 - `job_result.py` provides shared helpers for reading/writing job metadata, discovering rawData files, promoting workflow metadata, and constructing `JobResult`.
-- `recorded_data_client.record_result()` adapts `JobResult` to supported `recorded_data.api` functions and retrieves dynamically computed costs when possible.
+- Packaged `recorded_data_client.record_result(workspace, result)` maps `JobResult`
+  directly to `yadof.recorded_data.api` and retrieves that exact job's dynamically
+  computed cost. The transitional source client retains its old adaptive bridge.
 - `types.py` defines immutable `JobSpec` and `JobResult` records for internal handoff.
 
 ## I/O Format
@@ -68,8 +71,8 @@
 ## Non-Obvious Techniques
 - `calc_cost.py` is excluded from every job copy. Jobs generate rawData only; the
   transitional source path derives cost after recording.
-- In the package local path, cost is derived immediately after validated workflow
-  output and returned in memory; recording is deliberately deferred to step 5.
+- In the package local path, validated output is archived first and cost is then
+  derived from the workspace archive using the current task policy.
 - Active task-local adapters and arbitrary assets are recursively copied because a
   workflow may use one or several programs. Package worker support wins no collision:
   a reserved-name task file is rejected before any job directory is created.
@@ -84,8 +87,8 @@
   `inf`; static task/config validation and reserved-name collisions fail before
   batch execution because they affect every individual.
 - Local parallelism is at the individual/job level. Packaged workers execute
-  prepare -> run -> dynamic cost; transitional source workers execute prepare ->
-  run -> record, with `recorded_data` locks serializing durable writes.
+  prepare -> run -> record -> dynamic cost; workspace-keyed process/file locks
+  serialize each history's durable writes without sharing records across workspaces.
 - Distributed mode reuses the same result schema and recording path instead of inventing a second result schema.
 - The adaptive resource controller never rewrites source config. It treats
   `HTCONDOR_REQUEST_MEMORY` and `HTCONDOR_REQUEST_DISK` as safe fallbacks when a

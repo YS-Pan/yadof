@@ -42,9 +42,9 @@ Cost and normalized historical variables are derived views, not durable source r
 ## Current Package, Workspace, And Local Evaluation
 
 The repository now has an installable distribution boundary with workspace-local
-job preparation and local evaluation. The fourth package stage composes immutable
-package worker support with one workspace's mutable task payload and runs the real
-workflow/rawData/current-cost path without package writes:
+job preparation, local evaluation, and recorded evidence. The fifth package stage
+archives raw variables/rawData/metadata below the effective workspace path and
+derives current costs without package writes:
 
 ```text
 pyproject.toml
@@ -53,10 +53,11 @@ pyproject.toml
   -> installed job-template framework support + isolated task-module loading
   -> versioned generic template + workspace marker + init/check
   -> packaged job preparation + local subprocess evaluation + standalone smoke
+  -> workspace-local recorded-data archive + dynamic history queries
   -> wheel/sdist
 
-workspace/ (task inputs plus prepared local jobs)
-project/   (recording/optimization/surrogate/distributed transition runtime)
+workspace/ (task inputs, prepared local jobs, and recorded history)
+project/   (optimization/surrogate/tools/distributed transition runtime)
 ```
 
 The installed `yadof` command provides help, version, packaged documentation,
@@ -65,8 +66,9 @@ directory and publishes without overwriting user content; check validates marker
 config/task contracts, workflow syntax, static rawData, and backend prerequisites
 without running the workflow or repairing the environment. Smoke executes exactly
 one midpoint individual without a timeout; edited/external tasks require
-`--real-task`. The package does not alias `project.*`. Persistence, optimization,
-surrogate, user-tool, and distributed-worker migration remain later stages.
+`--real-task`, and every attempted individual is recorded best effort. The package
+does not alias `project.*`. Optimization, surrogate, user-tool, and
+distributed-worker migration remain later stages.
 
 ## Documentation Center
 The documentation home is:

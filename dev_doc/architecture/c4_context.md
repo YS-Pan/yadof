@@ -6,9 +6,9 @@
 The current distribution transition has an installable `yadof` foundation for
 version/help/document resources, safe generic workspace init/check, explicit
 workspace/effective-config APIs, isolated task loading, prepared jobs, local
-subprocess evaluation, and a standalone local smoke command. Persistence,
-optimization, surrogate, and distributed execution remain under `project/` for
-later staged migration.
+subprocess evaluation, workspace-local recorded data, and a standalone local smoke
+command. Optimization, surrogate, and distributed execution remain under `project/`
+for later staged migration.
 
 ## Context Diagram
 
@@ -44,6 +44,8 @@ flowchart LR
   overwriting user files, and diagnose it without running its workflow.
 - Compose package-owned worker support with workspace task files/assets, reject
   reserved-name collisions, and run local workflows without writing to the package.
+- Persist local raw evidence and compact metadata only below the effective workspace
+  record path, then derive history through current workspace task definitions.
 - Offer an explicit one-individual, no-timeout local smoke path whose safety gate
   distinguishes the unchanged starter from edited or external tasks.
 - Generate candidate populations in normalized variable space.

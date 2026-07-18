@@ -9,17 +9,19 @@ flowchart TD
     Workspace["selected writable workspace"]
     Python["Python interpreter"]
     Jobs["workspace/jobs/"]
+    Records["workspace/recorded_data/"]
 
     Workstation --> Package
     Workstation --> Workspace
     Package --> Python
     Workspace --> Python
     Python --> Jobs
+    Python --> Records
 ```
 
 The transitional source optimizer still writes `project/jobs/`, records, and
-checkpoints until their later package stages; new installed local/smoke calls use
-only the selected workspace jobs path.
+checkpoints until its later package stages; new installed local/smoke calls use only
+the selected workspace jobs and recorded-data paths.
 
 ## Runtime Locations
 - Installable package foundation source: `src/yadof/`; built wheels install its
@@ -27,8 +29,10 @@ only the selected workspace jobs path.
   stable job-template framework support into the Python environment.
 - Packaged local runtime source: `src/yadof/evaluate_manager/`, including copied
   worker support under `worker_files/`. Installed files are read-only inputs.
-- Current persistence/optimization/surrogate/distributed source: `project/` until
-  the remaining ordered package migration steps are completed.
+- Packaged persistence source: `src/yadof/recorded_data/`; its installed files are
+  code only and never store active history.
+- Current optimization/surrogate/distributed source and transitional persistence:
+  `project/` until the remaining ordered package migration steps are completed.
 - Administrator-only environment and cluster resources: `admin_tool/`. These scripts
   configure external systems and are never imported by the project runtime.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
@@ -53,10 +57,14 @@ only the selected workspace jobs path.
   assigned parameter snapshot, workspace workflow/adapters/assets, package-owned
   `worker_misc.py`, compact `yadof_worker_config.json`, lifecycle/runner metadata,
   and flat rawData. It contains neither submit-side `calc_cost.py` nor `cost.json`.
+- Package-era durable history: the effective
+  `workspace/recorded_data/indMeta.jsonl`, `indMeta.jsonl.lock`, zip-based
+  `rawData.npz`, and `optMeta/optMeta.jsonl`. Same-directory unique temporary files
+  exist only during atomic replacement and are removed after success/failure.
 - Initialized-workspace provenance: `.yadof/workspace.json`, containing only schema
   and version identifiers. It contains no package installation or other
   machine-specific absolute path. Init/check keep runtime directories lazy;
-  evaluation creates only the effective workspace jobs directory.
+  evaluation creates only the effective workspace jobs and record directories.
 
 ## Installed Package And Local Runtime
 
@@ -67,8 +75,8 @@ only the selected workspace jobs path.
   build-time snapshots of the authoritative documentation trees.
 - The wheel also contains `WorkspaceContext`, the effective config loader, the
   source-fresh isolated task loader, and stable `yadof.job_template` parameter,
-  rawData, and cost helpers. None creates or discovers writable state beside the
-  installed package.
+  rawData, cost helpers, and `yadof.recorded_data` APIs. None creates or discovers
+  writable state beside the installed package.
 - The wheel excludes the active `project/` task/runtime tree, simulator models,
   jobs, recorded history, checkpoints, caches, and secrets.
 - Package resource commands are read-only and are verified from a clean environment
@@ -81,7 +89,8 @@ only the selected workspace jobs path.
   user `job_template/`, and again leaves installed package content unchanged.
 - That read-only installed-wheel test also runs the unchanged generic smoke task,
   then edited-task failure and short-timeout API cases outside the repository. All
-  jobs remain in the external workspace and installed package hashes stay unchanged.
+  jobs, manifests, locks, archives, and temporary writes remain in the external
+  workspace; installed-package and repository-source hashes stay unchanged.
 
 ## Optional Distributed Deployment
 

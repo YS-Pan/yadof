@@ -11,10 +11,10 @@ This repository is partway through the package/workspace conversion. The install
 foundation under `src/yadof/` includes explicit workspace, effective-config, and
 isolated task-loading Python APIs plus safe workspace initialization and read-only
 diagnostics. It now also owns packaged job preparation, local subprocess evaluation,
-and a safe standalone local smoke command. Persistence, optimization, surrogate,
-tools, and distributed runtime remain under `project/` until their ordered migration
-steps are completed. The package namespace does not provide a compatibility alias
-for `project.*`.
+workspace-local recorded data, and a safe standalone local smoke command.
+Optimization, surrogate, tools, and distributed runtime remain under `project/`
+until their ordered migration steps are completed. The package namespace does not
+provide a compatibility alias for `project.*`.
 
 ## Package And Workspace Foundation
 
@@ -48,9 +48,10 @@ The unchanged generic starter can run directly; edited or additional task payloa
 require `--real-task` because workflow execution may launch expensive external
 software. This is distinct from package self-tests.
 
-Local evaluation is available through the installed package. Optimization, history,
-distributed evaluation, and user tools are added by later package-conversion stages;
-until then, use the current `project/` APIs and launchers for full campaigns.
+Local evaluation and workspace-explicit history APIs are available through the
+installed package. Optimization, history commands, distributed evaluation, and user
+tools are added by later package-conversion stages; until then, use the current
+`project/` APIs and launchers for full campaigns.
 
 The installed Python API can already resolve and validate a user-owned workspace
 without writing to site-packages:
@@ -59,20 +60,23 @@ without writing to site-packages:
 from yadof import WorkspaceContext, load_config
 from yadof.evaluate_manager import run_smoke_test
 from yadof.job_template import validate_task
+from yadof.recorded_data import get_historical_results
 
 workspace = WorkspaceContext.from_path("path/to/workspace")
 config = load_config(workspace)
 task = validate_task(config.workspace)
 print(config.describe())
 print(task.parameter_names, task.objective_names)
-print(run_smoke_test(config.workspace))
+print(run_smoke_test(config.workspace))  # also records raw evidence
+print(get_historical_results(config.workspace))
 ```
 
 The workspace owns root `config.py`, mutable files/assets under `job_template/`,
 the versioned `.yadof/workspace.json` marker, and all runtime paths. Package defaults
 are overridden first by workspace config and then by temporary in-memory overrides;
 task modules are freshly isolated on every query so separate workspaces cannot share
-import state.
+import state. Evaluation records, locks, and the rawData archive are created only
+under the effective workspace `RECORDED_DATA_DIR`.
 
 ## Dependency Layers
 

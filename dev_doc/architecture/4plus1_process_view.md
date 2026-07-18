@@ -97,6 +97,7 @@ sequenceDiagram
     participant E as yadof.evaluate_manager
     participant P as prepared workspace job
     participant W as local workflow subprocess
+    participant R as workspace recorded_data
     participant T as workspace calc_cost
 
     U->>C: select explicit workspace and local overrides
@@ -111,7 +112,9 @@ sequenceDiagram
         E->>W: run workflow.py in job directory
         W->>P: lifecycle metadata + flat rawData only
         E->>P: validate rawData and reject/remove cost.json
-        E->>T: calculate current costs from returned rawData
+        E->>R: record raw variables, rawData, status, and merged metadata
+        R->>R: atomically update indMeta.jsonl and rawData.npz under one lock
+        R->>T: calculate current costs from archived rawData
         T-->>E: one objective tuple per individual
         E-->>U: ordered tuples; per-individual failure/timeout becomes inf
     end
@@ -119,8 +122,9 @@ sequenceDiagram
 
 Normal local population calls use the effective timeout and worker count. The
 standalone smoke path always forces one worker, one deterministic midpoint row, no
-generation index, and no timeout. It does not run package self-tests and does not
-write recorded history; package step 5 adds persistence.
+generation index, and no timeout. It does not run package self-tests. Completed,
+failed, and timed-out attempts are recorded best effort below the effective
+workspace `RECORDED_DATA_DIR`; a record/cost failure affects only that individual.
 
 ## Transitional Source Local Evaluation Sequence
 
@@ -246,6 +250,10 @@ owners and may all act as submit or execute machines.
   preparation. Concurrent local preparation does not reload a shared module or
   mutate a shared import path, and a range edit is visible to the next prepared job.
 - `recorded_data` JSONL metadata writes and rawData archive updates are protected by process-local and file-level locks.
+- Package recorded-data writers use unique same-directory temporary files plus
+  atomic replacement. A failed metadata append can leave only an unreferenced
+  archive member; the next same-job attempt removes that orphan before writing, and
+  empty-history reads do not create a lock/directory.
 - Distributed mode reuses the same record/finalize semantics: workers write job-local individual metadata and submit-side finalizers send compact records to `recorded_data`.
 - Automatic per-job time limits use the newest smoke execution time for generation zero and the preceding generation for later jobs. The controller trims the configured high tail, treats timed-out rows as infinity, and falls back to the configured one-hour baseline when no finite calibration exists. When smoke is disabled, that baseline is treated as the smoke measurement and receives the normal bootstrap multiplier.
 - Automatic generation-to-generation memory/disk calibration and held-job request doublings are both yadof policies. HTCondor enforces only the concrete request in each submission; all retry attempts for an individual share the original generation-level deadline.

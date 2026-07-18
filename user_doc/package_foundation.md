@@ -83,17 +83,16 @@ custom program, or otherwise expensive workflow. Package self-tests such as
 
 ## Current Transition Boundary
 
-Workspace job preparation and local evaluation now live under
-`yadof.evaluate_manager`. Optimization, recorded history, surrogate, user tools,
-and distributed evaluation still live under `project/`. Continue using the
-source-tree full-campaign workflow in `optimization_workflow.md` and
+Workspace job preparation/local evaluation and workspace-local history now live
+under `yadof.evaluate_manager` and `yadof.recorded_data`. Optimization, surrogate,
+user tools, and distributed evaluation still live under `project/`. Continue using
+the source-tree full-campaign workflow in `optimization_workflow.md` and
 `config_and_run.md` until their ordered package stages replace those entry points.
 
 The package does not provide a `project.*` compatibility alias and does not yet
 implement `run`, history, view, task-editing, or distributed-smoke commands. Their
 absence is intentional rather than an installation error. `init` and `check` never
-evaluate; `smoke-test` evaluates once but does not record campaign history or start
-optimization.
+evaluate; `smoke-test` evaluates and records once but does not start optimization.
 
 ## Available Workspace Python APIs
 
@@ -104,6 +103,11 @@ boundary without creating runtime state:
 from yadof import WorkspaceContext, load_config
 from yadof.evaluate_manager import evaluate_population, run_smoke_test
 from yadof.job_template import validate_task
+from yadof.recorded_data import (
+    get_historical_results,
+    get_rawdata_diagnostics,
+    list_records,
+)
 
 workspace = WorkspaceContext.from_path("path/to/workspace")
 config = load_config(
@@ -121,6 +125,12 @@ print(run_smoke_test(config.workspace))
 
 # Normal local rows use effective timeout/worker settings:
 print(evaluate_population(config.workspace, ((0.25,), (0.75,))))
+
+# Completed, failed, and timed-out records stay inspectable. History derives
+# normalized variables and costs from the current task files:
+print(list_records(config.workspace))
+print(get_historical_results(config.workspace))
+print(get_rawdata_diagnostics(config.workspace))
 ```
 
 Omitting the path selects the current directory. `WorkspaceContext` resolves root
@@ -128,6 +138,28 @@ Omitting the path selects the current directory. `WorkspaceContext` resolves roo
 tool output to absolute paths but does not create them. Relative path settings are
 resolved from the workspace root; an explicit absolute value may select another
 writable location.
+
+Every recorded-data API takes the workspace as its first argument. Pass the
+effective `config.workspace` when `config.py` overrides `RECORDED_DATA_DIR` or the
+task path. Successful, failed, and timed-out evaluations append compact rows below
+that context's recorded-data directory:
+
+```text
+recorded_data/
+  indMeta.jsonl
+  indMeta.jsonl.lock
+  rawData.npz
+  optMeta/
+    optMeta.jsonl
+```
+
+`rawData.npz` is a zip archive whose members are named `job_name/file.npz`.
+`indMeta.jsonl` stores raw variables, archive member names, scrubbed rawData
+metadata, status, workflow timing, and run/generation context. It does not store
+costs or normalized historical variables. Those are recalculated on every query
+from the current `calc_cost.py` and parameter ranges. Invalid archived rawData is
+kept as evidence, skipped from default history/training views, and reported through
+`get_rawdata_diagnostics()`.
 
 Configuration precedence is:
 
@@ -159,9 +191,11 @@ Prepared jobs are created only below the effective `JOBS_DIR`. Each job combines
 The package reserves `worker_misc.py` and `yadof_worker_config.json` in a task
 payload; a same-named workspace file is an error and is never overwritten.
 Submit-side `calc_cost.py` is not copied. A workflow writes flat rawData and lifecycle
-metadata only, then the submit process validates rawData and derives the returned
-cost tuple through the current workspace `calc_cost.py`. A workflow-created
-`cost.json` makes the job fail and is removed.
+metadata only, then the submit process validates and archives rawData below the
+effective `RECORDED_DATA_DIR` before deriving the returned cost tuple through the
+current workspace `calc_cost.py`. A workflow-created `cost.json` makes the job fail
+and is removed. A recording or dynamic-cost failure affects only that individual;
+other local rows continue and the failed row returns `inf`.
 
 ## Packaged Documentation
 

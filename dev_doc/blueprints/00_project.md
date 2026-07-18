@@ -23,8 +23,10 @@
   safe initialization/diagnosis, package-default/workspace-override configuration,
   fresh isolated task-module loading, and stable parameter/rawData/cost-helper
   support. `yadof.evaluate_manager` now owns workspace job composition, local
-  subprocess execution, rawData validation, and dynamic local cost return. Package
-  code neither imports nor aliases the current `project.*` runtime.
+  subprocess execution, rawData validation/recording, and dynamic local cost return.
+  `yadof.recorded_data` owns workspace-explicit manifests, archives, locks,
+  diagnostics, and current-task historical views. Package code neither imports nor
+  aliases the current `project.*` runtime.
 - `project.optimize` owns the optimization loop, NSGA-III multi-objective candidate generation, GPSAF-style history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
 - `project.evaluate_manager` remains the transitional optimizer/recording/HTCondor
   path until later package stages. It converts normalized individuals into source-layout job folders, asks
@@ -35,7 +37,11 @@
 - `project.job_template` owns task-specific files: parameter definitions, workflow, rawData contract, simulator stand-ins or adapters, rawData-to-cost calculation, and optional rawData importance weights for surrogate training.
 - The framework does not fix a default optimization task, simulator model filename, rawData names, or objective names. Those are task-specific and come from the active files in `project/job_template/`, especially `workflow.py`, `calc_cost.py`, and `parameters_constraints.py`.
 - Active workflow adapters live in `project/job_template` so prepared jobs are self-contained. `project/com_lib` is only a staging/reference area for adapter source/reference copies such as `hfss_com.py` and retained synthetic `test_com.py`; reusable fixes from an active adapter are synchronized back after task-only assumptions are excluded.
-- `project.recorded_data` stores real evaluation records, raw variables once per individual, rawData files, compact rawData metadata, workflow-owned timing, run/generation identifiers, job metadata, and job names; it does not store cost, normalized variables, repeated variable echoes, or submit-side `created_at` as durable source data.
+- `yadof.recorded_data` stores package-era real evaluation records below the effective
+  workspace path. `project.recorded_data` remains the same-semantic transitional
+  store for not-yet-migrated source optimizer/surrogate/tool consumers. Neither
+  stores cost, normalized variables, repeated variable echoes, or submit-side
+  `created_at` as durable source data.
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; generic tools stay at its root and simulator-specific tools live under `project.tools.specific.<software>`. Core runtime and generic tests must not depend on tools. System-environment and HTCondor-pool configuration belong in `admin_tool/`.
 - `project.config` is a package: `key.py` holds routine generic settings, `all.py` holds the complete generic surface, and `specific/` contains simulator-specific extensions.
@@ -86,7 +92,12 @@
   with assigned normalized/raw values, submit-side `metadata.json`/`metaData.json`,
   workflow-owned `individual_metadata.json`, and flat `rawData/*.npz` files. Jobs do
   not contain or save `cost.json`.
-- Recorded history is represented by append-only individual metadata in `project/recorded_data/indMeta.jsonl`, optimization-level metadata in `project/recorded_data/optMeta/optMeta.jsonl`, and a single zip-based `project/recorded_data/rawData.npz` archive whose members are shaped like `job_name/file.npz`.
+- Package-era recorded history is represented below the effective
+  `WorkspaceContext.recorded_data_dir` by append-only logical rows in
+  `indMeta.jsonl`, optimization metadata in `optMeta/optMeta.jsonl`, one lock, and a
+  zip-based `rawData.npz` whose members are shaped like `job_name/file.npz`.
+  Transitional source consumers retain the parallel `project/recorded_data/` layout
+  until their own migration; package calls never read or write that path implicitly.
 - Public cross-core-module calls go through `api.py` files only: `optimize/api.py`, `evaluate_manager/api.py`, `job_template/api.py`, `recorded_data/api.py`, and `surrogate/api.py`.
 
 ## Core Invariants
@@ -190,8 +201,12 @@
   should change carefully.
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and active adapter files in `job_template/` are intentionally highly mutable between optimization tasks.
 - `project/config/key.py` and the active files under `project/config/specific/` are mutable at campaign setup time and during tuning; `project/config/all.py` carries the full grouped generic defaults.
-- `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.
-- Runtime files such as `project/jobs/`, `project/recorded_data/indMeta.jsonl`, `project/recorded_data/rawData.npz`, `project/recorded_data/optMeta/`, and surrogate checkpoint directories are generated artifacts.
+- `src/yadof/recorded_data`, `project/optimize`, `project/evaluate_manager`,
+  transitional `project/recorded_data`, and `project/surrogate` should change more
+  carefully because they define shared contracts.
+- Runtime files such as workspace/project jobs, effective
+  `recorded_data/indMeta.jsonl`, `rawData.npz`, `optMeta/`, and surrogate checkpoint
+  directories are generated artifacts.
 - Root `temp/` is a retained scratch directory: keep `temp/.gitkeep` tracked and ignore other contents.
 - `dev_doc/architecture/`, `dev_doc/blueprints/`, `dev_doc/terminology.md`,
   `dev_doc/toDo/`, and `dev_doc/change_records/` are current documentation

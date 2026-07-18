@@ -22,8 +22,17 @@ src/yadof/
     job_files.py
     job_result.py
     local_runner.py
+    recorded_data_client.py
     types.py
     worker_files/worker_misc.py
+  recorded_data/
+    api.py
+    manifest_store.py
+    paths.py
+    query.py
+    rawdata_store.py
+    records.py
+    utils.py
   job_template/
     api.py
     parameters_constraints_class.py
@@ -95,9 +104,9 @@ project/
 `src/yadof/` now contains the installable package/resource foundation plus explicit
 workspace, effective-config, isolated task-loader, safe init/check, parameter,
 rawData, cost-helper, prepared-job, local-evaluation, and standalone-smoke
-contracts. Persistence, optimization, surrogate, and distributed execution remain
-under `project/` until later package-conversion steps move each module with their
-contracts and tests.
+contracts plus workspace-local persistence. Optimization, surrogate, tools, and
+distributed execution remain under `project/` until later package-conversion steps
+move each module with their contracts and tests.
 New packaged code uses only the `yadof` namespace; there is no `project.*`
 compatibility alias.
 
@@ -110,8 +119,11 @@ compatibility alias.
   code and the standard library. `yadof.job_template` adds NumPy-backed rawData and
   cost helpers, but never imports the current `project/` tree.
 - `yadof.evaluate_manager` depends on packaged config/workspace/job-template APIs
-  and standard-library subprocess/resource helpers. It imports no `project.*`
-  module and has no recorded-data dependency before package step 5.
+  plus `yadof.recorded_data` and standard-library subprocess/resource helpers. It
+  imports no `project.*` module.
+- `yadof.recorded_data` depends on explicit workspace paths and
+  `yadof.job_template` for fresh normalization/cost/rawData validation. It never
+  imports transitional `project.recorded_data` or selects storage from `__file__`.
 - Package worker files are immutable inputs read through `importlib.resources` and
   copied into workspace jobs. Workspace task payload copies recursively around an
   explicit exclusion/reserved-name policy; no installed path becomes writable.
@@ -159,6 +171,10 @@ compatibility alias.
   code. These names are reserved at workspace task root. The JSON contains only
   local mode/timeout/worker-count values with sources plus version/workspace
   provenance, never a copy of package config source.
+- Recorded-data public calls receive an effective `WorkspaceContext` (or an explicit
+  root using default paths). Configured custom paths are preserved by passing
+  `load_config(...).workspace`; module globals never carry a previous workspace's
+  storage or task state.
 - Core code, docs, launchers, and tools must stay portable across machines. Do not hard-code machine-specific absolute install paths, and do not introduce a requirement that users create new system environment variables before using the project. Prefer paths derived from the repository, explicit command arguments, and environment variables that external installers already provide, such as existing Conda, Ansys, or HTCondor PATH/installation variables.
 - Users run against an environment already prepared by an administrator. Package
   installation, dependency repair, and HTCondor software/hardware configuration are
@@ -195,10 +211,16 @@ compatibility alias.
 - `project/test/test_packaged_local_evaluation.py` protects package/task composition,
   multiple adapters/assets, reserved collisions, assigned values, definition-only
   static hashing, provenance/effective config, success/failure/timeout isolation,
-  no-cost boundaries, and standalone smoke safety/exactly-one behavior.
+  no-cost boundaries, workspace recording/path overrides, record-failure isolation,
+  and standalone smoke safety/exactly-one behavior.
+- `project/test/test_packaged_recorded_data.py` protects two-workspace isolation,
+  current-range/current-cost reinterpretation, invalid-data diagnostics, failed
+  record visibility, JSONL recovery/overwrite, and concurrent manifest/archive
+  writes.
 - Package artifact integration additionally runs successful, failed, and timed-out
   local jobs from an installed wheel outside the repository while site-packages is
-  non-writable, then compares package hashes.
+  non-writable, then compares installed-package and repository-source hashes and
+  confirms every record/lock/archive/temp path remains workspace-owned.
 
 ## Documentation Strategy
 - `dev_doc/README.md` is the documentation entry point and writing guide.

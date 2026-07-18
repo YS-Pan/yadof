@@ -9,6 +9,7 @@ import pytest
 
 import yadof
 from yadof.config import load_config
+from yadof.recorded_data import api as recorded_api
 from yadof.evaluate_manager import (
     JobPreparationError,
     evaluate_population,
@@ -178,6 +179,12 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     }
     assert not (jobs[0] / "calc_cost.py").exists()
     assert not (jobs[0] / "cost.json").exists()
+    records = recorded_api.list_records(root)
+    assert len(records) == 1
+    assert records[0]["status"] == "completed"
+    assert records[0]["started_at"]
+    assert records[0]["ended_at"]
+    assert (root / "recorded_data/rawData.npz").is_file()
 
 
 def test_packaged_local_failures_are_isolated_and_return_inf(tmp_path: Path) -> None:
@@ -215,6 +222,10 @@ np.savez(raw / 'response.npz', values=data, metadata=json.dumps({
     assert costs == ((math.inf,), (1.0,))
     statuses = sorted(_metadata(path)["status"] for path in (root / "jobs").iterdir())
     assert statuses == ["done", "error"]
+    assert sorted(record["status"] for record in recorded_api.list_records(root)) == [
+        "completed",
+        "error",
+    ]
 
 
 def test_packaged_prepare_failure_does_not_write_metadata_at_jobs_root(tmp_path: Path) -> None:
@@ -230,6 +241,10 @@ def test_packaged_prepare_failure_does_not_write_metadata_at_jobs_root(tmp_path:
 
     assert costs == ((math.inf,), (0.0,))
     assert not (root / "jobs/metadata.json").exists()
+    assert sorted(record["status"] for record in recorded_api.list_records(root)) == [
+        "completed",
+        "error",
+    ]
 
 
 def test_packaged_local_timeout_is_per_individual_failure(tmp_path: Path) -> None:
@@ -252,6 +267,61 @@ def test_packaged_local_timeout_is_per_individual_failure(tmp_path: Path) -> Non
     metadata = _metadata(job)
     assert metadata["status"] == "timeout"
     assert metadata["timed_out"] is True
+    assert recorded_api.list_records(root)[0]["status"] == "timeout"
+
+
+def test_packaged_record_failure_is_isolated_per_individual(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yadof.evaluate_manager import api as evaluate_api
+
+    root = _workspace(tmp_path)
+    real_record_result = evaluate_api.record_result
+
+    def flaky_record_result(workspace, result):
+        if result.unnormalized_variables[0] < 0:
+            raise OSError("simulated individual record failure")
+        return real_record_result(workspace, result)
+
+    monkeypatch.setattr(evaluate_api, "record_result", flaky_record_result)
+    costs = evaluate_population(
+        root,
+        ((0.0,), (1.0,)),
+        mode="local",
+        timeout_sec=5.0,
+        env=_source_environment(),
+    )
+
+    assert costs == ((math.inf,), (1.0,))
+    records = recorded_api.list_records(root)
+    assert len(records) == 1
+    assert records[0]["status"] == "completed"
+    assert records[0]["raw_variables"] == [1.0]
+
+
+def test_packaged_evaluation_uses_effective_recorded_data_path(tmp_path: Path) -> None:
+    root = _workspace(tmp_path)
+    config_path = root / "config.py"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + "\nRECORDED_DATA_DIR = 'state/history'\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    costs = evaluate_population(
+        root,
+        ((0.5,),),
+        mode="local",
+        timeout_sec=5.0,
+        env=_source_environment(),
+    )
+
+    assert costs == ((0.0,),)
+    effective_workspace = load_config(root).workspace
+    assert recorded_api.get_job_names(effective_workspace)
+    assert (root / "state/history/indMeta.jsonl").is_file()
+    assert not (root / "recorded_data").exists()
 
 
 def test_smoke_cli_requires_explicit_real_task_and_runs_exactly_one(

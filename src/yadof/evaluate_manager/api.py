@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from ..config import LoadedConfig, load_config
-from ..job_template import calculate_cost, get_objective_count, get_variable_count
+from ..job_template import get_objective_count, get_variable_count
 from ..workspace import WorkspaceContext
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
 from .local_runner import run_local_job
+from .recorded_data_client import record_result
 from .types import JobResult, JobSpec
 
 
@@ -220,6 +221,7 @@ def _evaluate_one_local(
             generation_index=generation_index,
         )
         _best_effort_write_failure(failure)
+        _best_effort_record_failure(config.workspace, failure)
         return index, None
 
     try:
@@ -243,19 +245,19 @@ def _evaluate_one_local(
             generation_index=generation_index,
         )
         _best_effort_write_failure(failure)
+        _best_effort_record_failure(config.workspace, failure)
         return index, None
 
     if result.status != "done":
+        _best_effort_record_failure(config.workspace, result)
         return index, None
     try:
-        costs = calculate_cost(
-            config.workspace,
-            (result.raw_data_paths,),
-            (result.unnormalized_variables,),
-        )[0]
-    except Exception as exc:  # noqa: BLE001 - cost failure is per individual.
+        costs = record_result(config.workspace, result)
+        if costs is None:
+            raise RuntimeError("completed recorded result returned no costs")
+    except Exception as exc:  # noqa: BLE001 - recording/cost failure is per individual.
         failure = _failed_result(
-            stage="cost",
+            stage="recorded_data",
             exc=exc,
             population_row=population_row,
             index=index,
@@ -289,6 +291,15 @@ def _best_effort_write_failure(result: JobResult) -> None:
         return
 
 
+def _best_effort_record_failure(
+    workspace: WorkspaceContext, result: JobResult
+) -> None:
+    try:
+        record_result(workspace, result)
+    except Exception:  # noqa: BLE001 - recording never stops the remaining population.
+        return
+
+
 def _failed_result(
     *,
     stage: str,
@@ -319,7 +330,7 @@ def _failed_result(
         else (
             tuple(float(value) for value in job.unnormalized_variables)
             if job is not None
-            else _float_tuple(population_row)
+            else ()
         )
     )
     metadata: dict[str, Any] = {}
@@ -356,16 +367,6 @@ def _failed_result(
 
 def _population_row(variables: Iterable[float]) -> tuple[Any, ...]:
     return tuple(variables)
-
-
-def _float_tuple(values: Iterable[Any]) -> tuple[float, ...]:
-    converted: list[float] = []
-    for value in values:
-        try:
-            converted.append(float(value))
-        except (TypeError, ValueError):
-            continue
-    return tuple(converted)
 
 
 def _metadata_row(values: Iterable[Any]) -> list[Any]:

@@ -73,7 +73,8 @@
 3. The artifacts contain the `yadof` namespace, one version value, console entry
    point, versioned software-neutral starter, init/check, explicit workspace/config/
    task loaders, stable job-template framework helpers, packaged local evaluator,
-   standalone local smoke command, and authoritative documentation.
+   workspace-explicit recorded-data APIs, standalone local smoke command, and
+   authoritative documentation.
 4. Artifact inspection rejects the current task/runtime tree, simulator model files,
    jobs, history, checkpoints, caches, and secrets.
 5. A clean virtual environment outside the repository installs the wheel without
@@ -87,7 +88,8 @@
    recorder, or surrogate implementation; installed package hashes remain unchanged.
 9. With site-packages still non-writable, the installed smoke command executes the
    generic workflow once; edited failure and short-timeout cases remain isolated in
-   workspace jobs and still leave package hashes unchanged.
+   workspace jobs/history and still leave installed-package and repository-source
+   hashes unchanged.
 
 ## Scenario 10: Alternate Two Workspaces In One Process
 1. A caller builds or loads the effective config for workspace A.
@@ -95,8 +97,9 @@
    the file itself is not rewritten.
 3. Parameter and cost queries freshly compile A's task modules and local helpers,
    then remove their temporary import state.
-4. The caller performs the same queries for workspace B, whose same-named helpers,
-   config, parameters, objectives, and paths remain independent.
+4. The caller records/queries a same-named job in A, then performs the same operations
+   for workspace B; helpers, config, parameters, objectives, manifests, locks,
+   archives, and results remain independent.
 5. A task/config edit in A is visible on the next call even when its timestamp and
    source size would otherwise permit stale bytecode reuse.
 6. Switching back to B returns B's unchanged values, and `sys.path` plus unrelated
@@ -133,8 +136,9 @@
 4. The local Python subprocess writes lifecycle metadata and flat rawData. The
    runner validates both, rejects/removes any `cost.json`, and preserves stdout/
    stderr diagnostics.
-5. The submit process freshly loads workspace `calc_cost.py`, derives one cost tuple,
-   and reports success. It does not write recorded history in this stage.
+5. The submit process records raw variables/rawData/metadata below the effective
+   workspace record path, freshly loads workspace `calc_cost.py` from the archived
+   evidence, derives one cost tuple, and reports success.
 6. If task bytes were edited or extra task assets/adapters were added, the CLI
    creates no job until the user repeats with `--real-task`, whose help explicitly
    warns that workflow execution may launch expensive external software.

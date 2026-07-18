@@ -10,10 +10,13 @@ flowchart TD
     Package --> TaskAPI["isolated task loader + stable job-template support"]
     Package --> WorkspaceLifecycle["versioned template + marker + safe publish/check"]
     Package --> LocalEvaluate["packaged job preparation + local evaluation + smoke"]
+    Package --> PackageRecorded["workspace-explicit recorded data"]
     Workspace["selected writable workspace"] --> WorkspaceAPI
     Workspace --> TaskAPI
     WorkspaceLifecycle --> Workspace
     LocalEvaluate --> WorkspaceJobs["workspace/jobs runtime folders"]
+    LocalEvaluate --> PackageRecorded
+    PackageRecorded --> WorkspaceRecords["workspace/recorded_data"]
     Workspace --> LocalEvaluate
 
     Config["project/config: key + all + specific"] --> Optimize["project/optimize"]
@@ -49,17 +52,19 @@ flowchart TD
   resources, explicit workspace/config/task loading, safe init/check, and installed
   job-template framework support. It also owns workspace job composition, local
   subprocess execution, dynamic local cost return, and the standalone safe smoke
-  command. It does not import or wrap the current `project/` runtime.
+  command. It also owns workspace-explicit record/query APIs. It does not import or
+  wrap the current `project/` runtime.
 - Selected workspace: package-era user boundary containing short
   `config.py`, a portable `.yadof/workspace.json` marker, user-owned task files/assets,
   prepared local jobs, and workspace-local runtime paths. Init/check create and
-  validate this boundary; packaged local evaluation now writes only below its jobs
-  path. Persistence and other runtime state migrate in later steps.
+  validate this boundary; packaged local evaluation writes jobs and durable history
+  only below its effective workspace paths. Other runtime state migrates later.
 - `optimize`: NSGA-III search policy for multi-objective runs, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
 - `yadof.evaluate_manager`: authoritative package-era job preparation and local
   execution. It merges package worker support with workspace payload, calculates
-  current costs from returned rawData, and isolates each local failure without
-  persisting history yet.
+  current costs after workspace recording, and isolates each local or record failure.
+- `yadof.recorded_data`: workspace-explicit durable individual/optimization metadata,
+  zip-based rawData archiving, diagnostics, and dynamic cost/normalization views.
 - `project.evaluate_manager`: transitional source runtime used by the not-yet-migrated
   optimizer/recording/distributed path. Its HTCondor behavior remains current until
   later stages move those responsibilities.
@@ -87,9 +92,9 @@ Package local/smoke flow:
    effective-worker JSON summary.
 3. The local subprocess runs `workflow.py` in the prepared workspace job, producing
    flat rawData and lifecycle metadata only.
-4. The submit process validates rawData and derives the cost tuple through the
-   workspace's freshly loaded `calc_cost.py`. No record/archive write occurs before
-   package step 5.
+4. The submit process validates rawData, records raw variables/rawData/metadata under
+   the effective workspace record path, then derives the cost tuple through the
+   workspace's freshly loaded `calc_cost.py`.
 
 The transitional source optimization flow remains:
 
@@ -128,6 +133,9 @@ The transitional source optimization flow remains:
 - Prepared-job provenance records installed yadof version, workspace root/marker,
   definition-only static hash, and only the effective local worker settings needed
   for diagnosis. It never copies package config source into the workspace.
+- Package recorded-data calls always receive a workspace/context. Metadata and
+  archive writes share process/file locks and atomic same-directory replacements;
+  empty-history reads create no directory, and no path derives from package source.
 - Core modules communicate through each other's `api.py` files.
 - Runtime modules import `project.config.all` as the full generic settings surface; routine generic overrides live in `key.py`, while simulator settings and environment contributions stay below `config/specific/`.
 - `tools` may be flexible, but core modules and tests must not depend on tools.

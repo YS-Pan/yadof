@@ -38,7 +38,8 @@
 - `yadof.smoke_test` classifies only exact bundled generic task bytes as safe for
   implicit execution. A task edit or additional asset/adapter is not guessed safe;
   the CLI requires `--real-task` before handing one midpoint row to the packaged
-  local evaluator.
+  local evaluator. The evaluator records that single attempt below the effective
+  workspace record path before returning its current cost.
 
 ## I/O Format
 
@@ -92,7 +93,8 @@
 - Keep CLI imports lazy. Help/version/docs remain usable in a minimal environment
   even though init/check require the base NumPy-backed job-template dependency.
 - Keep check and smoke separate: check syntax-parses but never executes workflow;
-  smoke advertises execution/expense, applies the real-task gate, and creates jobs.
+  smoke advertises execution/expense, applies the real-task gate, and creates one job
+  plus one best-effort recorded-data row/archive update.
 
 ## Mutability Profile
 

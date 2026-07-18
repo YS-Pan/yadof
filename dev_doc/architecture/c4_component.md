@@ -77,12 +77,15 @@ flowchart LR
     JobFiles --> Types["types.py"]
     LocalRunner --> JobResult
     JobResult --> Types
-    EvalAPI --> DynamicCost["yadof.job_template cost API"]
+    EvalAPI --> RecordedClient["recorded_data_client.py"]
+    RecordedClient --> PackageRecorded["yadof.recorded_data API"]
+    PackageRecorded --> DynamicCost["yadof.job_template cost API"]
+    PackageRecorded --> WorkspaceHistory["workspace/recorded_data"]
 ```
 
 - `api.py`: explicit-workspace population/local-smoke entry points, fresh config
-  loading, ordered local concurrency, cost derivation, and per-individual `inf`
-  isolation. It has no `project.*` or recorded-data dependency.
+  loading, ordered local concurrency, record/failure handoff, and per-individual
+  `inf` isolation. It has no `project.*` dependency.
 - `job_files.py`: collision-safe package/task composition, assigned parameter
   materialization, package worker/config injection, definition-only static hashing,
   and yadof/workspace/config provenance.
@@ -94,6 +97,8 @@ flowchart LR
   runner metadata.
 - `job_result.py` and `types.py`: preserved `JobSpec`/`JobResult` and metadata/result
   handoff shapes for local now and distributed later.
+- `recorded_data_client.py`: maps `JobResult` status/raw variables/rawData/metadata to
+  the package recorded-data API and retrieves the newly recorded job's dynamic cost.
 
 ## Optimize Components
 
@@ -136,8 +141,9 @@ flowchart LR
 ```
 
 - These `project.evaluate_manager` components remain for the source optimizer,
-  recorded-data, and HTCondor transition path. New workspace-local calls use the
-  packaged components above; later stages move persistence and distributed pieces.
+  transitional recorded-data consumers, and HTCondor path. New workspace-local
+  calls use the packaged components above; later stages move optimizer and
+  distributed consumers.
 - `api.py`: backend selection, local per-individual worker-pool coordination, failure isolation, and ordered cost return.
 - `job_files.py`: copy the template, ask `job_template.api` to fresh-load and
   materialize one assigned parameter snapshot, copy the cache-free `config/`
@@ -193,7 +199,7 @@ flowchart LR
 - `hfss_com.py`: optional HFSS/PyAEDT simulator adapter. A workflow can copy it into `job_template` for active use, while `project/com_lib/hfss_com.py` keeps the synchronized reusable reference copy.
 - `project/com_lib/test_com.py`: retained pure-Python simulator stand-in; it must be copied into `job_template` before a workflow can use it.
 
-## Recorded Data Components
+## Package Recorded Data Components
 
 ```mermaid
 flowchart LR
@@ -204,12 +210,26 @@ flowchart LR
     Records --> RawStore["rawdata_store.py"]
     Query --> RawStore
     MetaStore --> Paths["paths.py"]
+    Paths --> Workspace["effective WorkspaceContext"]
+    Query --> Task["current yadof.job_template API"]
 ```
 
-- `records.py`: compact individual metadata creation, optimization metadata creation, workflow timing promotion, and rawData archiving.
-- `query.py`: normalized variables, costs, history, training data, diagnostics.
-- `manifest_store.py`: JSONL locking, append/rewrite helpers, and status normalization.
-- `rawdata_store.py`: `rawData.npz` member archiving, repeated-variable metadata scrubbing, metadata extraction, and archive loading.
+- `api.py`: requires workspace/context on every public record or query operation and
+  resolves no module-global storage/task path.
+- `paths.py`: derives one immutable path set from the effective
+  `WorkspaceContext.recorded_data_dir`.
+- `records.py`: compact individual/optimization metadata creation, status
+  normalization, workflow timing promotion, and rawData archiving.
+- `query.py`: current-range normalized variables, current-policy costs, history,
+  training data, and invalid-rawData diagnostics. It fresh-loads task modules through
+  `yadof.job_template` and retains no cross-workspace cache.
+- `manifest_store.py`: per-path process/file locking, atomic JSONL replacement,
+  read-only empty-history access, and JSONL validation.
+- `rawdata_store.py`: atomic `rawData.npz` replacement/recovery of orphan members,
+  repeated-variable metadata scrubbing, metadata extraction, and archive loading.
+
+`project/recorded_data` remains the transitional source consumer for the not-yet-
+migrated optimizer/surrogate/tools. It is not imported or aliased by the package.
 
 ## Surrogate Components
 

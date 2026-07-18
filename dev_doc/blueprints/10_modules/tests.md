@@ -35,12 +35,14 @@
   implementation, and compares installed package hashes before/after.
 - The same installed-wheel environment runs the generic local smoke successfully,
   verifies edited-task refusal, then executes explicit failure and short-timeout
-  local cases while package hashes remain unchanged.
+  local cases while package/source hashes remain unchanged and every generated
+  manifest, lock, archive, and temporary path remains in the external workspace.
 - Packaged local evaluator tests cover complete task resource/multiple-adapter copy,
   reserved worker filename collisions, assigned values, definition-only static
   hashing, version/workspace/effective-config provenance, no `calc_cost.py` or
   `cost.json`, dynamic costs, ordered failure isolation, process timeout, and
-  exactly-one/no-timeout smoke semantics.
+  workspace recording/path overrides, record-failure isolation, and exactly-one/
+  no-timeout smoke semantics.
 - Closed-loop tests cover optimize -> evaluate_manager -> job_template workflow -> recorded_data -> cost.
 - Framework tests use generic task doubles and neutral rawData fixtures. They must not assert the active task's parameter names/count, objective names/count, simulator expressions, model filename, or expected task results.
 - Software-specific tests may verify reusable adapters, file formats, and tools. They use mocks, synthetic data, and generated temporary resource names instead of the active task or a real simulator launch.
@@ -55,6 +57,9 @@
   memory/disk hold classification and bounded fresh resubmission, submit failure
   capture, and distributed-mode finalization through monkeypatched command execution.
 - Contract tests validate rawData metadata, metadata compaction, workflow-owned timing, schema versioning, flat directories, duplicate job behavior, concurrent recording, and invalid rawData diagnostics.
+- Packaged recorded-data tests additionally alternate two workspaces with identical
+  job names, edit ranges/cost policy without restart, recover existing JSONL, retain
+  failed records, and concurrently update both manifest and archive.
 - Parameter handoff tests validate assigned continuous/discrete/mixed values,
   same-process range refresh, job-local snapshots, definition-only static hashes,
   historical re-normalization, and local/distributed absence of JSON variable inputs.
@@ -102,6 +107,9 @@
   suite. Extend it whenever worker-reserved names, composition exclusions,
   provenance/config summary, local runner semantics, or standalone smoke safety
   changes.
+- `project/test/test_packaged_recorded_data.py` is the focused package step 5 suite.
+  Extend it whenever workspace path isolation, lock/atomicity, rawData diagnostics,
+  or dynamic history semantics change.
 - Add tests when changing shared contracts, storage layout, failure semantics, or surrogate API behavior.
 - Do not add task-specific tests under `project/test/`. Use `temp/` now or the task workspace after package separation.
 - Add software-specific tests under `project/test/`, never next to the implementation they cover.

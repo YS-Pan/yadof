@@ -144,6 +144,7 @@ def _verify_clean_external_install(wheel_path: Path) -> None:
 
 
 def _verify_external_workspace_commands(wheel_path: Path) -> None:
+    source_before_hashes = _file_hashes(REPOSITORY_ROOT / "src/yadof")
     with tempfile.TemporaryDirectory(prefix="yadof-workspace-wheel-test-") as temporary_dir:
         external_root = Path(temporary_dir)
         environment_dir = external_root / "runtime-environment"
@@ -232,6 +233,17 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             assert (successful_job / "yadof_worker_config.json").is_file()
             assert not (successful_job / "calc_cost.py").exists()
             assert not (successful_job / "cost.json").exists()
+            recorded_dir = workspace / "recorded_data"
+            successful_records = [
+                json.loads(line)
+                for line in (recorded_dir / "indMeta.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            assert len(successful_records) == 1
+            assert successful_records[0]["status"] == "completed"
+            assert successful_records[0]["job_name"] == successful_job.name
+            assert (recorded_dir / "rawData.npz").is_file()
+            assert (recorded_dir / "indMeta.jsonl.lock").is_file()
 
             workflow_path = workspace / "job_template/workflow.py"
             workflow_path.write_text(
@@ -289,6 +301,17 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             )
             assert timeout_check.returncode == 0, timeout_check.stdout + timeout_check.stderr
 
+            all_records = [
+                json.loads(line)
+                for line in (recorded_dir / "indMeta.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            assert sorted(record["status"] for record in all_records) == [
+                "completed",
+                "error",
+                "timeout",
+            ]
+
             workspace_paths = {
                 path.relative_to(workspace).as_posix()
                 for path in workspace.rglob("*")
@@ -299,6 +322,9 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 "job_template/calc_cost.py",
                 "job_template/parameters_constraints.py",
                 "job_template/workflow.py",
+                "recorded_data/indMeta.jsonl",
+                "recorded_data/indMeta.jsonl.lock",
+                "recorded_data/rawData.npz",
             } <= workspace_paths
             for forbidden in (
                 "job_template/api.py",
@@ -307,14 +333,15 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 "job_template/cost_misc.py",
                 "optimize",
                 "evaluate_manager",
-                "recorded_data",
                 "surrogate",
             ):
                 assert forbidden not in workspace_paths
+            assert not tuple(recorded_dir.rglob("*.tmp"))
             assert not any("__pycache__" in path for path in workspace_paths)
             marker_text = (workspace / ".yadof/workspace.json").read_text(encoding="utf-8")
             assert str(installed_package_dir) not in marker_text
             assert _file_hashes(installed_package_dir) == before_hashes
+            assert _file_hashes(REPOSITORY_ROOT / "src/yadof") == source_before_hashes
         finally:
             for path, mode in original_modes.items():
                 if path.exists():
@@ -396,8 +423,17 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/evaluate_manager/job_files.py" in wheel_names
         assert "yadof/evaluate_manager/job_result.py" in wheel_names
         assert "yadof/evaluate_manager/local_runner.py" in wheel_names
+        assert "yadof/evaluate_manager/recorded_data_client.py" in wheel_names
         assert "yadof/evaluate_manager/types.py" in wheel_names
         assert "yadof/evaluate_manager/worker_files/worker_misc.py" in wheel_names
+        assert "yadof/recorded_data/__init__.py" in wheel_names
+        assert "yadof/recorded_data/api.py" in wheel_names
+        assert "yadof/recorded_data/manifest_store.py" in wheel_names
+        assert "yadof/recorded_data/paths.py" in wheel_names
+        assert "yadof/recorded_data/query.py" in wheel_names
+        assert "yadof/recorded_data/rawdata_store.py" in wheel_names
+        assert "yadof/recorded_data/records.py" in wheel_names
+        assert "yadof/recorded_data/utils.py" in wheel_names
         assert "yadof/job_template/api.py" in wheel_names
         assert "yadof/job_template/parameters_constraints_class.py" in wheel_names
         assert "yadof/job_template/rawdata_contract.py" in wheel_names
