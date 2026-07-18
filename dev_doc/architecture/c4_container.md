@@ -4,6 +4,13 @@
 
 ```mermaid
 flowchart TD
+    Package["src/yadof: package foundation"] --> PackageDocs["read-only packaged dev_doc/user_doc"]
+    Package --> PackageCLI["yadof help/version/docs"]
+    Package --> WorkspaceAPI["workspace + effective config"]
+    Package --> TaskAPI["isolated task loader + stable job-template support"]
+    Workspace["selected writable workspace"] --> WorkspaceAPI
+    Workspace --> TaskAPI
+
     Config["project/config: key + all + specific"] --> Optimize["project/optimize"]
     Config --> Evaluate["project/evaluate_manager"]
     Config --> Surrogate["project/surrogate"]
@@ -32,6 +39,14 @@ flowchart TD
 ```
 
 ## Container Responsibilities
+- `src/yadof` package foundation: distribution metadata handoff, the single runtime
+  version, minimal repository-independent CLI, read-only document/template resource
+  access, explicit workspace/config/task loading, and installed job-template
+  framework support. It does not import or wrap the current `project/` runtime.
+- Selected workspace: future package-era user boundary containing short `config.py`,
+  user-owned task files/assets, and workspace-local runtime paths. The current
+  package APIs can validate and query this boundary, while evaluation/persistence
+  migration remains in later steps.
 - `optimize`: NSGA-III search policy for multi-objective runs, history warm start, GPSAF-style surrogate assistance, generation metadata, and evaluation run/generation context.
 - `evaluate_manager`: job preparation, local execution, optional HTCondor submission, yadof-managed memory/disk retry submissions, workflow metadata collection, failure isolation, and recording handoff.
 - `job_template`: task-specific parameter definitions, workflow, rawData schema, and cost calculation.
@@ -62,6 +77,13 @@ flowchart TD
 6. `surrogate` trains a conditional INR ensemble from recorded rawData, with task-owned importance weights for objective-relevant windows, and predicts rawData for optimizer-side candidate screening.
 
 ## Container Rules
+- Wheel construction maps root documentation into `yadof` resources at build time;
+  root documentation remains authoritative and is not duplicated in source.
+- Installed framework files and resources are read-only inputs. All task/runtime
+  paths derive from an explicit `WorkspaceContext` or an explicit absolute config
+  override; no user-data path derives from package `__file__`.
+- Workspace config and task modules are fresh snapshots. Temporary CLI/API overrides
+  never rewrite config, and task imports do not survive in global import state.
 - Core modules communicate through each other's `api.py` files.
 - Runtime modules import `project.config.all` as the full generic settings surface; routine generic overrides live in `key.py`, while simulator settings and environment contributions stay below `config/specific/`.
 - `tools` may be flexible, but core modules and tests must not depend on tools.

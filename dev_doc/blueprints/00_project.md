@@ -1,7 +1,9 @@
 # Prompt: yadof modular optimization framework
 
 ## Intent
-- Build the current `yadof` framework as a modular, recoverable optimization system under `project/`.
+- Build `yadof` as a modular, recoverable optimization framework. The installable
+  package foundation lives under `src/yadof/`; current runtime modules remain under
+  `project/` until their ordered migrations are completed.
 - Merge the mature job orchestration and recording ideas from older fanyufei-style workflows with the surrogate-assisted optimization ideas from the shorten-style experiments.
 - Keep the central modeling chain as `normalized variables -> rawData -> cost`, where cost is always derived from rawData through the current `job_template/calc_cost.py`.
 - Make the framework tolerant of long-running campaigns: failed evaluations, interrupted runs, changed parameter ranges, changed workflows, and local/distributed execution backends should not force a rewrite of the core optimizer.
@@ -14,6 +16,12 @@
 - GPSAF supplies the optimizer's surrogate-assistance framing. The implementation keeps the GPSAF-shaped alpha/beta/gamma pressure controls while using pymoo GA/NSGA-III mechanics for candidate generation and diversity.
 
 ## Functionalities
+- The `src/yadof` package foundation owns the distribution/import/command name,
+  single version source, minimal help/version/document CLI, and read-only packaged
+  documentation/template resources. It also owns explicit workspace paths,
+  package-default/workspace-override configuration, fresh isolated task-module
+  loading, and stable parameter/rawData/cost-helper support. It neither imports nor
+  aliases the current `project.*` runtime.
 - `project.optimize` owns the optimization loop, NSGA-III multi-objective candidate generation, GPSAF-style history warm start, optional surrogate-assisted candidate selection, and lightweight optimization-level metadata handoff.
 - `project.evaluate_manager` converts normalized individuals into job folders, asks
   `job_template.api` to fresh-load and materialize assigned parameter snapshots,
@@ -27,6 +35,10 @@
 - `project.surrogate` trains a conditional INR deep ensemble from `recorded_data`, predicts rawData arrays, converts predictions to costs through `job_template.api`, audits historical prediction error, returns ensemble member min/max cost intervals, and writes per-generation checkpoints plus member artifacts.
 - `project.tools` remains optional and user-launched; generic tools stay at its root and simulator-specific tools live under `project.tools.specific.<software>`. Core runtime and generic tests must not depend on tools. System-environment and HTCondor-pool configuration belong in `admin_tool/`.
 - `project.config` is a package: `key.py` holds routine generic settings, `all.py` holds the complete generic surface, and `specific/` contains simulator-specific extensions.
+- `yadof.workspace.WorkspaceContext` is the package-era authority for the selected
+  workspace root and every task/runtime path. `yadof.config.load_config` returns an
+  immutable effective config with source precedence; `yadof.task_loader` and
+  `yadof.job_template` query current user task modules without shared import state.
 - `project.test` is the sole source location for maintained automated tests. It verifies generic framework contracts and may also verify reusable software-specific adapters or tools with mocks and synthetic inputs. It never encodes the current task's concrete files, objectives, variable shape, or expected physical results. Current-task tests and their resources belong in ignored `temp/` now and in the task workspace after package separation.
 - `dev_doc` owns project documentation guidance, including current architecture
   contracts, selective blueprint reading, terminology, historical lineage,
@@ -35,6 +47,19 @@
   are only opportunistic during already in-scope work and have stale-document rules.
 
 ## I/O Format
+- Current installed foundation commands are `yadof --help`, `yadof version`, and
+  `yadof docs user|dev`. They require no workspace and produce console output only.
+- Current installed Python APIs include `WorkspaceContext`, `load_config`, isolated
+  task-module loading, installed `Parameter`/rawData/cost helpers, and workspace-
+  explicit parameter/objective/cost queries. They do not yet prepare or execute a
+  job; that remains a later package stage.
+- A package-era workspace contains short root `config.py`; task-owned
+  `job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, active
+  adapters, and arbitrary assets; and workspace-local jobs, records, checkpoints,
+  logs, and tool output. Relative configured paths resolve from the workspace root.
+- Wheel builds map the authoritative root `dev_doc/` and `user_doc/` trees under
+  `yadof/_resources/docs/`; sdists retain those root trees for reproducible wheel
+  builds. The source tree does not maintain duplicate document copies under `src/`.
 - User-edited inputs are primarily `project/config/key.py`, the active software settings under `project/config/specific/`, and task-specific files in `project/job_template/` such as `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and copied active adapters.
 - Optimizer input and output use normalized float tuples shaped as `population[individual][variable]`.
 - Evaluator input is a generation of normalized float tuples; evaluator output is cost tuples shaped as `population[individual][objective_cost]`.
@@ -46,6 +71,17 @@
 - Public cross-core-module calls go through `api.py` files only: `optimize/api.py`, `evaluate_manager/api.py`, `job_template/api.py`, `recorded_data/api.py`, and `surrogate/api.py`.
 
 ## Core Invariants
+- Installed package resources are read-only inputs. Foundation commands must not
+  create jobs, records, checkpoints, logs, plots, or temporary state beside package
+  code.
+- The current directory is only the default workspace selector. Once selected, all
+  paths are absolute and derive from that workspace unless a config/API value is an
+  explicit absolute override. No user-data path derives from package `__file__`.
+- Config precedence is package defaults, then workspace `config.py`, then temporary
+  in-memory overrides. Unknown uppercase names, invalid types/modes, and missing task
+  paths fail before batch work; loading never rewrites the file.
+- Task source and local helper imports are recompiled for every query, use temporary
+  namespaces, and leave `sys.path` plus unrelated/global module cache state unchanged.
 - Expensive evaluations produce rawData and metadata, not authoritative costs.
 - Cost and normalized historical variables are derived from stored raw evidence and the current task definition.
 - The core framework remains simulator-agnostic; adding Maxwell, TwinBuilder, custom Python, or multi-software workflows should happen through task files and adapters rather than core rewrites.
@@ -56,6 +92,17 @@
 - Local mode must stay usable without HTCondor or real simulator software for default tests.
 
 ## Non-Obvious Techniques
+- Distribution metadata reads its dynamic version from `src/yadof/_version.py`, and
+  runtime consumers use `yadof.__version__`; this keeps wheel metadata, CLI output,
+  and future workspace/job provenance on one value.
+- Hatchling `force-include` maps the root documentation trees into wheel package
+  paths during the build. Source-checkout document lookup falls back to those same
+  roots only when embedded resources are absent, so no hand-synchronized copy exists.
+- Workspace task import uses a temporary meta-path finder rather than a lasting
+  `sys.path` insertion. Its loader compiles current source bytes directly instead of
+  relying on `.pyc` timestamp/size validity, then restores same-named pre-existing
+  modules. This makes rapid edits visible and prevents two workspaces with identical
+  helper names from contaminating each other.
 - Cost is deliberately not a persisted evaluation artifact. Any module that needs cost asks `recorded_data` or `job_template` to compute it from rawData using the current `calc_cost.py`.
 - Normalized historical variables are also derived data. `recorded_data` stores raw variables and uses current `job_template` parameter ranges to calculate normalized variables on demand.
 - `job_static_hash` captures copied static job inputs. For the assigned parameter
@@ -89,6 +136,12 @@
 - Portability is a core contract. Source code, config defaults, launchers, and tools must not assume fixed absolute install paths, and must not require users to create new system environment variables before first use. They may rely on repository-derived paths, explicit parameters, standard install discovery, and environment variables already provided by installed tools such as Conda, Ansys, or HTCondor.
 
 ## Mutability Profile
+- `pyproject.toml`, root `README.md`, and `src/yadof/` currently define the package
+  and workspace/task-loading foundation. Package source grows by moving runtime
+  modules in later stages, not by adding `project.*` compatibility wrappers.
+- Workspace `config.py` and task modules are user-owned and highly mutable; the
+  installed workspace/config/task-loader/job-template APIs are shared contracts and
+  should change carefully.
 - `project/job_template/parameters_constraints.py`, `workflow.py`, `calc_cost.py`, simulator model files, and active adapter files in `job_template/` are intentionally highly mutable between optimization tasks.
 - `project/config/key.py` and the active files under `project/config/specific/` are mutable at campaign setup time and during tuning; `project/config/all.py` carries the full grouped generic defaults.
 - `project/optimize`, `project/evaluate_manager`, `project/recorded_data`, and `project/surrogate` should change more carefully because they define shared contracts.

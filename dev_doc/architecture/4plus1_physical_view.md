@@ -19,7 +19,11 @@ flowchart TD
 ```
 
 ## Runtime Locations
-- Source code: `project/`.
+- Installable package foundation source: `src/yadof/`; built wheels install its
+  CLI/version/resources plus workspace/config/task-loader and stable job-template
+  framework support into the Python environment.
+- Current optimization runtime source: `project/` until the remaining ordered
+  package migration steps are completed.
 - Administrator-only environment and cluster resources: `admin_tool/`. These scripts
   configure external systems and are never imported by the project runtime.
 - Active simulator adapters copied into jobs: adapter files placed directly in `project/job_template/`.
@@ -35,6 +39,29 @@ flowchart TD
 - Surrogate model artifacts: `project/surrogate/checkpoints/generation_*_conditional_inr/` containing `inr_meta.json`, `member_*.pt`, and auxiliary target-scaling/query-table payloads.
 - Tool outputs: typically `project/tools/`.
 - Root temporary workspace: `temp/` is kept in git with a `.gitkeep` placeholder, while all other files under it are ignored. Use it for disposable diagnostics or manual scratch artifacts that should not become source.
+- Selected package-era workspace root: supplied explicitly or defaulted to the
+  current directory. Its `config.py`, `job_template/`, jobs, records, checkpoints,
+  logs, and tool output are represented by absolute `WorkspaceContext` paths.
+  Relative config paths resolve from this root; explicit absolute overrides may
+  select a different writable volume.
+
+## Installed Package Foundation
+
+- `yadof` wheel/sdist version is read from `src/yadof/_version.py`.
+- The wheel contains `yadof --help`, `yadof version`, `yadof docs user|dev`, the
+  software-neutral template resource foundation, and build-time snapshots of the
+  authoritative documentation trees.
+- The wheel also contains `WorkspaceContext`, the effective config loader, the
+  source-fresh isolated task loader, and stable `yadof.job_template` parameter,
+  rawData, and cost helpers. None creates or discovers writable state beside the
+  installed package.
+- The wheel excludes the active `project/` task/runtime tree, simulator models,
+  jobs, recorded history, checkpoints, caches, and secrets.
+- Package resource commands are read-only and are verified from a clean environment
+  outside the repository after installed files are made non-writable.
+- Clean-install tests also construct a workspace and load config/task modules while
+  site-packages is non-writable, verifying writable paths remain workspace-owned and
+  the installed package hash remains unchanged.
 
 ## Optional Distributed Deployment
 

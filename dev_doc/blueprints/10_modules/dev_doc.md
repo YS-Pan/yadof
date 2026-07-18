@@ -10,6 +10,9 @@
 - Coordinate with `user_doc/`, the separate user-facing documentation home for task setup and run instructions.
 
 ## Functionalities
+- Package builds map the authoritative `dev_doc/` and `../user_doc/` trees into
+  read-only wheel resources. `yadof docs dev|user` prints the corresponding README
+  entry through `importlib.resources` without a GUI.
 - `README.md` is the entry point for documentation reading and writing rules.
 - `../user_doc/README.md` is read at the start of a `dev_doc` pass and then controls which user-facing task docs are read. A `user_doc` pass does not read back into `dev_doc`.
 - `architecture/` describes the current system using C4 and 4+1 viewpoints and carries the highest-priority current-view contracts for boundaries, data flow, runtime behavior, persistence, and invariants.
@@ -29,6 +32,9 @@
   resources. Those resources are not part of `project/tools/` or user task setup.
 
 ## I/O Format
+- In a source checkout, documentation lives only at the repository roots. In a
+  wheel, build-time mapping places it under `yadof/_resources/docs/`; sdists keep the
+  root layout so rebuilding a wheel preserves the same input.
 - Default context gathering reads all files in `architecture/`, `terminology.md`, and
   every Markdown file in `toDo/` recursively in full. Reading a manual toDo does not
   authorize its execution; an automatic toDo is evaluated only after its obsolete
@@ -46,6 +52,9 @@
 - Change records use sections: `Context`, `Change`, `Rationale`, `Impact`, and optional `Follow-Up`.
 
 ## Non-Obvious Techniques
+- Build-time document mapping avoids two editable source copies. Installed resource
+  traversal is the primary path; a checkout-only fallback serves the same root
+  files during development and is never used as a user-data location.
 - Architecture files are current-view maps; they should emphasize stable module relationships, runtime flows, and invariants rather than line-by-line implementation.
 - Blueprint files are not ordinary summaries. Their center thought is that an AI should be able to recreate a module or file with equivalent behavior from the blueprint.
 - Historical reference details are useful only when they preserve a durable implementation idea, not when they are a stale path list. Put the useful natural-language lineage in the relevant blueprint.
@@ -73,6 +82,8 @@
 - Terminology is updated only for project-specific concepts, corrected misunderstandings, or names that are not intuitive from ordinary software usage.
 
 ## Mutability Profile
+- Package-resource configuration changes when document trees or entry commands
+  change, but the root documentation trees remain authoritative.
 - `README.md` should change when documentation workflow changes.
 - `architecture/` and `blueprints/` should change alongside code when module contracts, responsibilities, I/O, persistence behavior, execution topology, historical lineage, or important implementation techniques change.
 - `user_doc/` should change when user-facing task setup, adapter usage, workflow, cost, config, smoke-test, or launch instructions change.

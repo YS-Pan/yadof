@@ -1,5 +1,9 @@
 # User Workflow For A New Optimization Task
 
+> Package transition note: installed workspace/config/task-loading APIs are now
+> available, but initialization and evaluation are later stages. Use the current
+> `project/` paths below for real runs until those commands are documented as current.
+
 This is the normal user-side path for turning a simulation or custom evaluator into
 a yadof optimization run.
 

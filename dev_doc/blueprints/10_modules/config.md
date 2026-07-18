@@ -3,6 +3,9 @@
 ## Intent
 - Provide a layered configuration package for generic cross-module settings and
   explicitly software-specific extensions.
+- Provide the installed package-era configuration contract as immutable package
+  defaults merged with one selected workspace's short `config.py` and optional
+  temporary overrides.
 - Keep `project/config/key.py` small enough for routine campaign edits while
   preserving a full grouped reference in `project/config/all.py`.
 - Keep problem shape and objective schema out of config; those belong to `job_template.api`.
@@ -13,6 +16,17 @@
 - Current config keeps task shape and objective semantics out of global settings; those belong to `job_template.api`.
 
 ## Functionalities
+- `yadof.workspace.WorkspaceContext` resolves an explicit root, fixed root
+  `config.py`, task inputs, jobs, recorded data, surrogate checkpoints, logs, and
+  tool output to absolute paths without creating them.
+- `yadof.config.load_config` executes workspace `config.py` in a fresh namespace,
+  validates uppercase names/types/modes/resources/task paths, merges precedence as
+  package default < workspace config < temporary override, and reports each final
+  value's source.
+- Relative configured paths resolve from the workspace root. Only an explicit
+  absolute context/config/override value may place a path elsewhere. The loader
+  never derives writable paths from installed package locations and never rewrites
+  `config.py` for a temporary override.
 - `project/config/key.py` defines only generic key settings users are likely to edit for a new optimization campaign. It contains constants only.
 - `project/config/all.py` imports `key.py`, groups all generic defaults by area, and uses matching names from `key.py` as overrides.
 - `project/config/specific/` owns settings tied to a simulator or vendor. The current `hfss.py` owns HFSS/PyAEDT runtime defaults and its HTCondor environment contribution.
@@ -31,6 +45,14 @@
 - Defines GPSAF surrogate assistance controls: `OPTIMIZE_SURROGATE_ALPHA`, `OPTIMIZE_SURROGATE_BETA`, `OPTIMIZE_SURROGATE_GAMMA`, `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION`, and `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`.
 
 ## I/O Format
+- Package-era callers pass a workspace root or `WorkspaceContext` and receive a
+  `LoadedConfig` with `.workspace`, mapping/attribute access to immutable final
+  values, `.source_for(name)`, and `.describe()` output showing precedence.
+- Package path settings are `JOB_TEMPLATE_DIR`, `JOBS_DIR`, `RECORDED_DATA_DIR`,
+  `SURROGATE_CHECKPOINT_DIR`, `LOGS_DIR`, and `TOOL_OUTPUT_DIR`. Their effective
+  values are absolute `Path` objects.
+- Workspace config files define only recognized uppercase settings. Imports and
+  private/lowercase helpers are not settings; unknown uppercase names are errors.
 - Generic runtime modules import `project.config.all`; software-specific workflow code imports its matching module under `project.config.specific`.
 - `key.py` and `all.py` must remain software-agnostic. `key.py` contains constants only; `all.py` may contain generic composition helpers but not task logic or simulator-named settings.
 - Paths are `Path` objects rooted in `project/` when they are derived in `all.py`, whose file now lives one directory below the project root.
@@ -38,6 +60,15 @@
 - Local and HTCondor controls are simple strings, numbers, and booleans such as `EVALUATION_TIMEOUT_SEC`, `OPTIMIZE_SMOKE_TEST_ENABLED`, `LOCAL_EVALUATION_MAX_WORKERS`, `HTCONDOR_SUBMIT_EXE`, `HTCONDOR_HISTORY_EXE`, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`, `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER`, `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION`, `YADOF_RESOURCE_RETRY_DOUBLINGS`, `HTCONDOR_REQUEST_DISK_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`, `HTCONDOR_JOB_TIMEOUT_MULTIPLIER`, `HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION`, `HTCONDOR_ENVIRONMENT`, `HTCONDOR_LOAD_PROFILE`, `HTCONDOR_RUN_AS_OWNER`, and `HTCONDOR_REQUIREMENTS`.
 
 ## Non-Obvious Techniques
+- A supplied `WorkspaceContext` may carry explicit path choices. Those choices
+  override package path defaults, while an explicit value in its `config.py` and a
+  temporary override retain the normal later precedence.
+- Config source is compiled from current bytes in a fresh module object, so repeated
+  calls see edits without mutating `sys.path` or caching a config module.
+- Task path validation is split deliberately: `load_config` verifies the workspace
+  root, task directory, and required task filenames before batch work;
+  `yadof.job_template.validate_task` performs parameter/objective module validation
+  without importing or running `workflow.py`.
 - `project/config/key.py` is intentionally short. Its current surface includes evaluation mode/generation timeout, the optional smoke switch, generic HTCondor resources, the auto/fixed per-job timeout baseline, and population size.
 - `project/config/all.py` is the generic discovery layer. Adding a new cross-module setting usually means adding it there first, then deciding whether it belongs in `key.py` or a `specific/<software>.py` module.
 - `evaluate_manager` copies the complete `project/config/` package into every prepared job folder, excluding caches, so submitted jobs retain generic and active software-specific context.
@@ -78,6 +109,11 @@
 - `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` is interpreted against completed surrogate training generations. The default `2` allows a model to trail real simulation by one or two generations, then forces a blocking catch-up before the next surrogate-assisted submission.
 
 ## Mutability Profile
+- `src/yadof/config.py` owns package defaults, validation, precedence, and the public
+  immutable loaded-config contract. `src/yadof/workspace.py` owns path layout. Both
+  are installed shared framework code.
+- Package-era users edit only workspace `config.py`; temporary API/CLI overrides are
+  intentionally non-persistent.
 - Users may tune `config/key.py` often during experiments and the active file under `config/specific/` when its simulator settings change.
 - `config/all.py` should change when the framework gains or renames a generic cross-module setting.
 - Add a new file under `config/specific/` for a new simulator's settings; do not add those names to `key.py` or `all.py`.

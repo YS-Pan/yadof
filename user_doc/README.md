@@ -12,6 +12,7 @@ from `dev_doc/`, which describes framework design and maintainer contracts.
 
 When collecting user-side context, read these files in full:
 
+- `package_foundation.md`
 - `optimization_workflow.md`
 - `config_and_run.md`
 
@@ -27,6 +28,12 @@ development, architecture changes, or maintainer reasoning, start from
 `dev_doc/README.md` instead.
 
 ## Core User Rules
+
+The installed package foundation currently supplies `yadof --help`, version,
+read-only documentation lookup, and Python APIs for explicit workspace paths,
+effective config, and isolated task queries. Workspace initialization and runtime
+CLI commands arrive in later package stages, so the source-tree workflow below
+remains current for optimization runs during this transition.
 
 The normal task path is:
 
@@ -49,6 +56,12 @@ Keep these boundaries:
 - Historical rawData may be reused when `calc_cost.py` or parameter ranges change, but the user must delete or ignore old history if old rawData no longer represents the new task.
 
 ## Document Roles
+
+### `package_foundation.md`
+
+Installation metadata, dependency extras, and the small set of commands currently
+available from an installed wheel, plus the explicit workspace/config/task-loading
+Python boundary available before runtime migration is complete.
 
 ### `optimization_workflow.md`
 

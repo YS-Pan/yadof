@@ -1,5 +1,10 @@
 # Package Step 2: Workspace, Config, And Task Loaders
 
+> Completed and archived on 2026-07-18. Explicit workspace paths, effective config
+> precedence/validation, source-fresh isolated task loading, installed job-template
+> framework support, tests, current documentation, and this phase's change record
+> are in place. Package step 3 is now the next manual handoff.
+
 ## Context
 
 - This is step 2 of 10 and depends on step 1 being completed and archived.

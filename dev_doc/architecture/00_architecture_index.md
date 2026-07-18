@@ -39,6 +39,30 @@ Cost and normalized historical variables are derived views, not durable source r
 - Allow controlled mid-campaign edits to parameter ranges, workflow files, simulator inputs, and `calc_cost.py`; users remain responsible for discarding old history when semantics drift too far.
 - Keep local execution usable without HTCondor while allowing the distributed backend to share the same job and recording contracts.
 
+## Current Package And Workspace Foundation
+
+The repository now has an installable distribution boundary without yet moving the
+runtime modules. The second package stage adds explicit workspace, configuration,
+and task-loading contracts:
+
+```text
+pyproject.toml
+  -> src/yadof/ (version + minimal CLI + read-only resources)
+  -> WorkspaceContext + package-default/workspace-override config
+  -> installed job-template framework support + isolated task-module loading
+  -> wheel/sdist
+
+workspace/ (explicit future writable task/runtime boundary)
+project/   (current optimization runtime; migrated in later ordered steps)
+```
+
+The installed `yadof` command currently provides help, version, and packaged
+documentation entry points. Public Python APIs can resolve a workspace, merge and
+validate its `config.py`, and load its submit-side task modules without package
+writes or cross-workspace import state. The CLI does not yet initialize or run a
+workspace, and the package does not alias `project.*` or claim that evaluation,
+optimization, persistence, or user-tool migration is complete.
+
 ## Documentation Center
 The documentation home is:
 
@@ -59,6 +83,7 @@ The user-facing documentation home is:
 ```text
 user_doc/
   README.md
+  package_foundation.md
   optimization_workflow.md
   workflow_typical_patterns.md
   calc_cost_typical_patterns.md
@@ -86,3 +111,8 @@ historical and `obsolete/` is archival; neither is read by default.
 `dev_doc` context gathering also starts with `user_doc/README.md` and follows its
 reading guide for user-facing task setup context. A `user_doc`-only pass does not
 read `dev_doc`.
+
+The repository copies neither documentation tree into `src/`. Wheel builds map the
+authoritative root `dev_doc/` and `user_doc/` trees into read-only `yadof` package
+resources, while sdists retain the same root source trees. Installed
+`yadof docs dev|user` reads their `README.md` entries through Python resource APIs.

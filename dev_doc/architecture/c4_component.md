@@ -1,5 +1,41 @@
 # C4 Component
 
+## Package And Workspace Foundation Components
+
+```mermaid
+flowchart LR
+    Metadata["pyproject.toml"] --> Console["yadof console script"]
+    Version["_version.py"] --> Public["yadof.__version__"]
+    Version --> Console
+    Console --> Resources["resources.py"]
+    RootDocs["root dev_doc + user_doc"] -->|build-time mapping| Resources
+    Templates["_resources/templates"] --> Resources
+    Workspace["workspace.py"] --> Config["config.py"]
+    Config --> TaskLoader["task_loader.py"]
+    Workspace --> JobTemplate["yadof/job_template"]
+    TaskLoader --> JobTemplate
+```
+
+- `pyproject.toml`: PEP 517 backend, distribution metadata, dependency layers,
+  package selection, resource mapping, and the `yadof` console entry point.
+- `_version.py`: single literal runtime/distribution version source.
+- `cli.py` and `__main__.py`: standard-library help, version, and non-GUI document
+  output with consistent process streams/status.
+- `resources.py`: `importlib.resources` lookup of installed read-only content plus a
+  checkout-only fallback to the same authoritative root docs.
+- `workspace.py`: immutable absolute paths for config, task inputs, jobs, recorded
+  data, surrogate checkpoints, logs, and tool output. Construction never creates
+  directories.
+- `config.py`: immutable package defaults, isolated workspace `config.py` execution,
+  unknown-name/type/mode/path validation, precedence tracking, and non-mutating
+  temporary overrides.
+- `task_loader.py`: per-load source compilation and temporary import resolution for
+  workspace-local absolute/relative imports without permanent `sys.path` or module
+  cache changes.
+- `yadof.job_template`: installed `Parameter`, normalization/materialization API,
+  rawData contract/views, generic cost helpers, and workspace-explicit task queries.
+  User-owned parameter/workflow/cost/adapters/assets remain in the workspace.
+
 ## Optimize Components
 
 ```mermaid

@@ -1,5 +1,11 @@
 # Config And Run
 
+> Package transition note: installed `yadof` now provides help, version,
+> documentation commands, and workspace/config/task-loading Python APIs. Runtime
+> consumers have not migrated, so the source-tree configuration and launch
+> instructions below remain current. See `package_foundation.md` for the installed
+> boundary and future workspace `config.py` precedence.
+
 `project/config/key.py` is the short, user-editable generic key config for a normal optimization campaign. `project/config/all.py` contains the full set of generic defaults grouped by area. Settings tied to one simulator live under `project/config/specific/`; the current HFSS task uses `project/config/specific/hfss.py`. Task physics, variables, objective names, rawData shape, and cost definitions still belong in `project/job_template/`.
 
 `project/config/all.py` imports `project/config/key.py`, so values in `key.py` override matching generic defaults. Advanced users can inspect or edit `all.py`, but most new runs should only need `key.py` plus the matching file under `specific/` when their workflow uses one.

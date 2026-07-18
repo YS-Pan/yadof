@@ -1,5 +1,9 @@
 # Package Step 1: Build And Resource Foundation
 
+> Completed and archived on 2026-07-18. The package foundation, artifact tests,
+> installed CLI/resource verification, current documentation, and change record are
+> in place; package step 2 is now the next manual handoff.
+
 ## Context
 
 - This is step 1 of 10 in the package/workspace conversion sequence split from

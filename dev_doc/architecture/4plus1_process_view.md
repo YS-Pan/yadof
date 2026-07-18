@@ -1,5 +1,57 @@
 # 4+1 Process View
 
+## Package Build And Document Lookup
+
+```mermaid
+sequenceDiagram
+    participant B as PEP 517 build frontend
+    participant H as Hatchling
+    participant S as src/yadof
+    participant D as root dev_doc + user_doc
+    participant W as installed wheel
+    participant C as yadof CLI
+
+    B->>H: build wheel and sdist from pyproject.toml
+    H->>S: package yadof CLI, version, and template resources
+    H->>D: map authoritative documentation into wheel package data
+    H-->>W: emit yadof distribution with console entry point
+    C->>W: read version or documentation through package resources
+    W-->>C: print content without package writes or GUI launch
+```
+
+The source-checkout resource fallback reads the same root documentation only for
+development. An installed wheel resolves embedded resources first and does not
+depend on the repository or its current directory.
+
+## Workspace, Config, And Task Loading
+
+```mermaid
+sequenceDiagram
+    participant A as Python caller
+    participant W as WorkspaceContext
+    participant C as config loader
+    participant T as isolated task loader
+    participant F as workspace files
+
+    A->>W: select explicit root or accept current-directory default
+    W-->>A: absolute config/task/runtime paths without creating them
+    A->>C: load_config(workspace, temporary overrides)
+    C->>F: execute config.py in a fresh namespace
+    C->>C: merge defaults < workspace < overrides and validate
+    C-->>A: immutable values, sources, and effective WorkspaceContext
+    A->>T: query parameters/objectives/cost with effective workspace
+    T->>F: compile current task source and local imports without pyc reuse
+    T-->>A: validated result
+    T->>T: restore module cache and leave sys.path unchanged
+```
+
+Config construction and loading are read-only. Relative path settings resolve from
+the selected workspace; temporary overrides affect only the returned effective
+config. Task modules use a per-load package namespace plus a temporary import finder
+for sibling absolute/relative imports. The finder and every workspace-owned
+`sys.modules` entry are removed after the query, so edits are visible on the next
+load and alternating workspaces cannot exchange task state.
+
 ## Local Evaluation Sequence
 
 ```mermaid

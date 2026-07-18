@@ -3,6 +3,11 @@
 `dev_doc/` stores the project documents that help an AI or human maintainer understand
 what the project is, how it is shaped, and why it changed over time.
 
+The repository root remains the authoritative editable source for `dev_doc/` and
+`user_doc/`. Package builds map both trees into read-only `yadof` wheel resources;
+installed `yadof docs dev|user` prints their entry documents without assuming a Git
+checkout or writable package directory.
+
 ## System Roles
 
 Only two roles interact with this codebase. Every tool and operational document
@@ -91,6 +96,8 @@ optimization.
 
 Read it and follow its instructions whenever collecting `dev_doc` context. Do not
 duplicate detailed user instructions here when they already belong under `user_doc/`.
+Its package-foundation document explains the commands currently available from an
+installed wheel while runtime modules remain in the source tree.
 
 ### `architecture/`
 

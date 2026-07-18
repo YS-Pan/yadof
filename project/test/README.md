@@ -4,6 +4,11 @@
 place pytest modules beside implementation code, including under
 `project/tools/specific/<software>/` or `project/com_lib/`.
 
+This remains the test home for both installed `src/yadof/` contracts and the
+temporarily unmigrated `project/` runtime. Workspace tests must create neutral
+temporary workspaces and must verify that no task/config/module state leaks between
+them.
+
 Tests here may cover either generic framework behavior or reusable behavior tied to
 a particular simulator, vendor, adapter, or software-specific tool. A
 software-specific test must remain independent of the active optimization task. It

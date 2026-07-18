@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from project.job_template.cost_misc import (
+from yadof.job_template.cost_misc import (
     FIRST,
     LAST,
     calculate_2d_curve_cost,

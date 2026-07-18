@@ -66,3 +66,31 @@
 3. Generation zero submits each normal Condor job with `allowed_execute_duration = smoke duration * HTCONDOR_JOB_TIMEOUT_MULTIPLIER`.
 4. Each following generation derives its limit from the preceding generation after the configured top-tail trim; timed-out records participate as infinity under the documented finite-fallback rule.
 5. When smoke is disabled, the user-entered memory, disk, and one-hour timeout baselines stand in for smoke measurements and receive their configured bootstrap multipliers.
+
+## Scenario 9: Build And Inspect The Package Foundation
+1. A developer installs the declared development build tools.
+2. A PEP 517 frontend builds wheel and sdist from `pyproject.toml`.
+3. The artifacts contain the `yadof` namespace, one version value, console entry
+   point, software-neutral template foundation, explicit workspace/config/task
+   loaders, stable job-template framework helpers, and authoritative documentation.
+4. Artifact inspection rejects the current task/runtime tree, simulator model files,
+   jobs, history, checkpoints, caches, and secrets.
+5. A clean virtual environment outside the repository installs the wheel without
+   repository `PYTHONPATH` and runs help, version, and both document commands.
+6. The same commands leave non-writable installed package files unchanged.
+7. In the same external environment, a workspace context resolves all writable
+   paths away from site-packages and can load config plus a local-importing task
+   module without changing the installed package or `sys.path`.
+
+## Scenario 10: Alternate Two Workspaces In One Process
+1. A caller builds or loads the effective config for workspace A.
+2. Package defaults are overridden by A's `config.py` and optional temporary values;
+   the file itself is not rewritten.
+3. Parameter and cost queries freshly compile A's task modules and local helpers,
+   then remove their temporary import state.
+4. The caller performs the same queries for workspace B, whose same-named helpers,
+   config, parameters, objectives, and paths remain independent.
+5. A task/config edit in A is visible on the next call even when its timestamp and
+   source size would otherwise permit stale bytecode reuse.
+6. Switching back to B returns B's unchanged values, and `sys.path` plus unrelated
+   pre-existing `sys.modules` entries are identical to their original state.

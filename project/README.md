@@ -1,7 +1,10 @@
-# yadof project v3
+# yadof Runtime Source
 
-`project/` contains the v3 modular optimization framework described by the
-current architecture views and project/module blueprints under `../dev_doc/`.
+`project/` contains the current modular optimization runtime described by the
+architecture views and project/module blueprints under `../dev_doc/`. The
+installable package and workspace/config/task-loading foundation lives under
+`../src/yadof/`; runtime modules remain here until their ordered package-migration
+stages are completed.
 
 The central contract is:
 ```text
@@ -87,6 +90,7 @@ print(state.checkpoint_path)
 
 ## Useful Docs
 
+- Installed package foundation: `../user_doc/package_foundation.md`
 - Documentation entry point: `../dev_doc/README.md`
 - Architecture views and current invariants: `../dev_doc/architecture/`
 - Project blueprint overview: `../dev_doc/blueprints/00_project.md`

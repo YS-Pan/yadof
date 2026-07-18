@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from project.job_template.rawdata_contract import (
+from yadof.job_template.rawdata_contract import (
     RAWDATA_SCHEMA_VERSION,
     RawDataContractError,
     RawDataView,

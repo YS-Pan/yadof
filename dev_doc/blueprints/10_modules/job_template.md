@@ -4,6 +4,7 @@
 - Own the task-specific definition of optimization variables, workflow execution, rawData shape, and rawData-to-cost calculation.
 - Allow each optimization campaign to replace task files without changing the framework core.
 - Keep expensive evaluation outputs as rawData only; cost is a dynamic interpretation of rawData under the current task definition.
+- Separate stable installed framework support from a workspace's mutable task files.
 
 ## Historical Lineage
 - HFSS workflow and adapter conventions descend from earlier huangzetao/fanyufei task templates, but active task files are intentionally replaceable.
@@ -11,6 +12,17 @@
 - Shorten-style synthetic problem/objective ideas remain useful as references for non-HFSS tasks and surrogate-friendly rawData shapes.
 
 ## Functionalities
+- `yadof.job_template` owns the installed `Parameter` class, normalization and
+  assigned-snapshot materialization, rawData contract/views, generic cost helpers,
+  and workspace-explicit parameter/objective/cost APIs.
+- A package-era workspace `job_template/` owns only
+  `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, active `*_com.py`
+  adapters, simulator/custom inputs, lookup tables, and other task assets. It does
+  not contain framework `api.py`, the parameter class, rawData contract, or generic
+  cost helpers.
+- `yadof.task_loader` fresh-loads submit-side task modules. It supports sibling
+  absolute imports and package-relative imports, even when two workspaces use the
+  same helper names, without a permanent `sys.path` entry or module-cache residue.
 - `api.py` exposes fresh parameter queries, isolated parameter-file loading,
   definition-only hash signatures, job-local parameter materialization, objective
   metadata, normalization helpers, job-file copying, rawData cost calculation, and
@@ -28,6 +40,13 @@
 - Adapter files present in `job_template` are copied into prepared jobs with the workflow and are task-owned implementation details.
 
 ## I/O Format
+- Every installed job-template query takes an explicit workspace/context first.
+  Parameter and objective metadata are immutable snapshots of current workspace
+  source; cost accepts rawData samples and derives rows through freshly loaded
+  `calc_cost.py`.
+- Workspace `parameters_constraints.py` imports `Parameter` from
+  `yadof.job_template`. A materialized job snapshot does the same and contains the
+  current definitions plus finite assigned raw/normalized values.
 - Parameter API returns fresh names, ranges, units, constraints, and variable count.
 - Job materialization accepts one normalized row and returns the raw values written
   into the same job-local `parameters_constraints.py` snapshot.
@@ -40,6 +59,12 @@
 - The task defines the objective count, names, and numeric scale through `calc_cost.py`; framework code must discover them through `job_template.api` rather than hard-coding them.
 
 ## Non-Obvious Techniques
+- The isolated task loader uses a unique ephemeral package for relative imports and
+  a temporary meta-path finder for local absolute imports. It compiles source bytes
+  directly, removes all workspace-owned entries from `sys.modules`, restores
+  collisions, and never edits `sys.path`.
+- Task validation imports parameters and cost policy but only checks that
+  `workflow.py` exists; it must not launch an expensive workflow as a side effect.
 - `workflow.py` owns `variables -> rawData`; `calc_cost.py` owns `rawData -> cost`. Do not let workflow write `cost.json`.
 - A simulator workflow must consume the assigned job-local
   `parameters_constraints.py` snapshot directly. It must not reconstruct individual
@@ -62,6 +87,8 @@
 - Task files are intentionally replaceable by user or AI-generated code before a new campaign.
 
 ## Mutability Profile
+- `src/yadof/job_template/` and `src/yadof/task_loader.py` are stable installed
+  framework code. Workspace task files are the package-era highly mutable boundary.
 - `parameters_constraints.py`, `workflow.py`, `calc_cost.py`, active adapter files in `job_template`, and simulator model files are the most mutable source files in the project.
 - `parameters_constraints_class.py`, `api.py`, and `rawdata_contract.py` define shared contracts and should be more stable.
 - Real simulator adapters can be added later, but the no-cost-in-workflow rule should remain stable.

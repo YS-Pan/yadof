@@ -1,6 +1,19 @@
 # 4+1 Logical View
 
 ## Core Concepts
+- Package foundation: the installable `yadof` distribution metadata, version,
+  minimal console interface, and read-only documentation/template resources under
+  `src/yadof/`. It is distinct from the current `project/` runtime and from a future
+  writable task workspace.
+- Workspace context: one immutable set of absolute paths rooted at the explicitly
+  selected writable task directory. The current directory is only the default root;
+  package `__file__` never selects a user-data path.
+- Effective config: immutable package defaults merged with uppercase values from
+  workspace `config.py` and optional in-memory overrides, together with the source
+  of every final value.
+- Task module snapshot: one freshly compiled `parameters_constraints.py`,
+  `calc_cost.py`, or other requested submit-side module plus its local imports,
+  isolated from all other workspaces and removed from global import caches after use.
 - Optimization variable: normalized in `optimize`, raw/unnormalized in `recorded_data`.
 - rawData: one or more `.npz` files produced by a workflow.
 - Cost: dynamic objective value calculated from rawData by current `job_template/calc_cost.py`. Objective names, count, physical meaning, and numeric scale are task-specific.
@@ -11,6 +24,9 @@
 - Checkpoint: recoverable surrogate state. Surrogate checkpoints include a JSON summary plus conditional-INR member artifacts; optimizer generation metadata is recorded under `recorded_data/optMeta/` and is not treated as a checkpoint.
 
 ## Logical Modules
+- `yadof` package foundation: repository-independent help/version/document lookup;
+  explicit workspace/config/task-loading APIs; and installed parameter, rawData,
+  and cost-helper contracts. It does not yet expose optimization runtime modules.
 - `optimize`: uses GA for single-objective runs and NSGA-III reference-direction survival for multi-objective candidate generation, real evaluations, and optional surrogate-predicted candidate screening.
 - `evaluate_manager`: turns candidate rows into job execution and records results.
 - `job_template`: defines the current task and interprets rawData.
@@ -18,6 +34,15 @@
 - `surrogate`: trains a conditional INR deep ensemble over rawData slots, predicts rawData, and converts it to cost through the same cost path.
 
 ## Boundary Rules
+- New installed-package code uses `yadof.*` or package-relative imports and does not
+  provide a `project.*` alias. Until migrated, runtime code continues to use the
+  current source contract under `project/`.
+- Every packaged API that reads task or runtime state receives a workspace/context
+  explicitly. Config and task loading cannot fall back to a package-relative or
+  current `project/` path.
+- Workspace task loading never permanently changes `sys.path` and never reuses a
+  local module cache across calls. Package defaults are immutable, and temporary
+  overrides never rewrite workspace `config.py`.
 - Internal files may call another core module only through that module's `api.py`.
 - Internal files should not call their own `api.py` just to reach another module.
 - `project.config.all` is the generic runtime shared-settings dependency; `project.config.key` is the short generic override file, and simulator settings live under `project.config.specific`.
@@ -43,3 +68,6 @@
 - A Condor hold with code 46 or 47 is a timeout result. The submit side records it and removes the held job so the timed-out individual is not retried.
 - Condor submit files carry one concrete memory/disk request and no native resource-retry ladder. Yadof alone changes resource requests: generation calibration selects the initial request, while `resource_retries.py` handles bounded per-individual memory/disk doublings after resource holds.
 - Current HFSS cost shaping follows the old huangzetao/fanyufei tanh-style soft objective mapping: goal-like values approach 0 and worst-threshold values approach 1.
+- The installed `Parameter`, rawData contract, and cost helpers are framework code;
+  workspace `job_template/` owns only task definitions, workflow, cost policy,
+  active adapters, and arbitrary simulator/custom assets.

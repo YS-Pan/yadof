@@ -3,6 +3,11 @@
 ## Scope
 `yadof` is a local-first optimization framework for expensive simulation workflows. It coordinates optimization, job execution, rawData persistence, surrogate training, and optional user tools.
 
+The current distribution transition has an installable `yadof` foundation for
+version/help/document resources plus explicit workspace, effective-config, and
+isolated task-loading APIs. The optimization runtime remains under `project/` for
+later staged migration.
+
 ## Context Diagram
 
 ```mermaid
@@ -27,6 +32,12 @@ flowchart LR
 - Filesystem: the durable persistence layer for source files, job folders, individual metadata, optimization metadata, archived rawData, and surrogate checkpoints.
 
 ## System Responsibilities
+- Publish one `yadof` distribution/command/import name with a single version source
+  and read-only packaged documentation/template resources.
+- Resolve one selected writable workspace into explicit absolute config, task,
+  jobs, record, checkpoint, log, and tool-output paths.
+- Merge and validate package defaults, workspace config, and temporary overrides;
+  freshly load task modules without cross-workspace import contamination.
 - Generate candidate populations in normalized variable space.
 - Convert normalized candidates into task-specific raw variables.
 - Run a workflow that produces rawData only.
