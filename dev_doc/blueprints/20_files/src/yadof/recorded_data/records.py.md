@@ -1,4 +1,4 @@
-# File blueprint: src/yadof/recorded_data/records.py
+﻿# File blueprint: src/yadof/recorded_data/records.py
 
 ## Intent
 - Persist real individual records and compact optimization-level metadata.

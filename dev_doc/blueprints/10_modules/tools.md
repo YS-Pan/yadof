@@ -1,55 +1,8 @@
 # Module blueprint: tools
 
-## Intent
-- Provide optional, user-launched utilities for inspecting project data and preparing
-  task inputs.
-- Separate generic utilities from tools tied to one simulator or vendor.
-- Keep all tool behavior outside the core optimization dependency graph.
-- Surface recorded-data history in ways that help long campaigns be explained and debugged.
-- Exclude environment-installation and HTCondor-pool configuration; those are
-  administrator responsibilities and live under `admin_tool/`.
-
-## Historical Lineage
-- Cost/time viewers and maintenance tools descend from the fanyufei optional tools lineage.
-- HFSS parameter extraction keeps ideas from both fanyufei and huangzetao tooling while writing the current `Parameter` format.
-- Shorten-style interactive result inspection remains a useful idea, but current tools read through current APIs whenever possible.
-
-## Functionalities
-- `viewCost.py` reads `recorded_data.api.get_historical_results()`, dynamically calculates current costs, prints a Pareto-oriented summary, and optionally saves a PNG plot.
-- `run_viewcost.bat` launches `viewCost.py` from the tools directory and activates the `yadof` conda environment through the caller's Conda/PATH setup.
-- Cost plots mark objective series, combined-cost trend, Pareto points, optimization-start metadata, and job-static-hash changes. Legend entries for objective and combined-cost series use the same hollow marker style as the visible best Pareto points.
-- `viewTime.py` reads workflow-owned top-level `started_at`/`ended_at` fields from recorded individual rows when available, with legacy nested metadata only as a fallback. It uses the lightweight recorded-data manifest reader so importing timing summaries does not load NumPy-dependent cost code. When the invoking interpreter lacks plotting dependencies, it may re-run through the existing `HTCONDOR_PYTHON_EXE` environment interpreter.
-- `specific/hfss/get_para_and_range.py` reads optimization-enabled variables through PyAEDT and regenerates `job_template/parameters_constraints.py` in the current `Parameter` format.
-- `specific/hfss/get_para_and_range_direct.py` scans `job_template` when exactly one
-  `.aedt` file exists, parses AEDT optimization definitions directly (including
-  discrete ranges and files containing embedded non-UTF-8 bytes), and falls back to
-  PyAEDT when needed. Explicit `--project` and `--design` arguments override
-  autodetection.
-- Future tools may generate parameter files, inspect simulator templates, back up records, or visualize job timing.
-
-## I/O Format
-- Tool inputs come through public project APIs or user-provided command-line arguments.
-- Generic tools live directly under `project/tools/`; tools tied to external software live under `project/tools/specific/<software>/` and use names that do not repeat the software directory prefix.
-- Tool outputs may include console summaries, PNG plots under `project/tools/`, generated helper files, or external backups.
-- Tools may be flexible and inspect internal files when useful, but core runtime must not call tools.
-- Administrator-only scripts must not be added here. Put them under `admin_tool/` with
-  their operational documentation.
-
-## Non-Obvious Techniques
-- `viewCost.py` intentionally reads costs through `recorded_data` instead of legacy `para_cost.jsonl` files.
-- Tool runner batch files should not assume the caller's working directory or a machine-specific install path; use the script directory plus PATH, standard install discovery, explicit user arguments, or existing environment-derived locations. Tools must not require users to create new system environment variables as a prerequisite for running the project.
-- Direct source-file launches bootstrap the `project` package from its package directory without inserting the repository root into `sys.path`.
-- Static-hash changes are plotted from job metadata so task definition changes are visible on cost timelines.
-- `viewCost.py` scales dense scatter points by lowering marker opacity down to a smaller floor for very large histories, and scales the right combined-cost axis so the observed combined-cost maximum aligns vertically with individual cost `1.0` on the left axis.
-- Optimization and generation boundaries can now come directly from individual `optimization_index` and `generation_index` fields, with `optMeta` joins still useful for run-level diagnostics.
-- The Pareto table is rendered in ASCII-safe text to keep terminal output robust.
-- HFSS/PyAEDT parameter extraction is environment-sensitive. Design names are task-specific; passing an old or wrong design name can make PyAEDT select or create the wrong design context and return no optimization variables. If the project has exactly one design, prefer omitting `--design`; otherwise pass the active design explicitly.
-- AEDT startup also depends on the interactive Windows user profile and writable Ansys/PyAEDT folders. A VS Code click-run under the normal desktop user may succeed where a sandboxed or non-graphical command times out while starting gRPC or touching `Documents/Ansoft`. For Codex-run smoke checks, use the correct design name, allow a long timeout, and run outside the sandbox when AEDT needs the real user profile.
-- `specific/hfss/get_para_and_range.py` archives the old `parameters_constraints.py` only after it has found variables to write, so a failed extraction should leave the current parameter file intact.
-- Reusable software-specific tool tests live under `project/test/`, not beside these tools. They use synthetic inputs or mocks and remain independent of the active optimization task and installed simulator software.
-
-## Mutability Profile
-- Tools can change quickly for user convenience.
-- A tool must move under `specific/<software>/` as soon as its behavior or dependency is tied to that software; generic tools must not import specific tools.
-- Tool changes should not force changes to `optimize`, `evaluate_manager`, `job_template`, `recorded_data`, or `surrogate`.
-- If a tool depends on a public API shape, add or update tests before changing that API.
+`yadof.tools` is optional, user-launched, and workspace-explicit. Cost/time views
+read public recorded/task APIs and write relative outputs below tool output. History
+clear requires confirmation and validates exact workspace-owned targets. Task tools
+list/copy packaged adapters and extract HFSS parameters with backup and confirmation.
+Core optimization/evaluation never imports tools. Pool/system administration stays
+outside the package in `admin_tool/`.

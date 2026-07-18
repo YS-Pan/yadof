@@ -22,7 +22,7 @@ reserved and job preparation rejects a collision instead of overwriting it.
 
 Current packaged local jobs consume the returned `rawData/` directory directly and
 do not require `rawData_outputs.zip`. The helper can still create that archive for
-the transitional source distributed path; package step 8 defines the final
+the packaged distributed path; worker bootstrap defines the
 distributed transfer rule.
 
 ## Minimal Skeleton
@@ -133,7 +133,7 @@ records variables separately.
 ## Adapter Workflow Pattern
 
 If `workflow.py` calls an external simulator or custom evaluator, copy the needed
-`*_com.py` file from `project/com_lib/` into `project/job_template/`, then import it
+`*_com.py` file with `yadof task copy-adapter` into the workspace `job_template/`, then import it
 by same-directory name.
 
 Read `user_doc/com_lib/README.md` first, then read the document for the specific

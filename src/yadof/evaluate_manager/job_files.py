@@ -23,7 +23,7 @@ from .types import JobSpec
 
 RAW_DATA_DIR_NAME = "rawData"
 WORKER_CONFIG_FILE_NAME = "yadof_worker_config.json"
-PACKAGE_WORKER_FILES = ("worker_misc.py",)
+PACKAGE_WORKER_FILES = ("worker_misc.py", "sitecustomize.py")
 RESERVED_WORKER_FILE_NAMES = frozenset(
     (*PACKAGE_WORKER_FILES, WORKER_CONFIG_FILE_NAME)
 )
@@ -206,6 +206,16 @@ def effective_worker_config_summary(
         "EVALUATION_TIMEOUT_SEC": timeout_sec,
         "LOCAL_EVALUATION_MAX_WORKERS": int(config.LOCAL_EVALUATION_MAX_WORKERS),
     }
+    if str(mode).strip().lower() == "distributed":
+        runtime_values = {
+            **runtime_values,
+            **{
+                name: config[name]
+                for name in config.values
+                if name.startswith("HTCONDOR_")
+                or name == "YADOF_RESOURCE_RETRY_DOUBLINGS"
+            },
+        }
     for name, value in runtime_values.items():
         source = config.source_for(name)
         if name == "EVALUATION_MODE" and value != config[name]:

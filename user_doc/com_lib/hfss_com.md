@@ -2,11 +2,12 @@
 
 Use this adapter for HFSS/PyAEDT workflows.
 
-The source/reference copy is `project/com_lib/hfss_com.py`. The workflow uses the
-active copy at `project/job_template/hfss_com.py`, so copy the file into
-`job_template` before importing it from `workflow.py`. The two copies are currently
-synchronized; reusable adapter fixes validated in the active copy should be copied
-back to `com_lib` after excluding task-only assumptions.
+The source/reference copy is a packaged adapter resource. The workflow uses the
+active copy at `<workspace>/job_template/hfss_com.py`, so copy the file with
+`yadof task copy-adapter hfss_com.py --workspace PATH` into
+`job_template` before importing it from `workflow.py`. Reusable fixes validated in
+an active copy can be contributed back to the packaged resource after task-only
+assumptions are removed.
 
 ## Import Pattern
 
@@ -152,7 +153,7 @@ save_antPara(
 
 ## Metadata And File Names
 
-The active `project/job_template/hfss_com.py` supports `output_name=` and
+The active workspace `job_template/hfss_com.py` supports `output_name=` and
 `metadata=` for save functions. Use them so `calc_cost.py` can find rawData by stable
 names and task-specific tags.
 

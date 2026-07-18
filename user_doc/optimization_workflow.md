@@ -1,204 +1,75 @@
-# User Workflow For A New Optimization Task
+# Define an optimization task
 
-> Package transition note: `yadof init PATH` creates a generic package-era starter,
-> `yadof check --workspace PATH` diagnoses it without execution, and
-> `yadof smoke-test --workspace PATH --mode local` now runs one real local midpoint
-> individual with no timeout. Full optimization, history, and distributed execution
-> still use the source-tree procedure below until their later migration stages.
+All paths below are relative to a selected workspace.
 
-This is the normal user-side path for turning a simulation or custom evaluator into
-a yadof optimization run.
+## 1. Parameters
 
-## 1. Prepare Simulator Or Custom Input Files
+`job_template/parameters_constraints.py` returns yadof `Parameter` objects. Keep the
+canonical definitions unassigned; job preparation writes a fresh assigned snapshot
+for each normalized candidate. Parameter names, ranges, units, constraints, and
+count come from this task file, not framework config.
 
-Put task files that the workflow needs directly under `project/job_template/`.
-
-Examples:
-
-- HFSS project: `project/job_template/your_model.aedt`
-- Custom lookup tables or Python data files used by `workflow.py`
-- Any simulator-specific auxiliary files that must be copied into each job folder
-
-Do not put run outputs into `job_template/` by hand. Each prepared job gets its own
-job folder under `project/jobs/` or the configured `JOBS_DIR`.
-
-## 2. Prepare `parameters_constraints.py`
-
-`project/job_template/parameters_constraints.py` defines optimization variables and
-optional constraints.
-
-For HFSS tasks, variables can often be generated from the `.aedt` file:
+For AEDT projects, extraction is an explicit, backed-up workspace operation:
 
 ```powershell
-python project\tools\specific\hfss\get_para_and_range_direct.py --project project\job_template\your_model.aedt --design YourDesignName
+yadof task extract-parameters --workspace D:\work\study-a `
+  --project job_template\model.aedt --design MyDesign --yes
 ```
 
-If the `.aedt` project has exactly one design, `--design` can usually be omitted.
-If `project/job_template/` contains exactly one `.aedt` file, `--project` can also be
-omitted; otherwise specify it explicitly. The direct tool tolerates embedded
-non-UTF-8 bytes while reading AEDT text, tries to read optimization-enabled
-variables, and writes the current `Parameter(...)` format.
+## 2. Workflow and adapters
 
-Constraints still need to be written by the user or by an AI assistant. A constraint
-expression should be non-negative when it is satisfied. For example:
+`job_template/workflow.py` consumes assigned raw parameter values and writes flat
+`rawData/*.npz` plus `individual_metadata.json`. It must not write authoritative
+costs. Put every task-local helper, model, lookup table, and active adapter below
+`job_template/`; prepared jobs copy that payload recursively while package worker
+support is composed separately.
 
-```python
-CONSTRAINTS = (
-    "slot_l - slot_w - 30",
-)
+List and copy a packaged reference adapter without overwriting user edits:
+
+```powershell
+yadof task adapters
+yadof task copy-adapter hfss_com.py --workspace D:\work\study-a
 ```
 
-A typical variable file looks like:
+## 3. rawData and cost
 
-```python
-from __future__ import annotations
+Each flat `.npz` item carries schema-versioned metadata and numerical arrays. The
+framework records raw evidence and derives cost through the current
+`job_template/calc_cost.py`. Changing a cost policy therefore reinterprets history
+without rerunning simulation. Clear history when task semantics or rawData meaning
+become incompatible.
 
-try:
-    from .parameters_constraints_class import Parameter
-except ImportError:
-    from parameters_constraints_class import Parameter
-
-PARAMETERS = (
-    Parameter("parameter_a", ((10, 30),), unit="mm"),
-    Parameter("parameter_b", ((1, 3),), unit="mm"),
-    Parameter("mode_index", (1, 2, 3), unit=""),
-)
-
-CONSTRAINTS = ()
-
-
-def get_parameters() -> tuple[Parameter, ...]:
-    return tuple(PARAMETERS)
-```
-
-Continuous ranges use `(low, high)`. Discrete choices use plain values. Mixed ranges
-are also allowed because each range element maps to one segment of normalized `[0, 1]`.
-The canonical task file leaves `value` and `normalized_value` unassigned. Each
-prepared job receives its own `parameters_constraints.py` snapshot with both fields
-filled from that individual's normalized row and the ranges current at prepare time.
-
-## 3. Copy Needed `_com.py` Files Into `job_template`
-
-Choose adapter files from `project/com_lib/`, read the matching document under
-`user_doc/com_lib/`, then copy the needed files into `project/job_template/`.
-
-Examples:
+Real evaluation and the surrogate follow the same path:
 
 ```text
-project/com_lib/hfss_com.py  ->  project/job_template/hfss_com.py  ->  user_doc/com_lib/hfss_com.md
-project/com_lib/test_com.py  ->  project/job_template/test_com.py  ->  user_doc/com_lib/test_com.md
+normalized candidate
+  -> assigned task parameters
+  -> workflow rawData
+  -> current calc_cost
+  -> objective tuple
 ```
 
-`workflow.py` imports adapters from its own job folder, for example:
-
-```python
-from hfss_com import analyze, save_modal, solver_init
-```
-
-Do not import adapters from `project.com_lib` in `workflow.py`. Prepared jobs are
-meant to be self-contained.
-
-## 4. Write `workflow.py` And `calc_cost.py`
-
-`workflow.py` owns:
-
-- reading assigned values from the job-local `parameters_constraints.py`,
-- calling HFSS or custom code,
-- writing one or more `.npz` files directly under `rawData/`,
-- writing `individual_metadata.json`,
-- recording failure information when possible.
-
-`calc_cost.py` owns:
-
-- loading rawData,
-- extracting the values that matter for objectives,
-- returning a tuple of minimization costs,
-- adding a constraint cost when `CONSTRAINTS` is non-empty.
-
-The workflow must not calculate final cost. The job folder should not contain
-`cost.json`.
-
-## 5. Edit `project/config/key.py` And Any Active Specific Config
-
-`project/config/key.py` is the short generic key config for settings that are likely to change between optimization campaigns. `project/config/all.py` contains the full grouped generic defaults and imports matching overrides from `key.py`. Settings tied to external software live under `project/config/specific/`; the current HFSS task uses `project/config/specific/hfss.py`.
-
-Common key settings users edit:
-
-- `EVALUATION_MODE`: `"local"` for local subprocess runs, `"distributed"` for HTCondor.
-- `EVALUATION_TIMEOUT_SEC`: whole-generation wait budget in distributed mode.
-- `OPTIMIZE_SMOKE_TEST_ENABLED`: whether the normal launcher runs one real midpoint smoke individual before optimization. It defaults to `True`; the smoke job has no timeout.
-- `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, `HTCONDOR_REQUEST_DISK`: distributed job resource requests. CPU remains manual; memory and disk are bootstrap values for automatic calibration when Condor has no usable prior measurement.
-- `YADOF_RESOURCE_RETRY_DOUBLINGS`: maximum number of yadof-managed request doublings after an individual is held for memory or disk exhaustion. It defaults to `4` in `all.py`; memory and disk limits are counted independently.
-- `HTCONDOR_JOB_TIMEOUT_MODE`, `HTCONDOR_JOB_TIMEOUT_SEC`: per-individual Condor timeout policy. The defaults are `"auto"` and one hour; `"fixed"` always uses the configured hour.
-- `HTCONDOR_REQUEST_DISK_MULTIPLIER`: an extra disk safety factor (default `1.0`). Raise it, for example to `2.0`, when worker scratch space is plentiful; keep it at `1.0` for constrained disks or RAM disks.
-- HTCondor submit files run `workflow.py` directly as the transferred executable; do not configure Python itself as the submit executable.
-- `OPTIMIZE_POPULATION_SIZE`: number of real evaluations per generation.
-
-For the current HFSS adapter, edit `HFSS_CPUCORE_MULTIPLIER`, `HFSS_PARALLEL_TASKS`, and `HFSS_NON_GRAPHICAL` in `project/config/specific/hfss.py` when needed. The default core multiplier is `2`, so a manual Condor request of `3` CPUs gives HFSS `6` solver cores. Advanced generic settings such as automatic resource calibration, `JOBS_DIR`, local worker concurrency, NSGA-III controls, and surrogate controls are in `project/config/all.py`. Problem shape, variable names, and objective names come from `job_template`, not from config.
-## 6. Run A Smoke Test Before A Full Optimization
-
-Before a long run, test one individual.
-
-For a package-era workspace whose task files are still the unchanged generic starter:
+## 4. Validate and smoke
 
 ```powershell
-yadof smoke-test --workspace path\to\workspace --mode local
+yadof check --workspace D:\work\study-a
+yadof smoke-test --workspace D:\work\study-a
 ```
 
-After you edit any task file or add one or more adapters/assets, use the explicit
-real-task confirmation:
+An edited/external task requires `--real-task` for the standalone smoke command.
+This acknowledges that it may launch expensive software. Use `--mode distributed`
+to submit exactly one unlimited smoke job. Pool deployment and Windows slot-user
+configuration remain administrator responsibilities.
+
+## 5. Optimize and inspect
 
 ```powershell
-yadof smoke-test --workspace path\to\workspace --mode local --real-task
+yadof run --workspace D:\work\study-a --generations 10
+yadof run --workspace D:\work\study-a --start-generation 10 --generations 5
+yadof view cost --workspace D:\work\study-a -o costs.png
+yadof view time --workspace D:\work\study-a
 ```
 
-This command executes `workflow.py` and may launch external or expensive software.
-It always evaluates exactly one parameter-space midpoint with no timeout, creates a
-job only after the safety check passes, and reports failure when no finite cost is
-returned. Inspect the newest folder under the workspace's effective `JOBS_DIR`.
-
-For the transitional source-tree runtime only, the direct Python equivalent remains:
-
-```powershell
-@"
-from project.evaluate_manager.api import run_smoke_test
-print(run_smoke_test(mode="local"))
-"@ | python -
-```
-
-For the reusable source test suite, which may include synthetic HFSS parser/adapter
-contracts but must not start HFSS or encode the active optimization task:
-
-```powershell
-pytest -q
-```
-
-Run the configured optimization:
-
-```powershell
-.\start_optimization_aedtopt.cmd
-```
-
-With the default `OPTIMIZE_SMOKE_TEST_ENABLED = True`, this launcher first runs the same one-individual smoke test in the configured mode with no timeout and starts generation zero only after it succeeds. Set the key-config value to `False` to skip it. In that case, generation-zero auto memory, disk, and per-job timeout calibration treat the user-entered values as the smoke measurements before applying their bootstrap multipliers.
-
-For a direct Python launch, set environment variables and call the launcher:
-
-```powershell
-$env:YADOF_GENERATIONS = "50"
-$env:YADOF_START_GENERATION = "0"
-$env:YADOF_PROGRESS = "1"
-python -u start_optimization_from_config.py
-```
-
-## 7. Inspect And Adjust
-
-After a run starts, inspect generated job folders and recorded history when needed:
-
-- `project/jobs/<job_name>/individual_metadata.json`: workflow status and timing.
-- `project/jobs/<job_name>/rawData/*.npz`: job-local rawData outputs.
-- `project/recorded_data/indMeta.jsonl`: compact recorded individual metadata.
-- `project/recorded_data/rawData.npz`: archived rawData from completed and recorded jobs.
-
-If you change `calc_cost.py`, historical costs are recalculated from rawData. If you
-change the simulation file or workflow so old rawData is no longer comparable, remove
-or archive old recorded history before continuing.
+Individual prepare/run/timeout/record failures become diagnostic records and
+correct-width `inf` costs. `--fail-on-all-infinite` stops after the first generation
+with no finite objective.

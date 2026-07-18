@@ -63,7 +63,7 @@ include = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-p no:cacheprovider --basetemp=project/test/_pytest_tmp --ignore=project/test/_tmp_runtime --ignore=project/test/_contract_tmp --ignore=project/test/_pytest_tmp"
+addopts = "-p no:cacheprovider --basetemp=tests/_pytest_tmp --ignore=tests/_tmp_runtime --ignore=tests/_contract_tmp --ignore=tests/_pytest_tmp --ignore=tests/_build_deps --ignore=tests/_installed_env"
 norecursedirs = [
     ".*",
     "build",
@@ -76,6 +76,7 @@ norecursedirs = [
     "_pytest_tmp*",
     "_tmp_runtime",
     "_contract_tmp",
+    "_build_deps",
+    "_installed_env",
 ]
-pythonpath = ["src", "."]
-testpaths = ["project/test"]
+testpaths = ["tests"]

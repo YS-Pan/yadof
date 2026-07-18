@@ -1,4 +1,4 @@
-"""Workspace-explicit local evaluation API."""
+"""Workspace-explicit local and distributed evaluation API."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def evaluate_population(
     generation_index: int | None = None,
     after_jobs_submitted: Callable[[], object] | None = None,
 ) -> tuple[tuple[float, ...], ...]:
-    """Evaluate a population locally and return dynamic cost tuples in input order."""
+    """Evaluate a population and return dynamic cost tuples in input order."""
 
     overrides: dict[str, object] = {}
     if mode is not None:
@@ -48,11 +48,19 @@ def evaluate_population(
         overrides["LOCAL_EVALUATION_MAX_WORKERS"] = max(1, int(local_max_workers))
     config = load_config(workspace, overrides=overrides)
     selected_mode = str(config.EVALUATION_MODE).strip().lower()
-    if selected_mode != "local":
-        raise ValueError(
-            "installed yadof currently supports local evaluation only; "
-            "distributed worker execution is added in package step 8"
+    if selected_mode == "distributed":
+        return _dispatch_distributed(
+            config,
+            population,
+            timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
+            env=env,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+            after_jobs_submitted=after_jobs_submitted,
         )
+    if selected_mode != "local":
+        raise ValueError(f"unsupported evaluation mode: {selected_mode!r}")
     return _dispatch_local(
         config,
         population,
@@ -83,13 +91,21 @@ def run_smoke_test(
         workspace,
         overrides={"EVALUATION_MODE": str(mode).strip().lower()},
     )
-    if str(config.EVALUATION_MODE).strip().lower() != "local":
-        raise ValueError(
-            "installed yadof smoke-test currently supports --mode local only"
-        )
+    selected_mode = str(config.EVALUATION_MODE).strip().lower()
     if normalized_variables is None:
         normalized_variables = (0.5,) * get_variable_count(config.workspace)
     row = tuple(float(value) for value in normalized_variables)
+    if selected_mode == "distributed":
+        return _dispatch_distributed(
+            config,
+            (row,),
+            timeout_sec=None,
+            env=env,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=None,
+            after_jobs_submitted=None,
+        )
     return _dispatch_local(
         config,
         (row,),
@@ -210,6 +226,7 @@ def _evaluate_one_local(
     except Exception as exc:  # noqa: BLE001 - isolate one candidate.
         failure = _failed_result(
             stage="prepare",
+            engine="local",
             exc=exc,
             population_row=population_row,
             index=index,
@@ -234,6 +251,7 @@ def _evaluate_one_local(
     except Exception as exc:  # noqa: BLE001 - isolate one candidate.
         failure = _failed_result(
             stage="run",
+            engine="local",
             exc=exc,
             population_row=population_row,
             index=index,
@@ -258,6 +276,7 @@ def _evaluate_one_local(
     except Exception as exc:  # noqa: BLE001 - recording/cost failure is per individual.
         failure = _failed_result(
             stage="recorded_data",
+            engine="local",
             exc=exc,
             population_row=population_row,
             index=index,
@@ -271,6 +290,116 @@ def _evaluate_one_local(
         _best_effort_write_failure(failure)
         return index, None
     return index, tuple(float(value) for value in costs)
+
+
+def _dispatch_distributed(
+    config: LoadedConfig,
+    population: Iterable[Iterable[float]],
+    *,
+    timeout_sec: float | None,
+    env: Mapping[str, str] | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+    after_jobs_submitted: Callable[[], object] | None,
+) -> tuple[tuple[float, ...], ...]:
+    from .condor_runner import run_condor_jobs
+
+    validate_task_payload(config)
+    rows = tuple(_population_row(values) for values in population)
+    objective_width = get_objective_count(config.workspace)
+    costs: list[tuple[float, ...] | None] = [None] * len(rows)
+    jobs: list[JobSpec] = []
+    positions: list[int] = []
+
+    for index, row in enumerate(rows):
+        try:
+            job = prepare_job(
+                config.workspace,
+                row,
+                config=config,
+                mode="distributed",
+                timeout_sec=timeout_sec,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+                population_index=index,
+            )
+        except Exception as exc:  # noqa: BLE001 - isolate one candidate.
+            failure = _failed_result(
+                stage="prepare",
+                engine="htcondor",
+                exc=exc,
+                population_row=row,
+                index=index,
+                jobs_dir=config.workspace.jobs_dir,
+                job=None,
+                result=None,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+            )
+            _best_effort_record_failure(config.workspace, failure)
+            continue
+        jobs.append(job)
+        positions.append(index)
+
+    try:
+        results = run_condor_jobs(
+            config.workspace,
+            tuple(jobs),
+            config=config,
+            timeout_sec=timeout_sec,
+            env=env,
+            after_jobs_submitted=after_jobs_submitted,
+        )
+    except Exception as exc:  # noqa: BLE001 - preserve generation shape.
+        results = tuple(
+            _failed_result(
+                stage="run",
+                engine="htcondor",
+                exc=exc,
+                population_row=rows[position],
+                index=position,
+                jobs_dir=config.workspace.jobs_dir,
+                job=job,
+                result=None,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+            )
+            for position, job in zip(positions, jobs)
+        )
+
+    for position, result in zip(positions, results):
+        if result.status != "done":
+            _best_effort_record_failure(config.workspace, result)
+            continue
+        try:
+            row_costs = record_result(config.workspace, result)
+            if row_costs is None:
+                raise RuntimeError("completed recorded result returned no costs")
+        except Exception as exc:  # noqa: BLE001 - isolate recording failures.
+            failure = _failed_result(
+                stage="recorded_data",
+                engine="htcondor",
+                exc=exc,
+                population_row=rows[position],
+                index=position,
+                jobs_dir=config.workspace.jobs_dir,
+                job=jobs[positions.index(position)],
+                result=result,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+            )
+            _best_effort_write_failure(failure)
+            continue
+        costs[position] = tuple(float(value) for value in row_costs)
+
+    return tuple(
+        row if row is not None else _inf_costs(objective_width) for row in costs
+    )
 
 
 def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
@@ -303,6 +432,7 @@ def _best_effort_record_failure(
 def _failed_result(
     *,
     stage: str,
+    engine: str,
     exc: BaseException,
     population_row: tuple[Any, ...],
     index: int,
@@ -340,7 +470,7 @@ def _failed_result(
         {
             "job_name": job_name,
             "status": "error",
-            "engine": "local",
+            "engine": engine,
             "failure_stage": stage,
             "error_type": type(exc).__name__,
             "error_message": str(exc),

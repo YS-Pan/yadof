@@ -8,7 +8,7 @@
 - The current deployment uses yadof-managed fresh submissions because the available
   HTCondor installation does not accept the required native retry submit settings.
 - The temporary policy is deliberately isolated in
-  `project/evaluate_manager/resource_retries.py`, with minimal orchestration in
+  `src/yadof/evaluate_manager/resource_retries.py`, with minimal orchestration in
   `condor_runner.py`.
 
 ## Goal
@@ -22,7 +22,7 @@
 
 ## Guidance
 
-- Delete `project/evaluate_manager/resource_retries.py` and its focused tests.
+- Delete `src/yadof/evaluate_manager/resource_retries.py` and its focused tests.
 - Remove retry state, held-cluster removal, attempt-output cleanup, and fresh
   resubmission orchestration from `condor_runner.py`.
 - Replace `YADOF_RESOURCE_RETRY_DOUBLINGS` with the native submit-file policy. Build

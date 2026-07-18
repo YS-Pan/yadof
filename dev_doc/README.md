@@ -25,7 +25,7 @@ An **administrator** configures and maintains the environment in which yadof run
 This includes installing the package and its dependencies, and configuring or
 maintaining the HTCondor cluster's software and hardware. Administrator-only
 documents and tools live in `../admin_tool/`; they must not be placed in
-`project/tools/`.
+the installed yadof CLI/tools.
 
 The documents in this folder are not all read with the same priority. Use the rules
 below before changing code or documentation. The canonical entry point is
@@ -189,7 +189,7 @@ Recommended structure:
 Keep blueprint files module-level until the project stabilizes. Avoid file-level blueprint
 documents unless a single file has a complex contract that cannot be captured by the
 module blueprint. File-level blueprints under `blueprints/20_files/` mirror the
-source path as folders, such as `blueprints/20_files/project/surrogate/runtime.py.md`;
+source path as folders, such as `blueprints/20_files/src/yadof/surrogate/runtime.py.md`;
 do not encode a path into one filename such as `project_surrogate_runtime.py.md`.
 
 Historical reference ancestry belongs in the relevant project or module blueprint

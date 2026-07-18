@@ -110,9 +110,45 @@ def read_template_manifest(name: str) -> dict[str, object]:
     return decoded
 
 
+def adapter_names() -> tuple[str, ...]:
+    """List optional example adapters bundled as read-only resources."""
+
+    root = _embedded_root().joinpath("adapters")
+    if not root.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            child.name
+            for child in root.iterdir()
+            if child.is_file()
+            and child.name.endswith("_com.py")
+            and not child.name.startswith(".")
+        )
+    )
+
+
+def adapter_resource(name: str) -> Traversable:
+    """Return one exact bundled adapter without extracting or writing it."""
+
+    selected = str(name).strip()
+    if selected and not selected.endswith(".py"):
+        selected += ".py"
+    if selected not in adapter_names():
+        choices = ", ".join(adapter_names()) or "none"
+        raise ResourceNotFoundError(
+            f"unknown adapter {name!r}; available adapters: {choices}"
+        )
+    resource = _embedded_root().joinpath("adapters").joinpath(selected)
+    if not resource.is_file():
+        raise ResourceNotFoundError(f"adapter resource is missing: {selected}")
+    return resource
+
+
 __all__ = [
     "DocumentationKind",
     "ResourceNotFoundError",
+    "adapter_names",
+    "adapter_resource",
     "documentation_entry",
     "read_documentation_entry",
     "read_template_manifest",

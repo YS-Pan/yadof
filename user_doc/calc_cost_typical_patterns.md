@@ -30,7 +30,7 @@ def rawdata_importance_weights(sample_rawdata, *, floor=0.25, boost=2.0):
 ```
 
 Installed workspace calls load these functions through `yadof.job_template`; the
-transitional source runtime uses the matching `project/job_template/api.py` gateway.
+installed runtime uses the matching `yadof.job_template` gateway.
 
 ## Typical Structure
 

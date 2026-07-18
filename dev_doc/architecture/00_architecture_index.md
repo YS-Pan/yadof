@@ -1,125 +1,13 @@
-# Architecture Index
+# Architecture index
 
-This folder describes the current `yadof` architecture from multiple viewpoints. It is
-part of the documentation home under `dev_doc/`.
+The current system is an installed `yadof` package plus one or more explicit
+writable workspaces. There is no repository-local runtime namespace.
 
-## Reading Policy
-- Read every file in this folder in full when collecting project context.
-- Use `dev_doc/README.md` for the broader documentation reading and writing guide.
-- Do not read `dev_doc/change_records/` by default; use it only when historical
-  rationale is needed.
-
-## Files
-- `c4_context.md`: system context, actors, external systems, and project boundary.
-- `c4_container.md`: major runtime containers/modules and their data flow.
-- `c4_component.md`: internal components of the five core modules.
-- `4plus1_logical_view.md`: domain concepts, module responsibilities, and API boundaries.
-- `4plus1_process_view.md`: runtime flows for local evaluation, surrogate assistance, and failure handling.
-- `4plus1_development_view.md`: source organization, dependency rules, and change boundaries.
-- `4plus1_physical_view.md`: local workstation deployment now and distributed/HTCondor deployment later.
-- `4plus1_scenarios.md`: use cases that connect the other views.
-
-## Architectural Center
-The most important invariant is:
-
-```text
-normalized variables
-  -> workflow/rawData
-  -> job_template/calc_cost.py
-  -> cost
-```
-
-Cost and normalized historical variables are derived views, not durable source records.
-
-## Core Goals
-- Keep the framework simulator-agnostic: HFSS, other Ansys tools, custom Python, and multi-tool workflows are task choices rather than core assumptions.
-- Support complex expensive evaluations that may run several simulations, combine tools, or perform task-local sub-optimization before producing rawData.
-- Resume long campaigns from completed recorded rawData, recalculating normalized variables and costs with the current task definition.
-- Isolate prepare, workflow, timeout, submit, and recording failures so one bad individual does not stop the generation.
-- Allow controlled mid-campaign edits to parameter ranges, workflow files, simulator inputs, and `calc_cost.py`; users remain responsible for discarding old history when semantics drift too far.
-- Keep local execution usable without HTCondor while allowing the distributed backend to share the same job and recording contracts.
-
-## Current Package, Workspace, And Local Evaluation
-
-The repository now has an installable distribution boundary with workspace-local
-job preparation, local evaluation, and recorded evidence. The fifth package stage
-archives raw variables/rawData/metadata below the effective workspace path and
-derives current costs without package writes:
-
-```text
-pyproject.toml
-  -> src/yadof/ (version + CLI + read-only resources)
-  -> WorkspaceContext + package-default/workspace-override config
-  -> installed job-template framework support + isolated task-module loading
-  -> versioned generic template + workspace marker + init/check
-  -> packaged job preparation + local subprocess evaluation + standalone smoke
-  -> workspace-local recorded-data archive + dynamic history queries
-  -> wheel/sdist
-
-workspace/ (task inputs, prepared local jobs, and recorded history)
-project/   (optimization/surrogate/tools/distributed transition runtime)
-```
-
-The installed `yadof` command provides help, version, packaged documentation,
-`init`, `check`, and `smoke-test --mode local`. Init validates a neutral starter in a sibling temporary
-directory and publishes without overwriting user content; check validates marker,
-config/task contracts, workflow syntax, static rawData, and backend prerequisites
-without running the workflow or repairing the environment. Smoke executes exactly
-one midpoint individual without a timeout; edited/external tasks require
-`--real-task`, and every attempted individual is recorded best effort. The package
-does not alias `project.*`. Optimization, surrogate, user-tool, and
-distributed-worker migration remain later stages.
-
-## Documentation Center
-The documentation home is:
-
-```text
-dev_doc/
-  README.md
-  terminology.md
-  architecture/
-  blueprints/
-  toDo/
-    auto/
-  change_records/
-  obsolete/
-```
-
-The user-facing documentation home is:
-
-```text
-user_doc/
-  README.md
-  package_foundation.md
-  optimization_workflow.md
-  workflow_typical_patterns.md
-  calc_cost_typical_patterns.md
-  com_lib/
-    README.md
-    hfss_com.md
-    test_com.md
-  config_and_run.md
-```
-
-`architecture/` and `terminology.md` are full-read context sources. `toDo/` is also
-read recursively in full so pending future goals can shape current implementation
-choices. Files directly under `toDo/` are manual-trigger items and execute only when
-the prompt explicitly names a file whose instructions should be executed. Files
-under `toDo/auto/` are automatic-trigger, low-priority opportunistic cleanup: they
-may run only when current work naturally exposes a matching occurrence, and they
-use one of two obsolete policies from `dev_doc/README.md`: automatic, where expiry
-by time or satisfaction of an explicitly configured user condition is sufficient,
-or manual, which disables automatic obsoletion. No extra user condition exists by
-default.
-`blueprints/` is listed first and read selectively, with `blueprints/00_project.md`
-serving as the generative project-level contract and module blueprints carrying
-historical reference ancestry when it is still useful. `change_records/` is
-historical and `obsolete/` is archival; neither is read by default.
-`dev_doc` context gathering also starts with `user_doc/README.md` and follows its
-reading guide for user-facing task setup context. A `user_doc`-only pass does not
-read `dev_doc`.
-
-The repository copies neither documentation tree into `src/`. Wheel builds map the
-authoritative root `dev_doc/` and `user_doc/` trees into read-only `yadof` package
-resources, while sdists retain the same root source trees. Installed
-`yadof docs dev|user` reads their `README.md` entries through Python resource APIs.
+- [c4_context.md](c4_context.md): users and external systems
+- [c4_container.md](c4_container.md): package/workspace/execution/persistence split
+- [c4_component.md](c4_component.md): package module responsibilities
+- [4plus1_logical_view.md](4plus1_logical_view.md)
+- [4plus1_process_view.md](4plus1_process_view.md)
+- [4plus1_development_view.md](4plus1_development_view.md)
+- [4plus1_physical_view.md](4plus1_physical_view.md)
+- [4plus1_scenarios.md](4plus1_scenarios.md)

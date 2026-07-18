@@ -48,22 +48,22 @@
   report the finding in the current response with its file path and a concise
   explanation.
 - These task files may contain content tied to a particular task or software:
-  - `project/job_template/calc_cost.py`
-  - `project/job_template/hfss_com.py`
-  - `project/job_template/workflow.py`
-  - `project/job_template/parameters_constraints.py`
+  - workspace `job_template/calc_cost.py`
+  - workspace `job_template/hfss_com.py`
+  - workspace `job_template/workflow.py`
+  - workspace `job_template/parameters_constraints.py`
 - These directories are also exempt because their explicit responsibility is to
   hold reusable, software-specific settings, tools, or adapter references:
-  - `project/config/specific/`
-  - `project/tools/specific/`
-  - `project/com_lib/`
+  - workspace task/environment settings
+  - `yadof.tools` software-specific modules
+  - packaged adapter resources
 - Task- or software-specific content in any other code path harms Yadof's
   generality and must be reported. This includes concrete task filenames,
   assumptions tied to one simulator or vendor, and logic that assumes only one
   task-local `*_com.py` adapter.
 - Do not report one of the permitted files or anything below the three exempt
   directories merely because it contains task- or software-specific content; that
-  specificity belongs there. The exemption does not extend to `project/test/` or
+  specificity belongs there. The exemption does not extend to `tests/` or
   to generic config/tools modules outside the `specific/` subdirectories.
 
 ## Completion Rule
