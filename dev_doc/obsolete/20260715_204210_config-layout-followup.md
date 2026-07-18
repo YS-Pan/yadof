@@ -1,5 +1,8 @@
 # Follow Up The Config Package Layout
 
+> Automatically archived on 2026-07-18 because the configured two-day lifetime
+> expired strictly after 2026-07-17 20:42:10 local time.
+
 ## Context
 - The 2026-07-15 config-boundary change moved campaign settings to
   `project/config/key.py`, `project/config/all.py`, and

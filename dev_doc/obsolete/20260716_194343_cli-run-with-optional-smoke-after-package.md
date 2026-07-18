@@ -1,5 +1,9 @@
 # Add The Optimization Run CLI After Package Conversion
 
+> Archived on 2026-07-18 after its requirements were incorporated into ordered
+> step 9, `20260718_103608_package-run-cli-and-optional-smoke.md`. That step runs
+> after the package runtime migrations and before the final packaging audit.
+
 ## Context
 
 - Execute this manual toDo only after `dev_doc/toDo/20260703 package.md` has been completed and archived.
