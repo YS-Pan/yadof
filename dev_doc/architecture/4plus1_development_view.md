@@ -12,6 +12,12 @@ tests build the distributions, inspect members, install a wheel outside the
 repository, make package files read-only, and exercise the CLI and two-workspace
 contracts.
 
+The canonical local environment is the repository sibling `../.venv`, created from
+the system Python. Development acceptance never uses an editable install or
+repository `src/` on `PYTHONPATH`: after each change, build a wheel, force-reinstall
+that wheel without dependency churn, verify the import path is below the venv's
+site-packages, and only then run pytest with the venv interpreter.
+
 Installed command routing lives under `src/yadof/cli/`; workspace context,
 initialization, marker, and checking live under `src/yadof/workspace/`. Packaged
 documentation commands list, show, or bundle audience-relative resources without

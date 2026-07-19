@@ -67,6 +67,49 @@ for project history.
 document explicitly points there, when investigating old plans, or when checking a
 completed toDo handoff.
 
+## Installed Development Environment
+
+The canonical local development/runtime environment for this checkout is the
+repository sibling `../.venv`. It is based on the machine's system Python but owns
+its installed packages. Use its interpreter by explicit path so tests, commands,
+and wheel replacement cannot silently select another Python environment.
+
+Create and populate it once from the repository root:
+
+```powershell
+& "C:\Program Files\Python313\python.exe" -m venv "..\.venv"
+& "..\.venv\Scripts\python.exe" -m pip install ".[dev]"
+```
+
+Do not use an editable install for acceptance testing and do not add `src/` to
+`PYTHONPATH`. Tests must import the regular yadof installation in `.venv`, including
+its wheel documentation, templates, adapters, and console entry point.
+
+After changing source or documentation, build first, then replace the installed
+yadof with the newest successful wheel before testing:
+
+```powershell
+& "..\.venv\Scripts\python.exe" -m build --wheel
+$wheel = Get-ChildItem ".\dist\yadof-*.whl" |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+& "..\.venv\Scripts\python.exe" -m pip install `
+  --force-reinstall --no-deps $wheel.FullName
+```
+
+Verify the import origin and run tests with repository-source injection disabled:
+
+```powershell
+Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+& "..\.venv\Scripts\python.exe" -c `
+  "import pathlib, yadof; print(yadof.__version__); print(pathlib.Path(yadof.__file__).resolve())"
+& "..\.venv\Scripts\python.exe" -m pytest -q
+```
+
+The reported package path must be below `../.venv/Lib/site-packages/yadof`, never
+below repository `src/`. Build/install failure stops the workflow; do not test the
+previous installed copy as though it contained the current edits.
+
 ## Encoding And Mojibake
 
 Markdown files in `dev_doc/` and `admin_tool/` should be treated as UTF-8 text. Some
