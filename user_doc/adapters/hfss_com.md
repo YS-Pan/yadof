@@ -157,5 +157,5 @@ The active workspace `job_template/hfss_com.py` supports `output_name=` and
 `metadata=` for save functions. Use them so `calc_cost.py` can find rawData by stable
 names and task-specific tags.
 
-If you replace the active adapter by copying a fresh file from `com_lib`, make sure
+If you replace the active adapter by copying a fresh packaged resource, make sure
 the copied adapter still supports the arguments your workflow uses.

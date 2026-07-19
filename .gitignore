@@ -1,12 +1,3 @@
-# Workspace runtime data
-/workspaces/*/jobs/
-/workspaces/*/recorded_data/
-/workspaces/*/.yadof/surrogate/
-/workspaces/*/.yadof/logs/
-/workspaces/*/.yadof/tool_output/*
-!/workspaces/*/.yadof/tool_output/parameter_history/
-!/workspaces/*/.yadof/tool_output/parameter_history/*.py
-
 # Disposable task-specific work
 /temp/*
 !/temp/.gitkeep

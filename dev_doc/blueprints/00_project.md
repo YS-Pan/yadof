@@ -19,6 +19,8 @@ failure-shape contracts.
   tools, embedded docs.
 - Workspace: `config.py`, task modules/assets, jobs, records, checkpoints, logs,
   tool output.
+- Examples: Git-tracked reference workspaces under `examples/`; never runtime write
+  targets or distribution members.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 
@@ -27,4 +29,5 @@ failure-shape contracts.
 All stateful public APIs take a workspace. Package resources are never runtime write
 targets. Config precedence is defaults < workspace < temporary override. Fresh task
 loading isolates same-named helpers between workspaces. Failures become diagnostics
-and correct-width infinity. Wheel/sdist exclude workspaces and runtime artifacts.
+and correct-width infinity. Wheel/sdist exclude examples, workspaces, and runtime
+artifacts.

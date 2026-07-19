@@ -553,7 +553,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         )
         assert not any(
             len(PurePosixPath(name).parts) > 1
-            and PurePosixPath(name).parts[1] in {"workspaces", "tests"}
+            and PurePosixPath(name).parts[1] in {"examples", "tests"}
             for name in sdist_names
         )
         assert not any(name.lower().endswith(".aedt") for name in sdist_names)

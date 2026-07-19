@@ -1,8 +1,7 @@
-"""Optional HFSS/PyAEDT adapter.
+"""Optional reusable HFSS/PyAEDT adapter resource.
 
-This file is migrated from the reference project as a future backend. The
-default v3 workflow does not import or call it, so normal tests do not require
-PyAEDT or start HFSS.
+Users copy this file into a workspace before importing it from a task workflow.
+Importing the core package does not require PyAEDT or start HFSS.
 """
 
 from __future__ import annotations

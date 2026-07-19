@@ -8,5 +8,5 @@ submits, diagnoses, and records jobs but never installs or repairs the pool.
 
 Package artifacts are immutable framework inputs. Workspace directories are the
 only mutable task/runtime boundary. Wheel and sdist contain package code, generic
-templates, adapter resources, and documentation, but exclude workspaces, models,
-jobs, history, checkpoints, logs, caches, and secrets.
+templates, adapter resources, and documentation, but exclude repository examples,
+workspaces, models, jobs, history, checkpoints, logs, caches, and secrets.

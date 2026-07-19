@@ -17,7 +17,10 @@ Task author references:
 
 - [workflow_typical_patterns.md](workflow_typical_patterns.md)
 - [calc_cost_typical_patterns.md](calc_cost_typical_patterns.md)
-- [com_lib/README.md](com_lib/README.md) and the adapter-specific pages
+- [adapters/README.md](adapters/README.md) and the adapter-specific pages
+
+The source repository also provides complete reference workspaces under its top-level
+`examples/` directory.
 
 The supported command surface is `yadof --help`, `version`, `docs`, `init`, `check`,
 `smoke-test`, `run`, `view`, `history`, and `task`. Commands that can execute real

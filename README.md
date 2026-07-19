@@ -26,5 +26,6 @@ are treated as read-only and there is no `project.*` compatibility namespace.
 
 See [user_doc/README.md](user_doc/README.md) for installation and workflow guidance,
 and [dev_doc/README.md](dev_doc/README.md) for architecture and contribution rules.
-The checked-in `workspaces/hfss-newchoke/` directory preserves the former HFSS task
-as a user workspace; it is not included in wheel or sdist artifacts.
+The checked-in [examples](examples/README.md) preserve complete reference workspaces,
+including the former HFSS task; examples are tracked in Git but excluded from wheel
+and sdist artifacts.

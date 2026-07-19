@@ -26,6 +26,6 @@ stops after an all-infinite generation and prints recent diagnostic summaries.
 
 ## Clean artifact
 
-Build wheel/sdist, reject workspace/runtime/model members, install wheel into a
-clean external environment, make site-packages read-only, and run help/version,
+Build wheel/sdist, reject example/workspace/runtime/model members, install wheel
+into a clean external environment, make site-packages read-only, and run help/version,
 init/check/smoke/run/resume/view/history plus mocked distributed tests.
