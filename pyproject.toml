@@ -51,7 +51,7 @@ packages = ["src/yadof"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "dev_doc" = "yadof/_resources/docs/dev_doc"
-"user_doc" = "yadof/_resources/docs/user_doc"
+"agent_doc" = "yadof/_resources/docs/agent_doc"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -59,7 +59,7 @@ include = [
     "/pyproject.toml",
     "/src/yadof",
     "/dev_doc",
-    "/user_doc",
+    "/agent_doc",
 ]
 
 [tool.pytest.ini_options]

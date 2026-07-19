@@ -11,7 +11,7 @@ from yadof.evaluate_manager.resource_retries import (
     resource_retry_metadata,
 )
 from yadof.evaluate_manager.types import JobSpec
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 def _request():

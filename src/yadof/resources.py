@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from importlib.resources import files
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 try:  # Python 3.11 moved these resource ABCs into importlib.resources.
@@ -12,11 +12,11 @@ try:  # Python 3.11 moved these resource ABCs into importlib.resources.
 except ImportError:  # pragma: no cover - exercised on supported Python 3.10.
     from importlib.abc import Traversable
 
-DocumentationKind = Literal["dev", "user"]
+DocumentationKind = Literal["agent", "dev"]
 
 _DOCUMENTATION_DIRECTORIES: dict[DocumentationKind, str] = {
+    "agent": "agent_doc",
     "dev": "dev_doc",
-    "user": "user_doc",
 }
 
 
@@ -32,38 +32,97 @@ def _source_checkout_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def documentation_entry(kind: DocumentationKind) -> Traversable:
-    """Return the selected documentation entry point without extracting it."""
+def documentation_root(kind: DocumentationKind) -> Traversable:
+    """Return one installed or source-checkout documentation tree."""
 
     if kind not in _DOCUMENTATION_DIRECTORIES:
         choices = ", ".join(sorted(_DOCUMENTATION_DIRECTORIES))
         raise ValueError(f"unknown documentation kind {kind!r}; expected one of: {choices}")
 
     directory_name = _DOCUMENTATION_DIRECTORIES[kind]
-    embedded = (
-        _embedded_root()
-        .joinpath("docs")
-        .joinpath(directory_name)
-        .joinpath("README.md")
-    )
-    if embedded.is_file():
+    embedded = _embedded_root().joinpath("docs").joinpath(directory_name)
+    if embedded.is_dir():
         return embedded
 
     # Builds force-include the authoritative root documentation trees. This source
     # fallback keeps checkout development usable without duplicating those trees.
-    source = _source_checkout_root().joinpath(directory_name, "README.md")
-    if source.is_file():
+    source = _source_checkout_root().joinpath(directory_name)
+    if source.is_dir():
         return source
 
     raise ResourceNotFoundError(
-        f"the {kind!r} documentation entry is missing from package resources"
+        f"the {kind!r} documentation tree is missing from package resources"
     )
+
+
+def _documentation_relative_path(value: str) -> PurePosixPath:
+    text = str(value).strip().replace("\\", "/")
+    path = PurePosixPath(text)
+    if not text or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise ResourceNotFoundError(
+            f"documentation path must be a non-empty relative path: {value!r}"
+        )
+    return path
+
+
+def documentation_file(kind: DocumentationKind, path: str) -> Traversable:
+    """Return one audience-relative documentation file without extracting it."""
+
+    relative = _documentation_relative_path(path)
+    resource = documentation_root(kind)
+    for part in relative.parts:
+        resource = resource.joinpath(part)
+    if not resource.is_file():
+        raise ResourceNotFoundError(
+            f"the {kind!r} documentation file does not exist: {relative.as_posix()}"
+        )
+    return resource
+
+
+def _walk_documentation(root: Traversable, prefix: PurePosixPath) -> list[str]:
+    names: list[str] = []
+    for child in root.iterdir():
+        relative = prefix / child.name
+        if child.is_dir():
+            names.extend(_walk_documentation(child, relative))
+        elif child.is_file():
+            names.append(relative.as_posix())
+    return names
+
+
+def documentation_names(kind: DocumentationKind) -> tuple[str, ...]:
+    """List every packaged document for one audience, with its README first."""
+
+    names = _walk_documentation(documentation_root(kind), PurePosixPath())
+    return tuple(sorted(names, key=lambda name: (name != "README.md", name)))
+
+
+def read_documentation(kind: DocumentationKind, path: str = "README.md") -> str:
+    """Read one audience-relative documentation file as UTF-8 text."""
+
+    return documentation_file(kind, path).read_text(encoding="utf-8")
+
+
+def read_documentation_bundle(kind: DocumentationKind) -> str:
+    """Read one audience's complete documentation tree with path delimiters."""
+
+    sections = [
+        f"===== {kind}/{name} =====\n{read_documentation(kind, name).rstrip()}"
+        for name in documentation_names(kind)
+    ]
+    return "\n\n".join(sections) + ("\n" if sections else "")
+
+
+def documentation_entry(kind: DocumentationKind) -> Traversable:
+    """Return the selected documentation entry point without extracting it."""
+
+    return documentation_file(kind, "README.md")
 
 
 def read_documentation_entry(kind: DocumentationKind) -> str:
     """Read a documentation entry point as UTF-8 text."""
 
-    return documentation_entry(kind).read_text(encoding="utf-8")
+    return read_documentation(kind)
 
 
 def template_names() -> tuple[str, ...]:
@@ -150,6 +209,11 @@ __all__ = [
     "adapter_names",
     "adapter_resource",
     "documentation_entry",
+    "documentation_file",
+    "documentation_names",
+    "documentation_root",
+    "read_documentation",
+    "read_documentation_bundle",
     "read_documentation_entry",
     "read_template_manifest",
     "template_names",

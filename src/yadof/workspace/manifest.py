@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 from typing import Mapping
 
-from ._version import __version__
-from .job_template.rawdata_contract import RAWDATA_SCHEMA_VERSION
+from .._version import __version__
+from ..job_template.rawdata_contract import RAWDATA_SCHEMA_VERSION
 
 
 WORKSPACE_SCHEMA_VERSION = 1

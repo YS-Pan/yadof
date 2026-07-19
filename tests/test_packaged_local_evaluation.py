@@ -18,7 +18,7 @@ from yadof.evaluate_manager import (
     run_smoke_test,
 )
 from yadof.workspace import WorkspaceContext
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 def _workspace(tmp_path: Path) -> Path:

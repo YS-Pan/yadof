@@ -3,6 +3,10 @@
 yadof is an installable, task-agnostic optimization framework for expensive local
 or HTCondor workflows. Its durable modeling contract is:
 
+## Prompt starter
+
+> Complete the task below. Before you begin, run `python -m yadof docs show agent README.md` and follow its instructions, reading any referenced documentation or installed yadof code needed for the task.
+
 ```text
 normalized variables -> rawData -> current task cost
 ```
@@ -24,7 +28,8 @@ tools, and documentation. A workspace owns `config.py`, `job_template/`, jobs,
 recorded raw evidence, surrogate checkpoints, logs, and tool output. Package files
 are treated as read-only and there is no `project.*` compatibility namespace.
 
-See [user_doc/README.md](user_doc/README.md) for installation and workflow guidance,
+See [agent_doc/README.md](agent_doc/README.md) for agent-oriented installation and
+workflow guidance,
 and [dev_doc/README.md](dev_doc/README.md) for architecture and contribution rules.
 The checked-in [examples](examples/README.md) preserve complete reference workspaces,
 including the former HFSS task; examples are tracked in Git but excluded from wheel

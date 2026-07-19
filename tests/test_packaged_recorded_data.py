@@ -10,7 +10,7 @@ import pytest
 
 from yadof.job_template import RAWDATA_SCHEMA_VERSION
 from yadof.recorded_data import api as recorded_api
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 def _workspace(path: Path) -> Path:

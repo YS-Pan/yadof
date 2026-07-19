@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
+import re
 import stat
 import subprocess
 import sys
@@ -19,6 +20,9 @@ import pytest
 import yadof
 from yadof import cli
 from yadof.resources import (
+    ResourceNotFoundError,
+    documentation_names,
+    read_documentation,
     read_documentation_entry,
     read_template_manifest,
     template_names,
@@ -26,6 +30,7 @@ from yadof.resources import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
 def _run(command: list[str], *, cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess[str]:
@@ -100,8 +105,22 @@ def _verify_clean_external_install(wheel_path: Path) -> None:
                 ([str(yadof_executable), "--help"], "usage: yadof"),
                 ([str(yadof_executable), "--version"], f"yadof {yadof.__version__}"),
                 ([str(yadof_executable), "version"], yadof.__version__),
-                ([str(yadof_executable), "docs", "user"], "# yadof user guide"),
-                ([str(yadof_executable), "docs", "dev"], "# dev_doc README"),
+                (
+                    [str(yadof_executable), "docs", "list", "agent"],
+                    "optimization_workflow.md",
+                ),
+                (
+                    [str(yadof_executable), "docs", "show", "agent", "README.md"],
+                    "# yadof agent guide",
+                ),
+                (
+                    [str(yadof_executable), "docs", "show", "dev", "README.md"],
+                    "# dev_doc README",
+                ),
+                (
+                    [str(yadof_executable), "docs", "bundle", "agent"],
+                    "===== agent/README.md =====",
+                ),
             )
             for command, expected in commands:
                 result = _run(command, cwd=outside_dir)
@@ -423,7 +442,18 @@ def test_package_metadata_and_source_resources() -> None:
     assert yadof.__version__ == "0.1.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
-    assert read_documentation_entry("user").startswith("# yadof user guide")
+    assert read_documentation_entry("agent").startswith("# yadof agent guide")
+    assert read_documentation("agent", "adapters/README.md").startswith(
+        "# Packaged adapters"
+    )
+    source_agent_names = {
+        path.relative_to(REPOSITORY_ROOT / "agent_doc").as_posix()
+        for path in (REPOSITORY_ROOT / "agent_doc").rglob("*")
+        if path.is_file()
+    }
+    assert set(documentation_names("agent")) == source_agent_names
+    with pytest.raises(ResourceNotFoundError):
+        read_documentation("agent", "../README.md")
     assert template_names() == ("default",)
     manifest = read_template_manifest("default")
     assert manifest["name"] == "default"
@@ -437,6 +467,18 @@ def test_package_metadata_and_source_resources() -> None:
         assert forbidden not in template_text
 
 
+def test_agent_documentation_links_resolve_inside_source_tree() -> None:
+    root = REPOSITORY_ROOT / "agent_doc"
+    for document in root.rglob("*.md"):
+        for target in MARKDOWN_LINK.findall(document.read_text(encoding="utf-8")):
+            path_text = target.split("#", 1)[0]
+            if not path_text or "://" in path_text:
+                continue
+            assert (document.parent / path_text).is_file(), (
+                f"broken agent documentation link in {document.relative_to(root)}: {target}"
+            )
+
+
 def test_minimal_cli_output_and_streams(capsys) -> None:
     assert cli.main([]) == 0
     output = capsys.readouterr()
@@ -448,9 +490,21 @@ def test_minimal_cli_output_and_streams(capsys) -> None:
     assert output.out == f"{yadof.__version__}\n"
     assert output.err == ""
 
-    assert cli.main(["docs", "user"]) == 0
+    assert cli.main(["docs", "show", "agent", "README.md"]) == 0
     output = capsys.readouterr()
-    assert output.out.startswith("# yadof user guide")
+    assert output.out.startswith("# yadof agent guide")
+    assert output.err == ""
+
+    assert cli.main(["docs", "list", "agent"]) == 0
+    output = capsys.readouterr()
+    assert output.out.splitlines()[0] == "README.md"
+    assert "adapters/hfss_com.md" in output.out
+    assert output.err == ""
+
+    assert cli.main(["docs", "bundle", "agent"]) == 0
+    output = capsys.readouterr()
+    assert output.out.startswith("===== agent/README.md =====\n# yadof agent guide")
+    assert "===== agent/optimization_workflow.md =====" in output.out
     assert output.err == ""
 
 
@@ -472,13 +526,16 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
     with zipfile.ZipFile(wheel_path) as archive:
         wheel_names = set(archive.namelist())
         assert "yadof/__init__.py" in wheel_names
-        assert "yadof/cli.py" in wheel_names
-        assert "yadof/workspace.py" in wheel_names
+        assert "yadof/cli/__init__.py" in wheel_names
+        assert "yadof/cli/main.py" in wheel_names
+        assert "yadof/cli/docs.py" in wheel_names
+        assert "yadof/workspace/__init__.py" in wheel_names
+        assert "yadof/workspace/context.py" in wheel_names
         assert "yadof/config.py" in wheel_names
         assert "yadof/task_loader.py" in wheel_names
-        assert "yadof/workspace_manifest.py" in wheel_names
-        assert "yadof/workspace_init.py" in wheel_names
-        assert "yadof/workspace_check.py" in wheel_names
+        assert "yadof/workspace/manifest.py" in wheel_names
+        assert "yadof/workspace/init.py" in wheel_names
+        assert "yadof/workspace/check.py" in wheel_names
         assert "yadof/smoke_test.py" in wheel_names
         assert "yadof/evaluate_manager/__init__.py" in wheel_names
         assert "yadof/evaluate_manager/api.py" in wheel_names
@@ -528,7 +585,11 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
             "yadof/_resources/templates/default/workspace/job_template/calc_cost.py"
         ) in wheel_names
         assert "yadof/_resources/docs/dev_doc/README.md" in wheel_names
-        assert "yadof/_resources/docs/user_doc/README.md" in wheel_names
+        assert "yadof/_resources/docs/agent_doc/README.md" in wheel_names
+        for source in (REPOSITORY_ROOT / "agent_doc").rglob("*"):
+            if source.is_file():
+                relative = source.relative_to(REPOSITORY_ROOT / "agent_doc").as_posix()
+                assert f"yadof/_resources/docs/agent_doc/{relative}" in wheel_names
         entry_points_name = next(name for name in wheel_names if name.endswith(".dist-info/entry_points.txt"))
         metadata_name = next(name for name in wheel_names if name.endswith(".dist-info/METADATA"))
         assert "yadof = yadof.cli:main" in archive.read(entry_points_name).decode("utf-8")
@@ -538,14 +599,21 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "Requires-Dist: numpy" in built_metadata
         assert "Requires-Dist: pymoo" in built_metadata
         assert not any(name.startswith("project/") for name in wheel_names)
+        assert "yadof/cli.py" not in wheel_names
+        assert "yadof/workspace.py" not in wheel_names
+        assert "yadof/workspace_init.py" not in wheel_names
+        assert "yadof/workspace_check.py" not in wheel_names
+        assert "yadof/workspace_manifest.py" not in wheel_names
+        assert not any(name.startswith("yadof/_resources/docs/user_doc/") for name in wheel_names)
         assert not any(name.lower().endswith(".aedt") for name in wheel_names)
         assert not any("__pycache__" in name or name.endswith((".pyc", ".pyo")) for name in wheel_names)
 
     with tarfile.open(sdist_path, "r:gz") as archive:
         sdist_names = set(archive.getnames())
-        assert any(name.endswith("/src/yadof/cli.py") for name in sdist_names)
+        assert any(name.endswith("/src/yadof/cli/main.py") for name in sdist_names)
+        assert any(name.endswith("/src/yadof/workspace/context.py") for name in sdist_names)
         assert any(name.endswith("/dev_doc/README.md") for name in sdist_names)
-        assert any(name.endswith("/user_doc/README.md") for name in sdist_names)
+        assert any(name.endswith("/agent_doc/README.md") for name in sdist_names)
         assert any(name.endswith("/src/yadof/_resources/templates/default/README.md") for name in sdist_names)
         assert not any(
             len(PurePosixPath(name).parts) > 1 and PurePosixPath(name).parts[1] == "project"

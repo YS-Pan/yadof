@@ -1,7 +1,8 @@
 # C4 package components
 
-- `workspace`, `workspace_manifest`, `workspace_init`, `workspace_check`: resolve,
-  create, and diagnose user-owned workspaces without implicit package writes.
+- `workspace.context`, `workspace.manifest`, `workspace.init`, `workspace.check`:
+  resolve, create, and diagnose user-owned workspaces without implicit package
+  writes.
 - `config`: immutable effective values with package < workspace < temporary override
   precedence and validation.
 - `task_loader`, `job_template`: fresh isolated task loading, parameter assignment,
@@ -17,7 +18,8 @@
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
 - `tools`, `resources`: view/history/task utilities and read-only adapter/template/doc
   resources.
-- `cli`, `run_command`: installed command routing and normal campaign orchestration.
+- `cli`, `run_command`: modular installed command routing, packaged-document access,
+  and normal campaign orchestration.
 
 Stable cross-module calls use public `api.py` or package `__init__` exports. Stateful
 APIs accept a workspace; no module derives user-data paths from package `__file__`.

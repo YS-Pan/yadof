@@ -8,28 +8,19 @@ import math
 import sys
 from pathlib import Path
 
-from ._version import __version__
-from .resources import ResourceNotFoundError, read_documentation_entry
-
-
-def _write_text(text: str) -> None:
-    sys.stdout.write(text)
-    if not text.endswith("\n"):
-        sys.stdout.write("\n")
+from .._version import __version__
+from ..resources import ResourceNotFoundError
+from ._output import write_text
+from .docs import add_docs_parser
 
 
 def _show_version(_args: argparse.Namespace) -> int:
-    _write_text(__version__)
-    return 0
-
-
-def _show_docs(args: argparse.Namespace) -> int:
-    _write_text(read_documentation_entry(args.kind))
+    write_text(__version__)
     return 0
 
 
 def _init_workspace_command(args: argparse.Namespace) -> int:
-    from .workspace_init import WorkspaceInitError, init_workspace
+    from ..workspace.init import WorkspaceInitError, init_workspace
 
     try:
         result = init_workspace(args.path)
@@ -37,12 +28,12 @@ def _init_workspace_command(args: argparse.Namespace) -> int:
         print(f"yadof: error: {exc}", file=sys.stderr)
         return 1
     if result.created:
-        _write_text(
+        write_text(
             f"Initialized yadof workspace at {result.workspace.root} "
             f"(template {result.template_name} version {result.template_version})."
         )
     else:
-        _write_text(
+        write_text(
             f"Workspace already initialized at {result.workspace.root}; "
             "no files changed."
         )
@@ -50,17 +41,17 @@ def _init_workspace_command(args: argparse.Namespace) -> int:
 
 
 def _check_workspace_command(args: argparse.Namespace) -> int:
-    from .workspace_check import check_workspace
+    from ..workspace.check import check_workspace
 
     report = check_workspace(args.workspace)
-    _write_text(report.format())
+    write_text(report.format())
     return 0 if report.ok else 1
 
 
 def _smoke_test_command(args: argparse.Namespace) -> int:
-    from .config import ConfigError, load_config
-    from .evaluate_manager import JobPreparationError, run_smoke_test
-    from .smoke_test import assess_smoke_task
+    from ..config import ConfigError, load_config
+    from ..evaluate_manager import JobPreparationError, run_smoke_test
+    from ..smoke_test import assess_smoke_task
 
     try:
         config = load_config(
@@ -97,7 +88,7 @@ def _smoke_test_command(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    _write_text(
+    write_text(
         f"Smoke test succeeded for exactly one individual in {config.workspace.root}: "
         f"costs={costs[0]!r}"
     )
@@ -105,7 +96,7 @@ def _smoke_test_command(args: argparse.Namespace) -> int:
 
 
 def _run_optimization_command(args: argparse.Namespace) -> int:
-    from .run_command import run_from_args
+    from ..run_command import run_from_args
 
     return run_from_args(args)
 
@@ -127,14 +118,14 @@ def _nonnegative_int(value: str) -> int:
 def _view_command(args: argparse.Namespace) -> int:
     try:
         if args.view_kind == "cost":
-            from .tools.view_cost import view_cost
+            from ..tools.view_cost import view_cost
 
             status = None if args.status == "all" else args.status
             summary, output = view_cost(
                 args.workspace, status=status, output_path=args.output
             )
         else:
-            from .tools.view_time import view_time
+            from ..tools.view_time import view_time
 
             status = None if args.status == "all" else args.status
             summary, output = view_time(
@@ -143,9 +134,9 @@ def _view_command(args: argparse.Namespace) -> int:
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         print(f"yadof: error: could not view {args.view_kind}: {exc}", file=sys.stderr)
         return 1
-    _write_text(summary)
+    write_text(summary)
     if output is not None:
-        _write_text(f"saved: {output}")
+        write_text(f"saved: {output}")
     return 0
 
 
@@ -175,36 +166,36 @@ def _history_clear_command(args: argparse.Namespace) -> int:
     ):
         return 1
     try:
-        from .tools.history import clear_history
+        from ..tools.history import clear_history
 
         summary = clear_history(args.workspace, confirm=True)
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         print(f"yadof: error: history was not cleared: {exc}", file=sys.stderr)
         return 1
-    _write_text("Workspace optimization history cleared.")
+    write_text("Workspace optimization history cleared.")
     for name, value in summary.items():
-        _write_text(f"{name}: {value}")
+        write_text(f"{name}: {value}")
     return 0
 
 
 def _task_adapters_command(_args: argparse.Namespace) -> int:
-    from .tools.adapters import list_adapters
+    from ..tools.adapters import list_adapters
 
     names = list_adapters()
-    _write_text("\n".join(names) if names else "No bundled adapters are available.")
+    write_text("\n".join(names) if names else "No bundled adapters are available.")
     return 0
 
 
 def _task_copy_adapter_command(args: argparse.Namespace) -> int:
     try:
-        from .tools.adapters import copy_adapter
+        from ..tools.adapters import copy_adapter
 
         result = copy_adapter(args.workspace, args.adapter)
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         print(f"yadof: error: adapter was not copied: {exc}", file=sys.stderr)
         return 1
     action = "copied" if result.created else "already matches"
-    _write_text(f"Adapter {result.name} {action}: {result.destination}")
+    write_text(f"Adapter {result.name} {action}: {result.destination}")
     return 0
 
 
@@ -218,7 +209,7 @@ def _task_extract_parameters_command(args: argparse.Namespace) -> int:
     ):
         return 1
     try:
-        from .tools.hfss import extract_parameters
+        from ..tools.hfss import extract_parameters
 
         result = extract_parameters(
             args.workspace,
@@ -232,12 +223,12 @@ def _task_extract_parameters_command(args: argparse.Namespace) -> int:
         print(f"yadof: error: parameters were not extracted: {exc}", file=sys.stderr)
         return 1
     method = "direct AEDT parsing" if result.used_direct_parser else "PyAEDT"
-    _write_text(
+    write_text(
         f"Extracted {result.parameter_count} parameter(s) using {method}: "
         f"{result.parameter_file}"
     )
     if result.backup_file is not None:
-        _write_text(f"backup: {result.backup_file}")
+        write_text(f"backup: {result.backup_file}")
     return 0
 
 
@@ -403,20 +394,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.set_defaults(handler=_run_optimization_command)
 
-    docs_parser = subparsers.add_parser(
-        "docs",
-        help="print a packaged documentation entry point",
-        description=(
-            "Print the selected UTF-8 documentation entry without opening a GUI "
-            "or writing package resources."
-        ),
-    )
-    docs_parser.add_argument(
-        "kind",
-        choices=("dev", "user"),
-        help="documentation set whose README entry should be printed",
-    )
-    docs_parser.set_defaults(handler=_show_docs)
+    add_docs_parser(subparsers)
 
     view_parser = subparsers.add_parser(
         "view",

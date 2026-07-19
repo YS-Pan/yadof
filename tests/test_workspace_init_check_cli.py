@@ -10,8 +10,8 @@ import yadof
 from yadof import cli
 from yadof.job_template import calculate_cost, validate_rawdata_directory
 from yadof.task_loader import load_task_module
-from yadof.workspace_check import check_workspace
-from yadof.workspace_init import WorkspaceInitError, init_workspace
+from yadof.workspace.check import check_workspace
+from yadof.workspace.init import WorkspaceInitError, init_workspace
 
 
 EXPECTED_WORKSPACE_FILES = {
@@ -201,7 +201,7 @@ def test_repeated_init_does_not_repair_an_incomplete_workspace(tmp_path: Path) -
 def test_init_validation_failure_removes_stage_root_and_new_parents(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from yadof import workspace_init
+    from yadof.workspace import init as workspace_init
 
     root = tmp_path / "new-parent/child/workspace"
 
@@ -221,7 +221,7 @@ def test_init_validation_failure_removes_stage_root_and_new_parents(
 def test_init_publish_failure_rolls_back_only_created_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from yadof import workspace_init
+    from yadof.workspace import init as workspace_init
 
     root = tmp_path / "workspace"
     root.mkdir()
@@ -307,7 +307,7 @@ def test_check_parses_but_never_imports_or_executes_workflow(tmp_path: Path) -> 
 def test_check_distributed_backend_reports_prerequisites_without_repair(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from yadof import workspace_check
+    from yadof.workspace import check as workspace_check
 
     root = tmp_path / "workspace"
     init_workspace(root)

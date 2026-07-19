@@ -17,7 +17,7 @@ from .._version import __version__
 from ..config import LoadedConfig, load_config
 from ..job_template import get_parameter_definition_signature, materialize_job_parameters
 from ..workspace import WorkspaceContext, resolve_workspace
-from ..workspace_manifest import WorkspaceMarkerError, read_workspace_marker
+from ..workspace.manifest import WorkspaceMarkerError, read_workspace_marker
 from .types import JobSpec
 
 

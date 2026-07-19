@@ -8,7 +8,7 @@ import pytest
 import yadof
 
 from yadof.recorded_data import get_historical_results, list_optimization_metadata
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 @pytest.fixture(autouse=True)

@@ -136,11 +136,11 @@ If `workflow.py` calls an external simulator or custom evaluator, copy the neede
 `*_com.py` file with `yadof task copy-adapter` into the workspace `job_template/`, then import it
 by same-directory name.
 
-Read `user_doc/adapters/README.md` first, then read the document for the specific
+Read `agent_doc/adapters/README.md` first, then read the document for the specific
 adapter:
 
-- `user_doc/adapters/hfss_com.md` for HFSS/PyAEDT workflows.
-- `user_doc/adapters/test_com.md` for pure-Python synthetic workflows.
+- `agent_doc/adapters/hfss_com.md` for HFSS/PyAEDT workflows.
+- `agent_doc/adapters/test_com.md` for pure-Python synthetic workflows.
 
 A workflow should use adapter functions only to produce rawData. Final objective
 costs still belong in `calc_cost.py`.

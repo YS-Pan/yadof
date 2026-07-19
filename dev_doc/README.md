@@ -4,9 +4,9 @@
 what the project is, how it is shaped, and why it changed over time.
 
 The repository root remains the authoritative editable source for `dev_doc/` and
-`user_doc/`. Package builds map both trees into read-only `yadof` wheel resources;
-installed `yadof docs dev|user` prints their entry documents without assuming a Git
-checkout or writable package directory.
+`agent_doc/`. Package builds map both trees into read-only `yadof` wheel resources;
+installed `yadof docs list|show|bundle` discovers and reads them without assuming a
+Git checkout or writable package directory.
 
 ## System Roles
 
@@ -35,7 +35,7 @@ below before changing code or documentation. The canonical entry point is
 
 When collecting project context, read these files in full:
 
-- `../user_doc/README.md`, then follow its reading instructions for user-facing
+- `../agent_doc/README.md`, then follow its reading instructions for agent-facing
   task setup context.
 - every file in `architecture/`
 - `terminology.md`
@@ -48,9 +48,9 @@ that will not fight likely future goals. Reading a manual toDo is context gather
 not authorization to execute it. While reading automatic toDos, apply their obsolete
 rules first and only then consider whether the current work naturally triggers one.
 
-Reading `dev_doc/` must include the `user_doc/README.md` pass above because framework
-changes can affect how users and AI assistants prepare tasks. Reading `user_doc/`
-alone must not trigger a `dev_doc/` pass; user-facing task setup docs are allowed to
+Reading `dev_doc/` must include the `agent_doc/README.md` pass above because framework
+changes can affect how AI assistants prepare tasks. Reading `agent_doc/`
+alone must not trigger a `dev_doc/` pass; agent-facing task setup docs are allowed to
 stand on their own.
 
 Read `blueprints/` in a targeted pass:
@@ -87,17 +87,19 @@ that depend on the current Windows code page.
 
 ## Document Roles
 
-### `../user_doc/README.md`
+### `../agent_doc/README.md`
 
-`user_doc/` is the companion user-facing documentation home. It explains how users
-and AI assistants should prepare task files, use `_com.py` adapters, write
+`agent_doc/` is the companion agent-facing documentation home. It explains how AI
+assistants should prepare task files, use `_com.py` adapters, write
 `workflow.py` and `calc_cost.py`, edit run config, smoke-test, and launch
 optimization.
 
 Read it and follow its instructions whenever collecting `dev_doc` context. Do not
-duplicate detailed user instructions here when they already belong under `user_doc/`.
+duplicate detailed task-authoring instructions here when they already belong under
+`agent_doc/`.
 Its package-foundation document explains the commands currently available from an
-installed wheel while runtime modules remain in the source tree.
+installed wheel and the boundary between immutable package code and writable task
+workspaces.
 
 ### `architecture/`
 

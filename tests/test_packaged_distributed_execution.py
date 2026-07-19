@@ -15,7 +15,7 @@ from yadof.config import load_config
 from yadof.evaluate_manager import evaluate_population, prepare_job, run_smoke_test
 from yadof.evaluate_manager.types import JobResult
 from yadof.recorded_data import list_records
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 def _workspace(tmp_path: Path, name: str) -> Path:

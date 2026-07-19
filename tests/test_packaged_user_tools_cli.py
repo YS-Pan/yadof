@@ -15,7 +15,7 @@ from yadof.tools.history import (
     HistoryClearConfirmationRequired,
     clear_history,
 )
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 @pytest.fixture(autouse=True)

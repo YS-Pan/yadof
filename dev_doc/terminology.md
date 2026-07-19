@@ -3,6 +3,7 @@
 | Term | Meaning |
 |---|---|
 | `installed package` | The complete `yadof` framework under site-packages: APIs, CLI, defaults, templates, adapters, worker support, tools, and read-only docs. It is not a runtime write location. |
+| `agent documentation` | Version-matched task-authoring and question-answering guidance under root `agent_doc/`, exposed from an installed package through `yadof docs`; it replaces the former user-documentation audience. |
 | `workspace` | One explicitly selected writable root owning `config.py`, `job_template/`, jobs, records, checkpoints, logs, and tool output. |
 | `workspace marker` | Portable `.yadof/workspace.json` provenance published last by init. It never authorizes overwrite, repair, or automatic upgrade. |
 | `WorkspaceContext` | Immutable absolute workspace/path value used by stateful public APIs. Relative configured paths resolve from its root. |

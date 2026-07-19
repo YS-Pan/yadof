@@ -10,16 +10,16 @@ import shutil
 import sys
 from typing import Literal
 
-from ._version import __version__
-from .config import LoadedConfig, load_config
-from .job_template import (
+from .._version import __version__
+from ..config import LoadedConfig, load_config
+from ..job_template import (
     RAWDATA_SCHEMA_VERSION,
     validate_rawdata_directory,
     validate_task,
 )
-from .workspace import WorkspaceContext, resolve_workspace
-from .workspace_init import load_workspace_template
-from .workspace_manifest import (
+from .context import WorkspaceContext, resolve_workspace
+from .init import load_workspace_template
+from .manifest import (
     WORKSPACE_MARKER_RELATIVE_PATH,
     WORKSPACE_SCHEMA_VERSION,
     WorkspaceMarker,

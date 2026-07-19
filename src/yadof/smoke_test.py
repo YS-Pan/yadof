@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .workspace import WorkspaceContext, resolve_workspace
-from .workspace_init import WorkspaceInitError, load_workspace_template
-from .workspace_manifest import WorkspaceMarkerError, read_workspace_marker
+from .workspace.init import WorkspaceInitError, load_workspace_template
+from .workspace.manifest import WorkspaceMarkerError, read_workspace_marker
 
 
 _IGNORED_TASK_PARTS = {"__pycache__", ".pytest_cache", "rawData"}

@@ -9,7 +9,7 @@ import yadof
 
 from yadof.cli import main as cli_main
 from yadof.recorded_data import list_optimization_metadata
-from yadof.workspace_init import init_workspace
+from yadof.workspace.init import init_workspace
 
 
 @pytest.fixture(autouse=True)

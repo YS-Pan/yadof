@@ -10,11 +10,11 @@ import shutil
 import tempfile
 from typing import Mapping, Sequence
 
-from .config import load_config
-from .job_template import validate_task
-from .resources import ResourceNotFoundError, read_template_manifest, template_root
-from .workspace import WorkspaceContext
-from .workspace_manifest import (
+from ..config import load_config
+from ..job_template import validate_task
+from ..resources import ResourceNotFoundError, read_template_manifest, template_root
+from .context import WorkspaceContext
+from .manifest import (
     WORKSPACE_MARKER_RELATIVE_PATH,
     WORKSPACE_SCHEMA_VERSION,
     WorkspaceMarker,
