@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import runpy
 
+import numpy as np
 import pytest
 import yadof
 
@@ -62,6 +64,41 @@ def test_bundled_adapters_are_listed_and_only_selected_file_is_copied(
         ]
     ) == 1
     assert result.destination.read_text(encoding="utf-8") == "# user edit\n"
+
+
+def test_test_com_large_scale_profile_has_exact_multidimensional_shapes():
+    namespace = runpy.run_path(str(adapter_resource("test_com.py")))
+    evaluate_raw_data = namespace["evaluate_raw_data"]
+    variables = {f"x{index}": index / 29.0 for index in range(30)}
+
+    blocks = evaluate_raw_data(variables, profile="large_scale")
+    expected_shapes = {
+        "scalar_0": (),
+        "scalar_1": (),
+        "curve_0": (20,),
+        "curve_1": (20,),
+        "surface": (100, 100),
+        "volume": (5, 100, 100),
+    }
+    assert tuple(blocks) == tuple(expected_shapes)
+
+    for name, expected_shape in expected_shapes.items():
+        block = blocks[name]
+        values = np.asarray(block["arrays"]["values"])
+        metadata = block["metadata"]
+        assert values.shape == expected_shape
+        assert values.dtype == np.float32
+        assert metadata["schema_version"] == 1
+        assert metadata["rawdata_name"] == name
+        assert metadata["shape"] == list(expected_shape)
+        assert len(metadata["axes"]) == len(expected_shape)
+
+    repeated = evaluate_raw_data(variables, profile="stress")
+    for name in expected_shapes:
+        np.testing.assert_array_equal(
+            repeated[name]["arrays"]["values"],
+            blocks[name]["arrays"]["values"],
+        )
 
 
 def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):

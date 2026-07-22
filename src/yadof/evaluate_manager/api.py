@@ -16,7 +16,7 @@ from ..workspace import WorkspaceContext
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
 from .local_runner import run_local_job
-from .recorded_data_client import record_result
+from .recorded_data_client import record_result, record_results
 from .types import JobResult, JobSpec
 
 
@@ -148,7 +148,7 @@ def _dispatch_local(
 
     def evaluate_one(
         index: int, population_row: tuple[Any, ...]
-    ) -> tuple[int, tuple[float, ...] | None]:
+    ) -> tuple[int, JobResult | None]:
         return _evaluate_one_local(
             config=config,
             index=index,
@@ -161,7 +161,7 @@ def _dispatch_local(
             generation_index=generation_index,
         )
 
-    outcomes: list[tuple[int, tuple[float, ...] | None]] = []
+    outcomes: list[tuple[int, JobResult | None]] = []
     worker_count = min(max(1, int(local_max_workers)), max(1, len(population_rows)))
     if worker_count <= 1 or len(population_rows) <= 1:
         outcomes = [
@@ -187,9 +187,19 @@ def _dispatch_local(
                     )
                     outcomes.append((index, None))
 
-    for index, costs in outcomes:
-        if costs is not None:
-            costs_by_individual[index] = costs
+    completed = tuple(
+        (index, result) for index, result in outcomes if result is not None
+    )
+    for index, costs in _record_completed_results(
+        config,
+        completed,
+        population_rows,
+        engine="local",
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+    ).items():
+        costs_by_individual[index] = costs
     _run_after_jobs_submitted(after_jobs_submitted)
     return tuple(
         costs if costs is not None else _inf_costs(objective_width)
@@ -208,7 +218,7 @@ def _evaluate_one_local(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
-) -> tuple[int, tuple[float, ...] | None]:
+) -> tuple[int, JobResult | None]:
     job: JobSpec | None = None
     result: JobResult | None = None
     try:
@@ -269,27 +279,7 @@ def _evaluate_one_local(
     if result.status != "done":
         _best_effort_record_failure(config.workspace, result)
         return index, None
-    try:
-        costs = record_result(config.workspace, result)
-        if costs is None:
-            raise RuntimeError("completed recorded result returned no costs")
-    except Exception as exc:  # noqa: BLE001 - recording/cost failure is per individual.
-        failure = _failed_result(
-            stage="recorded_data",
-            engine="local",
-            exc=exc,
-            population_row=population_row,
-            index=index,
-            jobs_dir=config.workspace.jobs_dir,
-            job=job,
-            result=result,
-            run_id=run_id,
-            optimization_index=optimization_index,
-            generation_index=generation_index,
-        )
-        _best_effort_write_failure(failure)
-        return index, None
-    return index, tuple(float(value) for value in costs)
+    return index, result
 
 
 def _dispatch_distributed(
@@ -371,35 +361,120 @@ def _dispatch_distributed(
             for position, job in zip(positions, jobs)
         )
 
+    completed: list[tuple[int, JobResult]] = []
     for position, result in zip(positions, results):
         if result.status != "done":
             _best_effort_record_failure(config.workspace, result)
             continue
-        try:
-            row_costs = record_result(config.workspace, result)
-            if row_costs is None:
-                raise RuntimeError("completed recorded result returned no costs")
-        except Exception as exc:  # noqa: BLE001 - isolate recording failures.
-            failure = _failed_result(
-                stage="recorded_data",
-                engine="htcondor",
-                exc=exc,
-                population_row=rows[position],
-                index=position,
-                jobs_dir=config.workspace.jobs_dir,
-                job=jobs[positions.index(position)],
-                result=result,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-            )
-            _best_effort_write_failure(failure)
-            continue
-        costs[position] = tuple(float(value) for value in row_costs)
+        completed.append((position, result))
+
+    for position, row_costs in _record_completed_results(
+        config,
+        tuple(completed),
+        rows,
+        engine="htcondor",
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+    ).items():
+        costs[position] = row_costs
 
     return tuple(
         row if row is not None else _inf_costs(objective_width) for row in costs
     )
+
+
+def _record_completed_results(
+    config: LoadedConfig,
+    indexed_results: tuple[tuple[int, JobResult], ...],
+    population_rows: tuple[tuple[Any, ...], ...],
+    *,
+    engine: str,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+) -> dict[int, tuple[float, ...]]:
+    """Use the batch fast path, with individual fallback for isolation."""
+
+    if not indexed_results:
+        return {}
+    results = tuple(result for _index, result in indexed_results)
+    try:
+        costs_by_job = record_results(config.workspace, results)
+    except Exception as batch_exc:  # noqa: BLE001 - retry individually for isolation.
+        _progress(
+            "batch recording failed; retrying individuals: "
+            f"{type(batch_exc).__name__}: {batch_exc}"
+        )
+        costs_by_index: dict[int, tuple[float, ...]] = {}
+        for index, result in indexed_results:
+            try:
+                row_costs = record_result(config.workspace, result)
+                if row_costs is None:
+                    raise RuntimeError("completed recorded result returned no costs")
+                costs_by_index[index] = tuple(float(value) for value in row_costs)
+            except Exception as exc:  # noqa: BLE001 - isolate one recording failure.
+                _write_recording_failure(
+                    config,
+                    population_rows[index],
+                    index,
+                    result,
+                    exc,
+                    engine=engine,
+                    run_id=run_id,
+                    optimization_index=optimization_index,
+                    generation_index=generation_index,
+                )
+        return costs_by_index
+
+    costs_by_index: dict[int, tuple[float, ...]] = {}
+    for index, result in indexed_results:
+        row_costs = costs_by_job.get(result.job_name)
+        if row_costs is None:
+            _write_recording_failure(
+                config,
+                population_rows[index],
+                index,
+                result,
+                RuntimeError(
+                    f"recorded job {result.job_name!r} has no dynamically calculable cost"
+                ),
+                engine=engine,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+            )
+            continue
+        costs_by_index[index] = tuple(float(value) for value in row_costs)
+    return costs_by_index
+
+
+def _write_recording_failure(
+    config: LoadedConfig,
+    population_row: tuple[Any, ...],
+    index: int,
+    result: JobResult,
+    exc: BaseException,
+    *,
+    engine: str,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+) -> None:
+    failure = _failed_result(
+        stage="recorded_data",
+        engine=engine,
+        exc=exc,
+        population_row=population_row,
+        index=index,
+        jobs_dir=config.workspace.jobs_dir,
+        job=None,
+        result=result,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+    )
+    _best_effort_write_failure(failure)
 
 
 def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:

@@ -17,8 +17,21 @@ from .manifest_store import (
     write_individual_records_unlocked,
 )
 from .paths import RecordedDataPaths, IND_META_SCHEMA_VERSION, OPT_META_SCHEMA_VERSION
-from .rawdata_store import source_files, write_rawdata_files
+from .rawdata_store import (
+    source_files,
+    write_rawdata_file_groups,
+    write_rawdata_files,
+)
 from .utils import now_utc_text
+
+
+JobRecordRequest = tuple[
+    str,
+    Sequence[float] | Mapping[str, float],
+    str | Path | Sequence[str | Path],
+    Mapping[str, object] | None,
+    str,
+]
 
 
 def safe_metadata(metadata: Mapping[str, object] | None) -> dict[str, object]:
@@ -52,16 +65,13 @@ def _safe_metadata_value(value: object, forbidden: set[str]) -> object:
     return value
 
 
-def record_job_result(
-    storage: RecordedDataPaths,
+def _prepare_job_payload(
     job_name: str,
     raw_variables: Sequence[float] | Mapping[str, float],
     rawdata_source: str | Path | Sequence[str | Path],
-    job_metadata: Mapping[str, object] | None = None,
-    *,
-    status: str = "completed",
-    overwrite: bool = False,
-) -> dict[str, object]:
+    job_metadata: Mapping[str, object] | None,
+    status: str,
+) -> tuple[str, str, list[Path], object, dict[str, object]]:
     clean_job_name = str(job_name).strip()
     if not clean_job_name:
         raise ValueError("job_name must not be empty")
@@ -82,6 +92,38 @@ def record_job_result(
         }
     else:
         variable_payload = [float(value) for value in raw_variables]
+    return (
+        clean_job_name,
+        clean_status,
+        source_paths,
+        variable_payload,
+        safe_metadata(job_metadata),
+    )
+
+
+def record_job_result(
+    storage: RecordedDataPaths,
+    job_name: str,
+    raw_variables: Sequence[float] | Mapping[str, float],
+    rawdata_source: str | Path | Sequence[str | Path],
+    job_metadata: Mapping[str, object] | None = None,
+    *,
+    status: str = "completed",
+    overwrite: bool = False,
+) -> dict[str, object]:
+    (
+        clean_job_name,
+        clean_status,
+        source_paths,
+        variable_payload,
+        clean_metadata,
+    ) = _prepare_job_payload(
+        job_name,
+        raw_variables,
+        rawdata_source,
+        job_metadata,
+        status,
+    )
 
     with metadata_lock(storage):
         records = read_individual_records(storage)
@@ -98,7 +140,6 @@ def record_job_result(
         rawdata_files, rawdata_metadata = write_rawdata_files(
             storage, clean_job_name, source_paths
         )
-        clean_metadata = safe_metadata(job_metadata)
         record = {
             "schema_version": IND_META_SCHEMA_VERSION,
             "job_name": clean_job_name,
@@ -117,6 +158,76 @@ def record_job_result(
         else:
             append_individual_record_unlocked(storage, record)
         return record
+
+
+def record_job_results(
+    storage: RecordedDataPaths,
+    requests: Sequence[JobRecordRequest],
+) -> tuple[dict[str, object], ...]:
+    """Atomically record a batch while copying archive/manifest state once."""
+
+    prepared = tuple(
+        _prepare_job_payload(
+            job_name,
+            raw_variables,
+            rawdata_source,
+            job_metadata,
+            status,
+        )
+        for (
+            job_name,
+            raw_variables,
+            rawdata_source,
+            job_metadata,
+            status,
+        ) in requests
+    )
+    names = [job_name for job_name, _status, _paths, _variables, _metadata in prepared]
+    if len(names) != len(set(names)):
+        raise ValueError("record batch contains duplicate job names")
+    if not prepared:
+        return ()
+
+    with metadata_lock(storage):
+        records = read_individual_records(storage)
+        existing = {str(record.get("job_name")) for record in records}
+        duplicates = sorted(existing.intersection(names))
+        if duplicates:
+            raise ValueError(
+                "record already exists for job(s): " + ", ".join(repr(name) for name in duplicates)
+            )
+
+        rawdata_by_job = write_rawdata_file_groups(
+            storage,
+            tuple(
+                (job_name, source_paths)
+                for job_name, _status, source_paths, _variables, _metadata in prepared
+            ),
+        )
+        new_records: list[dict[str, object]] = []
+        for (
+            job_name,
+            clean_status,
+            _source_paths,
+            variable_payload,
+            clean_metadata,
+        ) in prepared:
+            rawdata_files, rawdata_metadata = rawdata_by_job[job_name]
+            record = {
+                "schema_version": IND_META_SCHEMA_VERSION,
+                "job_name": job_name,
+                "status": clean_status,
+                "raw_variables": variable_payload,
+                "rawdata_files": rawdata_files,
+                "rawdata_metadata": rawdata_metadata,
+                "recorded_at": now_utc_text(),
+            }
+            _promote_individual_metadata(record, clean_metadata)
+            record["job_metadata"] = clean_metadata
+            new_records.append(record)
+
+        write_individual_records_unlocked(storage, (*records, *new_records))
+        return tuple(new_records)
 
 
 def record_optimization_metadata(

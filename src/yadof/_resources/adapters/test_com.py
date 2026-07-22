@@ -5,9 +5,9 @@ The default synthetic response mirrors the current HFSS rawData shape used by
 Phi, and Theta axes. A smaller generic summary/curve/surface profile is also
 kept for lightweight adapter examples.
 
-All outputs are deterministic nonlinear functions of a 20-dimensional input
-vector, so the optimizer cannot solve the task by matching one or two echoed
-variables.
+The HFSS-like and generic outputs are deterministic nonlinear functions of a
+20-dimensional input vector. The ``large_scale`` profile uses 30 inputs and
+larger 0D-through-3D fields for optimizer and surrogate stress tests.
 """
 
 from __future__ import annotations
@@ -22,6 +22,11 @@ INPUT_DIM = 20
 LATENT_DIM = 160
 CURVE_POINTS = 160
 SURFACE_SHAPE = (48, 48)
+LARGE_INPUT_DIM = 30
+LARGE_LATENT_DIM = 192
+LARGE_CURVE_POINTS = 20
+LARGE_SURFACE_SHAPE = (100, 100)
+LARGE_VOLUME_SHAPE = (5, 100, 100)
 PIN_STATES = (1, 2, 3)
 HFSS_FREQ_AXIS = np.asarray([2.40, 2.42, 2.44, 2.46, 2.48], dtype=np.float64)
 HFSS_GAIN_FREQ_AXIS = np.asarray([2.44], dtype=np.float64)
@@ -36,6 +41,11 @@ _NAME_RE = re.compile(r"^x(\d+)$")
 _RNG = np.random.default_rng(20260418)
 _W = _RNG.normal(size=(LATENT_DIM, INPUT_DIM)).astype(np.float64) / math.sqrt(INPUT_DIM)
 _B = _RNG.normal(scale=0.45, size=(LATENT_DIM,)).astype(np.float64)
+_LARGE_RNG = np.random.default_rng(20260720)
+_LARGE_W = _LARGE_RNG.normal(size=(LARGE_LATENT_DIM, LARGE_INPUT_DIM)).astype(np.float64) / math.sqrt(
+    LARGE_INPUT_DIM
+)
+_LARGE_B = _LARGE_RNG.normal(scale=0.45, size=(LARGE_LATENT_DIM,)).astype(np.float64)
 
 
 def _ordered_values(variables: Mapping[str, float] | Sequence[float]) -> tuple[float, ...]:
@@ -51,11 +61,13 @@ def _variable_sort_key(name: str) -> tuple[int, int | str]:
     return (1, str(name))
 
 
-def _unit_input_vector(variables: Mapping[str, float] | Sequence[float]) -> np.ndarray:
+def _unit_input_vector_for_dimension(
+    variables: Mapping[str, float] | Sequence[float], dimension: int
+) -> np.ndarray:
     values = list(_ordered_values(variables))
-    if len(values) < INPUT_DIM:
-        values.extend([0.5] * (INPUT_DIM - len(values)))
-    x = np.asarray(values[:INPUT_DIM], dtype=np.float64)
+    if len(values) < dimension:
+        values.extend([0.5] * (dimension - len(values)))
+    x = np.asarray(values[:dimension], dtype=np.float64)
     finite = np.isfinite(x)
     if np.any(finite) and (np.nanmin(x[finite]) < 0.0 or np.nanmax(x[finite]) > 1.0):
         lo = float(np.nanmin(x[finite]))
@@ -68,6 +80,10 @@ def _unit_input_vector(variables: Mapping[str, float] | Sequence[float]) -> np.n
     return np.clip(x, 0.0, 1.0)
 
 
+def _unit_input_vector(variables: Mapping[str, float] | Sequence[float]) -> np.ndarray:
+    return _unit_input_vector_for_dimension(variables, INPUT_DIM)
+
+
 def _sigmoid(values: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-values))
 
@@ -76,8 +92,16 @@ def _latent(x: np.ndarray) -> np.ndarray:
     return _sigmoid(3.4 * (_W @ x + _B))
 
 
+def _large_latent(x: np.ndarray) -> np.ndarray:
+    return _sigmoid(3.2 * (_LARGE_W @ x + _LARGE_B))
+
+
 def _p(h: np.ndarray, index: int) -> float:
     return float(h[int(index) % LATENT_DIM])
+
+
+def _lp(h: np.ndarray, index: int) -> float:
+    return float(h[int(index) % LARGE_LATENT_DIM])
 
 
 def _scalar_outputs(h: np.ndarray) -> np.ndarray:
@@ -420,6 +444,177 @@ def _generic_outputs(h: np.ndarray) -> dict[str, dict[str, object]]:
     }
 
 
+def _large_scalar_outputs(h: np.ndarray) -> tuple[float, float]:
+    scalar_0 = (
+        0.06
+        + 0.47 * _lp(h, 0)
+        + 0.22 * _lp(h, 17)
+        + 0.14 * (1.0 - _lp(h, 49))
+        + 0.07 * math.sin(_TWO_PI * _lp(h, 91))
+    )
+    scalar_1 = (
+        0.08
+        + 0.44 * (1.0 - _lp(h, 1))
+        + 0.24 * _lp(h, 23)
+        + 0.15 * _lp(h, 57)
+        + 0.06 * math.cos(_TWO_PI * _lp(h, 103))
+    )
+    clipped = np.clip(np.asarray([scalar_0, scalar_1], dtype=np.float64), 0.0, 1.0)
+    return float(clipped[0]), float(clipped[1])
+
+
+def _large_curve_outputs(h: np.ndarray, axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    center_0 = 0.12 + 0.76 * _lp(h, 2)
+    width_0 = 0.035 + 0.11 * _lp(h, 3)
+    curve_0 = (
+        0.12
+        + 0.24 * _lp(h, 4)
+        + 0.12 * np.sin(_TWO_PI * ((0.8 + 2.4 * _lp(h, 31)) * axis + _lp(h, 37)))
+        + (0.18 + 0.52 * _lp(h, 43)) * np.exp(-0.5 * ((axis - center_0) / width_0) ** 2)
+        - (0.05 + 0.22 * _lp(h, 47))
+        * np.exp(-0.5 * ((axis - (1.0 - center_0)) / (0.04 + 0.07 * _lp(h, 53))) ** 2)
+    )
+
+    center_1 = 0.10 + 0.80 * _lp(h, 5)
+    width_1 = 0.03 + 0.12 * _lp(h, 6)
+    curve_1 = (
+        0.18
+        + 0.20 * (1.0 - _lp(h, 7))
+        + 0.11 * np.cos(_TWO_PI * ((0.9 + 2.1 * _lp(h, 61)) * axis + _lp(h, 67)))
+        + (0.14 + 0.46 * _lp(h, 71)) * np.exp(-0.5 * ((axis - center_1) / width_1) ** 2)
+        - (0.04 + 0.20 * _lp(h, 73))
+        * np.exp(-0.5 * ((axis - (1.0 - center_1)) / (0.035 + 0.08 * _lp(h, 79))) ** 2)
+    )
+    return (
+        np.asarray(np.clip(curve_0, 0.0, 1.0), dtype=np.float32),
+        np.asarray(np.clip(curve_1, 0.0, 1.0), dtype=np.float32),
+    )
+
+
+def _large_surface_output(h: np.ndarray, axis_x: np.ndarray, axis_y: np.ndarray) -> np.ndarray:
+    x, y = np.meshgrid(axis_x, axis_y, indexing="ij")
+    center_x = 0.10 + 0.80 * _lp(h, 8)
+    center_y = 0.10 + 0.80 * _lp(h, 9)
+    width_x = 0.04 + 0.13 * _lp(h, 10)
+    width_y = 0.04 + 0.13 * _lp(h, 11)
+    peak = (0.18 + 0.58 * _lp(h, 83)) * np.exp(
+        -0.5 * (((x - center_x) / width_x) ** 2 + ((y - center_y) / width_y) ** 2)
+    )
+    valley = (0.05 + 0.28 * _lp(h, 89)) * np.exp(
+        -0.5
+        * (
+            ((x - (1.0 - center_x)) / (0.05 + 0.09 * _lp(h, 97))) ** 2
+            + ((y - (1.0 - center_y)) / (0.05 + 0.09 * _lp(h, 101))) ** 2
+        )
+    )
+    ripple = 0.08 * np.sin(_TWO_PI * ((0.8 + 2.0 * _lp(h, 107)) * x + _lp(h, 109))) * np.cos(
+        _TWO_PI * ((0.8 + 2.0 * _lp(h, 113)) * y + _lp(h, 127))
+    )
+    surface = 0.14 + 0.26 * _lp(h, 13) + ripple + peak - valley
+    return np.asarray(np.clip(surface, 0.0, 1.0), dtype=np.float32)
+
+
+def _large_volume_output(
+    h: np.ndarray, axis_z: np.ndarray, axis_x: np.ndarray, axis_y: np.ndarray
+) -> np.ndarray:
+    z, x, y = np.meshgrid(axis_z, axis_x, axis_y, indexing="ij")
+    center_z = 0.08 + 0.84 * _lp(h, 14)
+    center_x = 0.08 + 0.84 * _lp(h, 15)
+    center_y = 0.08 + 0.84 * _lp(h, 16)
+    width_z = 0.10 + 0.22 * _lp(h, 131)
+    width_x = 0.035 + 0.12 * _lp(h, 137)
+    width_y = 0.035 + 0.12 * _lp(h, 139)
+    blob = (0.16 + 0.56 * _lp(h, 149)) * np.exp(
+        -0.5
+        * (
+            ((z - center_z) / width_z) ** 2
+            + ((x - center_x) / width_x) ** 2
+            + ((y - center_y) / width_y) ** 2
+        )
+    )
+    trench = (0.04 + 0.24 * _lp(h, 151)) * np.exp(
+        -0.5
+        * (
+            ((z - (1.0 - center_z)) / (0.12 + 0.18 * _lp(h, 157))) ** 2
+            + ((x - (1.0 - center_x)) / (0.05 + 0.08 * _lp(h, 163))) ** 2
+            + ((y - (1.0 - center_y)) / (0.05 + 0.08 * _lp(h, 167))) ** 2
+        )
+    )
+    ripple = 0.06 * np.sin(
+        _TWO_PI
+        * (
+            (0.7 + 1.3 * _lp(h, 173)) * z
+            + (0.7 + 1.8 * _lp(h, 179)) * x
+            + (0.7 + 1.8 * _lp(h, 181)) * y
+            + _lp(h, 187)
+        )
+    )
+    volume = 0.16 + 0.24 * (1.0 - _lp(h, 19)) + ripple + blob - trench
+    return np.asarray(np.clip(volume, 0.0, 1.0), dtype=np.float32)
+
+
+def _large_block(
+    name: str,
+    values: np.ndarray | float,
+    axes: Sequence[tuple[str, np.ndarray]],
+) -> dict[str, object]:
+    data = np.asarray(values, dtype=np.float32)
+    arrays: dict[str, np.ndarray] = {"values": data}
+    axis_descriptors: list[dict[str, object]] = []
+    for index, (axis_name, coordinates) in enumerate(axes):
+        key = f"axis_{axis_name}"
+        coordinate_array = np.asarray(coordinates, dtype=np.float32)
+        arrays[key] = coordinate_array
+        axis_descriptors.append(
+            {
+                "index": int(index),
+                "size": int(data.shape[index]),
+                "name": str(axis_name),
+                "values_key": key,
+            }
+        )
+    return {
+        "arrays": arrays,
+        "metadata": {
+            "schema_version": 1,
+            "rawdata_name": name,
+            "shape": list(data.shape),
+            "axis_names": [name for name, _coordinates in axes],
+            "axes": axis_descriptors,
+            "profile": "large_scale",
+            "source": "test_com.evaluate_raw_data",
+        },
+    }
+
+
+def _large_scale_outputs(h: np.ndarray) -> dict[str, dict[str, object]]:
+    curve_axis = np.linspace(0.0, 1.0, LARGE_CURVE_POINTS, dtype=np.float32)
+    surface_axis_x = np.linspace(0.0, 1.0, LARGE_SURFACE_SHAPE[0], dtype=np.float32)
+    surface_axis_y = np.linspace(0.0, 1.0, LARGE_SURFACE_SHAPE[1], dtype=np.float32)
+    volume_axis_z = np.linspace(0.0, 1.0, LARGE_VOLUME_SHAPE[0], dtype=np.float32)
+    volume_axis_x = np.linspace(0.0, 1.0, LARGE_VOLUME_SHAPE[1], dtype=np.float32)
+    volume_axis_y = np.linspace(0.0, 1.0, LARGE_VOLUME_SHAPE[2], dtype=np.float32)
+
+    scalar_0, scalar_1 = _large_scalar_outputs(h)
+    curve_0, curve_1 = _large_curve_outputs(h, curve_axis)
+    surface = _large_surface_output(h, surface_axis_x, surface_axis_y)
+    volume = _large_volume_output(h, volume_axis_z, volume_axis_x, volume_axis_y)
+    return {
+        "scalar_0": _large_block("scalar_0", scalar_0, ()),
+        "scalar_1": _large_block("scalar_1", scalar_1, ()),
+        "curve_0": _large_block("curve_0", curve_0, (("x", curve_axis),)),
+        "curve_1": _large_block("curve_1", curve_1, (("x", curve_axis),)),
+        "surface": _large_block(
+            "surface", surface, (("x", surface_axis_x), ("y", surface_axis_y))
+        ),
+        "volume": _large_block(
+            "volume",
+            volume,
+            (("z", volume_axis_z), ("x", volume_axis_x), ("y", volume_axis_y)),
+        ),
+    }
+
+
 def evaluate_raw_data(
     variables: Mapping[str, float] | Sequence[float],
     *,
@@ -437,4 +632,7 @@ def evaluate_raw_data(
         return _hfss_like_outputs(h)
     if profile_key in {"generic", "mixed", "summary_curve_surface"}:
         return _generic_outputs(h)
+    if profile_key in {"large", "large_scale", "stress"}:
+        large_x = _unit_input_vector_for_dimension(variables, LARGE_INPUT_DIM)
+        return _large_scale_outputs(_large_latent(large_x))
     raise ValueError(f"unknown test_com profile: {profile!r}")

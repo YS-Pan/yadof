@@ -5,6 +5,7 @@
 
 ## Functionalities
 - Record individual raw variables/rawData/job metadata.
+- Record a population batch with one archive/manifest publication.
 - Record generation-level metadata.
 - Record surrogate-training metadata through `record_surrogate_metadata()`.
 - Require an immutable `RecordedDataPaths` value derived from the caller's workspace;
@@ -20,6 +21,10 @@
 - Individual writes validate names/status/source files before taking the workspace
   lock, replace that job's archive members, scrub/promote metadata, then atomically
   update JSONL. Duplicate jobs require explicit overwrite.
+- Batch writes reject duplicate job names, preserve request order, copy existing
+  archive state at most once, and publish all new evidence atomically. Evaluation
+  orchestration may fall back to single writes when batch preparation fails so
+  individual failure isolation remains intact.
 
 ## Mutability Profile
 - Metadata schemas should change cautiously because tools inspect these rows.

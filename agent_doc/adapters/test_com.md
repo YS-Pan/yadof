@@ -48,6 +48,9 @@ filled with `0.5`. Values already in `[0, 1]` are used as normalized inputs. If 
 input appears to be raw task values outside `[0, 1]`, the adapter rescales that
 vector into `[0, 1]` before generating deterministic synthetic responses.
 
+The HFSS-like and generic profiles consume 20 inputs. The `large_scale` profile
+consumes 30 inputs. Extra inputs are ignored by the selected profile.
+
 ## Output Profiles
 
 The default profile is `profile="hfss_like"`. It mirrors the current HFSS-like
@@ -69,6 +72,23 @@ blocks = evaluate_raw_data(variables, profile="generic")
 ```
 
 That profile returns `summary`, `curve`, and `surface` blocks.
+
+For optimizer, recording, and surrogate stress tests, use the larger profile:
+
+```python
+blocks = evaluate_raw_data(variables, profile="large_scale")
+```
+
+It returns six `float32` blocks:
+
+- `scalar_0` and `scalar_1`: scalar 0D values;
+- `curve_0` and `curve_1`: separate 20-point 1D curves with an `x` axis;
+- `surface`: one `100 x 100` field with `x` and `y` axes;
+- `volume`: one `5 x 100 x 100` field with `z`, `x`, and `y` axes.
+
+`large` and `stress` are aliases for this profile. Its arrays are deterministic
+nonlinear functions of all 30 inputs. The adapter intentionally does not prescribe
+objective windows or costs; those remain task-owned `calc_cost.py` policy.
 
 This adapter is useful for checking `workflow.py`, `calc_cost.py`, `recorded_data`,
 optimizer behavior, and surrogate training without opening AEDT.

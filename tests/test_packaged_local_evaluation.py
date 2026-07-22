@@ -278,11 +278,16 @@ def test_packaged_record_failure_is_isolated_per_individual(
     root = _workspace(tmp_path)
     real_record_result = evaluate_api.record_result
 
+    def force_individual_fallback(workspace, results):
+        del workspace, results
+        raise OSError("simulated batch record failure")
+
     def flaky_record_result(workspace, result):
         if result.unnormalized_variables[0] < 0:
             raise OSError("simulated individual record failure")
         return real_record_result(workspace, result)
 
+    monkeypatch.setattr(evaluate_api, "record_results", force_individual_fallback)
     monkeypatch.setattr(evaluate_api, "record_result", flaky_record_result)
     costs = evaluate_population(
         root,

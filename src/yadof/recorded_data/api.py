@@ -18,6 +18,9 @@ from .paths import (
 )
 
 
+JobRecordRequest = _records.JobRecordRequest
+
+
 def _context_and_storage(
     workspace: WorkspaceLike,
 ) -> tuple[WorkspaceContext, RecordedDataPaths]:
@@ -47,6 +50,16 @@ def record_job_result(
         status=status,
         overwrite=overwrite,
     )
+
+
+def record_job_results(
+    workspace: WorkspaceLike,
+    requests: Sequence[JobRecordRequest],
+) -> tuple[dict[str, object], ...]:
+    """Atomically store one evaluation batch without per-job archive copies."""
+
+    _context, storage = _context_and_storage(workspace)
+    return _records.record_job_results(storage, requests)
 
 
 def list_records(workspace: WorkspaceLike) -> tuple[dict[str, object], ...]:
@@ -214,6 +227,7 @@ __all__ = [
     "list_records",
     "list_surrogate_metadata",
     "record_job_result",
+    "record_job_results",
     "record_optimization_metadata",
     "record_surrogate_metadata",
 ]

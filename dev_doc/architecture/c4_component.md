@@ -10,8 +10,8 @@
 - `evaluate_manager`: job preparation, local subprocesses, HTCondor submit/collect,
   resource calibration/retry, execution limits, worker compatibility bootstrap, and
   recording handoff.
-- `recorded_data`: workspace-local JSONL/zip evidence, locks, diagnostics, and
-  dynamically interpreted history.
+- `recorded_data`: workspace-local JSONL/zip evidence, locks, atomic generation-
+  batch recording, diagnostics, and dynamically interpreted history.
 - `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,

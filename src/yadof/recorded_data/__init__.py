@@ -19,6 +19,7 @@ from .api import (
     list_records,
     list_surrogate_metadata,
     record_job_result,
+    record_job_results,
     record_optimization_metadata,
     record_surrogate_metadata,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "list_records",
     "list_surrogate_metadata",
     "record_job_result",
+    "record_job_results",
     "record_optimization_metadata",
     "record_surrogate_metadata",
 ]

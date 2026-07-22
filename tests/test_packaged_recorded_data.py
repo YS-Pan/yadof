@@ -300,6 +300,63 @@ def test_concurrent_archive_and_manifest_writes_keep_every_record(
     assert not tuple((root / "recorded_data").rglob("*.tmp"))
 
 
+def test_batch_recording_copies_existing_archive_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yadof.recorded_data import rawdata_store
+
+    root = _workspace(tmp_path / "workspace")
+    recorded_api.record_job_result(
+        root,
+        "seed",
+        (0.0,),
+        _write_rawdata(root / "jobs/seed/rawData", 1.0),
+    )
+    requests = tuple(
+        (
+            f"batch_{index}",
+            (0.0,),
+            _write_rawdata(
+                root / f"jobs/batch_{index}/rawData",
+                float(index + 2),
+            ),
+            {"population_index": index},
+            "completed",
+        )
+        for index in range(3)
+    )
+
+    real_copy = rawdata_store.shutil.copy2
+    copied: list[tuple[object, object]] = []
+
+    def counted_copy(source, destination, *args, **kwargs):
+        copied.append((source, destination))
+        return real_copy(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(rawdata_store.shutil, "copy2", counted_copy)
+    recorded = recorded_api.record_job_results(root, requests)
+
+    assert [record["job_name"] for record in recorded] == [
+        "batch_0",
+        "batch_1",
+        "batch_2",
+    ]
+    assert len(copied) == 1
+    assert recorded_api.get_job_names(root) == (
+        "seed",
+        "batch_0",
+        "batch_1",
+        "batch_2",
+    )
+    assert [costs[0] for _job_name, costs in recorded_api.calculate_costs(root)] == [
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+    ]
+    assert not tuple((root / "recorded_data").glob("*.tmp"))
+
+
 def test_optimization_and_surrogate_metadata_stay_workspace_local(
     tmp_path: Path,
 ) -> None:
