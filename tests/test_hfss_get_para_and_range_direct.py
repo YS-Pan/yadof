@@ -69,6 +69,25 @@ def test_direct_parser_tolerates_non_utf8_bytes(tmp_path):
     assert parameters == [generator.OptParam(variable_name, ((1.0, 2.0),), 1.5, "mm")]
 
 
+def test_direct_parser_reads_inline_variableprop_optimization_ranges(tmp_path):
+    aedt_path = _temporary_aedt_path(tmp_path)
+    aedt_path.write_text(
+        "VariableProp('Wc1', 'UD', '', '36.9mm', "
+        "oa(i=true, int=false, Min='30mm', Max='40mm', "
+        "Level='[22.5: 67.5] mm'))\n"
+        "VariableProp('mode', 'UD', '', '2', "
+        "oa(i=true, int=false, Min='1', Max='3', Level='[1, 2, 3]'))\n",
+        encoding="utf-8",
+    )
+
+    parameters = generator._collect_parameters_from_aedt_file(aedt_path)
+
+    assert parameters == [
+        generator.OptParam("mode", (1.0, 2.0, 3.0), 2.0, ""),
+        generator.OptParam("Wc1", ((30.0, 40.0),), 36.9, "mm"),
+    ]
+
+
 def test_single_aedt_scan_uses_the_only_project(tmp_path):
     expected = _temporary_aedt_path(tmp_path)
     expected.write_bytes(b"")

@@ -249,7 +249,8 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             assert successful_metadata["workspace_identity"]["root"] == str(workspace.resolve())
             assert successful_metadata["effective_config_summary"]["EVALUATION_TIMEOUT_SEC"]["value"] is None
             assert (successful_job / "worker_misc.py").is_file()
-            assert (successful_job / "yadof_worker_config.json").is_file()
+            assert not (successful_job / "yadof_worker_package.zip").exists()
+            assert not (successful_job / "yadof_worker_config.json").exists()
             assert not (successful_job / "calc_cost.py").exists()
             assert not (successful_job / "cost.json").exists()
             recorded_dir = workspace / "recorded_data"
@@ -549,7 +550,9 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/evaluate_manager/recorded_data_client.py" in wheel_names
         assert "yadof/evaluate_manager/types.py" in wheel_names
         assert "yadof/evaluate_manager/worker_files/worker_misc.py" in wheel_names
-        assert "yadof/evaluate_manager/worker_files/sitecustomize.py" in wheel_names
+        assert "yadof/evaluate_manager/worker_files/sitecustomize.py" not in wheel_names
+        assert "yadof/evaluate_manager/worker_files/yadof_worker.py" not in wheel_names
+        assert "yadof/evaluate_manager/worker_files/run_workflow.py" not in wheel_names
         assert "yadof/recorded_data/__init__.py" in wheel_names
         assert "yadof/recorded_data/api.py" in wheel_names
         assert "yadof/recorded_data/manifest_store.py" in wheel_names

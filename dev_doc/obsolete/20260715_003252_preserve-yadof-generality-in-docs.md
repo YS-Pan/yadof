@@ -73,3 +73,7 @@
 - Keep this automatic toDo active for other incidental occurrences until its
   automatic obsolete policy archives it; one local correction does not imply that
   every document has been reviewed.
+
+## Archive
+
+- Archived on 2026-07-22 after the default seven-day obsolete deadline elapsed.

@@ -11,8 +11,11 @@ python -m pip install ".\dist\yadof-0.1.0-py3-none-any.whl[surrogate,plot]"
 ```
 
 `yadof --version` and `yadof version` report the same package version. Distributed
-workers must import that exact version; transferred worker bootstrap records an
-actionable failure when yadof is absent or incompatible.
+jobs do **not** carry the yadof package, wheel, source tree, or runtime archive.
+HTCondor executes job-local `workflow.py` directly. The assigned parameter snapshot
+is self-contained and the package copies only `worker_misc.py` beside the workflow.
+Python, NumPy, adapters' third-party dependencies, PyAEDT, and simulator software
+still belong to the worker environment.
 
 ## Initialize and inspect
 
@@ -49,6 +52,11 @@ Relative configured paths resolve from the selected workspace. Two workspaces ca
 be used consecutively or concurrently in one process without sharing task modules,
 records, surrogate state, or output paths. Installed package resources are read-only
 inputs and are never used as a runtime-data location.
+
+Prepared distributed jobs contain the task payload, assigned
+`parameters_constraints.py`, and `worker_misc.py`. A distributed workflow must not
+import yadof; import only same-directory task files, the Python standard library,
+and dependencies deliberately installed on execute nodes.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

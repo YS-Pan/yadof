@@ -78,7 +78,6 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
         "first_com.py",
         "second_com.py",
         "worker_misc.py",
-        "yadof_worker_config.json",
     ):
         assert (first.directory / name).is_file()
     assert (first.directory / "assets/nested/lookup.bin").read_bytes() == b"arbitrary task bytes"
@@ -92,6 +91,8 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
     assigned = (first.directory / "parameters_constraints.py").read_text(encoding="utf-8")
     assert "normalized_value=0.25" in assigned
     assert "value=-0.5" in assigned
+    assert "class Parameter:" in assigned
+    assert "import yadof" not in assigned
     first_metadata = _metadata(first.directory)
     second_metadata = _metadata(second.directory)
     assert first_metadata["job_static_hash"] == second_metadata["job_static_hash"]
@@ -109,11 +110,7 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
         "LOCAL_EVALUATION_MAX_WORKERS",
     }
     assert summary["EVALUATION_TIMEOUT_SEC"]["value"] == 12.0
-    worker_config = json.loads(
-        (first.directory / "yadof_worker_config.json").read_text(encoding="utf-8")
-    )
-    assert worker_config["effective_config"] == summary
-    assert "OPTIMIZE_POPULATION_SIZE" not in json.dumps(worker_config)
+    assert "OPTIMIZE_POPULATION_SIZE" not in json.dumps(first_metadata)
 
 
 def test_prepare_job_reloads_task_and_hashes_definitions_not_assignments(tmp_path: Path) -> None:
@@ -150,7 +147,10 @@ def test_prepare_job_reloads_task_and_hashes_definitions_not_assignments(tmp_pat
     assert _metadata(third.directory)["job_static_hash"] != _metadata(first.directory)["job_static_hash"]
 
 
-@pytest.mark.parametrize("reserved_name", ("worker_misc.py", "YADOF_WORKER_CONFIG.JSON"))
+@pytest.mark.parametrize(
+    "reserved_name",
+    ("worker_misc.py", "WORKER_MISC.PY"),
+)
 def test_prepare_job_rejects_reserved_filename_collisions(
     tmp_path: Path, reserved_name: str
 ) -> None:

@@ -48,6 +48,13 @@ synthetic generation-zero calibration. Distributed normal jobs receive a schedul
 deadline. Memory/disk holds may be freshly resubmitted by yadof with bounded,
 independent doubling. yadof diagnoses HTCondor but never installs or repairs it.
 
+The Windows distributed submit contract runs `workflow.py` directly with
+`transfer_executable=True`, `load_profile=True`, and `run_as_owner=False`. Input
+transfer contains the task/job files and `worker_misc.py`, never a yadof runtime
+package. Output transfer returns `rawData.zip` plus `individual_metadata.json` and
+does not return `rawData/`. Missing, nested, or malformed zip contents become
+per-individual diagnostics.
+
 ## History and tools
 
 ```powershell

@@ -10,6 +10,7 @@ import time
 from typing import Callable, Mapping, Sequence
 
 from ..config import LoadedConfig, load_config
+from ..job_template import RawDataContractError, validate_rawdata_directory
 from ..workspace import WorkspaceContext
 from .config import (
     CONDOR_CLUSTER_ID_FILE_NAME,
@@ -94,6 +95,8 @@ _WINDOWS_STATUS_MESSAGES = {
         "environment reached by the worker's .py file association.",
     ),
 }
+_MATCH_DIAGNOSTIC_MIN_DELAY_SEC = 5.0
+_MATCH_DIAGNOSTIC_MAX_DELAY_SEC = 60.0
 
 
 @dataclass(frozen=True)
@@ -163,6 +166,11 @@ def run_condor_jobs(
     deadline = None if timeout_sec is None else time.monotonic() + float(timeout_sec)
     poll_sec = max(0.1, htcondor_poll_sec(effective))
     last_report = 0.0
+    match_diagnostic_at = time.monotonic() + min(
+        _MATCH_DIAGNOSTIC_MAX_DELAY_SEC,
+        max(_MATCH_DIAGNOSTIC_MIN_DELAY_SEC, poll_sec * 2.0),
+    )
+    match_diagnostic_reported = False
     if pending:
         _progress(f"htcondor: waiting for {len(pending)} jobs")
     while pending and (deadline is None or time.monotonic() < deadline):
@@ -247,6 +255,10 @@ def run_condor_jobs(
                                     f"disk={decision.state.request.disk_text}"
                                 )
                                 continue
+                else:
+                    remove_error = remove_condor_job(
+                        effective.workspace, submission, config=effective
+                    )
             collection_options: dict[str, object] = {}
             if remove_error is not None:
                 collection_options["remove_error"] = remove_error
@@ -280,6 +292,23 @@ def run_condor_jobs(
         if completed_now or now >= last_report + poll_sec:
             _progress(f"htcondor: pending={len(pending)}/{total}")
             last_report = now
+        if (
+            pending
+            and not match_diagnostic_reported
+            and now >= match_diagnostic_at
+        ):
+            representative = next(iter(pending.values()))
+            diagnostic = condor_matchmaking_diagnostic(representative)
+            if diagnostic:
+                job_id = (
+                    f"{representative.cluster_id}.0"
+                    if representative.cluster_id is not None
+                    else representative.job.name
+                )
+                _progress(
+                    f"htcondor: scheduling diagnostic for {job_id}: {diagnostic}"
+                )
+            match_diagnostic_reported = True
         if pending:
             time.sleep(poll_sec)
 
@@ -419,7 +448,9 @@ def write_condor_submit_file(
         effective.workspace, job, config=effective
     )
     prepare_sandbox_env_dirs(job.directory)
-    inputs = transfer_input_files(job.directory, executable_name=WORKFLOW_SCRIPT_NAME)
+    inputs = transfer_input_files(
+        job.directory, executable_name=WORKFLOW_SCRIPT_NAME
+    )
     requirements = htcondor_requirements(effective).strip()
     submit_environment = condor_environment_string(effective)
     lines: list[str] = [
@@ -440,6 +471,7 @@ def write_condor_submit_file(
             "should_transfer_files = YES",
             "when_to_transfer_output = ON_EXIT",
             "transfer_executable = True",
+            f"transfer_output_files = {RAW_DATA_TRANSFER_ZIP_NAME},{INDIVIDUAL_METADATA_FILE_NAME}",
         ]
     )
     if inputs:
@@ -538,11 +570,16 @@ def collect_condor_result(
         else condor_hold_info(submission) if terminal_reason == "held" else {}
     )
     timeout_hold = terminal_reason == "held" and _is_timeout_hold(hold_info)
+    zip_restore_error = restore_rawdata_transfer_zip(job.directory)
     raw_paths = raw_data_paths(job.directory)
-    zip_restore_error = None
-    if not raw_paths:
-        zip_restore_error = restore_rawdata_transfer_zip(job.directory)
-        raw_paths = raw_data_paths(job.directory)
+    if zip_restore_error is None and raw_paths:
+        try:
+            raw_paths = validate_rawdata_directory(
+                job.directory / RAW_DATA_DIR_NAME
+            )
+        except RawDataContractError as exc:
+            zip_restore_error = f"invalid restored rawData: {exc}"
+            raw_paths = ()
     log_info = condor_log_info(job.directory)
     resource_usage = (
         dict(preloaded_resource_usage)
@@ -593,13 +630,14 @@ def collect_condor_result(
             )
         elif _workflow_reported_rawdata(individual_metadata):
             error = (
-                "Workflow reported done and listed rawData files, but no .npz files were returned under "
-                f"{RAW_DATA_DIR_NAME}/. This usually means the job used the legacy Windows transfer contract "
-                f"that did not return nested {RAW_DATA_DIR_NAME}/*.npz files, or {RAW_DATA_TRANSFER_ZIP_NAME} "
-                "was not created/transferred."
+                "Workflow reported done and listed rawData files, but the required flat "
+                f"{RAW_DATA_TRANSFER_ZIP_NAME} output was missing, invalid, or contained no .npz files."
             )
         else:
-            error = f"HTCondor job finished without .npz files under {RAW_DATA_DIR_NAME}/"
+            error = (
+                f"HTCondor job finished without valid .npz files in "
+                f"{RAW_DATA_TRANSFER_ZIP_NAME}"
+            )
 
     metadata.update(
         status=status,
@@ -695,6 +733,55 @@ def condor_resource_usage(
     return {"condor_resource_usage_query_error": "; ".join(errors)} if errors else {}
 
 
+def condor_matchmaking_diagnostic(submission: CondorSubmission) -> str:
+    """Summarize why one representative queued job has not matched a slot."""
+
+    if submission.cluster_id is None:
+        return ""
+    job_id = f"{submission.cluster_id}.0"
+    try:
+        completed = subprocess.run(
+            ["condor_q", job_id, "-better-analyze:nouserprios"],
+            cwd=str(submission.job.directory),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        return f"condor_q -better-analyze unavailable: {exc}"
+    output = (completed.stdout or completed.stderr or "").strip()
+    if completed.returncode != 0:
+        detail = tail(output.replace("\r", " ").replace("\n", " "), limit=500)
+        return (
+            f"condor_q -better-analyze exited {completed.returncode}"
+            f"{f': {detail}' if detail else ''}"
+        )
+    return _summarize_matchmaking_analysis(output)
+
+
+def _summarize_matchmaking_analysis(output: str) -> str:
+    details: list[str] = []
+    failed_conditions = re.findall(
+        r"^\[\d+\]\s+0\s+(.+?)\s*$",
+        output,
+        flags=re.MULTILINE,
+    )
+    for condition in failed_conditions:
+        details.append(f"failed requirement: {condition.strip()}")
+    if "No machines matched the job's constraints" in output:
+        details.append("no machines matched the job's constraints")
+    reason_match = re.search(
+        r"^Reason for last match failure:\s*(.+?)\s*$",
+        output,
+        flags=re.MULTILINE,
+    )
+    if reason_match is not None:
+        details.append(f"last match failure: {reason_match.group(1).strip()}")
+    if not details:
+        return ""
+    return "; ".join(dict.fromkeys(details))
+
+
 def _first_condor_json_ad(text: str) -> Mapping[str, object] | None:
     try:
         decoded = json.loads(text)
@@ -775,23 +862,46 @@ def collect_failure_result(
 def restore_rawdata_transfer_zip(job_dir: Path) -> str | None:
     archive_path = job_dir / RAW_DATA_TRANSFER_ZIP_NAME
     if not archive_path.is_file():
-        return None
+        return f"required HTCondor output is missing: {RAW_DATA_TRANSFER_ZIP_NAME}"
     import zipfile
 
     raw_dir = job_dir / RAW_DATA_DIR_NAME
     raw_dir.mkdir(parents=True, exist_ok=True)
     try:
         with zipfile.ZipFile(archive_path, "r") as archive:
-            for member in archive.infolist():
-                member_name = member.filename.replace("\\", "/")
-                if member.is_dir() or "/" in member_name or not member_name.endswith(".npz"):
-                    continue
-                target = raw_dir / Path(member_name).name
+            members = _flat_rawdata_zip_members(archive)
+            for existing in raw_dir.iterdir():
+                if existing.is_dir():
+                    return (
+                        f"cannot restore {RAW_DATA_TRANSFER_ZIP_NAME}: "
+                        f"{RAW_DATA_DIR_NAME} already contains nested directory {existing.name!r}"
+                    )
+                existing.unlink()
+            for member in members:
+                target = raw_dir / member.filename
                 with archive.open(member, "r") as source, target.open("wb") as dest:
                     dest.write(source.read())
-    except (OSError, zipfile.BadZipFile) as exc:
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
         return f"could not restore {RAW_DATA_TRANSFER_ZIP_NAME}: {exc}"
     return None
+
+
+def _flat_rawdata_zip_members(archive) -> tuple[object, ...]:
+    members = tuple(archive.infolist())
+    names: set[str] = set()
+    for member in members:
+        name = str(member.filename)
+        if member.is_dir() or not name or "/" in name or "\\" in name:
+            raise ValueError(
+                f"archive member must be a direct .npz file, got {name!r}"
+            )
+        if Path(name).suffix.casefold() != ".npz":
+            raise ValueError(f"archive member is not .npz: {name!r}")
+        key = name.casefold()
+        if key in names:
+            raise ValueError(f"archive contains duplicate member name: {name!r}")
+        names.add(key)
+    return members
 
 
 def _job_local_outputs_ready(job_dir: Path, individual_metadata: Mapping[str, object]) -> bool:
@@ -809,7 +919,7 @@ def _job_local_outputs_ready(job_dir: Path, individual_metadata: Mapping[str, ob
         elif raw_paths:
             return True
         return _rawdata_transfer_zip_is_readable(job_dir)
-    return status == "error"
+    return status == "error" and _rawdata_transfer_zip_is_readable(job_dir)
 
 
 def _rawdata_transfer_zip_is_readable(job_dir: Path) -> bool:
@@ -820,8 +930,9 @@ def _rawdata_transfer_zip_is_readable(job_dir: Path) -> bool:
 
     try:
         with zipfile.ZipFile(archive_path, "r") as archive:
+            _flat_rawdata_zip_members(archive)
             return archive.testzip() is None
-    except (OSError, zipfile.BadZipFile):
+    except (OSError, ValueError, zipfile.BadZipFile):
         return False
 
 
@@ -956,7 +1067,16 @@ def _read_tail(path: Path, limit: int = 4000) -> str:
 
 
 def _quote_submit_atom(value: str) -> str:
-    return f'"{value}"' if any(char in value for char in (" ", ",")) else value
+    text = str(value)
+    if any(char in text for char in ("\r", "\n", ",")):
+        raise ValueError(
+            "HTCondor transferred filenames cannot contain commas or newlines: "
+            f"{text!r}"
+        )
+    # Submit values preserve spaces literally. Double quotes become part of a
+    # Windows transfer filename, so quoting a path such as "model file.aedt"
+    # makes Condor try to open a filename that includes the quote characters.
+    return text
 
 
 def _condor_bool(value: bool) -> str:

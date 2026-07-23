@@ -12,6 +12,9 @@ from datetime import datetime
 from pathlib import Path
 
 
+RAWDATA_SCHEMA_VERSION = 1
+
+
 def env_int(name: str, default: int, *, minimum: int) -> int:
     raw = os.environ.get(name)
     return default if raw is None or not raw.strip() else max(minimum, int(raw))
@@ -94,22 +97,35 @@ def runtime_identity(
 def prepare_rawdata_dir(raw_data_dir: str | Path, transfer_zip: str | Path) -> None:
     raw_data_dir, transfer_zip = Path(raw_data_dir), Path(transfer_zip)
     raw_data_dir.mkdir(parents=True, exist_ok=True)
-    for path in raw_data_dir.glob("*.npz"):
+    for path in raw_data_dir.iterdir():
+        if path.is_dir():
+            raise ValueError(
+                f"rawData must be flat; remove nested directory: {path.name}"
+            )
         path.unlink()
     transfer_zip.unlink(missing_ok=True)
 
 
 def write_rawdata_transfer_zip(raw_data_dir: str | Path, transfer_zip: str | Path) -> None:
     raw_data_dir, transfer_zip = Path(raw_data_dir), Path(transfer_zip)
-    files = sorted(raw_data_dir.glob("*.npz"))
-    if not files:
-        transfer_zip.unlink(missing_ok=True)
-        return
+    raw_data_dir.mkdir(parents=True, exist_ok=True)
+    entries = sorted(raw_data_dir.iterdir(), key=lambda path: path.name.casefold())
+    invalid = [
+        path.name
+        for path in entries
+        if path.is_dir() or not path.is_file() or path.suffix.casefold() != ".npz"
+    ]
+    files = [path for path in entries if path.is_file() and path.suffix.casefold() == ".npz"]
     temp_path = transfer_zip.with_name(transfer_zip.name + ".tmp")
     with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_STORED) as archive:
         for path in files:
             archive.write(path, arcname=path.name)
     os.replace(temp_path, transfer_zip)
+    if invalid:
+        raise ValueError(
+            "rawData must contain only direct .npz files; invalid entries: "
+            + ", ".join(invalid)
+        )
 
 
 __all__ = [
@@ -121,6 +137,7 @@ __all__ = [
     "prepare_rawdata_dir",
     "raw_data_file_names",
     "runtime_identity",
+    "RAWDATA_SCHEMA_VERSION",
     "write_json",
     "write_rawdata_transfer_zip",
 ]

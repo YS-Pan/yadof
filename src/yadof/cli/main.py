@@ -199,7 +199,7 @@ def _task_copy_adapter_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _task_extract_parameters_command(args: argparse.Namespace) -> int:
+def _task_hfss_extract_parameters_command(args: argparse.Namespace) -> int:
     if not _confirm_destructive(
         confirmed=args.yes,
         prompt=(
@@ -467,7 +467,13 @@ def build_parser() -> argparse.ArgumentParser:
     task_copy.add_argument("--workspace", default=".")
     task_copy.set_defaults(handler=_task_copy_adapter_command)
 
-    task_extract = task_subparsers.add_parser(
+    task_hfss = task_subparsers.add_parser(
+        "hfss", help="manage HFSS-specific workspace task inputs"
+    )
+    task_hfss_subparsers = task_hfss.add_subparsers(
+        dest="hfss_task_command", metavar="ACTION", required=True
+    )
+    task_extract = task_hfss_subparsers.add_parser(
         "extract-parameters",
         help="extract HFSS optimization variables into the workspace task",
         description=(
@@ -492,7 +498,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="confirm replacement non-interactively",
     )
-    task_extract.set_defaults(handler=_task_extract_parameters_command)
+    task_extract.set_defaults(handler=_task_hfss_extract_parameters_command)
     return parser
 
 

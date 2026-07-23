@@ -11,10 +11,13 @@ transfer_executable = True
 getenv = False
 load_profile = True
 run_as_owner = False
+transfer_output_files = rawData.zip,individual_metadata.json
 ```
 
 The payload is a self-contained job-local `workflow.py`. Python itself is not named
-as the HTCondor `executable` in the normal submit file.
+as the HTCondor `executable` in the normal submit file. Yadof is not transferred to
+the worker. The assigned parameter snapshot and `worker_misc.py` are direct job
+files; the workflow returns flat `rawData.zip` rather than `rawData/`.
 
 ## Pool Naming And Network Interface
 
@@ -91,8 +94,9 @@ TEMP=._tmp
 TMP=._tmp
 ```
 
-The workflow also bootstraps these directories and pins Windows known folders so
-AEDT's job-local document paths remain inside the execute sandbox.
+The workflow also bootstraps job-local home/appdata/temp directories before starting
+external software. Any additional Windows known-folder policy remains an
+administrator deployment decision rather than a job-side registry mutation.
 
 ## Debugging Order
 
@@ -117,8 +121,10 @@ AEDT's job-local document paths remain inside the execute sandbox.
 - Direct `.py` execution depends on worker-side associations and ACLs.
 - Absolute-interpreter submit files can fail differently across workers and are not
   the current project contract.
-- Missing optional output files should not hold jobs; rely on HTCondor's default
-  output transfer and job metadata diagnostics.
+- `rawData.zip` and `individual_metadata.json` are required outputs. The workflow
+  must create metadata before expensive work and create the zip on both success and
+  error paths so the explicit output list does not turn a missing artifact into an
+  opaque transfer hold.
 
 ## Useful Configuration Knobs
 

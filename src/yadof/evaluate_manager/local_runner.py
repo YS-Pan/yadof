@@ -71,11 +71,13 @@ def run_local_job(
     raw_paths = raw_data_paths(job.directory)
     individual_metadata = read_individual_metadata(job.directory)
     rawdata_error: str | None = None
-    if raw_paths:
+    rawdata_dir = job.directory / RAW_DATA_DIR_NAME
+    if rawdata_dir.exists():
         try:
-            raw_paths = validate_rawdata_directory(job.directory / RAW_DATA_DIR_NAME)
+            raw_paths = validate_rawdata_directory(rawdata_dir)
         except RawDataContractError as exc:
             rawdata_error = str(exc)
+            raw_paths = ()
     cost_path = job.directory / "cost.json"
     if timed_out:
         status = "timeout"

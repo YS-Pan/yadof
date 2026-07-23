@@ -249,8 +249,10 @@ def test_packaged_parameter_materialization_and_rawdata_contract(tmp_path: Path)
     }
 
     assert raw_values == (1.0,)
-    assert "from yadof.job_template import Parameter" in snapshot
+    assert "class Parameter:" in snapshot
+    assert "import yadof" not in snapshot
     assert not (job_dir / "parameters_constraints_class.py").exists()
-    assert isinstance(loaded_snapshot.PARAMETERS[0], Parameter)
+    assert not isinstance(loaded_snapshot.PARAMETERS[0], Parameter)
+    assert loaded_snapshot.PARAMETERS[0].name == "x"
     assert loaded_snapshot.PARAMETERS[0].value == pytest.approx(1.0)
     assert validate_rawdata_item(rawdata)["values"].tolist() == [1.0, 2.0]

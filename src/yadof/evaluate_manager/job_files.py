@@ -22,17 +22,14 @@ from .types import JobSpec
 
 
 RAW_DATA_DIR_NAME = "rawData"
-WORKER_CONFIG_FILE_NAME = "yadof_worker_config.json"
-PACKAGE_WORKER_FILES = ("worker_misc.py", "sitecustomize.py")
-RESERVED_WORKER_FILE_NAMES = frozenset(
-    (*PACKAGE_WORKER_FILES, WORKER_CONFIG_FILE_NAME)
-)
+PACKAGE_WORKER_FILES = ("worker_misc.py",)
+RESERVED_WORKER_FILE_NAMES = frozenset(PACKAGE_WORKER_FILES)
 
 EXCLUDED_TASK_NAMES = {
     "__pycache__",
     "calc_cost.py",
     "cost.json",
-    "rawData_outputs.zip",
+    "rawData.zip",
     "metadata.json",
     "metaData.json",
     "individual_metadata.json",
@@ -65,7 +62,6 @@ HASH_EXCLUDED_NAMES = {
     "metaData.json",
     "individual_metadata.json",
     "individual_metadata.json.tmp",
-    WORKER_CONFIG_FILE_NAME,
 }
 HASH_EXCLUDED_DIRS = {
     "__pycache__",
@@ -151,14 +147,7 @@ def prepare_job(
         mode=mode,
         timeout_sec=timeout_sec,
     )
-    worker_config = {
-        "schema_version": 1,
-        "yadof_version": __version__,
-        "workspace_identity": workspace_identity,
-        "effective_config": config_summary,
-    }
     _copy_package_worker_files(job_dir)
-    _write_json(job_dir / WORKER_CONFIG_FILE_NAME, worker_config)
     (job_dir / RAW_DATA_DIR_NAME).mkdir(exist_ok=True)
     job_static_hash = prepared_job_static_hash(job_dir)
 
@@ -175,7 +164,6 @@ def prepare_job(
         "yadof_version": __version__,
         "workspace_identity": workspace_identity,
         "effective_config_summary": config_summary,
-        "worker_config_file": WORKER_CONFIG_FILE_NAME,
         **evaluation_context,
     }
     _write_json(job_dir / "metadata.json", metadata)
@@ -377,7 +365,6 @@ __all__ = [
     "JobPreparationError",
     "PACKAGE_WORKER_FILES",
     "RESERVED_WORKER_FILE_NAMES",
-    "WORKER_CONFIG_FILE_NAME",
     "effective_worker_config_summary",
     "new_job_name",
     "prepare_job",

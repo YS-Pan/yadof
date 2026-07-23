@@ -11,19 +11,20 @@ A good workflow does these things:
 - reads assigned values from the job-local `parameters_constraints.py`,
 - writes `individual_metadata.json` with `status`, `started_at`, and `ended_at`,
 - writes rawData `.npz` files directly under `rawData/`,
+- creates top-level `rawData.zip` whose members are those direct `.npz` basenames,
 - records exception details when possible,
 - exits with an error when the workflow failed,
 - never writes `cost.json` and never calculates final objective costs.
 
 Use helpers from `worker_misc.py`; the installed package copies that stable file into
 each prepared job. Do not place your own `worker_misc.py` or
-`yadof_worker_config.json` in workspace `job_template/`: those filenames are
-reserved and job preparation rejects a collision instead of overwriting it.
+case-variant equivalent in workspace `job_template/`: that filename is reserved and
+job preparation rejects a collision instead of overwriting it.
 
-Current packaged local jobs consume the returned `rawData/` directory directly and
-do not require `rawData_outputs.zip`. The helper can still create that archive for
-the packaged distributed path; worker bootstrap defines the
-distributed transfer rule.
+Local jobs consume `rawData/` directly. Distributed jobs run `workflow.py` directly
+and HTCondor returns `rawData.zip` instead of the directory. Therefore write the zip
+on both success and exception paths. Do not import yadof from workflow or assigned
+parameter code: yadof is intentionally not sent to execute nodes.
 
 ## Minimal Skeleton
 
@@ -47,7 +48,7 @@ from worker_misc import (
 
 BASE_DIR = Path(__file__).resolve().parent
 RAW_DATA_DIR = BASE_DIR / "rawData"
-RAW_DATA_TRANSFER_ZIP = BASE_DIR / "rawData_outputs.zip"
+RAW_DATA_TRANSFER_ZIP = BASE_DIR / "rawData.zip"
 INDIVIDUAL_METADATA = BASE_DIR / "individual_metadata.json"
 
 
@@ -126,6 +127,10 @@ Each rawData file needs:
 - optional ordered `axes` descriptors with `index`, `size`, `name`, and `values_key`.
 
 Keep `rawData/` flat. Do not put subfolders inside it.
+
+The zip must also be flat. Valid members look like `response_curve.npz`; invalid
+members include `rawData/response_curve.npz`, any directory, or a non-`.npz` file.
+The helper enforces this rule and publishes the zip atomically.
 
 Avoid storing the full variable vector in every rawData metadata item. The framework
 records variables separately.

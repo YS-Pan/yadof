@@ -1,4 +1,4 @@
-# tools/specific/hfss/get_para_and_range_direct.py
+"""Extract optimization parameters from an HFSS AEDT project."""
 from __future__ import annotations
 
 import ast
@@ -261,6 +261,14 @@ _OPTIM_VAR_LINE_RE = re.compile(
     re.MULTILINE,
 )
 
+# Matches current AEDT files that keep optimization attributes inline, for example:
+# VariableProp('width', 'UD', '', '1.5mm', oa(i=true, ..., Min='1mm', ...))
+_INLINE_OPTIM_VAR_RE = re.compile(
+    r"^\s*VariableProp\(\s*'([^']*)'\s*,\s*'[^']*'\s*,\s*'[^']*'\s*,"
+    r"\s*'([^']*)'\s*,\s*oa\((.+)\)\s*\)\s*$",
+    re.MULTILINE,
+)
+
 
 def _parse_optim_var_attrs(attr_str: str) -> dict[str, str]:
     """
@@ -357,14 +365,30 @@ def _parse_level_string(level_str: str) -> tuple[list[RangeElem], str]:
         return [], unit
 
 
+def _ranges_from_optim_attrs(attrs: dict[str, str]) -> tuple[list[RangeElem], str]:
+    """Return discrete Level values or the continuous Min/Max interval."""
+
+    level_ranges, level_unit = _parse_level_string(attrs.get("Level", ""))
+    if level_ranges and all(not isinstance(elem, tuple) for elem in level_ranges):
+        return level_ranges, level_unit
+
+    lo_val, lo_unit = _parse_value_with_unit(attrs.get("Min", ""))
+    hi_val, hi_unit = _parse_value_with_unit(attrs.get("Max", ""))
+    if lo_val is not None and hi_val is not None:
+        if lo_unit and hi_unit and lo_unit != hi_unit:
+            return [], ""
+        return [(lo_val, hi_val)], lo_unit or hi_unit or level_unit
+
+    # Some older/direct forms provide only a continuous Level interval.
+    return level_ranges, level_unit
+
+
 def _collect_parameters_from_aedt_file(aedt_path: Path) -> list[OptParam]:
     """
     Parse the ``.aedt`` file directly to extract optimisation-included
-    variables with full support for **discrete** ranges via the ``Level``
-    field in the Optimetrics Variables section.
-
-    Falls back to ``Min`` / ``Max`` (continuous) when ``Level`` is absent
-    or unparseable.
+    variables from standalone Optimetrics records or inline ``VariableProp``
+    attributes. Discrete ranges come from ``Level``; continuous ranges come
+    from their explicit ``Min`` / ``Max`` optimization bounds.
     """
     # AEDT files are text-based but can contain embedded non-UTF-8 payloads.
     # Surrogate escapes preserve valid Unicode and leave the ASCII syntax parseable.
@@ -380,6 +404,10 @@ def _collect_parameters_from_aedt_file(aedt_path: Path) -> list[OptParam]:
     for m in _OPTIM_VAR_LINE_RE.finditer(text):
         var_name = m.group(1)
         attr_str = m.group(2)
+        optim_vars[var_name] = _parse_optim_var_attrs(attr_str)
+    for m in _INLINE_OPTIM_VAR_RE.finditer(text):
+        var_name = m.group(1)
+        attr_str = m.group(3)
         optim_vars[var_name] = _parse_optim_var_attrs(attr_str)
 
     if not optim_vars:
@@ -397,25 +425,11 @@ def _collect_parameters_from_aedt_file(aedt_path: Path) -> list[OptParam]:
         if attrs.get("i", "false").lower() != "true":
             continue
 
-        # --- ranges from Level ---
-        level_str = attrs.get("Level", "")
-        ranges: list[RangeElem]
-        level_unit: str
-        if level_str:
-            ranges, level_unit = _parse_level_string(level_str)
-        else:
-            ranges, level_unit = [], ""
-
-        # fallback: Min / Max  →  single continuous interval
+        # Discrete Level values are authoritative. Continuous variables use their
+        # explicit Min/Max optimization bounds even when AEDT stores a wider Level.
+        ranges, range_unit = _ranges_from_optim_attrs(attrs)
         if not ranges:
-            min_str = attrs.get("Min", "")
-            max_str = attrs.get("Max", "")
-            lo_val, u_lo = _parse_value_with_unit(min_str)
-            hi_val, u_hi = _parse_value_with_unit(max_str)
-            if lo_val is None or hi_val is None:
-                continue
-            ranges = [(lo_val, hi_val)]
-            level_unit = u_lo or u_hi or ""
+            continue
 
         # --- current value ---
         val_str = var_current_values.get(var_name, "")
@@ -426,7 +440,7 @@ def _collect_parameters_from_aedt_file(aedt_path: Path) -> list[OptParam]:
         if cur is None:
             continue
 
-        unit = level_unit or u_cur or ""
+        unit = range_unit or u_cur or ""
 
         # coerce to proper tuple[RangeElem, ...]
         ranges_tuple: tuple[RangeElem, ...] = tuple(

@@ -11,11 +11,13 @@
 | `task module snapshot` | Freshly compiled workspace task and local helpers in a temporary namespace; same-named helpers in two workspaces cannot contaminate each other. |
 | `PARAMETERS` | Canonical unassigned `Parameter` objects in workspace `job_template/parameters_constraints.py`; each job receives a fresh assigned snapshot. |
 | `expensive evaluation` | A real simulator/custom workflow producing rawData and lifecycle metadata, never authoritative cost. |
-| `rawData` | Durable task evidence in flat schema-versioned `rawData/*.npz` files. |
+| `rawData` | Durable task evidence in schema-versioned direct `rawData/*.npz` files; subdirectories and non-`.npz` entries are invalid. |
+| `rawData.zip` | Distributed transport archive created on the execute node and explicitly returned by HTCondor instead of `rawData/`; every member is a direct `.npz` basename with no enclosing directory. |
 | `cost` | Current objective tuple dynamically calculated from rawData by workspace `calc_cost.py`. |
 | `workspace recorded data` | Workspace-local JSONL/zip evidence and optimization metadata; normalized variables and costs are derived. |
-| `package worker support` | Reserved `worker_misc.py`, `sitecustomize.py`, and compact generated worker config composed into jobs from immutable resources. |
-| `worker compatibility bootstrap` | Transferred `sitecustomize.py` check that records a pre-task failure when yadof is missing or version-incompatible on a worker. |
+| `package worker support` | The single reserved `worker_misc.py` copied as a direct job-local file; it provides dependency-free workflow helpers and flat zip creation without sending yadof to workers. |
+| `self-contained parameter snapshot` | Assigned job-local `parameters_constraints.py` with a minimal local `Parameter` representation and no yadof import. |
+| `direct workflow submission` | Windows HTCondor contract in which `workflow.py` itself is `executable` with `transfer_executable=True`; there is no yadof launcher. |
 | `job_static_hash` | Definition-oriented hash of task/worker inputs that excludes runtime metadata and per-candidate assignments. |
 | `standalone smoke test` | `yadof smoke-test`: exactly one midpoint real task, no generation/per-job/whole-generation timeout; edited tasks require explicit real-task intent. |
 | `run smoke` | Optional pre-run real-task smoke chosen by workspace config unless `--smoke-test` or `--no-smoke-test` overrides it. Failure prevents generation submission. |
@@ -30,6 +32,7 @@
 | `surrogate cost interval` | Per-objective min/max across conditional-INR ensemble members after predicted rawData is converted by current cost policy. |
 | `staggered surrogate training` | Submit real jobs first, then train at most one workspace-local background model while execution is busy, subject to lag bounds. |
 | `packaged adapter` | Read-only reusable resource listed/copied by `yadof task`; active jobs use only the workspace copy. |
+| `software task namespace` | The software-identifying CLI level below `yadof task` for non-generic actions, such as `yadof task hfss`; it prevents different adapters from competing for an ambiguous generic action name. |
 | `task-specific test` | Test tied to a concrete model/design/objective. It belongs in a disposable/external workspace, not the generic default suite. |
 | `user` | Prepares workspace tasks, runs campaigns, and inspects results without maintaining system infrastructure. |
 | `administrator` | Installs dependencies and maintains HTCondor/software/hardware; resources live under `admin_tool/`. |

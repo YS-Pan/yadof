@@ -7,15 +7,18 @@ import json
 import os
 from pathlib import Path
 import traceback
+import zipfile
 
 import numpy as np
 
 from parameters_constraints import get_parameters
-from yadof.job_template import RAWDATA_SCHEMA_VERSION
 
 
+RAWDATA_SCHEMA_VERSION = 1
 ROOT = Path(__file__).resolve().parent
 INDIVIDUAL_METADATA_PATH = ROOT / "individual_metadata.json"
+RAW_DATA_DIR = ROOT / "rawData"
+RAW_DATA_ZIP = ROOT / "rawData.zip"
 
 
 def _now() -> str:
@@ -32,6 +35,31 @@ def _write_metadata(payload: dict[str, object]) -> None:
     os.replace(temporary, INDIVIDUAL_METADATA_PATH)
 
 
+def _write_rawdata_zip() -> None:
+    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    entries = sorted(RAW_DATA_DIR.iterdir(), key=lambda path: path.name.casefold())
+    invalid = [
+        path.name
+        for path in entries
+        if path.is_dir() or not path.is_file() or path.suffix.casefold() != ".npz"
+    ]
+    files = [
+        path
+        for path in entries
+        if path.is_file() and path.suffix.casefold() == ".npz"
+    ]
+    temporary = RAW_DATA_ZIP.with_name(RAW_DATA_ZIP.name + ".tmp")
+    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED) as archive:
+        for path in files:
+            archive.write(path, arcname=path.name)
+    os.replace(temporary, RAW_DATA_ZIP)
+    if invalid:
+        raise ValueError(
+            "rawData must contain only direct .npz files; invalid entries: "
+            + ", ".join(invalid)
+        )
+
+
 def main() -> int:
     metadata: dict[str, object] = {"status": "running", "started_at": _now()}
     _write_metadata(metadata)
@@ -41,19 +69,19 @@ def main() -> int:
             raise ValueError("starter workflow requires assigned finite parameter values")
 
         response = np.asarray(float(np.mean(values**2)), dtype=float)
-        rawdata_dir = ROOT / "rawData"
-        rawdata_dir.mkdir(exist_ok=True)
+        RAW_DATA_DIR.mkdir(exist_ok=True)
         rawdata_metadata = {
             "schema_version": RAWDATA_SCHEMA_VERSION,
             "shape": list(response.shape),
             "rawdata_name": "response",
         }
-        output = rawdata_dir / "response.npz"
+        output = RAW_DATA_DIR / "response.npz"
         np.savez(
             output,
             values=response,
             metadata=json.dumps(rawdata_metadata, sort_keys=True),
         )
+        _write_rawdata_zip()
         metadata.update(
             {
                 "status": "done",
@@ -64,6 +92,7 @@ def main() -> int:
         _write_metadata(metadata)
         return 0
     except Exception as exc:
+        _write_rawdata_zip()
         metadata.update(
             {
                 "status": "error",

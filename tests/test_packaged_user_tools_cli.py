@@ -155,12 +155,13 @@ def test_history_clear_requires_confirmation_and_clears_only_selected_workspace(
     assert not any((workspace_a / "jobs").iterdir())
 
 
-def test_extract_parameters_uses_workspace_paths_and_confirmation(capsys, tmp_path):
+def test_hfss_extract_parameters_uses_workspace_paths_and_confirmation(capsys, tmp_path):
     workspace = _workspace(tmp_path, "extract_workspace")
     project_path = workspace / "job_template" / "synthetic.aedt"
     project_path.write_text(
-        "VariableProp('width', 'VariableProp', '', '1.5mm')\n"
-        "width(i=true, int=false, Min='1mm', Max='2mm', Level='[1 : 2] mm')\n",
+        "VariableProp('Wc1', 'UD', '', '36.9mm', "
+        "oa(i=true, int=false, Min='30mm', Max='40mm', "
+        "Level='[22.5 : 67.5] mm'))\n",
         encoding="utf-8",
     )
     parameter_file = workspace / "job_template" / "parameters_constraints.py"
@@ -169,6 +170,7 @@ def test_extract_parameters_uses_workspace_paths_and_confirmation(capsys, tmp_pa
     assert cli_main(
         [
             "task",
+            "hfss",
             "extract-parameters",
             "--workspace",
             str(workspace),
@@ -182,6 +184,7 @@ def test_extract_parameters_uses_workspace_paths_and_confirmation(capsys, tmp_pa
     assert cli_main(
         [
             "task",
+            "hfss",
             "extract-parameters",
             "--workspace",
             str(workspace),
@@ -191,7 +194,7 @@ def test_extract_parameters_uses_workspace_paths_and_confirmation(capsys, tmp_pa
         ]
     ) == 0
     source = parameter_file.read_text(encoding="utf-8")
-    assert "Parameter('width', ((1, 2),), unit='mm')" in source
+    assert "Parameter('Wc1', ((30, 40),), unit='mm')" in source
     backups = tuple(
         (workspace / ".yadof" / "tool_output" / "parameter_history").glob(
             "parameters_constraints_*.py"

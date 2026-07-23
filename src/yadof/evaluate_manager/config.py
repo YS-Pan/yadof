@@ -10,7 +10,7 @@ from ..config import LoadedConfig
 FINAL_STATUSES = {"done", "error", "timeout"}
 WORKFLOW_SCRIPT_NAME = "workflow.py"
 RAW_DATA_DIR_NAME = "rawData"
-RAW_DATA_TRANSFER_ZIP_NAME = "rawData_outputs.zip"
+RAW_DATA_TRANSFER_ZIP_NAME = "rawData.zip"
 INDIVIDUAL_METADATA_FILE_NAME = "individual_metadata.json"
 CONDOR_SUBMIT_FILE_NAME = "job.sub"
 CONDOR_STDOUT_FILE_NAME = "stdout.txt"

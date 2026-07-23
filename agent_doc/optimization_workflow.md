@@ -12,9 +12,23 @@ count come from this task file, not framework config.
 For AEDT projects, extraction is an explicit, backed-up workspace operation:
 
 ```powershell
-yadof task extract-parameters --workspace D:\work\study-a `
+yadof task hfss extract-parameters --workspace D:\work\study-a `
   --project job_template\model.aedt --design MyDesign --yes
 ```
+
+The command first parses the AEDT file directly, including optimization attributes
+stored inline in `VariableProp(...)`. Continuous variables use their Optimetrics
+`Min`/`Max` bounds; discrete variables use the values in `Level`. Direct parsing does
+not launch AEDT. If direct parsing cannot obtain any parameters, the command falls
+back to PyAEDT; `--design` selects the fallback design, `--graphical` permits a
+graphical session, and `--verbose` exposes fallback diagnostics. Relative project
+paths resolve from the workspace root. When `--project` is omitted, exactly one
+`.aedt` file must exist in `job_template/`.
+
+Before replacement, the current parameter file is copied to
+`.yadof/tool_output/parameter_history/`. The operation preserves the rest of a
+current-format file, including `CONSTRAINTS`, and replaces only `PARAMETERS`. Use
+`--yes` for non-interactive confirmation.
 
 ## 2. Workflow and adapters
 
@@ -22,7 +36,14 @@ yadof task extract-parameters --workspace D:\work\study-a `
 `rawData/*.npz` plus `individual_metadata.json`. It must not write authoritative
 costs. Put every task-local helper, model, lookup table, and active adapter below
 `job_template/`; prepared jobs copy that payload recursively while package worker
-support is composed separately.
+support adds only `worker_misc.py`. The assigned parameter snapshot is
+self-contained. Distributed jobs execute `workflow.py` directly and do not receive
+or import the yadof package.
+
+For distributed use, workflow success and error paths must create top-level
+`rawData.zip` via `write_rawdata_transfer_zip()`. Its members are direct `.npz`
+basenames, not an enclosing `rawData/` directory. Condor returns the zip and the
+submit host restores it into job-local `rawData/`.
 
 List and copy a packaged reference adapter without overwriting user edits:
 

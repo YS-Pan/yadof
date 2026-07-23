@@ -60,6 +60,7 @@ getenv = False
 environment = "USERPROFILE=._home HOME=._home APPDATA=._appdata LOCALAPPDATA=._localappdata TEMP=._tmp TMP=._tmp ..."
 load_profile = True
 run_as_owner = False
+transfer_output_files = rawData.zip,individual_metadata.json
 ```
 
 The environment string may also carry task runtime settings such as
@@ -75,7 +76,9 @@ Each execute workstation should be configured so its slot users can:
 - read installed Python, PyAEDT, and simulator dependencies;
 - write the HTCondor execute scratch directory;
 - load enough Windows profile and system environment state for AEDT/PyAEDT startup;
-- return job-local outputs through HTCondor's default output transfer.
+- create and return required job-local `rawData.zip` and
+  `individual_metadata.json` through the explicit output list. The zip contains
+  direct `.npz` members and HTCondor does not return `rawData/`.
 
 Workers that run HFSS 2024.1 must also exclude `OMP_THREAD_LIMIT` from
 `STARTER_NUM_THREADS_ENV_VARS`. Keep the other standard thread variables so they
