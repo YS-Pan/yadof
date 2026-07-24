@@ -32,7 +32,8 @@
   validation, and shared metadata finalization.
 - `condor_runner`: direct `workflow.py` submit, input selection, explicit
   `rawData.zip` transport, flat archive restoration, queue polling, collection,
-  ClassAd diagnostics, and pool matchmaking analysis.
+  `condor.log` execution-clock watchdog, bounded removal, ClassAd diagnostics, and
+  pool matchmaking analysis.
 - `resource_requests`, `resource_retries`, `time_limits`: workspace-local adaptive
   policy separated from backend orchestration.
 - `job_result`, `types`: common result shape and metadata utilities.

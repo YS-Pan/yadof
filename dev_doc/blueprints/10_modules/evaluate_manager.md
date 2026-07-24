@@ -27,7 +27,9 @@ and captures output tails.
 `condor_runner.py` writes Windows direct-workflow submit files, selects only needed
 job inputs, explicitly returns `rawData.zip` plus individual metadata instead of the
 `rawData/` directory, restores only unique direct `.npz` archive members, validates
-them, queries queue/history ClassAds, and removes terminal held jobs when needed.
+them, queries queue/history ClassAds, derives active execution wall-clock from
+submit-side event logs, and removes terminal held/timed-out jobs when needed. A
+per-job timeout becomes locally final even when bounded `condor_rm` cleanup fails.
 Normal policy is `run_as_owner=False`, `load_profile=True`; pool repair is outside
 the module.
 
@@ -37,10 +39,10 @@ retried through the single-result path to preserve failure isolation.
 
 Distributed support preserves concrete CPU/memory/disk requests, workspace-local
 calibration, bounded yadof memory/disk resubmission, automatic/fixed scheduler
-execution limits, unlimited smoke, whole-generation deadlines, final ClassAd data,
-output restoration, and Windows slot-user policy. Pending jobs may receive one
-delayed read-only matchmaking analysis. The module diagnoses but never repairs
-HTCondor.
+execution limits enforced both by Condor and a submit-side yadof watchdog, unlimited
+smoke, whole-generation deadlines, final ClassAd data, output restoration, and
+Windows slot-user policy. Pending jobs may receive one delayed read-only matchmaking
+analysis. The module diagnoses but never repairs HTCondor.
 
 ## Recording and cost return
 

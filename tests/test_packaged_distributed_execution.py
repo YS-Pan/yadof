@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import math
 from pathlib import Path
@@ -323,3 +324,148 @@ def test_time_limit_calibration_is_workspace_local(tmp_path, monkeypatch):
     assert limit_a.source == "smoke_calibration"
     assert limit_a.seconds == 20
     assert limit_b.source == "configured_fallback"
+
+
+def test_condor_execution_clock_uses_only_the_current_active_run(tmp_path):
+    from yadof.evaluate_manager.condor_runner import (
+        condor_execution_clock,
+    )
+
+    job_dir = tmp_path / "job"
+    job_dir.mkdir()
+    log_path = job_dir / "condor.log"
+    log_path.write_text(
+        "001 (42.000.000) 2026-07-24 01:00:00 Job executing on host: <slot-a>\n"
+        "004 (42.000.000) 2026-07-24 02:00:00 Job was evicted.\n"
+        "001 (42.000.000) 2026-07-24 03:00:00 Job executing on host: <slot-b>\n"
+        "010 (42.000.000) 2026-07-24 03:30:00 Job was suspended.\n"
+        "011 (42.000.000) 2026-07-24 04:00:00 Job was unsuspended.\n",
+        encoding="utf-8",
+    )
+
+    clock = condor_execution_clock(
+        job_dir,
+        now_epoch=datetime(2026, 7, 24, 5, 0, 0).timestamp(),
+    )
+
+    assert clock is not None
+    assert "2026-07-24T03:00:00" in clock.started_at
+    assert clock.elapsed_sec == 90 * 60
+    assert clock.suspended is False
+
+    with log_path.open("a", encoding="utf-8") as stream:
+        stream.write(
+            "004 (42.000.000) 2026-07-24 05:01:00 Job was evicted.\n"
+        )
+    assert (
+        condor_execution_clock(
+            job_dir,
+            now_epoch=datetime(2026, 7, 24, 6, 0, 0).timestamp(),
+        )
+        is None
+    )
+
+
+def test_distributed_yadof_watchdog_times_out_even_when_remove_fails(
+    tmp_path, monkeypatch
+):
+    from yadof.evaluate_manager import condor_runner
+
+    workspace = _workspace(tmp_path, "watchdog")
+    config = load_config(workspace)
+    job = prepare_job(
+        workspace,
+        (0.5,),
+        config=config,
+        mode="distributed",
+        timeout_sec=30,
+        generation_index=0,
+        run_id="watchdog-run",
+    )
+    started = datetime.fromtimestamp(
+        datetime.now().timestamp() - 10
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    (job.directory / "condor.log").write_text(
+        f"001 (77.000.000) {started} Job executing on host: <slot-a>\n",
+        encoding="utf-8",
+    )
+
+    def fake_submit(_workspace, submitted_job, **_kwargs):
+        return condor_runner.CondorSubmission(
+            job=submitted_job,
+            submit_file=submitted_job.directory / "job.sub",
+            cluster_id=77,
+            submitted_at="2026-07-24T03:00:00+08:00",
+            stdout="",
+            stderr="",
+            time_limit=condor_runner.HTCondorTimeLimit(
+                seconds=1,
+                source="test",
+                sample_count=0,
+            ),
+        )
+
+    removed: list[int | None] = []
+
+    def failed_remove(_workspace, submission, **_kwargs):
+        removed.append(submission.cluster_id)
+        return "condor_rm unavailable"
+
+    monkeypatch.setattr(condor_runner, "submit_condor_job", fake_submit)
+    monkeypatch.setattr(condor_runner, "remove_condor_job", failed_remove)
+
+    results = condor_runner.run_condor_jobs(
+        workspace,
+        (job,),
+        config=config,
+        timeout_sec=30,
+    )
+
+    assert removed == [77]
+    assert len(results) == 1
+    assert results[0].status == "timeout"
+    assert results[0].metadata["timed_out"] is True
+    assert (
+        results[0].metadata["condor_timeout_enforced_by"]
+        == "yadof_submit_watchdog"
+    )
+    assert results[0].metadata["condor_timeout_limit_sec"] == 1
+    assert results[0].metadata["condor_execution_elapsed_sec"] >= 1
+    assert results[0].metadata["condor_remove_error"] == "condor_rm unavailable"
+    assert results[0].metadata["condor_terminal_reason"] == "yadof_job_timeout"
+
+
+def test_remove_condor_job_has_a_bounded_command_wait(tmp_path, monkeypatch):
+    from yadof.evaluate_manager import condor_runner
+
+    workspace = _workspace(tmp_path, "remove_timeout")
+    job = prepare_job(
+        workspace, (0.5,), mode="distributed", timeout_sec=None
+    )
+    submission = condor_runner.CondorSubmission(
+        job=job,
+        submit_file=job.directory / "job.sub",
+        cluster_id=88,
+        submitted_at="2026-07-24T03:00:00+08:00",
+        stdout="",
+        stderr="",
+    )
+
+    def hanging_remove(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    monkeypatch.setattr(condor_runner.subprocess, "run", hanging_remove)
+
+    error = condor_runner.remove_condor_job(workspace, submission)
+
+    assert error == "condor_rm timed out after 5 seconds"
+
+    def broken_remove(*_args, **_kwargs):
+        raise RuntimeError("cleanup backend failed")
+
+    monkeypatch.setattr(condor_runner.subprocess, "run", broken_remove)
+
+    assert (
+        condor_runner.remove_condor_job(workspace, submission)
+        == "RuntimeError: cleanup backend failed"
+    )

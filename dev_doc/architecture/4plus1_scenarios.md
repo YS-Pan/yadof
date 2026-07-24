@@ -39,7 +39,10 @@ For every candidate, the submit side copies the task, materializes self-containe
 assigned parameters, and writes `job.sub` with `executable = workflow.py`. The
 execute node runs as a slot user, creates direct `rawData/*.npz` and flat
 `rawData.zip`, and returns only the zip plus individual metadata. The submit side
-restores/validates evidence, records it, and calculates costs.
+restores/validates evidence, records it, and calculates costs. Normal jobs retain
+Condor's `allowed_execute_duration` and are independently watched from their local
+`condor.log` execute events. At the per-job limit, yadof records timeout immediately,
+attempts bounded `condor_rm` cleanup, and does not wait for queue removal.
 
 ## Change current cost policy
 
@@ -60,7 +63,8 @@ Prepare, workflow, timeout, submit, resource exhaustion, invalid/nested rawData,
 missing or malformed `rawData.zip`, collection, and record errors are isolated per
 individual. Strict CLI mode stops after an all-infinite generation and prints recent
 diagnostic summaries. Pending unmatched Condor jobs receive one read-only match
-analysis rather than being incorrectly marked failed.
+analysis rather than being incorrectly marked failed. A missing, failed, or hung
+`condor_rm` cannot keep a yadof-timed-out individual pending.
 
 ## Resource retry
 

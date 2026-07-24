@@ -44,9 +44,12 @@ for that invocation and restores the caller environment afterward.
 
 When smoke is skipped, configured memory/disk and job-timeout baselines act as the
 synthetic generation-zero calibration. Distributed normal jobs receive a scheduler
-`allowed_execute_duration`; the submit side separately enforces a whole-generation
-deadline. Memory/disk holds may be freshly resubmitted by yadof with bounded,
-independent doubling. yadof diagnoses HTCondor but never installs or repairs it.
+`allowed_execute_duration` and the submit side independently watches each active
+execution from local Condor event timestamps. At the limit, yadof records timeout,
+stops waiting, and attempts bounded `condor_rm` cleanup without requiring it to
+succeed. The whole-generation deadline remains separate. Memory/disk holds may be
+freshly resubmitted by yadof with bounded, independent doubling. yadof diagnoses
+HTCondor but never installs or repairs it.
 
 The Windows distributed submit contract runs `workflow.py` directly with
 `transfer_executable=True`, `load_profile=True`, and `run_as_owner=False`. Input

@@ -2,7 +2,7 @@
 
 ## Intent
 
-- Calculate the scheduler-enforced execution duration for one HTCondor job while keeping the whole-generation wait budget separate.
+- Calculate the shared per-job execution duration enforced by HTCondor and the yadof submit-side watchdog while keeping the whole-generation wait budget separate.
 - Adapt normal-job limits from real execution history without ever limiting the smoke job or rewriting user config.
 
 ## Functionalities
@@ -18,7 +18,7 @@
 ## I/O Format
 
 - Input: one `JobSpec` plus public `recorded_data.api.list_records()` rows.
-- Output: immutable `HTCondorTimeLimit(seconds, source, sample_count)`; `seconds=None` means the submit file must omit `allowed_execute_duration`.
+- Output: immutable `HTCondorTimeLimit(seconds, source, sample_count)`; `seconds=None` means the submit file must omit `allowed_execute_duration` and the yadof runner must omit its per-job watchdog.
 - Relevant metadata fields are `engine`, `condor_remote_wall_clock_sec`, `condor_cumulative_suspension_sec`, top-level workflow timestamps, status, run id, and generation index.
 
 ## Non-Obvious Techniques
@@ -30,4 +30,4 @@
 ## Mutability Profile
 
 - Timeout statistics and config validation require focused tests because an incorrect limit can waste cluster time or terminate valid expensive evaluations.
-- HTCondor enforcement mechanics belong in `condor_runner.py`; this file only calculates the value and provenance.
+- HTCondor and submit-side yadof enforcement mechanics belong in `condor_runner.py`; this file only calculates the shared value and provenance.

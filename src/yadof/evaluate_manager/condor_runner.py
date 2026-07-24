@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -57,12 +58,26 @@ from .types import JobResult, JobSpec
 
 _CLUSTER_RE = re.compile(r"submitted to cluster\s+(\d+)", re.IGNORECASE)
 _RETURN_VALUE_RE = re.compile(r"Normal termination \(return value ([^)]+)\)", re.IGNORECASE)
+_CONDOR_EVENT_RE = re.compile(
+    r"^(?P<code>\d{3}) \([^)]+\) "
+    r"(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) "
+    r"(?P<message>[^\r\n]*)",
+    re.MULTILINE,
+)
 _TERMINAL_LOG_MARKERS = {
     "terminated": "Job terminated",
     "held": "Job was held",
     "aborted": "Job was aborted",
     "removed": "Job was removed",
 }
+_EXECUTION_STOP_EVENT_CODES = {"004", "005", "009", "012"}
+_EXECUTION_STOP_MARKERS = (
+    "Job was evicted",
+    "Job terminated",
+    "Job was held",
+    "Job was aborted",
+    "Job was removed",
+)
 _SUBMIT_ARTIFACTS = {
     CONDOR_SUBMIT_FILE_NAME,
     CONDOR_STDOUT_FILE_NAME,
@@ -97,6 +112,14 @@ _WINDOWS_STATUS_MESSAGES = {
 }
 _MATCH_DIAGNOSTIC_MIN_DELAY_SEC = 5.0
 _MATCH_DIAGNOSTIC_MAX_DELAY_SEC = 60.0
+_CONDOR_REMOVE_COMMAND_TIMEOUT_SEC = 5.0
+
+
+@dataclass(frozen=True)
+class CondorExecutionClock:
+    started_at: str
+    elapsed_sec: float
+    suspended: bool
 
 
 @dataclass(frozen=True)
@@ -108,6 +131,7 @@ class CondorSubmission:
     stdout: str
     stderr: str
     resource_request: HTCondorResourceRequest | None = None
+    time_limit: HTCondorTimeLimit | None = None
 
 
 class CondorSubmitError(RuntimeError):
@@ -178,7 +202,34 @@ def run_condor_jobs(
         for job_name, submission in list(pending.items()):
             terminal_reason = terminal_log_reason(submission.job.directory)
             individual_metadata = read_individual_metadata(submission.job.directory)
-            if terminal_reason is None and not _job_local_outputs_ready(submission.job.directory, individual_metadata):
+            outputs_ready = _job_local_outputs_ready(
+                submission.job.directory, individual_metadata
+            )
+            if terminal_reason is None and not outputs_ready:
+                timeout_metadata = _yadof_execution_timeout_metadata(submission)
+                if timeout_metadata is None:
+                    continue
+                remove_error = remove_condor_job(
+                    effective.workspace, submission, config=effective
+                )
+                results_by_name[job_name] = collect_condor_result(
+                    effective.workspace,
+                    submission.job,
+                    config=effective,
+                    submission=submission,
+                    timed_out=True,
+                    terminal_reason="yadof_job_timeout",
+                    remove_error=remove_error,
+                    preloaded_resource_usage={},
+                    extra_metadata=timeout_metadata,
+                )
+                pending.pop(job_name, None)
+                completed_now += 1
+                _progress(
+                    f"htcondor: yadof timeout {job_name}; "
+                    f"execution={float(timeout_metadata['condor_execution_elapsed_sec']):.1f}s; "
+                    f"limit={timeout_metadata['condor_timeout_limit_sec']}s"
+                )
                 continue
             preloaded_hold_info: Mapping[str, object] | None = None
             preloaded_resource_usage: Mapping[str, object] | None = None
@@ -325,6 +376,7 @@ def run_condor_jobs(
             timed_out=True,
             terminal_reason="timeout",
             remove_error=remove_error,
+            preloaded_resource_usage={},
         )
         pending.pop(job_name, None)
     if timed_out_count:
@@ -425,6 +477,7 @@ def submit_condor_job(
         stdout=stdout,
         stderr=stderr,
         resource_request=resource_request,
+        time_limit=time_limit,
     )
 
 
@@ -549,6 +602,92 @@ def terminal_log_reason(job_dir: Path) -> str | None:
     return None
 
 
+def condor_execution_clock(
+    job_dir: Path,
+    *,
+    now_epoch: float | None = None,
+) -> CondorExecutionClock | None:
+    """Return the current Condor execution segment's submit-side wall clock."""
+
+    log_path = job_dir / CONDOR_LOG_FILE_NAME
+    if not log_path.is_file():
+        return None
+    text = log_path.read_text(encoding="utf-8", errors="ignore")
+    active_started_epoch: float | None = None
+    segment_started_epoch: float | None = None
+    elapsed_sec = 0.0
+    suspended = False
+    for match in _CONDOR_EVENT_RE.finditer(text):
+        try:
+            event_epoch = datetime.strptime(
+                match.group("timestamp"), "%Y-%m-%d %H:%M:%S"
+            ).timestamp()
+        except (OSError, ValueError):
+            continue
+        code = match.group("code")
+        message = match.group("message")
+        if code == "001" and "Job executing" in message:
+            active_started_epoch = event_epoch
+            segment_started_epoch = event_epoch
+            elapsed_sec = 0.0
+            suspended = False
+            continue
+        if active_started_epoch is None:
+            continue
+        if code == "010":
+            if segment_started_epoch is not None:
+                elapsed_sec += max(0.0, event_epoch - segment_started_epoch)
+            segment_started_epoch = None
+            suspended = True
+            continue
+        if code == "011":
+            if suspended:
+                segment_started_epoch = event_epoch
+            suspended = False
+            continue
+        if code in _EXECUTION_STOP_EVENT_CODES or any(
+            marker in message for marker in _EXECUTION_STOP_MARKERS
+        ):
+            active_started_epoch = None
+            segment_started_epoch = None
+            elapsed_sec = 0.0
+            suspended = False
+
+    if active_started_epoch is None:
+        return None
+    current_epoch = time.time() if now_epoch is None else float(now_epoch)
+    if segment_started_epoch is not None:
+        elapsed_sec += max(0.0, current_epoch - segment_started_epoch)
+    started_at = (
+        datetime.fromtimestamp(active_started_epoch)
+        .astimezone()
+        .isoformat(timespec="seconds")
+    )
+    return CondorExecutionClock(
+        started_at=started_at,
+        elapsed_sec=elapsed_sec,
+        suspended=suspended,
+    )
+
+
+def _yadof_execution_timeout_metadata(
+    submission: CondorSubmission,
+) -> dict[str, object] | None:
+    time_limit = submission.time_limit
+    if time_limit is None or time_limit.seconds is None:
+        return None
+    clock = condor_execution_clock(submission.job.directory)
+    if clock is None or clock.elapsed_sec < time_limit.seconds:
+        return None
+    return {
+        "condor_timeout_enforced_by": "yadof_submit_watchdog",
+        "condor_timeout_limit_sec": time_limit.seconds,
+        "condor_execution_started_at": clock.started_at,
+        "condor_execution_elapsed_sec": clock.elapsed_sec,
+        "condor_execution_suspended": clock.suspended,
+    }
+
+
 def collect_condor_result(
     workspace: WorkspaceContext | str | Path,
     job: JobSpec,
@@ -602,7 +741,13 @@ def collect_condor_result(
     effective_timed_out = bool(timed_out or timeout_hold)
     if timed_out:
         status = "timeout"
-        error = f"HTCondor job exceeded timeout_sec while waiting for job-local outputs"
+        if terminal_reason == "yadof_job_timeout":
+            limit_sec = metadata.get("condor_timeout_limit_sec")
+            error = "HTCondor job exceeded yadof submit-side execution limit"
+            if limit_sec is not None:
+                error += f" of {limit_sec} seconds"
+        else:
+            error = "HTCondor job exceeded timeout_sec while waiting for job-local outputs"
     elif timeout_hold:
         status = "timeout"
         error = "HTCondor job exceeded allowed_execute_duration and was not retried"
@@ -1046,9 +1191,17 @@ def remove_condor_job(
             capture_output=True,
             text=True,
             check=False,
+            timeout=_CONDOR_REMOVE_COMMAND_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            "condor_rm timed out after "
+            f"{_CONDOR_REMOVE_COMMAND_TIMEOUT_SEC:g} seconds"
         )
     except OSError as exc:
         return str(exc)
+    except Exception as exc:  # noqa: BLE001 - cleanup failure cannot defeat timeout finalization.
+        return f"{type(exc).__name__}: {exc}"
     if completed.returncode == 0:
         return None
     return (completed.stderr or completed.stdout or f"condor_rm exited with {completed.returncode}").strip()

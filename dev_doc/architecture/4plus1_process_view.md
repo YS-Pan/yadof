@@ -35,9 +35,13 @@ validation and recording path.
 
 Distributed orchestration invokes after-submit surrogate scheduling, polls terminal
 or returned-output state, owns bounded memory/disk resubmission, enforces a separate
-whole-generation deadline, and collects final ClassAd provenance. If a
-representative job remains pending, one delayed `condor_q -better-analyze` query
-reports failed match requirements without mutating or failing the queue.
+whole-generation deadline, and collects final ClassAd provenance. For each normal
+job it also derives the current execute segment and elapsed wall-clock from the
+submit-side `condor.log`. Once that clock reaches the adaptive limit, yadof records
+timeout locally and stops polling the job regardless of whether its bounded
+`condor_rm` cleanup succeeds. If a representative job remains pending, one delayed
+`condor_q -better-analyze` query reports failed match requirements without mutating
+or failing the queue.
 
 Surrogate training has at most one background task per workspace. Scheduler and
 model state maps are workspace-keyed and protected by locks. Clearing one workspace
@@ -57,8 +61,14 @@ does not discard otherwise valid evidence.
   only the exhausted request doubled. The old cluster is removed and stale runtime
   outputs are cleared first. Workflow and timeout failures are never resource
   retried.
-- `allowed_execute_duration` enforces normal execute time. Standalone smoke omits it;
-  the submit-side generation deadline remains separate.
+- Normal jobs have two per-job enforcement layers using the same adaptive limit:
+  Condor `allowed_execute_duration` and the yadof submit-side execution watchdog.
+  Queue, transfer, eviction-idle, and suspension time do not consume the watchdog
+  clock. Standalone smoke omits both; the whole-generation deadline remains
+  separate.
+- Timeout cleanup invokes `condor_rm` with a bounded command wait. Local result
+  finalization never waits for Condor to confirm removal and preserves any cleanup
+  error as metadata.
 - A callback or history/ClassAd diagnostic failure is recorded/logged but cannot
   cancel jobs that were successfully submitted.
 

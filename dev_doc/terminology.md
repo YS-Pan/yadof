@@ -27,7 +27,8 @@
 | `slot user` | Low-privilege Windows HTCondor execution account; normal policy is `run_as_owner=False`, `load_profile=True`. |
 | `adaptive resource request` | Workspace-history-derived memory/disk request; CPU remains a user policy. |
 | `yadof resource retry` | Fresh bounded submission after standard memory/disk holds, doubling only the exhausted request and preserving attempt diagnostics. |
-| `adaptive time limit` | Per-normal-job `allowed_execute_duration` derived from smoke/prior generation or fixed config, separate from the submit-side generation deadline. |
+| `adaptive time limit` | Per-normal-job execution budget derived from smoke/prior generation or fixed config, enforced both by Condor `allowed_execute_duration` and the yadof submit-side execution watchdog; it is separate from the whole-generation deadline. |
+| `submit-side execution watchdog` | yadof's distributed per-job clock derived from the current `condor.log` execute segment; at the adaptive limit it finalizes timeout locally and attempts bounded `condor_rm` cleanup without waiting for removal confirmation. |
 | `GPSAF` | Alpha/beta/gamma surrogate-assistance framing implemented by `yadof.optimize` with real-evaluation validation and exploration quota. |
 | `surrogate cost interval` | Per-objective min/max across conditional-INR ensemble members after predicted rawData is converted by current cost policy. |
 | `staggered surrogate training` | Submit real jobs first, then train at most one workspace-local background model while execution is busy, subject to lag bounds. |

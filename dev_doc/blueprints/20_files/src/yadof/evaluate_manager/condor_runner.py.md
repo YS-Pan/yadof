@@ -5,9 +5,15 @@
 
 ## Functionalities
 - Submit one `job.sub` per prepared `JobSpec`.
-- Write Windows HTCondor submit files from values exposed by `the workspace LoadedConfig` through `evaluate_manager.config` and the adaptive `resource_requests`/`time_limits` helpers.
+- Write Windows HTCondor submit files from the workspace `LoadedConfig` through `evaluate_manager.config` and the adaptive `resource_requests`/`time_limits` helpers.
 - Invoke an optional `after_jobs_submitted` callback after successful submissions and before polling outputs.
 - Poll terminal job state or complete returned outputs, collect rawData and metadata, query final `condor_history`/held-job ClassAds for resource and execution-time measurements, and turn failures/timeouts into `JobResult` rows.
+- Parse local `condor.log` event timestamps to measure the current active execution
+  segment, excluding queued, evicted-idle, and suspended intervals. Enforce each
+  normal job's calculated time limit independently of scheduler enforcement.
+- On a yadof-detected per-job timeout, invoke `condor_rm` with a bounded command
+  wait, preserve cleanup failure metadata, finalize timeout locally, and remove the
+  job from the local pending set without waiting for queue confirmation.
 - Recognize `allowed_execute_duration` hold codes 46/47 as timeouts, capture their diagnostics, and remove the held job so it cannot be retried.
 - Delegate standard memory/disk resource-hold decisions and attempt cleanup to
   `resource_retries.py`, remove the old cluster, and submit a fresh cluster with the
@@ -50,6 +56,11 @@
   execute-directory `DiskUsage`, `RemoteWallClockTime`,
   `CumulativeSuspensionTime`, and related request/CPU values as diagnostics but
   never turns an unavailable history query into a result-collection failure.
+- The yadof watchdog follows event `001` (`Job executing`) and the corresponding
+  eviction/termination/hold/removal events instead of submission time, so
+  matchmaking and input-transfer delay cannot consume a job's execute budget.
+  Suspension/unsuspension events pause/resume the clock. A later execute event starts
+  a fresh active segment.
 - `rawData.zip` is the only distributed rawData transport. It is required, readable,
   and may contain only unique direct `.npz` members; directories, nested paths,
   other extensions, and case-insensitive duplicates are errors. Collection restores
@@ -61,6 +72,9 @@
   cleanup, and non-resource hold failures are never resource-retried.
 - Non-resource held jobs are removed after their hold ClassAd is captured so a
   completed controller call does not leave a persistent held cluster behind.
+- `condor_rm` is cleanup rather than acknowledgement: timeout state is authoritative
+  on the submit side, and command failure or timeout cannot return a job to the
+  pending set.
 - Matchmaking diagnostics use `condor_q -better-analyze:nouserprios` for one pending
   cluster only. They are delayed to avoid adding work to short jobs and summarized
   to the failed requirement, no-match warning, and last match failure.
