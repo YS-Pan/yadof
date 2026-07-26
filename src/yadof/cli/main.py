@@ -138,10 +138,6 @@ def _run_view(
         from ..tools.view_time import view_time
 
         return view_time(workspace, status=status, output_path=output_path)
-    if view_kind == "error":
-        from ..tools.view_error import view_error
-
-        return view_error(workspace, output_path=output_path)
     raise ValueError(f"unsupported view kind: {view_kind}")
 
 
@@ -183,7 +179,6 @@ def _view_all_command(args: argparse.Namespace) -> int:
     for view_kind, status in (
         ("cost", "completed"),
         ("time", None),
-        ("error", None),
     ):
         output_path = (
             None
@@ -466,7 +461,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     view_parser = subparsers.add_parser(
         "view",
-        help="inspect workspace cost, timing, or error history",
+        help="inspect workspace cost or timing/failure history",
         description=(
             "Print a workspace history summary and write a timestamped PNG by "
             "default. Plotting requires the optional plot dependencies; no GUI "
@@ -504,34 +499,9 @@ def build_parser() -> argparse.ArgumentParser:
         )
         item.set_defaults(handler=_view_command)
 
-    error_view = view_subparsers.add_parser(
-        "error",
-        help="inspect failure rate and error occurrence history",
-    )
-    error_view.add_argument(
-        "--workspace",
-        default=".",
-        help="workspace to inspect (default: current directory)",
-    )
-    error_view.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        help=(
-            "PNG output path; default: error_YYYYMMDD_HHMMSS.png below "
-            "the workspace tool-output directory"
-        ),
-    )
-    error_view.add_argument(
-        "--summary-only",
-        action="store_true",
-        help="print the summary without rendering a PNG",
-    )
-    error_view.set_defaults(handler=_view_command)
-
     all_views = view_subparsers.add_parser(
         "all",
-        help="run cost, time, and error views together",
+        help="run cost and time views together",
     )
     all_views.add_argument(
         "--workspace",
@@ -541,7 +511,7 @@ def build_parser() -> argparse.ArgumentParser:
     all_views.add_argument(
         "--summary-only",
         action="store_true",
-        help="print all three summaries without rendering PNGs",
+        help="print both summaries without rendering PNGs",
     )
     all_views.set_defaults(handler=_view_all_command)
 

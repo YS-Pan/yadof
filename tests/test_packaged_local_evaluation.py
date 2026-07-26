@@ -203,6 +203,7 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     metadata = _metadata(jobs[0])
     assert metadata["status"] == "done"
     assert metadata["timed_out"] is False
+    assert metadata["execute_machine"]
     assert metadata["effective_config_summary"]["EVALUATION_TIMEOUT_SEC"] == {
         "value": None,
         "source": "no-timeout smoke-test override",
@@ -214,6 +215,7 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     assert records[0]["status"] == "completed"
     assert records[0]["started_at"]
     assert records[0]["ended_at"]
+    assert records[0]["job_metadata"]["execute_machine"] == metadata["execute_machine"]
     assert (root / "recorded_data/rawData.npz").is_file()
 
 

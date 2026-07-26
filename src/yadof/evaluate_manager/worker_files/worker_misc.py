@@ -34,6 +34,20 @@ def now_text() -> str:
     return datetime.now().astimezone().isoformat(timespec="milliseconds")
 
 
+def execute_machine_name() -> str:
+    """Return the computer name observed by the running execute-side process."""
+
+    for value in (
+        platform.node(),
+        os.environ.get("COMPUTERNAME", ""),
+        os.environ.get("HOSTNAME", ""),
+    ):
+        name = str(value or "").strip()
+        if name:
+            return name
+    return "unknown"
+
+
 def write_json(path: str | Path, data: Mapping[str, object]) -> None:
     path = Path(path)
     temp_path = path.with_name(path.name + ".tmp")
@@ -78,6 +92,7 @@ def runtime_identity(
     except Exception:
         whoami = ""
     identity = {
+        "execute_machine": execute_machine_name(),
         "runtime_user": getpass.getuser(),
         "runtime_whoami": whoami,
         "runtime_cwd": str(Path(base_dir)),
@@ -133,6 +148,7 @@ __all__ = [
     "env_bool",
     "env_float",
     "env_int",
+    "execute_machine_name",
     "now_text",
     "prepare_rawdata_dir",
     "raw_data_file_names",

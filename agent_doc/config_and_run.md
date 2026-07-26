@@ -63,24 +63,27 @@ per-individual diagnostics.
 ```powershell
 yadof view cost --workspace PATH [--status completed] [-o NAME.png] [--summary-only]
 yadof view time --workspace PATH [--status all] [-o NAME.png] [--summary-only]
-yadof view error --workspace PATH [-o NAME.png] [--summary-only]
 yadof view all --workspace PATH [--summary-only]
 yadof history clear --workspace PATH --yes
 yadof task adapters
 yadof task copy-adapter test_com.py --workspace PATH
 ```
 
-The cost and time views show objective and elapsed-time history. The error view
-owns failure-rate reporting and plots every failed/timeout occurrence by time;
-different error types use different colors. Individual view commands print a
-summary and create `cost_YYYYMMDD_HHMMSS.png`, `time_YYYYMMDD_HHMMSS.png`, or
-`error_YYYYMMDD_HHMMSS.png` by default. `-o/--output` overrides the individual
-view's name or path; relative plot names are written below
-`.yadof/tool_output/`. `view all` runs cost, time, and error views together,
-prints all three summaries, and creates all three timestamped images. Use
-`--summary-only` to print without creating PNGs. Destructive history clear
-requires interactive confirmation or `--yes`, validates its exact workspace
-targets, clears only that workspace, and recreates the jobs directory.
+The cost view shows objective history. The time view combines elapsed time, failure
+rate, execute-machine colors, and error occurrences. Each error type occupies a
+labeled horizontal band near the top of the plot; an error marker's fill identifies
+the execute machine and its outer ring identifies the error type. The execute
+machine comes from `individual_metadata.json` written on the execute node, not from
+submit-side scheduler history.
+
+Individual view commands print a summary and create
+`cost_YYYYMMDD_HHMMSS.png` or `time_YYYYMMDD_HHMMSS.png` by default.
+`-o/--output` overrides the individual view's name or path; relative plot names are
+written below `.yadof/tool_output/`. `view all` runs cost and time together, prints
+both summaries, and creates both timestamped images. Use `--summary-only` to print
+without creating PNGs. Destructive history clear requires interactive confirmation
+or `--yes`, validates its exact workspace targets, clears only that workspace, and
+recreates the jobs directory.
 
 ## Python APIs
 

@@ -9,18 +9,19 @@ confirmed task edits. Pool/system administration remains under `admin_tool/`.
 
 ## Views and history
 
-Cost/time/error views derive current values from public history/task APIs and write
+Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected
-records/objectives, time supports status filtering, and error reads every evaluation
-record so its failure-rate denominator remains meaningful. The error view owns
-failure-rate reporting: it lists each failure occurrence, classifies explicit error
-types with status/stage fallbacks, and plots occurrence time against categorical
-error type with a distinct color per type.
+records/objectives. Time supports status filtering and owns elapsed time, failure
+rate, execute-machine color, and typed error occurrence reporting. It reads
+`execute_machine` from workflow-written individual metadata, never from submit-side
+scheduler history. Each error type occupies a directly labeled horizontal band near
+the plot top; marker fill identifies the execute machine and the outer ring
+identifies the error type.
 
 Individual CLI view commands write timestamped PNGs by default, accept `--output`
 to override the destination, and accept `--summary-only` to suppress plotting.
-`view all` invokes cost, time, and error with their normal defaults, prints three
-labeled summaries, and uses one timestamp for the three default image names. The
+`view all` invokes cost and time with their normal defaults, prints two labeled
+summaries, and uses one timestamp for the two default image names. The
 views do not mutate durable evidence. History clear requires explicit confirmation,
 resolves and validates exact workspace-owned targets, and avoids package or
 unrelated paths.

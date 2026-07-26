@@ -245,6 +245,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             )
             assert successful_metadata["status"] == "done"
             assert successful_metadata["timed_out"] is False
+            assert successful_metadata["execute_machine"]
             assert successful_metadata["yadof_version"] == yadof.__version__
             assert successful_metadata["workspace_identity"]["root"] == str(workspace.resolve())
             assert successful_metadata["effective_config_summary"]["EVALUATION_TIMEOUT_SEC"]["value"] is None
@@ -262,6 +263,10 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             assert len(successful_records) == 1
             assert successful_records[0]["status"] == "completed"
             assert successful_records[0]["job_name"] == successful_job.name
+            assert (
+                successful_records[0]["job_metadata"]["execute_machine"]
+                == successful_metadata["execute_machine"]
+            )
             assert (recorded_dir / "rawData.npz").is_file()
             assert (recorded_dir / "indMeta.jsonl.lock").is_file()
 
@@ -299,7 +304,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 )
                 assert run_result.returncode == 0, run_result.stdout + run_result.stderr
                 assert f"gen={generation}" in run_result.stdout
-            for view_kind in ("cost", "time", "error"):
+            for view_kind in ("cost", "time"):
                 viewed = _run(
                     [
                         str(yadof_executable),
@@ -579,7 +584,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/scheduler.py" in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
         assert "yadof/tools/view_time.py" in wheel_names
-        assert "yadof/tools/view_error.py" in wheel_names
+        assert "yadof/tools/view_error.py" not in wheel_names
         assert "yadof/tools/history.py" in wheel_names
         assert "yadof/tools/hfss/parameter_extraction.py" in wheel_names
         assert "yadof/run_command.py" in wheel_names

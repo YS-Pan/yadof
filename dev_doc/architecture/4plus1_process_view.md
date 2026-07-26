@@ -14,7 +14,7 @@ sequenceDiagram
     loop each candidate
         E->>J: copy task + assign self-contained parameters
         E->>W: local subprocess or HTCondor direct executable
-        W->>J: write lifecycle metadata and flat rawData/*.npz
+        W->>J: write lifecycle/execute-machine metadata and flat rawData/*.npz
     end
     E->>R: batch-record completed/error results
     R->>C: calculate current costs from recorded rawData
@@ -32,6 +32,11 @@ and explicitly returns `rawData.zip` plus `individual_metadata.json`; it never
 returns `rawData/`. Submit-side collection requires a readable archive whose members
 are unique direct `.npz` names, restores them into `rawData/`, then applies the same
 validation and recording path.
+
+The workflow samples its machine name while running and writes
+`execute_machine` into `individual_metadata.json`. Visualization consumes that
+returned execute-side value rather than inferring a node from submit-side
+`condor_history` or `condor_q`.
 
 Distributed orchestration invokes after-submit surrogate scheduling, polls terminal
 or returned-output state, owns bounded memory/disk resubmission, enforces a separate

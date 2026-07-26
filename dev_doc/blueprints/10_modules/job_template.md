@@ -12,8 +12,9 @@ does not contain a concrete simulator or objective.
 - `parameters_constraints.py` defines canonical unassigned `PARAMETERS` and textual
   constraints using packaged `Parameter` on the submit side.
 - `workflow.py` consumes assigned values, controls simulators/custom software, writes
-  lifecycle metadata, writes direct `rawData/*.npz`, and creates flat
-  `rawData.zip` for distributed return. It must not write cost.
+  lifecycle metadata including execute-side `execute_machine`, writes direct
+  `rawData/*.npz`, and creates flat `rawData.zip` for distributed return. It must
+  not write cost.
 - `calc_cost.py` reports objective names/count and calculates current costs from
   rawData; it may expose importance weights for surrogate training.
 - adapters, models, lookup data, and task helpers are copied into prepared jobs when
@@ -47,5 +48,7 @@ supplied when a task needs them, but rawData remains the evidence source.
 
 - Task modules are workspace-explicit and fresh-loaded.
 - Workflows do not import yadof in distributed execution.
+- Workflows sample `execute_machine` on the node where they run and include it in
+  returned individual metadata.
 - Rich rawData is preserved; cost code may select objective-relevant windows.
 - `cost.json` is never an authoritative task output.

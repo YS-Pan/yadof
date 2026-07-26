@@ -17,8 +17,9 @@ they never find user state relative to package source or a process-global projec
 `init` stages and validates a generic template, then publishes it without
 overwriting existing files. The portable `.yadof/workspace.json` marker is published
 last and records template/version provenance; it does not authorize repair or
-automatic upgrade. `check` is read-only and reports marker, required files, task
-contract, path, and optional static rawData diagnostics.
+automatic upgrade. The generic workflow records execute-side machine identity in
+its lifecycle metadata. `check` is read-only and reports marker, required files,
+task contract, path, and optional static rawData diagnostics.
 
 ## Task loading and resources
 

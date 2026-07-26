@@ -36,6 +36,7 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
                     "started_at": "2026-05-14T08:00:00+08:00",
                     "ended_at": "2026-05-14T08:01:00+08:00",
                     "job_static_hash": "hash_a",
+                    "execute_machine": "worker-a",
                 },
             },
             {
@@ -48,6 +49,9 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
                     "started_at": "2026-05-14T08:02:00+08:00",
                     "ended_at": "2026-05-14T08:03:30+08:00",
                     "job_static_hash": "hash_a",
+                    "execute_machine": "worker-b",
+                    "error_type": "RuntimeError",
+                    "error_message": "solver failed",
                 },
             },
             {
@@ -58,6 +62,8 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
                 "job_metadata": {
                     "failed_at": "2026-05-14T08:04:00+08:00",
                     "job_static_hash": "hash_b",
+                    "execute_machine": "worker-a",
+                    "timed_out": True,
                 },
             },
         ),
@@ -73,6 +79,16 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
     assert [row["job_name"] for row in rows] == ["job_a", "job_b", "job_c"]
     assert [row["status"] for row in rows] == ["completed", "error", "timeout"]
     assert [row["success"] for row in rows] == [True, False, False]
+    assert [row["computer"] for row in rows] == [
+        "worker-a",
+        "worker-b",
+        "worker-a",
+    ]
+    assert [row["error_type"] for row in rows] == [
+        None,
+        "RuntimeError",
+        "timeout",
+    ]
     assert rows[0]["elapsed_min"] == pytest.approx(1.0)
     assert rows[1]["elapsed_min"] == pytest.approx(1.5)
     assert rows[2]["elapsed_min"] == pytest.approx(0.0)
@@ -83,7 +99,11 @@ def test_build_rows_uses_recorded_data_individual_metadata_records():
 
     summary = view_time.summarize_rows(rows)
     assert "rows: 3" in summary
-    assert "failure rate" not in summary
+    assert "errors: 2" in summary
+    assert "failure rate: 66.67 %" in summary
+    assert "RuntimeError" in summary
+    assert "solver failed" in summary
+    assert "worker-b" in summary
     assert "status counts:" in summary
 
 
@@ -141,6 +161,32 @@ def test_build_rows_can_filter_completed_records():
     rows = view_time.build_rows(object(), recorded_api=fake_api, status="completed")
 
     assert [row["job_name"] for row in rows] == ["job_a"]
+
+
+def test_computer_colors_and_error_bands_are_distinct():
+    computer_colors = view_time._categorical_colors(
+        ("worker-a", "worker-b", "worker-c")
+    )
+    error_colors = view_time._categorical_colors(
+        ("RuntimeError", "timeout", "collect error"),
+        hue_offset=0.08,
+        saturation=0.92,
+        value=0.88,
+    )
+
+    assert len(set(computer_colors.values())) == 3
+    assert len(set(error_colors.values())) == 3
+    assert view_time._error_band_positions(
+        ("RuntimeError", "timeout", "collect error")
+    ) == {
+        "RuntimeError": pytest.approx(0.80),
+        "timeout": pytest.approx(0.85),
+        "collect error": pytest.approx(0.90),
+    }
+    assert view_time._error_band_positions(("timeout",)) == {
+        "timeout": pytest.approx(0.85)
+    }
+    assert view_time.ELAPSED_DATA_TOP < view_time.ERROR_BAND_BOTTOM
 
 
 def test_generation_regions_use_time_midpoints_and_restart_per_run():
@@ -231,8 +277,11 @@ def test_view_time_source_does_not_reference_legacy_jsonl_inputs():
     assert "optMeta.jsonl" not in source
     assert "sys.path" not in source
     assert "alpha=TREND_LINE_ALPHA" in source
-    assert "FAIL_RATE_COLOR" not in source
-    assert "Failure rate (%)" not in source
+    assert "FAIL_RATE_COLOR" in source
+    assert "Failure rate (%)" in source
+    assert "execute_machine" in source
+    assert "edgecolors=ring_color" in source
+    assert "label=error_type" not in source
 
 
 def test_view_time_plot_style_stays_aligned_to_view_cost():
@@ -321,14 +370,14 @@ def test_view_time_splits_data_and_event_legends():
 
     axis = FakeLegendAxis()
     sources = (
-        FakeSourceAxis(["completed", "Opt. start"]),
-        FakeSourceAxis(["Hash change"]),
+        FakeSourceAxis(["computer: worker-a", "avg. time", "Opt. start"]),
+        FakeSourceAxis(["avg. failure rate", "Hash change"]),
     )
 
     view_time._add_split_legends(axis, sources)
 
     assert [call[0] for call in axis.calls] == [
-        ["completed"],
+        ["computer: worker-a", "avg. time", "avg. failure rate"],
         ["Opt. start", "Hash change"],
     ]
     assert axis.calls[0][1]["framealpha"] == pytest.approx(0.6)
@@ -355,6 +404,7 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):
                     "job_metadata": {
                         "started_at": "2026-05-14T08:00:00+08:00",
                         "ended_at": "2026-05-14T08:01:00+08:00",
+                        "execute_machine": "worker-a",
                     },
                 },
                 {
@@ -366,6 +416,36 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):
                     "job_metadata": {
                         "started_at": "2026-05-14T08:02:00+08:00",
                         "ended_at": "2026-05-14T08:02:30+08:00",
+                        "execute_machine": "worker-b",
+                        "error_type": "RuntimeError",
+                        "error_message": "solver failed",
+                    },
+                },
+                {
+                    "job_name": "job_c",
+                    "status": "timeout",
+                    "started_at": "2026-05-14T08:03:00+08:00",
+                    "failed_at": "2026-05-14T08:04:00+08:00",
+                    "recorded_at": "2026-05-14T00:04:00+00:00",
+                    "job_metadata": {
+                        "started_at": "2026-05-14T08:03:00+08:00",
+                        "failed_at": "2026-05-14T08:04:00+08:00",
+                        "execute_machine": "worker-c",
+                        "timed_out": True,
+                    },
+                },
+                {
+                    "job_name": "job_d",
+                    "status": "error",
+                    "started_at": "2026-05-14T08:05:00+08:00",
+                    "ended_at": "2026-05-14T08:05:20+08:00",
+                    "recorded_at": "2026-05-14T00:05:20+00:00",
+                    "job_metadata": {
+                        "started_at": "2026-05-14T08:05:00+08:00",
+                        "ended_at": "2026-05-14T08:05:20+08:00",
+                        "execute_machine": "worker-a",
+                        "failure_stage": "collect",
+                        "error": "missing rawData.zip",
                     },
                 },
             )

@@ -12,7 +12,8 @@ Direct task-template children ending case-insensitively with `.aedtresults` or
 `.aedt.lock` are AEDT runtime artifacts and are excluded. The suffix rule does not
 inspect task-owned subdirectories.
 
-Runtime adds workflow metadata, local/Condor logs and submit diagnostics,
+Runtime adds workflow metadata including execute-side `execute_machine`,
+local/Condor logs and submit diagnostics,
 `rawData.zip` in distributed mode, and direct restored/locally generated
 `rawData/*.npz`. `calc_cost.py`, workspace/global config packages, yadof source,
 wheel/package archives, worker bootstraps/configs, and authoritative `cost.json` are
@@ -32,8 +33,10 @@ HTCondor executes the copied `workflow.py` directly. `workflow.py` imports the
 same-directory `worker_misc.py` as needed and is responsible for generating a flat
 top-level `rawData.zip` in success and error paths. The archive contains only member
 names like `name.npz`; it never contains a `rawData/` directory. Condor returns that
-zip and workflow metadata, not the rawData directory. Submit-side restoration is
-strict and reports missing, corrupt, nested, non-`.npz`, or duplicate members.
+zip and workflow metadata, not the rawData directory. The workflow captures
+`execute_machine` while running; submit-side ClassAds do not supply or replace that
+identity. Submit-side restoration is strict and reports missing, corrupt, nested,
+non-`.npz`, or duplicate members.
 
 ## Invariants
 

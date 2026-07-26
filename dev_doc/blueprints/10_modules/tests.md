@@ -22,8 +22,9 @@ license, machine identity, or credential.
   rawData, local validation, dynamic cost, and persistence atomicity;
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
-- CLI/docs, cost/time/error views including grouped `view all`, tools/adapters, and
-  artifact exclusion of examples/runtime data.
+- CLI/docs, integrated cost/time views including grouped `view all`,
+  execute-machine/error encodings, tools/adapters, and artifact exclusion of
+  examples/runtime data.
 
 ## Test placement
 

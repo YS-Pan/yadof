@@ -11,8 +11,11 @@ create the distributed transfer archive without importing yadof on an execute no
 
 - Environment helpers parse bounded integer/float/bool values.
 - `bootstrap_home_dirs()` redirects volatile profile/temp paths below the job.
-- `runtime_identity()` captures user, Python, platform, scratch, and selected
-  environment diagnostics without failing when `whoami` is unavailable.
+- `execute_machine_name()` captures the machine name from the running execute-side
+  process with platform/environment fallbacks.
+- `runtime_identity()` includes `execute_machine` plus user, Python, platform,
+  scratch, and selected environment diagnostics without failing when `whoami` is
+  unavailable.
 - `write_json()` atomically replaces workflow metadata through a `.tmp` file.
 - `prepare_rawdata_dir()` creates/clears the output directory, rejects nested
   directories, and removes a stale transfer zip.
@@ -35,5 +38,8 @@ logic. Its archive is transport-only; durable archival remains recorded_data's j
 - `rawData/` is flat and contains only direct `.npz` files.
 - `rawData.zip` members never contain `rawData/` or any path separator.
 - Archive and metadata replacement do not expose partial target files.
+- Execute-machine identity is sampled by the workflow process on the execute node
+  and returned in `individual_metadata.json`; submit-side ClassAds are not its
+  source.
 - Helper failures remain visible to workflow/Condor rather than silently omitting
   invalid output.

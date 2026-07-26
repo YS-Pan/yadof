@@ -23,7 +23,8 @@ package/archive/config.
 `local_runner.py` directly runs job-local `workflow.py` with bounded concurrency and
 per-job timeout, kills the process tree on timeout, rejects `cost.json`, validates
 the flat rawData directory even when no direct files exist, merges workflow metadata,
-and captures output tails.
+and captures output tails. The workflow records its own execute-machine name in
+individual metadata through package worker support.
 
 ## Distributed backend
 
@@ -46,6 +47,10 @@ execution limits enforced both by Condor and a submit-side yadof watchdog, unlim
 smoke, whole-generation deadlines, final ClassAd data, output restoration, and
 Windows slot-user policy. Pending jobs may receive one delayed read-only matchmaking
 analysis. The module diagnoses but never repairs HTCondor.
+
+Execute-machine provenance is not inferred from those submit-side ClassAds.
+`workflow.py` samples it on the execute node, writes `execute_machine` into
+`individual_metadata.json`, and returns that file through the normal transport.
 
 ## Recording and cost return
 

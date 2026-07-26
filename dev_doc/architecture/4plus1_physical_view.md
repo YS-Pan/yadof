@@ -72,3 +72,7 @@ workspace path setting.
 JSON and archive publication requiring replacement is atomic and protected by
 workspace locks. Package resources remain read-only even when site-packages itself
 is read-only.
+
+`individual_metadata.json` includes `execute_machine` sampled by the workflow
+process on the execute node. It is transferred back with the normal job outputs;
+submit-side ClassAds are not authoritative for this field.

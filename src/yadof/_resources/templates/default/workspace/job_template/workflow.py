@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import platform
 import traceback
 import zipfile
 
@@ -23,6 +24,18 @@ RAW_DATA_ZIP = ROOT / "rawData.zip"
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _execute_machine_name() -> str:
+    for value in (
+        platform.node(),
+        os.environ.get("COMPUTERNAME", ""),
+        os.environ.get("HOSTNAME", ""),
+    ):
+        normalized = str(value).strip()
+        if normalized:
+            return normalized
+    return "unknown"
 
 
 def _write_metadata(payload: dict[str, object]) -> None:
@@ -61,7 +74,11 @@ def _write_rawdata_zip() -> None:
 
 
 def main() -> int:
-    metadata: dict[str, object] = {"status": "running", "started_at": _now()}
+    metadata: dict[str, object] = {
+        "status": "running",
+        "started_at": _now(),
+        "execute_machine": _execute_machine_name(),
+    }
     _write_metadata(metadata)
     try:
         values = np.asarray([parameter.value for parameter in get_parameters()], dtype=float)

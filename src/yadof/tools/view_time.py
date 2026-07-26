@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import colorsys
 import math
 from collections.abc import Sequence as SequenceABC
 from datetime import datetime, timedelta
@@ -12,8 +13,7 @@ from ..workspace import WorkspaceContext
 
 
 WorkspaceLike = WorkspaceContext | str | Path
-DONE_COLOR = "#d62728"
-FAIL_COLOR = "#7f7f7f"
+FAIL_RATE_COLOR = "darkblue"
 HASH_LINE_COLOR = "#FFAA00"
 OPT_LINE_COLOR = "black"
 OPT_LINE_LABEL = "Opt. start"
@@ -41,6 +41,13 @@ HASH_LINE_STYLE = (EVENT_DASH_LENGTH, (EVENT_DASH_LENGTH, EVENT_DASH_LENGTH))
 GRID_LINE_WIDTH = 0.4
 SCATTER_MARKER_SIZE = 3.0
 SCATTER_EDGE_LINE_WIDTH = 0.4
+ERROR_SCATTER_MARKER_SIZE = 5.0
+ERROR_RING_LINE_WIDTH = 1.0
+ERROR_BAND_BOTTOM = 0.80
+ERROR_BAND_TOP = 0.90
+ELAPSED_DATA_TOP = 0.72
+ERROR_BAND_LINE_WIDTH = 0.6
+ERROR_LABEL_X = 0.985
 GENERATION_SHADE_COLOR = "black"
 GENERATION_SHADE_ALPHA = 0.1
 GENERATION_LABEL_Y = 0.98
@@ -119,6 +126,34 @@ def _first_datetime(
     return None
 
 
+def _first_datetime_from_sources(
+    sources: Sequence[Mapping[str, object]], keys: Sequence[str]
+) -> datetime | None:
+    for key in keys:
+        for source in sources:
+            parsed = _parse_dt(source.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _first_text(
+    sources: Sequence[Mapping[str, object]], keys: Sequence[str]
+) -> str | None:
+    for key in keys:
+        for source in sources:
+            value = source.get(key)
+            if value not in (None, ""):
+                return str(value).strip()
+    return None
+
+
+def _is_truthy(value: object) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 def _canonical_status(value: object) -> str:
     status = str(value or "").strip().lower()
     if status == "done":
@@ -128,6 +163,76 @@ def _canonical_status(value: object) -> str:
 
 def _record_status(record: Mapping[str, object], metadata: Mapping[str, object]) -> str:
     return _canonical_status(record.get("status") or metadata.get("status"))
+
+
+def _error_type(
+    record: Mapping[str, object],
+    metadata: Mapping[str, object],
+    status: str,
+) -> str | None:
+    if status == "completed":
+        return None
+
+    sources = (record, metadata)
+    explicit = _first_text(sources, ("error_type", "failure_type"))
+    if explicit is not None:
+        return explicit
+    if status == "timeout" or any(
+        _is_truthy(source.get("timed_out")) for source in sources
+    ):
+        return "timeout"
+    stage = _first_text(sources, ("failure_stage",))
+    if stage is not None:
+        return f"{stage} error"
+    return status if status != "unknown" else "error"
+
+
+def _error_message(
+    record: Mapping[str, object], metadata: Mapping[str, object]
+) -> str:
+    message = _first_text(
+        (record, metadata),
+        (
+            "error_message",
+            "error",
+            "rawdata_error",
+            "rawdata_transfer_zip_error",
+            "condor_hold_reason",
+        ),
+    )
+    return "" if message is None else " ".join(message.split())
+
+
+def _normalize_machine_name(value: object) -> str | None:
+    if value in (None, ""):
+        return None
+    name = str(value).strip().strip('"')
+    if not name:
+        return None
+    if "@" in name:
+        name = name.split("@", 1)[1]
+    return name or None
+
+
+def _computer_name(
+    record: Mapping[str, object], metadata: Mapping[str, object]
+) -> str:
+    for key in (
+        "condor_execute_machine",
+        "execute_machine",
+        "LastRemoteHost",
+        "RemoteHost",
+        "Machine",
+        "machine",
+        "hostname",
+        "host_name",
+    ):
+        for source in (record, metadata):
+            machine = _normalize_machine_name(source.get(key))
+            if machine is not None:
+                return machine
+    engine = _first_text((record, metadata), ("engine",))
+    return "local" if str(engine or "").lower() == "local" else "unknown"
 
 
 def _metadata_int(metadata: Mapping[str, object], key: str) -> int | None:
@@ -229,6 +334,24 @@ def build_rows(
         if end is None:
             end = start
         assert start is not None and end is not None
+        failed = record_status != "completed"
+        event_time = (
+            _first_datetime_from_sources(
+                (record, metadata),
+                (
+                    "failed_at",
+                    "ended_at",
+                    "runner_finished_at",
+                    "recorded_at",
+                    "started_at",
+                    "runner_started_at",
+                ),
+            )
+            if failed
+            else end
+        )
+        if event_time is None:
+            event_time = end
 
         job_name = str(record.get("job_name") or metadata.get("job_name") or f"row_{row_number}")
         optimization_index = _metadata_int(record, "optimization_index")
@@ -253,8 +376,13 @@ def build_rows(
                 "status": record_status,
                 "start": start,
                 "end": end,
+                "event_time": event_time,
                 "elapsed_min": _elapsed_minutes(start, end, metadata),
-                "success": record_status == "completed",
+                "success": not failed,
+                "failed": failed,
+                "error_type": _error_type(record, metadata, record_status),
+                "error_message": _error_message(record, metadata),
+                "computer": _computer_name(record, metadata),
                 "optimization_index": optimization_index,
                 "optimization_run_id": optimization_run_id,
                 "generation_index": generation_index,
@@ -280,6 +408,40 @@ def gaussian_kernel_smoother(x_data, y_data, fine_x, sigma):
         if weight_sum > 0.0:
             smoothed[i] = np.sum(weights * y_data) / weight_sum
     return smoothed
+
+
+def _categorical_colors(
+    labels: Sequence[str],
+    *,
+    hue_offset: float = 0.0,
+    saturation: float = 0.68,
+    value: float = 0.78,
+) -> dict[str, str]:
+    unique = tuple(dict.fromkeys(str(label) for label in labels))
+    count = max(1, len(unique))
+    colors: dict[str, str] = {}
+    for index, label in enumerate(unique):
+        hue = (hue_offset + index / count) % 1.0
+        red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value)
+        colors[label] = "#{:02x}{:02x}{:02x}".format(
+            round(red * 255),
+            round(green * 255),
+            round(blue * 255),
+        )
+    return colors
+
+
+def _error_band_positions(error_types: Sequence[str]) -> dict[str, float]:
+    unique = tuple(dict.fromkeys(str(error_type) for error_type in error_types))
+    if not unique:
+        return {}
+    if len(unique) == 1:
+        return {unique[0]: (ERROR_BAND_BOTTOM + ERROR_BAND_TOP) / 2.0}
+    step = (ERROR_BAND_TOP - ERROR_BAND_BOTTOM) / (len(unique) - 1)
+    return {
+        error_type: ERROR_BAND_BOTTOM + index * step
+        for index, error_type in enumerate(unique)
+    }
 
 
 def _optimization_starts(rows: Sequence[dict[str, object]]) -> list[tuple[int, datetime]]:
@@ -331,6 +493,23 @@ def _time_cell_edges(rows: Sequence[dict[str, object]]) -> list[datetime]:
         *midpoints,
         times[-1] + last_half_gap,  # type: ignore[operator]
     ]
+
+
+def _plot_time_limits(
+    rows: Sequence[dict[str, object]],
+) -> tuple[datetime, datetime]:
+    times = [row["start"] for row in rows]
+    times.extend(row["event_time"] for row in rows if row["failed"])
+    left = min(times)
+    right = max(times)
+    if left == right:
+        margin = timedelta(seconds=30)
+    else:
+        margin = max(
+            timedelta(seconds=1),
+            (right - left) * 0.025,  # type: ignore[operator]
+        )
+    return left - margin, right + margin  # type: ignore[operator]
 
 
 def _generation_regions(
@@ -475,20 +654,68 @@ def _table_lines(headers: Sequence[str], rows: Sequence[Sequence[str]], right_al
 def summarize_rows(rows: Sequence[dict[str, object]]) -> str:
     elapsed = [float(row["elapsed_min"]) for row in rows]
     completed_elapsed = [float(row["elapsed_min"]) for row in rows if row["success"]]
+    failed_rows = [row for row in rows if row["failed"]]
+    failure_rate = 100.0 * len(failed_rows) / len(rows)
     status_counts: dict[str, int] = {}
     for row in rows:
         status_counts[str(row["status"])] = status_counts.get(str(row["status"]), 0) + 1
+    type_counts: dict[str, int] = {}
+    for row in failed_rows:
+        error_type = str(row["error_type"])
+        type_counts[error_type] = type_counts.get(error_type, 0) + 1
+    span_end = max(
+        [
+            *(row["end"] for row in rows),
+            *(row["event_time"] for row in failed_rows),
+        ]
+    )
 
     lines = [
         f"rows: {len(rows)}",
-        f"time span: {rows[0]['start']} to {rows[-1]['end']}",
+        f"time span: {rows[0]['start']} to {span_end}",
         f"avg elapsed: {sum(elapsed) / len(elapsed):.3f} min",
         "avg completed elapsed: "
         + ("n/a" if not completed_elapsed else f"{sum(completed_elapsed) / len(completed_elapsed):.3f} min"),
+        f"errors: {len(failed_rows)}",
+        f"failure rate: {failure_rate:.2f} %",
         "status counts:",
     ]
     table_rows = [[status, str(count)] for status, count in sorted(status_counts.items())]
     lines.extend(_table_lines(["status", "count"], table_rows, [False, True]))
+    lines.append("error type counts:")
+    if type_counts:
+        lines.extend(
+            _table_lines(
+                ("error type", "count"),
+                tuple(
+                    (error_type, str(count))
+                    for error_type, count in sorted(type_counts.items())
+                ),
+                (False, True),
+            )
+        )
+    else:
+        lines.append("none")
+    lines.append("error occurrences:")
+    if failed_rows:
+        lines.extend(
+            _table_lines(
+                ("time", "error type", "job", "computer", "message"),
+                tuple(
+                    (
+                        row["event_time"].isoformat(sep=" "),  # type: ignore[union-attr]
+                        str(row["error_type"]),
+                        str(row["job_name"]),
+                        str(row["computer"]),
+                        str(row["error_message"]),
+                    )
+                    for row in failed_rows
+                ),
+                (False, False, False, False, False),
+            )
+        )
+    else:
+        lines.append("none")
     return "\n".join(lines)
 
 
@@ -532,7 +759,8 @@ def plot_rows(
         dtype=float,
     )
     elapsed = np.asarray([row["elapsed_min"] for row in rows], dtype=float)
-    time_edges = _time_cell_edges(rows)
+    failures = np.asarray([row["failed"] for row in rows], dtype=float)
+    time_limits = _plot_time_limits(rows)
     generation_regions = _generation_regions(rows)
 
     if len(x_hours) == 1:
@@ -541,35 +769,101 @@ def plot_rows(
     else:
         fine_x = np.linspace(float(np.min(x_hours)), float(np.max(x_hours)), 600)
         avg_spacing = float(np.mean(np.diff(x_hours)))
-        sigma = max(1e-12, max(1, int(0.05 * len(rows))) * avg_spacing / 3.0)
+        sigma = max(
+            1e-12,
+            max(1, int(0.05 * len(rows))) * max(avg_spacing, 0.0) / 3.0,
+        )
     fine_times = [rows[0]["start"] + timedelta(hours=float(x)) for x in fine_x]  # type: ignore[operator]
 
     done_rows = [row for row in rows if row["success"]]
-    fail_rows = [row for row in rows if not row["success"]]
+    fail_rows = [row for row in rows if row["failed"]]
+    computers = tuple(dict.fromkeys(str(row["computer"]) for row in rows))
+    computer_colors = _categorical_colors(computers)
+    error_types = tuple(
+        dict.fromkeys(str(row["error_type"]) for row in fail_rows)
+    )
+    error_colors = _categorical_colors(
+        error_types,
+        hue_offset=0.08,
+        saturation=0.92,
+        value=0.88,
+    )
+    error_positions = _error_band_positions(error_types)
 
     fig, ax = plt.subplots(figsize=PLOT_FIGSIZE)
     _draw_generation_regions(ax, generation_regions)
 
-    if done_rows:
+    for computer in computers:
         ax.scatter(
-            [row["start"] for row in done_rows],
-            [row["elapsed_min"] for row in done_rows],
-            color=DONE_COLOR,
-            alpha=0.6,
+            [],
+            [],
+            facecolors=computer_colors[computer],
+            edgecolors=computer_colors[computer],
+            alpha=0.75,
             s=SCATTER_MARKER_SIZE**2,
             linewidths=SCATTER_EDGE_LINE_WIDTH,
-            label="completed",
+            label=f"computer: {computer}",
         )
-    if fail_rows:
+        matching = [
+            row for row in done_rows if str(row["computer"]) == computer
+        ]
+        if not matching:
+            continue
         ax.scatter(
-            [row["start"] for row in fail_rows],
-            [row["elapsed_min"] for row in fail_rows],
-            color=FAIL_COLOR,
-            alpha=0.8,
+            [row["start"] for row in matching],
+            [row["elapsed_min"] for row in matching],
+            facecolors=computer_colors[computer],
+            edgecolors=computer_colors[computer],
+            alpha=0.75,
             s=SCATTER_MARKER_SIZE**2,
-            marker="x",
-            label="not completed",
+            linewidths=SCATTER_EDGE_LINE_WIDTH,
         )
+
+    xaxis_transform = ax.get_xaxis_transform()
+    for error_type in error_types:
+        height = error_positions[error_type]
+        ring_color = error_colors[error_type]
+        ax.plot(
+            [time_limits[0], time_limits[1]],
+            [height, height],
+            transform=xaxis_transform,
+            color=ring_color,
+            linewidth=ERROR_BAND_LINE_WIDTH,
+            alpha=0.45,
+            zorder=1.2,
+        )
+        ax.text(
+            ERROR_LABEL_X,
+            height,
+            error_type,
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            color=ring_color,
+            fontsize=PLOT_LEGEND_FONT_SIZE,
+            bbox={
+                "facecolor": "white",
+                "edgecolor": "none",
+                "alpha": 0.7,
+                "pad": 0.4,
+            },
+            zorder=4,
+        )
+        for row in fail_rows:
+            if str(row["error_type"]) != error_type:
+                continue
+            computer = str(row["computer"])
+            ax.scatter(
+                [row["event_time"]],
+                [height],
+                transform=xaxis_transform,
+                facecolors=computer_colors[computer],
+                edgecolors=ring_color,
+                linewidths=ERROR_RING_LINE_WIDTH,
+                alpha=0.95,
+                s=ERROR_SCATTER_MARKER_SIZE**2,
+                zorder=3,
+            )
 
     if done_rows:
         done_x = np.asarray(
@@ -587,6 +881,20 @@ def plot_rows(
             alpha=TREND_LINE_ALPHA,
             label=f"avg. time (global: {global_avg:.2f} min)",
         )
+
+    global_failure = float(np.mean(failures) * 100.0)
+    local_failure = (
+        gaussian_kernel_smoother(x_hours, failures, fine_x, sigma) * 100.0
+    )
+    ax2 = ax.twinx()
+    ax2.plot(
+        fine_times,
+        local_failure,
+        color=FAIL_RATE_COLOR,
+        linewidth=TREND_LINE_WIDTH,
+        alpha=0.6,
+        label=f"avg. failure rate (global: {global_failure:.2f} %)",
+    )
 
     event_line_style = {
         "linewidth": EVENT_LINE_WIDTH,
@@ -619,10 +927,10 @@ def plot_rows(
     ax.set_xlabel("Time", fontsize=PLOT_FONT_SIZE)
     ax.set_ylabel("Elapsed time (minutes)", fontsize=PLOT_FONT_SIZE)
     ax.set_title(
-        "Evaluation speeds from recorded_data",
+        "Evaluation time and failures from recorded_data",
         fontsize=PLOT_TITLE_FONT_SIZE,
     )
-    ax.set_xlim(time_edges[0], time_edges[-1])
+    ax.set_xlim(time_limits[0], time_limits[1])
     ax.grid(
         True,
         color="gainsboro",
@@ -630,8 +938,21 @@ def plot_rows(
         linewidth=GRID_LINE_WIDTH,
         alpha=0.6,
     )
-    ax.set_ylim(0.0, max(1.0, float(np.max(elapsed)) * 1.1))
+    completed_max = (
+        max(float(row["elapsed_min"]) for row in done_rows)
+        if done_rows
+        else 0.0
+    )
+    ax.set_ylim(0.0, max(1.0, completed_max / ELAPSED_DATA_TOP))
     ax.tick_params(
+        axis="both",
+        labelsize=PLOT_TICK_FONT_SIZE,
+        width=AXIS_LINE_WIDTH,
+    )
+
+    ax2.set_ylabel("Failure rate (%)", fontsize=PLOT_FONT_SIZE)
+    ax2.set_ylim(0.0, 100.0)
+    ax2.tick_params(
         axis="both",
         labelsize=PLOT_TICK_FONT_SIZE,
         width=AXIS_LINE_WIDTH,
@@ -642,7 +963,7 @@ def plot_rows(
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
     fig.tight_layout(pad=PLOT_TIGHT_LAYOUT_PAD)
-    _add_split_legends(ax, (ax,))
+    _add_split_legends(ax, (ax, ax2))
     fig.savefig(output, dpi=PLOT_DPI)
     plt.close(fig)
     return output

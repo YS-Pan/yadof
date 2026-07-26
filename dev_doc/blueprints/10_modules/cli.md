@@ -30,14 +30,14 @@ software may add its own `yadof task <software> extract-parameters` without clai
 or overloading a generic task action. Do not retain ambiguous compatibility aliases
 when a command is moved into its current namespace.
 
-Cost/time/error view commands print their summaries and, by default, create
-`cost_YYYYMMDD_HHMMSS.png`, `time_YYYYMMDD_HHMMSS.png`, or
-`error_YYYYMMDD_HHMMSS.png` below the selected workspace's configured tool-output
-directory. `--output` selects another path and `--summary-only` explicitly disables
-image generation. `view all` invokes all three tools with one workspace and one
-timestamp, prints labeled results for every successful tool, continues attempting
-later tools if one fails, and returns failure if any tool failed. The corresponding
-Python tool APIs retain `output_path=None` as summary-only behavior.
+Cost/time view commands print their summaries and, by default, create
+`cost_YYYYMMDD_HHMMSS.png` or `time_YYYYMMDD_HHMMSS.png` below the selected
+workspace's configured tool-output directory. `--output` selects another path and
+`--summary-only` explicitly disables image generation. `view all` invokes both
+tools with one workspace and one timestamp, prints labeled results for every
+successful tool, continues attempting the later tool if the first fails, and
+returns failure if either tool failed. The corresponding Python tool APIs retain
+`output_path=None` as summary-only behavior.
 
 ## Invariants
 

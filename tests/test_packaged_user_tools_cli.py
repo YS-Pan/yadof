@@ -124,24 +124,12 @@ def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):
     ) == 0
     time_output = capsys.readouterr().out
     assert "rows: 1" in time_output
-    assert "failure rate" not in time_output
+    assert "failure rate: 0.00 %" in time_output
     assert "saved:" in time_output
     time_plots = tuple(
         (workspace / ".yadof" / "tool_output").glob("time_*.png")
     )
     assert len(time_plots) == 1
-
-    assert cli_main(
-        ["view", "error", "--workspace", str(workspace)]
-    ) == 0
-    error_output = capsys.readouterr().out
-    assert "rows: 1" in error_output
-    assert "failure rate: 0.00 %" in error_output
-    assert "saved:" in error_output
-    error_plots = tuple(
-        (workspace / ".yadof" / "tool_output").glob("error_*.png")
-    )
-    assert len(error_plots) == 1
 
     assert cli_main(
         [
@@ -169,12 +157,9 @@ def test_view_default_output_name_matches_legacy_timestamp_format():
     assert _default_view_output_name("time", now=now) == Path(
         "time_20260724_173045.png"
     )
-    assert _default_view_output_name("error", now=now) == Path(
-        "error_20260724_173045.png"
-    )
 
 
-def test_view_all_prints_three_results_and_creates_three_images(capsys, tmp_path):
+def test_view_all_prints_both_results_and_creates_both_images(capsys, tmp_path):
     workspace = _workspace(tmp_path, "view_all_workspace")
     evaluate_population(workspace, ((0.25,),))
 
@@ -186,10 +171,10 @@ def test_view_all_prints_three_results_and_creates_three_images(capsys, tmp_path
     assert output.err == ""
     assert "=== cost ===" in output.out
     assert "=== time ===" in output.out
-    assert "=== error ===" in output.out
-    assert output.out.count("saved:") == 3
+    assert "=== error ===" not in output.out
+    assert output.out.count("saved:") == 2
     tool_output = workspace / ".yadof" / "tool_output"
-    for view_kind in ("cost", "time", "error"):
+    for view_kind in ("cost", "time"):
         assert len(tuple(tool_output.glob(f"{view_kind}_*.png"))) == 1
 
 
@@ -281,4 +266,4 @@ def test_only_the_package_tool_namespace_is_present():
     assert not Path("project").exists()
     assert Path("src/yadof/tools/view_cost.py").is_file()
     assert Path("src/yadof/tools/view_time.py").is_file()
-    assert Path("src/yadof/tools/view_error.py").is_file()
+    assert not Path("src/yadof/tools/view_error.py").exists()

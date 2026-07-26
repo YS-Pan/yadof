@@ -47,12 +47,13 @@
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
-- `tools`, `_resources`: cost, time, and error views; grouped `view all`
-  orchestration; history/task utilities; and read-only adapter/template/doc
-  resources. Error inspection owns failure-rate reporting and time/type event
-  visualization. Software-specific task commands live below an explicit software
-  namespace, such as `yadof task hfss`, so future adapters do not collide on
-  generic action names.
+- `tools`, `_resources`: cost view; integrated time/failure/machine/error view;
+  grouped `view all` orchestration; history/task utilities; and read-only
+  adapter/template/doc resources. The time view colors points by execute-side
+  machine metadata and uses directly labeled horizontal bands plus marker rings for
+  error types. Software-specific task commands live below an explicit software
+  namespace, such as `yadof task hfss`, so future adapters do not collide on generic
+  action names.
 - `cli`, `run_command`: modular installed command routing, packaged-document access,
   and normal campaign orchestration.
 

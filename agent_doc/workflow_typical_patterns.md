@@ -10,6 +10,7 @@ A good workflow does these things:
 
 - reads assigned values from the job-local `parameters_constraints.py`,
 - writes `individual_metadata.json` with `status`, `started_at`, and `ended_at`,
+- records `execute_machine` from the execute-side process in that metadata,
 - writes rawData `.npz` files directly under `rawData/`,
 - creates top-level `rawData.zip` whose members are those direct `.npz` basenames,
 - records exception details when possible,
@@ -39,6 +40,7 @@ import numpy as np
 
 from parameters_constraints import get_parameters
 from worker_misc import (
+    execute_machine_name,
     now_text,
     prepare_rawdata_dir,
     raw_data_file_names,
@@ -73,8 +75,16 @@ def _save_rawdata(name: str, values: np.ndarray, axis: np.ndarray) -> None:
 
 def main() -> None:
     started_at = now_text()
+    execute_machine = execute_machine_name()
     prepare_rawdata_dir(RAW_DATA_DIR, RAW_DATA_TRANSFER_ZIP)
-    write_json(INDIVIDUAL_METADATA, {"status": "running", "started_at": started_at})
+    write_json(
+        INDIVIDUAL_METADATA,
+        {
+            "status": "running",
+            "started_at": started_at,
+            "execute_machine": execute_machine,
+        },
+    )
 
     try:
         parameters = get_parameters()
@@ -91,6 +101,7 @@ def main() -> None:
                 "status": "done",
                 "started_at": started_at,
                 "ended_at": now_text(),
+                "execute_machine": execute_machine,
                 "raw_data_files": raw_data_file_names(RAW_DATA_DIR),
             },
         )
@@ -102,6 +113,7 @@ def main() -> None:
                 "status": "error",
                 "started_at": started_at,
                 "ended_at": now_text(),
+                "execute_machine": execute_machine,
                 "error_type": type(exc).__name__,
                 "error_message": str(exc),
                 "traceback_tail": traceback.format_exc()[-4000:],
