@@ -113,6 +113,36 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
     assert "OPTIMIZE_POPULATION_SIZE" not in json.dumps(first_metadata)
 
 
+def test_prepare_job_excludes_only_top_level_aedt_runtime_items(tmp_path: Path) -> None:
+    root = _workspace(tmp_path)
+    task = root / "job_template"
+    (task / "model.aedt").write_bytes(b"project")
+    (task / "model.aedt.lock").write_bytes(b"top-level lock")
+    (task / "CACHE.AEDTRESULTS").mkdir()
+    (task / "CACHE.AEDTRESULTS" / "locked.semaphore").write_bytes(b"")
+    (task / "odd.aedtresults").write_bytes(b"top-level suffix file")
+    (task / "odd.aedt.lock").mkdir()
+    (task / "odd.aedt.lock" / "payload.bin").write_bytes(b"top-level suffix directory")
+
+    nested = task / "assets"
+    nested.mkdir()
+    (nested / "nested.aedt.lock").write_bytes(b"nested lock")
+    (nested / "nested.aedtresults").mkdir()
+    (nested / "nested.aedtresults" / "seed.bin").write_bytes(b"nested results")
+
+    job = prepare_job(root, (0.5,), mode="local", timeout_sec=1.0)
+
+    assert (job.directory / "model.aedt").read_bytes() == b"project"
+    assert not (job.directory / "model.aedt.lock").exists()
+    assert not (job.directory / "CACHE.AEDTRESULTS").exists()
+    assert not (job.directory / "odd.aedtresults").exists()
+    assert not (job.directory / "odd.aedt.lock").exists()
+    assert (job.directory / "assets/nested.aedt.lock").read_bytes() == b"nested lock"
+    assert (
+        job.directory / "assets/nested.aedtresults/seed.bin"
+    ).read_bytes() == b"nested results"
+
+
 def test_prepare_job_reloads_task_and_hashes_definitions_not_assignments(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
     config = load_config(root)

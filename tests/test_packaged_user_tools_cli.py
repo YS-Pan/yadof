@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import os
 from pathlib import Path
 import runpy
@@ -9,6 +10,7 @@ import pytest
 import yadof
 
 from yadof.cli import main as cli_main
+from yadof.cli.main import _default_view_output_name
 from yadof.evaluate_manager import evaluate_population
 from yadof.recorded_data import list_records
 from yadof.resources import adapter_names, adapter_resource
@@ -111,13 +113,84 @@ def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):
     cost_output = capsys.readouterr().out
     assert "rows: 1" in cost_output
     assert "objectives: objective" in cost_output
+    assert "saved:" in cost_output
+    cost_plots = tuple(
+        (workspace / ".yadof" / "tool_output").glob("cost_*.png")
+    )
+    assert len(cost_plots) == 1
 
     assert cli_main(
         ["view", "time", "--workspace", str(workspace)]
     ) == 0
     time_output = capsys.readouterr().out
     assert "rows: 1" in time_output
-    assert "failure rate: 0.00 %" in time_output
+    assert "failure rate" not in time_output
+    assert "saved:" in time_output
+    time_plots = tuple(
+        (workspace / ".yadof" / "tool_output").glob("time_*.png")
+    )
+    assert len(time_plots) == 1
+
+    assert cli_main(
+        ["view", "error", "--workspace", str(workspace)]
+    ) == 0
+    error_output = capsys.readouterr().out
+    assert "rows: 1" in error_output
+    assert "failure rate: 0.00 %" in error_output
+    assert "saved:" in error_output
+    error_plots = tuple(
+        (workspace / ".yadof" / "tool_output").glob("error_*.png")
+    )
+    assert len(error_plots) == 1
+
+    assert cli_main(
+        [
+            "view",
+            "time",
+            "--workspace",
+            str(workspace),
+            "--summary-only",
+        ]
+    ) == 0
+    summary_only_output = capsys.readouterr().out
+    assert "rows: 1" in summary_only_output
+    assert "saved:" not in summary_only_output
+    assert tuple(
+        (workspace / ".yadof" / "tool_output").glob("time_*.png")
+    ) == time_plots
+
+
+def test_view_default_output_name_matches_legacy_timestamp_format():
+    now = datetime(2026, 7, 24, 17, 30, 45)
+
+    assert _default_view_output_name("cost", now=now) == Path(
+        "cost_20260724_173045.png"
+    )
+    assert _default_view_output_name("time", now=now) == Path(
+        "time_20260724_173045.png"
+    )
+    assert _default_view_output_name("error", now=now) == Path(
+        "error_20260724_173045.png"
+    )
+
+
+def test_view_all_prints_three_results_and_creates_three_images(capsys, tmp_path):
+    workspace = _workspace(tmp_path, "view_all_workspace")
+    evaluate_population(workspace, ((0.25,),))
+
+    assert cli_main(
+        ["view", "all", "--workspace", str(workspace)]
+    ) == 0
+
+    output = capsys.readouterr()
+    assert output.err == ""
+    assert "=== cost ===" in output.out
+    assert "=== time ===" in output.out
+    assert "=== error ===" in output.out
+    assert output.out.count("saved:") == 3
+    tool_output = workspace / ".yadof" / "tool_output"
+    for view_kind in ("cost", "time", "error"):
+        assert len(tuple(tool_output.glob(f"{view_kind}_*.png"))) == 1
 
 
 def test_history_clear_requires_confirmation_and_clears_only_selected_workspace(
@@ -208,3 +281,4 @@ def test_only_the_package_tool_namespace_is_present():
     assert not Path("project").exists()
     assert Path("src/yadof/tools/view_cost.py").is_file()
     assert Path("src/yadof/tools/view_time.py").is_file()
+    assert Path("src/yadof/tools/view_error.py").is_file()

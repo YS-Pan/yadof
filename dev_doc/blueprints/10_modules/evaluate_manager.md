@@ -10,10 +10,13 @@ collection, recording, or cost failure affects only its candidate.
 ## Job preparation
 
 `job_files.py` creates a collision-safe directory, copies task inputs while
-excluding runtime/submit artifacts and `calc_cost.py`, materializes a self-contained
-assigned parameter snapshot, copies only package `worker_misc.py`, creates empty
-`rawData/`, computes definition-oriented static hash, and writes preparation
-metadata. It never creates or transfers a yadof runtime package/archive/config.
+excluding runtime/submit artifacts and `calc_cost.py`, and excludes direct
+`job_template/` children whose names end case-insensitively with `.aedtresults` or
+`.aedt.lock`. The suffix filter is intentionally top-level only. Preparation then
+materializes a self-contained assigned parameter snapshot, copies only package
+`worker_misc.py`, creates empty `rawData/`, computes a definition-oriented static
+hash, and writes preparation metadata. It never creates or transfers a yadof runtime
+package/archive/config.
 
 ## Local backend
 

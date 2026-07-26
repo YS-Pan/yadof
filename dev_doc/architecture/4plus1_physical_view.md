@@ -15,6 +15,9 @@ task-owned subdirectories when necessary). Framework composition adds only
 `worker_misc.py`; assigned `parameters_constraints.py` is self-contained. No yadof
 package directory, wheel, zip archive, compatibility bootstrap, generated worker
 config, copied global config package, or `calc_cost.py` is sent to execute nodes.
+Direct `job_template/` children ending case-insensitively with `.aedtresults` or
+`.aedt.lock` are excluded before copying; the rule deliberately does not inspect
+task-owned subdirectories.
 The job static hash covers task/support definitions while ignoring runtime metadata
 and candidate assignment values.
 

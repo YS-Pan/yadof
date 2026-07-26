@@ -3,7 +3,8 @@
 ## New generic study
 
 Install wheel, `yadof init PATH`, edit workspace config/task, `check`, run one local
-smoke, `run`, then inspect cost/time. No repository path is required.
+smoke, `run`, then inspect cost/time/error individually or with `view all`. No
+repository path is required.
 
 The initialized generic workflow imports only its assigned parameter snapshot and
 job-local `worker_misc.py`, writes one direct `.npz`, and creates flat

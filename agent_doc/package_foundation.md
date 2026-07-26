@@ -54,9 +54,11 @@ records, surrogate state, or output paths. Installed package resources are read-
 inputs and are never used as a runtime-data location.
 
 Prepared distributed jobs contain the task payload, assigned
-`parameters_constraints.py`, and `worker_misc.py`. A distributed workflow must not
-import yadof; import only same-directory task files, the Python standard library,
-and dependencies deliberately installed on execute nodes.
+`parameters_constraints.py`, and `worker_misc.py`. Direct `job_template/` children
+ending with `.aedtresults` or `.aedt.lock` are excluded as AEDT runtime artifacts;
+the suffix rule does not inspect nested task directories. A distributed workflow
+must not import yadof; import only same-directory task files, the Python standard
+library, and dependencies deliberately installed on execute nodes.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

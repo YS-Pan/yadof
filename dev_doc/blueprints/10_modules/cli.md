@@ -30,9 +30,19 @@ software may add its own `yadof task <software> extract-parameters` without clai
 or overloading a generic task action. Do not retain ambiguous compatibility aliases
 when a command is moved into its current namespace.
 
+Cost/time/error view commands print their summaries and, by default, create
+`cost_YYYYMMDD_HHMMSS.png`, `time_YYYYMMDD_HHMMSS.png`, or
+`error_YYYYMMDD_HHMMSS.png` below the selected workspace's configured tool-output
+directory. `--output` selects another path and `--summary-only` explicitly disables
+image generation. `view all` invokes all three tools with one workspace and one
+timestamp, prints labeled results for every successful tool, continues attempting
+later tools if one fails, and returns failure if any tool failed. The corresponding
+Python tool APIs retain `output_path=None` as summary-only behavior.
+
 ## Invariants
 
 - CLI routing does not duplicate core implementation or documentation text.
-- Read-only commands do not create workspace/runtime files.
+- Commands described as summary-only do not create workspace/runtime files; normal
+  view commands may create only their documented tool-output PNG.
 - Real external execution is clearly distinguishable from package self-tests.
 - All stateful commands pass an explicit workspace into public APIs.

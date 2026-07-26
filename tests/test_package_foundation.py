@@ -299,7 +299,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 )
                 assert run_result.returncode == 0, run_result.stdout + run_result.stderr
                 assert f"gen={generation}" in run_result.stdout
-            for view_kind in ("cost", "time"):
+            for view_kind in ("cost", "time", "error"):
                 viewed = _run(
                     [
                         str(yadof_executable),
@@ -312,6 +312,14 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 )
                 assert viewed.returncode == 0, viewed.stdout + viewed.stderr
                 assert viewed.stdout.strip()
+                assert "saved:" in viewed.stdout
+                assert len(
+                    tuple(
+                        (run_workspace / ".yadof" / "tool_output").glob(
+                            f"{view_kind}_*.png"
+                        )
+                    )
+                ) == 1
             cleared = _run(
                 [
                     str(yadof_executable),
@@ -571,6 +579,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/scheduler.py" in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
         assert "yadof/tools/view_time.py" in wheel_names
+        assert "yadof/tools/view_error.py" in wheel_names
         assert "yadof/tools/history.py" in wheel_names
         assert "yadof/tools/hfss/parameter_extraction.py" in wheel_names
         assert "yadof/run_command.py" in wheel_names

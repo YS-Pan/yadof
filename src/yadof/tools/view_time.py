@@ -14,9 +14,36 @@ from ..workspace import WorkspaceContext
 WorkspaceLike = WorkspaceContext | str | Path
 DONE_COLOR = "#d62728"
 FAIL_COLOR = "#7f7f7f"
-FAIL_RATE_COLOR = "darkblue"
 HASH_LINE_COLOR = "#FFAA00"
-OPT_LINE_COLOR = "gray"
+OPT_LINE_COLOR = "black"
+OPT_LINE_LABEL = "Opt. start"
+HASH_LINE_LABEL = "Hash change"
+EVENT_LINE_LABELS = (OPT_LINE_LABEL, HASH_LINE_LABEL)
+PLOT_FIGSIZE = (5.5, 3.5)
+PLOT_DPI = 600
+PLOT_FONT_SIZE = 10
+PLOT_TITLE_FONT_SIZE = 11
+PLOT_TICK_FONT_SIZE = 8
+PLOT_LEGEND_FONT_SIZE = 7
+PLOT_LEGEND_FRAME_ALPHA = 0.6
+PLOT_LEGEND_EDGE_PAD = 0.015
+PLOT_LEGEND_GAP = 0.01
+PLOT_GENERATION_FONT_SIZE = 8
+PLOT_TIGHT_LAYOUT_PAD = 0.6
+AXIS_LINE_WIDTH = 0.8
+TREND_LINE_WIDTH = 2.0
+TREND_LINE_ALPHA = 0.25
+EVENT_LINE_ALPHA = 0.25
+EVENT_LINE_WIDTH = 1.2
+EVENT_DASH_LENGTH = 4.0
+OPT_LINE_STYLE = (0.0, (EVENT_DASH_LENGTH, EVENT_DASH_LENGTH))
+HASH_LINE_STYLE = (EVENT_DASH_LENGTH, (EVENT_DASH_LENGTH, EVENT_DASH_LENGTH))
+GRID_LINE_WIDTH = 0.4
+SCATTER_MARKER_SIZE = 3.0
+SCATTER_EDGE_LINE_WIDTH = 0.4
+GENERATION_SHADE_COLOR = "black"
+GENERATION_SHADE_ALPHA = 0.1
+GENERATION_LABEL_Y = 0.98
 
 
 class ViewTimeError(RuntimeError):
@@ -267,6 +294,105 @@ def _optimization_starts(rows: Sequence[dict[str, object]]) -> list[tuple[int, d
     return starts
 
 
+def _time_cell_edges(rows: Sequence[dict[str, object]]) -> list[datetime]:
+    times = [row["start"] for row in rows]
+    if len(times) == 1:
+        return [
+            times[0] - timedelta(seconds=30),  # type: ignore[operator]
+            times[0] + timedelta(seconds=30),  # type: ignore[operator]
+        ]
+
+    positive_gaps = [
+        right - left  # type: ignore[operator]
+        for left, right in zip(times, times[1:])
+        if right > left
+    ]
+    fallback_half_gap = (
+        min(positive_gaps) / 2
+        if positive_gaps
+        else timedelta(seconds=30)
+    )
+    midpoints = [
+        left + (right - left) / 2  # type: ignore[operator]
+        for left, right in zip(times, times[1:])
+    ]
+    first_half_gap = (
+        (times[1] - times[0]) / 2  # type: ignore[operator]
+        if times[1] > times[0]
+        else fallback_half_gap
+    )
+    last_half_gap = (
+        (times[-1] - times[-2]) / 2  # type: ignore[operator]
+        if times[-1] > times[-2]
+        else fallback_half_gap
+    )
+    return [
+        times[0] - first_half_gap,  # type: ignore[operator]
+        *midpoints,
+        times[-1] + last_half_gap,  # type: ignore[operator]
+    ]
+
+
+def _generation_regions(
+    rows: Sequence[dict[str, object]],
+) -> list[tuple[int, datetime, datetime]]:
+    edges = _time_cell_edges(rows)
+    regions: list[tuple[int, datetime, datetime]] = []
+    active_key: tuple[object, int] | None = None
+    active_generation: int | None = None
+    start_index = 0
+
+    for index, row in enumerate(rows):
+        generation = _metadata_int(row, "generation_index")
+        run_identity = row.get("optimization_run_id")
+        if run_identity is None:
+            run_identity = row.get("optimization_index")
+        key = None if generation is None else (run_identity, generation)
+
+        if key == active_key:
+            continue
+        if active_key is not None and active_generation is not None:
+            regions.append(
+                (active_generation, edges[start_index], edges[index])
+            )
+        active_key = key
+        active_generation = generation
+        start_index = index
+
+    if active_key is not None and active_generation is not None:
+        regions.append(
+            (active_generation, edges[start_index], edges[len(rows)])
+        )
+    return regions
+
+
+def _draw_generation_regions(
+    ax, regions: Sequence[tuple[int, datetime, datetime]]
+) -> None:
+    xaxis_transform = ax.get_xaxis_transform()
+    for generation, left, right in regions:
+        if generation % 2:
+            ax.axvspan(
+                left,
+                right,
+                facecolor=GENERATION_SHADE_COLOR,
+                edgecolor="none",
+                alpha=GENERATION_SHADE_ALPHA,
+                zorder=0,
+            )
+        ax.text(
+            left + (right - left) / 2,
+            GENERATION_LABEL_Y,
+            str(generation),
+            transform=xaxis_transform,
+            ha="center",
+            va="top",
+            color="black",
+            fontsize=PLOT_GENERATION_FONT_SIZE,
+            zorder=4,
+        )
+
+
 def _hash_change_times(rows: Sequence[dict[str, object]]) -> list[datetime]:
     starts: list[datetime] = []
     previous_hash = None
@@ -279,6 +405,56 @@ def _hash_change_times(rows: Sequence[dict[str, object]]) -> list[datetime]:
             starts.append(row["start"])  # type: ignore[arg-type]
         previous_hash, seen_hash = current_hash, True
     return starts
+
+
+def _add_split_legends(ax, axes: Sequence[object]) -> None:
+    data_legend: dict[str, object] = {}
+    event_legend: dict[str, object] = {}
+    for source_axis in axes:
+        handles, labels = source_axis.get_legend_handles_labels()
+        for handle, label in zip(handles, labels):
+            target = event_legend if label in EVENT_LINE_LABELS else data_legend
+            target.setdefault(label, handle)
+
+    data_artist = None
+    if data_legend:
+        data_artist = ax.legend(
+            list(data_legend.values()),
+            list(data_legend.keys()),
+            loc="lower left",
+            bbox_to_anchor=(PLOT_LEGEND_EDGE_PAD, PLOT_LEGEND_EDGE_PAD),
+            frameon=True,
+            framealpha=PLOT_LEGEND_FRAME_ALPHA,
+            fontsize=PLOT_LEGEND_FONT_SIZE,
+            borderpad=0.3,
+            borderaxespad=0.0,
+            labelspacing=0.3,
+            handletextpad=0.5,
+        )
+    if event_legend:
+        event_x = PLOT_LEGEND_EDGE_PAD
+        if data_artist is not None:
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+            data_bbox = data_artist.get_window_extent(renderer).transformed(
+                ax.transAxes.inverted()
+            )
+            event_x = data_bbox.x1 + PLOT_LEGEND_GAP
+        ax.legend(
+            list(event_legend.values()),
+            list(event_legend.keys()),
+            loc="lower left",
+            bbox_to_anchor=(event_x, PLOT_LEGEND_EDGE_PAD),
+            frameon=True,
+            framealpha=PLOT_LEGEND_FRAME_ALPHA,
+            fontsize=PLOT_LEGEND_FONT_SIZE,
+            borderpad=0.3,
+            borderaxespad=0.0,
+            labelspacing=0.3,
+            handletextpad=0.5,
+        )
+        if data_artist is not None:
+            ax.add_artist(data_artist)
 
 
 def _table_lines(headers: Sequence[str], rows: Sequence[Sequence[str]], right_align: Sequence[bool]) -> list[str]:
@@ -303,15 +479,12 @@ def summarize_rows(rows: Sequence[dict[str, object]]) -> str:
     for row in rows:
         status_counts[str(row["status"])] = status_counts.get(str(row["status"]), 0) + 1
 
-    failure_count = len(rows) - status_counts.get("completed", 0)
-    failure_rate = 100.0 * failure_count / len(rows)
     lines = [
         f"rows: {len(rows)}",
         f"time span: {rows[0]['start']} to {rows[-1]['end']}",
         f"avg elapsed: {sum(elapsed) / len(elapsed):.3f} min",
         "avg completed elapsed: "
         + ("n/a" if not completed_elapsed else f"{sum(completed_elapsed) / len(completed_elapsed):.3f} min"),
-        f"failure rate: {failure_rate:.2f} %",
         "status counts:",
     ]
     table_rows = [[status, str(count)] for status, count in sorted(status_counts.items())]
@@ -351,14 +524,16 @@ def plot_rows(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 12
+    plt.rcParams["font.size"] = PLOT_FONT_SIZE
+    plt.rcParams["axes.linewidth"] = AXIS_LINE_WIDTH
 
     x_hours = np.asarray(
         [(row["start"] - rows[0]["start"]).total_seconds() / 3600.0 for row in rows],  # type: ignore[operator]
         dtype=float,
     )
     elapsed = np.asarray([row["elapsed_min"] for row in rows], dtype=float)
-    success = np.asarray([row["success"] for row in rows], dtype=bool)
+    time_edges = _time_cell_edges(rows)
+    generation_regions = _generation_regions(rows)
 
     if len(x_hours) == 1:
         fine_x = x_hours.copy()
@@ -372,7 +547,8 @@ def plot_rows(
     done_rows = [row for row in rows if row["success"]]
     fail_rows = [row for row in rows if not row["success"]]
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=PLOT_FIGSIZE)
+    _draw_generation_regions(ax, generation_regions)
 
     if done_rows:
         ax.scatter(
@@ -380,7 +556,8 @@ def plot_rows(
             [row["elapsed_min"] for row in done_rows],
             color=DONE_COLOR,
             alpha=0.6,
-            s=36,
+            s=SCATTER_MARKER_SIZE**2,
+            linewidths=SCATTER_EDGE_LINE_WIDTH,
             label="completed",
         )
     if fail_rows:
@@ -389,7 +566,7 @@ def plot_rows(
             [row["elapsed_min"] for row in fail_rows],
             color=FAIL_COLOR,
             alpha=0.8,
-            s=48,
+            s=SCATTER_MARKER_SIZE**2,
             marker="x",
             label="not completed",
         )
@@ -402,55 +579,71 @@ def plot_rows(
         done_y = np.asarray([row["elapsed_min"] for row in done_rows], dtype=float)
         global_avg = float(np.mean(done_y))
         local_avg = gaussian_kernel_smoother(done_x, done_y, fine_x, sigma)
-        ax.plot(fine_times, local_avg, color="orange", linewidth=2, label=f"avg. time (global: {global_avg:.2f} min)")
+        ax.plot(
+            fine_times,
+            local_avg,
+            color="orange",
+            linewidth=TREND_LINE_WIDTH,
+            alpha=TREND_LINE_ALPHA,
+            label=f"avg. time (global: {global_avg:.2f} min)",
+        )
 
-    failure = (~success).astype(float)
-    global_failure = float(np.mean(failure) * 100.0)
-    local_failure = gaussian_kernel_smoother(x_hours, failure, fine_x, sigma) * 100.0
-
-    ax2 = ax.twinx()
-    ax2.plot(
-        fine_times,
-        local_failure,
-        color=FAIL_RATE_COLOR,
-        linewidth=2,
-        alpha=0.5,
-        label=f"avg. failure rate (global: {global_failure:.2f} %)",
-    )
-
+    event_line_style = {
+        "linewidth": EVENT_LINE_WIDTH,
+        "alpha": EVENT_LINE_ALPHA,
+        "dash_capstyle": "butt",
+        "zorder": 0.7,
+    }
     first_opt = True
-    for opt_idx, when in _optimization_starts(rows):
-        ax.axvline(when, color=OPT_LINE_COLOR, linestyle="--", linewidth=0.8, alpha=0.25, label="Optimization start" if first_opt else None)
-        ax.text(when, 1.01, f"opt {opt_idx}", transform=ax.get_xaxis_transform(), rotation=90, va="bottom", ha="right", fontsize=8, color=OPT_LINE_COLOR)
+    for _, when in _optimization_starts(rows):
+        ax.axvline(
+            when,
+            color=OPT_LINE_COLOR,
+            linestyle=OPT_LINE_STYLE,
+            label=OPT_LINE_LABEL if first_opt else None,
+            **event_line_style,
+        )
         first_opt = False
 
     first_hash = True
     for when in _hash_change_times(rows):
-        ax.axvline(when, color=HASH_LINE_COLOR, linestyle="-", linewidth=1.4, alpha=0.25, label="Static input hash change" if first_hash else None)
+        ax.axvline(
+            when,
+            color=HASH_LINE_COLOR,
+            linestyle=HASH_LINE_STYLE,
+            label=HASH_LINE_LABEL if first_hash else None,
+            **event_line_style,
+        )
         first_hash = False
 
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Elapsed time (minutes)")
-    ax.set_title("Evaluation speeds from recorded_data")
-    ax.grid(True, color="gainsboro", linestyle="-", linewidth=0.5, alpha=0.6)
+    ax.set_xlabel("Time", fontsize=PLOT_FONT_SIZE)
+    ax.set_ylabel("Elapsed time (minutes)", fontsize=PLOT_FONT_SIZE)
+    ax.set_title(
+        "Evaluation speeds from recorded_data",
+        fontsize=PLOT_TITLE_FONT_SIZE,
+    )
+    ax.set_xlim(time_edges[0], time_edges[-1])
+    ax.grid(
+        True,
+        color="gainsboro",
+        linestyle="-",
+        linewidth=GRID_LINE_WIDTH,
+        alpha=0.6,
+    )
     ax.set_ylim(0.0, max(1.0, float(np.max(elapsed)) * 1.1))
-
-    ax2.set_ylabel("Failure rate (%)")
-    ax2.set_ylim(0.0, 100.0)
+    ax.tick_params(
+        axis="both",
+        labelsize=PLOT_TICK_FONT_SIZE,
+        width=AXIS_LINE_WIDTH,
+    )
 
     locator = mdates.AutoDateLocator(minticks=6, maxticks=12)
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
-    legend = {}
-    handles1, labels1 = ax.get_legend_handles_labels()
-    handles2, labels2 = ax2.get_legend_handles_labels()
-    for handle, label in list(zip(handles1, labels1)) + list(zip(handles2, labels2)):
-        legend.setdefault(label, handle)
-    ax.legend(list(legend.values()), list(legend.keys()), loc="upper left")
-
-    fig.tight_layout()
-    fig.savefig(output, dpi=300)
+    fig.tight_layout(pad=PLOT_TIGHT_LAYOUT_PAD)
+    _add_split_legends(ax, (ax,))
+    fig.savefig(output, dpi=PLOT_DPI)
     plt.close(fig)
     return output
 
@@ -461,7 +654,7 @@ def view_time(
     status: str | None = None,
     output_path: str | Path | None = None,
 ) -> tuple[str, Path | None]:
-    """Return a timing/failure summary and optionally render a PNG."""
+    """Return a timing summary and optionally render a PNG."""
 
     config = load_config(workspace)
     rows = build_rows(config.workspace, status=_as_filter_status(status))

@@ -17,15 +17,21 @@
 - Identify the minimization Pareto front, show at most ten representatives selected
   by lowest summed cost, and render an aligned text table.
 - Optionally plot per-objective costs, combined cost, a Gaussian-smoothed combined
-  trend, visible Pareto markers, optimization starts, and static-hash changes.
+  trend, visible Pareto markers, optimization starts, generation bands, and
+  static-hash changes.
+- Render cost/time-aligned 5.5-by-3.5-inch, 600-dpi figures with a compact font and
+  line hierarchy, plus separate data and event legends.
+- Scale and explicitly place right-axis ticks so, for `N` objectives, combined cost
+  `N` aligns with individual cost `1` and every visible left/right tick is aligned.
 
 ## I/O Format
 
 - `build_rows(workspace, status="completed")` returns dictionaries containing row
   number, job name, normalized variables, dynamic costs, and available provenance.
 - `view_cost(...)` returns `(summary_text, output_path_or_none)`.
-- Relative plot paths resolve below `.yadof/tool_output/`; omitted plot paths mean
-  summary-only operation, while `plot_rows(..., None)` creates a timestamped PNG.
+- Relative plot paths resolve below `.yadof/tool_output/`. The Python API keeps an
+  omitted plot path as summary-only, while the CLI defaults to
+  `cost_YYYYMMDD_HHMMSS.png` unless `--summary-only` is supplied.
 
 ## Non-Obvious Techniques
 
@@ -34,7 +40,26 @@
 - Pareto membership uses strict all-objective minimization; the combined sum is for
   display/selection only and does not redefine dominance.
 - Scatter size and opacity decrease for large histories, and the right combined
-  axis is positioned so value one aligns meaningfully with the left cost axis.
+  axis is an exact objective-count multiple of the left individual-cost axis.
+- The smoothed average combined-cost line is deliberately thicker than ordinary
+  time/cost trends so it remains visually prominent.
+- Individual-cost Pareto points use a larger 60-square-point marker with a
+  0.75-point ring, making selected points prominent without a heavy outline.
+  Emphasized combined-cost points use the same ring width, while ordinary
+  combined-cost circles use a lighter 0.4-point edge.
+- Contiguous generations are scoped by optimization run, labeled with their
+  zero-based generation index inside the top of the plot, and odd generations use
+  a black background at 10% opacity. Rows without generation metadata are not
+  assigned a generation band.
+- Optimization-start and hash-change lines use equal-length complementary dash
+  phases, butt caps, and the original viewCost opacity of 0.25, so coincident event
+  lines remain independently visible without dominating the data.
+- The translucent data and event legends share the lower-left row; the event
+  legend is positioned immediately to the right of the measured data legend, and
+  both are inset from the axes frame by 0.015 axes units.
+- Shared dimensions, typography, widths, generation styling, event dashes, and
+  event names follow the cost/time alignment contract in the tools module
+  blueprint; this file is the reference when no request says otherwise.
 
 ## Mutability Profile
 

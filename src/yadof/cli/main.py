@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from datetime import datetime
 import math
 import sys
 from pathlib import Path
@@ -115,29 +116,96 @@ def _nonnegative_int(value: str) -> int:
     return parsed
 
 
-def _view_command(args: argparse.Namespace) -> int:
-    try:
-        if args.view_kind == "cost":
-            from ..tools.view_cost import view_cost
+def _default_view_output_name(
+    view_kind: str, *, now: datetime | None = None
+) -> Path:
+    timestamp = (now or datetime.now()).strftime("%Y%m%d_%H%M%S")
+    return Path(f"{view_kind}_{timestamp}.png")
 
-            status = None if args.status == "all" else args.status
-            summary, output = view_cost(
-                args.workspace, status=status, output_path=args.output
-            )
-        else:
-            from ..tools.view_time import view_time
 
-            status = None if args.status == "all" else args.status
-            summary, output = view_time(
-                args.workspace, status=status, output_path=args.output
-            )
-    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-        print(f"yadof: error: could not view {args.view_kind}: {exc}", file=sys.stderr)
-        return 1
+def _run_view(
+    view_kind: str,
+    workspace: str | Path,
+    *,
+    output_path: str | Path | None,
+    status: str | None = None,
+) -> tuple[str, Path | None]:
+    if view_kind == "cost":
+        from ..tools.view_cost import view_cost
+
+        return view_cost(workspace, status=status, output_path=output_path)
+    if view_kind == "time":
+        from ..tools.view_time import view_time
+
+        return view_time(workspace, status=status, output_path=output_path)
+    if view_kind == "error":
+        from ..tools.view_error import view_error
+
+        return view_error(workspace, output_path=output_path)
+    raise ValueError(f"unsupported view kind: {view_kind}")
+
+
+def _write_view_result(
+    view_kind: str, summary: str, output: Path | None, *, heading: bool = False
+) -> None:
+    if heading:
+        write_text(f"=== {view_kind} ===")
     write_text(summary)
     if output is not None:
         write_text(f"saved: {output}")
+
+
+def _view_command(args: argparse.Namespace) -> int:
+    output_path = (
+        None
+        if args.summary_only
+        else args.output or _default_view_output_name(args.view_kind)
+    )
+    status_value = getattr(args, "status", None)
+    status = None if status_value == "all" else status_value
+    try:
+        summary, output = _run_view(
+            args.view_kind,
+            args.workspace,
+            status=status,
+            output_path=output_path,
+        )
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        print(f"yadof: error: could not view {args.view_kind}: {exc}", file=sys.stderr)
+        return 1
+    _write_view_result(args.view_kind, summary, output)
     return 0
+
+
+def _view_all_command(args: argparse.Namespace) -> int:
+    now = datetime.now()
+    failed = False
+    for view_kind, status in (
+        ("cost", "completed"),
+        ("time", None),
+        ("error", None),
+    ):
+        output_path = (
+            None
+            if args.summary_only
+            else _default_view_output_name(view_kind, now=now)
+        )
+        try:
+            summary, output = _run_view(
+                view_kind,
+                args.workspace,
+                status=status,
+                output_path=output_path,
+            )
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            failed = True
+            print(
+                f"yadof: error: could not view {view_kind}: {exc}",
+                file=sys.stderr,
+            )
+            continue
+        _write_view_result(view_kind, summary, output, heading=True)
+    return 1 if failed else 0
 
 
 def _confirm_destructive(*, confirmed: bool, prompt: str) -> bool:
@@ -398,10 +466,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     view_parser = subparsers.add_parser(
         "view",
-        help="inspect workspace cost or timing history",
+        help="inspect workspace cost, timing, or error history",
         description=(
-            "Print a workspace history summary. Supplying --output writes a PNG "
-            "and requires the optional plot dependencies; no GUI opens implicitly."
+            "Print a workspace history summary and write a timestamped PNG by "
+            "default. Plotting requires the optional plot dependencies; no GUI "
+            "opens implicitly. Use --summary-only to skip the PNG."
         ),
     )
     view_subparsers = view_parser.add_subparsers(
@@ -423,9 +492,58 @@ def build_parser() -> argparse.ArgumentParser:
             "-o",
             "--output",
             type=Path,
-            help="optional PNG output path; omit for printable summary only",
+            help=(
+                f"PNG output path; default: {kind}_YYYYMMDD_HHMMSS.png below "
+                "the workspace tool-output directory"
+            ),
+        )
+        item.add_argument(
+            "--summary-only",
+            action="store_true",
+            help="print the summary without rendering a PNG",
         )
         item.set_defaults(handler=_view_command)
+
+    error_view = view_subparsers.add_parser(
+        "error",
+        help="inspect failure rate and error occurrence history",
+    )
+    error_view.add_argument(
+        "--workspace",
+        default=".",
+        help="workspace to inspect (default: current directory)",
+    )
+    error_view.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help=(
+            "PNG output path; default: error_YYYYMMDD_HHMMSS.png below "
+            "the workspace tool-output directory"
+        ),
+    )
+    error_view.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="print the summary without rendering a PNG",
+    )
+    error_view.set_defaults(handler=_view_command)
+
+    all_views = view_subparsers.add_parser(
+        "all",
+        help="run cost, time, and error views together",
+    )
+    all_views.add_argument(
+        "--workspace",
+        default=".",
+        help="workspace to inspect (default: current directory)",
+    )
+    all_views.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="print all three summaries without rendering PNGs",
+    )
+    all_views.set_defaults(handler=_view_all_command)
 
     history_parser = subparsers.add_parser(
         "history", help="manage workspace optimization history"

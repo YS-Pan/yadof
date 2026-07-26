@@ -36,9 +36,12 @@ current-format file, including `CONSTRAINTS`, and replaces only `PARAMETERS`. Us
 `rawData/*.npz` plus `individual_metadata.json`. It must not write authoritative
 costs. Put every task-local helper, model, lookup table, and active adapter below
 `job_template/`; prepared jobs copy that payload recursively while package worker
-support adds only `worker_misc.py`. The assigned parameter snapshot is
-self-contained. Distributed jobs execute `workflow.py` directly and do not receive
-or import the yadof package.
+support adds only `worker_misc.py`. Top-level files or directories whose names end
+with `.aedtresults` or `.aedt.lock` (case-insensitive) are treated as AEDT runtime
+artifacts and are not copied. This suffix rule applies only to direct children of
+`job_template/`; nested task assets are not inspected by it. The assigned parameter
+snapshot is self-contained. Distributed jobs execute `workflow.py` directly and do
+not receive or import the yadof package.
 
 For distributed use, workflow success and error paths must create top-level
 `rawData.zip` via `write_rawdata_transfer_zip()`. Its members are direct `.npz`
@@ -89,7 +92,15 @@ yadof run --workspace D:\work\study-a --generations 10
 yadof run --workspace D:\work\study-a --start-generation 10 --generations 5
 yadof view cost --workspace D:\work\study-a -o costs.png
 yadof view time --workspace D:\work\study-a
+yadof view error --workspace D:\work\study-a
+yadof view all --workspace D:\work\study-a
 ```
+
+The three individual view commands create timestamped PNGs below
+`.yadof/tool_output/` by default. `view error` reports failure rate and shows each
+failed/timeout occurrence with a color for its error type. `view all` prints all
+three summaries and creates all three images. Use `--summary-only` when only
+terminal output is wanted.
 
 Individual prepare/run/timeout/record failures become diagnostic records and
 correct-width `inf` costs. `--fail-on-all-infinite` stops after the first generation

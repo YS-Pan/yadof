@@ -9,11 +9,50 @@ confirmed task edits. Pool/system administration remains under `admin_tool/`.
 
 ## Views and history
 
-Cost/time views derive current values from public history/task APIs, support selected
-records/objectives, and write relative outputs below the configured tool directory.
-They do not mutate durable evidence. History clear requires explicit confirmation,
-resolves and validates exact workspace-owned targets, and avoids package or unrelated
-paths.
+Cost/time/error views derive current values from public history/task APIs and write
+relative outputs below the configured tool directory. Cost supports selected
+records/objectives, time supports status filtering, and error reads every evaluation
+record so its failure-rate denominator remains meaningful. The error view owns
+failure-rate reporting: it lists each failure occurrence, classifies explicit error
+types with status/stage fallbacks, and plots occurrence time against categorical
+error type with a distinct color per type.
+
+Individual CLI view commands write timestamped PNGs by default, accept `--output`
+to override the destination, and accept `--summary-only` to suppress plotting.
+`view all` invokes cost, time, and error with their normal defaults, prints three
+labeled summaries, and uses one timestamp for the three default image names. The
+views do not mutate durable evidence. History clear requires explicit confirmation,
+resolves and validates exact workspace-owned targets, and avoids package or
+unrelated paths.
+
+### Cost/time plot alignment contract
+
+Unless a requested change explicitly says otherwise, `view_cost.py` is the visual
+reference and `view_time.py` must remain aligned with it. Update both files and the
+cross-view style test whenever a shared value changes. The aligned commands and
+values are:
+
+| Concern | Matplotlib command / constant | Default |
+|---|---|---|
+| Figure size | `plt.subplots(figsize=PLOT_FIGSIZE)` | `(5.5, 3.5)` inches |
+| Raster resolution | `fig.savefig(..., dpi=PLOT_DPI)` | `600` dpi |
+| Medium text | `PLOT_FONT_SIZE` | `10` pt |
+| Title / tick / legend / generation text | explicit `fontsize` constants | `11 / 8 / 7 / 8` pt |
+| Axis / trend / event / grid width | explicit width constants | `0.8 / 2.0 / 1.2 / 0.4` pt |
+| Combined-cost average width | `COMBINED_TREND_LINE_WIDTH` in viewCost | `4.0` pt |
+| Average cost/time trend opacity | `TREND_LINE_ALPHA` | `0.25` |
+| Ordinary Combined-cost and viewTime marker diameter / ring width | `SCATTER_MARKER_SIZE` / `SCATTER_EDGE_LINE_WIDTH` | `3.0` pt / `0.4` pt |
+| Pareto emphasis in viewCost | marker area / ring width | `60.0` pt² / `0.75` pt |
+| Generation background | `axvspan(..., facecolor="black", alpha=0.1)` | odd generations only |
+| Optimization-start dashes | `linestyle=(0, (4, 4))` | butt dash caps |
+| Hash-change dashes | `linestyle=(4, (4, 4))` | complementary butt dash caps |
+| Event-line opacity | `EVENT_LINE_ALPHA` | `0.25` |
+| Legends | adjacent lower-left data/event legends | axes-edge pad `0.015`; `framealpha=0.6`; event names `Opt. start`, `Hash change` |
+
+Plot-specific colors, axes, scientific data series, and domain labels may differ.
+Shared presentation values do not drift independently: make a visual change in
+`view_cost.py` first, mirror it in `view_time.py`, and update the alignment table
+and tests in the same change.
 
 ## Task utilities
 

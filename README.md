@@ -20,7 +20,7 @@ yadof init D:\work\my-study
 yadof check --workspace D:\work\my-study
 yadof smoke-test --workspace D:\work\my-study
 yadof run --workspace D:\work\my-study --generations 10
-yadof view cost --workspace D:\work\my-study
+yadof view all --workspace D:\work\my-study
 ```
 
 The package owns framework code, defaults, worker support, templates, adapters,

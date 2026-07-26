@@ -14,14 +14,16 @@ license, machine identity, or credential.
 - initialization no-overwrite behavior, marker/check diagnostics, explicit paths,
   config precedence, and two-workspace task/module isolation;
 - parameter assignment, job static hash, task payload exclusions, minimal worker
-  support, and absence of any yadof runtime archive/config in jobs;
+  support, top-level-only AEDT results/lock exclusion, and absence of any yadof
+  runtime archive/config in jobs;
 - direct `workflow.py` HTCondor submit shape, Windows slot-user values, resource/time
   policy, matchmaking diagnostics, bounded retries, and per-job mocked failures;
 - explicit `rawData.zip` output transfer, flat zip members, rejection of nested
   rawData, local validation, dynamic cost, and persistence atomicity;
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
-- CLI/docs/tools/adapters and artifact exclusion of examples/runtime data.
+- CLI/docs, cost/time/error views including grouped `view all`, tools/adapters, and
+  artifact exclusion of examples/runtime data.
 
 ## Test placement
 

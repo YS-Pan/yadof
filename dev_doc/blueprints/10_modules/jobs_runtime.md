@@ -8,6 +8,9 @@ assigned self-contained `parameters_constraints.py`, `workflow.py`, one
 package-provided `worker_misc.py`, preparation metadata, and empty `rawData/`.
 Task-owned models/adapters/assets may be files or required subdirectories below the
 job; package support files themselves are direct files.
+Direct task-template children ending case-insensitively with `.aedtresults` or
+`.aedt.lock` are AEDT runtime artifacts and are excluded. The suffix rule does not
+inspect task-owned subdirectories.
 
 Runtime adds workflow metadata, local/Condor logs and submit diagnostics,
 `rawData.zip` in distributed mode, and direct restored/locally generated
@@ -36,6 +39,8 @@ strict and reports missing, corrupt, nested, non-`.npz`, or duplicate members.
 
 - Reserved package support filenames cannot be supplied by the task, even with case
   differences on Windows.
+- Top-level AEDT results/lock artifacts never enter a prepared job, while
+  same-suffixed nested task assets remain ordinary recursively copied payload.
 - Every execute dependency is present in the job or deliberately installed on the
   execute node; jobs do not import yadof.
 - The rawData output tree is flat in local, execute, restored, and recorded paths.

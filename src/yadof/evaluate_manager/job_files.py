@@ -55,6 +55,7 @@ EXCLUDED_TASK_DIRS = {
     RAW_DATA_DIR_NAME,
 }
 RECURSIVE_EXCLUDED_TASK_DIRS = {"__pycache__", ".pytest_cache"}
+TOP_LEVEL_EXCLUDED_TASK_SUFFIXES = (".aedtresults", ".aedt.lock")
 HASH_EXCLUDED_NAMES = {
     "cost.json",
     "metadata.json",
@@ -270,7 +271,9 @@ def _ignore_task_items(_directory: str, names: list[str]) -> set[str]:
 
 
 def _is_excluded(path: Path) -> bool:
-    return path.name in EXCLUDED_TASK_NAMES or (
+    return path.name.casefold().endswith(TOP_LEVEL_EXCLUDED_TASK_SUFFIXES) or (
+        path.name in EXCLUDED_TASK_NAMES
+    ) or (
         path.is_dir() and path.name in EXCLUDED_TASK_DIRS
     )
 

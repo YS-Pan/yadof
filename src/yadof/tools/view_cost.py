@@ -15,15 +15,42 @@ from ..workspace import WorkspaceContext
 WorkspaceLike = WorkspaceContext | str | Path
 MAX_VISIBLE_PARETO = 10
 TREND_LINE_ALPHA = 0.25
-TREND_LINE_WIDTH = 6.0
+TREND_LINE_WIDTH = 2.0
+COMBINED_TREND_LINE_WIDTH = 4.0
+EVENT_LINE_ALPHA = TREND_LINE_ALPHA
+EVENT_LINE_WIDTH = 1.2
+EVENT_DASH_LENGTH = 4.0
+OPT_LINE_STYLE = (0.0, (EVENT_DASH_LENGTH, EVENT_DASH_LENGTH))
+HASH_LINE_STYLE = (EVENT_DASH_LENGTH, (EVENT_DASH_LENGTH, EVENT_DASH_LENGTH))
 SCATTER_ALPHA = 0.6
 MIN_SCATTER_ALPHA = 0.15
 OPT_LINE_COLOR = "black"
 HASH_LINE_COLOR = "#FFAA00"
+OPT_LINE_LABEL = "Opt. start"
+HASH_LINE_LABEL = "Hash change"
+EVENT_LINE_LABELS = (OPT_LINE_LABEL, HASH_LINE_LABEL)
 PLOT_COLORS = ["#FF0000", "#FFAA00", "#58A500", "#00BFE9", "#2000AA", "#960096", "#808080"]
 PLOT_MARKERS = ["o", "s", "D", "^", "v", "<", ">"]
-PLOT_FONT_SIZE = 14
-PLOT_LEGEND_FONT_SIZE = 12
+PLOT_FIGSIZE = (5.5, 3.5)
+PLOT_DPI = 600
+PLOT_FONT_SIZE = 10
+PLOT_TITLE_FONT_SIZE = 11
+PLOT_TICK_FONT_SIZE = 8
+PLOT_LEGEND_FONT_SIZE = 7
+PLOT_LEGEND_FRAME_ALPHA = 0.6
+PLOT_LEGEND_EDGE_PAD = 0.015
+PLOT_LEGEND_GAP = 0.01
+PLOT_GENERATION_FONT_SIZE = 8
+PLOT_TIGHT_LAYOUT_PAD = 0.6
+AXIS_LINE_WIDTH = 0.8
+GRID_LINE_WIDTH = 0.4
+SCATTER_MARKER_SIZE = 3.0
+SCATTER_EDGE_LINE_WIDTH = 0.4
+PARETO_MARKER_AREA = 60.0
+PARETO_EDGE_LINE_WIDTH = 0.75
+GENERATION_SHADE_COLOR = "black"
+GENERATION_SHADE_ALPHA = 0.1
+GENERATION_LABEL_Y = 0.98
 
 
 class ViewCostError(RuntimeError):
@@ -242,6 +269,79 @@ def _optimization_start_rows(rows: Sequence[dict[str, object]]) -> list[tuple[in
     return starts
 
 
+def _row_cell_edges(rows: Sequence[dict[str, object]]) -> list[float]:
+    x = [float(row["row_number"]) for row in rows]
+    if len(x) == 1:
+        return [x[0] - 0.5, x[0] + 0.5]
+
+    midpoints = [(left + right) / 2.0 for left, right in zip(x, x[1:])]
+    return [
+        x[0] - (midpoints[0] - x[0]),
+        *midpoints,
+        x[-1] + (x[-1] - midpoints[-1]),
+    ]
+
+
+def _generation_regions(
+    rows: Sequence[dict[str, object]],
+) -> list[tuple[int, float, float]]:
+    edges = _row_cell_edges(rows)
+    regions: list[tuple[int, float, float]] = []
+    active_key: tuple[object, int] | None = None
+    active_generation: int | None = None
+    start_index = 0
+
+    for index, row in enumerate(rows):
+        generation = _metadata_int(row, "generation_index")
+        run_identity = row.get("optimization_run_id")
+        if run_identity is None:
+            run_identity = row.get("optimization_index")
+        key = None if generation is None else (run_identity, generation)
+
+        if key == active_key:
+            continue
+        if active_key is not None and active_generation is not None:
+            regions.append(
+                (active_generation, edges[start_index], edges[index])
+            )
+        active_key = key
+        active_generation = generation
+        start_index = index
+
+    if active_key is not None and active_generation is not None:
+        regions.append(
+            (active_generation, edges[start_index], edges[len(rows)])
+        )
+    return regions
+
+
+def _draw_generation_regions(
+    ax, regions: Sequence[tuple[int, float, float]]
+) -> None:
+    xaxis_transform = ax.get_xaxis_transform()
+    for generation, left, right in regions:
+        if generation % 2:
+            ax.axvspan(
+                left,
+                right,
+                facecolor=GENERATION_SHADE_COLOR,
+                edgecolor="none",
+                alpha=GENERATION_SHADE_ALPHA,
+                zorder=0,
+            )
+        ax.text(
+            (left + right) / 2.0,
+            GENERATION_LABEL_Y,
+            str(generation),
+            transform=xaxis_transform,
+            ha="center",
+            va="top",
+            color="black",
+            fontsize=PLOT_GENERATION_FONT_SIZE,
+            zorder=4,
+        )
+
+
 def _hash_change_rows(rows: Sequence[dict[str, object]]) -> list[float]:
     starts: list[float] = []
     previous_hash = None
@@ -263,24 +363,80 @@ def _scatter_alpha(row_count: int, *, threshold: int = 1000) -> float:
     return max(MIN_SCATTER_ALPHA, SCATTER_ALPHA * math.sqrt(float(threshold) / float(row_count)))
 
 
-def _combined_axis_ylim(combined, left_ylim: tuple[float, float]) -> tuple[float, float]:
-    import numpy as np
-
-    combined_values = np.asarray(combined, dtype=float)
-    combined_min = min(0.0, float(np.min(combined_values)) * 1.05)
-    combined_max = max(0.0, float(np.max(combined_values)))
+def _combined_axis_ylim(
+    left_ylim: tuple[float, float], objective_count: int
+) -> tuple[float, float]:
+    objective_count = max(1, int(objective_count))
     left_min, left_max = (float(left_ylim[0]), float(left_ylim[1]))
     if not math.isfinite(left_min) or not math.isfinite(left_max) or left_max <= left_min:
-        return combined_min, max(combined_max * 1.05, 1.0)
+        return 0.0, float(objective_count)
+    return left_min * objective_count, left_max * objective_count
 
-    one_position = (1.0 - left_min) / (left_max - left_min)
-    if one_position <= 0.0:
-        return combined_min, max(combined_max * 1.05, 1.0)
-    if one_position >= 1.0:
-        return combined_min, max(combined_max, combined_min + 1e-12)
 
-    axis_max = combined_min + (combined_max - combined_min) / one_position
-    return combined_min, max(axis_max, combined_max, combined_min + 1e-12)
+def _aligned_combined_ticks(
+    left_ticks: Sequence[float],
+    left_ylim: tuple[float, float],
+    objective_count: int,
+) -> tuple[list[float], list[float]]:
+    left_min, left_max = sorted((float(left_ylim[0]), float(left_ylim[1])))
+    tolerance = max(1.0, abs(left_min), abs(left_max)) * 1e-12
+    visible_left = [
+        float(tick)
+        for tick in left_ticks
+        if left_min - tolerance <= float(tick) <= left_max + tolerance
+    ]
+    multiplier = max(1, int(objective_count))
+    return visible_left, [tick * multiplier for tick in visible_left]
+
+
+def _add_split_legends(ax, axes: Sequence[object]) -> None:
+    data_legend: dict[str, object] = {}
+    event_legend: dict[str, object] = {}
+    for source_axis in axes:
+        handles, labels = source_axis.get_legend_handles_labels()
+        for handle, label in zip(handles, labels):
+            target = event_legend if label in EVENT_LINE_LABELS else data_legend
+            target.setdefault(label, handle)
+
+    data_artist = None
+    if data_legend:
+        data_artist = ax.legend(
+            list(data_legend.values()),
+            list(data_legend.keys()),
+            loc="lower left",
+            bbox_to_anchor=(PLOT_LEGEND_EDGE_PAD, PLOT_LEGEND_EDGE_PAD),
+            frameon=True,
+            framealpha=PLOT_LEGEND_FRAME_ALPHA,
+            fontsize=PLOT_LEGEND_FONT_SIZE,
+            borderpad=0.3,
+            borderaxespad=0.0,
+            labelspacing=0.3,
+            handletextpad=0.5,
+        )
+    if event_legend:
+        event_x = PLOT_LEGEND_EDGE_PAD
+        if data_artist is not None:
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+            data_bbox = data_artist.get_window_extent(renderer).transformed(
+                ax.transAxes.inverted()
+            )
+            event_x = data_bbox.x1 + PLOT_LEGEND_GAP
+        ax.legend(
+            list(event_legend.values()),
+            list(event_legend.keys()),
+            loc="lower left",
+            bbox_to_anchor=(event_x, PLOT_LEGEND_EDGE_PAD),
+            frameon=True,
+            framealpha=PLOT_LEGEND_FRAME_ALPHA,
+            fontsize=PLOT_LEGEND_FONT_SIZE,
+            borderpad=0.3,
+            borderaxespad=0.0,
+            labelspacing=0.3,
+            handletextpad=0.5,
+        )
+        if data_artist is not None:
+            ax.add_artist(data_artist)
 
 
 def _table_lines(headers: Sequence[str], rows: Sequence[Sequence[str]], right_align: Sequence[bool]) -> list[str]:
@@ -378,30 +534,56 @@ def plot_rows(
     raw_pareto = is_pareto_efficient(cost_matrix)
     pareto_mask = _visible_pareto_mask(raw_pareto, combined)
     optimization_start_rows = _optimization_start_rows(rows)
+    generation_regions = _generation_regions(rows)
     hash_change_rows = _hash_change_rows(rows)
+    x_edges = _row_cell_edges(rows)
 
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["font.size"] = PLOT_FONT_SIZE
+    plt.rcParams["axes.linewidth"] = AXIS_LINE_WIDTH
     plt.rcParams["axes.prop_cycle"] = cycler("color", PLOT_COLORS)
 
     threshold = 1000
-    markersize = 6.0 if len(rows) <= threshold else max(1.0, 6.0 * math.sqrt(threshold / len(rows)))
+    markersize = (
+        SCATTER_MARKER_SIZE
+        if len(rows) <= threshold
+        else max(1.0, SCATTER_MARKER_SIZE * math.sqrt(threshold / len(rows)))
+    )
     alpha = _scatter_alpha(len(rows), threshold=threshold)
 
-    fig, ax1 = plt.subplots(figsize=(12, 7))
+    fig, ax1 = plt.subplots(figsize=PLOT_FIGSIZE)
     ax1.set_axisbelow(True)
-    fixed_markersize_pareto = 200.0
+    fixed_markersize_pareto = PARETO_MARKER_AREA
     border_size_multiplier = 1.5
-    line_style = {"linewidth": TREND_LINE_WIDTH, "alpha": TREND_LINE_ALPHA, "linestyle": "-", "zorder": 0.5}
+    event_line_style = {
+        "linewidth": EVENT_LINE_WIDTH,
+        "alpha": EVENT_LINE_ALPHA,
+        "dash_capstyle": "butt",
+        "zorder": 0.7,
+    }
+
+    _draw_generation_regions(ax1, generation_regions)
 
     first_opt = True
     for _, start_x in optimization_start_rows:
-        ax1.axvline(start_x, color=OPT_LINE_COLOR, label="Optimization start" if first_opt else None, **line_style)
+        ax1.axvline(
+            start_x,
+            color=OPT_LINE_COLOR,
+            label=OPT_LINE_LABEL if first_opt else None,
+            linestyle=OPT_LINE_STYLE,
+            **event_line_style,
+        )
         first_opt = False
 
     first_hash = True
     for start_x in hash_change_rows:
-        ax1.axvline(start_x, color=HASH_LINE_COLOR, label="Static input hash change" if first_hash else None, **line_style)
+        ax1.axvline(
+            start_x,
+            color=HASH_LINE_COLOR,
+            label=HASH_LINE_LABEL if first_hash else None,
+            linestyle=HASH_LINE_STYLE,
+            **event_line_style,
+        )
         first_hash = False
 
     for idx, name in enumerate(names):
@@ -436,18 +618,29 @@ def plot_rows(
                 marker=marker,
                 edgecolors=color,
                 facecolors="none",
-                linewidths=1.5,
+                linewidths=PARETO_EDGE_LINE_WIDTH,
                 s=fixed_markersize_pareto,
                 zorder=3,
             )
 
-    ax1.set_xlabel("Evaluation index")
-    ax1.set_ylabel("Individual costs")
-    ax1.set_xlim((x[0] - 0.5, x[0] + 0.5) if len(x) == 1 else (float(np.min(x)), float(np.max(x))))
+    ax1.set_xlabel("Evaluation index", fontsize=PLOT_FONT_SIZE)
+    ax1.set_ylabel("Individual costs", fontsize=PLOT_FONT_SIZE)
+    ax1.set_xlim(float(x_edges[0]), float(x_edges[-1]))
     y_max = max(1.0, float(np.max(cost_matrix)) * 1.05)
     y_min = min(0.0, float(np.min(cost_matrix)) * 1.05)
     ax1.set_ylim(y_min, y_max)
-    ax1.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.7)
+    ax1.tick_params(
+        axis="both",
+        labelsize=PLOT_TICK_FONT_SIZE,
+        width=AXIS_LINE_WIDTH,
+    )
+    ax1.grid(
+        True,
+        which="both",
+        linestyle="--",
+        linewidth=GRID_LINE_WIDTH,
+        alpha=0.7,
+    )
 
     ax2 = ax1.twinx()
     if len(x) == 1:
@@ -463,7 +656,7 @@ def plot_rows(
         fine_x,
         local_avg,
         color="black",
-        linewidth=TREND_LINE_WIDTH,
+        linewidth=COMBINED_TREND_LINE_WIDTH,
         alpha=TREND_LINE_ALPHA,
         linestyle="-",
         marker=None,
@@ -477,6 +670,7 @@ def plot_rows(
         marker="o",
         alpha=alpha,
         s=markersize**2,
+        linewidths=SCATTER_EDGE_LINE_WIDTH,
     )
     if np.any(pareto_mask):
         ax2.scatter(
@@ -495,31 +689,32 @@ def plot_rows(
             label="Combined cost",
             facecolors="none",
             edgecolors="black",
-            linewidths=1.5,
+            linewidths=PARETO_EDGE_LINE_WIDTH,
             marker="o",
             s=fixed_markersize_pareto,
             zorder=3,
         )
 
-    ax2.set_ylabel("Combined cost")
-    ax2.set_ylim(*_combined_axis_ylim(combined, ax1.get_ylim()))
-
-    legend = {}
-    handles1, labels1 = ax1.get_legend_handles_labels()
-    handles2, labels2 = ax2.get_legend_handles_labels()
-    for handle, label in list(zip(handles1, labels1)) + list(zip(handles2, labels2)):
-        legend.setdefault(label, handle)
-    ax1.legend(
-        list(legend.values()),
-        list(legend.keys()),
-        loc="lower left",
-        frameon=True,
-        fontsize=PLOT_LEGEND_FONT_SIZE,
+    ax2.set_ylabel("Combined cost", fontsize=PLOT_FONT_SIZE)
+    ax2.set_ylim(*_combined_axis_ylim(ax1.get_ylim(), len(names)))
+    left_ticks, right_ticks = _aligned_combined_ticks(
+        ax1.get_yticks(), ax1.get_ylim(), len(names)
     )
-    ax1.set_title("Optimization costs from recorded_data")
+    ax1.set_yticks(left_ticks)
+    ax2.set_yticks(right_ticks)
+    ax2.tick_params(
+        axis="both",
+        labelsize=PLOT_TICK_FONT_SIZE,
+        width=AXIS_LINE_WIDTH,
+    )
+    ax1.set_title(
+        "Optimization costs from recorded_data",
+        fontsize=PLOT_TITLE_FONT_SIZE,
+    )
 
-    fig.tight_layout()
-    fig.savefig(output, dpi=300)
+    fig.tight_layout(pad=PLOT_TIGHT_LAYOUT_PAD)
+    _add_split_legends(ax1, (ax1, ax2))
+    fig.savefig(output, dpi=PLOT_DPI)
     plt.close(fig)
     return output
 
