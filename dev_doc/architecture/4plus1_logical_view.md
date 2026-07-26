@@ -17,6 +17,11 @@
 The logical pipeline is `normalized variables -> assigned task parameters ->
 workflow rawData -> current calc_cost -> objective tuple`.
 
+`workflow.py` and `calc_cost.py` own only the task-variable parts of that pipeline.
+The package owns invariant execution lifecycle, paths, metadata, transport,
+rawData manipulation, cost dispatch, constraint/failure policy, and objective
+counting. Task files select and parameterize those package mechanisms.
+
 ## Source-of-truth policy
 
 Durable source truth includes raw variables once per individual, flat rawData,
@@ -45,3 +50,5 @@ effective workspace paths.
   successful evidence.
 - Stored rawData stays rich enough for later cost changes and surrogate learning;
   task cost code may select smaller windows when calculating objectives.
+- No task module duplicates behavior that is invariant across optimization tasks,
+  and no package module hard-codes behavior that changes with a task.

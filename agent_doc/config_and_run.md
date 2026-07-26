@@ -73,8 +73,9 @@ The cost view shows objective history. The time view combines elapsed time, fail
 rate, execute-machine colors, and error occurrences. Each error type occupies a
 labeled horizontal band near the top of the plot; an error marker's fill identifies
 the execute machine and its outer ring identifies the error type. The execute
-machine comes from `individual_metadata.json` written on the execute node, not from
-submit-side scheduler history.
+machine comes from `individual_metadata.json` written by package worker support in
+the execute-side workflow process, not from submit-side scheduler history or task
+metadata.
 
 Individual view commands print a summary and create
 `cost_YYYYMMDD_HHMMSS.png` or `time_YYYYMMDD_HHMMSS.png` by default.

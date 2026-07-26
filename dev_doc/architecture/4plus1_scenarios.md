@@ -6,10 +6,11 @@ Install wheel, `yadof init PATH`, edit workspace config/task, `check`, run one l
 smoke, `run`, then inspect cost and integrated time/failure/error history
 individually or with `view all`. No repository path is required.
 
-The initialized generic workflow imports only its assigned parameter snapshot and
-job-local `worker_misc.py`, writes one direct `.npz`, and creates flat
-`rawData.zip`. Replacing it with a simulator workflow preserves the same evidence
-and lifecycle contract.
+The initialized generic workflow contains only task-specific calculation/rawData
+logic. It imports its assigned parameter snapshot and calls job-local
+`worker_misc.run_workflow()`, which owns lifecycle metadata, execute identity,
+standard paths, and flat `rawData.zip`. Replacing the task callback with a simulator
+workflow preserves those package-owned contracts.
 
 ## Agent-authored study
 
@@ -50,7 +51,9 @@ attempts bounded `condor_rm` cleanup, and does not wait for queue removal.
 Edit only workspace `calc_cost.py`, run `check`, and query history again. Existing
 compatible rawData stays unchanged while objective names/values are recalculated.
 If the scientific meaning or schema of old evidence is no longer compatible, the
-user explicitly clears or separates history.
+user explicitly clears or separates history. The task file changes its rawData
+interpretation and objective policy while continuing to call reusable
+`yadof.job_template` cost/rawData helpers.
 
 ## Two simultaneous workspaces
 

@@ -33,22 +33,26 @@ current-format file, including `CONSTRAINTS`, and replaces only `PARAMETERS`. Us
 ## 2. Workflow and adapters
 
 `job_template/workflow.py` consumes assigned raw parameter values and writes flat
-`rawData/*.npz` plus `individual_metadata.json`. It must not write authoritative
-costs. Use `worker_misc.execute_machine_name()` on the execute node and include its
-`execute_machine` value in every lifecycle metadata write. Put every task-local
-helper, model, lookup table, and active adapter below `job_template/`; prepared jobs
-copy that payload recursively while package worker support adds only
-`worker_misc.py`. Top-level files or directories whose names end
+`rawData/*.npz`. It must not write authoritative costs. Put only task-varying
+simulation logic in this file and call `worker_misc.run_workflow()` for the fixed
+execute lifecycle. That package-owned helper collects `execute_machine`, owns the
+standard job paths, prepares rawData, atomically writes running/done/error metadata,
+records exceptions, and creates `rawData.zip`.
+
+Put task-specific helpers, models, lookup tables, and active adapters below
+`job_template/`; prepared jobs copy that payload recursively while package worker
+support adds only `worker_misc.py`. Do not put generic lifecycle, transport,
+metadata, machine-detection, filesystem, or error-handling implementations in the
+workspace. Top-level files or directories whose names end
 with `.aedtresults` or `.aedt.lock` (case-insensitive) are treated as AEDT runtime
 artifacts and are not copied. This suffix rule applies only to direct children of
 `job_template/`; nested task assets are not inspected by it. The assigned parameter
 snapshot is self-contained. Distributed jobs execute `workflow.py` directly and do
 not receive or import the yadof package.
 
-For distributed use, workflow success and error paths must create top-level
-`rawData.zip` via `write_rawdata_transfer_zip()`. Its members are direct `.npz`
-basenames, not an enclosing `rawData/` directory. Condor returns the zip and the
-submit host restores it into job-local `rawData/`.
+`run_workflow()` creates top-level `rawData.zip` on both success and error paths.
+Its members are direct `.npz` basenames, not an enclosing `rawData/` directory.
+Condor returns the zip and the submit host restores it into job-local `rawData/`.
 
 List and copy a packaged reference adapter without overwriting user edits:
 
@@ -64,6 +68,12 @@ framework records raw evidence and derives cost through the current
 `job_template/calc_cost.py`. Changing a cost policy therefore reinterprets history
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
+
+Keep only task-varying rawData interpretation, objective definitions, thresholds,
+and importance-region selection in `calc_cost.py`. Reusable axis reduction,
+definition dispatch, worst-curve aggregation, constraint handling, error fallback,
+importance-weight allocation, and objective counting belong to
+`yadof.job_template` and must be called rather than copied into the task module.
 
 Real evaluation and the surrogate follow the same path:
 

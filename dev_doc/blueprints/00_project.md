@@ -19,8 +19,9 @@ failure-shape contracts.
 2. Fresh-load current parameter/objective definitions without global module leakage.
 3. Generate normalized candidates and materialize a self-contained assigned
    parameter snapshot per job.
-4. Execute task-owned `workflow.py` locally or directly through HTCondor.
-5. Require schema-versioned direct `rawData/*.npz`; distributed workflows package
+4. Execute task-owned `workflow.py` locally or directly through HTCondor; its
+   task-specific callback runs inside package `worker_misc` lifecycle support.
+5. Require schema-versioned direct `rawData/*.npz`; package worker support packages
    them as flat `rawData.zip` and Condor returns the zip rather than the directory.
 6. Normalize all outcomes into ordered `JobResult` rows with per-individual
    diagnostics.
@@ -34,9 +35,9 @@ failure-shape contracts.
 ## Boundaries
 
 - Package: framework APIs, CLI, defaults, job/worker support, templates, adapters,
-  tools, embedded docs.
+  tools, embedded docs, and all behavior invariant across optimization tasks.
 - Workspace: `config.py`, task modules/assets, jobs, records, checkpoints, logs,
-  tool output.
+  tool output; workflow/cost code contains only behavior that changes with the task.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
@@ -102,7 +103,8 @@ Additional invariants: workflows write evidence rather than cost; distributed
 workflows do not import yadof; rawData directories and transport archives are flat;
 local/distributed execution converge before recording; core runtime never depends on
 optional tools or administrator code; historical documents do not override current
-architecture/blueprints.
+architecture/blueprints. Task modules call package support for invariant behavior,
+and package modules do not hard-code task-variable simulator or objective policy.
 
 ## Verification boundary
 

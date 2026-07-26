@@ -13,6 +13,8 @@ conversion. It demonstrates:
 - a versioned `.yadof/workspace.json` marker and task-level `config.py`;
 - parameter definitions, workflow orchestration, and cost calculation under
   `job_template/`;
+- task-variable HFSS/objective code calling yadof worker/cost helpers for invariant
+  lifecycle, transport, rawData, and cost mechanics;
 - an active task-local `hfss_com.py` copied from the packaged adapter resources;
 - task-specific HFSS settings and an AEDT model asset;
 - retained parameter-definition history useful for understanding the task's

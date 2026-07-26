@@ -22,21 +22,25 @@ flowchart LR
 
 The package owns defaults, config validation, workspace handling, task loading, job
 composition, evaluation backends, optimization, rawData-first persistence and
-surrogate logic, tools, minimal worker helpers, templates, adapters, and docs. It is
-read-only at runtime and never stores user state below site-packages.
+surrogate logic, tools, invariant worker lifecycle support, templates, adapters,
+and docs. It is read-only at runtime and never stores user state below
+site-packages.
 
 ## Workspace
 
 Each workspace owns root `config.py`, `job_template/`, prepared jobs, recorded
 evidence, checkpoints, logs, and tool output. `parameters_constraints.py`,
 `workflow.py`, `calc_cost.py`, copied adapters, models, and assets are task-owned.
-Relative configured paths are resolved from this explicit root.
+Their executable logic is limited to behavior that changes with the optimization
+task; they call package support for invariant behavior. Relative configured paths
+are resolved from this explicit root.
 
 ## Prepared job
 
 A job is the execution boundary. It contains the copied task payload, one assigned
-self-contained parameter snapshot, package-provided `worker_misc.py`, preparation
-metadata, an initially empty `rawData/`, and later runtime artifacts. It contains no
+self-contained parameter snapshot, package-provided `worker_misc.py` owning the
+fixed worker lifecycle, preparation metadata, an initially empty `rawData/`, and
+later runtime artifacts. It contains no
 copied framework config tree, `calc_cost.py`, yadof wheel/archive/package, or
 authoritative `cost.json`.
 

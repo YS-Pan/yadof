@@ -9,6 +9,13 @@ from typing import Callable
 
 import numpy as np
 
+from .rawdata_contract import (
+    RawDataContractError,
+    RawDataItem,
+    RawDataView,
+    load_rawdata_views,
+)
+
 RawVariables = Mapping[str, float] | Sequence[float]
 
 ALL = "ALL"
@@ -114,6 +121,26 @@ def calculate_2d_curve_cost(
     return soft_cost(combined, goal=goal, worst=worst, **curve)
 
 
+def calculate_worst_curve_cost(
+    value_for_cost: object,
+    definition: Mapping[str, object],
+    **curve,
+) -> float:
+    """Return the largest cost across a task-provided sequence of curves."""
+
+    if not isinstance(value_for_cost, Sequence) or isinstance(
+        value_for_cost, (str, bytes)
+    ):
+        raise ValueError("worst-curve cost requires a sequence of curves")
+    costs = tuple(
+        calculate_2d_curve_cost(item, definition, **curve)
+        for item in value_for_cost
+    )
+    if not costs:
+        raise ValueError("worst-curve cost requires at least one curve")
+    return float(max(costs))
+
+
 def calculate_registered_cost(
     definition: Mapping[str, object],
     value_for_cost: Mapping[str, object],
@@ -145,6 +172,116 @@ def calculate_defined_costs(
         calculate_registered_cost(definition, value_for_cost, calculators, **curve)
         for definition in definitions
     )
+
+
+def objective_names_from_definitions(
+    definitions: Sequence[Mapping[str, object]],
+    parameter_config: object | None = None,
+    *,
+    constraint_name: str = "cost_constraints",
+) -> tuple[str, ...]:
+    """Derive task objective names and the standard optional constraint objective."""
+
+    names = tuple(str(definition["name"]) for definition in definitions)
+    if parameter_config is not None and constraint_expressions(parameter_config):
+        names += (str(constraint_name),)
+    return names
+
+
+def calculate_task_cost(
+    sample_rawdata: Sequence[RawDataItem],
+    raw_variables: RawVariables | None,
+    *,
+    definitions: Sequence[Mapping[str, object]],
+    extract_value_for_cost: Callable[
+        [Sequence[RawDataView]], Mapping[str, object]
+    ],
+    parameter_config: object | None = None,
+    calculators: Mapping[str, object] | None = None,
+    cost_curve: Mapping[str, object] | None = None,
+    constraint_curve: Mapping[str, object] | None = None,
+) -> tuple[float, ...]:
+    """Apply the invariant defined-cost, constraint, and failure policy."""
+
+    curve = dict(cost_curve or {})
+    constraint_settings = dict(curve if constraint_curve is None else constraint_curve)
+    registry: dict[str, object] = {
+        "calculate_2d_curve_cost": calculate_2d_curve_cost,
+        "calculate_worst_curve_cost": calculate_worst_curve_cost,
+    }
+    registry.update(calculators or {})
+    names = objective_names_from_definitions(definitions, parameter_config)
+    error_cost = float(curve.get("error_cost", 1.0))
+    try:
+        loaded_items = load_rawdata_views(sample_rawdata)
+        costs = calculate_defined_costs(
+            definitions,
+            extract_value_for_cost(loaded_items),
+            registry,
+            **curve,
+        )
+    except COST_CALCULATION_ERRORS as exc:
+        if isinstance(exc, RawDataContractError):
+            raise
+        return error_costs(len(names), error_cost=error_cost)
+
+    if parameter_config is None or not constraint_expressions(parameter_config):
+        return costs
+    try:
+        return costs + (
+            constraint_cost(
+                raw_variables,
+                parameter_config,
+                **constraint_settings,
+            ),
+        )
+    except CONSTRAINT_CALCULATION_ERRORS:
+        return costs + (
+            float(constraint_settings.get("error_cost", error_cost)),
+        )
+
+
+def calculate_rawdata_cost(
+    sample_rawdata: Sequence[RawDataItem],
+    raw_variables: RawVariables | None,
+    *,
+    objective_names: Sequence[str],
+    calculate_loaded_cost: Callable[
+        [Sequence[RawDataView], RawVariables | None], Sequence[float]
+    ],
+    error_cost: float = float("inf"),
+) -> tuple[float, ...]:
+    """Apply invariant loading, width validation, and failure fallback."""
+
+    names = tuple(str(name) for name in objective_names)
+    try:
+        loaded_items = load_rawdata_views(sample_rawdata)
+        costs = tuple(
+            float(value)
+            for value in calculate_loaded_cost(loaded_items, raw_variables)
+        )
+        if len(costs) != len(names):
+            raise ValueError(
+                f"expected {len(names)} costs, got {len(costs)}"
+            )
+        return costs
+    except COST_CALCULATION_ERRORS as exc:
+        if isinstance(exc, RawDataContractError):
+            raise
+        return error_costs(len(names), error_cost=error_cost)
+
+
+def strict_finite_mean(
+    values: object,
+    *,
+    error_cost: float = float("inf"),
+) -> float:
+    """Return the mean only when every selected value is finite."""
+
+    selected = np.asarray(values, dtype=float)
+    if selected.size == 0 or not np.all(np.isfinite(selected)):
+        return float(error_cost)
+    return float(np.mean(selected))
 
 
 def calculate_costs(
@@ -252,10 +389,15 @@ __all__ = [
     "calculate_2d_curve_cost",
     "calculate_costs",
     "calculate_defined_costs",
+    "calculate_rawdata_cost",
     "calculate_registered_cost",
+    "calculate_task_cost",
+    "calculate_worst_curve_cost",
     "constraint_cost",
     "constraint_expressions",
     "error_costs",
     "mean_cost",
+    "objective_names_from_definitions",
     "soft_cost",
+    "strict_finite_mean",
 ]

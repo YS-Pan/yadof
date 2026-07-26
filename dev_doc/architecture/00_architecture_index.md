@@ -20,6 +20,8 @@ Core architectural goals are task-agnostic expensive evaluation, resumable
 rawData-first history, local/distributed equivalence, per-individual failure
 isolation, and safe coexistence of multiple workspaces. Costs and normalized
 history are interpretations of evidence, not stored source truth.
+Cross-task invariant behavior belongs in yadof; workspace workflow/cost files own
+only behavior that varies with the selected optimization task.
 
 - [c4_context.md](c4_context.md): users and external systems
 - [c4_container.md](c4_container.md): package/workspace/execution/persistence split

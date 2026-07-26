@@ -36,6 +36,13 @@ persistence APIs; `optimize` may coordinate evaluation/history/surrogate; core c
 must not depend on optional tools. Stateful APIs accept explicit workspace context.
 No module calculates mutable user paths relative to package `__file__`.
 
+Code placement follows variability: behavior invariant across optimization tasks
+belongs in yadof; behavior that changes with simulator, model, rawData meaning, or
+objective policy belongs in workspace `workflow.py`/`calc_cost.py`. Execute-side
+fixed behavior is shipped through the package-owned `worker_misc.py`, while
+submit-side reusable cost/rawData behavior is exposed through
+`yadof.job_template`. Task modules call these surfaces and do not copy them.
+
 Tests import an installed distribution. Generic default tests do not depend on a
 simulator or live HTCondor pool; scheduler commands and adapters are mocked. Artifact
 tests build the distributions, inspect members, install a wheel outside the

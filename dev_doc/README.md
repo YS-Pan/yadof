@@ -130,6 +130,27 @@ that depend on the current Windows code page.
 - [Change records](skill/change_records.md): append-only completed-change history,
   naming, structure, and targeted reading.
 
+## Task/framework ownership rule
+
+Code whose behavior is invariant across optimization tasks belongs under
+`src/yadof/`, not in workspace/reference `workflow.py` or `calc_cost.py`. Execute-
+side invariant code must be exposed through the package-owned `worker_misc.py`
+copied into prepared jobs, because distributed workers do not import yadof.
+Submit-side invariant cost/rawData code must be exposed through
+`yadof.job_template`.
+
+Conversely, simulator/project/design selection, task measurements, rawData meaning,
+objective definitions, thresholds, and other behavior that changes with the
+optimization task belongs in `workflow.py` or `calc_cost.py`; it must not be
+hard-coded into yadof. Task files call framework helpers but do not duplicate their
+implementations.
+
+The package boundary is not a destination for every extracted function. Add a
+helper to yadof only when it represents a broadly recurring mechanism across
+different optimization tasks or a stable framework contract. A one-off data shape,
+task-specific grouping, simulator convention, or narrowly specialized objective
+policy stays in the task file even when it can technically be factored out.
+
 ## Maintenance Workflow
 
 After each code change:

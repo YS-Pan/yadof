@@ -10,8 +10,8 @@
 - `task_loader`: fresh compile/execute in temporary module namespaces, including
   workspace-local helper packages without lasting `sys.path` or `sys.modules`
   pollution.
-- `_resources`: generic workspace template, reusable adapter references, minimal
-  worker helper, and installed documentation resources.
+- `_resources`: generic workspace template, reusable adapter references, invariant
+  execute-side worker lifecycle support, and installed documentation resources.
 
 ## Task interpretation
 
@@ -19,16 +19,19 @@
   materialization, normalization, dynamic cost, importance weights, and task
   validation.
 - `parameters_constraints_class`: canonical submit-side `Parameter` semantics.
-- `rawdata_contract`: schema-versioned `.npz` validation and rawData views.
-- `cost_misc`: neutral multi-sample cost calculation helpers.
+- `rawdata_contract`: schema-versioned `.npz` validation, rawData views, reusable
+  axis-curve reduction, and importance-weight allocation.
+- `cost_misc`: neutral multi-sample/defined/custom-callback cost calculation,
+  result-width validation, worst-curve aggregation, objective-name derivation,
+  constraint handling, and failure fallback.
 
 ## Evaluation
 
 - `evaluate_manager.api`: backend selection, population ordering, local worker pool,
   per-individual failure isolation, recording, and cost return.
 - `job_files`: task copying, self-contained assigned parameter snapshots, job static
-  hashes, package worker-helper copying, top-level AEDT runtime-artifact exclusion,
-  and preparation provenance.
+  hashes, package worker-lifecycle copying, top-level AEDT runtime-artifact
+  exclusion, and preparation provenance.
 - `local_runner`: direct workflow subprocess, timeout/process cleanup, rawData
   validation, and shared metadata finalization.
 - `condor_runner`: direct `workflow.py` submit, input selection, explicit
@@ -67,3 +70,6 @@ external installed dependencies, but distributed workflows must not import yadof
 
 Stable cross-module calls use public `api.py` or package `__init__` exports. Stateful
 APIs accept a workspace; no module derives user-data paths from package `__file__`.
+Task workflow/cost modules contain task-variable callbacks and definitions only:
+they invoke copied `worker_misc` or installed `yadof.job_template` helpers for
+invariant behavior.

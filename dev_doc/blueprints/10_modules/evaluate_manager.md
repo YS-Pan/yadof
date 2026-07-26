@@ -10,21 +10,22 @@ collection, recording, or cost failure affects only its candidate.
 ## Job preparation
 
 `job_files.py` creates a collision-safe directory, copies task inputs while
-excluding runtime/submit artifacts and `calc_cost.py`, and excludes direct
+excluding runtime/submit artifacts (including current/legacy worker profile/temp
+directories) and `calc_cost.py`, and excludes direct
 `job_template/` children whose names end case-insensitively with `.aedtresults` or
 `.aedt.lock`. The suffix filter is intentionally top-level only. Preparation then
 materializes a self-contained assigned parameter snapshot, copies only package
-`worker_misc.py`, creates empty `rawData/`, computes a definition-oriented static
-hash, and writes preparation metadata. It never creates or transfers a yadof runtime
-package/archive/config.
+`worker_misc.py` containing the invariant execute lifecycle, creates empty
+`rawData/`, computes a definition-oriented static hash, and writes preparation
+metadata. It never creates or transfers a yadof runtime package/archive/config.
 
 ## Local backend
 
 `local_runner.py` directly runs job-local `workflow.py` with bounded concurrency and
 per-job timeout, kills the process tree on timeout, rejects `cost.json`, validates
 the flat rawData directory even when no direct files exist, merges workflow metadata,
-and captures output tails. The workflow records its own execute-machine name in
-individual metadata through package worker support.
+and captures output tails. The task workflow calls package worker support, which
+records the execute-machine name and the rest of the invariant lifecycle metadata.
 
 ## Distributed backend
 
@@ -49,8 +50,9 @@ Windows slot-user policy. Pending jobs may receive one delayed read-only matchma
 analysis. The module diagnoses but never repairs HTCondor.
 
 Execute-machine provenance is not inferred from those submit-side ClassAds.
-`workflow.py` samples it on the execute node, writes `execute_machine` into
-`individual_metadata.json`, and returns that file through the normal transport.
+`worker_misc.run_workflow()`, invoked by `workflow.py`, samples it on the execute
+node, writes `execute_machine` into `individual_metadata.json`, and returns that
+file through the normal transport.
 
 ## Recording and cost return
 

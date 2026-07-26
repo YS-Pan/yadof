@@ -27,6 +27,9 @@ The package owns framework code, defaults, worker support, templates, adapters,
 tools, and documentation. A workspace owns `config.py`, `job_template/`, jobs,
 recorded raw evidence, surrogate checkpoints, logs, and tool output. Package files
 are treated as read-only and there is no `project.*` compatibility namespace.
+Cross-task invariant code belongs in yadof; workspace `workflow.py`/`calc_cost.py`
+contain only behavior that can change with the optimization task and call package
+helpers for everything else.
 
 See [agent_doc/README.md](agent_doc/README.md) for agent-oriented installation and
 workflow guidance,

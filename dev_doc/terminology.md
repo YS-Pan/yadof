@@ -15,7 +15,8 @@
 | `rawData.zip` | Distributed transport archive created on the execute node and explicitly returned by HTCondor instead of `rawData/`; every member is a direct `.npz` basename with no enclosing directory. |
 | `cost` | Current objective tuple dynamically calculated from rawData by workspace `calc_cost.py`. |
 | `workspace recorded data` | Workspace-local JSONL/zip evidence and optimization metadata; normalized variables and costs are derived. |
-| `package worker support` | The single reserved `worker_misc.py` copied as a direct job-local file; it provides dependency-free workflow helpers and flat zip creation without sending yadof to workers. |
+| `package worker support` | The single reserved `worker_misc.py` copied as a direct job-local file; it owns dependency-free invariant execute lifecycle, paths, metadata, machine identity, rawData preparation, cleanup/error handling, and flat zip creation without sending yadof to workers. |
+| `task-variable code` | Workflow or cost behavior that can change when the optimization task changes, such as simulator/project/design operations, measurements, rawData interpretation, objective definitions, thresholds, and importance regions. It belongs in workspace `workflow.py`/`calc_cost.py`; cross-task invariant behavior belongs in yadof. |
 | `self-contained parameter snapshot` | Assigned job-local `parameters_constraints.py` with a minimal local `Parameter` representation and no yadof import. |
 | `direct workflow submission` | Windows HTCondor contract in which `workflow.py` itself is `executable` with `transfer_executable=True`; there is no yadof launcher. |
 | `job_static_hash` | Definition-oriented hash of task/worker inputs that excludes runtime metadata and per-candidate assignments. |
@@ -25,7 +26,7 @@
 | `distributed mode` | HTCondor transport preserving the local job/result/recording contract. |
 | `HTCondor runner` | `yadof.evaluate_manager.condor_runner`, which writes submit files, submits/polls/collects, records ClassAds, and diagnoses but never repairs the pool. |
 | `slot user` | Low-privilege Windows HTCondor execution account; normal policy is `run_as_owner=False`, `load_profile=True`. |
-| `execute machine` | Computer name sampled by the running workflow on the local/HTCondor execute node and returned as `execute_machine` in `individual_metadata.json`; it is not inferred from submit-side ClassAds. |
+| `execute machine` | Computer name sampled by package worker support inside the running workflow process on the local/HTCondor execute node and returned as `execute_machine` in `individual_metadata.json`; task metadata and submit-side ClassAds cannot supply or override it. |
 | `adaptive resource request` | Workspace-history-derived memory/disk request; CPU remains a user policy. |
 | `yadof resource retry` | Fresh bounded submission after standard memory/disk holds, doubling only the exhausted request and preserving attempt diagnostics. |
 | `adaptive time limit` | Per-normal-job execution budget derived from smoke/prior generation or fixed config, enforced both by Condor `allowed_execute_duration` and the yadof submit-side execution watchdog; it is separate from the whole-generation deadline. |

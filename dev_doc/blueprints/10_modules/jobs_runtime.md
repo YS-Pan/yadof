@@ -5,14 +5,16 @@
 Jobs are generated below the effective workspace jobs directory and are the only
 unit sent to an execute backend. A prepared job contains copied task inputs,
 assigned self-contained `parameters_constraints.py`, `workflow.py`, one
-package-provided `worker_misc.py`, preparation metadata, and empty `rawData/`.
+package-provided `worker_misc.py` owning the invariant execute lifecycle,
+preparation metadata, and empty `rawData/`.
 Task-owned models/adapters/assets may be files or required subdirectories below the
 job; package support files themselves are direct files.
 Direct task-template children ending case-insensitively with `.aedtresults` or
 `.aedt.lock` are AEDT runtime artifacts and are excluded. The suffix rule does not
 inspect task-owned subdirectories.
 
-Runtime adds workflow metadata including execute-side `execute_machine`,
+Runtime package worker support adds lifecycle metadata including execute-side
+`execute_machine`,
 local/Condor logs and submit diagnostics,
 `rawData.zip` in distributed mode, and direct restored/locally generated
 `rawData/*.npz`. `calc_cost.py`, workspace/global config packages, yadof source,
@@ -30,13 +32,14 @@ optional run/optimization/generation/population indices.
 ## Distributed transport
 
 HTCondor executes the copied `workflow.py` directly. `workflow.py` imports the
-same-directory `worker_misc.py` as needed and is responsible for generating a flat
-top-level `rawData.zip` in success and error paths. The archive contains only member
-names like `name.npz`; it never contains a `rawData/` directory. Condor returns that
-zip and workflow metadata, not the rawData directory. The workflow captures
-`execute_machine` while running; submit-side ClassAds do not supply or replace that
-identity. Submit-side restoration is strict and reports missing, corrupt, nested,
-non-`.npz`, or duplicate members.
+same-directory `worker_misc.py` and calls `run_workflow()` around task-specific
+work. The helper generates a flat top-level `rawData.zip` in success and error
+paths. The archive contains only member names like `name.npz`; it never contains a
+`rawData/` directory. Condor returns that zip and workflow metadata, not the rawData
+directory. Worker support captures `execute_machine` while running; submit-side
+ClassAds and task metadata do not supply or replace that identity. Submit-side
+restoration is strict and reports missing, corrupt, nested, non-`.npz`, or duplicate
+members.
 
 ## Invariants
 
@@ -46,5 +49,7 @@ non-`.npz`, or duplicate members.
   same-suffixed nested task assets remain ordinary recursively copied payload.
 - Every execute dependency is present in the job or deliberately installed on the
   execute node; jobs do not import yadof.
+- Task workflows contain only task-variable operations/cleanup and call package
+  worker support for fixed lifecycle behavior.
 - The rawData output tree is flat in local, execute, restored, and recorded paths.
 - Retries clear stale runtime outputs without changing static task inputs.

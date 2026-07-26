@@ -13,7 +13,7 @@ Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected
 records/objectives. Time supports status filtering and owns elapsed time, failure
 rate, execute-machine color, and typed error occurrence reporting. It reads
-`execute_machine` from workflow-written individual metadata, never from submit-side
+`execute_machine` from worker-support-written individual metadata, never from submit-side
 scheduler history. Each error type occupies a directly labeled horizontal band near
 the plot top; marker fill identifies the execute machine and the outer ring
 identifies the error type.

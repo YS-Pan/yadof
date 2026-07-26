@@ -4,6 +4,18 @@
 rawData has been recorded, and it is also used by the surrogate path. Keep it pure
 and repeatable: the same rawData and same code should produce the same cost.
 
+Keep only code that can change with the optimization task: rawData interpretation,
+objective definitions, physical thresholds, custom calculators, and importance
+regions. Reusable loading, axis reduction, definition dispatch, worst-curve
+aggregation, constraints, failure fallback, weight allocation, and objective
+counting belong in `yadof.job_template`; call those helpers instead of copying their
+implementations into `calc_cost.py`.
+
+The reusable helpers are deliberately coarse-grained. A custom grouping whose
+members carry task-specific ranges, a simulator-specific array layout, or another
+narrow objective convention remains a local calculator passed through the generic
+calculator registry. Do not add it to yadof solely to shorten one task file.
+
 ## Required Public Functions
 
 At minimum, provide:
@@ -15,11 +27,10 @@ def calculate_cost(sample_rawdata, raw_variables=None) -> tuple[float, ...]:
 
 def get_objective_names() -> tuple[str, ...]:
     ...
-
-
-def get_objective_count() -> int:
-    return len(get_objective_names())
 ```
+
+Do not define `get_objective_count()` merely as `len(get_objective_names())`; yadof
+derives and validates the count from objective names.
 
 If surrogate training should emphasize objective-relevant rawData windows, also
 provide:
@@ -39,7 +50,8 @@ The current project style separates cost calculation into four parts:
 1. Load rawData into `RawDataView` objects.
 2. Extract task-specific `value_for_cost` values.
 3. Define objectives in `COST_DEFINITIONS`.
-4. Convert extracted values into bounded minimization costs.
+4. Call the yadof defined-cost helper to apply reusable minimization, constraint,
+   and failure behavior.
 
 Example:
 
@@ -51,18 +63,18 @@ from collections.abc import Sequence
 import numpy as np
 
 from . import parameters_constraints as parameter_config
-from .cost_misc import (
+from yadof.job_template.cost_misc import (
     ALL,
-    CONSTRAINT_CALCULATION_ERRORS,
-    COST_CALCULATION_ERRORS,
     RawVariables,
-    calculate_2d_curve_cost,
-    calculate_defined_costs,
-    constraint_cost,
-    constraint_expressions,
-    error_costs,
+    calculate_task_cost,
+    objective_names_from_definitions,
 )
-from .rawdata_contract import RawDataItem, RawDataView, load_rawdata_views
+from yadof.job_template.rawdata_contract import (
+    RawDataItem,
+    RawDataView,
+    build_rawdata_importance_weights,
+    mark_axis_range,
+)
 
 ERROR_COST = 1.1
 
@@ -81,9 +93,6 @@ COST_DEFINITIONS = (
     },
 )
 
-SIMULATION_OBJECTIVE_NAMES = tuple(str(definition["name"]) for definition in COST_DEFINITIONS)
-
-
 def _extract_value_for_cost(loaded_items: Sequence[RawDataView]) -> dict[str, object]:
     curve = next(item for item in loaded_items if item.name == "response_curve")
     x = curve.axis_coordinates("x") if curve.has_axis("x") else np.arange(curve.data.size)
@@ -95,35 +104,22 @@ def calculate_cost(
     sample_rawdata: Sequence[RawDataItem],
     raw_variables: RawVariables | None = None,
 ) -> tuple[float, ...]:
-    loaded_items = load_rawdata_views(sample_rawdata)
-    try:
-        value_for_cost = _extract_value_for_cost(loaded_items)
-        costs = calculate_defined_costs(
-            COST_DEFINITIONS,
-            value_for_cost,
-            globals(),
-            **COST_CURVE,
-        )
-    except COST_CALCULATION_ERRORS:
-        return error_costs(get_objective_count(), error_cost=ERROR_COST)
-
-    if not constraint_expressions(parameter_config):
-        return costs
-
-    try:
-        return costs + (constraint_cost(raw_variables, parameter_config, **CONSTRAINT_COST_CURVE),)
-    except CONSTRAINT_CALCULATION_ERRORS:
-        return costs + (ERROR_COST,)
-
-
-def get_objective_names() -> tuple[str, ...]:
-    return SIMULATION_OBJECTIVE_NAMES + (
-        ("cost_constraints",) if constraint_expressions(parameter_config) else ()
+    return calculate_task_cost(
+        sample_rawdata,
+        raw_variables,
+        definitions=COST_DEFINITIONS,
+        extract_value_for_cost=_extract_value_for_cost,
+        parameter_config=parameter_config,
+        cost_curve=COST_CURVE,
+        constraint_curve=CONSTRAINT_COST_CURVE,
     )
 
 
-def get_objective_count() -> int:
-    return len(get_objective_names())
+def get_objective_names() -> tuple[str, ...]:
+    return objective_names_from_definitions(
+        COST_DEFINITIONS,
+        parameter_config,
+    )
 ```
 
 ## Cost Direction
@@ -196,16 +192,16 @@ Example:
 
 ```python
 def rawdata_importance_weights(sample_rawdata, *, floor=0.25, boost=2.0):
-    out = []
-    for item in sample_rawdata:
-        view = RawDataView.from_item(item)
-        weights = np.full(np.asarray(view.data).shape, float(floor), dtype=np.float32)
+    def mark_important(view, weights, important):
         if view.name == "response_curve" and view.has_axis("x"):
-            from .rawdata_contract import mark_axis_range
+            mark_axis_range(weights, view, "x", 0.4, 0.6, important)
 
-            mark_axis_range(weights, view, "x", 0.4, 0.6, floor + boost)
-        out.append({view.data_key: weights})
-    return tuple(out)
+    return build_rawdata_importance_weights(
+        sample_rawdata,
+        mark_important,
+        floor=floor,
+        boost=boost,
+    )
 ```
 
 If you do not know which rawData points are more important, omit this hook. The
@@ -218,3 +214,5 @@ framework can still train on all rawData.
 - Do not save cost as a source file.
 - Do not mutate rawData while calculating cost.
 - Do not hide missing rawData by returning a normal-looking good cost. Return the configured error cost on calculation failure.
+- Do not reimplement reusable yadof cost/rawData helpers or objective counting in
+  the task module.

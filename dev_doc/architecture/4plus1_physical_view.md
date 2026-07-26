@@ -12,7 +12,9 @@ directory. Local evaluation uses the installed environment to launch job-local
 
 Every job places required task inputs directly below its own directory (including
 task-owned subdirectories when necessary). Framework composition adds only
-`worker_misc.py`; assigned `parameters_constraints.py` is self-contained. No yadof
+`worker_misc.py`; it owns invariant execute-side paths, lifecycle metadata,
+execute-machine provenance, rawData preparation, and flat output transport.
+Assigned `parameters_constraints.py` is self-contained. No yadof
 package directory, wheel, zip archive, compatibility bootstrap, generated worker
 config, copied global config package, or `calc_cost.py` is sent to execute nodes.
 Direct `job_template/` children ending case-insensitively with `.aedtresults` or
@@ -39,8 +41,9 @@ transfer_output_files = rawData.zip,individual_metadata.json
 
 `workflow.py` and other task inputs are already in the prepared job folder. Condor
 transfers the executable plus selected direct inputs, and does not transfer runtime
-directories or old outputs. The execute workflow creates `rawData.zip`; its archive
-members are direct `.npz` files such as `response.npz`, never
+directories or old outputs. Package worker support invoked by the execute workflow
+creates `rawData.zip`; its archive members are direct `.npz` files such as
+`response.npz`, never
 `rawData/response.npz`. Condor returns the zip instead of the `rawData/` directory.
 The submit host restores validated files into its job-local `rawData/`.
 
@@ -73,6 +76,7 @@ JSON and archive publication requiring replacement is atomic and protected by
 workspace locks. Package resources remain read-only even when site-packages itself
 is read-only.
 
-`individual_metadata.json` includes `execute_machine` sampled by the workflow
-process on the execute node. It is transferred back with the normal job outputs;
-submit-side ClassAds are not authoritative for this field.
+The task workflow calls package worker support, which samples `execute_machine` in
+the workflow process and writes it into `individual_metadata.json`. It is
+transferred back with the normal job outputs; submit-side ClassAds are not
+authoritative for this field.

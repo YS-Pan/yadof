@@ -10,21 +10,17 @@ import numpy as np
 from . import parameters_constraints as parameter_config
 from yadof.job_template.cost_misc import (
     ALL,
-    CONSTRAINT_CALCULATION_ERRORS,
-    COST_CALCULATION_ERRORS,
     RawVariables,
-    calculate_2d_curve_cost,
-    calculate_defined_costs,
-    constraint_cost,
-    constraint_expressions,
-    error_costs,
+    calculate_task_cost,
+    objective_names_from_definitions,
 )
 from yadof.job_template.rawdata_contract import (
     RawDataItem,
     RawDataView,
     angle_to_degrees,
+    build_rawdata_importance_weights,
+    curve_along_axis,
     frequency_to_ghz,
-    load_rawdata_views,
     mark_axis_range,
 )
 
@@ -49,7 +45,7 @@ COST_DEFINITIONS = (
         "worst": -3.0,
         "ext_ratio": 0.2,
         "data_range": (ALL, 0),
-        "calculator": "calculate_s11_band_cost",
+        "calculator": "calculate_worst_curve_cost",
     },
     {
         "name": "cost_gain_lhcp_envelope",
@@ -85,11 +81,10 @@ COST_DEFINITIONS = (
         "worst": 18.0,
         "ext_ratio": 0.7,
         "data_range": (ALL, 0),
-        "calculator": "calculate_axial_ratio_cost",
+        "calculator": "calculate_worst_curve_cost",
     },
 )
 
-SIMULATION_OBJECTIVE_NAMES = tuple(str(definition["name"]) for definition in COST_DEFINITIONS)
 _PIN_STATE_RE = re.compile(r"pinState(\d+)", re.IGNORECASE)
 
 
@@ -101,7 +96,7 @@ def _extract_value_for_cost(loaded_items: Sequence[RawDataView]) -> dict[str, ob
     peak_gain, peak_theta = _peak_gain_curve(gain_curves)
     return {
         "s11_by_state": tuple(
-            _curve_along_axis(s11_by_state[state], "Freq", frequency_to_ghz)
+            curve_along_axis(s11_by_state[state], "Freq", frequency_to_ghz)
             for state in PIN_STATES
         ),
         "gain_envelope": _gain_envelope(gain_curves),
@@ -131,7 +126,7 @@ def _gain_curve(item: RawDataView) -> tuple[np.ndarray, np.ndarray]:
     item = _select_phi(item)
     if item.has_axis("Freq"):
         item = item.select("Freq", TARGET_FREQ_GHZ, FREQ_TOL_GHZ, converter=frequency_to_ghz)
-    return _curve_along_axis(item, "Theta", angle_to_degrees)
+    return curve_along_axis(item, "Theta", angle_to_degrees)
 
 
 def _gain_envelope(curves: Mapping[int, tuple[np.ndarray, np.ndarray]]) -> tuple[np.ndarray, np.ndarray]:
@@ -180,34 +175,13 @@ def _back_lobe_curve(curves: Mapping[int, tuple[np.ndarray, np.ndarray]]) -> tup
 def _axial_ratio_curve(item: RawDataView, peak_theta: float) -> tuple[np.ndarray, np.ndarray]:
     item = _select_phi(item)
     item = item.select("Theta", peak_theta, ANGLE_TOL_DEG, period=360.0, converter=angle_to_degrees)
-    return _curve_along_axis(item, "Freq", frequency_to_ghz)
+    return curve_along_axis(item, "Freq", frequency_to_ghz)
 
 
 def _select_phi(item: RawDataView) -> RawDataView:
     if not item.has_axis("Phi"):
         return item
     return item.select("Phi", TARGET_PHI_DEG, ANGLE_TOL_DEG, period=360.0, converter=angle_to_degrees)
-
-
-def _curve_along_axis(item: RawDataView, axis_name: str, converter) -> tuple[np.ndarray, np.ndarray]:
-    if not item.has_axis(axis_name):
-        raise ValueError(f"{item.name} missing {axis_name} axis")
-    x_values = item.axis_coordinates(axis_name, converter)
-    data = np.asarray(item.data)
-    data = (np.real(data) if np.iscomplexobj(data) else data).astype(float)
-    axis = item.axis_index(axis_name)
-    matrix = np.moveaxis(data, axis, 0).reshape(x_values.size, -1)
-    y_values = np.asarray([_finite_mean(row) for row in matrix], dtype=float)
-    finite = np.isfinite(x_values) & np.isfinite(y_values)
-    if not np.any(finite):
-        raise ValueError(f"{item.name} has no finite {axis_name} curve values")
-    return x_values[finite], y_values[finite]
-
-
-def _finite_mean(values: object) -> float:
-    finite = np.asarray(values, dtype=float)
-    finite = finite[np.isfinite(finite)]
-    return float(finite.mean()) if finite.size else float("nan")
 
 
 def _pin_state(item: RawDataView) -> int | None:
@@ -219,26 +193,6 @@ def _pin_state(item: RawDataView) -> int | None:
         return int(match.group(1)) if match else None
 
 
-def calculate_s11_band_cost(value_for_cost: object, definition: Mapping[str, object], **curve) -> float:
-    """Evaluate every state and use the least compliant state as the objective."""
-
-    state_costs = tuple(
-        calculate_2d_curve_cost(state_curve, definition, **curve)
-        for state_curve in value_for_cost
-    )
-    return float(max(state_costs))
-
-
-def calculate_axial_ratio_cost(value_for_cost: object, definition: Mapping[str, object], **curve) -> float:
-    """Evaluate axial ratio at all three peak-gain directions without summing states."""
-
-    state_costs = tuple(
-        calculate_2d_curve_cost(state_curve, definition, **curve)
-        for state_curve in value_for_cost
-    )
-    return float(max(state_costs))
-
-
 def rawdata_importance_weights(
     sample_rawdata: Sequence[RawDataItem],
     *,
@@ -247,12 +201,11 @@ def rawdata_importance_weights(
 ) -> tuple[dict[str, np.ndarray], ...]:
     """Emphasize objective-relevant regions during full-field surrogate training."""
 
-    base = max(0.0, float(floor))
-    important = base + max(0.0, float(boost))
-    out: list[dict[str, np.ndarray]] = []
-    for item in sample_rawdata:
-        loaded = RawDataView.from_item(item)
-        weights = np.full(np.asarray(loaded.data).shape, base, dtype=np.float32)
+    def mark_important(
+        loaded: RawDataView,
+        weights: np.ndarray,
+        important: float,
+    ) -> None:
         if loaded.name.startswith("s11") or loaded.name.startswith("axial_ratio"):
             weights[...] = important
         elif loaded.name.startswith("gain_lhcp"):
@@ -266,8 +219,13 @@ def rawdata_importance_weights(
             )
             for low, high in BACK_LOBE_RANGES_DEG:
                 mark_axis_range(weights, loaded, "Theta", low, high, important, converter=angle_to_degrees)
-        out.append({loaded.data_key: weights})
-    return tuple(out)
+
+    return build_rawdata_importance_weights(
+        sample_rawdata,
+        mark_important,
+        floor=floor,
+        boost=boost,
+    )
 
 
 def calculate_cost(
@@ -276,29 +234,19 @@ def calculate_cost(
 ) -> tuple[float, ...]:
     """Calculate independent objectives from one current or archived rawData sample."""
 
-    loaded_items = load_rawdata_views(sample_rawdata)
-    try:
-        costs = calculate_defined_costs(
-            COST_DEFINITIONS,
-            _extract_value_for_cost(loaded_items),
-            globals(),
-            **COST_CURVE,
-        )
-    except COST_CALCULATION_ERRORS:
-        return error_costs(get_objective_count(), error_cost=ERROR_COST)
-    if not constraint_expressions(parameter_config):
-        return costs
-    try:
-        return costs + (constraint_cost(raw_variables, parameter_config, **CONSTRAINT_COST_CURVE),)
-    except CONSTRAINT_CALCULATION_ERRORS:
-        return costs + (ERROR_COST,)
-
-
-def get_objective_names() -> tuple[str, ...]:
-    return SIMULATION_OBJECTIVE_NAMES + (
-        ("cost_constraints",) if constraint_expressions(parameter_config) else ()
+    return calculate_task_cost(
+        sample_rawdata,
+        raw_variables,
+        definitions=COST_DEFINITIONS,
+        extract_value_for_cost=_extract_value_for_cost,
+        parameter_config=parameter_config,
+        cost_curve=COST_CURVE,
+        constraint_curve=CONSTRAINT_COST_CURVE,
     )
 
 
-def get_objective_count() -> int:
-    return len(get_objective_names())
+def get_objective_names() -> tuple[str, ...]:
+    return objective_names_from_definitions(
+        COST_DEFINITIONS,
+        parameter_config,
+    )

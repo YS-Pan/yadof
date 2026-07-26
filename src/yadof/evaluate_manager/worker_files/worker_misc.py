@@ -4,15 +4,42 @@ import getpass
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
+import traceback
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 
 RAWDATA_SCHEMA_VERSION = 1
+_WORKFLOW_METADATA_KEYS = {
+    "ended_at",
+    "error_message",
+    "error_type",
+    "execute_machine",
+    "raw_data_files",
+    "secondary_errors",
+    "started_at",
+    "status",
+    "traceback_tail",
+}
+
+
+@dataclass(frozen=True)
+class WorkflowContext:
+    """Fixed execute-side paths and provenance supplied to task-specific work."""
+
+    base_dir: Path
+    raw_data_dir: Path
+    raw_data_transfer_zip: Path
+    individual_metadata_path: Path
+    temp_dir: Path
+    started_at: str
+    runtime_metadata: Mapping[str, str]
 
 
 def env_int(name: str, default: int, *, minimum: int) -> int:
@@ -104,8 +131,19 @@ def runtime_identity(
         "runtime_localappdata": os.environ.get("LOCALAPPDATA", ""),
         "runtime_temp": os.environ.get("TEMP", ""),
     }
-    identity.update({str(key): os.environ.get(str(env_name), "") for key, env_name in (environment or {}).items()})
-    identity.update({str(key): str(value) for key, value in (extra or {}).items()})
+    _merge_unique(
+        identity,
+        {
+            str(key): os.environ.get(str(env_name), "")
+            for key, env_name in (environment or {}).items()
+        },
+        source="runtime environment metadata",
+    )
+    _merge_unique(
+        identity,
+        {str(key): str(value) for key, value in (extra or {}).items()},
+        source="runtime extra metadata",
+    )
     return identity
 
 
@@ -143,6 +181,171 @@ def write_rawdata_transfer_zip(raw_data_dir: str | Path, transfer_zip: str | Pat
         )
 
 
+def rawdata_metadata(
+    name: str,
+    shape: Sequence[int],
+    *,
+    extra: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Build the invariant metadata fields for one task-specific rawData item."""
+
+    metadata = dict(extra or {})
+    metadata.update(
+        {
+            "schema_version": RAWDATA_SCHEMA_VERSION,
+            "rawdata_name": str(name),
+            "shape": [int(size) for size in shape],
+        }
+    )
+    return metadata
+
+
+def run_workflow(
+    operation: Callable[[WorkflowContext], object],
+    *,
+    cleanup: Callable[[WorkflowContext], None] | None = None,
+    metadata: Mapping[str, object] | None = None,
+    runtime_environment: Mapping[str, str] | None = None,
+    runtime_extra: Mapping[str, object] | None = None,
+) -> object:
+    """Run task-specific work inside yadof's invariant worker lifecycle."""
+
+    if not callable(operation):
+        raise TypeError("operation must be callable")
+    if cleanup is not None and not callable(cleanup):
+        raise TypeError("cleanup must be callable")
+
+    task_metadata = {str(key): value for key, value in (metadata or {}).items()}
+    reserved = sorted(_WORKFLOW_METADATA_KEYS.intersection(task_metadata))
+    if reserved:
+        raise ValueError(
+            "task metadata cannot override workflow-owned fields: "
+            + ", ".join(reserved)
+        )
+
+    base_dir = Path(__file__).resolve().parent
+    raw_data_dir = base_dir / "rawData"
+    raw_data_transfer_zip = base_dir / "rawData.zip"
+    individual_metadata_path = base_dir / "individual_metadata.json"
+    temp_dir = base_dir / "_tmp"
+    started_at = now_text()
+
+    bootstrap_home_dirs(base_dir, temp_dir)
+    runtime_metadata = runtime_identity(
+        base_dir,
+        environment=runtime_environment,
+        extra=runtime_extra,
+    )
+    context = WorkflowContext(
+        base_dir=base_dir,
+        raw_data_dir=raw_data_dir,
+        raw_data_transfer_zip=raw_data_transfer_zip,
+        individual_metadata_path=individual_metadata_path,
+        temp_dir=temp_dir,
+        started_at=started_at,
+        runtime_metadata=runtime_metadata,
+    )
+    write_json(
+        individual_metadata_path,
+        {
+            **task_metadata,
+            **runtime_metadata,
+            "status": "running",
+            "started_at": started_at,
+        },
+    )
+
+    result: object = None
+    primary_error: tuple[Exception, object, str] | None = None
+    secondary_errors: list[str] = []
+    try:
+        prepare_rawdata_dir(raw_data_dir, raw_data_transfer_zip)
+        result = operation(context)
+    except Exception as exc:
+        primary_error = (exc, exc.__traceback__, _exception_text(exc))
+
+    try:
+        write_rawdata_transfer_zip(raw_data_dir, raw_data_transfer_zip)
+    except Exception as exc:
+        if primary_error is None:
+            primary_error = (exc, exc.__traceback__, _exception_text(exc))
+        else:
+            secondary_errors.append(f"rawData packaging failed: {exc}")
+
+    if cleanup is not None:
+        try:
+            cleanup(context)
+        except Exception as exc:
+            if primary_error is None:
+                primary_error = (exc, exc.__traceback__, _exception_text(exc))
+            else:
+                secondary_errors.append(f"workflow cleanup failed: {exc}")
+                print(
+                    f"WARNING: workflow cleanup failed after another error: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    _remove_runtime_dirs(context)
+
+    final_metadata: dict[str, object] = {
+        **task_metadata,
+        **runtime_metadata,
+        "status": "done" if primary_error is None else "error",
+        "started_at": started_at,
+        "ended_at": now_text(),
+        "raw_data_files": raw_data_file_names(raw_data_dir),
+    }
+    if primary_error is not None:
+        error, error_traceback, traceback_text = primary_error
+        final_metadata.update(
+            {
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "traceback_tail": traceback_text[-4000:],
+            }
+        )
+        if secondary_errors:
+            final_metadata["secondary_errors"] = secondary_errors
+    write_json(individual_metadata_path, final_metadata)
+
+    if primary_error is not None:
+        error, error_traceback, _traceback_text = primary_error
+        raise error.with_traceback(error_traceback)
+    return result
+
+
+def _exception_text(error: Exception) -> str:
+    return "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )
+
+
+def _remove_runtime_dirs(context: WorkflowContext) -> None:
+    for path in (
+        context.base_dir / "_home",
+        context.base_dir / "_appdata",
+        context.base_dir / "_localappdata",
+        context.temp_dir,
+    ):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def _merge_unique(
+    target: dict[str, str],
+    values: Mapping[str, str],
+    *,
+    source: str,
+) -> None:
+    duplicates = sorted(set(target).intersection(values))
+    if duplicates:
+        raise ValueError(
+            f"{source} cannot override runtime identity fields: "
+            + ", ".join(duplicates)
+        )
+    target.update(values)
+
+
 __all__ = [
     "bootstrap_home_dirs",
     "env_bool",
@@ -151,9 +354,12 @@ __all__ = [
     "execute_machine_name",
     "now_text",
     "prepare_rawdata_dir",
+    "rawdata_metadata",
     "raw_data_file_names",
+    "run_workflow",
     "runtime_identity",
     "RAWDATA_SCHEMA_VERSION",
+    "WorkflowContext",
     "write_json",
     "write_rawdata_transfer_zip",
 ]

@@ -14,7 +14,7 @@
 - Prefer explicit elapsed-minute/second metadata over timestamp subtraction and
   clamp negative durations to zero.
 - Merge optimization metadata when individual records lack run/generation indices.
-- Read execute-machine identity from workflow-written individual metadata; normalize
+- Read execute-machine identity from worker-support-written individual metadata; normalize
   old remote-host spellings only as a compatibility read and never query the submit
   host for the machine.
 - Classify failures by explicit error type, then timeout, failure stage, or status.

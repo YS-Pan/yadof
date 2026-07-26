@@ -5,7 +5,9 @@ This bundled resource defines the software-neutral default workspace used by
 framework APIs remain installed under `yadof` and are not copied.
 
 The starter task evaluates a generic numeric input with pure Python/NumPy and writes
-schema-valid rawData for a generic objective. It selects no simulator, vendor,
+schema-valid rawData for a generic objective. Its workflow contains only the
+task-variable calculation and calls package worker support for invariant lifecycle,
+metadata, execute identity, paths, and transport. It selects no simulator, vendor,
 model/input filename, adapter, or physical result.
 
 An unchanged initialized copy is the only task that `yadof smoke-test` runs without

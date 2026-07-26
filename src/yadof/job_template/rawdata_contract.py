@@ -157,6 +157,58 @@ def combine_2d_curves(
     return np.concatenate(x_chunks), np.concatenate(y_chunks)
 
 
+def curve_along_axis(
+    item: RawDataView,
+    axis_name: str,
+    converter: AxisConverter | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reduce every non-selected dimension and return one finite axis curve."""
+
+    if not item.has_axis(axis_name):
+        raise ValueError(f"{item.name} missing {axis_name} axis")
+    x_values = item.axis_coordinates(axis_name, converter)
+    raw_data = np.asarray(item.data)
+    data = (
+        np.real(raw_data) if np.iscomplexobj(raw_data) else raw_data
+    ).astype(float)
+    axis = item.axis_index(axis_name)
+    matrix = np.moveaxis(data, axis, 0).reshape(x_values.size, -1)
+    y_values = np.asarray(
+        [
+            float(finite.mean()) if finite.size else float("nan")
+            for row in matrix
+            for finite in (np.asarray(row, dtype=float)[np.isfinite(row)],)
+        ],
+        dtype=float,
+    )
+    finite = np.isfinite(x_values) & np.isfinite(y_values)
+    if not np.any(finite):
+        raise ValueError(f"{item.name} has no finite {axis_name} curve values")
+    return x_values[finite], y_values[finite]
+
+
+def build_rawdata_importance_weights(
+    items: Sequence[RawDataItem],
+    mark_important: Callable[[RawDataView, np.ndarray, float], None],
+    *,
+    floor: float = 0.25,
+    boost: float = 2.0,
+) -> tuple[dict[str, np.ndarray], ...]:
+    """Allocate standard weights and delegate only task-specific region marking."""
+
+    if not callable(mark_important):
+        raise TypeError("mark_important must be callable")
+    base = max(0.0, float(floor))
+    important = base + max(0.0, float(boost))
+    output: list[dict[str, np.ndarray]] = []
+    for raw_item in items:
+        item = RawDataView.from_item(raw_item)
+        weights = np.full(np.asarray(item.data).shape, base, dtype=np.float32)
+        mark_important(item, weights, important)
+        output.append({item.data_key: weights})
+    return tuple(output)
+
+
 def frequency_to_ghz(values: np.ndarray, unit: str) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     scale = {
@@ -541,7 +593,9 @@ __all__ = [
     "RawDataItem",
     "RawDataView",
     "angle_to_degrees",
+    "build_rawdata_importance_weights",
     "combine_2d_curves",
+    "curve_along_axis",
     "frequency_to_ghz",
     "load_rawdata_item",
     "load_rawdata_views",

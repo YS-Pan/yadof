@@ -2,10 +2,11 @@
 
 ## Intent
 
-Provide the small, dependency-free helper copied directly into every prepared job.
-It lets task workflows read environment policy, create job-local profile/temp paths,
-write atomic lifecycle metadata, report runtime identity, manage flat rawData, and
-create the distributed transfer archive without importing yadof on an execute node.
+Provide the dependency-free, package-owned invariant lifecycle copied directly into
+every prepared job. Task workflows supply only task-varying operation/cleanup
+callbacks. The helper owns environment policy, standard paths, job-local
+profile/temp paths, atomic lifecycle metadata, execute identity, flat rawData
+management, and distributed transfer without importing yadof on an execute node.
 
 ## Public behavior
 
@@ -15,7 +16,13 @@ create the distributed transfer archive without importing yadof on an execute no
   process with platform/environment fallbacks.
 - `runtime_identity()` includes `execute_machine` plus user, Python, platform,
   scratch, and selected environment diagnostics without failing when `whoami` is
-  unavailable.
+  unavailable; task extras cannot override framework identity fields.
+- `WorkflowContext` supplies the fixed base/rawData/archive/metadata/temp paths and
+  captured runtime provenance to task-specific callbacks.
+- `run_workflow()` writes running state, prepares rawData, invokes task work,
+  packages output on success/error, invokes optional task-specific cleanup, writes
+  done/error metadata, removes standard worker profile/temp directories, and
+  re-raises the primary failure.
 - `write_json()` atomically replaces workflow metadata through a `.tmp` file.
 - `prepare_rawdata_dir()` creates/clears the output directory, rejects nested
   directories, and removes a stale transfer zip.
@@ -25,6 +32,8 @@ create the distributed transfer archive without importing yadof on an execute no
   publication if any directory or non-`.npz` entry exists.
 - `RAWDATA_SCHEMA_VERSION` lets the packaged generic workflow write current rawData
   without importing yadof.
+- `rawdata_metadata()` supplies invariant schema/name/shape fields while allowing
+  task-specific axis and scientific metadata.
 
 ## Dependencies and constraints
 
@@ -38,8 +47,10 @@ logic. Its archive is transport-only; durable archival remains recorded_data's j
 - `rawData/` is flat and contains only direct `.npz` files.
 - `rawData.zip` members never contain `rawData/` or any path separator.
 - Archive and metadata replacement do not expose partial target files.
-- Execute-machine identity is sampled by the workflow process on the execute node
-  and returned in `individual_metadata.json`; submit-side ClassAds are not its
-  source.
+- Execute-machine identity is sampled by `run_workflow()` in the workflow process
+  on the execute node and returned in `individual_metadata.json`; submit-side
+  ClassAds and task metadata cannot supply or override it.
 - Helper failures remain visible to workflow/Condor rather than silently omitting
   invalid output.
+- Cross-task invariant worker behavior is implemented here, never copied into
+  task-owned `workflow.py`.

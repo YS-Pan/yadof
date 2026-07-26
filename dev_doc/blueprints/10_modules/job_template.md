@@ -4,19 +4,24 @@
 
 `yadof.job_template` is stable framework support for task-owned workspace files. It
 defines parameter semantics, current task queries, assigned job snapshots, rawData
-schema/views/validation, cost helpers, and optional rawData importance weights. It
-does not contain a concrete simulator or objective.
+schema/views/validation, reusable axis reduction and importance allocation,
+definition-based cost dispatch, constraint/failure policy, and objective counting.
+It does not contain a concrete simulator or objective.
 
 ## Task-owned files
 
 - `parameters_constraints.py` defines canonical unassigned `PARAMETERS` and textual
   constraints using packaged `Parameter` on the submit side.
-- `workflow.py` consumes assigned values, controls simulators/custom software, writes
-  lifecycle metadata including execute-side `execute_machine`, writes direct
-  `rawData/*.npz`, and creates flat `rawData.zip` for distributed return. It must
-  not write cost.
-- `calc_cost.py` reports objective names/count and calculates current costs from
-  rawData; it may expose importance weights for surrogate training.
+- `workflow.py` consumes assigned values, controls task-specific simulators/custom
+  software, and writes task-specific direct `rawData/*.npz` inside
+  `worker_misc.run_workflow()`. Package worker support owns standard paths,
+  lifecycle/error metadata, execute-side `execute_machine`, rawData preparation,
+  and flat `rawData.zip`. The task file must not duplicate these mechanisms or
+  write cost.
+- `calc_cost.py` reports objective names and contains task-specific rawData
+  interpretation, objective definitions, thresholds, calculators, and importance
+  regions. It calls package helpers for reusable loading/reduction/dispatch,
+  constraints, failure fallback, weight allocation, and objective counting.
 - adapters, models, lookup data, and task helpers are copied into prepared jobs when
   placed under `job_template/`.
 
@@ -43,12 +48,19 @@ Costs are recomputed through freshly loaded current `calc_cost.py`. Returned row
 must match reported objective width. The same path is used for completed simulation
 evidence, history queries, and surrogate-predicted rawData. Raw variables may be
 supplied when a task needs them, but rawData remains the evidence source.
+`get_objective_count()` is package-derived from validated objective names; task
+modules do not repeat that calculation.
 
 ## Invariants
 
 - Task modules are workspace-explicit and fresh-loaded.
 - Workflows do not import yadof in distributed execution.
-- Workflows sample `execute_machine` on the node where they run and include it in
-  returned individual metadata.
+- Workflows call copied package worker support, which samples `execute_machine` on
+  the node where they run and includes it in returned individual metadata.
 - Rich rawData is preserved; cost code may select objective-relevant windows.
 - `cost.json` is never an authoritative task output.
+- Code invariant across optimization tasks lives in yadof; code that changes with
+  the task lives in `workflow.py`/`calc_cost.py`.
+- A yadof helper must be a stable contract or a mechanism reasonably reusable
+  across different task families. One-off array layouts, specialized grouping, and
+  narrow objective rules remain task-owned rather than becoming package APIs.

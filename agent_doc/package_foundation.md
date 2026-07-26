@@ -14,8 +14,10 @@ python -m pip install ".\dist\yadof-0.1.0-py3-none-any.whl[surrogate,plot]"
 jobs do **not** carry the yadof package, wheel, source tree, or runtime archive.
 HTCondor executes job-local `workflow.py` directly. The assigned parameter snapshot
 is self-contained and the package copies only `worker_misc.py` beside the workflow.
-Python, NumPy, adapters' third-party dependencies, PyAEDT, and simulator software
-still belong to the worker environment.
+That helper owns behavior invariant across tasks: standard paths, execute identity,
+lifecycle/error metadata, rawData preparation, and flat output transport. Python,
+NumPy, adapters' third-party dependencies, PyAEDT, and simulator software still
+belong to the worker environment.
 
 ## Initialize and inspect
 
@@ -59,6 +61,10 @@ ending with `.aedtresults` or `.aedt.lock` are excluded as AEDT runtime artifact
 the suffix rule does not inspect nested task directories. A distributed workflow
 must not import yadof; import only same-directory task files, the Python standard
 library, and dependencies deliberately installed on execute nodes.
+
+Workspace `workflow.py` and `calc_cost.py` contain only behavior that can change
+with the optimization task. They call copied `worker_misc` or installed
+`yadof.job_template` helpers for every cross-task invariant.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

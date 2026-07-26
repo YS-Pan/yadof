@@ -40,6 +40,26 @@ When a source checkout is available, its top-level `examples/` directory may pro
 additional task-specific reference workspaces. Those examples are not installed
 package resources and must not be assumed to exist in a pip-only environment.
 
+## Task/framework code boundary
+
+Put code in `workflow.py` or `calc_cost.py` only when it can change because the
+optimization task changes. Examples include simulator/project/design selection,
+task parameters, measurements to export, rawData interpretation, objective
+definitions, thresholds, and objective-relevant regions.
+
+Code that does not change between optimization tasks belongs in yadof. A workflow
+must call the copied package-owned `worker_misc.py` for execute-side lifecycle,
+machine identity, standard paths, metadata, rawData preparation, and transport.
+A cost module must call `yadof.job_template` helpers for reusable rawData reduction,
+cost dispatch, constraints, failure fallback, and objective counting. Do not copy
+or reimplement those fixed mechanisms in task files.
+
+Promote code only when the abstraction is common across materially different
+optimization tasks or is part of a stable framework contract. Keep one-task data
+shapes, specialized curve groupings, simulator conventions, and narrow objective
+policies local; being extractable by itself is not enough to make code framework
+code.
+
 ## Operating rules
 
 - Run `yadof init PATH` rather than inventing the workspace marker or starter files.

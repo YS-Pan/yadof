@@ -8,13 +8,16 @@ sequenceDiagram
     participant E as evaluate_manager
     participant J as prepared job
     participant W as workflow.py
+    participant S as worker_misc.py
     participant R as recorded_data
     participant C as calc_cost.py
     O->>E: normalized population + workspace
     loop each candidate
         E->>J: copy task + assign self-contained parameters
         E->>W: local subprocess or HTCondor direct executable
-        W->>J: write lifecycle/execute-machine metadata and flat rawData/*.npz
+        W->>S: run task callback inside fixed lifecycle
+        W->>J: write task-specific flat rawData/*.npz
+        S->>J: write lifecycle/execute-machine metadata and flat rawData.zip
     end
     E->>R: batch-record completed/error results
     R->>C: calculate current costs from recorded rawData
@@ -33,10 +36,10 @@ returns `rawData/`. Submit-side collection requires a readable archive whose mem
 are unique direct `.npz` names, restores them into `rawData/`, then applies the same
 validation and recording path.
 
-The workflow samples its machine name while running and writes
-`execute_machine` into `individual_metadata.json`. Visualization consumes that
-returned execute-side value rather than inferring a node from submit-side
-`condor_history` or `condor_q`.
+The workflow invokes package worker support while running. That helper samples the
+machine name in the execute process and writes `execute_machine` into
+`individual_metadata.json`. Visualization consumes that returned execute-side value
+rather than inferring a node from submit-side `condor_history` or `condor_q`.
 
 Distributed orchestration invokes after-submit surrogate scheduling, polls terminal
 or returned-output state, owns bounded memory/disk resubmission, enforces a separate

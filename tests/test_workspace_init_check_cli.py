@@ -8,7 +8,6 @@ import pytest
 
 import yadof
 from yadof import cli
-from yadof.job_template import calculate_cost, validate_rawdata_directory
 from yadof.task_loader import load_task_module
 from yadof.workspace.check import check_workspace
 from yadof.workspace.init import WorkspaceInitError, init_workspace
@@ -79,23 +78,24 @@ def test_init_empty_directory_creates_generic_workspace_and_check_passes(
     assert not (root / "job_template/individual_metadata.json").exists()
 
 
-def test_generic_starter_runs_only_when_explicitly_invoked(tmp_path: Path) -> None:
+def test_generic_starter_task_logic_is_inert_during_module_load(tmp_path: Path) -> None:
     root = tmp_path / "workspace"
     init_workspace(root)
     workflow = load_task_module(root, "workflow")
     parameters = workflow.get_parameters()
-    parameters[0].value = 0.25
-    parameters[0].normalized_value = 0.625
 
-    assert workflow.main() == 0
-
-    rawdata_files = validate_rawdata_directory(root / "job_template/rawData")
-    assert [path.name for path in rawdata_files] == ["response.npz"]
-    assert calculate_cost(root, ((rawdata_files[0],),)) == ((0.0625,),)
-    metadata = json.loads(
-        (root / "job_template/individual_metadata.json").read_text(encoding="utf-8")
+    assert len(parameters) == 1
+    assert callable(workflow.main)
+    assert not (root / "job_template/rawData").exists()
+    assert not (root / "job_template/individual_metadata.json").exists()
+    workflow_source = (root / "job_template/workflow.py").read_text(
+        encoding="utf-8"
     )
-    assert metadata["status"] == "done"
+    cost_source = (root / "job_template/calc_cost.py").read_text(encoding="utf-8")
+    assert "run_workflow(_evaluate)" in workflow_source
+    assert "_execute_machine_name" not in workflow_source
+    assert "write_rawdata_transfer_zip" not in workflow_source
+    assert "def get_objective_count" not in cost_source
 
 
 def test_init_defaults_to_current_directory_and_is_non_interactive(

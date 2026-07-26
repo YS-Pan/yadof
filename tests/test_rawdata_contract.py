@@ -10,6 +10,8 @@ from yadof.job_template.rawdata_contract import (
     RawDataContractError,
     RawDataView,
     angle_to_degrees,
+    build_rawdata_importance_weights,
+    curve_along_axis,
     frequency_to_ghz,
     mark_axis_points,
     mark_axis_range,
@@ -310,3 +312,50 @@ def test_rawdata_axis_markers_apply_ranges_and_periodic_points(tmp_path):
 
     assert range_weights.tolist() == [[0.0, 0.0, 0.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]
     assert point_weights.tolist() == [[3.0, 0.0, 3.0], [3.0, 0.0, 3.0], [3.0, 0.0, 3.0]]
+
+
+def test_curve_reduction_and_importance_allocation_are_framework_helpers(tmp_path):
+    path = _write_npz(
+        tmp_path / "surface.npz",
+        metadata={
+            "rawdata_name": "surface",
+            "shape": [3, 2],
+            "axis_names": ["Freq", "sample"],
+            "axes": [
+                {
+                    "index": 0,
+                    "size": 3,
+                    "name": "Freq",
+                    "values_key": "axis_Freq",
+                    "unit": "GHz",
+                },
+                {"index": 1, "size": 2, "name": "sample"},
+            ],
+        },
+        data=np.asarray([[1.0, 3.0], [np.nan, 5.0], [7.0, 9.0]]),
+        axis_Freq=np.asarray([2.3, 2.4, 2.5]),
+    )
+    view = RawDataView.from_item(path)
+
+    x_values, y_values = curve_along_axis(view, "Freq")
+    weights = build_rawdata_importance_weights(
+        (path,),
+        lambda item, output, important: mark_axis_range(
+            output,
+            item,
+            "Freq",
+            2.4,
+            2.5,
+            important,
+        ),
+        floor=0.25,
+        boost=2.0,
+    )
+
+    assert x_values.tolist() == [2.3, 2.4, 2.5]
+    assert y_values.tolist() == [2.0, 5.0, 8.0]
+    assert weights[0]["data"].tolist() == [
+        [0.25, 0.25],
+        [2.25, 2.25],
+        [2.25, 2.25],
+    ]

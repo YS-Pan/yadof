@@ -8,14 +8,14 @@ Python APIs.
 
 ## People and responsibilities
 
-- Users own workspace task definitions, simulator/model inputs, objective policy,
-  campaign configuration, and decisions to launch expensive work.
+- Users own workspace task-variable definitions, simulator/model inputs, objective
+  policy, campaign configuration, and decisions to launch expensive work.
 - AI agents may read version-matched `agent_doc`, inspect documented package code,
   and edit the selected workspace or package source when explicitly requested.
 - Administrators own Python/simulator installation, licenses, HTCondor deployment,
   execute-node permissions, resource advertisement, and Windows slot-user policy.
-- Package maintainers own stable framework contracts, packaged resources,
-  persistence correctness, current APIs, and generic tests.
+- Package maintainers own every cross-task invariant, stable framework contracts,
+  packaged resources, persistence correctness, current APIs, and generic tests.
 
 ## External systems
 
@@ -43,9 +43,12 @@ and secrets.
 ## System guarantees
 
 - No stateful API silently selects another workspace.
-- A workflow writes evidence and lifecycle metadata, never authoritative costs.
+- A workflow writes task evidence; package worker support writes lifecycle metadata;
+  neither writes authoritative costs.
 - Local and distributed backends converge on the same `JobResult` and recording
   path.
 - A failed candidate keeps population order and yields a correctly sized infinite
   objective row with diagnostics.
 - Historical rawData can be reinterpreted by the current cost definition.
+- Cross-task invariant code is implemented in yadof and called by task files;
+  task-varying workflow/objective code is not hard-coded into yadof.
