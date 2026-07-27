@@ -52,11 +52,14 @@
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
 - `tools`, `_resources`: cost view; integrated time/failure/machine/error view;
   grouped `view all` orchestration; history/task utilities; and read-only
-  adapter/template/doc resources. The time view colors points by execute-side
-  machine metadata and uses directly labeled horizontal bands plus marker rings for
-  error types. Software-specific task commands live below an explicit software
-  namespace, such as `yadof task hfss`, so future adapters do not collide on generic
-  action names.
+  adapter/template/doc resources. `tools.surrogate_viewer` is a lazy, optional GUI
+  leaf for checkpoint prediction, real-result comparison, and cross-generation
+  error audits; its backend owns yadof checkpoint/rawData adaptation while its UI
+  never writes workspace data. The time view colors points by execute-side machine
+  metadata and uses directly labeled horizontal bands plus marker rings for error
+  types. Software-specific task commands live below an explicit software namespace,
+  such as `yadof task hfss`, so future adapters do not collide on generic action
+  names.
 - `cli`, `run_command`: modular installed command routing, packaged-document access,
   and normal campaign orchestration.
 
@@ -72,4 +75,5 @@ Stable cross-module calls use public `api.py` or package `__init__` exports. Sta
 APIs accept a workspace; no module derives user-data paths from package `__file__`.
 Task workflow/cost modules contain task-variable callbacks and definitions only:
 they invoke copied `worker_misc` or installed `yadof.job_template` helpers for
-invariant behavior.
+invariant behavior. The viewer's package-internal checkpoint/rawData dependencies
+remain isolated below its backend and never leak into UI modules or core runtime.

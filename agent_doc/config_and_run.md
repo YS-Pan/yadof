@@ -64,6 +64,7 @@ per-individual diagnostics.
 yadof view cost --workspace PATH [--status completed] [-o NAME.png] [--summary-only]
 yadof view time --workspace PATH [--status all] [-o NAME.png] [--summary-only]
 yadof view all --workspace PATH [--summary-only]
+yadof view surrogate [--workspace PATH]
 yadof history clear --workspace PATH --yes
 yadof task adapters
 yadof task copy-adapter test_com.py --workspace PATH
@@ -85,6 +86,12 @@ both summaries, and creates both timestamped images. Use `--summary-only` to pri
 without creating PNGs. Destructive history clear requires interactive confirmation
 or `--yes`, validates its exact workspace targets, clears only that workspace, and
 recreates the jobs directory.
+
+`view surrogate` is a separate, explicitly launched desktop tool. It opens the
+selected workspace (or lets the user choose one), explores saved surrogate
+checkpoint predictions and recorded real evidence, and can calculate an in-memory
+cross-generation error audit. It never joins `view all`, trains a model, starts a
+workflow, or modifies workspace files. Install the `viewer` extra before using it.
 
 ## Python APIs
 

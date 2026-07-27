@@ -72,6 +72,7 @@ code.
   exact command the user can approve to start the next execution stage.
 
 The supported command surface is `yadof --help`, `version`, `docs`, `init`, `check`,
-`smoke-test`, `run`, `view`, `history`, and `task`. Commands that can execute real
-software or delete history make that behavior explicit. Framework self-tests are
-`pytest` tests and are different from a task smoke test.
+`smoke-test`, `run`, `view`, `history`, and `task`. `view surrogate` explicitly
+opens the optional read-only checkpoint viewer. Commands that can execute real
+software, open a desktop GUI, or delete history make that behavior explicit.
+Framework self-tests are `pytest` tests and are different from a task smoke test.

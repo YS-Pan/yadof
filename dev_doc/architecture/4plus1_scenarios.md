@@ -55,6 +55,16 @@ user explicitly clears or separates history. The task file changes its rawData
 interpretation and objective policy while continuing to call reusable
 `yadof.job_template` cost/rawData helpers.
 
+## Inspect saved surrogate checkpoints
+
+Install the `viewer` extra and run
+`yadof view surrogate --workspace PATH`. The optional desktop tool reads current
+task definitions, recorded evidence, and compatible checkpoint artifacts. It
+predicts rawData, reapplies current cost logic, compares selected real individuals,
+and can calculate a cancellable in-memory cross-generation error audit. Closing or
+stopping the viewer leaves configuration, history, rawData, and checkpoints
+unchanged. `view all` remains the non-GUI cost/time pair and never opens this tool.
+
 ## Two simultaneous workspaces
 
 Every call passes a workspace. Config, task modules, jobs, records, locks, surrogate

@@ -121,6 +121,10 @@ def _verify_clean_external_install(wheel_path: Path) -> None:
                     [str(yadof_executable), "docs", "bundle", "agent"],
                     "===== agent/README.md =====",
                 ),
+                (
+                    [str(yadof_executable), "view", "surrogate", "--help"],
+                    "does not train",
+                ),
             )
             for command, expected in commands:
                 result = _run(command, cwd=outside_dir)
@@ -493,6 +497,32 @@ def test_agent_documentation_links_resolve_inside_source_tree() -> None:
             )
 
 
+def test_surrogate_viewer_developer_documentation_links_resolve() -> None:
+    root_entry = REPOSITORY_ROOT / "dev_doc" / "README.md"
+    root_targets = MARKDOWN_LINK.findall(root_entry.read_text(encoding="utf-8"))
+    expected = "../src/yadof/tools/surrogate_viewer/dev_doc/README.md"
+    assert expected in root_targets
+    assert (root_entry.parent / expected).is_file()
+
+    viewer_root = (
+        REPOSITORY_ROOT
+        / "src"
+        / "yadof"
+        / "tools"
+        / "surrogate_viewer"
+        / "dev_doc"
+    )
+    for document in viewer_root.rglob("*.md"):
+        for target in MARKDOWN_LINK.findall(document.read_text(encoding="utf-8")):
+            path_text = target.split("#", 1)[0]
+            if not path_text or "://" in path_text:
+                continue
+            assert (document.parent / path_text).is_file(), (
+                "broken surrogate viewer documentation link in "
+                f"{document.relative_to(viewer_root)}: {target}"
+            )
+
+
 def test_minimal_cli_output_and_streams(capsys) -> None:
     assert cli.main([]) == 0
     output = capsys.readouterr()
@@ -584,6 +614,14 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/scheduler.py" in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
         assert "yadof/tools/view_time.py" in wheel_names
+        assert "yadof/tools/surrogate_viewer/__init__.py" in wheel_names
+        assert "yadof/tools/surrogate_viewer/__main__.py" in wheel_names
+        assert "yadof/tools/surrogate_viewer/app.py" in wheel_names
+        assert "yadof/tools/surrogate_viewer/backend/workspace.py" in wheel_names
+        assert "yadof/tools/surrogate_viewer/ui/heatmap.py" in wheel_names
+        assert (
+            "yadof/tools/surrogate_viewer/dev_doc/README.md"
+        ) in wheel_names
         assert "yadof/tools/view_error.py" not in wheel_names
         assert "yadof/tools/history.py" in wheel_names
         assert "yadof/tools/hfss/parameter_extraction.py" in wheel_names
@@ -615,6 +653,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert f"Version: {yadof.__version__}" in built_metadata
         assert "Requires-Dist: numpy" in built_metadata
         assert "Requires-Dist: pymoo" in built_metadata
+        assert "Provides-Extra: viewer" in built_metadata
         assert not any(name.startswith("project/") for name in wheel_names)
         assert "yadof/cli.py" not in wheel_names
         assert "yadof/workspace.py" not in wheel_names
@@ -629,6 +668,14 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         sdist_names = set(archive.getnames())
         assert any(name.endswith("/src/yadof/cli/main.py") for name in sdist_names)
         assert any(name.endswith("/src/yadof/workspace/context.py") for name in sdist_names)
+        assert any(
+            name.endswith("/src/yadof/tools/surrogate_viewer/app.py")
+            for name in sdist_names
+        )
+        assert any(
+            name.endswith("/src/yadof/tools/surrogate_viewer/dev_doc/README.md")
+            for name in sdist_names
+        )
         assert any(name.endswith("/dev_doc/README.md") for name in sdist_names)
         assert any(name.endswith("/agent_doc/README.md") for name in sdist_names)
         assert any(name.endswith("/src/yadof/_resources/templates/default/README.md") for name in sdist_names)

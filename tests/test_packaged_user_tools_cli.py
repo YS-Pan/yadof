@@ -10,7 +10,7 @@ import pytest
 import yadof
 
 from yadof.cli import main as cli_main
-from yadof.cli.main import _default_view_output_name
+from yadof.cli.main import _default_view_output_name, build_parser
 from yadof.evaluate_manager import evaluate_population
 from yadof.recorded_data import list_records
 from yadof.resources import adapter_names, adapter_resource
@@ -159,6 +159,17 @@ def test_view_default_output_name_matches_legacy_timestamp_format():
     )
 
 
+def test_surrogate_viewer_cli_is_registered_without_loading_optional_modules():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["view", "surrogate", "--workspace", "D:/work/viewer"]
+    )
+
+    assert args.view_kind == "surrogate"
+    assert args.workspace == Path("D:/work/viewer")
+    assert args.handler.__name__ == "_surrogate_viewer_command"
+
+
 def test_view_all_prints_both_results_and_creates_both_images(capsys, tmp_path):
     workspace = _workspace(tmp_path, "view_all_workspace")
     evaluate_population(workspace, ((0.25,),))
@@ -266,4 +277,8 @@ def test_only_the_package_tool_namespace_is_present():
     assert not Path("project").exists()
     assert Path("src/yadof/tools/view_cost.py").is_file()
     assert Path("src/yadof/tools/view_time.py").is_file()
+    assert Path("src/yadof/tools/surrogate_viewer/app.py").is_file()
+    assert Path(
+        "src/yadof/tools/surrogate_viewer/dev_doc/README.md"
+    ).is_file()
     assert not Path("src/yadof/tools/view_error.py").exists()

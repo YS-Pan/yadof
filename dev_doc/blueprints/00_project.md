@@ -54,6 +54,8 @@ failure-shape contracts.
 - `surrogate` owns conditional INR training, rawData prediction, uncertainty
   intervals, audits, scheduling, and checkpoints.
 - `tools` and `cli` are optional user-facing orchestration/inspection layers.
+  `tools.surrogate_viewer` is an explicitly launched, read-only GUI leaf with its
+  own nested developer documentation and optional dependency group.
 - `_resources` contains immutable templates, adapter references, documentation, and
   the small worker helper copied into jobs.
 
@@ -111,6 +113,8 @@ and package modules do not hard-code task-variable simulator or objective policy
 Generic tests use installed wheels, temporary neutral workspaces, mocked scheduler
 interfaces, and synthetic adapters. They cover artifact membership, read-only
 site-packages, workspace isolation, job payload exclusions, direct workflow submit,
-flat zip restoration, persistence, optimization, surrogate recovery, and CLI/tools.
-Live pools/simulators and concrete physical assertions remain explicit integration
-tests outside the default package suite.
+flat zip restoration, persistence, optimization, surrogate recovery, and CLI/tools,
+including lazy viewer registration and deterministic viewer backend/aggregate
+contracts when its optional dependencies are available. Live pools/simulators and
+concrete physical assertions remain explicit integration tests outside the default
+package suite.

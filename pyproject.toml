@@ -28,6 +28,10 @@ keywords = ["optimization", "simulation", "surrogate-model", "workflow"]
 [project.optional-dependencies]
 surrogate = ["torch>=2.2"]
 plot = ["matplotlib>=3.8"]
+viewer = [
+    "matplotlib>=3.8",
+    "torch>=2.2",
+]
 hfss = ["ansys-aedt-core>=0.18"]
 dev = [
     "build>=1.2",

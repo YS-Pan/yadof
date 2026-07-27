@@ -23,8 +23,10 @@ flowchart LR
 The package owns defaults, config validation, workspace handling, task loading, job
 composition, evaluation backends, optimization, rawData-first persistence and
 surrogate logic, tools, invariant worker lifecycle support, templates, adapters,
-and docs. It is read-only at runtime and never stores user state below
-site-packages.
+and docs. The optional `tools/surrogate_viewer/` subtree reads workspace evidence
+and checkpoints through a desktop process launched by `yadof view surrogate`; it
+does not enter the execution or persistence pipeline. The package is read-only at
+runtime and never stores user state below site-packages.
 
 ## Workspace
 

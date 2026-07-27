@@ -7,6 +7,11 @@ copies both trees into read-only wheel resources so installed documentation matc
 installed code. `yadof docs list/show/bundle` addresses audience-relative paths,
 rejects traversal, and never requires callers to locate site-packages.
 
+The integrated surrogate viewer retains a second, relatively independent
+developer tree at `src/yadof/tools/surrogate_viewer/dev_doc/`. That tree ships with
+the tool package and owns viewer-specific architecture, blueprints, and terminology;
+the root developer README links to it instead of duplicating those contracts.
+
 ## Developer document roles
 
 - `README.md`: entry point for mandatory reading order, environment, validation,
@@ -39,6 +44,8 @@ build/force-reinstall/import-path/full-test workflow after package changes.
 - Documentation-only changes still receive a change record.
 - `README.md` links every module contract instead of duplicating its detailed rules.
 - Installed docs are generated from root source, never edited under site-packages.
+- Viewer-specific docs are edited only in the viewer subtree and ship beside its
+  code; they are not duplicated into the root documentation lifecycle.
 - Current architecture/blueprints override historical change records.
 - Agent docs contain task-authoring/runtime instructions; administrator deployment
   remains in `admin_tool/`.

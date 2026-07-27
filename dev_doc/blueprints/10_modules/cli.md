@@ -4,9 +4,10 @@
 
 `yadof.cli` is the installed, repository-independent command package. Public `main`
 and `build_parser` route version, documentation, workspace initialization/checking,
-standalone smoke, optimization run/resume, history/view, and task utilities. Commands
-return stable exit codes and present actionable workspace/job diagnostics rather than
-tracebacks for expected user errors.
+standalone smoke, optimization run/resume, history/view, the optional surrogate
+viewer, and task utilities. Commands return stable exit codes and present
+actionable workspace/job diagnostics rather than tracebacks for expected user
+errors.
 
 Heavy optimization/simulator/tool dependencies are loaded lazily behind their
 commands. `version`, help, and documentation stay lightweight and read-only.
@@ -39,6 +40,12 @@ successful tool, continues attempting the later tool if the first fails, and
 returns failure if either tool failed. The corresponding Python tool APIs retain
 `output_path=None` as summary-only behavior.
 
+`view surrogate` is a separate GUI kind. It optionally receives one workspace,
+loads `yadof.tools.surrogate_viewer.app` only inside its handler, reports missing
+`viewer` dependencies without a traceback, and never participates in `view all`.
+Parser construction and `view surrogate --help` must succeed in a core-only
+installation.
+
 ## Invariants
 
 - CLI routing does not duplicate core implementation or documentation text.
@@ -46,3 +53,4 @@ returns failure if either tool failed. The corresponding Python tool APIs retain
   view commands may create only their documented tool-output PNG.
 - Real external execution is clearly distinguishable from package self-tests.
 - All stateful commands pass an explicit workspace into public APIs.
+- No command other than `view surrogate` implicitly opens a desktop GUI.

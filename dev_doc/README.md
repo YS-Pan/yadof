@@ -54,6 +54,14 @@ optional summaries. When collecting project context, follow this order:
 Do not read `obsolete/` by default. Its targeted-read and archival rules are defined
 by the [toDo and obsolete contract](skill/toDo.md).
 
+## Integrated Tool Documentation
+
+The surrogate checkpoint viewer is packaged as a relatively independent tool
+subtree. Its developer entry point remains
+[surrogate_viewer/dev_doc/README.md](../src/yadof/tools/surrogate_viewer/dev_doc/README.md);
+read that tree before changing the viewer backend, GUI, audit contracts, or its
+package integration.
+
 ## Installed Development Environment
 
 The canonical local development/runtime environment for this checkout is the

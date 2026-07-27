@@ -8,6 +8,7 @@ processes. Add extras only for features you use:
 ```powershell
 python -m pip install .\dist\yadof-0.1.0-py3-none-any.whl
 python -m pip install ".\dist\yadof-0.1.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.1.0-py3-none-any.whl[viewer]"
 ```
 
 `yadof --version` and `yadof version` report the same package version. Distributed
@@ -18,6 +19,11 @@ That helper owns behavior invariant across tasks: standard paths, execute identi
 lifecycle/error metadata, rawData preparation, and flat output transport. Python,
 NumPy, adapters' third-party dependencies, PyAEDT, and simulator software still
 belong to the worker environment.
+
+The `viewer` extra installs the Torch and Matplotlib dependencies needed by
+`yadof view surrogate`; Tkinter must also be available in the selected Python
+installation. The viewer is submit-side, read-only inspection software and is
+never copied into distributed jobs.
 
 ## Initialize and inspect
 

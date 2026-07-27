@@ -1,0 +1,97 @@
+# Blueprint: integrated surrogate checkpoint viewer
+
+## Intent
+
+Provide an optional yadof desktop tool for understanding saved surrogate
+checkpoints. The application must let a user explore one prediction, compare it
+with recorded real evidence, and audit checkpoint accuracy across generations
+without mutating the selected workspace. CLI/parser imports remain lightweight
+until the user explicitly selects the viewer.
+
+## Main Contracts
+
+Interactive prediction:
+
+```text
+selected checkpoint + normalized parameter vector
+  -> predicted rawData + ensemble members
+  -> current workspace cost calculation
+  -> rawData curve and objective plots
+```
+
+Cross-generation audit:
+
+```text
+same per-generation sampled real individuals
+  × every valid checkpoint
+  -> predicted costs and modeled rawData scalars
+  -> relative/absolute sum-count aggregates
+  -> instantly selectable 2-D error matrix
+```
+
+## End-To-End Responsibilities
+
+1. Load one explicit compatible yadof workspace.
+2. Discover usable checkpoint generations while excluding broken/skipped
+   placeholders.
+3. Present normalized controls while displaying denormalized physical values.
+4. Predict rawData and current costs in a background worker.
+5. Optionally load one recorded individual for true/predicted comparison.
+6. Sample each historical generation independently for an audit.
+7. Use every checkpoint to predict the same selected rows.
+8. Aggregate cost and per-rawData errors without retaining large prediction
+   histories.
+9. Render a discrete generation-by-generation heatmap.
+10. Support cooperative stop and visible failure reporting.
+
+## Boundaries
+
+- Viewer subtree: GUI, plots, read-only adapter, aggregate contracts, and nested
+  developer documentation below `yadof.tools`.
+- Enclosing yadof package: CLI routing, workspace/task/record/checkpoint/rawData
+  mechanisms, model implementation, packaging, and maintained tests.
+- Selected workspace: external immutable inputs and evidence for the viewer.
+- Simulator/optimizer/trainer: explicitly out of scope.
+
+## Data Ownership
+
+Real records/rawData and checkpoints remain owned by the workspace. Predicted
+rawData, member spread, predicted costs, and audit aggregates are derived
+session-local data. Nothing in the viewer becomes authoritative optimization
+history.
+
+The aggregate cache stores only finite error sums and counts. It intentionally
+trades support for distribution metrics such as median/P90 for low memory and
+instant switching among pre-aggregated means.
+
+## Concurrency, Failure, And Recovery
+
+A single executor worker performs model operations. Worker callbacks enter a queue
+drained by the Tk main thread. Serials invalidate stale prediction/audit results,
+and an event cooperatively stops audits at batch boundaries.
+
+Failures are visible and preserve previously complete display state. There is no
+retry that silently switches checkpoints, no repair of incompatible evidence, and
+no persistence recovery because the viewer writes no audit cache.
+
+## Invariants
+
+- All workspace access is explicit and read-only.
+- Relative error uses
+  `abs(prediction - truth) / max(abs(truth), configured epsilon)`.
+- Cost errors aggregate by objective; rawData errors aggregate by named rawData
+  item and may also be combined across all modeled scalars.
+- Heatmap x is checkpoint generation; y is optimization generation.
+- Heatmap blocks are discrete, tick-centered, edge-complete, non-interpolated, and
+  not forced square.
+- Metric/quantity switching after a complete audit performs no model inference.
+- Cancellation never promotes partial aggregate state.
+
+## Verification Boundary
+
+Unit tests cover checkpoint discovery, curve extraction, aggregate selection,
+sampling, cancellation, and Tcl-popup ancestry handling. Compile/import/CLI smoke
+checks cover the installed nested module, lazy CLI registration, and artifact
+membership. Real-workspace checks cover yadof checkpoint compatibility and
+error-array shapes. Hidden Tk checks cover focus handlers and plot layout without
+launching a simulator.

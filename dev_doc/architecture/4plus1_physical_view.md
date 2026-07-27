@@ -76,6 +76,12 @@ JSON and archive publication requiring replacement is atomic and protected by
 workspace locks. Package resources remain read-only even when site-packages itself
 is read-only.
 
+The wheel also carries `yadof/tools/surrogate_viewer/`, including its independent
+developer-documentation subtree. Its Torch and Matplotlib dependencies are exposed
+through the `viewer` extra and are used only on the submit/user desktop. Viewer code
+and dependencies are never copied into a prepared job or transferred to execute
+nodes.
+
 The task workflow calls package worker support, which samples `execute_machine` in
 the workflow process and writes it into `individual_metadata.json`. It is
 transferred back with the normal job outputs; submit-side ClassAds are not

@@ -26,6 +26,21 @@ views do not mutate durable evidence. History clear requires explicit confirmati
 resolves and validates exact workspace-owned targets, and avoids package or
 unrelated paths.
 
+## Surrogate checkpoint viewer
+
+`tools/surrogate_viewer/` is an optional, relatively independent GUI subtree. It
+loads one explicit workspace, predicts saved checkpoint rawData/current costs,
+compares selected recorded individuals, and calculates cancellable in-memory
+cross-generation error aggregates. Its backend alone adapts package checkpoint,
+recorded-data, and rawData internals; UI modules consume immutable viewer values.
+The tool never trains, launches workflows, edits checkpoints, writes audit caches,
+or joins the non-GUI `view all` command.
+
+The subpackage root is lightweight and resolves backend convenience exports lazily.
+Torch, Matplotlib, and Tkinter are loaded only when the viewer is actually used.
+Detailed architecture, module, file, and terminology contracts remain under the
+subtree's own `dev_doc/`; yadof's main developer README links to that entry.
+
 ### Cost/time plot alignment contract
 
 Unless a requested change explicitly says otherwise, `view_cost.py` is the visual
@@ -73,3 +88,4 @@ fallback.
 - Potentially destructive history/task edits are previewed/confirmed and recoverable
   through backup where applicable.
 - New simulator-specific actions get their own software namespace.
+- The viewer is read-only, explicitly launched, and outside core runtime imports.

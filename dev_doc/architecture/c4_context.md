@@ -24,6 +24,8 @@ Python APIs.
 - HTCondor transports self-contained job folders to administrator-managed workers.
 - The filesystem durably stores job evidence, JSONL metadata, archives,
   checkpoints, logs, and tool output.
+- Tkinter and Matplotlib provide the explicitly launched, read-only surrogate
+  checkpoint viewer; PyTorch performs its checkpoint inference.
 
 Yadof diagnoses but does not install, configure, restart, or repair external
 software or the HTCondor pool. A workflow can orchestrate several simulations or
@@ -36,9 +38,9 @@ contract is insufficient, and edit only the selected user-owned workspace.
 
 Package artifacts are immutable framework inputs. Workspace directories are the
 only mutable task/runtime boundary. Wheel and sdist contain package code, generic
-templates, adapter resources, and documentation, but exclude repository examples,
-workspaces, concrete models, jobs, history, checkpoints, logs, caches, credentials,
-and secrets.
+templates, adapter resources, documentation, and the optional viewer source, but
+exclude repository examples, workspaces, concrete models, jobs, history,
+checkpoints, logs, caches, credentials, and secrets.
 
 ## System guarantees
 

@@ -23,6 +23,12 @@ history are interpretations of evidence, not stored source truth.
 Cross-task invariant behavior belongs in yadof; workspace workflow/cost files own
 only behavior that varies with the selected optimization task.
 
+An optional read-only surrogate viewer is an installed `yadof.tools` leaf. It
+consumes the same workspace records, current cost policy, and saved checkpoints
+through an explicit GUI launch, but it is outside optimization execution and never
+publishes workspace state. Its detailed design remains in the viewer subtree's
+own `dev_doc/`.
+
 - [c4_context.md](c4_context.md): users and external systems
 - [c4_container.md](c4_container.md): package/workspace/execution/persistence split
 - [c4_component.md](c4_component.md): package module responsibilities

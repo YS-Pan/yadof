@@ -203,6 +203,29 @@ def _view_all_command(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _surrogate_viewer_command(args: argparse.Namespace) -> int:
+    viewer_args: list[str] = []
+    if args.workspace is not None:
+        viewer_args.extend(("--workspace", str(args.workspace)))
+    try:
+        from ..tools.surrogate_viewer.app import main as viewer_main
+    except ImportError as exc:
+        print(
+            "yadof: error: the surrogate viewer requires the optional "
+            f"'viewer' dependencies; install yadof[viewer] ({exc})",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        return int(viewer_main(viewer_args))
+    except Exception as exc:
+        print(
+            f"yadof: error: could not start the surrogate viewer: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+
 def _confirm_destructive(*, confirmed: bool, prompt: str) -> bool:
     if confirmed:
         return True
@@ -461,11 +484,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     view_parser = subparsers.add_parser(
         "view",
-        help="inspect workspace cost or timing/failure history",
+        help="inspect workspace history or surrogate checkpoints",
         description=(
-            "Print a workspace history summary and write a timestamped PNG by "
-            "default. Plotting requires the optional plot dependencies; no GUI "
-            "opens implicitly. Use --summary-only to skip the PNG."
+            "Inspect cost or timing/failure history, or explicitly launch the "
+            "read-only surrogate checkpoint viewer. History plots require the "
+            "optional plot dependencies; no GUI opens unless the surrogate kind "
+            "is selected."
         ),
     )
     view_subparsers = view_parser.add_subparsers(
@@ -498,6 +522,23 @@ def build_parser() -> argparse.ArgumentParser:
             help="print the summary without rendering a PNG",
         )
         item.set_defaults(handler=_view_command)
+
+    surrogate_view = view_subparsers.add_parser(
+        "surrogate",
+        help="open the read-only surrogate checkpoint viewer",
+        description=(
+            "Launch the optional desktop viewer for saved surrogate checkpoints, "
+            "recorded real evidence, and cross-generation error audits. The viewer "
+            "does not train models, execute workflows, or modify the workspace."
+        ),
+    )
+    surrogate_view.add_argument(
+        "--workspace",
+        type=Path,
+        default=None,
+        help="workspace to load; omit to choose one in the viewer",
+    )
+    surrogate_view.set_defaults(handler=_surrogate_viewer_command)
 
     all_views = view_subparsers.add_parser(
         "all",

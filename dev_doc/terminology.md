@@ -36,6 +36,7 @@
 | `staggered surrogate training` | Submit real jobs first, then train at most one workspace-local background model while execution is busy, subject to lag bounds. |
 | `packaged adapter` | Read-only reusable resource listed/copied by `yadof task`; active jobs use only the workspace copy. |
 | `software task namespace` | The software-identifying CLI level below `yadof task` for non-generic actions, such as `yadof task hfss`; it prevents different adapters from competing for an ambiguous generic action name. |
+| `surrogate viewer` | The optional, explicitly launched `yadof view surrogate` desktop tool below `yadof.tools.surrogate_viewer`; it reads one workspace's current task, real evidence, and checkpoints without training, executing workflows, or writing workspace state. |
 | `task-specific test` | Test tied to a concrete model/design/objective. It belongs in a disposable/external workspace, not the generic default suite. |
 | `user` | Prepares workspace tasks, runs campaigns, and inspects results without maintaining system infrastructure. |
 | `administrator` | Installs dependencies and maintains HTCondor/software/hardware; resources live under `admin_tool/`. |

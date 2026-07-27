@@ -19,6 +19,7 @@ src/yadof/                 installed framework
   optimize/                candidate mechanics and campaign loop
   surrogate/               rawData-first model and scheduling
   tools/                   optional user-launched utilities
+    surrogate_viewer/      optional read-only GUI and its independent dev_doc
   _resources/              templates/adapters/docs/worker helper
 tests/                     maintained generic verification
 dev_doc/                   developer source documentation
@@ -53,6 +54,13 @@ Task-specific tests that hard-code a concrete model, design, objective, frequenc
 or exact active variable set belong with a disposable/reference workspace, not in
 the reusable package suite. Small neutral shapes and fake adapters remain valid
 generic fixtures.
+
+The viewer remains a leaf below `tools`: CLI parser construction and
+`yadof.tools` imports must not load Torch, Matplotlib, or Tkinter. Its subpackage
+loads those dependencies only when its backend exports or GUI command are used.
+Viewer-specific architecture and blueprints remain below
+`tools/surrogate_viewer/dev_doc/`, while maintained pytest coverage lives in the
+repository's top-level `tests/`.
 
 The canonical local environment is the repository sibling `../.venv`, created from
 the system Python. Development acceptance never uses an editable install or

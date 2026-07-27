@@ -26,7 +26,10 @@ license, machine identity, or credential.
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
 - CLI/docs, integrated cost/time views including grouped `view all`,
   execute-machine/error encodings, tools/adapters, and artifact exclusion of
-  examples/runtime data.
+  examples/runtime data;
+- lazy `view surrogate` registration/help, viewer wheel/sdist/dev_doc membership,
+  and deterministic viewer checkpoint discovery, rawData curves, aggregate
+  selection, sampling, and cancellation when optional dependencies are installed.
 
 ## Test placement
 
