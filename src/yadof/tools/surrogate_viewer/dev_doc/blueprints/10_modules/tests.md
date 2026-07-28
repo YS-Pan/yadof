@@ -9,7 +9,7 @@ optimization, or full model audit in the default suite.
 
 - Check valid checkpoint discovery, sorting, and malformed-file skipping.
 - Check rawData curve axis selection and nearest-zero slicing.
-- Check ensemble mean/std derivation.
+- Check ensemble finite minimum/maximum derivation.
 - Check Tcl-only popup ancestry safety.
 - Check instant aggregate switching across relative/absolute, cost/rawData, all,
   and item-specific quantities.

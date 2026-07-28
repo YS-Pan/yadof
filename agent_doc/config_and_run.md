@@ -72,11 +72,16 @@ yadof task copy-adapter test_com.py --workspace PATH
 
 The cost view shows objective history. The time view combines elapsed time, failure
 rate, execute-machine colors, and error occurrences. Each error type occupies a
-labeled horizontal band near the top of the plot; an error marker's fill identifies
-the execute machine and its outer ring identifies the error type. The execute
-machine comes from `individual_metadata.json` written by package worker support in
-the execute-side workflow process, not from submit-side scheduler history or task
-metadata.
+left-labeled horizontal band near the top of the plot, with the label centered on
+the line. Each machine legend entry includes that machine's average recorded
+elapsed time; an error marker's fill identifies the execute machine and its outer
+ring identifies the error type. The execute machine comes from
+`individual_metadata.json` written by package worker support in the execute-side
+workflow process whenever that file returns. If timeout prevents its return, yadof
+may fall back to the final relevant execution segment in the job-local Condor user
+log; this source-labeled value never overrides worker identity. A job that timed out
+without ever executing remains `unknown`. Historical records can derive this value
+in memory from their stored log tail, without changing recorded evidence.
 
 Individual view commands print a summary and create
 `cost_YYYYMMDD_HHMMSS.png` or `time_YYYYMMDD_HHMMSS.png` by default.

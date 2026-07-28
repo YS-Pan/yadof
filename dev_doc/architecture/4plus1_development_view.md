@@ -50,6 +50,11 @@ tests build the distributions, inspect members, install a wheel outside the
 repository, make package files read-only, and exercise the CLI and two-workspace
 contracts.
 
+Mocked distributed tests cover event-log execute segments and preserve provenance
+priority: worker-reported `execute_machine` wins, timed-out active/held segments may
+fall back to `condor_execute_machine`, historical terminal/removal tails are
+recognized, and never-executed queued jobs remain unassigned.
+
 Task-specific tests that hard-code a concrete model, design, objective, frequency,
 or exact active variable set belong with a disposable/reference workspace, not in
 the reusable package suite. Small neutral shapes and fake adapters remain valid

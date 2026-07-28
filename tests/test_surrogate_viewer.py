@@ -16,7 +16,7 @@ from yadof.tools.surrogate_viewer.backend import (
     RealResult,
     discover_checkpoints,
     extract_curve,
-    finite_curve_statistics,
+    finite_curve_bounds,
     sample_real_results_by_generation,
     _check_cancelled,
 )
@@ -100,14 +100,14 @@ def test_extract_curve_prefers_frequency_and_slices_other_axes_at_zero() -> None
     assert "Theta=0 deg" in curve.slice_label
 
 
-def test_finite_curve_statistics_returns_ensemble_mean_and_std() -> None:
+def test_finite_curve_bounds_returns_ensemble_minimum_and_maximum() -> None:
     first = extract_curve((_raw_item("gain", np.ones((2, 3))),), 0)
     second = extract_curve((_raw_item("gain", np.full((2, 3), 3.0)),), 0)
 
-    mean, std = finite_curve_statistics((first, second))
+    minimum, maximum = finite_curve_bounds((first, second))
 
-    np.testing.assert_allclose(mean, [2.0, 2.0])
-    np.testing.assert_allclose(std, [1.0, 1.0])
+    np.testing.assert_allclose(minimum, [1.0, 1.0])
+    np.testing.assert_allclose(maximum, [3.0, 3.0])
 
 
 def test_tcl_only_combobox_popup_is_not_treated_as_parameter_canvas() -> None:

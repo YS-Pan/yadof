@@ -12,11 +12,17 @@ confirmed task edits. Pool/system administration remains under `admin_tool/`.
 Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected
 records/objectives. Time supports status filtering and owns elapsed time, failure
-rate, execute-machine color, and typed error occurrence reporting. It reads
-`execute_machine` from worker-support-written individual metadata, never from submit-side
-scheduler history. Each error type occupies a directly labeled horizontal band near
-the plot top; marker fill identifies the execute machine and the outer ring
-identifies the error type.
+rate, execute-machine color, and typed error occurrence reporting. Machine legend
+entries show the bare machine name plus that machine's average recorded elapsed
+time. It prefers `execute_machine` from worker-support-written individual metadata,
+then uses source-labeled `condor_execute_machine` only when timeout prevented the
+worker file from returning. A never-executed job remains `unknown`; generic
+scheduler ClassAds do not override worker identity. Historical timeout rows may
+derive the same display-only fallback from their stored `condor_log_tail`, without
+reading job directories or changing records. Each error type occupies a left-
+labeled horizontal band near the plot top, with the label vertically centered on
+its line; marker fill identifies the execute machine and the outer ring identifies
+the error type. The failure-rate trend is highly transparent.
 
 Individual CLI view commands write timestamped PNGs by default, accept `--output`
 to override the destination, and accept `--summary-only` to suppress plotting.

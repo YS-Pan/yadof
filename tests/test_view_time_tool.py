@@ -189,6 +189,58 @@ def test_computer_colors_and_error_bands_are_distinct():
     assert view_time.ELAPSED_DATA_TOP < view_time.ERROR_BAND_BOTTOM
 
 
+def test_computer_name_prefers_worker_identity_then_condor_log_fallback():
+    assert (
+        view_time._computer_name(
+            {},
+            {
+                "execute_machine": "worker-reported",
+                "condor_execute_machine": "scheduler-observed",
+            },
+        )
+        == "worker-reported"
+    )
+    assert (
+        view_time._computer_name(
+            {},
+            {"condor_execute_machine": "scheduler-observed"},
+        )
+        == "scheduler-observed"
+    )
+    assert (
+        view_time._computer_name(
+            {"status": "timeout"},
+            {
+                "condor_log_tail": (
+                    "001 (81.000.000) 2026-07-24 03:00:00 "
+                    "Job executing on host: "
+                    "<192.0.2.81:9618?alias=historical-worker&sock=startd>\n"
+                    "\tSlotName: slot1_1@historical-worker\n"
+                    "...\n"
+                    "009 (81.000.000) 2026-07-24 04:00:00 "
+                    "Job was aborted.\n"
+                )
+            },
+        )
+        == "historical-worker"
+    )
+    assert (
+        view_time._computer_name(
+            {"status": "timeout"},
+            {
+                "condor_log_tail": (
+                    "000 (82.000.000) 2026-07-24 03:00:00 "
+                    "Job submitted from host: <submit-host>\n"
+                    "009 (82.000.000) 2026-07-24 04:00:00 "
+                    "Job was aborted.\n"
+                )
+            },
+        )
+        == "unknown"
+    )
+    assert view_time._computer_name({}, {}) == "unknown"
+
+
 def test_generation_regions_use_time_midpoints_and_restart_per_run():
     start = datetime(2026, 5, 14, 8, 0, 0)
     rows = [
@@ -282,6 +334,9 @@ def test_view_time_source_does_not_reference_legacy_jsonl_inputs():
     assert "execute_machine" in source
     assert "edgecolors=ring_color" in source
     assert "label=error_type" not in source
+    assert "computer:" not in source
+    assert view_time.FAIL_RATE_LINE_ALPHA == pytest.approx(0.1)
+    assert view_time.ERROR_LABEL_X == pytest.approx(0.015)
 
 
 def test_view_time_plot_style_stays_aligned_to_view_cost():
@@ -370,14 +425,14 @@ def test_view_time_splits_data_and_event_legends():
 
     axis = FakeLegendAxis()
     sources = (
-        FakeSourceAxis(["computer: worker-a", "avg. time", "Opt. start"]),
+        FakeSourceAxis(["worker-a (avg. 1.00 min)", "avg. time", "Opt. start"]),
         FakeSourceAxis(["avg. failure rate", "Hash change"]),
     )
 
     view_time._add_split_legends(axis, sources)
 
     assert [call[0] for call in axis.calls] == [
-        ["computer: worker-a", "avg. time", "avg. failure rate"],
+        ["worker-a (avg. 1.00 min)", "avg. time", "avg. failure rate"],
         ["Opt. start", "Hash change"],
     ]
     assert axis.calls[0][1]["framealpha"] == pytest.approx(0.6)
@@ -387,7 +442,9 @@ def test_view_time_splits_data_and_event_legends():
     assert axis.added == [axis.calls[0][2]]
 
 
-def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):
+def test_plot_rows_writes_png_when_matplotlib_is_available(
+    tmp_path, monkeypatch
+):
     if importlib.util.find_spec("matplotlib") is None:
         pytest.skip("matplotlib is not installed")
 
@@ -452,6 +509,23 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):
         )
     )
 
+    captured = {}
+
+    def capture_plot_contract(axis, axes):
+        labels = []
+        for source_axis in axes:
+            labels.extend(source_axis.get_legend_handles_labels()[1])
+        captured["labels"] = labels
+        captured["error_texts"] = {
+            text.get_text(): text for text in axis.texts
+        }
+        captured["failure_lines"] = tuple(
+            line
+            for line in axes[1].lines
+            if line.get_label().startswith("avg. failure rate")
+        )
+
+    monkeypatch.setattr(view_time, "_add_split_legends", capture_plot_contract)
     output = view_time.plot_rows(object(), rows, tmp_path / "time.png")
 
     assert output.is_file()
@@ -459,6 +533,16 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path):
     from matplotlib import image as matplotlib_image
 
     assert matplotlib_image.imread(output).shape[:2] == (2100, 3300)
+    assert "worker-a (avg. 0.67 min)" in captured["labels"]
+    assert "worker-b (avg. 0.50 min)" in captured["labels"]
+    assert "worker-c (avg. 1.00 min)" in captured["labels"]
+    for error_type in ("RuntimeError", "timeout", "collect error"):
+        error_text = captured["error_texts"][error_type]
+        assert error_text.get_position()[0] == pytest.approx(0.015)
+        assert error_text.get_horizontalalignment() == "left"
+        assert error_text.get_verticalalignment() == "center"
+    assert len(captured["failure_lines"]) == 1
+    assert captured["failure_lines"][0].get_alpha() == pytest.approx(0.1)
 
 
 def test_view_time_has_a_package_entrypoint():

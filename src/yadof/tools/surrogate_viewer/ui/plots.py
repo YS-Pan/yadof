@@ -16,7 +16,7 @@ from ..backend import (
     PredictionResult,
     SurrogateWorkspace,
     extract_curve,
-    finite_curve_statistics,
+    finite_curve_bounds,
 )
 from .style import MUTED, PANEL, PREDICTION, TEXT, TRUTH
 
@@ -71,21 +71,21 @@ class InteractivePlot(ttk.Frame):
             extract_curve(sample, item_index)
             for sample in result.member_samples
         )
-        stats = finite_curve_statistics(member_curves)
+        bounds = finite_curve_bounds(member_curves)
 
         ax = self.curve_ax
         ax.clear()
         ax.set_axis_on()
-        if stats is not None:
-            member_mean, member_std = stats
+        if bounds is not None:
+            member_minimum, member_maximum = bounds
             ax.fill_between(
                 predicted_curve.x,
-                member_mean - member_std,
-                member_mean + member_std,
+                member_minimum,
+                member_maximum,
                 color=PREDICTION,
                 alpha=0.16,
                 linewidth=0,
-                label="ensemble ±1σ",
+                label="ensemble min–max",
             )
         ax.plot(
             predicted_curve.x,

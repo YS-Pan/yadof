@@ -28,7 +28,8 @@ yadof view surrogate --workspace "D:\path\to\workspace"
 - **rawData curve**：选择要查看的输出。多维数据优先以 `Freq` 为横轴，
   其余维度取最接近 0 的切片；这与示例 HFSS 任务的波束中心比较一致。
 - 上图显示 rawData 曲线（蓝色为 surrogate，橙色为真实仿真，淡蓝区域为
-  ensemble ±1σ），下图显示由当前 `calc_cost.py` 动态计算的目标值。
+  ensemble 各成员预测的逐点最小值到最大值），下图显示由当前
+  `calc_cost.py` 动态计算的目标值。
 
 滑块停止约 350 ms 后自动预测，也可关闭自动预测并点击 **Predict now**。
 模型加载和推理在后台线程执行，不会阻塞界面刷新。

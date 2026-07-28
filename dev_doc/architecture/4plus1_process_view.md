@@ -38,15 +38,23 @@ validation and recording path.
 
 The workflow invokes package worker support while running. That helper samples the
 machine name in the execute process and writes `execute_machine` into
-`individual_metadata.json`. Visualization consumes that returned execute-side value
-rather than inferring a node from submit-side `condor_history` or `condor_q`.
+`individual_metadata.json`. Visualization prefers that returned execute-side value.
+When a timed-out HTCondor job cannot return the file, the submit side may instead
+record `condor_execute_machine` plus its slot and `condor_user_log` source from the
+execution segment in the job-local event log. This fallback never overrides worker
+identity. ViewTime may derive the same value in memory from a historical record's
+stored `condor_log_tail`; it recognizes removal from an active segment and a
+terminal segment not collected before the central deadline, without rewriting
+history. A job that never received an execute event, or was queued after an
+ordinary eviction when the deadline expired, remains `unknown`.
 
 Distributed orchestration invokes after-submit surrogate scheduling, polls terminal
 or returned-output state, owns bounded memory/disk resubmission, enforces a separate
 whole-generation deadline, and collects final ClassAd provenance. For each normal
 job it also derives the current execute segment and elapsed wall-clock from the
-submit-side `condor.log`. Once that clock reaches the adaptive limit, yadof records
-timeout locally and stops polling the job regardless of whether its bounded
+submit-side `condor.log`, including the segment's machine/slot identity. Once that
+clock reaches the adaptive limit, yadof records timeout locally and stops polling
+the job regardless of whether its bounded
 `condor_rm` cleanup succeeds. If a representative job remains pending, one delayed
 `condor_q -better-analyze` query reports failed match requirements without mutating
 or failing the queue.

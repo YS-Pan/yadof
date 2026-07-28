@@ -64,6 +64,15 @@ _CONDOR_EVENT_RE = re.compile(
     r"(?P<message>[^\r\n]*)",
     re.MULTILINE,
 )
+_CONDOR_SLOT_NAME_RE = re.compile(
+    r"^\s*SlotName:\s*(?P<slot>[^\s]+)\s*$",
+    re.MULTILINE,
+)
+_CONDOR_ALIAS_RE = re.compile(r"[?&]alias=(?P<machine>[^&>\s]+)")
+_CONDOR_EXECUTE_HOST_RE = re.compile(
+    r"Job executing on host:\s*<(?P<host>[^>]+)>",
+    re.IGNORECASE,
+)
 _TERMINAL_LOG_MARKERS = {
     "terminated": "Job terminated",
     "held": "Job was held",
@@ -116,10 +125,18 @@ _CONDOR_REMOVE_COMMAND_TIMEOUT_SEC = 5.0
 
 
 @dataclass(frozen=True)
+class CondorExecutionSite:
+    machine: str | None
+    slot_name: str | None
+
+
+@dataclass(frozen=True)
 class CondorExecutionClock:
     started_at: str
     elapsed_sec: float
     suspended: bool
+    execute_machine: str | None = None
+    slot_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -365,6 +382,17 @@ def run_condor_jobs(
 
     timed_out_count = len(pending)
     for job_name, submission in list(pending.items()):
+        active_clock = condor_execution_clock(submission.job.directory)
+        timeout_site_metadata = (
+            {}
+            if active_clock is None
+            else _condor_execution_site_metadata(
+                CondorExecutionSite(
+                    machine=active_clock.execute_machine,
+                    slot_name=active_clock.slot_name,
+                )
+            )
+        )
         remove_error = remove_condor_job(
             effective.workspace, submission, config=effective
         )
@@ -377,6 +405,7 @@ def run_condor_jobs(
             terminal_reason="timeout",
             remove_error=remove_error,
             preloaded_resource_usage={},
+            extra_metadata=timeout_site_metadata,
         )
         pending.pop(job_name, None)
     if timed_out_count:
@@ -602,6 +631,133 @@ def terminal_log_reason(job_dir: Path) -> str | None:
     return None
 
 
+def _normalized_condor_machine(value: object) -> str | None:
+    text = str(value or "").strip().strip('"<>')
+    if not text:
+        return None
+    if "@" in text:
+        text = text.rsplit("@", 1)[1].strip()
+    return text or None
+
+
+def _condor_execute_site_for_event(
+    text: str,
+    matches: Sequence[re.Match[str]],
+    index: int,
+) -> CondorExecutionSite | None:
+    match = matches[index]
+    block_end = (
+        matches[index + 1].start()
+        if index + 1 < len(matches)
+        else len(text)
+    )
+    block = text[match.start() : block_end]
+    slot_match = _CONDOR_SLOT_NAME_RE.search(block)
+    slot_name = (
+        None
+        if slot_match is None
+        else str(slot_match.group("slot")).strip() or None
+    )
+    machine = (
+        _normalized_condor_machine(slot_name)
+        if slot_name is not None and "@" in slot_name
+        else None
+    )
+    if machine is None:
+        alias_match = _CONDOR_ALIAS_RE.search(match.group("message"))
+        if alias_match is not None:
+            machine = _normalized_condor_machine(alias_match.group("machine"))
+    if machine is None:
+        host_match = _CONDOR_EXECUTE_HOST_RE.search(match.group("message"))
+        if host_match is not None:
+            host = str(host_match.group("host")).strip()
+            if all(marker not in host for marker in ("?", "=", ":")):
+                machine = _normalized_condor_machine(host)
+    if machine is None and slot_name is None:
+        return None
+    return CondorExecutionSite(machine=machine, slot_name=slot_name)
+
+
+def condor_last_execution_site(job_dir: Path) -> CondorExecutionSite | None:
+    """Return the most recent execute site recorded in the job's event log."""
+
+    log_path = job_dir / CONDOR_LOG_FILE_NAME
+    if not log_path.is_file():
+        return None
+    text = log_path.read_text(encoding="utf-8", errors="ignore")
+    matches = tuple(_CONDOR_EVENT_RE.finditer(text))
+    for index in reversed(range(len(matches))):
+        match = matches[index]
+        if (
+            match.group("code") == "001"
+            and "Job executing" in match.group("message")
+        ):
+            return _condor_execute_site_for_event(text, matches, index)
+    return None
+
+
+def condor_timeout_execution_site_from_text(
+    text: str,
+) -> CondorExecutionSite | None:
+    """Return the execution site associated with a recorded timeout."""
+
+    text = str(text or "")
+    matches = tuple(_CONDOR_EVENT_RE.finditer(text))
+    active_site: CondorExecutionSite | None = None
+    timeout_site: CondorExecutionSite | None = None
+    for index, match in enumerate(matches):
+        code = match.group("code")
+        message = match.group("message")
+        if code == "001" and "Job executing" in message:
+            active_site = _condor_execute_site_for_event(
+                text,
+                matches,
+                index,
+            )
+            timeout_site = None
+            continue
+        if code == "004":
+            block_end = (
+                matches[index + 1].start()
+                if index + 1 < len(matches)
+                else len(text)
+            )
+            event_block = text[match.start() : block_end]
+            timeout_site = (
+                active_site
+                if active_site is not None
+                and "via condor_rm" in event_block.lower()
+                else None
+            )
+            active_site = None
+            continue
+        if code == "005":
+            if active_site is not None:
+                timeout_site = active_site
+            active_site = None
+            continue
+        if code in {"009", "012"}:
+            if active_site is not None:
+                timeout_site = active_site
+            active_site = None
+    return active_site if active_site is not None else timeout_site
+
+
+def _condor_execution_site_metadata(
+    site: CondorExecutionSite | None,
+) -> dict[str, object]:
+    if site is None:
+        return {}
+    metadata: dict[str, object] = {}
+    if site.machine is not None:
+        metadata["condor_execute_machine"] = site.machine
+    if site.slot_name is not None:
+        metadata["condor_slot_name"] = site.slot_name
+    if metadata:
+        metadata["condor_execute_machine_source"] = "condor_user_log"
+    return metadata
+
+
 def condor_execution_clock(
     job_dir: Path,
     *,
@@ -613,11 +769,13 @@ def condor_execution_clock(
     if not log_path.is_file():
         return None
     text = log_path.read_text(encoding="utf-8", errors="ignore")
+    matches = tuple(_CONDOR_EVENT_RE.finditer(text))
     active_started_epoch: float | None = None
     segment_started_epoch: float | None = None
     elapsed_sec = 0.0
     suspended = False
-    for match in _CONDOR_EVENT_RE.finditer(text):
+    active_site: CondorExecutionSite | None = None
+    for index, match in enumerate(matches):
         try:
             event_epoch = datetime.strptime(
                 match.group("timestamp"), "%Y-%m-%d %H:%M:%S"
@@ -631,6 +789,11 @@ def condor_execution_clock(
             segment_started_epoch = event_epoch
             elapsed_sec = 0.0
             suspended = False
+            active_site = _condor_execute_site_for_event(
+                text,
+                matches,
+                index,
+            )
             continue
         if active_started_epoch is None:
             continue
@@ -652,6 +815,7 @@ def condor_execution_clock(
             segment_started_epoch = None
             elapsed_sec = 0.0
             suspended = False
+            active_site = None
 
     if active_started_epoch is None:
         return None
@@ -667,6 +831,10 @@ def condor_execution_clock(
         started_at=started_at,
         elapsed_sec=elapsed_sec,
         suspended=suspended,
+        execute_machine=(
+            None if active_site is None else active_site.machine
+        ),
+        slot_name=None if active_site is None else active_site.slot_name,
     )
 
 
@@ -679,13 +847,22 @@ def _yadof_execution_timeout_metadata(
     clock = condor_execution_clock(submission.job.directory)
     if clock is None or clock.elapsed_sec < time_limit.seconds:
         return None
-    return {
+    metadata = {
         "condor_timeout_enforced_by": "yadof_submit_watchdog",
         "condor_timeout_limit_sec": time_limit.seconds,
         "condor_execution_started_at": clock.started_at,
         "condor_execution_elapsed_sec": clock.elapsed_sec,
         "condor_execution_suspended": clock.suspended,
     }
+    metadata.update(
+        _condor_execution_site_metadata(
+            CondorExecutionSite(
+                machine=clock.execute_machine,
+                slot_name=clock.slot_name,
+            )
+        )
+    )
+    return metadata
 
 
 def collect_condor_result(
@@ -739,6 +916,11 @@ def collect_condor_result(
         metadata.update(extra_metadata)
 
     effective_timed_out = bool(timed_out or timeout_hold)
+    if timeout_hold:
+        for key, value in _condor_execution_site_metadata(
+            condor_last_execution_site(job.directory)
+        ).items():
+            metadata.setdefault(key, value)
     if timed_out:
         status = "timeout"
         if terminal_reason == "yadof_job_timeout":

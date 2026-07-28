@@ -21,6 +21,8 @@ read-only values and use-case methods suitable for a desktop viewer.
 - Aggregate absolute and relative errors by cost and rawData item.
 - Derive display matrices from small in-memory aggregate arrays.
 - Extract useful one-dimensional curves from generic rawData.
+- Derive pointwise finite minimum/maximum bounds from compatible ensemble-member
+  curves for interactive display.
 
 ## I/O Format
 

@@ -329,15 +329,23 @@ def test_time_limit_calibration_is_workspace_local(tmp_path, monkeypatch):
 def test_condor_execution_clock_uses_only_the_current_active_run(tmp_path):
     from yadof.evaluate_manager.condor_runner import (
         condor_execution_clock,
+        condor_last_execution_site,
+        condor_timeout_execution_site_from_text,
     )
 
     job_dir = tmp_path / "job"
     job_dir.mkdir()
     log_path = job_dir / "condor.log"
     log_path.write_text(
-        "001 (42.000.000) 2026-07-24 01:00:00 Job executing on host: <slot-a>\n"
+        "001 (42.000.000) 2026-07-24 01:00:00 Job executing on host: "
+        "<192.0.2.1:9618?alias=worker-a&sock=startd>\n"
+        "\tSlotName: slot1@worker-a\n"
+        "...\n"
         "004 (42.000.000) 2026-07-24 02:00:00 Job was evicted.\n"
-        "001 (42.000.000) 2026-07-24 03:00:00 Job executing on host: <slot-b>\n"
+        "001 (42.000.000) 2026-07-24 03:00:00 Job executing on host: "
+        "<192.0.2.2:9618?alias=worker-b&sock=startd>\n"
+        "\tSlotName: slot2_1@worker-b\n"
+        "...\n"
         "010 (42.000.000) 2026-07-24 03:30:00 Job was suspended.\n"
         "011 (42.000.000) 2026-07-24 04:00:00 Job was unsuspended.\n",
         encoding="utf-8",
@@ -352,6 +360,8 @@ def test_condor_execution_clock_uses_only_the_current_active_run(tmp_path):
     assert "2026-07-24T03:00:00" in clock.started_at
     assert clock.elapsed_sec == 90 * 60
     assert clock.suspended is False
+    assert clock.execute_machine == "worker-b"
+    assert clock.slot_name == "slot2_1@worker-b"
 
     with log_path.open("a", encoding="utf-8") as stream:
         stream.write(
@@ -364,6 +374,70 @@ def test_condor_execution_clock_uses_only_the_current_active_run(tmp_path):
         )
         is None
     )
+    last_site = condor_last_execution_site(job_dir)
+    assert last_site is not None
+    assert last_site.machine == "worker-b"
+    assert last_site.slot_name == "slot2_1@worker-b"
+    assert condor_timeout_execution_site_from_text(
+        log_path.read_text(encoding="utf-8")
+    ) is None
+
+
+def test_timeout_site_parser_distinguishes_timeout_terminals_from_evicted_queue():
+    from yadof.evaluate_manager.condor_runner import (
+        condor_timeout_execution_site_from_text,
+    )
+
+    active_then_removed = (
+        "001 (43.000.000) 2026-07-24 03:00:00 Job executing on host: "
+        "<192.0.2.3:9618?alias=worker-active&sock=startd>\n"
+        "\tSlotName: slot1_1@worker-active\n"
+        "...\n"
+        "009 (43.000.000) 2026-07-24 04:00:00 Job was aborted.\n"
+    )
+    evicted_then_removed = (
+        "001 (44.000.000) 2026-07-24 03:00:00 Job executing on host: "
+        "<192.0.2.4:9618?alias=worker-evicted&sock=startd>\n"
+        "\tSlotName: slot1_1@worker-evicted\n"
+        "...\n"
+        "004 (44.000.000) 2026-07-24 03:30:00 Job was evicted.\n"
+        "009 (44.000.000) 2026-07-24 04:00:00 Job was aborted.\n"
+    )
+    removed_while_active = (
+        "001 (45.000.000) 2026-07-24 03:00:00 Job executing on host: "
+        "<192.0.2.5:9618?alias=worker-removed&sock=startd>\n"
+        "\tSlotName: slot1_1@worker-removed\n"
+        "...\n"
+        "004 (45.000.000) 2026-07-24 04:00:00 Job was evicted.\n"
+        "\tReason: via condor_rm (by user test)\n"
+    )
+    terminated_before_collection = (
+        "001 (46.000.000) 2026-07-24 03:00:00 Job executing on host: "
+        "<192.0.2.6:9618?alias=worker-terminated&sock=startd>\n"
+        "\tSlotName: slot1_1@worker-terminated\n"
+        "...\n"
+        "005 (46.000.000) 2026-07-24 03:50:00 Job terminated.\n"
+    )
+
+    active_site = condor_timeout_execution_site_from_text(
+        active_then_removed
+    )
+    assert active_site is not None
+    assert active_site.machine == "worker-active"
+    assert (
+        condor_timeout_execution_site_from_text(evicted_then_removed)
+        is None
+    )
+    removed_site = condor_timeout_execution_site_from_text(
+        removed_while_active
+    )
+    assert removed_site is not None
+    assert removed_site.machine == "worker-removed"
+    terminated_site = condor_timeout_execution_site_from_text(
+        terminated_before_collection
+    )
+    assert terminated_site is not None
+    assert terminated_site.machine == "worker-terminated"
 
 
 def test_distributed_yadof_watchdog_times_out_even_when_remove_fails(
@@ -386,7 +460,9 @@ def test_distributed_yadof_watchdog_times_out_even_when_remove_fails(
         datetime.now().timestamp() - 10
     ).strftime("%Y-%m-%d %H:%M:%S")
     (job.directory / "condor.log").write_text(
-        f"001 (77.000.000) {started} Job executing on host: <slot-a>\n",
+        f"001 (77.000.000) {started} Job executing on host: "
+        "<192.0.2.7:9618?alias=worker-watchdog&sock=startd>\n"
+        "\tSlotName: slot1_1@worker-watchdog\n",
         encoding="utf-8",
     )
 
@@ -431,8 +507,162 @@ def test_distributed_yadof_watchdog_times_out_even_when_remove_fails(
     )
     assert results[0].metadata["condor_timeout_limit_sec"] == 1
     assert results[0].metadata["condor_execution_elapsed_sec"] >= 1
+    assert (
+        results[0].metadata["condor_execute_machine"]
+        == "worker-watchdog"
+    )
+    assert (
+        results[0].metadata["condor_slot_name"]
+        == "slot1_1@worker-watchdog"
+    )
+    assert (
+        results[0].metadata["condor_execute_machine_source"]
+        == "condor_user_log"
+    )
     assert results[0].metadata["condor_remove_error"] == "condor_rm unavailable"
     assert results[0].metadata["condor_terminal_reason"] == "yadof_job_timeout"
+
+
+def test_generation_timeout_records_only_an_active_condor_execute_machine(
+    tmp_path, monkeypatch
+):
+    from yadof.evaluate_manager import condor_runner
+
+    workspace = _workspace(tmp_path, "generation_timeout_machine")
+    config = load_config(workspace)
+    active_job = prepare_job(
+        workspace,
+        (0.25,),
+        config=config,
+        mode="distributed",
+        timeout_sec=30,
+        generation_index=0,
+        run_id="generation-timeout-run",
+    )
+    queued_job = prepare_job(
+        workspace,
+        (0.75,),
+        config=config,
+        mode="distributed",
+        timeout_sec=30,
+        generation_index=0,
+        run_id="generation-timeout-run",
+    )
+
+    def fake_submit(_workspace, submitted_job, **_kwargs):
+        cluster_id = 79 if submitted_job is active_job else 80
+        log_text = (
+            "001 (79.000.000) 2026-07-24 03:00:00 "
+            "Job executing on host: "
+            "<192.0.2.9:9618?alias=worker-active&sock=startd>\n"
+            "\tSlotName: slot3_1@worker-active\n"
+            if submitted_job is active_job
+            else (
+                "000 (80.000.000) 2026-07-24 03:00:00 "
+                "Job submitted from host: <submit-host>\n"
+            )
+        )
+        (submitted_job.directory / "condor.log").write_text(
+            log_text,
+            encoding="utf-8",
+        )
+        return condor_runner.CondorSubmission(
+            job=submitted_job,
+            submit_file=submitted_job.directory / "job.sub",
+            cluster_id=cluster_id,
+            submitted_at="2026-07-24T03:00:00+08:00",
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr(condor_runner, "submit_condor_job", fake_submit)
+    monkeypatch.setattr(
+        condor_runner,
+        "remove_condor_job",
+        lambda *_args, **_kwargs: None,
+    )
+
+    results = condor_runner.run_condor_jobs(
+        workspace,
+        (active_job, queued_job),
+        config=config,
+        timeout_sec=0,
+    )
+
+    assert [result.status for result in results] == ["timeout", "timeout"]
+    assert (
+        results[0].metadata["condor_execute_machine"]
+        == "worker-active"
+    )
+    assert (
+        results[0].metadata["condor_execute_machine_source"]
+        == "condor_user_log"
+    )
+    assert "condor_execute_machine" not in results[1].metadata
+
+
+def test_allowed_duration_timeout_records_last_condor_execute_machine(
+    tmp_path, monkeypatch
+):
+    from yadof.evaluate_manager import condor_runner
+
+    workspace = _workspace(tmp_path, "allowed_duration_machine")
+    config = load_config(workspace)
+    job = prepare_job(
+        workspace,
+        (0.5,),
+        config=config,
+        mode="distributed",
+        timeout_sec=30,
+        generation_index=0,
+        run_id="allowed-duration-run",
+    )
+    (job.directory / "condor.log").write_text(
+        "001 (78.000.000) 2026-07-24 03:00:00 Job executing on host: "
+        "<192.0.2.8:9618?alias=worker-held&sock=startd>\n"
+        "\tSlotName: slot2_1@worker-held\n"
+        "...\n"
+        "012 (78.000.000) 2026-07-24 04:00:00 Job was held.\n"
+        "\tThe job exceeded allowed execute duration of 1:00:00\n"
+        "\tCode 47 Subcode 0\n",
+        encoding="utf-8",
+    )
+    submission = condor_runner.CondorSubmission(
+        job=job,
+        submit_file=job.directory / "job.sub",
+        cluster_id=78,
+        submitted_at="2026-07-24T03:00:00+08:00",
+        stdout="",
+        stderr="",
+    )
+    monkeypatch.setattr(
+        condor_runner,
+        "remove_condor_job",
+        lambda *_args, **_kwargs: None,
+    )
+
+    result = condor_runner.collect_condor_result(
+        workspace,
+        job,
+        config=config,
+        submission=submission,
+        timed_out=False,
+        terminal_reason="held",
+        preloaded_hold_info={
+            "condor_hold_reason": "allowed execute duration exceeded",
+            "condor_hold_reason_code": "47",
+            "condor_hold_reason_subcode": "0",
+        },
+        preloaded_resource_usage={},
+    )
+
+    assert result.status == "timeout"
+    assert result.metadata["condor_execute_machine"] == "worker-held"
+    assert result.metadata["condor_slot_name"] == "slot2_1@worker-held"
+    assert (
+        result.metadata["condor_execute_machine_source"]
+        == "condor_user_log"
+    )
 
 
 def test_remove_condor_job_has_a_bounded_command_wait(tmp_path, monkeypatch):

@@ -84,5 +84,8 @@ nodes.
 
 The task workflow calls package worker support, which samples `execute_machine` in
 the workflow process and writes it into `individual_metadata.json`. It is
-transferred back with the normal job outputs; submit-side ClassAds are not
-authoritative for this field.
+transferred back with normal job outputs and remains authoritative. If timeout
+prevents that transfer, the submit host may persist a separate
+`condor_execute_machine` fallback parsed from the job-local `condor.log`, together
+with its slot and `condor_user_log` source. Submit-side ClassAds do not override
+either provenance path.

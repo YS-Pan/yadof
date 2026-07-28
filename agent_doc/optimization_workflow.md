@@ -109,8 +109,13 @@ yadof view all --workspace D:\work\study-a
 
 The two individual view commands create timestamped PNGs below
 `.yadof/tool_output/` by default. `view time` includes failure rate, execute-machine
-colors, and labeled error-type bands. `view all` prints both summaries and creates
-both images. Use `--summary-only` when only terminal output is wanted.
+colors, machine-specific average-time labels, and left-labeled error-type bands.
+`view all` prints both summaries and creates both images. Use `--summary-only` when
+only terminal output is wanted. Worker-reported machine identity is preferred; a
+timed-out distributed job may use its source-labeled Condor user-log machine when
+worker metadata could not return, while a job that never executed remains
+`unknown`. Existing timeout records use their stored Condor log tail for the same
+read-only display fallback; history is not rewritten.
 
 Individual prepare/run/timeout/record failures become diagnostic records and
 correct-width `inf` costs. `--fail-on-all-infinite` stops after the first generation

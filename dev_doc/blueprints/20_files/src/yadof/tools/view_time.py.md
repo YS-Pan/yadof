@@ -14,21 +14,29 @@
 - Prefer explicit elapsed-minute/second metadata over timestamp subtraction and
   clamp negative durations to zero.
 - Merge optimization metadata when individual records lack run/generation indices.
-- Read execute-machine identity from worker-support-written individual metadata; normalize
-  old remote-host spellings only as a compatibility read and never query the submit
-  host for the machine.
+- Prefer execute-machine identity from worker-support-written individual metadata;
+  fall back to source-labeled `condor_execute_machine` for timed-out jobs whose
+  worker file did not return. Normalize older remote-host spellings only as
+  compatibility reads and never let a scheduler value override worker identity.
+- For historical timeout records without the new field, derive an in-memory
+  fallback from recorded `condor_log_tail`. Assign the machine for an active
+  removal/hold, an eviction explicitly caused by `condor_rm`, or a terminal segment
+  not collected before the central deadline. A normally evicted or never-executed
+  queued job stays `unknown`.
 - Classify failures by explicit error type, then timeout, failure stage, or status.
 - Summarize time span, average elapsed time, completed-only average, failure rate,
   status/type counts, and each error occurrence.
 - Color ordinary elapsed-time points by execute machine and plot a smoothed
   completed duration.
+- Label each machine in the legend as `<machine> (avg. <minutes> min)`, where the
+  mean uses every recorded row assigned to that machine.
 - Place each error type on its own axes-relative horizontal band between 80% and 90%
   of plot height. Draw each error point with machine-colored fill and an
   error-type-colored outer ring.
-- Label error bands directly inside the right side of the plot rather than adding
-  error types to a centralized legend.
-- Plot smoothed failure percentage on a secondary right axis, plus optimization
-  starts, generation bands, and static-input hash changes.
+- Label error bands directly inside the left side of the plot rather than adding
+  error types to a centralized legend; vertically center each label on its band.
+- Plot highly transparent smoothed failure percentage on a secondary right axis,
+  plus optimization starts, generation bands, and static-input hash changes.
 - Render cost-aligned 5.5-by-3.5-inch, 600-dpi figures with a compact font and line
   hierarchy, plus separate data and event legends.
 
@@ -52,17 +60,24 @@
 - Matplotlib/numpy imports are lazy and use the headless `Agg` backend.
 - Completed-evaluation circles use the shared 0.4-point ordinary-marker edge and
   their fill color identifies the execute machine.
+- Machine lookup is provenance-ordered by key rather than record nesting:
+  `execute_machine`, then `condor_execute_machine`, then legacy remote-host fields.
+  Thus a nested worker value still wins over a top-level scheduler fallback.
+- Stored log-tail fallback runs only for timeout/timed-out rows and never opens a
+  job directory or mutates recorded metadata.
 - Error bands use `ax.get_xaxis_transform()` so their 0.80–0.90 heights stay near
   the visual top regardless of elapsed-time units. The elapsed-time y-limit keeps
   ordinary data at or below 72% of axes height to reserve that error region. Error
-  labels use `ax.transAxes` and right alignment so long names extend inward instead
-  of outside the axes.
+  labels use `ax.transAxes`, left alignment, and vertical centering on the line so
+  names extend inward from the left edge without sitting above the band.
 - Error markers use one Matplotlib circle with machine facecolor and error-type
   edgecolor, preserving both encodings without a separate error legend.
 - Machine and error palettes are deterministic and assign distinct colors within
   each category set.
 - The orange average-time line uses the shared average-trend opacity of 0.25,
   matching viewCost's translucent average-cost trend.
+- The dark-blue failure-rate line remains plot-specific and uses alpha 0.1 so it
+  stays visible without dominating the time data or error bands.
 - Contiguous generations are scoped by optimization run, labeled with their
   zero-based generation index inside the plot, and odd generations use a black
   background at 10% opacity.

@@ -3,7 +3,7 @@
 from .checkpoints import CheckpointPredictor, discover_checkpoints
 from .rawdata import (
     extract_curve,
-    finite_curve_statistics,
+    finite_curve_bounds,
     rawdata_names,
 )
 from .types import (
@@ -36,7 +36,7 @@ __all__ = [
     "_check_cancelled",
     "discover_checkpoints",
     "extract_curve",
-    "finite_curve_statistics",
+    "finite_curve_bounds",
     "rawdata_names",
     "sample_real_results_by_generation",
 ]

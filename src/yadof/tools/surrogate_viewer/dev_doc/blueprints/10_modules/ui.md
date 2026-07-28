@@ -15,7 +15,8 @@ Interactive tab:
 - display denormalized values and legal ranges;
 - debounce automatic predictions and support manual prediction;
 - apply real-result vectors and clear comparison state;
-- render prediction/true curves, ensemble spread, and objective bars.
+- render prediction/true curves, the ensemble-member pointwise min/max band, and
+  objective bars.
 
 Heatmap tab:
 

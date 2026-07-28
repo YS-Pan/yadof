@@ -33,10 +33,11 @@ records the execute-machine name and the rest of the invariant lifecycle metadat
 job inputs, explicitly returns `rawData.zip` plus individual metadata instead of the
 `rawData/` directory, restores only unique direct `.npz` archive members, validates
 them, queries queue/history ClassAds, derives active execution wall-clock from
-submit-side event logs, and removes terminal held/timed-out jobs when needed. A
-per-job timeout becomes locally final even when bounded `condor_rm` cleanup fails.
-Normal policy is `run_as_owner=False`, `load_profile=True`; pool repair is outside
-the module.
+submit-side event logs, retains the active/last timeout execution site's machine
+and slot as source-labeled fallback provenance, and removes terminal
+held/timed-out jobs when needed. A per-job timeout becomes locally final even when
+bounded `condor_rm` cleanup fails. Normal policy is `run_as_owner=False`,
+`load_profile=True`; pool repair is outside the module.
 
 Completed population results use the recorded-data batch fast path so large archives
 are copied once per population rather than once per individual. A batch failure is
@@ -49,10 +50,12 @@ smoke, whole-generation deadlines, final ClassAd data, output restoration, and
 Windows slot-user policy. Pending jobs may receive one delayed read-only matchmaking
 analysis. The module diagnoses but never repairs HTCondor.
 
-Execute-machine provenance is not inferred from those submit-side ClassAds.
-`worker_misc.run_workflow()`, invoked by `workflow.py`, samples it on the execute
-node, writes `execute_machine` into `individual_metadata.json`, and returns that
-file through the normal transport.
+`worker_misc.run_workflow()`, invoked by `workflow.py`, samples the primary
+execute-machine identity on the execute node, writes `execute_machine` into
+`individual_metadata.json`, and returns that file through normal transport. When a
+timeout prevents the transfer, `condor_runner` may record lower-priority
+`condor_execute_machine`/slot provenance from that job's own user log. ClassAds do
+not override either source, and a never-executed job remains unassigned.
 
 ## Recording and cost return
 

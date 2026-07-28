@@ -6,8 +6,8 @@
 2. Select a checkpoint generation.
 3. Move normalized parameter sliders or use arrow keys.
 4. Predict in the background.
-5. Display one selected rawData curve, ensemble spread, and current objective
-   values.
+5. Display one selected rawData curve, the ensemble members' pointwise minimum-to-
+   maximum band, and current objective values.
 
 Acceptance behavior: the UI remains responsive, superseded results are ignored,
 and no workspace file changes.

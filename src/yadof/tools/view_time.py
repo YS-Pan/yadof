@@ -8,12 +8,16 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from ..config import load_config
+from ..evaluate_manager.condor_runner import (
+    condor_timeout_execution_site_from_text,
+)
 from ..recorded_data import api as recorded_data_api
 from ..workspace import WorkspaceContext
 
 
 WorkspaceLike = WorkspaceContext | str | Path
 FAIL_RATE_COLOR = "darkblue"
+FAIL_RATE_LINE_ALPHA = 0.1
 HASH_LINE_COLOR = "#FFAA00"
 OPT_LINE_COLOR = "black"
 OPT_LINE_LABEL = "Opt. start"
@@ -47,7 +51,7 @@ ERROR_BAND_BOTTOM = 0.80
 ERROR_BAND_TOP = 0.90
 ELAPSED_DATA_TOP = 0.72
 ERROR_BAND_LINE_WIDTH = 0.6
-ERROR_LABEL_X = 0.985
+ERROR_LABEL_X = 0.015
 GENERATION_SHADE_COLOR = "black"
 GENERATION_SHADE_ALPHA = 0.1
 GENERATION_LABEL_Y = 0.98
@@ -218,8 +222,8 @@ def _computer_name(
     record: Mapping[str, object], metadata: Mapping[str, object]
 ) -> str:
     for key in (
-        "condor_execute_machine",
         "execute_machine",
+        "condor_execute_machine",
         "LastRemoteHost",
         "RemoteHost",
         "Machine",
@@ -231,6 +235,15 @@ def _computer_name(
             machine = _normalize_machine_name(source.get(key))
             if machine is not None:
                 return machine
+    status = _record_status(record, metadata)
+    if status == "timeout" or any(
+        _is_truthy(source.get("timed_out")) for source in (record, metadata)
+    ):
+        log_tail = _first_text((record, metadata), ("condor_log_tail",))
+        if log_tail is not None:
+            site = condor_timeout_execution_site_from_text(log_tail)
+            if site is not None and site.machine is not None:
+                return site.machine
     engine = _first_text((record, metadata), ("engine",))
     return "local" if str(engine or "").lower() == "local" else "unknown"
 
@@ -794,6 +807,15 @@ def plot_rows(
     _draw_generation_regions(ax, generation_regions)
 
     for computer in computers:
+        computer_avg = float(
+            np.mean(
+                [
+                    float(row["elapsed_min"])
+                    for row in rows
+                    if str(row["computer"]) == computer
+                ]
+            )
+        )
         ax.scatter(
             [],
             [],
@@ -802,7 +824,7 @@ def plot_rows(
             alpha=0.75,
             s=SCATTER_MARKER_SIZE**2,
             linewidths=SCATTER_EDGE_LINE_WIDTH,
-            label=f"computer: {computer}",
+            label=f"{computer} (avg. {computer_avg:.2f} min)",
         )
         matching = [
             row for row in done_rows if str(row["computer"]) == computer
@@ -837,8 +859,8 @@ def plot_rows(
             height,
             error_type,
             transform=ax.transAxes,
-            ha="right",
-            va="bottom",
+            ha="left",
+            va="center",
             color=ring_color,
             fontsize=PLOT_LEGEND_FONT_SIZE,
             bbox={
@@ -892,7 +914,7 @@ def plot_rows(
         local_failure,
         color=FAIL_RATE_COLOR,
         linewidth=TREND_LINE_WIDTH,
-        alpha=0.6,
+        alpha=FAIL_RATE_LINE_ALPHA,
         label=f"avg. failure rate (global: {global_failure:.2f} %)",
     )
 

@@ -11,6 +11,15 @@
 - Parse local `condor.log` event timestamps to measure the current active execution
   segment, excluding queued, evicted-idle, and suspended intervals. Enforce each
   normal job's calculated time limit independently of scheduler enforcement.
+- Parse each execute segment's machine and optional slot from its event block. For
+  timeout results only, preserve the active segment (watchdog/generation deadline)
+  or last held segment (`allowed_execute_duration`) as
+  `condor_execute_machine`, `condor_slot_name`, and source `condor_user_log`.
+- Expose the same timeout-site state machine for already stored `condor_log_tail`
+  text so read-only tools can interpret historical active removal, `condor_rm`
+  eviction, and terminal-before-collection records without reopening job
+  directories or rewriting history. Ordinary eviction back to the queue clears the
+  candidate site.
 - On a yadof-detected per-job timeout, invoke `condor_rm` with a bounded command
   wait, preserve cleanup failure metadata, finalize timeout locally, and remove the
   job from the local pending set without waiting for queue confirmation.
@@ -61,6 +70,17 @@
   matchmaking and input-transfer delay cannot consume a job's execute budget.
   Suspension/unsuspension events pause/resume the clock. A later execute event starts
   a fresh active segment.
+- Execute-site parsing prefers the `SlotName` continuation's suffix after `@`, then
+  the execute-event address alias. Worker-returned `execute_machine` remains
+  authoritative in visualization; the Condor value is a source-labeled fallback.
+  A whole-generation timeout records the site only while an execution segment is
+  active, whereas an allowed-duration hold uses the final segment that caused the
+  hold. No event `001` means no machine assignment.
+- Historical timeout-tail parsing retains event 004 only when its event block says
+  `via condor_rm`, retains the site at event 005 for centrally timed-out results,
+  and treats event 009/012 as timeout/removal of the active site. An ordinary event
+  004 clears the site, distinguishing a job removed while executing from one
+  evicted back to the queue before a later deadline.
 - `rawData.zip` is the only distributed rawData transport. It is required, readable,
   and may contain only unique direct `.npz` members; directories, nested paths,
   other extensions, and case-insensitive duplicates are errors. Collection restores

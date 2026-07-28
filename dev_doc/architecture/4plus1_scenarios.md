@@ -78,7 +78,13 @@ missing or malformed `rawData.zip`, collection, and record errors are isolated p
 individual. Strict CLI mode stops after an all-infinite generation and prints recent
 diagnostic summaries. Pending unmatched Condor jobs receive one read-only match
 analysis rather than being incorrectly marked failed. A missing, failed, or hung
-`condor_rm` cannot keep a yadof-timed-out individual pending.
+`condor_rm` cannot keep a yadof-timed-out individual pending. If timeout prevents
+worker metadata transfer, the final active or allowed-duration-held execution
+segment supplies source-labeled Condor machine/slot provenance; a queued job with no
+execute event correctly remains `unknown`. Historical timeout records can obtain
+the same display-only fallback from active-removal, `condor_rm`-eviction, or
+terminal-before-collection evidence in their already recorded Condor log tail
+without mutating durable evidence.
 
 ## Resource retry
 

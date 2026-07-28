@@ -9,8 +9,8 @@
   request intent, selected prediction inputs, and plot selection.
 - `HeatmapTab`: cost/rawData quantity mapping, error type, sampling percentage,
   progress, stop intent, last complete audit, and instant matrix selection.
-- `InteractivePlot`: rawData curve, ensemble band, true overlay, and objective bar
-  comparison.
+- `InteractivePlot`: rawData curve, pointwise ensemble-member min/max band, true
+  overlay, and objective bar comparison.
 - `HeatmapPlot`: non-interpolated `pcolormesh`, complete edge bounds, automatic
   rectangular aspect, annotations, colorbar, and one-line title.
 
@@ -24,7 +24,7 @@
 - `PredictionResult`, `ErrorMatrix`, and metadata dataclasses: immutable transfer
   objects between worker and UI code.
 - rawData helpers: schema-specific flattening, per-item aggregate reduction, curve
-  extraction, and ensemble statistics.
+  extraction, and finite ensemble-member bounds.
 
 ## Dependency Direction
 

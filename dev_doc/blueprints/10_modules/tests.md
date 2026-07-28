@@ -25,8 +25,10 @@ license, machine identity, or credential.
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
 - CLI/docs, integrated cost/time views including grouped `view all`,
-  execute-machine/error encodings, tools/adapters, and artifact exclusion of
-  examples/runtime data;
+  execute-machine/error encodings, worker-over-Condor machine precedence,
+  active/held/removed/terminated historical timeout log fallback,
+  evicted/never-executed timeout behavior,
+  tools/adapters, and artifact exclusion of examples/runtime data;
 - lazy `view surrogate` registration/help, viewer wheel/sdist/dev_doc membership,
   and deterministic viewer checkpoint discovery, rawData curves, aggregate
   selection, sampling, and cancellation when optional dependencies are installed.

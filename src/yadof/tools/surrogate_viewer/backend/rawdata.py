@@ -183,10 +183,10 @@ def extract_curve(
     )
 
 
-def finite_curve_statistics(
+def finite_curve_bounds(
     curves: Iterable[CurveData],
 ) -> tuple[np.ndarray, np.ndarray] | None:
-    """Return pointwise ensemble mean/std when curves share coordinates."""
+    """Return pointwise finite ensemble min/max for shared coordinates."""
 
     rows = tuple(curves)
     if not rows:
@@ -198,4 +198,9 @@ def finite_curve_statistics(
     ):
         return None
     matrix = np.stack([row.y for row in rows], axis=0)
-    return np.nanmean(matrix, axis=0), np.nanstd(matrix, axis=0)
+    finite = np.isfinite(matrix)
+    lower = np.min(np.where(finite, matrix, np.inf), axis=0)
+    upper = np.max(np.where(finite, matrix, -np.inf), axis=0)
+    lower[~np.any(finite, axis=0)] = np.nan
+    upper[~np.any(finite, axis=0)] = np.nan
+    return lower, upper
