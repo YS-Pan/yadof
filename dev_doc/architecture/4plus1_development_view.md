@@ -24,8 +24,10 @@ src/yadof/                 installed framework
 tests/                     maintained generic verification
 dev_doc/                   developer source documentation
   README.md                entry, reading order, environment, maintenance workflow
+  development_environment.md detected reproducibility snapshot
   skill/                   module-specific documentation contracts
 agent_doc/                 task-authoring source documentation
+  example_prompts/         expandable prompt-example collection
 admin_tool/                administrator-only operations
 ```
 

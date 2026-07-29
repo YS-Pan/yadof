@@ -2,8 +2,10 @@
 
 ```mermaid
 flowchart LR
-    User["User / CLI / API"] --> Package["Installed yadof package"]
-    User --> Workspace["Explicit writable workspace"]
+    User["User"] --> Agent["Installed AI coding agent"]
+    Agent --> Package["Installed yadof package / CLI / API"]
+    Agent --> Workspace["Explicit writable workspace"]
+    User -. direct advanced use .-> Package
     Package --> Workspace
     Package --> Local["Local workflow subprocess"]
     Package --> Schedd["HTCondor submit side"]
@@ -17,6 +19,13 @@ flowchart LR
     Result --> Records["Workspace recorded_data"]
     Records --> Optimizer["Optimizer and surrogate"]
 ```
+
+## Agent interaction
+
+The AI coding agent is the normal task-authoring interface. It consumes the
+version-matched installed agent documentation, edits only authorized source or
+workspace files, and invokes the same package CLI/API that direct users can invoke.
+It does not become a runtime dependency of prepared jobs or execute nodes.
 
 ## Installed package
 

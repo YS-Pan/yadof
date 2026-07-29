@@ -6,12 +6,18 @@ workspace, define parameters, a workflow, rawData outputs, and current cost poli
 then check, smoke, run/resume, and inspect through the CLI or workspace-explicit
 Python APIs.
 
+The supported default journey is agent-led. The user first installs an AI coding
+agent, preferably OpenAI Codex because it is the development reference, opens the
+source checkout or intended workspace, and gives the agent the task plus the prompt
+starter. Direct CLI/API use remains supported but is the lower-level surface.
+
 ## People and responsibilities
 
 - Users own workspace task-variable definitions, simulator/model inputs, objective
   policy, campaign configuration, and decisions to launch expensive work.
-- AI agents may read version-matched `agent_doc`, inspect documented package code,
-  and edit the selected workspace or package source when explicitly requested.
+- AI agents are the primary task-authoring interface. They read version-matched
+  `agent_doc`, inspect documented package code, and edit the selected workspace or
+  package source when explicitly requested.
 - Administrators own Python/simulator installation, licenses, HTCondor deployment,
   execute-node permissions, resource advertisement, and Windows slot-user policy.
 - Package maintainers own every cross-task invariant, stable framework contracts,

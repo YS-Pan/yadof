@@ -5,6 +5,11 @@ yadof or prepares a yadof optimization task. Treat the installed package and the
 version-matched documents as read-only sources of truth. Every task edit and runtime
 artifact belongs to an explicit writable workspace.
 
+yadof uses an AI-agent-first workflow. A user should install an AI coding agent
+before preparing a task, open the intended source checkout or writable workspace in
+that agent, and provide the task together with the repository prompt starter.
+OpenAI Codex is recommended because it was used to develop and verify yadof.
+
 ## First decide the request type
 
 - For a question, list the available documents and read only the relevant pages.
@@ -35,6 +40,8 @@ Task author references:
 - [workflow_typical_patterns.md](workflow_typical_patterns.md)
 - [calc_cost_typical_patterns.md](calc_cost_typical_patterns.md)
 - [adapters/README.md](adapters/README.md) and the adapter-specific pages
+- [example_prompts/README.md](example_prompts/README.md) for the expandable prompt
+  example directory
 
 When a source checkout is available, its top-level `examples/` directory may provide
 additional task-specific reference workspaces. Those examples are not installed

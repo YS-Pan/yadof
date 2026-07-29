@@ -100,12 +100,16 @@ configuration remain administrator responsibilities.
 ## 5. Optimize and inspect
 
 ```powershell
+yadof run --workspace D:\work\study-a
 yadof run --workspace D:\work\study-a --generations 10
 yadof run --workspace D:\work\study-a --start-generation 10 --generations 5
 yadof view cost --workspace D:\work\study-a -o costs.png
 yadof view time --workspace D:\work\study-a
 yadof view all --workspace D:\work\study-a
 ```
+
+The first command uses the CLI default of 50 generations. Use `--generations` for a
+different count.
 
 The two individual view commands create timestamped PNGs below
 `.yadof/tool_output/` by default. `view time` includes failure rate, execute-machine

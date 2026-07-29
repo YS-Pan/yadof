@@ -2,6 +2,7 @@
 
 | Term | Meaning |
 |---|---|
+| `agent-led workflow` | The normal yadof usage path: a user installs an AI coding agent, preferably the Codex reference used during development, and the agent reads version-matched installed guidance before authoring or validating an explicit workspace. The agent is not copied into jobs and does not replace the CLI/API runtime contract. |
 | `installed package` | The complete `yadof` framework under site-packages: APIs, CLI, defaults, templates, adapters, worker support, tools, and read-only docs. It is not a runtime write location. |
 | `agent documentation` | Version-matched task-authoring and question-answering guidance under root `agent_doc/`, exposed from an installed package through `yadof docs`; it replaces the former user-documentation audience. |
 | `workspace` | One explicitly selected writable root owning `config.py`, `job_template/`, jobs, records, checkpoints, logs, and tool output. |

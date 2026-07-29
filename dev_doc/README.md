@@ -69,6 +69,11 @@ repository sibling `../.venv`. It is based on the machine's system Python but ow
 its installed packages. Use its interpreter by explicit path so tests, commands,
 and wheel replacement cannot silently select another Python environment.
 
+The exact machine and package versions detected for the current packaged line are
+recorded in [development_environment.md](development_environment.md). Treat that
+page as a reproducibility snapshot; `pyproject.toml` remains the compatibility
+contract.
+
 Create and populate it once from the repository root:
 
 ```powershell

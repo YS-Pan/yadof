@@ -21,6 +21,12 @@ task/config, applies CLI overrides without rewriting config, handles optional sm
 supports start/resume/generation counts, displays progress, and can stop on an
 all-infinite generation with recent job diagnostics.
 
+Before standalone smoke blocks on execution, it flushes the workspace, selected
+backend, jobs directory, and the fact that no timeout applies. Its terminal message
+reports either finite costs or an actionable failure. `run --generations` defaults
+to 50 when the option is omitted; explicit values still override one invocation,
+and the Python optimizer API still requires its generation count.
+
 Documentation uses an explicit `list`, `show`, and `bundle` action model. Paths are
 audience-relative and traversal is rejected. CLI code contains no duplicate
 documentation body and never requires callers to locate site-packages.

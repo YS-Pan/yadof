@@ -378,6 +378,8 @@ def test_smoke_cli_requires_explicit_real_task_and_runs_exactly_one(
     monkeypatch.setenv("PYTHONPATH", str(Path(yadof.__file__).resolve().parents[1]))
     assert cli.main(["smoke-test", "--workspace", str(root)]) == 0
     output = capsys.readouterr()
+    assert "Starting smoke test" in output.out
+    assert f"live job files are under {root / 'jobs'}" in output.out
     assert "exactly one individual" in output.out
     assert output.err == ""
     assert len(tuple((root / "jobs").iterdir())) == 1
@@ -396,6 +398,31 @@ def test_smoke_cli_requires_explicit_real_task_and_runs_exactly_one(
     output = capsys.readouterr()
     assert "Smoke test succeeded" in output.out
     assert len(tuple((root / "jobs").iterdir())) == 2
+
+
+def test_smoke_cli_flushes_start_feedback_before_execution(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yadof import cli, evaluate_manager
+
+    root = _workspace(tmp_path)
+    observed: dict[str, bool] = {}
+
+    def fake_smoke_test(*_args, **_kwargs):
+        output = capsys.readouterr()
+        observed["announced"] = (
+            "Starting smoke test" in output.out
+            and "Exactly one midpoint individual will run with no timeout" in output.out
+        )
+        return ((0.0,),)
+
+    monkeypatch.setattr(evaluate_manager, "run_smoke_test", fake_smoke_test)
+
+    assert cli.main(["smoke-test", "--workspace", str(root)]) == 0
+    assert observed == {"announced": True}
+    assert "Smoke test succeeded" in capsys.readouterr().out
 
 
 def test_smoke_help_distinguishes_execution_from_package_self_tests() -> None:

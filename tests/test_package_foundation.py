@@ -457,7 +457,7 @@ def test_package_metadata_and_source_resources() -> None:
     assert project["scripts"] == {"yadof": "yadof.cli:main"}
     assert {"surrogate", "plot", "hfss", "dev"} <= set(project["optional-dependencies"])
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.1.0"
+    assert yadof.__version__ == "0.2.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("agent").startswith("# yadof agent guide")

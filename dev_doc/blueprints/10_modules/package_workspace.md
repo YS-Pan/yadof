@@ -7,6 +7,9 @@ explicitly selected user workspaces. Distribution metadata has one version sourc
 and one console entry point. Wheel/sdist membership is allowlisted around package
 code, generic templates/adapters, and version-matched documentation.
 
+The current package version is 0.2.0. Project history reserves 0.1.0 for the older
+pre-package implementation and uses 0.2.0 for the present installable-package line.
+
 ## Workspace contract
 
 `WorkspaceContext` is an immutable absolute value containing root, config, task,

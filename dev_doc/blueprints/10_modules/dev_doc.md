@@ -16,6 +16,8 @@ the root developer README links to it instead of duplicating those contracts.
 
 - `README.md`: entry point for mandatory reading order, environment, validation,
   cross-module maintenance, and links to detailed contracts.
+- `development_environment.md`: dated machine/tool/package reproducibility snapshot
+  that is explicitly separate from declared compatibility requirements.
 - `skill/`: module-specific contracts for agent documentation, architecture,
   blueprints, toDo/obsolete handling, terminology, and change records.
 - `architecture/`: current system relationships and invariants.
@@ -27,6 +29,10 @@ the root developer README links to it instead of duplicating those contracts.
 - `toDo/`: unresolved work; root entries require explicit request, `auto/` entries
   are only low-priority natural follow-ups.
 - `obsolete/`: historical completed/cancelled toDos, not current guidance.
+
+`agent_doc/example_prompts/` is an expandable collection with one Markdown file per
+copyable prompt. Its index may link placeholders whose prompt bodies remain empty
+until examples are supplied.
 
 ## Maintenance rules
 

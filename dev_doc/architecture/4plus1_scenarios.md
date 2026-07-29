@@ -2,9 +2,12 @@
 
 ## New generic study
 
-Install wheel, `yadof init PATH`, edit workspace config/task, `check`, run one local
-smoke, `run`, then inspect cost and integrated time/failure/error history
-individually or with `view all`. No repository path is required.
+Install an AI coding agent and the wheel, open the intended workspace in the agent,
+give it the prompt starter and task, then let it follow installed agent documents
+through `yadof init PATH`, task editing, and read-only `check`. After explicit
+authorization, run one local smoke, `run`, then inspect cost and integrated
+time/failure/error history individually or with `view all`. A run without
+`--generations` uses 50 generations. No repository path is required.
 
 The initialized generic workflow contains only task-specific calculation/rawData
 logic. It imports its assigned parameter snapshot and calls job-local
@@ -19,6 +22,10 @@ installed `agent` documentation entry, follows its targeted reading order, runs
 `init` when needed, edits only workspace-owned task inputs, and runs read-only
 `check`. A real smoke or optimization remains an explicitly authorized execution
 stage because it may launch expensive external software.
+
+The standalone smoke CLI flushes the selected workspace, backend, jobs directory,
+and no-timeout warning before blocking on the workflow, then reports success costs
+or an actionable failure.
 
 ## Resume
 

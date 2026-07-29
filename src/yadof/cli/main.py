@@ -68,6 +68,16 @@ def _smoke_test_command(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
+        print(
+            f"Starting smoke test in {config.workspace.root} "
+            f"(mode={config.EVALUATION_MODE}).",
+            flush=True,
+        )
+        print(
+            "Exactly one midpoint individual will run with no timeout; "
+            f"live job files are under {config.workspace.jobs_dir}.",
+            flush=True,
+        )
         costs = run_smoke_test(config.workspace, mode=args.mode)
     except (
         ConfigError,
@@ -427,8 +437,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--generations",
         type=_positive_int,
-        default=1,
-        help="number of generations to run (default: 1)",
+        default=50,
+        help="number of generations to run (default: 50)",
     )
     run_parser.add_argument(
         "--start-generation",

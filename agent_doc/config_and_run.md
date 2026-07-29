@@ -27,14 +27,22 @@ yadof smoke-test --workspace PATH --mode distributed --real-task
 
 A smoke evaluates exactly one midpoint individual with no generation index, no
 per-job execution limit, and no submit-side whole-generation deadline. It succeeds
-only if at least one finite objective is returned.
+only if at least one finite objective is returned. Before it blocks on the real
+workflow, the CLI immediately prints the selected workspace, evaluation mode, jobs
+directory, and no-timeout warning. It then prints the returned costs on success or
+an actionable error with the jobs directory on failure.
 
 ## Start or resume
 
 ```powershell
+yadof run --workspace PATH
 yadof run --workspace PATH --generations 5
 yadof run --workspace PATH --start-generation 5 --generations 5
 ```
+
+When `--generations` is omitted, the CLI runs 50 generations. Supplying
+`--generations N` overrides that invocation. The Python `run_generations()` API
+continues to require an explicit generation count.
 
 The pre-run real-task smoke default comes from
 `OPTIMIZE_SMOKE_TEST_ENABLED`. `--smoke-test` and `--no-smoke-test` are opposite,

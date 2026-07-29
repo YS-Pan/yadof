@@ -46,6 +46,14 @@ def _result(generation: int, costs=((0.25,),)):
     )
 
 
+def test_run_cli_defaults_to_fifty_generations():
+    parser = __import__("yadof.cli", fromlist=["build_parser"]).build_parser()
+    run_parser = parser._subparsers._group_actions[0].choices["run"]
+
+    assert parser.parse_args(["run"]).generations == 50
+    assert "default: 50" in run_parser.format_help()
+
+
 def test_run_cli_direct_start_and_resume_use_workspace_metadata(tmp_path, capsys):
     workspace = _workspace(tmp_path)
     assert cli_main(

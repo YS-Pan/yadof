@@ -3,6 +3,9 @@
 The system is an installed, immutable `yadof` distribution plus one or more
 explicit writable workspaces. There is no repository-local runtime namespace and
 no implicit "current project". Every stateful operation is scoped to a workspace.
+The normal user journey is AI-agent-first: a locally installed coding agent reads
+the installed, version-matched agent documents and prepares the selected workspace,
+while the CLI and Python APIs remain the underlying execution surfaces.
 
 The end-to-end invariant is:
 

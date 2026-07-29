@@ -1,14 +1,22 @@
 # Installation and workspaces
 
+## AI agent prerequisite
+
+yadof is intended to be used through an AI coding agent. Install an agent before
+authoring a task, then open the source checkout or selected writable workspace in
+that agent. OpenAI Codex is recommended because the author used it for development
+and verification. The agent should begin with `yadof docs show agent README.md` and
+follow the version-matched reading order before it edits anything.
+
 ## Install
 
 Install a built wheel into the Python environment used by submit and local worker
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.1.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.1.0-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.1.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.2.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.2.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.2.0-py3-none-any.whl[viewer]"
 ```
 
 `yadof --version` and `yadof version` report the same package version. Distributed
@@ -24,6 +32,15 @@ The `viewer` extra installs the Torch and Matplotlib dependencies needed by
 `yadof view surrogate`; Tkinter must also be available in the selected Python
 installation. The viewer is submit-side, read-only inspection software and is
 never copied into distributed jobs.
+
+Version `0.1.0` identifies the older pre-package project. Version `0.2.0`
+identifies the current installable-package line.
+
+The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
+Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and
+HTCondor 25.4.0. This is a reproducibility snapshot rather than a minimum-version
+contract; the wheel metadata remains authoritative for Python and dependency
+requirements.
 
 ## Initialize and inspect
 

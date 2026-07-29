@@ -1,29 +1,83 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. Its durable modeling contract is:
+or HTCondor workflows. The current packaged release is **0.2.0**. In this project's
+version history, **0.1.0** names the older pre-package codebase and **0.2.0** names
+the current installable-package line.
 
-## Prompt starter
-
-> Complete the task below. Before you begin, run `python -m yadof docs show agent README.md` and follow its instructions, reading any referenced documentation or installed yadof code needed for the task.
+Its durable modeling contract is:
 
 ```text
 normalized variables -> rawData -> current task cost
 ```
 
-Install the wheel, create a writable workspace, edit only that workspace, and run
-the CLI from any directory:
+## AI-agent-first use
+
+yadof is designed to be operated with an AI coding agent at the center of the
+workflow. Install an AI agent on the computer before preparing a yadof task. The
+recommended agent is [OpenAI Codex](https://openai.com/codex/get-started/) because
+the author developed and verified this package with Codex.
+
+Open the yadof source checkout or the intended writable workspace in the agent,
+then give it the task together with this starter:
+
+> Complete the task below. Before you begin, run `python -m yadof docs show agent README.md` and follow its instructions, reading any referenced documentation or installed yadof code needed for the task.
+
+The installed, version-matched agent documents tell the agent which files it may
+edit, what it must read, and which validation command to run. A reserved blank
+prompt is available at
+[agent_doc/example_prompts/01_task_setup.md](agent_doc/example_prompts/01_task_setup.md);
+the surrounding [prompt examples directory](agent_doc/example_prompts/README.md)
+is ready for additional examples.
+
+## Install and run
+
+Install the wheel into the Python environment used on the submit machine:
 
 ```powershell
-python -m pip install yadof-0.1.0-py3-none-any.whl
-python -m pip install "yadof-0.1.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.2.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.2.0-py3-none-any.whl[viewer]"
+```
+
+Ask the AI agent to initialize and author the task, or use the underlying commands
+directly:
+
+```powershell
 yadof init D:\work\my-study
 yadof check --workspace D:\work\my-study
-yadof smoke-test --workspace D:\work\my-study
-yadof run --workspace D:\work\my-study --generations 10
+yadof smoke-test --workspace D:\work\my-study --real-task
+yadof run --workspace D:\work\my-study
 yadof view all --workspace D:\work\my-study
 yadof view surrogate --workspace D:\work\my-study
 ```
+
+`yadof run` now runs **50 generations by default**. Use `--generations N` to
+override that count. The standalone smoke command prints its workspace, backend,
+jobs directory, and no-timeout warning before execution starts, then reports the
+final costs or an actionable failure.
+
+## Reference development environment
+
+The current packaged line was developed and tested on this machine snapshot,
+detected on 2026-07-29:
+
+| Component | Detected version |
+|---|---|
+| Operating system | Windows 11 Pro 25H2, build 26200.8875, x86-64 |
+| ANSYS Electronics Desktop | 2024 R1 (`2024.1.0.1`) |
+| Python | CPython 3.13.11 in the repository sibling `.venv` |
+| NumPy / pymoo | 2.2.6 / 0.6.2 |
+| PyAEDT | 0.24.1 |
+| HTCondor | 25.4.0 |
+| PyTorch / Matplotlib | 2.10.0+cu128 / 3.11.1 |
+| pytest | 9.1.1 |
+
+This is a reproducibility snapshot, not a claim that every listed version is a
+minimum requirement. See
+[dev_doc/development_environment.md](dev_doc/development_environment.md) for paths,
+detection details, and the package's declared compatibility boundary.
+
+## Package and workspace boundary
 
 The package owns framework code, defaults, worker support, templates, adapters,
 tools, and documentation. A workspace owns `config.py`, `job_template/`, jobs,
@@ -39,8 +93,7 @@ The optional read-only surrogate checkpoint viewer is installed below
 train models, run workflows, or write workspace state.
 
 See [agent_doc/README.md](agent_doc/README.md) for agent-oriented installation and
-workflow guidance,
-and [dev_doc/README.md](dev_doc/README.md) for architecture and contribution rules.
-The checked-in [examples](examples/README.md) preserve complete reference workspaces,
-including the former HFSS task; examples are tracked in Git but excluded from wheel
-and sdist artifacts.
+workflow guidance, and [dev_doc/README.md](dev_doc/README.md) for architecture and
+contribution rules. The checked-in [examples](examples/README.md) preserve complete
+reference workspaces, including the former HFSS task; examples are tracked in Git
+but excluded from wheel and sdist artifacts.
