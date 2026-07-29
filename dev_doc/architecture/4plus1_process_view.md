@@ -29,6 +29,13 @@ job-local `workflow.py` directly, rejects forbidden cost output, validates the f
 rawData directory, captures stdout/stderr tails, and maps every outcome to a
 `JobResult`.
 
+Before starting a local batch, shared resource calibration reads compatible smoke
+or preceding-generation records. Local policy combines that per-job estimate with a
+fresh physical-CPU/available-memory/free-disk snapshot and the configured cap. Each
+workflow process tree is sampled while it runs; peak summed RSS, accumulated CPU
+time, average CPU cores, process count, and current job-directory disk use are
+recorded under local and backend-neutral keys for the next calibration.
+
 Distributed mode prepares the same job folder. The submit file executes
 `workflow.py` directly with Windows file association, transfers only the job inputs,
 and explicitly returns `rawData.zip` plus `individual_metadata.json`; it never
@@ -47,6 +54,11 @@ stored `condor_log_tail`; it recognizes removal from an active segment and a
 terminal segment not collected before the central deadline, without rewriting
 history. A job that never received an execute event, or was queued after an
 ordinary eviction when the deadline expired, remains `unknown`.
+
+HTCondor ClassAd collection maps CPU, memory, and disk observations onto the same
+backend-neutral resource keys used by local mode. Its next request and local mode's
+next worker plan therefore consume one calibration implementation even though
+submission, hold retry, and host-capacity enforcement remain backend-specific.
 
 Distributed orchestration invokes after-submit surrogate scheduling, polls terminal
 or returned-output state, owns bounded memory/disk resubmission, enforces a separate

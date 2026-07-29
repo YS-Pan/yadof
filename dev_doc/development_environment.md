@@ -25,6 +25,7 @@ HTCondor deployment.
 | Role | Package versions |
 |---|---|
 | Core numerical/optimizer | NumPy 2.2.6; pymoo 0.6.2 |
+| Local resource measurement | psutil 7.2.2 |
 | Optional surrogate/viewer | PyTorch 2.10.0+cu128; Matplotlib 3.11.1 |
 | Build and test | build 1.5.0; hatchling 1.31.0; pytest 9.1.1 |
 

@@ -62,6 +62,11 @@ or exact active variable set belong with a disposable/reference workspace, not i
 the reusable package suite. Small neutral shapes and fake adapters remain valid
 generic fixtures.
 
+psutil is a core dependency because local evaluation must observe a workflow's
+recursive simulator process tree and submit-host capacity on supported platforms.
+It is used only by local resource measurement/planning and is never copied into
+distributed job payloads.
+
 The viewer remains a leaf below `tools`: CLI parser construction and
 `yadof.tools` imports must not load Torch, Matplotlib, or Tkinter. Its subpackage
 loads those dependencies only when its backend exports or GUI command are used.

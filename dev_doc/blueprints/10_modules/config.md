@@ -20,6 +20,12 @@ Task variable shape, objective definitions, simulator/project names, frequencies
 credentials, and adapter-specific scientific settings remain in workspace task files
 or deliberately supported worker environment entries.
 
+Local evaluation defaults to a worker cap of eight, resource autodetection enabled,
+and a 15% host reserve. The cap remains a positive integer. Autodetection and reserve
+settings are independently validated bool/fraction values. Existing HTCondor
+CPU/memory/disk request and calibration settings also provide the per-job bootstrap
+hints for local planning because both backends execute the same workflow.
+
 ## Dependencies and consumers
 
 The module depends on workspace context only. CLI, evaluation, optimization,

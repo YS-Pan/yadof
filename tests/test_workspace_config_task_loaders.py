@@ -89,6 +89,9 @@ def test_config_precedence_paths_sources_and_non_mutating_override(tmp_path: Pat
 
     assert config.EVALUATION_MODE == "distributed"
     assert config.OPTIMIZE_POPULATION_SIZE == 8
+    assert config.LOCAL_EVALUATION_MAX_WORKERS == 8
+    assert config.LOCAL_RESOURCE_AUTODETECT_ENABLED is True
+    assert config.LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION == 0.15
     assert config.HTCONDOR_REQUEST_CPUS == 1
     assert config.workspace.jobs_dir == context.root / "state/jobs"
     assert config.JOBS_DIR == context.root / "state/jobs"

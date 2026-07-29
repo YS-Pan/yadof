@@ -19,6 +19,9 @@ license, machine identity, or credential.
   of any yadof runtime archive/config in jobs;
 - direct `workflow.py` HTCondor submit shape, Windows slot-user values, resource/time
   policy, matchmaking diagnostics, bounded retries, and per-job mocked failures;
+- shared cross-backend resource calibration, local process-tree measurements,
+  default-eight local cap, CPU/memory/disk capacity limits, reserve policy, disabled
+  autodetection, and population bounds;
 - explicit `rawData.zip` output transfer, flat zip members, rejection of nested
   rawData, local validation, reusable cost/rawData helpers, dynamic cost, and
   persistence atomicity;

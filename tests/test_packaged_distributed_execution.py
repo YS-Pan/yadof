@@ -242,7 +242,7 @@ def test_condor_restore_rejects_nested_rawdata_zip(tmp_path):
 def test_resource_calibration_reads_only_the_selected_workspace(
     tmp_path, monkeypatch
 ):
-    from yadof.evaluate_manager import resource_requests
+    from yadof.evaluate_manager import resource_calibration, resource_requests
 
     workspace_a = _workspace(tmp_path, "calibration_a")
     workspace_b = _workspace(tmp_path, "calibration_b")
@@ -266,7 +266,7 @@ def test_resource_calibration_reads_only_the_selected_workspace(
     }
 
     monkeypatch.setattr(
-        resource_requests.recorded_data_api,
+        resource_calibration.recorded_data_api,
         "list_records",
         lambda workspace: records_by_root[Path(workspace.root).resolve()],
     )

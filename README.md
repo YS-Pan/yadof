@@ -56,6 +56,27 @@ override that count. The standalone smoke command prints its workspace, backend,
 jobs directory, and no-timeout warning before execution starts, then reports the
 final costs or an actionable failure.
 
+### Local concurrency
+
+Local mode previously defaulted to one concurrent simulation. The packaged default
+cap is now **8**, with resource autodetection enabled. The effective count for each
+batch is the smallest safe value allowed by:
+
+- the population size and `LOCAL_EVALUATION_MAX_WORKERS`;
+- physical CPU capacity;
+- currently available memory and free disk after a 15% system reserve;
+- per-job CPU, peak-memory, and disk estimates calibrated from the preceding smoke
+  test or optimization generation.
+
+Local workflows are monitored as process trees, so simulator child processes are
+included. Their measurements and HTCondor measurements use the same recorded
+resource fields and shared calibration algorithm. `HTCONDOR_REQUEST_CPUS`,
+`HTCONDOR_REQUEST_MEMORY`, and `HTCONDOR_REQUEST_DISK` remain the initial per-job
+resource hints when no usable history exists. Use `--progress` to print the selected
+local worker count and each limiting capacity. Set
+`LOCAL_RESOURCE_AUTODETECT_ENABLED = False` only when the configured worker cap
+should be used directly.
+
 ## Reference development environment
 
 The current packaged line was developed and tested on this machine snapshot,
@@ -67,6 +88,7 @@ detected on 2026-07-29:
 | ANSYS Electronics Desktop | 2024 R1 (`2024.1.0.1`) |
 | Python | CPython 3.13.11 in the repository sibling `.venv` |
 | NumPy / pymoo | 2.2.6 / 0.6.2 |
+| psutil | 7.2.2 |
 | PyAEDT | 0.24.1 |
 | HTCondor | 25.4.0 |
 | PyTorch / Matplotlib | 2.10.0+cu128 / 3.11.1 |

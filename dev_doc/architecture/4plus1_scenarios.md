@@ -53,6 +53,21 @@ Condor's `allowed_execute_duration` and are independently watched from their loc
 `condor.log` execute events. At the per-job limit, yadof records timeout immediately,
 attempts bounded `condor_rm` cleanup, and does not wait for queue removal.
 
+## Adaptive local campaign
+
+The package default local cap is eight workers. A run smoke still evaluates one
+midpoint individual and records process-tree CPU, peak-memory, and disk evidence.
+Before generation zero, yadof applies the shared bootstrap calibration, samples the
+host's current physical CPU/available memory/free disk, preserves the configured
+system reserve, and starts only the minimum safe worker count. Later generations
+recalculate from the preceding generation in the same run. `--progress` prints the
+chosen count and each limiting capacity.
+
+If local autodetection is disabled, the configured cap applies directly after the
+population-size bound. The explicit cap is never exceeded, and a missing system or
+history measurement falls back to the configured per-job resource hints rather than
+blocking the campaign.
+
 ## Change current cost policy
 
 Edit only workspace `calc_cost.py`, run `check`, and query history again. Existing

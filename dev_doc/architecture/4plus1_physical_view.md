@@ -8,6 +8,12 @@ workspaces, and HTCondor client tools when distributed mode is used. Workspace
 directory. Local evaluation uses the installed environment to launch job-local
 `workflow.py` files.
 
+Local planning reads the submit host's physical/logical CPU counts, currently
+available memory, and free space on the jobs volume through the core psutil
+dependency. A configured reserve fraction protects host headroom. These snapshots
+are ephemeral planning inputs; durable records contain only the chosen plan and
+per-job process-tree measurements.
+
 ## Prepared job contents
 
 Every job places required task inputs directly below its own directory (including

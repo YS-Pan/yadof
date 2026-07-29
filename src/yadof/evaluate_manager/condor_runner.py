@@ -1136,6 +1136,13 @@ def _resource_usage_from_ad(ad: Mapping[str, object]) -> dict[str, object]:
         value = _finite_resource_value(ad.get(ad_name))
         if value is not None:
             info[metadata_name] = value
+    for backend_name, shared_name in (
+        ("condor_cpus_usage", "resource_cpu_usage_cores"),
+        ("condor_memory_usage_mib", "resource_memory_usage_mib"),
+        ("condor_disk_usage_kib", "resource_disk_usage_kib"),
+    ):
+        if backend_name in info:
+            info[shared_name] = info[backend_name]
     return info
 
 

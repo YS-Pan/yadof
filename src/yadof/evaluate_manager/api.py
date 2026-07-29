@@ -16,6 +16,7 @@ from ..workspace import WorkspaceContext
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
 from .local_runner import run_local_job
+from .local_resources import plan_local_workers
 from .recorded_data_client import record_result, record_results
 from .types import JobResult, JobSpec
 
@@ -145,6 +146,15 @@ def _dispatch_local(
     population_rows = tuple(_population_row(variables) for variables in population)
     objective_width = get_objective_count(config.workspace)
     costs_by_individual: list[tuple[float, ...] | None] = [None] * len(population_rows)
+    worker_plan = plan_local_workers(
+        config,
+        population_size=len(population_rows),
+        configured_max=local_max_workers,
+        generation_index=generation_index,
+        run_id=run_id,
+    )
+    worker_plan_metadata = worker_plan.metadata()
+    _progress(worker_plan.summary())
 
     def evaluate_one(
         index: int, population_row: tuple[Any, ...]
@@ -159,10 +169,11 @@ def _dispatch_local(
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=generation_index,
+            worker_plan_metadata=worker_plan_metadata,
         )
 
     outcomes: list[tuple[int, JobResult | None]] = []
-    worker_count = min(max(1, int(local_max_workers)), max(1, len(population_rows)))
+    worker_count = worker_plan.worker_count
     if worker_count <= 1 or len(population_rows) <= 1:
         outcomes = [
             evaluate_one(index, row) for index, row in enumerate(population_rows)
@@ -218,6 +229,7 @@ def _evaluate_one_local(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
+    worker_plan_metadata: Mapping[str, object],
 ) -> tuple[int, JobResult | None]:
     job: JobSpec | None = None
     result: JobResult | None = None
@@ -257,6 +269,7 @@ def _evaluate_one_local(
             timeout_sec=timeout_sec,
             python_executable=python_executable,
             env=env,
+            plan_metadata=worker_plan_metadata,
         )
     except Exception as exc:  # noqa: BLE001 - isolate one candidate.
         failure = _failed_result(

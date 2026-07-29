@@ -18,6 +18,7 @@ from .job_result import (
     tail,
     write_metadata,
 )
+from .local_resources import ProcessTreeResourceMonitor, with_disk_usage
 from .types import JobResult, JobSpec
 
 
@@ -30,9 +31,12 @@ def run_local_job(
     timeout_sec: float | None,
     python_executable: str | Path = sys.executable,
     env: Mapping[str, str] | None = None,
+    plan_metadata: Mapping[str, object] | None = None,
 ) -> JobResult:
     workflow = job.directory / WORKFLOW_SCRIPT_NAME
     metadata = base_metadata(job, engine="local")
+    if plan_metadata:
+        metadata.update({str(key): value for key, value in plan_metadata.items()})
     if not workflow.is_file():
         metadata.update(status="error", error=f"Missing {WORKFLOW_SCRIPT_NAME}", runner_detected_at=now_text())
         write_metadata(job.directory, metadata)
@@ -59,6 +63,8 @@ def run_local_job(
         text=True,
         start_new_session=os.name != "nt",
     )
+    resource_monitor = ProcessTreeResourceMonitor(proc.pid)
+    resource_monitor.start()
 
     timed_out = False
     try:
@@ -67,6 +73,7 @@ def run_local_job(
         timed_out = True
         _terminate_process_tree(proc)
         stdout, stderr = proc.communicate()
+    resource_metadata = resource_monitor.stop()
 
     raw_paths = raw_data_paths(job.directory)
     individual_metadata = read_individual_metadata(job.directory)
@@ -104,6 +111,7 @@ def run_local_job(
         error = f"Workflow exited with return code {proc.returncode}"
 
     metadata.update(individual_metadata)
+    metadata.update(with_disk_usage(resource_metadata, job.directory))
     metadata.update(
         status=status,
         timed_out=timed_out,

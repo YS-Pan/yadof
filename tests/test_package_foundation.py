@@ -455,6 +455,7 @@ def test_package_metadata_and_source_resources() -> None:
     assert project["dynamic"] == ["version"]
     assert project["requires-python"] == ">=3.10"
     assert project["scripts"] == {"yadof": "yadof.cli:main"}
+    assert "psutil>=5.9,<8" in project["dependencies"]
     assert {"surrogate", "plot", "hfss", "dev"} <= set(project["optional-dependencies"])
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
     assert yadof.__version__ == "0.2.0"
@@ -586,7 +587,9 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/evaluate_manager/job_files.py" in wheel_names
         assert "yadof/evaluate_manager/job_result.py" in wheel_names
         assert "yadof/evaluate_manager/local_runner.py" in wheel_names
+        assert "yadof/evaluate_manager/local_resources.py" in wheel_names
         assert "yadof/evaluate_manager/condor_runner.py" in wheel_names
+        assert "yadof/evaluate_manager/resource_calibration.py" in wheel_names
         assert "yadof/evaluate_manager/resource_requests.py" in wheel_names
         assert "yadof/evaluate_manager/resource_retries.py" in wheel_names
         assert "yadof/evaluate_manager/time_limits.py" in wheel_names

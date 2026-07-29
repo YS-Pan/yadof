@@ -7,6 +7,11 @@ them locally or through HTCondor, normalizes every outcome into ordered `JobResu
 rows, records durable evidence, and derives current costs. A preparation, execution,
 collection, recording, or cost failure affects only its candidate.
 
+`resource_calibration.py` is the shared automation boundary. It reads backend-neutral
+resource keys with legacy backend-key fallback, selects compatible smoke or
+preceding-generation records, trims high samples, applies generation-zero bootstrap
+scaling, and returns one immutable per-job estimate.
+
 ## Job preparation
 
 `job_files.py` creates a collision-safe directory, copies task inputs while
@@ -24,8 +29,13 @@ metadata. It never creates or transfers a yadof runtime package/archive/config.
 `local_runner.py` directly runs job-local `workflow.py` with bounded concurrency and
 per-job timeout, kills the process tree on timeout, rejects `cost.json`, validates
 the flat rawData directory even when no direct files exist, merges workflow metadata,
-and captures output tails. The task workflow calls package worker support, which
-records the execute-machine name and the rest of the invariant lifecycle metadata.
+and captures output tails. psutil samples the workflow and recursive simulator
+children to record summed peak RSS, accumulated CPU time/average cores, peak process
+count, and job-directory disk use. `local_resources.py` combines calibrated per-job
+needs with physical CPU, currently available memory, free disk, reserve fraction,
+population size, and the configured worker cap. The task workflow calls package
+worker support, which records the execute-machine name and the rest of the invariant
+lifecycle metadata.
 
 ## Distributed backend
 
@@ -57,6 +67,11 @@ timeout prevents the transfer, `condor_runner` may record lower-priority
 `condor_execute_machine`/slot provenance from that job's own user log. ClassAds do
 not override either source, and a never-executed job remains unassigned.
 
+HTCondor ClassAd resource measurements and local process-tree measurements both
+publish `resource_cpu_usage_cores`, `resource_memory_usage_mib`, and
+`resource_disk_usage_kib`. Condor request formatting and local worker planning call
+the same calibration module; only backend-specific enforcement remains separate.
+
 ## Recording and cost return
 
 Completed population results use the batch recording path and one cost query. If
@@ -68,6 +83,8 @@ always matches candidate order.
 
 - Local/distributed share job preparation, result, recording, cost, and shape rules.
 - Standalone smoke is exactly one midpoint job and has no job/generation timeout.
+- Local default worker cap is eight; adaptive planning may safely choose fewer and
+  never exceeds the population or cap.
 - Resource retries are bounded fresh clusters for standard memory/disk holds only.
 - Submit callbacks run after submission and cannot cancel queued jobs on failure.
 - Every stateful lookup uses the effective workspace.

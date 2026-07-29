@@ -108,6 +108,15 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
         "EVALUATION_MODE",
         "EVALUATION_TIMEOUT_SEC",
         "LOCAL_EVALUATION_MAX_WORKERS",
+        "LOCAL_RESOURCE_AUTODETECT_ENABLED",
+        "LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION",
+        "HTCONDOR_REQUEST_CPUS",
+        "HTCONDOR_REQUEST_MEMORY",
+        "HTCONDOR_REQUEST_DISK",
+        "HTCONDOR_REQUEST_DISK_MULTIPLIER",
+        "HTCONDOR_RESOURCE_AUTODETECT_ENABLED",
+        "HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER",
+        "HTCONDOR_RESOURCE_TRIM_TOP_FRACTION",
     }
     assert summary["EVALUATION_TIMEOUT_SEC"]["value"] == 12.0
     assert "OPTIMIZE_POPULATION_SIZE" not in json.dumps(first_metadata)
@@ -210,6 +219,12 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     assert metadata["status"] == "done"
     assert metadata["timed_out"] is False
     assert metadata["execute_machine"]
+    assert metadata["local_worker_count"] == 1
+    assert metadata["local_worker_configured_max"] == 1
+    assert metadata["local_peak_memory_usage_mib"] > 0
+    assert metadata["resource_memory_usage_mib"] > 0
+    assert metadata["local_disk_usage_kib"] > 0
+    assert metadata["resource_disk_usage_kib"] > 0
     assert metadata["effective_config_summary"]["EVALUATION_TIMEOUT_SEC"] == {
         "value": None,
         "source": "no-timeout smoke-test override",

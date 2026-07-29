@@ -121,6 +121,16 @@ def _print_run_summary(
     print(f"Generation count: {generations}", flush=True)
     print(f"Start generation: {start_generation}", flush=True)
     print(f"Smoke test: {smoke_enabled} ({smoke_source})", flush=True)
+    if mode == "local":
+        print(
+            f"Local worker cap: {config.LOCAL_EVALUATION_MAX_WORKERS}",
+            flush=True,
+        )
+        print(
+            "Local resource autodetect: "
+            f"{config.LOCAL_RESOURCE_AUTODETECT_ENABLED}",
+            flush=True,
+        )
 
 
 def _print_result(result) -> None:

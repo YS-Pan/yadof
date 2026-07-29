@@ -197,8 +197,30 @@ def effective_worker_config_summary(
         "EVALUATION_MODE": str(mode),
         "EVALUATION_TIMEOUT_SEC": timeout_sec,
         "LOCAL_EVALUATION_MAX_WORKERS": int(config.LOCAL_EVALUATION_MAX_WORKERS),
+        "LOCAL_RESOURCE_AUTODETECT_ENABLED": bool(
+            config.LOCAL_RESOURCE_AUTODETECT_ENABLED
+        ),
+        "LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION": float(
+            config.LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION
+        ),
     }
-    if str(mode).strip().lower() == "distributed":
+    if str(mode).strip().lower() == "local":
+        runtime_values = {
+            **runtime_values,
+            **{
+                name: config[name]
+                for name in (
+                    "HTCONDOR_REQUEST_CPUS",
+                    "HTCONDOR_REQUEST_MEMORY",
+                    "HTCONDOR_REQUEST_DISK",
+                    "HTCONDOR_REQUEST_DISK_MULTIPLIER",
+                    "HTCONDOR_RESOURCE_AUTODETECT_ENABLED",
+                    "HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER",
+                    "HTCONDOR_RESOURCE_TRIM_TOP_FRACTION",
+                )
+            },
+        }
+    else:
         runtime_values = {
             **runtime_values,
             **{

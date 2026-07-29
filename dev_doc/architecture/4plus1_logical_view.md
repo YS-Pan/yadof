@@ -22,6 +22,13 @@ The package owns invariant execution lifecycle, paths, metadata, transport,
 rawData manipulation, cost dispatch, constraint/failure policy, and objective
 counting. Task files select and parameterize those package mechanisms.
 
+Resource evidence follows a parallel backend-neutral interpretation path. Local
+process-tree measurements and HTCondor ClassAd measurements publish common CPU,
+memory, and disk keys. One shared calibration component selects smoke or
+preceding-generation evidence and trims its upper tail. HTCondor turns the result
+into scheduler requests; local mode turns it into a safe worker count constrained
+by current submit-host capacity.
+
 ## Source-of-truth policy
 
 Durable source truth includes raw variables once per individual, flat rawData,
@@ -44,6 +51,8 @@ effective workspace paths.
 ## Invariants
 
 - Local/distributed evaluators differ only in execution transport.
+- Local concurrency is bounded by population size, an explicit cap, physical CPU,
+  currently available memory, and free disk; smoke remains exactly one worker.
 - Parameter and objective counts come from the currently selected workspace.
 - All population-return paths preserve input order and objective width.
 - Individual failures yield diagnostic records and infinite costs without deleting

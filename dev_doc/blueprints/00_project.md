@@ -27,11 +27,14 @@ failure-shape contracts.
    them as flat `rawData.zip` and Condor returns the zip rather than the directory.
 6. Normalize all outcomes into ordered `JobResult` rows with per-individual
    diagnostics.
-7. Atomically record raw variables, rawData, lifecycle/provenance metadata, and
+7. Normalize local process-tree and HTCondor ClassAd resource evidence, then reuse
+   one smoke/preceding-generation calibration for scheduler requests or local
+   worker-count planning.
+8. Atomically record raw variables, rawData, lifecycle/provenance metadata, and
    lightweight campaign metadata.
-8. Recalculate normalized history and objective costs through the current workspace
+9. Recalculate normalized history and objective costs through the current workspace
    task definition.
-9. Train/recover workspace-local rawData-first surrogate models and use predictions
+10. Train/recover workspace-local rawData-first surrogate models and use predictions
    only to screen candidates that still receive real evaluation.
 
 ## Boundaries

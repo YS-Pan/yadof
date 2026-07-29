@@ -38,9 +38,10 @@ identifies the current installable-package line.
 
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
 Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and
-HTCondor 25.4.0. This is a reproducibility snapshot rather than a minimum-version
-contract; the wheel metadata remains authoritative for Python and dependency
-requirements.
+psutil 7.2.2, and HTCondor 25.4.0. psutil is a core dependency because local
+resource planning measures the workflow and simulator process tree. This is a
+reproducibility snapshot rather than a minimum-version contract; the wheel metadata
+remains authoritative for Python and dependency requirements.
 
 ## Initialize and inspect
 

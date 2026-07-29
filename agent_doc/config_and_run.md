@@ -18,6 +18,40 @@ Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
 shape stay in `job_template/`.
 
+## Local concurrency and resource calibration
+
+`LOCAL_EVALUATION_MAX_WORKERS` is a safety cap, not always the number that will run.
+Its package default is 8. With the default
+`LOCAL_RESOURCE_AUTODETECT_ENABLED = True`, yadof plans every local batch from the
+minimum of:
+
+- the current population size and configured cap;
+- physical CPU count divided by estimated CPU cores per workflow;
+- available memory divided by estimated peak process-tree memory;
+- free disk divided by estimated job-directory disk use.
+
+`LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION` defaults to `0.15`, reserving 15% of
+available memory and disk for the operating system and other work. The one-individual
+smoke contract is unchanged.
+
+Local execution samples the workflow process and recursive simulator children with
+psutil. It records backend-neutral CPU, peak-memory, and disk fields alongside local
+diagnostics. HTCondor collection writes the same neutral fields. Both backends call
+one calibration implementation: generation zero uses compatible smoke evidence,
+later generations use the preceding generation from the same optimizer run, and the
+configured upper tail is trimmed before estimates are selected.
+
+When no evidence exists, `HTCONDOR_REQUEST_CPUS`, `HTCONDOR_REQUEST_MEMORY`, and
+`HTCONDOR_REQUEST_DISK` act as the shared per-job bootstrap hints. This preserves
+existing workspace resource declarations across local and distributed execution.
+`HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER` and
+`HTCONDOR_RESOURCE_TRIM_TOP_FRACTION` also apply to the shared calibration.
+
+`--progress` prints the effective local worker count, the configured/CPU/memory/disk
+limits, calibration source, and sample count. A temporary `local_max_workers` API
+override changes the cap; autodetection may still select a smaller safe count.
+Disable `LOCAL_RESOURCE_AUTODETECT_ENABLED` only to use the cap directly.
+
 ## Standalone smoke
 
 ```powershell

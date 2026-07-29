@@ -33,14 +33,22 @@
   hashes, package worker-lifecycle copying, top-level AEDT runtime-artifact
   exclusion, and preparation provenance.
 - `local_runner`: direct workflow subprocess, timeout/process cleanup, rawData
-  validation, and shared metadata finalization.
+  validation, psutil process-tree resource measurement, and shared metadata
+  finalization.
+- `resource_calibration`: backend-neutral smoke/preceding-generation observation
+  selection, upper-tail trimming, bootstrap scaling, and concrete per-job estimates
+  shared by local and HTCondor policy.
+- `local_resources`: submit-host CPU/memory/disk discovery, adaptive worker-count
+  planning, process-tree monitoring, and job-directory disk measurement.
 - `condor_runner`: direct `workflow.py` submit, input selection, explicit
   `rawData.zip` transport, flat archive restoration, queue polling, collection,
   `condor.log` execution-clock and execute-site parsing, source-labeled timeout
   machine fallback, bounded removal, ClassAd diagnostics, and pool matchmaking
   analysis.
 - `resource_requests`, `resource_retries`, `time_limits`: workspace-local adaptive
-  policy separated from backend orchestration.
+  policy separated from backend orchestration. Resource requests format
+  HTCondor-specific values over the shared calibration result; retry and time-limit
+  policies remain backend-specific.
 - `job_result`, `types`: common result shape and metadata utilities.
 - `recorded_data_client`: narrow evaluation-to-persistence boundary.
 
