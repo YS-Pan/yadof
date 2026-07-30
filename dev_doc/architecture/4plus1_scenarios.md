@@ -3,7 +3,7 @@
 ## New generic study
 
 Install an AI coding agent and the wheel, open the intended workspace in the agent,
-give it the prompt starter and task, then let it follow installed agent documents
+give it the prompt starter and task, then let it follow installed user documents
 through `yadof init PATH`, task editing, and read-only `check`. After explicit
 authorization, run one local smoke, `run`, then inspect cost and integrated
 time/failure/error history individually or with `view all`. A run without
@@ -18,7 +18,7 @@ workflow preserves those package-owned contracts.
 ## Agent-authored study
 
 The user prefixes a request with the repository prompt starter. The agent reads the
-installed `agent` documentation entry, follows its targeted reading order, runs
+installed `user` documentation entry, follows its targeted reading order, runs
 `init` when needed, edits only workspace-owned task inputs, and runs read-only
 `check`. A real smoke or optimization remains an explicitly authorized execution
 stage because it may launch expensive external software.

@@ -16,8 +16,9 @@
 
 ## Guidance
 
-- Trigger this toDo only when normal work naturally exposes a mismatch caused by
-  packagify; do not search the repository solely for occurrences.
+- During the required bounded automatic-trigger check, treat this toDo as triggered
+  only when already in-scope evidence exposes a mismatch caused by packagify; do
+  not search unrelated files or the repository solely for occurrences.
 - A simple inconsistency has one clear current replacement and can be corrected
   locally without changing public behavior, data, APIs, or architecture. Examples
   include stale paths, directory names, links, and wording.
@@ -36,4 +37,4 @@
 
 ## Obsolete Rule
 
-manual
+persistent

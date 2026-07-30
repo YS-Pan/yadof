@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from typing import get_args
 
 from ..resources import (
     DocumentationKind,
@@ -13,7 +14,7 @@ from ..resources import (
 from ._output import write_text
 
 
-_AUDIENCES: tuple[DocumentationKind, ...] = ("agent", "dev")
+_AUDIENCES: tuple[DocumentationKind, ...] = get_args(DocumentationKind)
 
 
 def _list_docs(args: argparse.Namespace) -> int:

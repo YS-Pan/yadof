@@ -5,8 +5,9 @@
 yadof is a task-agnostic installed framework. Stable code and read-only resources
 live under `src/yadof`; user-editable task inputs and runtime output live under an
 explicit workspace. The old source-runtime namespace is removed. Normal use is
-AI-agent-first: an installed coding agent reads packaged guidance and authors the
-workspace through the same public CLI/API available to direct users.
+AI-agent-first: a human user directs an installed coding agent, which reads packaged
+user guidance and authors the workspace through the same public CLI/API available
+to direct users.
 
 ## Main contract
 
@@ -112,6 +113,9 @@ local/distributed execution converge before recording; core runtime never depend
 optional tools or administrator code; historical documents do not override current
 architecture/blueprints. Task modules call package support for invariant behavior,
 and package modules do not hard-code task-variable simulator or objective policy.
+Developer maintenance performs a bounded pre-completion check of active automatic
+toDos against already in-scope evidence; recurring automatic toDos remain active
+after a single matching occurrence.
 
 ## Verification boundary
 

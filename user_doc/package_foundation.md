@@ -3,10 +3,10 @@
 ## AI agent prerequisite
 
 yadof is intended to be used through an AI coding agent. Install an agent before
-authoring a task, then open the source checkout or selected writable workspace in
-that agent. OpenAI Codex is recommended because the author used it for development
-and verification. The agent should begin with `yadof docs show agent README.md` and
-follow the version-matched reading order before it edits anything.
+authoring a task, then open the selected writable workspace in that agent. OpenAI
+Codex is recommended because the author used it for development and verification.
+The agent should begin with `yadof docs show user README.md` and follow the
+version-matched reading order before it edits anything.
 
 ## Install
 

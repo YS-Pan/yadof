@@ -23,9 +23,10 @@ flowchart LR
 ## Agent interaction
 
 The AI coding agent is the normal task-authoring interface. It consumes the
-version-matched installed agent documentation, edits only authorized source or
-workspace files, and invokes the same package CLI/API that direct users can invoke.
-It does not become a runtime dependency of prepared jobs or execute nodes.
+version-matched installed user documentation under a human user's direction, edits
+only the selected workspace files, and invokes the same package CLI/API that direct
+users can invoke. It does not become a runtime dependency of prepared jobs or
+execute nodes.
 
 ## Installed package
 

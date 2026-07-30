@@ -1,14 +1,21 @@
-# yadof agent guide
+# yadof user-workflow guide for AI agents
 
-This is the installed entry point for an AI agent that answers questions about
-yadof or prepares a yadof optimization task. Treat the installed package and these
-version-matched documents as read-only sources of truth. Every task edit and runtime
-artifact belongs to an explicit writable workspace.
+`user_doc/` is the installed documentation home for the yadof user's workflow. Its
+primary reader and executor is an AI coding agent acting under a human user's
+direction. The human user normally supplies the task, reviews assumptions and
+results, and authorizes real execution; they rarely need to read and carry out
+these pages command by command themselves. The `user_doc` name identifies whose
+workflow and authority the guidance serves, not who literally reads each step.
 
-yadof uses an AI-agent-first workflow. A user should install an AI coding agent
-before preparing a task, open the intended source checkout or writable workspace in
-that agent, and provide the task together with the repository prompt starter.
-OpenAI Codex is recommended because it was used to develop and verify yadof.
+This README is therefore addressed to that user-directed AI agent. Treat the
+installed package and these version-matched documents as read-only sources of
+truth. Every task edit and runtime artifact belongs to an explicit writable
+workspace.
+
+yadof uses a user-directed, AI-agent-first workflow. A user should install an AI
+coding agent before preparing a task, open the intended writable workspace in that
+agent, and provide the task together with the repository prompt starter. OpenAI
+Codex is recommended because it was used to develop and verify yadof.
 
 ## First decide the request type
 
@@ -21,9 +28,9 @@ OpenAI Codex is recommended because it was used to develop and verify yadof.
 Use the installed documentation interface from any directory:
 
 ```powershell
-python -m yadof docs list agent
-python -m yadof docs show agent package_foundation.md
-python -m yadof docs bundle agent
+python -m yadof docs list user
+python -m yadof docs show user package_foundation.md
+python -m yadof docs bundle user
 ```
 
 ## Task-authoring reading order

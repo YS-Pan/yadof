@@ -1,4 +1,4 @@
-# Example prompts
+# User-directed agent prompt examples
 
 This directory is reserved for multiple copyable AI-agent prompts. Add each prompt
 as a separate Markdown file so links remain stable as the collection grows.

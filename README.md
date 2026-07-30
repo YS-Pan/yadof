@@ -18,17 +18,19 @@ workflow. Install an AI agent on the computer before preparing a yadof task. The
 recommended agent is [OpenAI Codex](https://openai.com/codex/get-started/) because
 the author developed and verified this package with Codex.
 
-Open the yadof source checkout or the intended writable workspace in the agent,
-then give it the task together with this starter:
+Open the intended writable workspace in the agent, then give it the task together
+with this starter:
 
-> Complete the task below. Before you begin, run `python -m yadof docs show agent README.md` and follow its instructions, reading any referenced documentation or installed yadof code needed for the task.
+> Complete the task below. Before you begin, run `python -m yadof docs show user README.md` and follow its instructions, reading any referenced documentation or installed yadof code needed for the task.
 
-The installed, version-matched agent documents tell the agent which files it may
-edit, what it must read, and which validation command to run. A reserved blank
+The installed, version-matched user documents are written primarily for that
+user-directed AI agent: they tell it which files it may edit, what it must read, and
+which validation command to run. The human user normally directs and reviews this
+work rather than executing every documented step personally. A reserved blank
 prompt is available at
-[agent_doc/example_prompts/01_task_setup.md](agent_doc/example_prompts/01_task_setup.md);
-the surrounding [prompt examples directory](agent_doc/example_prompts/README.md)
-is ready for additional examples.
+[user_doc/example_prompts/01_task_setup.md](user_doc/example_prompts/01_task_setup.md);
+the surrounding [prompt examples directory](user_doc/example_prompts/README.md) is
+ready for additional examples.
 
 ## Install and run
 
@@ -114,8 +116,9 @@ The optional read-only surrogate checkpoint viewer is installed below
 `yadof view surrogate`. It reads checkpoints and recorded evidence but does not
 train models, run workflows, or write workspace state.
 
-See [agent_doc/README.md](agent_doc/README.md) for agent-oriented installation and
-workflow guidance, and [dev_doc/README.md](dev_doc/README.md) for architecture and
-contribution rules. The checked-in [examples](examples/README.md) preserve complete
-reference workspaces, including the former HFSS task; examples are tracked in Git
-but excluded from wheel and sdist artifacts.
+See [user_doc/README.md](user_doc/README.md) for the user-workflow guidance followed
+primarily by the user's AI agent, and [dev_doc/README.md](dev_doc/README.md) for
+architecture and contribution rules. The checked-in
+[examples](examples/README.md) preserve complete reference workspaces, including
+the former HFSS task; examples are tracked in Git but excluded from wheel and sdist
+artifacts.

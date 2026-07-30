@@ -20,15 +20,38 @@ Placement is the authoritative trigger declaration:
   Reading or mentioning one does not trigger its instructions. Execute it only when
   the user's prompt explicitly says to execute the instructions in that particular
   file. All toDos that predate `toDo/auto/` are manual.
-- **Automatic trigger** is opt-in. Automatic toDos live under `toDo/auto/`. They
-  describe worthwhile, low-priority cleanup whose exact source location may not be
-  known. Do not search the repository solely to find occurrences and do not broaden
-  the user's task for one. When normal work naturally exposes a match in files
-  already in scope, apply it opportunistically only if the change is safe within
-  that scope; otherwise leave it pending.
+- **Automatic trigger** is declared by placement. Automatic toDos live under
+  `toDo/auto/`. They describe worthwhile, low-priority cleanup whose exact source
+  location may not be known. Every active automatic toDo receives the bounded
+  trigger check below; execution remains conditional on an objective match in the
+  normal task scope. Do not search the repository solely to find occurrences and do
+  not broaden the user's task for one.
 
 Manual toDos may shape implementation choices, but they must not add unrequested
 work to the current task.
+
+## Automatic Trigger Check
+
+Reading an automatic toDo is not, by itself, a trigger. After the normal task has
+established its concrete files and a current diff or findings exist, perform this
+check before reporting the task complete:
+
+1. Compare every active automatic toDo with facts already encountered in the
+   in-scope files, their directly relevant callers/tests/documentation, and the
+   current diff.
+2. Treat a toDo as triggered when that bounded review finds the objective condition
+   described by the document. "Naturally exposed" includes this deliberate review
+   of already in-scope evidence; it does not require an accidental observation.
+3. If the matching work is safe and stays inside both the normal task scope and the
+   automatic toDo's limits, complete it and report it. If a match exists but the
+   work is risky or outside those limits, report the match and leave the document
+   pending.
+4. If no objective match exists, do not perform extra work and do not report the
+   automatic toDo merely to prove it was read.
+
+This checkpoint may use focused searches needed to establish callers, imports,
+exports, tests, or documented contracts for an already encountered candidate. It
+must not become an unrelated repository-wide hunt for candidates.
 
 ## Naming And Content Contract
 
@@ -74,7 +97,7 @@ Recommended structure:
 ## Obsolete Rule
 - Automatic toDos only: omit for the default seven-day time limit with no extra
   condition; state a custom time limit and/or an explicit user-defined condition,
-  or state `manual` to disable automatic obsoletion.
+  or state `persistent` to disable automatic obsoletion.
 ```
 
 ## Automatic Obsolete Contract
@@ -93,15 +116,20 @@ treating it as active:
      condition such as "after task X is completed". This condition is optional and
      absent by default. Do not invent one from project changes or from a subjective
      judgment that the document is no longer valid.
-2. **Manual.** When `## Obsolete Rule` says `manual`, do not archive because of age
-   or a configured condition. The document remains until explicitly retired or its
-   work is completed.
+2. **Persistent.** When `## Obsolete Rule` says `persistent`, do not archive because
+   of age or a configured condition. This word governs obsoletion only; placement
+   under `toDo/auto/` still declares an automatic trigger. The document remains
+   until its own completion rule permits retirement or a user explicitly retires
+   it.
 
 These stale-document rules do not replace completion handling. After a manual toDo
-is explicitly triggered, or an automatic toDo is opportunistically triggered,
-complete the code and documentation work first and then move the fully completed
-file to `../obsolete/`. If only part is complete, update the remaining toDo or split
-out a new time-named toDo before archiving the completed portion.
+is explicitly triggered, or an automatic toDo's bounded check finds a match,
+complete the code and documentation work first and then apply that document's
+completion rule. Move a one-shot toDo to `../obsolete/` only when its document-level
+goal is fully complete. A recurring automatic toDo whose completion rule says to
+remain active is not completed by one trigger instance and must stay under
+`toDo/auto/`. If only part of a one-shot goal is complete, update the remaining toDo
+or split out a new time-named toDo before archiving the completed portion.
 
 ## Obsolete Archive Contract
 
@@ -118,5 +146,7 @@ explicitly brings that fact forward.
 
 When adding future work, put manual-trigger work directly under `toDo/` and
 automatic-trigger work under `toDo/auto/`. When a task is fully completed, update
-the current code, tests, agent documentation, architecture, blueprints, terminology,
-and change record first; only then move its toDo to `obsolete/`.
+the current code, tests, user documentation, architecture, blueprints, terminology,
+and change record first; only then move a completed one-shot toDo to `obsolete/`.
+Keep a recurring automatic toDo active after each completed occurrence unless its
+own completion rule or an explicit user decision retires the document.

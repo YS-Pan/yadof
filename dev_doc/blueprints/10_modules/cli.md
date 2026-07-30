@@ -28,8 +28,10 @@ to 50 when the option is omitted; explicit values still override one invocation,
 and the Python optimizer API still requires its generation count.
 
 Documentation uses an explicit `list`, `show`, and `bundle` action model. Paths are
-audience-relative and traversal is rejected. CLI code contains no duplicate
-documentation body and never requires callers to locate site-packages.
+audience-relative and traversal is rejected. The current audiences are `user` for
+the user-workflow guidance primarily executed by the user's AI agent, and `dev` for
+maintainers. CLI code contains no duplicate documentation body and never requires
+callers to locate site-packages.
 
 Task utilities use software namespaces before actions that are not framework-
 generic. HFSS parameter extraction is `yadof task hfss extract-parameters`; another

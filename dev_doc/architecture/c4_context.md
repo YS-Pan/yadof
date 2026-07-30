@@ -8,16 +8,16 @@ Python APIs.
 
 The supported default journey is agent-led. The user first installs an AI coding
 agent, preferably OpenAI Codex because it is the development reference, opens the
-source checkout or intended workspace, and gives the agent the task plus the prompt
-starter. Direct CLI/API use remains supported but is the lower-level surface.
+intended writable workspace, and gives the agent the task plus the prompt starter.
+Direct CLI/API use remains supported but is the lower-level surface.
 
 ## People and responsibilities
 
 - Users own workspace task-variable definitions, simulator/model inputs, objective
   policy, campaign configuration, and decisions to launch expensive work.
 - AI agents are the primary task-authoring interface. They read version-matched
-  `agent_doc`, inspect documented package code, and edit the selected workspace or
-  package source when explicitly requested.
+  `user_doc` under a human user's direction, inspect documented package code, and
+  edit the selected workspace.
 - Administrators own Python/simulator installation, licenses, HTCondor deployment,
   execute-node permissions, resource advertisement, and Windows slot-user policy.
 - Package maintainers own every cross-task invariant, stable framework contracts,
@@ -38,9 +38,10 @@ software or the HTCondor pool. A workflow can orchestrate several simulations or
 task-local computations before producing rawData; the framework sees only the job
 contract.
 
-An AI agent can discover version-matched task-authoring documentation through the
-installed `yadof docs` command, inspect relevant package code when the documented
-contract is insufficient, and edit only the selected user-owned workspace.
+The user's AI agent can discover version-matched task-authoring documentation
+through the installed `yadof docs` command, inspect relevant package code when the
+documented contract is insufficient, and edit only the selected user-owned
+workspace.
 
 Package artifacts are immutable framework inputs. Workspace directories are the
 only mutable task/runtime boundary. Wheel and sdist contain package code, generic

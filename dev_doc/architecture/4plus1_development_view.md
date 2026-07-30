@@ -3,7 +3,7 @@
 ## Repository layout
 
 Framework source lives only under `src/yadof/`; maintained generic tests live under
-`tests/`. Root `dev_doc/` and `agent_doc/` are authoritative editable sources and
+`tests/`. Root `dev_doc/` and `user_doc/` are authoritative editable sources and
 are mapped into the wheel as read-only resources. `admin_tool/` owns system/pool
 operations outside package runtime. Complete reference workspaces may be tracked
 under `examples/`, but build inclusion excludes them from wheel/sdist. Runtime
@@ -26,7 +26,7 @@ dev_doc/                   developer source documentation
   README.md                entry, reading order, environment, maintenance workflow
   development_environment.md detected reproducibility snapshot
   skill/                   module-specific documentation contracts
-agent_doc/                 task-authoring source documentation
+user_doc/                  user-workflow documentation, primarily for the user's AI agent
   example_prompts/         expandable prompt-example collection
 admin_tool/                administrator-only operations
 ```
@@ -84,8 +84,12 @@ site-packages, and only then run pytest with the venv interpreter.
 
 - Read the development guide and its linked module contracts, then architecture,
   terminology, relevant blueprints, and active toDos before editing.
+- Before reporting normal work complete, compare active automatic toDos with the
+  already in-scope files, their direct evidence, and the current diff. Execute only
+  objective matches that stay within the documented scope; this bounded checkpoint
+  must not become an unrelated repository scan.
 - Update architecture when system relationships change; update blueprints when
-  module/file contracts change; update agent docs when task-authoring behavior
+  module/file contracts change; update user docs when task-authoring behavior
   changes; add one append-only change record.
 - Prefer current contracts over compatibility aliases and silent fallbacks. Obsolete
   design notes are preserved only as historical evidence.

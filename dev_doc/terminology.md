@@ -2,9 +2,9 @@
 
 | Term | Meaning |
 |---|---|
-| `agent-led workflow` | The normal yadof usage path: a user installs an AI coding agent, preferably the Codex reference used during development, and the agent reads version-matched installed guidance before authoring or validating an explicit workspace. The agent is not copied into jobs and does not replace the CLI/API runtime contract. |
+| `agent-led workflow` | The normal yadof usage path: a human user directs an AI coding agent, preferably the Codex reference used during development, and the agent reads version-matched installed user guidance before authoring or validating an explicit workspace. The agent is not copied into jobs and does not replace the CLI/API runtime contract. |
 | `installed package` | The complete `yadof` framework under site-packages: APIs, CLI, defaults, templates, adapters, worker support, tools, and read-only docs. It is not a runtime write location. |
-| `agent documentation` | Version-matched task-authoring and question-answering guidance under root `agent_doc/`, exposed from an installed package through `yadof docs`; it replaces the former user-documentation audience. |
+| `user documentation` | Version-matched task-authoring and question-answering guidance under root `user_doc/`, exposed as the installed `user` audience through `yadof docs`. It serves the human user's workflow but is written primarily for an AI coding agent acting under that user's direction; the user normally directs, reviews, and authorizes rather than executing every documented step personally. |
 | `workspace` | One explicitly selected writable root owning `config.py`, `job_template/`, jobs, records, checkpoints, logs, and tool output. |
 | `workspace marker` | Portable `.yadof/workspace.json` provenance published last by init. It never authorizes overwrite, repair, or automatic upgrade. |
 | `WorkspaceContext` | Immutable absolute workspace/path value used by stateful public APIs. Relative configured paths resolve from its root. |
@@ -42,8 +42,9 @@
 | `software task namespace` | The software-identifying CLI level below `yadof task` for non-generic actions, such as `yadof task hfss`; it prevents different adapters from competing for an ambiguous generic action name. |
 | `surrogate viewer` | The optional, explicitly launched `yadof view surrogate` desktop tool below `yadof.tools.surrogate_viewer`; it reads one workspace's current task, real evidence, and checkpoints without training, executing workflows, or writing workspace state. |
 | `task-specific test` | Test tied to a concrete model/design/objective. It belongs in a disposable/external workspace, not the generic default suite. |
-| `user` | Prepares workspace tasks, runs campaigns, and inspects results without maintaining system infrastructure. |
+| `user` | Directs preparation of workspace tasks, runs or authorizes campaigns, and inspects results without maintaining system infrastructure. The normal interface is a user-directed AI coding agent reading `user_doc/`. |
 | `administrator` | Installs dependencies and maintains HTCondor/software/hardware; resources live under `admin_tool/`. |
 | `manual toDo` | Root `dev_doc/toDo/*.md`; reading supplies context but execution requires an explicit user request. |
-| `automatic toDo` | Low-priority `toDo/auto/` handoff considered only when normal in-scope work naturally triggers it and its obsolete rule permits. |
+| `automatic toDo` | Low-priority `toDo/auto/` handoff that receives a mandatory bounded match check against already in-scope evidence before normal work is reported complete. It executes only when that check finds the document's objective condition and does not authorize an unrelated repository scan. |
+| `persistent automatic toDo` | An automatic toDo whose `Obsolete Rule` is `persistent`; it still triggers automatically on a bounded match, is not retired by age, and remains active after each occurrence when its completion rule defines recurring work. |
 | `change record` | Append-only time-named explanation under `dev_doc/change_records/`; not read by default. |

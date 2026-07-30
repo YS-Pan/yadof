@@ -15,9 +15,10 @@ They may own connection/setup/export mechanics and output dimensionality, but no
 concrete project/design, parameter set, objective name/count, cost threshold,
 credential, or machine path. Those belong to the workspace workflow/config/cost.
 
-Agent-facing usage references live under `agent_doc/adapters/`. Active reusable
-adapter fixes are made in package resource source and copied into workspaces only by
-explicit user action; existing workspace edits are not silently upgraded.
+User-workflow usage references, written primarily for the user's AI agent, live
+under `user_doc/adapters/`. Active reusable adapter fixes are made in package
+resource source and copied into workspaces only by explicit user action; existing
+workspace edits are not silently upgraded.
 
 ## Test adapter
 

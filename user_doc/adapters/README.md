@@ -16,6 +16,7 @@ jobs remain self-contained and never depend on a source checkout.
 - [hfss_com.md](hfss_com.md) describes the optional HFSS/PyAEDT adapter.
 - [test_com.md](test_com.md) describes the pure-Python simulator stand-in.
 
-New framework adapters belong in package resources with matching agent documentation.
+New framework adapters belong in package resources with matching user
+documentation written for the user's AI agent.
 Task-only project names, designs, objectives, and private credentials stay in the
 workspace rather than the reusable adapter.

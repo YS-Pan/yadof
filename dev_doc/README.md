@@ -4,7 +4,7 @@
 what the project is, how it is shaped, and why it changed over time.
 
 The repository root remains the authoritative editable source for `dev_doc/` and
-`agent_doc/`. Package builds map both trees into read-only `yadof` wheel resources;
+`user_doc/`. Package builds map both trees into read-only `yadof` wheel resources;
 installed `yadof docs list|show|bundle` discovers and reads them without assuming a
 Git checkout or writable package directory.
 
@@ -16,8 +16,10 @@ must be assigned to one of them.
 ### User
 
 A **user** uses yadof to prepare optimization tasks, configure and run campaigns,
-and inspect their results. A user may edit task files and campaign settings, but
-does not install, configure, repair, or maintain the system environment.
+and inspect their results, normally by directing an AI coding agent that reads
+`user_doc/` and performs the detailed task-authoring steps. A user may edit task
+files and campaign settings, but does not install, configure, repair, or maintain
+the system environment.
 
 ### Administrator
 
@@ -36,15 +38,18 @@ below before changing code or documentation. The canonical entry point is
 The module contracts under `skill/` are required operational instructions, not
 optional summaries. When collecting project context, follow this order:
 
-1. Read the [agent-document contract](skill/agent_doc.md), then read
-   `../agent_doc/README.md` and follow its agent-facing task setup instructions.
+1. Read the [user-document contract](skill/user_doc.md), then read
+   `../user_doc/README.md` and follow its user-workflow instructions, which are
+   written primarily for an AI agent acting under the user's direction.
 2. Read the [architecture contract](skill/architecture.md), then read every file in
    `architecture/` in full.
 3. Read the [terminology contract](skill/terminology.md), then read
    `terminology.md` in full.
 4. Read the [toDo and obsolete contract](skill/toDo.md), then read every Markdown
    file under `toDo/` recursively, including `toDo/auto/`, and apply automatic
-   obsolete rules before treating an automatic toDo as active.
+   obsolete rules before treating an automatic toDo as active. Once normal task
+   scope and findings are known, perform the contract's bounded automatic-trigger
+   check before reporting completion.
 5. List the complete `blueprints/` tree and perform the targeted reading pass
    defined by the [blueprint contract](skill/blueprints.md).
 6. Apply the [change-record contract](skill/change_records.md). Do not read existing
@@ -130,8 +135,9 @@ that depend on the current Windows code page.
 
 ## Module Contract Index
 
-- [Agent documentation](skill/agent_doc.md): the one-way relationship between
-  developer context and agent-facing task-authoring guidance.
+- [User documentation](skill/user_doc.md): the one-way relationship between
+  developer context and user-workflow task-authoring guidance that is primarily
+  executed by the user's AI agent.
 - [Architecture](skill/architecture.md): current-view system maps, invariants, file
   roles, and update triggers.
 - [Blueprints](skill/blueprints.md): generative module/file descriptions, targeted
@@ -174,10 +180,10 @@ After each code change:
    [change-record contract](skill/change_records.md).
 4. Apply the vocabulary rules in the
    [terminology contract](skill/terminology.md).
-5. Apply the completion and archival rules in the
+5. Apply the automatic-trigger check plus the completion and archival rules in the
    [toDo and obsolete contract](skill/toDo.md).
-6. Update `agent_doc/` when task-authoring behavior changes, as defined by the
-   [agent-document contract](skill/agent_doc.md).
+6. Update `user_doc/` when task-authoring behavior changes, as defined by the
+   [user-document contract](skill/user_doc.md).
 
 For documentation-only changes, still update architecture and blueprints when the
 documentation system itself changes, and add a change record.

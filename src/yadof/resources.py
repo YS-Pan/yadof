@@ -12,10 +12,10 @@ try:  # Python 3.11 moved these resource ABCs into importlib.resources.
 except ImportError:  # pragma: no cover - exercised on supported Python 3.10.
     from importlib.abc import Traversable
 
-DocumentationKind = Literal["agent", "dev"]
+DocumentationKind = Literal["user", "dev"]
 
 _DOCUMENTATION_DIRECTORIES: dict[DocumentationKind, str] = {
-    "agent": "agent_doc",
+    "user": "user_doc",
     "dev": "dev_doc",
 }
 
