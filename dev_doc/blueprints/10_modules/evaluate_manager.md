@@ -29,13 +29,15 @@ metadata. It never creates or transfers a yadof runtime package/archive/config.
 `local_runner.py` directly runs job-local `workflow.py` with bounded concurrency and
 per-job timeout, kills the process tree on timeout, rejects `cost.json`, validates
 the flat rawData directory even when no direct files exist, merges workflow metadata,
-and captures output tails. psutil samples the workflow and recursive simulator
-children to record summed peak RSS, accumulated CPU time/average cores, peak process
-count, and job-directory disk use. `local_resources.py` combines calibrated per-job
-needs with physical CPU, currently available memory, free disk, reserve fraction,
-population size, and the configured worker cap. The task workflow calls package
-worker support, which records the execute-machine name and the rest of the invariant
-lifecycle metadata.
+and captures output tails. With progress enabled, it continuously drains both
+workflow pipes and tees complete lines to the parent console with job/stream
+prefixes while retaining those tails. psutil samples the workflow and recursive
+simulator children to record summed peak RSS, accumulated CPU time/average cores,
+peak process count, and job-directory disk use. `local_resources.py` combines
+calibrated per-job needs with physical CPU, currently available memory, free disk,
+reserve fraction, population size, and the configured worker cap. The task workflow
+calls package worker support, which records the execute-machine name and the rest of
+the invariant lifecycle metadata.
 
 ## Distributed backend
 

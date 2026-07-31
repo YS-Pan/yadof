@@ -17,6 +17,7 @@ from yadof.evaluate_manager import (
     prepared_job_static_hash,
     run_smoke_test,
 )
+from yadof.evaluate_manager.local_runner import run_local_job
 from yadof.workspace import WorkspaceContext
 from yadof.workspace.init import init_workspace
 
@@ -321,6 +322,44 @@ def test_packaged_local_timeout_is_per_individual_failure(tmp_path: Path) -> Non
     assert metadata["status"] == "timeout"
     assert metadata["timed_out"] is True
     assert recorded_api.list_records(root)[0]["status"] == "timeout"
+
+
+def test_local_progress_streams_workflow_output_and_preserves_tails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _workspace(tmp_path)
+    workflow = root / "job_template/workflow.py"
+    source = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        source.replace(
+            "from __future__ import annotations\n",
+            "from __future__ import annotations\n"
+            "import sys\n"
+            "print('workflow-stage-out', flush=True)\n"
+            "print('workflow-stage-err', file=sys.stderr, flush=True)\n",
+            1,
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    job = prepare_job(root, (0.5,), mode="local", timeout_sec=5.0)
+    monkeypatch.setenv("YADOF_PROGRESS", "1")
+
+    result = run_local_job(
+        job,
+        timeout_sec=5.0,
+        env=_source_environment(),
+    )
+
+    output = capsys.readouterr()
+    assert result.status == "done"
+    assert f"[yadof:{job.name}:stdout] workflow-stage-out" in output.out
+    assert f"[yadof:{job.name}:stderr] workflow-stage-err" in output.err
+    metadata = _metadata(job.directory)
+    assert "workflow-stage-out" in metadata["stdout_tail"]
+    assert "workflow-stage-err" in metadata["stderr_tail"]
 
 
 def test_packaged_record_failure_is_isolated_per_individual(

@@ -4,8 +4,9 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, TextIO
 
 from ..job_template import RawDataContractError, validate_rawdata_directory
 from .job_files import RAW_DATA_DIR_NAME
@@ -23,6 +24,8 @@ from .types import JobResult, JobSpec
 
 
 WORKFLOW_SCRIPT_NAME = "workflow.py"
+_PROGRESS_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+_LIVE_OUTPUT_LOCK = threading.Lock()
 
 
 def run_local_job(
@@ -66,13 +69,22 @@ def run_local_job(
     resource_monitor = ProcessTreeResourceMonitor(proc.pid)
     resource_monitor.start()
 
-    timed_out = False
-    try:
-        stdout, stderr = proc.communicate(timeout=None if timeout_sec is None else float(timeout_sec))
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        _terminate_process_tree(proc)
-        stdout, stderr = proc.communicate()
+    if _progress_enabled():
+        stdout, stderr, timed_out = _communicate_live(
+            proc,
+            job_name=job.name,
+            timeout_sec=timeout_sec,
+        )
+    else:
+        timed_out = False
+        try:
+            stdout, stderr = proc.communicate(
+                timeout=None if timeout_sec is None else float(timeout_sec)
+            )
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _terminate_process_tree(proc)
+            stdout, stderr = proc.communicate()
     resource_metadata = resource_monitor.stop()
 
     raw_paths = raw_data_paths(job.directory)
@@ -127,6 +139,71 @@ def run_local_job(
         metadata["rawdata_error"] = rawdata_error
     write_metadata(job.directory, metadata)
     return result_from_metadata(job, metadata, raw_paths)
+
+
+def _progress_enabled() -> bool:
+    value = str(os.environ.get("YADOF_PROGRESS", "")).strip().lower()
+    return value in _PROGRESS_TRUE_VALUES
+
+
+def _communicate_live(
+    proc: subprocess.Popen[str],
+    *,
+    job_name: str,
+    timeout_sec: float | None,
+) -> tuple[str, str, bool]:
+    """Drain workflow pipes continuously and tee complete lines to the console."""
+
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+    threads: list[threading.Thread] = []
+    for stream, captured, sink, label in (
+        (proc.stdout, stdout_parts, sys.stdout, "stdout"),
+        (proc.stderr, stderr_parts, sys.stderr, "stderr"),
+    ):
+        if stream is None:
+            continue
+        thread = threading.Thread(
+            target=_drain_live_stream,
+            args=(stream, captured, sink, job_name, label),
+            name=f"yadof-{job_name}-{label}",
+            daemon=True,
+        )
+        thread.start()
+        threads.append(thread)
+
+    timed_out = False
+    try:
+        proc.wait(timeout=None if timeout_sec is None else float(timeout_sec))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _terminate_process_tree(proc)
+        proc.wait()
+    finally:
+        for thread in threads:
+            thread.join()
+    return "".join(stdout_parts), "".join(stderr_parts), timed_out
+
+
+def _drain_live_stream(
+    stream: TextIO,
+    captured: list[str],
+    sink: TextIO,
+    job_name: str,
+    label: str,
+) -> None:
+    try:
+        for line in iter(stream.readline, ""):
+            captured.append(line)
+            message = line.rstrip("\r\n")
+            with _LIVE_OUTPUT_LOCK:
+                print(
+                    f"[yadof:{job_name}:{label}] {message}",
+                    file=sink,
+                    flush=True,
+                )
+    finally:
+        stream.close()
 
 
 def _terminate_process_tree(proc: subprocess.Popen) -> None:
