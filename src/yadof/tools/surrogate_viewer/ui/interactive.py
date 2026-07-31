@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+import math
+import random
 from typing import Callable
 
 import tkinter as tk
 from tkinter import ttk
 
-from ..backend import PredictionResult, RealResult, SurrogateWorkspace
+from ..backend import (
+    DimensionSpec,
+    PlotRequest,
+    PredictionResult,
+    RealResult,
+    SurrogateWorkspace,
+)
 from .plots import InteractivePlot
 from .style import MUTED, PANEL
-from .widgets import ScrollableFrame, bind_combobox_keyboard
+from .widgets import (
+    CheckmarkToggle,
+    ScrollableFrame,
+    bind_combobox_keyboard,
+)
 
 
 class InteractiveTab(ttk.Frame):
@@ -29,12 +41,18 @@ class InteractiveTab(ttk.Frame):
         self._slider_values: list[tk.DoubleVar] = []
         self._slider_labels: list[ttk.Label] = []
         self.parameter_scales: list[ttk.Scale] = []
+        self._dimension_specs: tuple[DimensionSpec, ...] = ()
+        self._dimension_plot_vars: list[tk.BooleanVar] = []
+        self._dimension_fixed_vars: list[tk.StringVar] = []
+        self._dimension_grid_combos: list[ttk.Combobox] = []
+        self._dimension_fixed_entries: list[ttk.Entry] = []
+        self.dimension_toggles: list[CheckmarkToggle] = []
 
         self.checkpoint_var = tk.StringVar(master=self)
         self.real_generation_var = tk.StringVar(master=self)
         self.real_result_var = tk.StringVar(master=self)
         self.rawdata_var = tk.StringVar(master=self)
-        self.live_prediction_var = tk.BooleanVar(master=self, value=True)
+        self.auto_refresh_var = tk.BooleanVar(master=self, value=True)
         self._build()
 
     def _build(self) -> None:
@@ -86,21 +104,40 @@ class InteractiveTab(ttk.Frame):
         self.rawdata_combo = self._add_combo(
             controls,
             row=5,
-            label="rawData curve",
+            label="rawData output",
             variable=self.rawdata_var,
-            callback=self._draw_prediction,
+            callback=self._rawdata_changed,
         )
-        ttk.Checkbutton(
+        self.dimension_frame = ttk.LabelFrame(
             controls,
-            text="Predict automatically after slider changes",
-            variable=self.live_prediction_var,
-        ).grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(9, 3))
+            text="Plot dimensions",
+            padding=(8, 5, 8, 7),
+        )
+        self.dimension_frame.grid(
+            row=6,
+            column=0,
+            columnspan=2,
+            sticky=tk.EW,
+            pady=(8, 2),
+        )
+        self.auto_refresh_toggle = CheckmarkToggle(
+            controls,
+            text="Auto refresh",
+            variable=self.auto_refresh_var,
+        )
+        self.auto_refresh_toggle.grid(
+            row=7,
+            column=0,
+            columnspan=2,
+            sticky=tk.EW,
+            pady=(9, 3),
+        )
         ttk.Button(
             controls,
             text="Predict now",
             style="Accent.TButton",
             command=self._request_prediction,
-        ).grid(row=7, column=0, columnspan=2, sticky=tk.EW, pady=(5, 5))
+        ).grid(row=8, column=0, columnspan=2, sticky=tk.EW, pady=(5, 5))
         ttk.Label(
             controls,
             text=(
@@ -110,7 +147,7 @@ class InteractiveTab(ttk.Frame):
             style="Panel.TLabel",
             foreground=MUTED,
             font=("Segoe UI", 8),
-        ).grid(row=8, column=0, columnspan=2, sticky=tk.W, pady=(4, 0))
+        ).grid(row=9, column=0, columnspan=2, sticky=tk.W, pady=(4, 0))
         controls.columnconfigure(1, weight=1)
 
         ttk.Separator(left).pack(fill=tk.X, padx=14, pady=6)
@@ -159,10 +196,15 @@ class InteractiveTab(ttk.Frame):
             str(value)
             for value in workspace.generations
         )
-        self.real_generation_var.set("")
-        self.real_result_combo["values"] = ()
-        self.real_result_var.set("")
-        self._real_results_in_combo = ()
+        selected_generation = random.choice(workspace.generations)
+        self.real_generation_combo.current(
+            workspace.generations.index(selected_generation)
+        )
+        self._real_generation_changed()
+        selected_real = random.choice(self._real_results_in_combo)
+        self.real_result_combo.current(
+            self._real_results_in_combo.index(selected_real)
+        )
         self.rawdata_combo["values"] = workspace.rawdata_names
         self.rawdata_var.set("")
         if workspace.rawdata_names:
@@ -175,8 +217,250 @@ class InteractiveTab(ttk.Frame):
                 0,
             )
             self.rawdata_combo.current(preferred)
+        self._build_dimension_controls()
         self._build_parameter_sliders()
+        for variable, value in zip(
+            self._slider_values,
+            selected_real.normalized_values,
+        ):
+            variable.set(value)
+        self._update_parameter_labels(selected_real.normalized_values)
         self.plot.draw_empty()
+
+    def _build_dimension_controls(self) -> None:
+        for child in self.dimension_frame.winfo_children():
+            child.destroy()
+        self._dimension_specs = ()
+        self._dimension_plot_vars.clear()
+        self._dimension_fixed_vars.clear()
+        self._dimension_grid_combos.clear()
+        self._dimension_fixed_entries.clear()
+        self.dimension_toggles.clear()
+        if self.workspace is None:
+            return
+        item_index = self.rawdata_combo.current()
+        if item_index < 0:
+            return
+
+        self._dimension_specs = self.workspace.dimensions_for_rawdata(
+            item_index
+        )
+        if not self._dimension_specs:
+            ttk.Label(
+                self.dimension_frame,
+                text="Scalar rawData has no dimensions.",
+                style="Panel.TLabel",
+                foreground=MUTED,
+            ).grid(row=0, column=0, sticky=tk.W)
+            return
+
+        ttk.Label(
+            self.dimension_frame,
+            text="Select 0–2 axes; enter fixed coordinates for the rest.",
+            style="Panel.TLabel",
+            foreground=MUTED,
+            font=("Segoe UI", 8),
+        ).grid(row=0, column=0, columnspan=5, sticky=tk.W, pady=(0, 3))
+        default_axis = next(
+            (
+                dimension.index
+                for dimension in self._dimension_specs
+                if dimension.name.casefold() == "freq"
+            ),
+            self._dimension_specs[0].index,
+        )
+        for row, dimension in enumerate(self._dimension_specs, start=1):
+            plot_variable = tk.BooleanVar(
+                master=self,
+                value=dimension.index == default_axis,
+            )
+            fixed_variable = tk.StringVar(
+                master=self,
+                value=self._format_coordinate(dimension.default_value),
+            )
+            toggle = CheckmarkToggle(
+                self.dimension_frame,
+                text=dimension.label,
+                variable=plot_variable,
+                command=lambda i=dimension.index: (
+                    self._dimension_selection_changed(i)
+                ),
+            )
+            toggle.grid(
+                row=row,
+                column=0,
+                sticky=tk.EW,
+                padx=(0, 8),
+                pady=2,
+            )
+            ttk.Label(
+                self.dimension_frame,
+                text="grid",
+                style="Panel.TLabel",
+                foreground=MUTED,
+            ).grid(row=row, column=1, sticky=tk.E, padx=(0, 4))
+            grid_combo = ttk.Combobox(
+                self.dimension_frame,
+                state="readonly",
+                width=11,
+                values=tuple(
+                    self._format_coordinate(value)
+                    for value in dimension.coordinates
+                ),
+            )
+            default_index = min(
+                range(len(dimension.coordinates)),
+                key=lambda index: abs(
+                    float(dimension.coordinates[index])
+                    - dimension.default_value
+                ),
+            )
+            grid_combo.current(default_index)
+            grid_combo.grid(row=row, column=2, sticky=tk.EW, pady=2)
+            grid_combo.bind(
+                "<<ComboboxSelected>>",
+                lambda _event, i=dimension.index: (
+                    self._grid_dimension_changed(i)
+                ),
+            )
+            bind_combobox_keyboard(grid_combo)
+            ttk.Label(
+                self.dimension_frame,
+                text="value",
+                style="Panel.TLabel",
+                foreground=MUTED,
+            ).grid(row=row, column=3, sticky=tk.E, padx=(7, 4))
+            entry = ttk.Entry(
+                self.dimension_frame,
+                textvariable=fixed_variable,
+                width=11,
+            )
+            entry.grid(row=row, column=4, sticky=tk.EW, pady=2)
+            entry.bind(
+                "<Return>",
+                lambda _event, i=dimension.index: (
+                    self._fixed_dimension_changed(i)
+                ),
+            )
+            entry.bind(
+                "<FocusOut>",
+                lambda _event, i=dimension.index: (
+                    self._fixed_dimension_changed(i)
+                ),
+            )
+            self._dimension_plot_vars.append(plot_variable)
+            self._dimension_fixed_vars.append(fixed_variable)
+            self._dimension_grid_combos.append(grid_combo)
+            self._dimension_fixed_entries.append(entry)
+            self.dimension_toggles.append(toggle)
+        self.dimension_frame.columnconfigure(4, weight=1)
+        self._update_dimension_entry_states()
+
+    def _rawdata_changed(self, _event: tk.Event | None = None) -> None:
+        self._build_dimension_controls()
+        self._request_prediction()
+
+    def _dimension_selection_changed(self, index: int) -> None:
+        selected_count = sum(
+            variable.get()
+            for variable in self._dimension_plot_vars
+        )
+        if selected_count > 2:
+            self._dimension_plot_vars[index].set(False)
+            self.bell()
+        self._update_dimension_entry_states()
+        self._request_prediction()
+
+    def _update_dimension_entry_states(self) -> None:
+        for selected, combo, entry in zip(
+            self._dimension_plot_vars,
+            self._dimension_grid_combos,
+            self._dimension_fixed_entries,
+        ):
+            combo.configure(
+                state="disabled" if selected.get() else "readonly"
+            )
+            entry.configure(
+                state="disabled" if selected.get() else "normal"
+            )
+
+    def _grid_dimension_changed(self, index: int) -> None:
+        if self._dimension_plot_vars[index].get():
+            return
+        selected = self._dimension_grid_combos[index].current()
+        if selected < 0:
+            return
+        coordinate = float(
+            self._dimension_specs[index].coordinates[selected]
+        )
+        self._dimension_fixed_vars[index].set(
+            self._format_coordinate(coordinate)
+        )
+        self._request_prediction()
+
+    def _fixed_dimension_changed(self, index: int) -> None:
+        if self._dimension_plot_vars[index].get():
+            return
+        dimension = self._dimension_specs[index]
+        try:
+            requested = float(self._dimension_fixed_vars[index].get())
+            if not math.isfinite(requested):
+                raise ValueError
+        except ValueError:
+            requested = dimension.default_value
+            self.bell()
+        self._dimension_fixed_vars[index].set(
+            self._format_coordinate(requested)
+        )
+        matching = next(
+            (
+                coordinate_index
+                for coordinate_index, coordinate in enumerate(
+                    dimension.coordinates
+                )
+                if math.isclose(
+                    float(coordinate),
+                    requested,
+                    rel_tol=1e-12,
+                    abs_tol=1e-12 * max(1.0, abs(requested)),
+                )
+            ),
+            None,
+        )
+        if matching is None:
+            self._dimension_grid_combos[index].set("")
+        else:
+            self._dimension_grid_combos[index].current(matching)
+        self._request_prediction()
+
+    def _plot_selection(self) -> tuple[tuple[int, ...], dict[int, float]]:
+        plotted = tuple(
+            dimension.index
+            for dimension, variable in zip(
+                self._dimension_specs,
+                self._dimension_plot_vars,
+            )
+            if variable.get()
+        )
+        fixed: dict[int, float] = {}
+        for dimension, selected, variable in zip(
+            self._dimension_specs,
+            self._dimension_plot_vars,
+            self._dimension_fixed_vars,
+        ):
+            if selected.get():
+                continue
+            value = float(variable.get())
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"{dimension.name} fixed value must be finite"
+                )
+            fixed[dimension.index] = value
+        return plotted, fixed
+
+    @staticmethod
+    def _format_coordinate(value: float) -> str:
+        return f"{float(value):.15g}"
 
     def _build_parameter_sliders(self) -> None:
         assert self.workspace is not None
@@ -259,17 +543,31 @@ class InteractiveTab(ttk.Frame):
 
     def prediction_inputs(
         self,
-    ) -> tuple[int, tuple[float, ...], str | None]:
+    ) -> tuple[
+        int,
+        tuple[float, ...],
+        str | None,
+        PlotRequest,
+    ]:
         if self.workspace is None:
             raise RuntimeError("load a workspace first")
         checkpoint_index = self.checkpoint_combo.current()
         if checkpoint_index < 0:
             raise ValueError("choose a checkpoint")
         real = self._selected_real_result()
+        item_index = self.rawdata_combo.current()
+        if item_index < 0:
+            raise ValueError("choose a rawData output")
+        plotted, fixed = self._plot_selection()
         return (
             self.workspace.checkpoints[checkpoint_index].generation,
             tuple(float(variable.get()) for variable in self._slider_values),
             None if real is None else real.job_name,
+            PlotRequest(
+                item_index=item_index,
+                plotted_dimensions=plotted,
+                fixed_values=tuple(sorted(fixed.items())),
+            ),
         )
 
     def show_prediction(self, result: PredictionResult) -> None:
@@ -282,10 +580,17 @@ class InteractiveTab(ttk.Frame):
         item_index = self.rawdata_combo.current()
         if item_index < 0:
             return
+        try:
+            plotted_dimensions, fixed_values = self._plot_selection()
+        except ValueError:
+            self.bell()
+            return
         self.plot.draw_prediction(
             self._last_prediction,
             self.workspace,
             item_index,
+            plotted_dimensions,
+            fixed_values,
         )
 
     def _request_prediction(self, _event: tk.Event | None = None) -> None:
@@ -343,7 +648,7 @@ class InteractiveTab(ttk.Frame):
         )
         self._update_parameter_labels(normalized, only_index=index)
         self.real_result_combo.set("")
-        if not self.live_prediction_var.get():
+        if not self.auto_refresh_var.get():
             return
         if self._debounce_id:
             self.after_cancel(self._debounce_id)

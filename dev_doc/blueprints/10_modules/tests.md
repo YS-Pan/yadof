@@ -34,8 +34,10 @@ license, machine identity, or credential.
   evicted/never-executed timeout behavior,
   tools/adapters, and artifact exclusion of examples/runtime data;
 - lazy `view surrogate` registration/help, viewer wheel/sdist/dev_doc membership,
-  and deterministic viewer checkpoint discovery, rawData curves, aggregate
-  selection, sampling, and cancellation when optional dependencies are installed.
+  and deterministic viewer checkpoint discovery, 0D/1D/2D rawData slice
+  extraction from higher-rank data, arbitrary fixed-coordinate controls,
+  stored-grid/off-grid surrogate-query compatibility, aggregate selection,
+  sampling, and cancellation when optional dependencies are installed.
 
 ## Test placement
 

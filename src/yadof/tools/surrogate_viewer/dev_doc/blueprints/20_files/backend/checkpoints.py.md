@@ -15,6 +15,8 @@ selection, and both interactive and audit inference.
 - Load the conditional-INR ensemble through installed yadof.
 - Predict member flat arrays, reconstruct mean/member rawData, and calculate current
   costs.
+- Query a modeled slot at arbitrary physical coordinates and build mean/member
+  `PlotData`; interpolate a constant unmodeled field directly from its template.
 - Batch audit rows and reduce rawData errors per item.
 - Report progress and cooperate with cancellation.
 - Increase CUDA sample batching and recover from OOM by halving toward the
@@ -23,7 +25,8 @@ selection, and both interactive and audit inference.
 ## I/O Format
 
 `CheckpointPredictor.predict()` returns mean samples, cost rows, and optional member
-sample batches. `predict_audit_rows()` returns cost rows plus four arrays shaped
+sample batches. `predict_plot()` returns one mean plot plus member plots for a
+`PlotRequest`. `predict_audit_rows()` returns cost rows plus four arrays shaped
 `[sample, rawData item]`: relative/absolute sums and counts.
 
 ## Non-Obvious Techniques
@@ -32,6 +35,8 @@ sample batches. `predict_audit_rows()` returns cost rows plus four arrays shaped
   predicted and compared.
 - Ensemble mean is taken in flat scaled-output space after inverse scaling, then
   reconstructed through the checkpoint schema.
+- Off-grid plot queries reuse the loaded model/schema/scaler but never replace the
+  full-grid `predict()` path.
 - Absolute and relative errors are reduced before rawData reconstruction is
   discarded, keeping audit memory small.
 - Out-of-memory recovery must not shrink below the model's configured evaluation

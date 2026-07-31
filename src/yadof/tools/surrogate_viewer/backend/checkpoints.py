@@ -14,15 +14,31 @@ import torch
 
 from yadof.config import load_config
 from yadof.job_template import api as job_template_api
+from yadof.job_template.rawdata_contract import RawDataView
 from yadof.surrogate.modeling import (
     load_inr_artifacts,
     predict_conditional_inr_members,
 )
-from yadof.surrogate.runtime import _raw_samples_from_flat
+from yadof.surrogate.runtime import (
+    _interpolate_regular_grid,
+    _raw_samples_from_flat,
+    predict_rawdata_slot_members_at_coordinates,
+)
 from yadof.surrogate.types import RawArraySlot, RawDataSchema, TargetScaler
 
-from .rawdata import copy_template, summarize_errors_by_item
-from .types import CheckpointInfo, ProgressCallback, _check_cancelled
+from .rawdata import (
+    copy_template,
+    plot_from_coordinate_grid,
+    rawdata_dimensions,
+    summarize_errors_by_item,
+)
+from .types import (
+    CheckpointInfo,
+    PlotData,
+    PlotRequest,
+    ProgressCallback,
+    _check_cancelled,
+)
 
 
 def discover_checkpoints(
@@ -283,6 +299,98 @@ class CheckpointPredictor:
             for member_flat in member_flats
         )
         return mean_samples, costs, member_samples
+
+    def predict_plot(
+        self,
+        normalized_rows: Sequence[Sequence[float]],
+        request: PlotRequest,
+    ) -> tuple[PlotData, tuple[PlotData, ...]]:
+        """Predict one plotted slice at physical, possibly off-grid coordinates."""
+
+        item_index = int(request.item_index)
+        if not 0 <= item_index < len(self.schema.templates):
+            raise IndexError(item_index)
+        template = self.schema.templates[item_index]
+        view = RawDataView.from_item(template)
+        dimensions = rawdata_dimensions(self.schema.templates, item_index)
+        selected = tuple(int(value) for value in request.plotted_dimensions)
+        if len(selected) > 2 or len(set(selected)) != len(selected):
+            raise ValueError("choose zero, one, or two unique plot dimensions")
+        if any(index < 0 or index >= len(dimensions) for index in selected):
+            raise IndexError("plot dimension is outside the rawData rank")
+        fixed = request.fixed_map
+        if any(
+            dimension.index not in selected
+            and dimension.index not in fixed
+            for dimension in dimensions
+        ):
+            raise ValueError("every unplotted dimension needs a fixed value")
+
+        targets = tuple(
+            (
+                np.asarray(dimension.coordinates, dtype=np.float64)
+                if dimension.index in selected
+                else np.asarray([fixed[dimension.index]], dtype=np.float64)
+            )
+            for dimension in dimensions
+        )
+        modeled = any(
+            slot.item_index == item_index and slot.key == view.data_key
+            for slot in self.schema.modeled_slots
+        )
+        if modeled:
+            member_values = predict_rawdata_slot_members_at_coordinates(
+                model=self.model,
+                schema=self.schema,
+                scaler=self.scaler,
+                train_cfg=self.train_cfg,
+                device=self.device,
+                normalized_rows=normalized_rows,
+                item_index=item_index,
+                key=view.data_key,
+                axis_coordinates=targets,
+            )
+            if member_values.shape[1] != 1:
+                raise ValueError("viewer plot prediction expects one parameter row")
+            grids = np.asarray(member_values[:, 0], dtype=np.float64)
+        else:
+            source_axes = tuple(
+                np.asarray(dimension.coordinates, dtype=np.float64)
+                for dimension in dimensions
+            )
+            constant_grid = _interpolate_regular_grid(
+                np.real(np.asarray(view.data)).astype(
+                    np.float64,
+                    copy=False,
+                ),
+                source_axes,
+                targets,
+            )
+            grids = np.repeat(
+                constant_grid[None, ...],
+                max(1, int(self.checkpoint.member_count)),
+                axis=0,
+            )
+
+        name = view.name or f"rawData {item_index}"
+        mean_plot = plot_from_coordinate_grid(
+            name=name,
+            dimensions=dimensions,
+            values=np.mean(grids, axis=0, dtype=np.float64),
+            plotted_dimensions=selected,
+            fixed_values=fixed,
+        )
+        member_plots = tuple(
+            plot_from_coordinate_grid(
+                name=name,
+                dimensions=dimensions,
+                values=values,
+                plotted_dimensions=selected,
+                fixed_values=fixed,
+            )
+            for values in grids
+        )
+        return mean_plot, member_plots
 
     def predict_audit_rows(
         self,

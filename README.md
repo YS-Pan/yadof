@@ -114,7 +114,9 @@ helpers for everything else.
 The optional read-only surrogate checkpoint viewer is installed below
 `yadof.tools.surrogate_viewer` and launched explicitly with
 `yadof view surrogate`. It reads checkpoints and recorded evidence but does not
-train models, run workflows, or write workspace state.
+train models, run workflows, or write workspace state. Its interactive rawData
+view lets users choose zero, one, or two dimensions for scalar, curve, or filled
+two-dimensional color-contour display and set the remaining slice coordinates.
 
 See [user_doc/README.md](user_doc/README.md) for the user-workflow guidance followed
 primarily by the user's AI agent, and [dev_doc/README.md](dev_doc/README.md) for

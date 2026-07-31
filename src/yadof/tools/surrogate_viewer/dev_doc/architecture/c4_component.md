@@ -5,14 +5,22 @@
 - `SurrogateViewerApp`: root lifecycle, workspace loading, executor submission,
   serial-based stale-result suppression, UI callback draining, cancellation, and
   error reporting.
-- `InteractiveTab`: selectors, slider construction, keyboard behavior, debounced
-  request intent, selected prediction inputs, and plot selection.
+- `InteractiveTab`: selectors, rawData dimension rows, zero-to-two plot-axis
+  selection, grid dropdowns, arbitrary fixed-coordinate entries, slider
+  construction, keyboard behavior,
+  random initial real-result selection, `Auto refresh` intent, debounced prediction
+  requests, selected prediction inputs, and plot selection.
 - `HeatmapTab`: cost/rawData quantity mapping, error type, sampling percentage,
   progress, stop intent, last complete audit, and instant matrix selection.
-- `InteractivePlot`: rawData curve, pointwise ensemble-member min/max band, true
-  overlay, and objective bar comparison.
+- `InteractivePlot`: scalar values, rawData curves, pointwise ensemble-member
+  min/max display, filled two-dimensional color contours without contour lines,
+  true-result comparison, and objective bars.
 - `HeatmapPlot`: non-interpolated `pcolormesh`, complete edge bounds, automatic
-  rectangular aspect, annotations, colorbar, and one-line title.
+  rectangular aspect, edge-free flush cells, annotations, colorbar, and one-line
+  title.
+- `CheckmarkToggle`: keyboard-operable shared selection control with an explicit
+  checkmark and high-contrast accent fill instead of theme-dependent indicator
+  glyphs.
 
 ## Backend Components
 
@@ -21,10 +29,11 @@
   interactive and audit inference.
 - `CrossGenerationErrorAudit`: compact relative/absolute cost/rawData sum-count
   arrays and zero-inference matrix derivation.
-- `PredictionResult`, `ErrorMatrix`, and metadata dataclasses: immutable transfer
-  objects between worker and UI code.
-- rawData helpers: schema-specific flattening, per-item aggregate reduction, curve
-  extraction, and finite ensemble-member bounds.
+- `PlotRequest`, `PredictionResult`, `ErrorMatrix`, and metadata dataclasses:
+  immutable transfer objects between worker and UI code.
+- rawData helpers: schema-specific flattening, per-item aggregate reduction,
+  complete dimension description, stored-grid 0D/1D/2D slicing, coordinate-grid
+  plot construction, and finite ensemble-member bounds.
 
 ## Dependency Direction
 
@@ -56,7 +65,10 @@ the coordinator; the coordinator submits backend operations.
 ## Interface Invariants
 
 - A `PredictionResult` contains reconstructed mean rawData, optional member
-  samples, predicted costs, and an optional real comparison.
+  samples, predicted costs, an optional real comparison, and optional off-grid
+  mean/member plots. `PlotRequest` identifies the item, zero to two plot axes, and
+  every fixed coordinate. `PlotData` carries selected `DimensionSpec` values,
+  numeric values, and the actual fixed-coordinate label.
 - Audit cost arrays have shape
   `(optimization generations, checkpoints, objectives)`.
 - Audit rawData arrays have shape

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Mapping
+
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg,
     NavigationToolbar2Tk,
 )
+from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
 import numpy as np
 import tkinter as tk
@@ -13,10 +16,11 @@ from tkinter import ttk
 
 from ..backend import (
     ErrorMatrix,
+    PlotData,
     PredictionResult,
     SurrogateWorkspace,
-    extract_curve,
-    finite_curve_bounds,
+    extract_plot,
+    finite_plot_bounds,
 )
 from .style import MUTED, PANEL, PREDICTION, TEXT, TRUTH
 
@@ -29,9 +33,6 @@ class InteractivePlot(ttk.Frame):
             dpi=100,
             constrained_layout=True,
         )
-        grid = self.figure.add_gridspec(2, 1, height_ratios=(3, 1.35))
-        self.curve_ax = self.figure.add_subplot(grid[0, 0])
-        self.cost_ax = self.figure.add_subplot(grid[1, 0])
         self.canvas = FigureCanvasTkAgg(self.figure, master=self)
         toolbar = NavigationToolbar2Tk(self.canvas, self, pack_toolbar=False)
         toolbar.update()
@@ -39,9 +40,20 @@ class InteractivePlot(ttk.Frame):
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.draw_empty()
 
+    def _reset_axes(self, top_count: int = 1) -> list[object]:
+        self.figure.clear()
+        grid = self.figure.add_gridspec(2, 1, height_ratios=(3, 1.35))
+        top_grid = grid[0, 0].subgridspec(1, top_count)
+        top_axes = [
+            self.figure.add_subplot(top_grid[0, index])
+            for index in range(top_count)
+        ]
+        self.curve_ax = top_axes[0]
+        self.cost_ax = self.figure.add_subplot(grid[1, 0])
+        return top_axes
+
     def draw_empty(self) -> None:
-        self.curve_ax.clear()
-        self.cost_ax.clear()
+        self._reset_axes()
         self.curve_ax.text(
             0.5,
             0.5,
@@ -60,26 +72,158 @@ class InteractivePlot(ttk.Frame):
         result: PredictionResult,
         workspace: SurrogateWorkspace,
         item_index: int,
+        plotted_dimensions: tuple[int, ...],
+        fixed_values: Mapping[int, float],
     ) -> None:
-        predicted_curve = extract_curve(result.predicted_sample, item_index)
-        true_curve = (
-            extract_curve(result.true_sample, item_index)
-            if result.true_sample is not None
-            else None
+        if result.predicted_plot is None:
+            predicted_plot = extract_plot(
+                result.predicted_sample,
+                item_index,
+                plotted_dimensions,
+                fixed_values,
+            )
+            true_plot = (
+                extract_plot(
+                    result.true_sample,
+                    item_index,
+                    plotted_dimensions,
+                    fixed_values,
+                )
+                if result.true_sample is not None
+                else None
+            )
+            member_plots = tuple(
+                extract_plot(
+                    sample,
+                    item_index,
+                    plotted_dimensions,
+                    fixed_values,
+                )
+                for sample in result.member_samples
+            )
+        else:
+            predicted_plot = result.predicted_plot
+            true_plot = None
+            member_plots = result.member_plots
+        bounds = finite_plot_bounds(member_plots)
+        top_axes = self._reset_axes(
+            2 if predicted_plot.ndim == 2 and true_plot is not None else 1
         )
-        member_curves = tuple(
-            extract_curve(sample, item_index)
-            for sample in result.member_samples
-        )
-        bounds = finite_curve_bounds(member_curves)
+        if predicted_plot.ndim == 0:
+            self._draw_scalar(
+                top_axes[0],
+                predicted_plot,
+                true_plot,
+                bounds,
+                result,
+            )
+        elif predicted_plot.ndim == 1:
+            self._draw_curve(
+                top_axes[0],
+                predicted_plot,
+                true_plot,
+                bounds,
+                result,
+            )
+        else:
+            self._draw_surfaces(
+                top_axes,
+                predicted_plot,
+                true_plot,
+                result,
+            )
+        if result.plot_note:
+            self.figure.suptitle(
+                result.plot_note,
+                color=MUTED,
+                fontsize=9,
+            )
+        self._draw_costs(result, workspace)
+        self.canvas.draw_idle()
 
-        ax = self.curve_ax
-        ax.clear()
+    @staticmethod
+    def _title(plot: PlotData) -> str:
+        subtitle = (
+            f" · {plot.slice_label}"
+            if plot.slice_label
+            else ""
+        )
+        return f"{plot.name}{subtitle}"
+
+    def _draw_scalar(
+        self,
+        ax: object,
+        predicted: PlotData,
+        truth: PlotData | None,
+        bounds: tuple[np.ndarray, np.ndarray] | None,
+        result: PredictionResult,
+    ) -> None:
+        predicted_value = float(predicted.values)
         ax.set_axis_on()
+        ax.text(
+            0.5,
+            0.62,
+            f"{predicted_value:.8g}",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            color=PREDICTION,
+            fontsize=28,
+            fontweight="semibold",
+        )
+        ax.text(
+            0.5,
+            0.46,
+            f"surrogate · checkpoint {result.checkpoint_generation}",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            color=PREDICTION,
+        )
+        if bounds is not None:
+            minimum, maximum = (
+                float(np.asarray(value))
+                for value in bounds
+            )
+            ax.text(
+                0.5,
+                0.36,
+                f"ensemble min–max {minimum:.6g} … {maximum:.6g}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                color=MUTED,
+            )
+        if truth is not None:
+            ax.text(
+                0.5,
+                0.22,
+                f"real · {result.true_job_name}: {float(truth.values):.8g}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                color=TRUTH,
+                fontsize=13,
+            )
+        ax.set_title(self._title(predicted), loc="left")
+        ax.set_xticks(())
+        ax.set_yticks(())
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+    def _draw_curve(
+        self,
+        ax: object,
+        predicted: PlotData,
+        truth: PlotData | None,
+        bounds: tuple[np.ndarray, np.ndarray] | None,
+        result: PredictionResult,
+    ) -> None:
+        dimension = predicted.dimensions[0]
         if bounds is not None:
             member_minimum, member_maximum = bounds
             ax.fill_between(
-                predicted_curve.x,
+                dimension.coordinates,
                 member_minimum,
                 member_maximum,
                 color=PREDICTION,
@@ -88,8 +232,8 @@ class InteractivePlot(ttk.Frame):
                 label="ensemble min–max",
             )
         ax.plot(
-            predicted_curve.x,
-            predicted_curve.y,
+            dimension.coordinates,
+            predicted.values,
             color=PREDICTION,
             linewidth=2.2,
             label=(
@@ -97,10 +241,10 @@ class InteractivePlot(ttk.Frame):
                 f"{result.checkpoint_generation}"
             ),
         )
-        if true_curve is not None:
+        if truth is not None:
             ax.plot(
-                true_curve.x,
-                true_curve.y,
+                truth.dimensions[0].coordinates,
+                truth.values,
                 color=TRUTH,
                 linewidth=2.0,
                 linestyle="--",
@@ -108,19 +252,113 @@ class InteractivePlot(ttk.Frame):
                 markersize=3.5,
                 label=f"real · {result.true_job_name}",
             )
-        subtitle = (
-            f" · {predicted_curve.slice_label}"
-            if predicted_curve.slice_label
-            else ""
-        )
-        ax.set_title(f"{predicted_curve.name}{subtitle}", loc="left")
-        ax.set_xlabel(predicted_curve.x_label)
-        ax.set_ylabel(predicted_curve.y_label)
+        ax.set_title(self._title(predicted), loc="left")
+        ax.set_xlabel(dimension.label)
+        ax.set_ylabel(predicted.name)
         ax.grid(True, alpha=0.2)
         ax.legend(loc="best")
 
+    def _draw_surfaces(
+        self,
+        axes: list[object],
+        predicted: PlotData,
+        truth: PlotData | None,
+        result: PredictionResult,
+    ) -> None:
+        arrays = [predicted.values]
+        if truth is not None:
+            arrays.append(truth.values)
+        finite_chunks = tuple(
+            np.asarray(values)[np.isfinite(values)]
+            for values in arrays
+            if np.any(np.isfinite(values))
+        )
+        if finite_chunks:
+            finite = np.concatenate(finite_chunks)
+            low = float(np.min(finite))
+            high = float(np.max(finite))
+            if high <= low:
+                high = low + max(abs(low) * 1e-6, 1e-12)
+        else:
+            low, high = 0.0, 1.0
+        normalization = Normalize(vmin=low, vmax=high)
+        artist = self._draw_surface(
+            axes[0],
+            predicted,
+            normalization,
+            (
+                f"Surrogate · checkpoint "
+                f"{result.checkpoint_generation}"
+            ),
+        )
+        if truth is not None:
+            self._draw_surface(
+                axes[1],
+                truth,
+                normalization,
+                f"Real · {result.true_job_name}",
+            )
+        colorbar = self.figure.colorbar(artist, ax=axes, pad=0.02)
+        colorbar.set_label(predicted.name)
+        axes[0].text(
+            0.0,
+            1.08,
+            self._title(predicted),
+            transform=axes[0].transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=12,
+        )
+
+    @staticmethod
+    def _draw_surface(
+        ax: object,
+        plot: PlotData,
+        normalization: Normalize,
+        title: str,
+    ) -> object:
+        x_dimension, y_dimension = plot.dimensions
+        values = np.ma.masked_invalid(np.asarray(plot.values).T)
+        if (
+            x_dimension.coordinates.size >= 2
+            and y_dimension.coordinates.size >= 2
+            and np.any(np.isfinite(plot.values))
+        ):
+            levels = np.linspace(
+                normalization.vmin,
+                normalization.vmax,
+                64,
+            )
+            artist = ax.contourf(
+                x_dimension.coordinates,
+                y_dimension.coordinates,
+                values,
+                levels=levels,
+                cmap="viridis",
+                norm=normalization,
+                antialiased=False,
+            )
+        else:
+            artist = ax.pcolormesh(
+                x_dimension.coordinates,
+                y_dimension.coordinates,
+                values,
+                shading="nearest",
+                cmap="viridis",
+                norm=normalization,
+                edgecolors="none",
+            )
+        ax.set_title(title, loc="left")
+        ax.set_xlabel(x_dimension.label)
+        ax.set_ylabel(y_dimension.label)
+        return artist
+
+    def _draw_costs(
+        self,
+        result: PredictionResult,
+        workspace: SurrogateWorkspace,
+    ) -> None:
         cost_ax = self.cost_ax
-        cost_ax.clear()
         names = workspace.objective_names
         positions = np.arange(len(names), dtype=float)
         if result.true_costs is None:
@@ -153,7 +391,6 @@ class InteractivePlot(ttk.Frame):
         cost_ax.set_ylabel("cost")
         cost_ax.grid(True, axis="y", alpha=0.2)
         cost_ax.legend(loc="best")
-        self.canvas.draw_idle()
 
 
 class HeatmapPlot(ttk.Frame):
@@ -215,8 +452,8 @@ class HeatmapPlot(ttk.Frame):
             cmap="magma",
             vmin=low,
             vmax=high,
-            edgecolors=PANEL,
-            linewidth=1.0,
+            edgecolors="none",
+            linewidth=0.0,
             antialiased=False,
         )
         colorbar = self.figure.colorbar(artist, ax=ax, pad=0.02)

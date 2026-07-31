@@ -18,7 +18,7 @@ src/yadof/tools/surrogate_viewer/
     interactive.py          interactive controls and selection state
     plots.py                Matplotlib components
     style.py                visual constants and ttk styles
-    widgets.py              shared scrolling and keyboard controls
+    widgets.py              shared toggles, scrolling, and keyboard controls
   dev_doc/                  relatively independent viewer documentation
 tests/test_surrogate_viewer.py
 ```

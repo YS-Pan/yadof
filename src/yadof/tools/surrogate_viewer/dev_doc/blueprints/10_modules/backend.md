@@ -20,15 +20,22 @@ read-only values and use-case methods suitable for a desktop viewer.
 - Flatten true rawData through each checkpoint's modeled slots.
 - Aggregate absolute and relative errors by cost and rawData item.
 - Derive display matrices from small in-memory aggregate arrays.
-- Extract useful one-dimensional curves from generic rawData.
+- Describe every named or index-fallback dimension of generic rawData.
+- Extract user-selected zero-, one-, or two-dimensional stored-grid slices.
+- Query one rawData slot at arbitrary fixed physical coordinates and convert the
+  resulting member grids into plot values.
 - Derive pointwise finite minimum/maximum bounds from compatible ensemble-member
-  curves for interactive display.
+  slices for interactive display.
 
 ## I/O Format
 
 Public inputs are a workspace path, checkpoint generation, normalized vector,
 optional real job name, audit sample fraction, optional seed/cancel event, and
-progress callback.
+progress callback. Interactive slicing additionally accepts a rawData item index,
+an ordered tuple of zero to two dimension indices, and fixed coordinate values for
+the remaining dimensions. Grid coordinates retain the legacy full-sample result;
+off-grid coordinates return immutable direct-query plot values whose rank equals
+the number of selected dimensions.
 
 Important output shapes:
 
@@ -60,6 +67,13 @@ Non-finite error elements add neither sum nor count.
   and halves it after out-of-memory until the checkpoint-configured baseline.
 - Only one interactive predictor is cached; audit predictors are released after
   each checkpoint.
+- Missing or non-finite stored axis coordinates fall back to dimension indices for
+  display.
+- The workspace detects stored fixed coordinates before querying. This preserves
+  the old full-grid path exactly and suppresses recorded truth only for off-grid
+  plots.
+- Off-grid inverse scaling linearly interpolates checkpoint target mean/scale;
+  checkpoint files and the optimizer/audit reconstruction path are not changed.
 
 ## Mutability Profile
 

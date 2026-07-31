@@ -14,3 +14,6 @@
 | `quantity` | The heatmap target selection: all costs, one cost, all rawData, or one rawData item. |
 | `relative epsilon` | `SURROGATE_RELATIVE_ERROR_EPS`, used as the denominator floor in `abs(prediction - truth) / max(abs(truth), epsilon)`. It prevents division by zero; it is not a model perturbation. |
 | `interactive predictor` | The session-local loaded-checkpoint path used for one parameter vector and optional real-result comparison. It is separate from the cross-generation audit. |
+| `plot dimension` | One rawData dimension selected as an interactive independent variable. Zero, one, or two selections produce a scalar, curve, or filled two-dimensional color contour respectively. |
+| `fixed dimension` | Any rawData dimension not selected for plotting. Its checkpoint-grid dropdown preserves the legacy stored slice, while its text entry may request any finite physical coordinate. |
+| `off-grid rawData query` | A conditional-INR decoder evaluation at a fixed physical coordinate absent from the checkpoint grid. The target scaler is interpolated, recorded truth is unavailable, and the checkpoint is not changed. |

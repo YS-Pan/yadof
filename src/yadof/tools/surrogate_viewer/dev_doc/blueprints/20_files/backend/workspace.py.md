@@ -12,6 +12,8 @@ the complete cross-generation audit.
 - Normalize record metadata into sorted `RealResult` values.
 - Retrieve true rawData and calculate current true costs.
 - Cache one interactive `CheckpointPredictor`.
+- Detect whether every fixed plot coordinate belongs to the stored grid and issue
+  a separate plot query only when needed.
 - Sample each generation independently.
 - Bulk-load sampled rawData and calculate true costs once.
 - For every checkpoint, flatten true samples, run inference, aggregate cost and
@@ -20,7 +22,10 @@ the complete cross-generation audit.
 
 ## I/O Format
 
-`predict_one()` returns `PredictionResult`.
+`predict_one()` accepts an optional `PlotRequest` and returns `PredictionResult`.
+For an off-grid request the result carries direct-query mean/member plots plus a
+display note; its reconstructed sample and objective costs remain the unchanged
+full-grid prediction.
 
 `calculate_error_audit()` accepts fraction, seed, cancellation event, progress
 callback, outer batch size, and CUDA sample batch. It returns arrays shaped:
@@ -36,6 +41,8 @@ callback, outer batch size, and CUDA sample batch. It returns arrays shaped:
 - The same ordered sampled rows feed every checkpoint in an audit.
 - True flat matrices are cached by a schema key only for the current audit.
 - Relative error uses the workspace's `SURROGATE_RELATIVE_ERROR_EPS`.
+- Stored-grid detection keeps existing plots, recorded overlays, and numerical
+  reconstruction on the legacy path. Off-grid rawData has no recorded overlay.
 - Progress total is sampled rows multiplied by checkpoint count.
 - Predictor deletion and optional `torch.cuda.empty_cache()` happen after each
   checkpoint column.

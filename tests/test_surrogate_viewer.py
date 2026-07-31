@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
+import tkinter as tk
 
 import numpy as np
 import pytest
@@ -10,48 +12,79 @@ import pytest
 pytest.importorskip("matplotlib")
 pytest.importorskip("torch")
 
+from matplotlib.colors import Normalize
+from matplotlib.figure import Figure
+
 from yadof.tools.surrogate_viewer.backend import (
     AuditCancelled,
     CrossGenerationErrorAudit,
+    DimensionSpec,
+    ErrorMatrix,
+    PlotData,
+    PlotRequest,
+    PredictionResult,
     RealResult,
     discover_checkpoints,
     extract_curve,
+    extract_plot,
     finite_curve_bounds,
+    finite_plot_bounds,
+    rawdata_dimensions,
     sample_real_results_by_generation,
     _check_cancelled,
 )
 from yadof.tools.surrogate_viewer.app import _is_widget_descendant
+from yadof.tools.surrogate_viewer.ui.interactive import InteractiveTab
+from yadof.tools.surrogate_viewer.ui.plots import (
+    HeatmapPlot,
+    InteractivePlot,
+)
+from yadof.tools.surrogate_viewer.ui.style import ACCENT, PANEL
 
 
 def _raw_item(name: str, data: np.ndarray) -> dict[str, object]:
+    return _nd_raw_item(
+        name,
+        data,
+        (
+            ("Freq", np.asarray([1.0, 2.0]), "GHz"),
+            ("Theta", np.asarray([-90.0, 0.0, 90.0]), "deg"),
+        ),
+    )
+
+
+def _nd_raw_item(
+    name: str,
+    data: np.ndarray,
+    axes: tuple[tuple[str, np.ndarray, str], ...],
+) -> dict[str, object]:
     metadata = {
         "schema_version": 1,
         "rawdata_name": name,
-        "axis_names": ["Freq", "Theta"],
+        "axis_names": [axis_name for axis_name, _values, _unit in axes],
         "axes": [
             {
-                "index": 0,
-                "size": data.shape[0],
-                "name": "Freq",
-                "values_key": "axis_Freq",
-                "unit": "GHz",
-            },
-            {
-                "index": 1,
-                "size": data.shape[1],
-                "name": "Theta",
-                "values_key": "axis_Theta",
-                "unit": "deg",
-            },
+                "index": index,
+                "size": data.shape[index],
+                "name": axis_name,
+                "values_key": f"axis_{axis_name}",
+                "unit": unit,
+            }
+            for index, (axis_name, _values, unit) in enumerate(axes)
         ],
         "shape": list(data.shape),
     }
-    return {
+    item = {
         "data": data,
-        "axis_Freq": np.asarray([1.0, 2.0]),
-        "axis_Theta": np.asarray([-90.0, 0.0, 90.0]),
         "metadata": np.asarray(json.dumps(metadata)),
     }
+    item.update(
+        {
+            f"axis_{axis_name}": values
+            for axis_name, values, _unit in axes
+        }
+    )
+    return item
 
 
 def test_discover_checkpoints_sorts_and_skips_bad_json(tmp_path: Path) -> None:
@@ -108,6 +141,319 @@ def test_finite_curve_bounds_returns_ensemble_minimum_and_maximum() -> None:
 
     np.testing.assert_allclose(minimum, [1.0, 1.0])
     np.testing.assert_allclose(maximum, [3.0, 3.0])
+
+
+def test_extract_plot_supports_scalar_and_user_selected_nd_slices() -> None:
+    scalar = _nd_raw_item("scalar", np.asarray(7.5), ())
+    scalar_plot = extract_plot((scalar,), 0)
+
+    assert scalar_plot.ndim == 0
+    assert float(scalar_plot.values) == 7.5
+    assert rawdata_dimensions((scalar,), 0) == ()
+
+    data = np.arange(24.0).reshape(2, 3, 4)
+    item = _nd_raw_item(
+        "volume",
+        data,
+        (
+            ("Freq", np.asarray([1.0, 2.0]), "GHz"),
+            ("Theta", np.asarray([-20.0, 0.0, 20.0]), "deg"),
+            ("Phi", np.asarray([-30.0, -10.0, 10.0, 30.0]), "deg"),
+        ),
+    )
+    dimensions = rawdata_dimensions((item,), 0)
+    surface = extract_plot(
+        (item,),
+        0,
+        (0, 2),
+        {1: 18.0},
+    )
+    point = extract_plot(
+        (item,),
+        0,
+        (),
+        {0: 1.8, 1: -18.0, 2: 9.0},
+    )
+
+    assert [dimension.name for dimension in dimensions] == [
+        "Freq",
+        "Theta",
+        "Phi",
+    ]
+    assert [dimension.label for dimension in surface.dimensions] == [
+        "Freq (GHz)",
+        "Phi (deg)",
+    ]
+    np.testing.assert_allclose(surface.values, data[:, 2, :])
+    assert "Theta=20 deg" in surface.slice_label
+    assert float(point.values) == data[1, 0, 2]
+    assert point.ndim == 0
+
+    with pytest.raises(ValueError, match="at most two"):
+        extract_plot((item,), 0, (0, 1, 2))
+
+
+def test_finite_plot_bounds_supports_two_dimensional_member_surfaces() -> None:
+    first = _raw_item("gain", np.ones((2, 3)))
+    second = _raw_item("gain", np.full((2, 3), 3.0))
+    plots = (
+        extract_plot((first,), 0, (0, 1)),
+        extract_plot((second,), 0, (0, 1)),
+    )
+
+    minimum, maximum = finite_plot_bounds(plots)
+
+    np.testing.assert_allclose(minimum, np.ones((2, 3)))
+    np.testing.assert_allclose(maximum, np.full((2, 3), 3.0))
+
+
+def test_off_grid_query_keeps_stored_grid_predictions_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import torch
+
+    from yadof.surrogate import runtime
+    from yadof.surrogate.modeling import INRTrainConfig
+    from yadof.surrogate.types import (
+        RawArraySlot,
+        RawDataSchema,
+        TargetScaler,
+    )
+
+    item = _nd_raw_item(
+        "response",
+        np.asarray([0.0, 0.0]),
+        (("Freq", np.asarray([0.0, 10.0]), "GHz"),),
+    )
+    schema = RawDataSchema(
+        templates=(item,),
+        modeled_slots=(
+            RawArraySlot(
+                item_index=0,
+                key="data",
+                shape=(2,),
+                dtype="float64",
+                start=0,
+                end=2,
+                field_id=0,
+            ),
+        ),
+        flat_dim=2,
+        coord_table=np.asarray([[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32),
+        field_ids=np.asarray([0, 0], dtype=np.int64),
+    )
+    scaler = TargetScaler(
+        mean=np.asarray([10.0, 20.0], dtype=np.float32),
+        scale=np.asarray([2.0, 4.0], dtype=np.float32),
+    )
+
+    def fake_predict(**kwargs) -> np.ndarray:
+        matrix = np.asarray(kwargs["X"], dtype=np.float32)
+        coordinates = np.asarray(
+            kwargs["coord_table"],
+            dtype=np.float32,
+        )[:, 0]
+        first = matrix[:, 0, None] + coordinates[None, :]
+        return np.stack((first, first + 1.0), axis=0)
+
+    monkeypatch.setattr(
+        runtime,
+        "predict_conditional_inr_members",
+        fake_predict,
+    )
+    normalized = ((0.25,),)
+    legacy_scaled = fake_predict(
+        X=np.asarray(normalized, dtype=np.float32),
+        coord_table=schema.coord_table,
+    )
+    legacy_physical = scaler.inverse_members(legacy_scaled)
+
+    stored_grid = runtime.predict_rawdata_slot_members_at_coordinates(
+        model=object(),
+        schema=schema,
+        scaler=scaler,
+        train_cfg=INRTrainConfig(),
+        device=torch.device("cpu"),
+        normalized_rows=normalized,
+        item_index=0,
+        key="data",
+        axis_coordinates=(np.asarray([0.0, 10.0]),),
+    )
+    midpoint = runtime.predict_rawdata_slot_members_at_coordinates(
+        model=object(),
+        schema=schema,
+        scaler=scaler,
+        train_cfg=INRTrainConfig(),
+        device=torch.device("cpu"),
+        normalized_rows=normalized,
+        item_index=0,
+        key="data",
+        axis_coordinates=(np.asarray([5.0]),),
+    )
+
+    np.testing.assert_array_equal(stored_grid, legacy_physical)
+    np.testing.assert_allclose(midpoint[:, 0, 0], [15.75, 18.75])
+    np.testing.assert_array_equal(
+        schema.coord_table,
+        np.asarray([[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32),
+    )
+    np.testing.assert_array_equal(scaler.mean, [10.0, 20.0])
+
+
+def test_two_dimensional_plot_is_a_filled_contour_without_line_overlay() -> None:
+    plot = PlotData(
+        name="surface",
+        dimensions=(
+            DimensionSpec(0, "x", np.asarray([0.0, 1.0]), "m"),
+            DimensionSpec(1, "y", np.asarray([0.0, 1.0, 2.0]), "s"),
+        ),
+        values=np.arange(6.0).reshape(2, 3),
+        slice_label="",
+    )
+    axis = Figure().add_subplot()
+
+    artist = InteractivePlot._draw_surface(
+        axis,
+        plot,
+        Normalize(vmin=0.0, vmax=5.0),
+        "prediction",
+    )
+
+    assert artist.filled
+    assert axis.get_xlabel() == "x (m)"
+    assert axis.get_ylabel() == "y (s)"
+    assert not axis.lines
+
+
+def test_interactive_tab_lists_dimensions_and_enforces_two_axis_limit() -> None:
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        pytest.skip(f"Tk display is unavailable: {exc}")
+    root.withdraw()
+    try:
+        item = _nd_raw_item(
+            "volume",
+            np.arange(24.0).reshape(2, 3, 4),
+            (
+                ("Freq", np.asarray([1.0, 2.0]), "GHz"),
+                ("Theta", np.asarray([-20.0, 0.0, 20.0]), "deg"),
+                ("Phi", np.asarray([-30.0, -10.0, 10.0, 30.0]), "deg"),
+            ),
+        )
+        default_real = RealResult(
+            job_name="job-0",
+            generation=0,
+            population_index=0,
+            raw_values=(),
+            normalized_values=(),
+        )
+        workspace = SimpleNamespace(
+            checkpoints=(
+                SimpleNamespace(label="Generation 1", generation=1),
+            ),
+            generations=(0,),
+            rawdata_names=("volume",),
+            parameters=(),
+            objective_names=("cost",),
+            denormalize=lambda _values: (),
+            results_for_generation=lambda _generation: (default_real,),
+            dimensions_for_rawdata=lambda _index: rawdata_dimensions(
+                (item,),
+                0,
+            ),
+        )
+        prediction_requests: list[None] = []
+        tab = InteractiveTab(
+            root,
+            on_prediction_request=lambda: prediction_requests.append(None),
+        )
+        tab.load_workspace(workspace)
+        prediction = PredictionResult(
+            checkpoint_generation=1,
+            normalized_values=(),
+            raw_values=(),
+            predicted_sample=(item,),
+            member_samples=((item,),),
+            predicted_costs=(1.0,),
+        )
+        tab.show_prediction(prediction)
+
+        assert [dimension.name for dimension in tab._dimension_specs] == [
+            "Freq",
+            "Theta",
+            "Phi",
+        ]
+        assert [
+            variable.get()
+            for variable in tab._dimension_plot_vars
+        ] == [True, False, False]
+        assert tab.dimension_toggles[0].cget("text").startswith("✓")
+        assert tab.dimension_toggles[1].cget("text").startswith("□")
+        assert tab.auto_refresh_toggle.cget("text") == "✓  Auto refresh"
+        assert tab.auto_refresh_toggle.cget("background") == ACCENT
+        assert tab.real_generation_var.get() == "0"
+        assert tab.real_result_var.get() == default_real.label
+        assert tab.prediction_inputs()[2] == default_real.job_name
+        request = tab.prediction_inputs()[3]
+        assert isinstance(request, PlotRequest)
+        assert request.plotted_dimensions == (0,)
+        assert request.fixed_map == {1: 0.0, 2: -10.0}
+        assert tuple(tab._dimension_grid_combos[1]["values"]) == (
+            "-20",
+            "0",
+            "20",
+        )
+
+        tab._dimension_fixed_vars[1].set("7.5")
+        tab._fixed_dimension_changed(1)
+        assert tab._dimension_fixed_vars[1].get() == "7.5"
+        assert tab._dimension_grid_combos[1].get() == ""
+        assert tab.prediction_inputs()[3].fixed_map[1] == 7.5
+        assert prediction_requests
+
+        tab.auto_refresh_toggle.invoke()
+        assert not tab.auto_refresh_var.get()
+        assert tab.auto_refresh_toggle.cget("text") == "□  Auto refresh"
+        assert tab.auto_refresh_toggle.cget("background") == PANEL
+
+        tab._dimension_plot_vars[1].set(True)
+        tab._dimension_selection_changed(1)
+        tab.show_prediction(prediction)
+        assert tab.plot.curve_ax.get_xlabel() == "Freq (GHz)"
+        assert tab.plot.curve_ax.get_ylabel() == "Theta (deg)"
+
+        tab._dimension_plot_vars[2].set(True)
+        tab._dimension_selection_changed(2)
+        assert not tab._dimension_plot_vars[2].get()
+        assert tab.dimension_toggles[2].cget("text").startswith("□")
+    finally:
+        root.destroy()
+
+
+def test_heatmap_cells_touch_without_grid_edges() -> None:
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        pytest.skip(f"Tk display is unavailable: {exc}")
+    root.withdraw()
+    try:
+        plot = HeatmapPlot(root)
+        plot.draw(
+            ErrorMatrix(
+                checkpoint_generations=(1, 2),
+                optimization_generations=(3, 4),
+                values=np.asarray([[0.1, 0.2], [0.3, 0.4]]),
+                metric_label="Mean relative error · all costs",
+                sample_counts=(1, 1),
+            )
+        )
+
+        mesh = plot.ax.collections[0]
+        np.testing.assert_allclose(mesh.get_linewidths(), 0.0)
+        assert mesh.get_edgecolors().size == 0
+    finally:
+        root.destroy()
 
 
 def test_tcl_only_combobox_popup_is_not_treated_as_parameter_canvas() -> None:

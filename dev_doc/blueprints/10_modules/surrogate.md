@@ -17,6 +17,16 @@ objective-relevant windows while retaining full-field coverage. Large fields may
 stochastic query minibatches for training, but public prediction reconstructs the
 full compatible field.
 
+The conditional decoder may also be queried at arbitrary physical coordinates for
+one modeled rawData slot. Stored coordinate values use exactly the checkpoint's
+original normalized coordinates and scaler entries. Between stored values, only
+the per-coordinate target mean/scale is linearly interpolated before inverse
+scaling; the decoder itself is evaluated at the requested coordinate. Values
+outside the stored axis range are decoder extrapolation, with endpoint-clamped
+scaler values. This query path is additive: training, checkpoint serialization,
+full-grid reconstruction, optimizer prediction, and audit behavior remain
+unchanged.
+
 Ensemble members may bootstrap samples and use configured latent, embedding,
 Fourier-feature, hidden-layer, batch, optimizer, and non-finite policies. Member
 spread becomes uncertainty input for optimizer screening; it is not durable truth.
@@ -39,3 +49,4 @@ predicted rawData after recovery, so cost policy is never frozen in a checkpoint
 - No checkpoint or scheduler collision across workspaces.
 - Non-finite/corrupt history is diagnosed and bounded by policy.
 - Prediction output passes the same rawData/cost interpretation used for real data.
+- Full-grid prediction never routes through optional off-grid interpolation.

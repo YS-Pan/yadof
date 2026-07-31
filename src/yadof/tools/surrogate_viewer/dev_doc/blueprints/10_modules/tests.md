@@ -8,8 +8,17 @@ optimization, or full model audit in the default suite.
 ## Functionalities
 
 - Check valid checkpoint discovery, sorting, and malformed-file skipping.
-- Check rawData curve axis selection and nearest-zero slicing.
-- Check ensemble finite minimum/maximum derivation.
+- Check scalar rawData plus user-selected 0D/1D/2D slices from higher-rank data,
+  including stored fixed dimensions and the two-axis limit.
+- Check that stored-grid direct queries equal the legacy decoder/scaler result and
+  that an intermediate coordinate produces an additional physical prediction.
+- Check fixed-coordinate dropdown values and preservation of arbitrary finite text
+  input.
+- Check ensemble finite minimum/maximum derivation for curves and surfaces.
+- Check that axis and `Auto refresh` toggles render explicit selected/unselected
+  symbols and stay synchronized with their BooleanVar values.
+- Check that workspace loading preselects a real generation and individual, and
+  that heatmap meshes render with zero line width and no edge colors.
 - Check Tcl-only popup ancestry safety.
 - Check instant aggregate switching across relative/absolute, cost/rawData, all,
   and item-specific quantities.

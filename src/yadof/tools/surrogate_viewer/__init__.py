@@ -13,12 +13,17 @@ __all__ = [
     "AuditCancelled",
     "CheckpointInfo",
     "CrossGenerationErrorAudit",
+    "DimensionSpec",
     "ErrorMatrix",
     "ParameterSpec",
+    "PlotData",
+    "PlotRequest",
     "PredictionResult",
     "RealResult",
     "SurrogateWorkspace",
     "extract_curve",
+    "extract_plot",
+    "rawdata_dimensions",
     "sample_real_results_by_generation",
 ]
 

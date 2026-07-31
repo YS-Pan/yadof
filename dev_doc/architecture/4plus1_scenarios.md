@@ -82,10 +82,17 @@ interpretation and objective policy while continuing to call reusable
 Install the `viewer` extra and run
 `yadof view surrogate --workspace PATH`. The optional desktop tool reads current
 task definitions, recorded evidence, and compatible checkpoint artifacts. It
-predicts rawData, reapplies current cost logic, compares selected real individuals,
-and can calculate a cancellable in-memory cross-generation error audit. Closing or
-stopping the viewer leaves configuration, history, rawData, and checkpoints
-unchanged. `view all` remains the non-GUI cost/time pair and never opens this tool.
+predicts rawData, lets the user select zero to two plotted dimensions and fixed
+coordinates for every remaining dimension through a checkpoint-grid dropdown or
+arbitrary finite-value entry, reapplies current cost logic, compares selected real
+individuals where recorded coordinates exist, and can calculate a cancellable
+in-memory cross-generation error audit. Stored-grid selections keep legacy
+prediction behavior; off-grid selections directly query the existing conditional
+INR and interpolate its target scaler without changing checkpoint artifacts. The
+resulting rawData view is a scalar, curve, or filled two-dimensional color contour.
+Closing or stopping the viewer leaves configuration, history, rawData, and
+checkpoints unchanged. `view all` remains the non-GUI cost/time pair and never
+opens this tool.
 
 ## Two simultaneous workspaces
 

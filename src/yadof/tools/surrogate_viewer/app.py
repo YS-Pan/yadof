@@ -183,7 +183,7 @@ class SurrogateViewerApp:
     def request_prediction(self) -> None:
         if self.workspace is None:
             return
-        generation, normalized, true_job_name = (
+        generation, normalized, true_job_name, plot_request = (
             self.interactive_tab.prediction_inputs()
         )
         self._prediction_serial += 1
@@ -198,6 +198,7 @@ class SurrogateViewerApp:
             generation,
             normalized,
             true_job_name=true_job_name,
+            plot_request=plot_request,
         )
         self._prediction_future = future
 

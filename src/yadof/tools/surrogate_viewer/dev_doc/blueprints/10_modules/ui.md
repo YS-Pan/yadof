@@ -10,13 +10,23 @@ application coordinator.
 
 Interactive tab:
 
-- select a checkpoint, real generation, real individual, and rawData curve;
+- select a checkpoint, real generation, real individual, and rawData output;
+- randomly select one available real generation and one of its individuals when a
+  workspace is loaded;
+- list every rawData dimension, allow at most two to be checked as plot axes, and
+  give every unchecked dimension both a checkpoint-grid dropdown and an arbitrary
+  finite-value entry;
 - build one normalized slider per task parameter;
 - display denormalized values and legal ranges;
-- debounce automatic predictions and support manual prediction;
+- expose `Auto refresh`, debounce automatic predictions when enabled, and support
+  manual prediction;
 - apply real-result vectors and clear comparison state;
-- render prediction/true curves, the ensemble-member pointwise min/max band, and
-  objective bars.
+- render scalar values, prediction/true curves, the ensemble-member pointwise
+  min/max display, filled two-dimensional color contours without contour lines,
+  and objective bars. Two-dimensional truth and prediction use the same color
+scale in adjacent axes.
+- omit recorded rawData overlays and show an explanatory note for off-grid
+  coordinates while retaining objective bars calculated from the checkpoint grid.
 
 Heatmap tab:
 
@@ -30,6 +40,8 @@ Heatmap tab:
 Shared UI:
 
 - consistent ttk styling and conventional selected-tab emphasis;
+- explicit checkmark plus high-contrast accent fill for selected plot dimensions
+  and `Auto refresh`, independent of the platform ttk indicator glyph;
 - Up/Down navigation for readonly comboboxes;
 - Left/Right normalized slider movement, with larger Shift steps;
 - scrollable parameter controls;
@@ -38,12 +50,13 @@ Shared UI:
 ## I/O Format
 
 The tabs accept a `SurrogateWorkspace` when loaded. The interactive tab exposes
-`(checkpoint generation, normalized tuple, optional real job name)` and consumes a
-`PredictionResult`. The heatmap tab emits a validated percentage and consumes
-progress values or one `CrossGenerationErrorAudit`.
+`(checkpoint generation, normalized tuple, optional real job name, PlotRequest)`
+and consumes a `PredictionResult`. The heatmap tab emits a validated percentage
+and consumes progress values or one `CrossGenerationErrorAudit`.
 
 Plot components consume immutable result/matrix values and own their figure axes
-and canvases.
+and canvases. Interactive plot intent includes zero to two ordered dimension
+indices plus fixed coordinates for the remaining dimensions.
 
 ## Non-Obvious Techniques
 
@@ -52,9 +65,15 @@ and canvases.
 - The heatmap uses explicit half-step cell edges so outer blocks are complete and
   generation ticks align with block centers.
 - `pcolormesh(..., shading="flat")` plus `aspect="auto"` gives discrete rectangular
-  cells that fill the available region.
+  cells that fill the available region; zero line width and no edge colors keep
+  neighboring cells flush.
 - The displayed audit is replaced only in `finish()`, never in begin/progress/stop
   paths.
+- Selecting dimensions or fixed coordinates issues a superseding prediction
+  request so an existing off-grid plot cannot be reused for a different query; a
+  third selected dimension is rejected immediately.
+- Shared checkmark toggles retain native BooleanVar state, focus, and Space-key
+  operation while rendering deterministic selected/unselected symbols.
 - Tk combobox popdown widgets may be Tcl path strings rather than Python widgets;
   mousewheel ancestry logic must tolerate that.
 

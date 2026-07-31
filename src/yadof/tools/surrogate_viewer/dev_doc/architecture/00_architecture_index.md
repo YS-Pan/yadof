@@ -10,8 +10,11 @@ The two primary data paths are:
 
 ```text
 normalized parameters
-  -> selected checkpoint
+  + selected checkpoint
+  + selected 0-2 plot dimensions
+  + fixed slice coordinates
   -> predicted rawData
+  -> scalar, curve, or filled 2-D color contour
   -> current workspace cost calculation
   -> interactive plots
 

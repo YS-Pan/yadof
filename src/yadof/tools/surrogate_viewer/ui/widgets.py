@@ -5,7 +5,71 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-from .style import PANEL
+from .style import ACCENT, PANEL, TEXT
+
+
+class CheckmarkToggle(tk.Checkbutton):
+    """Checkbox with an explicit checkmark and high-contrast selected state."""
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        text: str,
+        variable: tk.BooleanVar,
+        command=None,
+        background: str = PANEL,
+    ) -> None:
+        self._label = str(text)
+        self._variable = variable
+        self._background = str(background)
+        self._trace_id: str | None = None
+        super().__init__(
+            parent,
+            variable=variable,
+            command=command,
+            indicatoron=False,
+            anchor=tk.W,
+            justify=tk.LEFT,
+            relief=tk.FLAT,
+            offrelief=tk.FLAT,
+            overrelief=tk.FLAT,
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground=self._background,
+            highlightcolor=ACCENT,
+            padx=6,
+            pady=3,
+            takefocus=True,
+            cursor="hand2",
+            font=("Segoe UI", 10),
+        )
+        self._trace_id = variable.trace_add("write", self._sync_from_variable)
+        self._sync()
+
+    def _sync_from_variable(self, *_args: object) -> None:
+        if self.winfo_exists():
+            self._sync()
+
+    def _sync(self) -> None:
+        selected = bool(self._variable.get())
+        self.configure(
+            text=f"{'✓' if selected else '□'}  {self._label}",
+            background=ACCENT if selected else self._background,
+            foreground="white" if selected else TEXT,
+            activebackground="#1857d7" if selected else "#e8edf6",
+            activeforeground="white" if selected else TEXT,
+            selectcolor=ACCENT if selected else self._background,
+        )
+
+    def destroy(self) -> None:
+        if self._trace_id is not None:
+            try:
+                self._variable.trace_remove("write", self._trace_id)
+            except tk.TclError:
+                pass
+            self._trace_id = None
+        super().destroy()
 
 
 def _is_widget_descendant(widget: object, ancestor: object) -> bool:

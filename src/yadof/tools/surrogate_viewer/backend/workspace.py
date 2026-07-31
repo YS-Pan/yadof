@@ -17,11 +17,17 @@ from yadof.job_template import api as job_template_api
 from yadof.recorded_data import get_rawdata_samples, list_records
 
 from .checkpoints import CheckpointPredictor, discover_checkpoints
-from .rawdata import flatten_samples_for_schema, rawdata_names
+from .rawdata import (
+    flatten_samples_for_schema,
+    rawdata_dimensions,
+    rawdata_names,
+)
 from .types import (
     CheckpointInfo,
     CrossGenerationErrorAudit,
+    DimensionSpec,
     ParameterSpec,
+    PlotRequest,
     PredictionResult,
     ProgressCallback,
     RealResult,
@@ -172,6 +178,12 @@ class SurrogateWorkspace:
             if item.generation == int(generation)
         )
 
+    def dimensions_for_rawdata(
+        self,
+        item_index: int,
+    ) -> tuple[DimensionSpec, ...]:
+        return rawdata_dimensions(self._template_sample, item_index)
+
     def checkpoint_for_generation(
         self,
         generation: int,
@@ -245,6 +257,7 @@ class SurrogateWorkspace:
         normalized_values: Sequence[float],
         *,
         true_job_name: str | None = None,
+        plot_request: PlotRequest | None = None,
     ) -> PredictionResult:
         normalized = tuple(float(value) for value in normalized_values)
         predictor = self._get_predictor(checkpoint_generation)
@@ -258,6 +271,21 @@ class SurrogateWorkspace:
             result = self._real_by_job[str(true_job_name)]
             true_sample = self.load_true_sample(result.job_name)
             true_costs = self.load_true_costs(result, true_sample)
+        predicted_plot = None
+        member_plots = ()
+        plot_note = ""
+        if (
+            plot_request is not None
+            and not self._plot_request_is_on_grid(plot_request)
+        ):
+            predicted_plot, member_plots = predictor.predict_plot(
+                (normalized,),
+                plot_request,
+            )
+            plot_note = (
+                "Off-grid rawData query; no recorded real overlay exists. "
+                "Objective comparison still uses the checkpoint grid."
+            )
         return PredictionResult(
             checkpoint_generation=int(checkpoint_generation),
             normalized_values=normalized,
@@ -268,7 +296,41 @@ class SurrogateWorkspace:
             true_sample=true_sample,
             true_costs=true_costs,
             true_job_name=true_job_name,
+            predicted_plot=predicted_plot,
+            member_plots=member_plots,
+            plot_note=plot_note,
         )
+
+    def _plot_request_is_on_grid(self, request: PlotRequest) -> bool:
+        dimensions = self.dimensions_for_rawdata(request.item_index)
+        fixed = request.fixed_map
+        for dimension in dimensions:
+            if dimension.index in request.plotted_dimensions:
+                continue
+            if dimension.index not in fixed:
+                return False
+            coordinates = np.asarray(
+                dimension.coordinates,
+                dtype=np.float64,
+            ).reshape(-1)
+            value = float(fixed[dimension.index])
+            tolerance = 1e-10 * max(
+                1.0,
+                abs(value),
+                float(np.max(np.abs(coordinates)))
+                if coordinates.size
+                else 1.0,
+            )
+            if not np.any(
+                np.isclose(
+                    coordinates,
+                    value,
+                    rtol=1e-10,
+                    atol=tolerance,
+                )
+            ):
+                return False
+        return True
 
     def _sampled_historical_rows(
         self,

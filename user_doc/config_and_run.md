@@ -137,8 +137,18 @@ recreates the jobs directory.
 `view surrogate` is a separate, explicitly launched desktop tool. It opens the
 selected workspace (or lets the user choose one), explores saved surrogate
 checkpoint predictions and recorded real evidence, and can calculate an in-memory
-cross-generation error audit. It never joins `view all`, trains a model, starts a
-workflow, or modifies workspace files. Install the `viewer` extra before using it.
+cross-generation error audit. For each rawData output it lists every dimension:
+select zero, one, or two as plot axes and enter coordinates for the remaining
+dimensions. Each fixed dimension has both a checkpoint-grid dropdown and an
+arbitrary finite-value entry. Stored values preserve the checkpoint's original
+full-grid prediction path; off-grid values directly query the same conditional INR
+and interpolate its stored per-coordinate target scaler. The interactive plot then
+shows a scalar value, a curve, or a filled two-dimensional color contour without
+contour lines. Recorded truth is omitted for off-grid rawData positions because no
+such evidence exists. Continuous task parameters remain independently queryable
+between recorded samples. The viewer never changes training/checkpoint artifacts,
+joins `view all`, starts a workflow, or modifies workspace files. Install the
+`viewer` extra before using it.
 
 ## Python APIs
 

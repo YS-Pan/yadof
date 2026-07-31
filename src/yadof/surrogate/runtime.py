@@ -249,7 +249,11 @@ def _normalized_axis(values: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(2.0 * (values - lo) / (hi - lo) - 1.0, dtype=np.float64)
 
 
-def _axis_values_for_dim(template: Mapping[str, object], shape: tuple[int, ...], dim: int) -> np.ndarray:
+def _physical_axis_values_for_dim(
+    template: Mapping[str, object],
+    shape: tuple[int, ...],
+    dim: int,
+) -> np.ndarray:
     size = int(shape[dim])
     metadata = _metadata_dict(template.get("metadata"))
     axes = metadata.get("axes")
@@ -260,10 +264,14 @@ def _axis_values_for_dim(template: Mapping[str, object], shape: tuple[int, ...],
             if isinstance(values_key, str) and values_key in template and _is_numeric_array(template[values_key]):
                 values = np.asarray(template[values_key], dtype=np.float64).reshape(-1)
                 if values.size == size:
-                    return _normalized_axis(values)
-    if size <= 1:
-        return np.zeros((size,), dtype=np.float64)
-    return np.linspace(-1.0, 1.0, size, dtype=np.float64)
+                    return values
+    return np.arange(size, dtype=np.float64)
+
+
+def _axis_values_for_dim(template: Mapping[str, object], shape: tuple[int, ...], dim: int) -> np.ndarray:
+    return _normalized_axis(
+        _physical_axis_values_for_dim(template, shape, dim)
+    )
 
 
 def _slot_coordinates(template: Mapping[str, object], slot: RawArraySlot) -> np.ndarray:
@@ -291,6 +299,185 @@ def _build_query_table(schema: RawDataSchema) -> tuple[np.ndarray, np.ndarray]:
     return (
         np.ascontiguousarray(np.concatenate(coords, axis=0), dtype=np.float32),
         np.ascontiguousarray(np.concatenate(fields, axis=0), dtype=np.int64),
+    )
+
+
+def _interpolate_regular_grid(
+    values: np.ndarray,
+    source_axes: Sequence[np.ndarray],
+    target_axes: Sequence[np.ndarray],
+) -> np.ndarray:
+    """Linearly interpolate one regular grid, clamping scaler extrapolation."""
+
+    result = np.asarray(values, dtype=np.float64)
+    for axis, (raw_source, raw_target) in enumerate(
+        zip(source_axes, target_axes)
+    ):
+        source = np.asarray(raw_source, dtype=np.float64).reshape(-1)
+        target = np.asarray(raw_target, dtype=np.float64).reshape(-1)
+        if source.size != result.shape[axis]:
+            raise ValueError("source axis does not match scaler grid")
+        if not np.all(np.isfinite(source)) or not np.all(np.isfinite(target)):
+            raise ValueError("off-grid rawData coordinates must be finite")
+        if np.array_equal(source, target):
+            continue
+
+        moved = np.moveaxis(result, axis, 0)
+        flat = moved.reshape(source.size, -1)
+        if source.size <= 1:
+            interpolated = np.repeat(flat[:1], target.size, axis=0)
+        else:
+            order = np.argsort(source, kind="stable")
+            ordered_source = source[order]
+            if np.any(np.diff(ordered_source) <= 0.0):
+                raise ValueError(
+                    "off-grid rawData queries require unique axis coordinates"
+                )
+            ordered_values = flat[order]
+            interpolated = np.empty(
+                (target.size, ordered_values.shape[1]),
+                dtype=np.float64,
+            )
+            for column in range(ordered_values.shape[1]):
+                interpolated[:, column] = np.interp(
+                    target,
+                    ordered_source,
+                    ordered_values[:, column],
+                )
+        reshaped = interpolated.reshape((target.size, *moved.shape[1:]))
+        result = np.moveaxis(reshaped, 0, axis)
+    return np.ascontiguousarray(result, dtype=np.float64)
+
+
+def predict_rawdata_slot_members_at_coordinates(
+    *,
+    model: object,
+    schema: RawDataSchema,
+    scaler: TargetScaler,
+    train_cfg: INRTrainConfig,
+    device: torch.device,
+    normalized_rows: Sequence[Sequence[float]],
+    item_index: int,
+    key: str,
+    axis_coordinates: Sequence[Sequence[float] | np.ndarray],
+) -> np.ndarray:
+    """Query one modeled rawData slot at arbitrary physical coordinates.
+
+    Existing full-grid prediction does not call this function. At stored
+    coordinates this uses the same decoder coordinates and target scaler as
+    the legacy path; between coordinates it linearly interpolates the stored
+    per-coordinate scaler before inverse scaling the decoder output.
+    """
+
+    slot = next(
+        (
+            candidate
+            for candidate in schema.modeled_slots
+            if candidate.item_index == int(item_index)
+            and candidate.key == str(key)
+        ),
+        None,
+    )
+    if slot is None:
+        raise ValueError(
+            f"rawData item {int(item_index)} field {str(key)!r} is not modeled"
+        )
+
+    shape = tuple(int(value) for value in slot.shape)
+    if len(axis_coordinates) != len(shape):
+        raise ValueError(
+            f"expected {len(shape)} rawData coordinate axes, "
+            f"got {len(axis_coordinates)}"
+        )
+    targets = tuple(
+        np.asarray(values, dtype=np.float64).reshape(-1)
+        for values in axis_coordinates
+    )
+    if any(values.size == 0 for values in targets):
+        raise ValueError("off-grid rawData coordinate axes cannot be empty")
+
+    template = schema.templates[slot.item_index]
+    sources = tuple(
+        _physical_axis_values_for_dim(template, shape, dim)
+        for dim in range(len(shape))
+    )
+    if any(not np.all(np.isfinite(values)) for values in (*sources, *targets)):
+        raise ValueError("off-grid rawData coordinates must be finite")
+    for dim in range(3, len(shape)):
+        if not np.array_equal(sources[dim], targets[dim]):
+            raise ValueError(
+                "this checkpoint only encodes the first three rawData "
+                "dimensions; higher dimensions must keep their stored grid"
+            )
+
+    target_shape = tuple(int(values.size) for values in targets)
+    query_count = int(np.prod(target_shape, dtype=np.int64)) if target_shape else 1
+    coords = np.zeros((query_count, 3), dtype=np.float64)
+    if target_shape:
+        indices = np.indices(target_shape, sparse=False)
+        for dim in range(min(len(shape), 3)):
+            low = float(np.min(sources[dim]))
+            high = float(np.max(sources[dim]))
+            normalized_axis = (
+                np.zeros_like(targets[dim], dtype=np.float64)
+                if high <= low
+                else 2.0 * (targets[dim] - low) / (high - low) - 1.0
+            )
+            coords[:, dim] = normalized_axis[indices[dim].reshape(-1)]
+
+    matrix = _x_matrix(normalized_rows)
+    scaled = predict_conditional_inr_members(
+        model=model,
+        X=matrix,
+        coord_table=np.ascontiguousarray(coords, dtype=np.float32),
+        field_ids=np.full(
+            (query_count,),
+            int(slot.field_id),
+            dtype=np.int64,
+        ),
+        device=device,
+        sample_batch=max(
+            1,
+            min(
+                int(train_cfg.sample_batch_eval),
+                int(max(1, matrix.shape[0])),
+            ),
+        ),
+        query_batch=max(1, int(train_cfg.query_batch_eval)),
+    )
+
+    mean_grid = np.asarray(
+        scaler.mean[slot.start : slot.end],
+        dtype=np.float64,
+    ).reshape(shape)
+    scale_grid = np.asarray(
+        scaler.scale[slot.start : slot.end],
+        dtype=np.float64,
+    ).reshape(shape)
+    target_mean = _interpolate_regular_grid(
+        mean_grid,
+        sources,
+        targets,
+    ).reshape(-1)
+    target_scale = _interpolate_regular_grid(
+        scale_grid,
+        sources,
+        targets,
+    ).reshape(-1)
+    physical = (
+        np.asarray(scaled, dtype=np.float64)
+        * target_scale[None, None, :]
+        + target_mean[None, None, :]
+    )
+    return np.ascontiguousarray(
+        physical.reshape(
+            (
+                int(physical.shape[0]),
+                int(physical.shape[1]),
+                *target_shape,
+            )
+        ),
+        dtype=np.float64,
     )
 
 

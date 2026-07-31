@@ -34,15 +34,21 @@ same per-generation sampled real individuals
 1. Load one explicit compatible yadof workspace.
 2. Discover usable checkpoint generations while excluding broken/skipped
    placeholders.
-3. Present normalized controls while displaying denormalized physical values.
-4. Predict rawData and current costs in a background worker.
-5. Optionally load one recorded individual for true/predicted comparison.
-6. Sample each historical generation independently for an audit.
-7. Use every checkpoint to predict the same selected rows.
-8. Aggregate cost and per-rawData errors without retaining large prediction
+3. Present normalized parameter controls while displaying denormalized physical
+   values.
+4. List every dimension of the selected rawData output; accept zero to two plot
+   dimensions and a stored-grid or arbitrary finite fixed coordinate for every
+   remaining dimension.
+5. Predict rawData and current costs in a background worker.
+6. Reuse the legacy full-grid slice or query the decoder at off-grid coordinates,
+   then display a scalar, curve, or filled two-dimensional color contour.
+7. Optionally load one recorded individual for true/predicted comparison.
+8. Sample each historical generation independently for an audit.
+9. Use every checkpoint to predict the same selected rows.
+10. Aggregate cost and per-rawData errors without retaining large prediction
    histories.
-9. Render a discrete generation-by-generation heatmap.
-10. Support cooperative stop and visible failure reporting.
+11. Render a discrete generation-by-generation heatmap.
+12. Support cooperative stop and visible failure reporting.
 
 ## Boundaries
 
@@ -83,7 +89,11 @@ no persistence recovery because the viewer writes no audit cache.
   item and may also be combined across all modeled scalars.
 - Heatmap x is checkpoint generation; y is optimization generation.
 - Heatmap blocks are discrete, tick-centered, edge-complete, non-interpolated, and
-  not forced square.
+  not forced square. Neighboring blocks have no drawn borders or gaps.
+- Interactive rawData selection accepts at most two plot dimensions; every other
+  dimension has a grid dropdown and free numeric entry.
+- Stored coordinates retain legacy full-grid values; off-grid coordinates never
+  fabricate recorded truth or modify the checkpoint.
 - Metric/quantity switching after a complete audit performs no model inference.
 - Cancellation never promotes partial aggregate state.
 

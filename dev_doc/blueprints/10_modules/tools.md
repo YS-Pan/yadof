@@ -38,9 +38,14 @@ unrelated paths.
 loads one explicit workspace, predicts saved checkpoint rawData/current costs,
 compares selected recorded individuals, and calculates cancellable in-memory
 cross-generation error aggregates. Its backend alone adapts package checkpoint,
-recorded-data, and rawData internals; UI modules consume immutable viewer values.
-The tool never trains, launches workflows, edits checkpoints, writes audit caches,
-or joins the non-GUI `view all` command.
+recorded-data, and rawData internals; this includes describing every rawData
+dimension, extracting user-selected 0D/1D/2D stored-grid slices, and requesting
+conditional-INR values at arbitrary fixed coordinates. Stored-grid selections keep
+the legacy reconstruction path; off-grid selections interpolate checkpoint scaler
+arrays and do not claim recorded truth. UI modules consume immutable viewer values
+and render scalars, curves, or filled color contours. The tool never trains,
+launches workflows, edits checkpoints, writes audit caches, or joins the non-GUI
+`view all` command.
 
 The subpackage root is lightweight and resolves backend convenience exports lazily.
 Torch, Matplotlib, and Tkinter are loaded only when the viewer is actually used.

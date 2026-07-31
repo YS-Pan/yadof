@@ -8,7 +8,9 @@
 3. The backend loads effective configuration, checkpoint descriptors, parameter
    definitions, objective names, completed-record metadata, and one rawData
    template.
-4. Both tabs replace their selectors and derived state.
+4. Both tabs replace their selectors and derived state. The interactive tab
+   randomly selects one available optimization generation and then one real
+   individual from that generation.
 5. The app submits the initial interactive prediction.
 
 Metadata loading is synchronous because it establishes all subsequent UI state.
@@ -37,7 +39,15 @@ sequenceDiagram
 
 Slider changes are debounced. Selecting a real individual copies its normalized
 variables into the controls and attaches its job name so true rawData and current
-costs are returned for comparison.
+costs are returned for comparison. Selecting a rawData item rebuilds one control
+row for every stored dimension. Zero to two checked dimensions are retained as
+plot axes; each unchecked dimension offers both a stored-coordinate dropdown and a
+free numeric entry. Requests whose fixed values are stored coordinates reuse the
+already predicted full rawData. A non-grid fixed value queries the same conditional
+INR at that physical coordinate, interpolates checkpoint target-scaler arrays, and
+returns plot-only member values. Recorded truth is omitted for that rawData plot
+because the requested coordinate was never recorded; objective bars continue to
+use the unchanged full-grid reconstruction.
 
 ## Cross-Generation Audit
 

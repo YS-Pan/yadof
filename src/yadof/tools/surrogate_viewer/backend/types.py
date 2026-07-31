@@ -70,6 +70,58 @@ class RealResult:
 
 
 @dataclass(frozen=True)
+class DimensionSpec:
+    index: int
+    name: str
+    coordinates: np.ndarray
+    unit: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.name} ({self.unit})" if self.unit else self.name
+
+    @property
+    def default_value(self) -> float:
+        return self.nearest_value(0.0)
+
+    def nearest_value(self, target: float) -> float:
+        value = float(target)
+        if not np.isfinite(value):
+            raise ValueError(f"{self.name} fixed value must be finite")
+        coordinates = np.asarray(self.coordinates, dtype=float).reshape(-1)
+        if coordinates.size == 0:
+            raise ValueError(f"{self.name} has no coordinates")
+        index = int(np.argmin(np.abs(coordinates - value)))
+        return float(coordinates[index])
+
+
+@dataclass(frozen=True)
+class PlotData:
+    name: str
+    dimensions: tuple[DimensionSpec, ...]
+    values: np.ndarray
+    slice_label: str
+
+    @property
+    def ndim(self) -> int:
+        return len(self.dimensions)
+
+
+@dataclass(frozen=True)
+class PlotRequest:
+    item_index: int
+    plotted_dimensions: tuple[int, ...]
+    fixed_values: tuple[tuple[int, float], ...]
+
+    @property
+    def fixed_map(self) -> dict[int, float]:
+        return {
+            int(index): float(value)
+            for index, value in self.fixed_values
+        }
+
+
+@dataclass(frozen=True)
 class CurveData:
     name: str
     x: np.ndarray
@@ -90,6 +142,9 @@ class PredictionResult:
     true_sample: tuple[Mapping[str, object], ...] | None = None
     true_costs: tuple[float, ...] | None = None
     true_job_name: str | None = None
+    predicted_plot: PlotData | None = None
+    member_plots: tuple[PlotData, ...] = ()
+    plot_note: str = ""
 
 
 @dataclass(frozen=True)
