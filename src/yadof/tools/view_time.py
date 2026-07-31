@@ -120,16 +120,6 @@ def _opt_metadata_by_job(
     return out
 
 
-def _first_datetime(
-    record: Mapping[str, object], keys: Sequence[str]
-) -> datetime | None:
-    for key in keys:
-        dt = _parse_dt(record.get(key))
-        if dt is not None:
-            return dt
-    return None
-
-
 def _first_datetime_from_sources(
     sources: Sequence[Mapping[str, object]], keys: Sequence[str]
 ) -> datetime | None:
@@ -267,7 +257,15 @@ def _metadata_str(metadata: Mapping[str, object], key: str) -> str | None:
 
 def _metadata_elapsed_minutes(metadata: Mapping[str, object]) -> float | None:
     minute_keys = ("elapsed_min", "elapsed_minutes", "duration_min", "duration_minutes")
-    second_keys = ("elapsed_sec", "elapsed_seconds", "duration_sec", "duration_seconds", "runtime_sec", "runtime_seconds")
+    second_keys = (
+        "elapsed_sec",
+        "elapsed_seconds",
+        "duration_sec",
+        "duration_seconds",
+        "runtime_sec",
+        "runtime_seconds",
+        "condor_execution_elapsed_sec",
+    )
     for key in minute_keys:
         value = metadata.get(key)
         if value is None:
@@ -331,13 +329,32 @@ def build_rows(
         if wanted_status is not None and record_status != wanted_status:
             continue
 
-        start = _first_datetime(
-            record,
-            ("started_at", "failed_at", "ended_at", "recorded_at"),
+        timing_sources = (record, metadata)
+        start = _first_datetime_from_sources(
+            timing_sources,
+            (
+                "started_at",
+                "condor_execution_started_at",
+                "runner_started_at",
+                "condor_submitted_at",
+                "failed_at",
+                "ended_at",
+                "runner_finished_at",
+                "recorded_at",
+            ),
         )
-        end = _first_datetime(
-            record,
-            ("ended_at", "failed_at", "recorded_at", "started_at"),
+        end = _first_datetime_from_sources(
+            timing_sources,
+            (
+                "ended_at",
+                "failed_at",
+                "runner_finished_at",
+                "recorded_at",
+                "started_at",
+                "condor_execution_started_at",
+                "runner_started_at",
+                "condor_submitted_at",
+            ),
         )
         if start is None and end is None:
             skipped_without_time += 1
@@ -807,14 +824,13 @@ def plot_rows(
     _draw_generation_regions(ax, generation_regions)
 
     for computer in computers:
-        computer_avg = float(
-            np.mean(
-                [
-                    float(row["elapsed_min"])
-                    for row in rows
-                    if str(row["computer"]) == computer
-                ]
-            )
+        matching = [
+            row for row in done_rows if str(row["computer"]) == computer
+        ]
+        average_label = (
+            "n/a"
+            if not matching
+            else f"{float(np.mean([float(row['elapsed_min']) for row in matching])):.2f} min"
         )
         ax.scatter(
             [],
@@ -824,11 +840,8 @@ def plot_rows(
             alpha=0.75,
             s=SCATTER_MARKER_SIZE**2,
             linewidths=SCATTER_EDGE_LINE_WIDTH,
-            label=f"{computer} (avg. {computer_avg:.2f} min)",
+            label=f"{computer} (avg. {average_label})",
         )
-        matching = [
-            row for row in done_rows if str(row["computer"]) == computer
-        ]
         if not matching:
             continue
         ax.scatter(

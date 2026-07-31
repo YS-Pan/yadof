@@ -14,7 +14,11 @@ relative outputs below the configured tool directory. Cost supports selected
 records/objectives. Time supports status filtering and owns elapsed time, failure
 rate, execute-machine color, and typed error occurrence reporting. Machine legend
 entries show the bare machine name plus that machine's average recorded elapsed
-time. It prefers `execute_machine` from worker-support-written individual metadata,
+time across completed evaluations; failed evaluations remain visible but do not
+enter machine time averages. Timing rows prefer workflow or execute starts from the
+individual record or nested job metadata and use batch publication time only as a
+last resort. It prefers `execute_machine` from worker-support-written individual
+metadata,
 then uses source-labeled `condor_execute_machine` only when timeout prevented the
 worker file from returning. A never-executed job remains `unknown`; generic
 scheduler ClassAds do not override worker identity. Historical timeout rows may

@@ -11,8 +11,11 @@
   historical spelling `done` to `completed` and treat `all` as no filter.
 - Parse ISO timestamps, including `Z` and timezone-aware values, into comparable
   local naive datetimes.
-- Prefer explicit elapsed-minute/second metadata over timestamp subtraction and
-  clamp negative durations to zero.
+- Prefer explicit elapsed-minute/second metadata, including Condor execution-clock
+  duration, over timestamp subtraction and clamp negative durations to zero.
+- Resolve timing fields across both the individual record and nested job metadata.
+  Prefer workflow or execute start time; use batch `recorded_at` only as a last
+  resort so failed rows are not clustered at generation publication boundaries.
 - Merge optimization metadata when individual records lack run/generation indices.
 - Prefer execute-machine identity from worker-support-written individual metadata;
   fall back to source-labeled `condor_execute_machine` for timed-out jobs whose
@@ -29,7 +32,9 @@
 - Color ordinary elapsed-time points by execute machine and plot a smoothed
   completed duration.
 - Label each machine in the legend as `<machine> (avg. <minutes> min)`, where the
-  mean uses every recorded row assigned to that machine.
+  mean uses completed rows assigned to that machine. Keep failure-only machines in
+  the color legend as `<machine> (avg. n/a)` without treating failure duration as
+  zero or as a completed runtime.
 - Place each error type on its own axes-relative horizontal band between 80% and 90%
   of plot height. Draw each error point with machine-colored fill and an
   error-type-colored outer ring.
@@ -54,9 +59,10 @@
 
 - Records lacking both usable start and end timestamps are skipped and counted for
   the empty-result diagnostic.
-- Start/end fallback orders tolerate failed and partially recorded jobs, while
-  explicit duration metadata avoids distorted elapsed time when lifecycle
-  timestamps describe different stages.
+- Start/end fallback orders span top-level records and nested job metadata, tolerate
+  failed and partially recorded jobs, and keep execution starts ahead of batch
+  publication timestamps. Explicit duration metadata avoids distorted elapsed time
+  when lifecycle timestamps describe different stages.
 - Matplotlib/numpy imports are lazy and use the headless `Agg` backend.
 - Completed-evaluation circles use the shared 0.4-point ordinary-marker edge and
   their fill color identifies the execute machine.

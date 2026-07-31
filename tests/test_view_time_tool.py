@@ -142,6 +142,42 @@ def test_build_rows_prefers_top_level_workflow_timing_and_context():
     assert rows[0]["job_static_hash"] == "hash_a"
 
 
+def test_build_rows_uses_execution_timing_for_failed_records_before_batch_record_time():
+    fake_api = FakeRecordedDataApi(
+        records=(
+            {
+                "job_name": "timed_out",
+                "status": "timeout",
+                "recorded_at": "2026-05-14T09:00:00+08:00",
+                "job_metadata": {
+                    "condor_execution_started_at": "2026-05-14T08:00:00+08:00",
+                    "condor_execution_elapsed_sec": 600.0,
+                    "runner_finished_at": "2026-05-14T08:10:01+08:00",
+                    "timed_out": True,
+                },
+            },
+            {
+                "job_name": "next_generation_completed",
+                "status": "completed",
+                "started_at": "2026-05-14T08:20:00+08:00",
+                "ended_at": "2026-05-14T08:21:00+08:00",
+                "recorded_at": "2026-05-14T09:30:00+08:00",
+            },
+        )
+    )
+
+    rows = view_time.build_rows(object(), recorded_api=fake_api)
+
+    assert [row["job_name"] for row in rows] == [
+        "timed_out",
+        "next_generation_completed",
+    ]
+    assert rows[0]["start"] == datetime(2026, 5, 14, 8, 0)
+    assert rows[0]["end"] == datetime(2026, 5, 14, 8, 10, 1)
+    assert rows[0]["event_time"] == datetime(2026, 5, 14, 8, 10, 1)
+    assert rows[0]["elapsed_min"] == pytest.approx(10.0)
+
+
 def test_build_rows_can_filter_completed_records():
     fake_api = FakeRecordedDataApi(
         (
@@ -533,9 +569,9 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(
     from matplotlib import image as matplotlib_image
 
     assert matplotlib_image.imread(output).shape[:2] == (2100, 3300)
-    assert "worker-a (avg. 0.67 min)" in captured["labels"]
-    assert "worker-b (avg. 0.50 min)" in captured["labels"]
-    assert "worker-c (avg. 1.00 min)" in captured["labels"]
+    assert "worker-a (avg. 1.00 min)" in captured["labels"]
+    assert "worker-b (avg. n/a)" in captured["labels"]
+    assert "worker-c (avg. n/a)" in captured["labels"]
     for error_type in ("RuntimeError", "timeout", "collect error"):
         error_text = captured["error_texts"][error_type]
         assert error_text.get_position()[0] == pytest.approx(0.015)
