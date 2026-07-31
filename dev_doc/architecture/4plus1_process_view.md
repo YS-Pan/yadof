@@ -27,7 +27,10 @@ sequenceDiagram
 Local mode uses bounded process concurrency and per-individual timeouts. It runs the
 job-local `workflow.py` directly, rejects forbidden cost output, validates the flat
 rawData directory, captures stdout/stderr tails, and maps every outcome to a
-`JobResult`.
+`JobResult`. When progress output is enabled, stdout/stderr pipes are drained by
+dedicated threads and complete lines are also forwarded immediately with job and
+stream prefixes, so concurrent workflows remain distinguishable without changing
+the persisted diagnostic tails.
 
 Before starting a local batch, shared resource calibration reads compatible smoke
 or preceding-generation records. Local policy combines that per-job estimate with a
