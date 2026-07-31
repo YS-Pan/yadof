@@ -12,10 +12,12 @@ error, and publishes recoverable checkpoints/metadata.
 
 Training bundles come from validated recorded evidence. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
-constant or near-constant fields. Task-owned importance weights may emphasize
-objective-relevant windows while retaining full-field coverage. Large fields may use
-stochastic query minibatches for training, but public prediction reconstructs the
-full compatible field.
+constant or near-constant fields. Task-owned importance weights do not add or remove
+rawData: they emphasize objective-relevant positions already present in the modeled
+query table. They weight full-query loss or, when large fields use stochastic query
+minibatches, determine query-sampling probabilities without weighting the sampled
+loss a second time. A positive baseline weight retains attention outside the
+emphasized window. Public prediction reconstructs the full compatible field.
 
 The conditional decoder may also be queried at arbitrary physical coordinates for
 one modeled rawData slot. Stored coordinate values use exactly the checkpoint's

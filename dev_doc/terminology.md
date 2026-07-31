@@ -37,6 +37,7 @@
 | `submit-side execution watchdog` | yadof's distributed per-job clock derived from the current `condor.log` execute segment; at the adaptive limit it finalizes timeout locally and attempts bounded `condor_rm` cleanup without waiting for removal confirmation. |
 | `GPSAF` | Alpha/beta/gamma surrogate-assistance framing implemented by `yadof.optimize` with real-evaluation validation and exploration quota. |
 | `surrogate cost interval` | Per-objective min/max across conditional-INR ensemble members after predicted rawData is converted by current cost policy. |
+| `rawData importance weights` | Task-owned per-position surrogate training weights returned by optional `calc_cost.py:rawdata_importance_weights()`. They apply to numeric positions already present in the modeled rawData query table: they weight full-query loss or, for stochastic query minibatches, determine query-sampling probability without weighting the sampled loss again. They do not control workflow output, recorded-data inclusion, or which rawData fields are added to the surrogate. |
 | `staggered surrogate training` | Submit real jobs first, then train at most one workspace-local background model while execution is busy, subject to lag bounds. |
 | `packaged adapter` | Read-only reusable resource listed/copied by `yadof task`; active jobs use only the workspace copy. |
 | `software task namespace` | The software-identifying CLI level below `yadof task` for non-generic actions, such as `yadof task hfss`; it prevents different adapters from competing for an ambiguous generic action name. |

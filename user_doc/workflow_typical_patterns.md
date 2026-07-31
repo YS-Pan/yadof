@@ -111,6 +111,14 @@ The helper enforces this rule and publishes the zip atomically.
 Avoid storing the full variable vector in every rawData metadata item. The framework
 records variables separately.
 
+Saving and importance are independent. If the task needs the surrogate to model a
+complete gain or other far-field grid, save that complete numeric grid here. Do not
+reduce the saved array merely because `calculate_cost()` observes only a small
+frequency/angle window. Conversely, do not try to include the grid by assigning it
+a broad importance mask in `calc_cost.py`; that mask only changes training
+attention after the saved rawData has entered the surrogate training bundle. See
+[RawData Importance Weights](calc_cost_typical_patterns.md#rawdata-importance-weights).
+
 ## Adapter Workflow Pattern
 
 If `workflow.py` calls an external simulator or custom evaluator, copy the needed

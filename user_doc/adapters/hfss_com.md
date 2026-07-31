@@ -128,6 +128,15 @@ For far fields, omitting `primary_sweep_variable` preserves full-matrix rawData 
 PyAEDT exposes it. This is preferred for surrogate training because `calc_cost.py`
 can select objective windows later without losing the rest of the field.
 
+This full-matrix export is what makes all saved gain values available to the
+surrogate. Do not express that requirement by marking the whole gain field as
+important: importance weights do not include or exclude rawData. They only
+redistribute training attention after the complete field has entered the training
+bundle. If cost uses one frequency/`Phi`/`Theta` region, its gain importance mask
+should select that multi-axis intersection rather than marking the frequency band
+across all angles. See
+[RawData Importance Weights](../calc_cost_typical_patterns.md#rawdata-importance-weights).
+
 ## Save Near-Field Or Antenna-Parameter Data
 
 ```python

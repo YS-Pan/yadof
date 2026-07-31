@@ -43,10 +43,12 @@ If task semantics make old evidence invalid, users must remove or exclude it
 explicitly; the package does not guess a scientific migration.
 
 Optimizer and surrogate are consumers of the same evidence. The surrogate predicts
-rawData before cost, may train with task-owned importance weights, reconstructs full
-public rawData, and calls current cost logic. It never establishes a parallel
-`variables -> cost` truth path. Its schedules, state, and checkpoints are keyed by
-effective workspace paths.
+rawData before cost, constructs its modeled query table from compatible recorded
+numeric rawData, reconstructs full public rawData, and calls current cost logic.
+Task-owned importance weights change full-query loss attention or stochastic query-sampling
+probability within that query table; they never select which rawData is saved or
+added to the surrogate. It never establishes a parallel `variables -> cost` truth
+path. Its schedules, state, and checkpoints are keyed by effective workspace paths.
 
 ## Invariants
 

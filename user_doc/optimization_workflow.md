@@ -69,6 +69,25 @@ framework records raw evidence and derives cost through the current
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
 
+Keep these three decisions separate:
+
+1. `workflow.py` decides what evidence is saved. To make every far-field value
+   available to the surrogate, save the complete compatible far-field grid in
+   rawData instead of reducing it to an objective trace.
+2. The surrogate builds its training bundle from recorded rawData. Compatible
+   varying numeric slots enter its query table; constant slots are preserved in the
+   rawData template instead of being learned. Large fields may be sampled by query
+   minibatches during individual training steps, but remain part of the full
+   modeled field and full-grid prediction contract.
+3. `calc_cost.py:rawdata_importance_weights()` only changes relative training
+   attention among those modeled values. It neither saves data nor adds data to the
+   surrogate.
+
+Therefore, “include all saved far-field rawData in surrogate training” is a
+workflow/rawData requirement, not an instruction to mark the entire far field as
+important. See [RawData Importance Weights](calc_cost_typical_patterns.md#rawdata-importance-weights)
+for the exact mask semantics and a multi-axis gain example.
+
 Keep only task-varying rawData interpretation, objective definitions, thresholds,
 and importance-region selection in `calc_cost.py`. Reusable axis reduction,
 definition dispatch, worst-curve aggregation, constraint handling, error fallback,

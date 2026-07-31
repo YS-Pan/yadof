@@ -8,7 +8,9 @@
 - Flatten numeric rawData slots into conditional-INR query tables and reconstruct predicted rawData.
 - Query one modeled rawData slot at arbitrary physical axis coordinates without
   mutating its checkpoint schema.
-- Apply task-owned rawData importance weights.
+- Apply task-owned rawData importance weights only after compatible numeric rawData
+  slots have entered the modeled query table; the weights alter full-query loss
+  attention or stochastic query-sampling probability, not data inclusion.
 - Train the INR ensemble through `modeling.py`.
 - Write checkpoints through `checkpoints.py` and training metadata through `metadata.py`.
 - Predict rawData/costs using the latest in-memory trained state.

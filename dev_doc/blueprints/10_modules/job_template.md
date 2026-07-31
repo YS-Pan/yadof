@@ -20,8 +20,10 @@ It does not contain a concrete simulator or objective.
   write cost.
 - `calc_cost.py` reports objective names and contains task-specific rawData
   interpretation, objective definitions, thresholds, calculators, and importance
-  regions. It calls package helpers for reusable loading/reduction/dispatch,
-  constraints, failure fallback, weight allocation, and objective counting.
+  regions. Importance regions assign relative attention to already modeled rawData;
+  they do not select saved evidence or surrogate inclusion. The file calls package
+  helpers for reusable loading/reduction/dispatch, constraints, failure fallback,
+  weight allocation, and objective counting.
 - adapters, models, lookup data, and task helpers are copied into prepared jobs when
   placed under `job_template/`.
 
