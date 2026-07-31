@@ -2,11 +2,12 @@
 
 The surrogate viewer is an optional, read-only `yadof.tools` application around
 one explicit yadof workspace. `yadof view surrogate` launches it separately from
-non-GUI history views. It presents interactive checkpoint predictions and a
-cross-generation error audit without training a model or changing workspace
-evidence.
+non-GUI history views. Its default mode presents interactive checkpoint
+predictions and a cross-generation error audit in a desktop window; its `summary`
+and `audit` modes expose metadata and selected error matrices as terminal text or
+JSON. No mode trains a model or changes workspace evidence.
 
-The two primary data paths are:
+The primary data paths are:
 
 ```text
 normalized parameters
@@ -22,7 +23,11 @@ sampled recorded individuals + real rawData
   -> every saved checkpoint
   -> predicted rawData and current costs
   -> relative/absolute sum-count aggregates
-  -> instantly selectable heatmap matrix
+  -> instantly selectable heatmap matrix or terminal matrix report
+
+workspace checkpoint + task + recorded metadata
+  -> bounded non-inference summary
+  -> terminal text or schema-versioned JSON
 ```
 
 Core invariants are:
@@ -33,6 +38,8 @@ Core invariants are:
 - A stopped or failed audit never replaces the previous complete audit.
 - Metric and quantity changes derive a new matrix from memory without model
   inference.
+- Terminal JSON contains no non-standard NaN values; missing finite cells are
+  represented as `null`, and optional progress stays on stderr.
 - Private yadof checkpoint/rawData dependencies remain isolated in `backend/`.
 
 Read the current views in this order:

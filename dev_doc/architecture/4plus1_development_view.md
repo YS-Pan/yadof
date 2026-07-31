@@ -19,7 +19,7 @@ src/yadof/                 installed framework
   optimize/                candidate mechanics and campaign loop
   surrogate/               rawData-first model and scheduling
   tools/                   optional user-launched utilities
-    surrogate_viewer/      optional read-only GUI and its independent dev_doc
+    surrogate_viewer/      optional read-only GUI/text inspection and dev_doc
   _resources/              templates/adapters/docs/worker helper
 tests/                     maintained generic verification
 dev_doc/                   developer source documentation
@@ -69,7 +69,9 @@ distributed job payloads.
 
 The viewer remains a leaf below `tools`: CLI parser construction and
 `yadof.tools` imports must not load Torch, Matplotlib, or Tkinter. Its subpackage
-loads those dependencies only when its backend exports or GUI command are used.
+loads backend/model dependencies only for a selected viewer mode, and loads
+Matplotlib/Tkinter only for the GUI. Text reports use the same viewer backend and
+write only stdout/stderr.
 Viewer-specific architecture and blueprints remain below
 `tools/surrogate_viewer/dev_doc/`, while maintained pytest coverage lives in the
 repository's top-level `tests/`.

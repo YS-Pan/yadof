@@ -29,9 +29,10 @@ NumPy, adapters' third-party dependencies, PyAEDT, and simulator software still
 belong to the worker environment.
 
 The `viewer` extra installs the Torch and Matplotlib dependencies needed by
-`yadof view surrogate`; Tkinter must also be available in the selected Python
-installation. The viewer is submit-side, read-only inspection software and is
-never copied into distributed jobs.
+`yadof view surrogate`. Tkinter must also be available when using its default
+desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewer is
+submit-side, read-only inspection software and is never copied into distributed
+jobs.
 
 Version `0.1.0` identifies the older pre-package project. Version `0.2.0`
 identifies the current installable-package line.

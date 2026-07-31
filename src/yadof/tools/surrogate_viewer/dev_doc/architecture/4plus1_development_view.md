@@ -5,7 +5,8 @@
 ```text
 src/yadof/tools/surrogate_viewer/
   __init__.py               lazy optional backend exports
-  app.py                    application coordinator and module CLI entry
+  app.py                    desktop coordinator and module GUI entry
+  report.py                 terminal summary/audit payloads and formatting
   __main__.py               python -m yadof.tools.surrogate_viewer entry
   backend/
     __init__.py             public viewer-backend exports
@@ -26,6 +27,8 @@ tests/test_surrogate_viewer.py
 ## Development Rules
 
 - Keep `app.py` as a coordinator; tab-specific widgets belong in their tab module.
+- Keep `report.py` presentation-only: it may select/format backend values but must
+  not duplicate checkpoint inference or record loading.
 - Keep yadof record/checkpoint/rawData mechanics below `backend/`.
 - Add shared helpers only after two real callers require identical semantics.
 - Keep transfer values explicit and immutable rather than passing live Tk widgets
@@ -36,6 +39,8 @@ tests/test_surrogate_viewer.py
   internal files.
 - Keep the viewer package root and yadof CLI parser light; optional GUI/model
   dependencies load only after the viewer is selected.
+- Keep terminal stdout limited to the final text/JSON value and route optional
+  progress to stderr.
 - Treat unrelated dirty-worktree changes as user-owned.
 
 ## Dependency And Installation Rules
@@ -57,6 +62,8 @@ The default focused checks are:
 & "..\.venv\Scripts\python.exe" -m pytest tests\test_surrogate_viewer.py -q
 & "..\.venv\Scripts\python.exe" -m yadof.tools.surrogate_viewer --help
 & "..\.venv\Scripts\yadof.exe" view surrogate --help
+& "..\.venv\Scripts\yadof.exe" view surrogate summary --help
+& "..\.venv\Scripts\yadof.exe" view surrogate audit --help
 ```
 
 Changes to checkpoint loading or audit inference should also run a small seeded

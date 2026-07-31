@@ -17,3 +17,5 @@
 | `plot dimension` | One rawData dimension selected as an interactive independent variable. Zero, one, or two selections produce a scalar, curve, or filled two-dimensional color contour respectively. |
 | `fixed dimension` | Any rawData dimension not selected for plotting. Its checkpoint-grid dropdown preserves the legacy stored slice, while its text entry may request any finite physical coordinate. |
 | `off-grid rawData query` | A conditional-INR decoder evaluation at a fixed physical coordinate absent from the checkpoint grid. The target scaler is interpolated, recorded truth is unavailable, and the checkpoint is not changed. |
+| `terminal report` | A complete stdout-only `summary` or `audit` result below `yadof view surrogate`. It is human-readable text or schema-versioned JSON; optional progress uses stderr and no report is persisted. |
+| `quantity selector` | The terminal audit syntax `all-costs`, `cost:NAME`, `all-rawdata`, or `rawdata:NAME`, resolved exactly against the current workspace objective/rawData names after one complete audit. |

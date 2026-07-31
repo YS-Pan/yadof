@@ -107,6 +107,11 @@ yadof view cost --workspace PATH [--status completed] [-o NAME.png] [--summary-o
 yadof view time --workspace PATH [--status all] [-o NAME.png] [--summary-only]
 yadof view all --workspace PATH [--summary-only]
 yadof view surrogate [--workspace PATH]
+yadof view surrogate summary --workspace PATH [--format text|json]
+yadof view surrogate audit --workspace PATH [--sample-percent 10] `
+  [--random-seed N] [--metric relative|absolute|both] `
+  [--quantity all-costs|cost:NAME|all-rawdata|rawdata:NAME] `
+  [--format text|json] [--progress]
 yadof history clear --workspace PATH --yes
 yadof task adapters
 yadof task copy-adapter test_com.py --workspace PATH
@@ -134,21 +139,39 @@ without creating PNGs. Destructive history clear requires interactive confirmati
 or `--yes`, validates its exact workspace targets, clears only that workspace, and
 recreates the jobs directory.
 
-`view surrogate` is a separate, explicitly launched desktop tool. It opens the
-selected workspace (or lets the user choose one), explores saved surrogate
-checkpoint predictions and recorded real evidence, and can calculate an in-memory
-cross-generation error audit. For each rawData output it lists every dimension:
-select zero, one, or two as plot axes and enter coordinates for the remaining
-dimensions. Each fixed dimension has both a checkpoint-grid dropdown and an
-arbitrary finite-value entry. Stored values preserve the checkpoint's original
-full-grid prediction path; off-grid values directly query the same conditional INR
-and interpolate its stored per-coordinate target scaler. The interactive plot then
-shows a scalar value, a curve, or a filled two-dimensional color contour without
-contour lines. Recorded truth is omitted for off-grid rawData positions because no
-such evidence exists. Continuous task parameters remain independently queryable
-between recorded samples. The viewer never changes training/checkpoint artifacts,
-joins `view all`, starts a workflow, or modifies workspace files. Install the
-`viewer` extra before using it.
+`view surrogate` is a separate, explicitly launched read-only tool. With no mode,
+or with the explicit `gui` mode, it opens the selected workspace (or lets the user
+choose one), explores saved surrogate checkpoint predictions and recorded real
+evidence, and can calculate an in-memory cross-generation error audit. For each
+rawData output it lists every dimension: select zero, one, or two as plot axes and
+enter coordinates for the remaining dimensions. Each fixed dimension has both a
+checkpoint-grid dropdown and an arbitrary finite-value entry. Stored values
+preserve the checkpoint's original full-grid prediction path; off-grid values
+directly query the same conditional INR and interpolate its stored per-coordinate
+target scaler. The interactive plot then shows a scalar value, a curve, or a
+filled two-dimensional color contour without contour lines. Recorded truth is
+omitted for off-grid rawData positions because no such evidence exists. Continuous
+task parameters remain independently queryable between recorded samples.
+
+The two terminal modes are intended for people and AI agents that need analysis
+without a window:
+
+- `summary` does not load a model. It prints checkpoint generations/training
+  metadata, completed-result counts by optimization generation, parameter ranges,
+  objective names, and rawData dimension spans. `--format json` emits a
+  schema-versioned machine-readable object.
+- `audit` performs the same checkpoint inference and per-generation sampling as
+  the GUI audit. It prints a matrix whose rows are optimization generations and
+  columns are checkpoint generations. `--quantity` selects all costs, one named
+  cost, all rawData, or one named rawData output; `--metric both` returns both
+  aggregate matrices from the single inference pass. JSON represents missing
+  finite aggregates as `null`. `--progress` writes status to stderr so stdout
+  remains clean for text or JSON capture.
+
+Both report modes default to the current directory when `--workspace` is omitted.
+They write no PNG, cache, checkpoint, history, or other workspace file. The
+surrogate tool never joins `view all`, starts a workflow, or changes training and
+checkpoint artifacts. Install the `viewer` extra before using any of its modes.
 
 ## Python APIs
 

@@ -1,9 +1,47 @@
 # yadof surrogate checkpoint viewer
 
-这是集成在 `yadof.tools.surrogate_viewer` 中的可选只读桌面工具。它访问
-yadof workspace，但不修改 checkpoint、真实仿真结果、配置或历史记录。
+这是集成在 `yadof.tools.surrogate_viewer` 中的可选只读分析工具。它既有
+桌面 GUI，也能在不打开窗口的情况下输出文本或 JSON；它访问 yadof
+workspace，但不修改 checkpoint、真实仿真结果、配置或历史记录。
 
-## 启动
+## 命令行文字报告
+
+AI agent 通常应先请求 JSON 概要：
+
+```powershell
+yadof view surrogate summary --workspace "D:\path\to\workspace" --format json
+```
+
+这个命令不加载模型，返回 checkpoint 代数、训练样本数和成员数、各优化代的
+完成结果数、参数范围、objective 名称，以及 rawData 每个维度的坐标数量和
+范围。默认 `--format text` 更适合终端阅读；JSON 带有 `schema_version` 和
+`analysis` 字段，适合 agent 稳定解析。
+
+需要误差分析时执行：
+
+```powershell
+yadof view surrogate audit --workspace "D:\path\to\workspace" `
+  --sample-percent 10 --random-seed 0 --metric both `
+  --quantity all-costs --format json --progress
+```
+
+`audit` 复用 GUI 的跨代误差审计：行是被预测真实个体的优化代，列是 surrogate
+checkpoint 代。它会做模型推理，但不会启动 workflow 或训练模型。可用的
+`--quantity` 形式为：
+
+- `all-costs`；
+- `cost:NAME`；
+- `all-rawdata`；
+- `rawdata:NAME`。
+
+`--metric` 可取 `relative`、`absolute` 或 `both`；选择 `both` 不会执行两次
+推理，因为一次 audit 本来就同时累计两类误差。`--sample-percent` 对每一代
+独立抽样且至少保留一个个体；`--random-seed` 让抽样可复现。`--progress`
+只写 stderr，stdout 仍可直接交给 JSON parser。JSON 中没有有限误差汇总的
+单元格使用 `null`。两个文字模式都默认检查当前目录，不创建 PNG 或 audit
+cache，也不导入 Tkinter 或打开窗口。
+
+## 启动桌面 GUI
 
 安装 `viewer` extra 后执行：
 
@@ -12,7 +50,9 @@ python -m pip install "yadof[viewer]"
 yadof view surrogate --workspace "D:\path\to\workspace"
 ```
 
-也可以不提供 `--workspace`，或使用模块入口
+裸 `view surrogate` 保持原有 GUI 行为，也可显式写成
+`yadof view surrogate gui --workspace ...`。还可以不提供 `--workspace`，
+或使用模块入口
 `python -m yadof.tools.surrogate_viewer`；启动后点击 **Browse…** 选择包含
 `config.py`、`recorded_data/` 和 `.yadof/surrogate/checkpoints/` 的目录。
 训练被跳过、没有模型成员的占位 checkpoint 不会列入可选项。
@@ -102,6 +142,7 @@ heatmap 的 CUDA 推理会使用比普通单点预测更大的样本批次，以
 ## 代码结构
 
 - `app.py`：窗口、后台任务和异常汇报的协调器；
+- `report.py`：无窗口 summary/audit 的稳定文本与 JSON 输出；
 - `ui/interactive.py`、`ui/heatmap.py`：两个互相独立的标签页；
 - `ui/plots.py`：Matplotlib 绘图；
 - `backend/checkpoints.py`：checkpoint 加载和批量推理；

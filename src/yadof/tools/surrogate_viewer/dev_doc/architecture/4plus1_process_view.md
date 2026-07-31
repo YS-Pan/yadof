@@ -68,6 +68,21 @@ use the unchanged full-grid reconstruction.
 Changing Error or Quantity after completion performs only NumPy aggregation and
 division. It must not load a checkpoint or execute PyTorch.
 
+## Terminal Reports
+
+`summary` constructs `SurrogateWorkspace`, reads the same checkpoint, task, record,
+and first-sample metadata used for GUI setup, bounds coordinate output to
+count/min/max per dimension, and exits without constructing a predictor or
+importing Tkinter.
+
+`audit` constructs the same workspace facade, resolves `all-costs`, `cost:NAME`,
+`all-rawdata`, or `rawdata:NAME` against current names, then calls
+`calculate_error_audit()` once. After full completion it derives the requested
+relative/absolute matrices in memory and renders text or JSON. `--metric both`
+reuses the one complete aggregate rather than repeating inference. Requested
+progress is written to stderr; stdout contains only the final report. A failed
+audit returns no partial report and writes nothing to the workspace.
+
 ## Cancellation And Previous Results
 
 The Stop button sets a thread-safe event. The backend checks it before and after

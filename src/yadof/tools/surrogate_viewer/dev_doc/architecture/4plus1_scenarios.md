@@ -46,6 +46,20 @@ Acceptance behavior: every heatmap block is discrete, centered on its generation
 tick, fully visible at the edge, allowed to be rectangular, flush against its
 neighbors without grid lines or gaps, and drawn with a one-line title.
 
+## Inspect From An AI Agent Or Terminal
+
+1. Run `yadof view surrogate summary --workspace PATH --format json`.
+2. Read checkpoint generations, sample/member/training metadata, historical counts,
+   parameter/objective names, and rawData dimension spans without model inference.
+3. Optionally run `audit` with a deterministic seed, sample percentage, metric, and
+   named quantity.
+4. Parse the row/column generations and selected error matrices from stdout.
+
+Acceptance behavior: neither command imports or opens Tkinter, JSON contains only
+standard finite numbers or `null`, progress appears only on stderr, named-quantity
+errors list available choices, one `both` request performs one audit, and no
+workspace or package file changes.
+
 ## Stop A Long Audit
 
 1. Begin recalculation while a prior complete audit is displayed.
@@ -67,9 +81,9 @@ partial audit.
 
 ## Package And CLI Integration
 
-Install the yadof wheel with its `viewer` extra, confirm
-`yadof view surrogate --help` works without opening a window, and launch the GUI
-only through that explicit command or its nested module entry. Acceptance behavior:
-the wheel and sdist contain viewer code plus this `dev_doc/`; `yadof --help` remains
-lightweight; `view all` never launches the GUI; the viewer writes no package or
-workspace files.
+Install the yadof wheel with its `viewer` extra, confirm GUI, summary, and audit
+help work without opening a window, and launch the GUI only through its
+default/explicit command or nested module entry. Acceptance behavior: the wheel and
+sdist contain viewer code, terminal reporter, and this `dev_doc/`; `yadof --help`
+remains lightweight; `view all` never launches the GUI; the viewer writes no
+package or workspace files.

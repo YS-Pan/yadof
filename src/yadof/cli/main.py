@@ -126,6 +126,15 @@ def _nonnegative_int(value: str) -> int:
     return parsed
 
 
+def _percentage(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or not 0.0 < parsed <= 100.0:
+        raise argparse.ArgumentTypeError(
+            "must be greater than 0 and at most 100"
+        )
+    return parsed
+
+
 def _default_view_output_name(
     view_kind: str, *, now: datetime | None = None
 ) -> Path:
@@ -234,6 +243,65 @@ def _surrogate_viewer_command(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+
+
+def _surrogate_report_command(args: argparse.Namespace) -> int:
+    try:
+        from ..tools.surrogate_viewer.report import (
+            render_error_audit,
+            render_workspace_summary,
+        )
+    except ImportError as exc:
+        print(
+            "yadof: error: surrogate text reports require the optional "
+            f"'viewer' dependencies; install yadof[viewer] ({exc})",
+            file=sys.stderr,
+        )
+        return 1
+
+    workspace = args.workspace or Path(".")
+    try:
+        if args.surrogate_action == "summary":
+            output = render_workspace_summary(
+                workspace,
+                output_format=args.output_format,
+            )
+        elif args.surrogate_action == "audit":
+            progress = None
+            if args.progress:
+                def progress(
+                    completed: int,
+                    total: int,
+                    message: str,
+                ) -> None:
+                    print(
+                        f"surrogate audit: {completed}/{total} {message}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+
+            output = render_error_audit(
+                workspace,
+                sample_fraction=args.sample_percent / 100.0,
+                random_seed=args.random_seed,
+                metric=args.metric,
+                quantity=args.quantity,
+                output_format=args.output_format,
+                progress=progress,
+            )
+        else:  # pragma: no cover - parser owns the action choices.
+            raise ValueError(
+                f"unsupported surrogate report: {args.surrogate_action}"
+            )
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        print(
+            f"yadof: error: could not create surrogate "
+            f"{args.surrogate_action} report: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+    write_text(output)
+    return 0
 
 
 def _confirm_destructive(*, confirmed: bool, prompt: str) -> bool:
@@ -535,20 +603,123 @@ def build_parser() -> argparse.ArgumentParser:
 
     surrogate_view = view_subparsers.add_parser(
         "surrogate",
-        help="open the read-only surrogate checkpoint viewer",
+        help="inspect surrogate checkpoints in a GUI or text report",
         description=(
-            "Launch the optional desktop viewer for saved surrogate checkpoints, "
-            "recorded real evidence, and cross-generation error audits. The viewer "
-            "does not train models, execute workflows, or modify the workspace."
+            "This read-only tool does not train models, execute workflows, or "
+            "modify the workspace. Launch the optional desktop viewer, print "
+            "checkpoint/history metadata, or calculate a text/JSON "
+            "cross-generation error audit. Omitting a mode preserves the "
+            "desktop GUI behavior."
         ),
     )
     surrogate_view.add_argument(
         "--workspace",
         type=Path,
         default=None,
+        help="GUI workspace to load; omit to choose one in the viewer",
+    )
+    surrogate_view.set_defaults(
+        handler=_surrogate_viewer_command,
+        surrogate_action="gui",
+    )
+    surrogate_modes = surrogate_view.add_subparsers(
+        dest="surrogate_action",
+        metavar="MODE",
+    )
+
+    surrogate_gui = surrogate_modes.add_parser(
+        "gui",
+        help="open the desktop viewer (the default mode)",
+    )
+    surrogate_gui.add_argument(
+        "--workspace",
+        type=Path,
+        default=argparse.SUPPRESS,
         help="workspace to load; omit to choose one in the viewer",
     )
-    surrogate_view.set_defaults(handler=_surrogate_viewer_command)
+    surrogate_gui.set_defaults(handler=_surrogate_viewer_command)
+
+    surrogate_summary = surrogate_modes.add_parser(
+        "summary",
+        help="print checkpoint, history, parameter, and rawData metadata",
+        description=(
+            "Print a read-only surrogate workspace summary without loading a "
+            "model or opening a window. JSON is intended for agent automation."
+        ),
+    )
+    surrogate_summary.add_argument(
+        "--workspace",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help="workspace to inspect (default: current directory)",
+    )
+    surrogate_summary.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="report encoding (default: text)",
+    )
+    surrogate_summary.set_defaults(handler=_surrogate_report_command)
+
+    surrogate_audit = surrogate_modes.add_parser(
+        "audit",
+        help="calculate a cross-generation surrogate error matrix",
+        description=(
+            "Run the viewer's read-only cross-generation error audit and print "
+            "the selected matrix as text or JSON. This performs checkpoint "
+            "inference but never launches a workflow or writes an audit cache."
+        ),
+    )
+    surrogate_audit.add_argument(
+        "--workspace",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help="workspace to inspect (default: current directory)",
+    )
+    surrogate_audit.add_argument(
+        "--sample-percent",
+        type=_percentage,
+        default=10.0,
+        help=(
+            "independent sample percentage from each optimization generation "
+            "(default: 10)"
+        ),
+    )
+    surrogate_audit.add_argument(
+        "--random-seed",
+        type=_nonnegative_int,
+        default=None,
+        help="optional deterministic per-generation sampling seed",
+    )
+    surrogate_audit.add_argument(
+        "--metric",
+        choices=("relative", "absolute", "both"),
+        default="relative",
+        help="error metric(s) to print (default: relative)",
+    )
+    surrogate_audit.add_argument(
+        "--quantity",
+        default="all-costs",
+        metavar="SELECTOR",
+        help=(
+            "all-costs, cost:NAME, all-rawdata, or rawdata:NAME "
+            "(default: all-costs)"
+        ),
+    )
+    surrogate_audit.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="report encoding (default: text)",
+    )
+    surrogate_audit.add_argument(
+        "--progress",
+        action="store_true",
+        help="write inference progress to stderr",
+    )
+    surrogate_audit.set_defaults(handler=_surrogate_report_command)
 
     all_views = view_subparsers.add_parser(
         "all",

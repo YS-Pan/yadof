@@ -94,6 +94,15 @@ Closing or stopping the viewer leaves configuration, history, rawData, and
 checkpoints unchanged. `view all` remains the non-GUI cost/time pair and never
 opens this tool.
 
+For terminal or AI-agent inspection, run
+`yadof view surrogate summary --workspace PATH --format json` to obtain checkpoint,
+history, parameter, objective, and rawData-dimension metadata without loading a
+model. Run `yadof view surrogate audit --workspace PATH --sample-percent 10
+--random-seed 0 --metric both --quantity all-costs --format json` to calculate the
+same cross-generation aggregate audit without opening a window. Audit progress, if
+requested, goes to stderr; the schema-versioned report remains on stdout. Neither
+mode writes a plot or workspace cache.
+
 ## Two simultaneous workspaces
 
 Every call passes a workspace. Config, task modules, jobs, records, locks, surrogate

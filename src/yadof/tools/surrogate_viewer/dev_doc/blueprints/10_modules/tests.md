@@ -22,6 +22,10 @@ optimization, or full model audit in the default suite.
 - Check Tcl-only popup ancestry safety.
 - Check instant aggregate switching across relative/absolute, cost/rawData, all,
   and item-specific quantities.
+- Check bounded workspace-summary fields and equivalent human-readable/JSON
+  rendering.
+- Check exact named quantity resolution, relative/absolute/both audit selection,
+  generation-axis order, null-safe JSON, and terminal matrix formatting.
 - Check per-generation random sampling counts and uniqueness.
 - Check cooperative cancellation before work begins.
 
@@ -38,6 +42,8 @@ under test.
   use the repository's standard pytest temporary-root configuration.
 - Viewer-specific tests skip as a group when optional Torch or Matplotlib
   dependencies are unavailable; parser/help/artifact tests still run core-only.
+- CLI parser tests construct GUI, summary, and audit actions without importing the
+  optional viewer modules.
 - GUI module imports may be tested without opening a visible window. A hidden Tk
   smoke is appropriate for component behavior but should not make the default
   suite depend on a display where avoidable.

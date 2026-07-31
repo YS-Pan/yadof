@@ -34,9 +34,10 @@ The package owns defaults, config validation, workspace handling, task loading, 
 composition, evaluation backends, optimization, rawData-first persistence and
 surrogate logic, tools, invariant worker lifecycle support, templates, adapters,
 and docs. The optional `tools/surrogate_viewer/` subtree reads workspace evidence
-and checkpoints through a desktop process launched by `yadof view surrogate`; it
-does not enter the execution or persistence pipeline. The package is read-only at
-runtime and never stores user state below site-packages.
+and checkpoints through either the desktop process or the `summary`/`audit`
+terminal modes selected below `yadof view surrogate`; it does not enter the
+execution or persistence pipeline. The package is read-only at runtime and never
+stores user state below site-packages.
 
 ## Workspace
 

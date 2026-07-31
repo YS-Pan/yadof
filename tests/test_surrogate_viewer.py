@@ -34,6 +34,12 @@ from yadof.tools.surrogate_viewer.backend import (
     _check_cancelled,
 )
 from yadof.tools.surrogate_viewer.app import _is_widget_descendant
+from yadof.tools.surrogate_viewer.report import (
+    build_error_audit_report,
+    build_workspace_summary,
+    format_error_audit_report,
+    format_workspace_summary,
+)
 from yadof.tools.surrogate_viewer.ui.interactive import InteractiveTab
 from yadof.tools.surrogate_viewer.ui.plots import (
     HeatmapPlot,
@@ -120,6 +126,128 @@ def test_discover_checkpoints_sorts_and_skips_bad_json(tmp_path: Path) -> None:
     assert [item.generation for item in checkpoints] == [1, 3]
     assert checkpoints[0].member_count == 4
     assert checkpoints[0].training_error == 0.25
+
+
+def test_workspace_summary_has_text_and_machine_readable_json(
+    tmp_path: Path,
+) -> None:
+    rows = (
+        RealResult("g0-0", 0, 0, (1.0,), (0.0,)),
+        RealResult("g1-0", 1, 0, (2.0,), (1.0,)),
+    )
+    dimension = DimensionSpec(
+        0,
+        "Freq",
+        np.asarray([1.0, 2.0, 3.0]),
+        "GHz",
+    )
+    viewer = SimpleNamespace(
+        root=tmp_path,
+        checkpoints=(
+            SimpleNamespace(
+                generation=2,
+                sample_count=20,
+                member_count=3,
+                training_error=0.125,
+                path=tmp_path / "generation_0002.json",
+            ),
+        ),
+        generations=(0, 1),
+        real_results=rows,
+        results_for_generation=lambda generation: tuple(
+            row for row in rows if row.generation == generation
+        ),
+        parameters=(
+            SimpleNamespace(
+                name="width",
+                unit="mm",
+                ranges=((1.0, 5.0),),
+            ),
+        ),
+        objective_names=("loss",),
+        rawdata_names=("gain",),
+        dimensions_for_rawdata=lambda _index: (dimension,),
+    )
+
+    payload = build_workspace_summary(viewer)
+    text = format_workspace_summary(payload)
+    encoded = json.loads(
+        format_workspace_summary(payload, output_format="json")
+    )
+
+    assert "generation 2: samples=20, members=3" in text
+    assert "optimization generations: 0 (1 results), 1 (1 results)" in text
+    assert "gain: Freq[3; 1..3 GHz]" in text
+    assert encoded["analysis"] == "surrogate_workspace_summary"
+    assert encoded["rawdata"][0]["dimensions"][0]["coordinate_max"] == 3.0
+
+
+def test_error_audit_report_selects_quantity_and_formats_matrices(
+    tmp_path: Path,
+) -> None:
+    audit = CrossGenerationErrorAudit(
+        checkpoint_generations=(2, 4),
+        optimization_generations=(1,),
+        objective_names=("loss",),
+        rawdata_names=("gain", "s11"),
+        sample_counts=(3,),
+        relative_sums=np.asarray([[[2.0], [4.0]]]),
+        relative_counts=np.asarray([[[2], [2]]]),
+        absolute_sums=np.asarray([[[10.0], [30.0]]]),
+        absolute_counts=np.asarray([[[2], [3]]]),
+        raw_relative_sums=np.asarray([[[3.0, 6.0], [0.0, 12.0]]]),
+        raw_relative_counts=np.asarray([[[1, 2], [0, 2]]]),
+        raw_absolute_sums=np.asarray([[[4.0, 8.0], [0.0, 20.0]]]),
+        raw_absolute_counts=np.asarray([[[1, 3], [0, 3]]]),
+        sample_fraction=0.25,
+    )
+    calls: list[dict[str, object]] = []
+
+    def calculate_error_audit(**kwargs):
+        calls.append(kwargs)
+        return audit
+
+    viewer = SimpleNamespace(
+        root=tmp_path,
+        objective_names=audit.objective_names,
+        rawdata_names=audit.rawdata_names,
+        calculate_error_audit=calculate_error_audit,
+    )
+    payload = build_error_audit_report(
+        viewer,
+        sample_fraction=0.25,
+        random_seed=7,
+        metric="both",
+        quantity="rawdata:gain",
+    )
+    text = format_error_audit_report(payload)
+    encoded = json.loads(
+        format_error_audit_report(payload, output_format="json")
+    )
+
+    assert calls == [
+        {
+            "sample_fraction": 0.25,
+            "random_seed": 7,
+            "progress": None,
+        }
+    ]
+    assert [item["metric"] for item in payload["matrices"]] == [
+        "relative",
+        "absolute",
+    ]
+    assert payload["matrices"][0]["values"] == [[3.0, None]]
+    assert "optimization_generation\tsamples\tcheckpoint_2\tcheckpoint_4" in text
+    assert "\n1\t3\t3\tn/a" in text
+    assert encoded["quantity"]["selector"] == "rawdata:gain"
+    assert encoded["matrices"][0]["values"] == [[3.0, None]]
+
+    with pytest.raises(ValueError, match="available names"):
+        build_error_audit_report(
+            viewer,
+            quantity="cost:unknown",
+        )
+    assert len(calls) == 1
 
 
 def test_extract_curve_prefers_frequency_and_slices_other_axes_at_zero() -> None:

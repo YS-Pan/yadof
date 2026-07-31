@@ -48,11 +48,16 @@ successful tool, continues attempting the later tool if the first fails, and
 returns failure if either tool failed. The corresponding Python tool APIs retain
 `output_path=None` as summary-only behavior.
 
-`view surrogate` is a separate GUI kind. It optionally receives one workspace,
-loads `yadof.tools.surrogate_viewer.app` only inside its handler, reports missing
-`viewer` dependencies without a traceback, and never participates in `view all`.
-Parser construction and `view surrogate --help` must succeed in a core-only
-installation.
+`view surrogate` is a separate optional kind. Its bare/default `gui` mode
+optionally receives one workspace and loads `yadof.tools.surrogate_viewer.app`
+only inside its handler. Its `summary` mode prints checkpoint/history/task/rawData
+metadata without model inference, while `audit` prints selected cross-generation
+error matrices after one backend inference pass. Both terminal modes support text
+and schema-versioned JSON, default to the current directory, never open Tkinter,
+and keep optional progress on stderr. All modes report missing `viewer`
+dependencies without a traceback and never participate in `view all`. Parser
+construction and every `view surrogate ... --help` path must succeed in a
+core-only installation.
 
 ## Invariants
 
@@ -61,4 +66,5 @@ installation.
   view commands may create only their documented tool-output PNG.
 - Real external execution is clearly distinguishable from package self-tests.
 - All stateful commands pass an explicit workspace into public APIs.
-- No command other than `view surrogate` implicitly opens a desktop GUI.
+- No command other than the default/explicit `view surrogate` GUI mode opens a
+  desktop GUI.

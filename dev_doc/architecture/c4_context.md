@@ -30,8 +30,9 @@ Direct CLI/API use remains supported but is the lower-level surface.
 - HTCondor transports self-contained job folders to administrator-managed workers.
 - The filesystem durably stores job evidence, JSONL metadata, archives,
   checkpoints, logs, and tool output.
-- Tkinter and Matplotlib provide the explicitly launched, read-only surrogate
-  checkpoint viewer; PyTorch performs its checkpoint inference.
+- Terminal stdout/JSON and the Tkinter/Matplotlib desktop UI provide two explicit,
+  read-only surrogate checkpoint inspection surfaces; PyTorch performs checkpoint
+  inference for audits and interactive predictions.
 
 Yadof diagnoses but does not install, configure, restart, or repair external
 software or the HTCondor pool. A workflow can orchestrate several simulations or

@@ -29,9 +29,9 @@ only behavior that varies with the selected optimization task.
 
 An optional read-only surrogate viewer is an installed `yadof.tools` leaf. It
 consumes the same workspace records, current cost policy, and saved checkpoints
-through an explicit GUI launch, but it is outside optimization execution and never
-publishes workspace state. Its detailed design remains in the viewer subtree's
-own `dev_doc/`.
+through an explicit GUI launch or terminal text/JSON reports, but it is outside
+optimization execution and never publishes workspace state. Its detailed design
+remains in the viewer subtree's own `dev_doc/`.
 
 - [c4_context.md](c4_context.md): users and external systems
 - [c4_container.md](c4_container.md): package/workspace/execution/persistence split

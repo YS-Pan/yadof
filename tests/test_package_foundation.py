@@ -626,6 +626,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/tools/surrogate_viewer/__init__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/__main__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/app.py" in wheel_names
+        assert "yadof/tools/surrogate_viewer/report.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/backend/workspace.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/ui/heatmap.py" in wheel_names
         assert (
@@ -685,6 +686,10 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert any(name.endswith("/src/yadof/workspace/context.py") for name in sdist_names)
         assert any(
             name.endswith("/src/yadof/tools/surrogate_viewer/app.py")
+            for name in sdist_names
+        )
+        assert any(
+            name.endswith("/src/yadof/tools/surrogate_viewer/report.py")
             for name in sdist_names
         )
         assert any(

@@ -87,6 +87,8 @@ code.
 
 The supported command surface is `yadof --help`, `version`, `docs`, `init`, `check`,
 `smoke-test`, `run`, `view`, `history`, and `task`. `view surrogate` explicitly
-opens the optional read-only checkpoint viewer. Commands that can execute real
-software, open a desktop GUI, or delete history make that behavior explicit.
-Framework self-tests are `pytest` tests and are different from a task smoke test.
+selects the optional read-only checkpoint tool: its bare/default mode opens the
+desktop viewer, while `summary` and `audit` print text or JSON without opening a
+window. Commands that can execute real software, open a desktop GUI, perform model
+inference, or delete history make that behavior explicit. Framework self-tests are
+`pytest` tests and are different from a task smoke test.

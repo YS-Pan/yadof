@@ -2,11 +2,11 @@
 
 ## Intent
 
-Provide an optional yadof desktop tool for understanding saved surrogate
-checkpoints. The application must let a user explore one prediction, compare it
-with recorded real evidence, and audit checkpoint accuracy across generations
-without mutating the selected workspace. CLI/parser imports remain lightweight
-until the user explicitly selects the viewer.
+Provide an optional yadof GUI and terminal tool for understanding saved surrogate
+checkpoints. It must let a user explore one prediction, compare it with recorded
+real evidence, obtain bounded metadata as text/JSON, and audit checkpoint accuracy
+across generations without mutating the selected workspace. CLI/parser imports
+remain lightweight until the user explicitly selects a viewer mode.
 
 ## Main Contracts
 
@@ -29,6 +29,18 @@ same per-generation sampled real individuals
   -> instantly selectable 2-D error matrix
 ```
 
+Terminal reporting:
+
+```text
+workspace/checkpoint/task metadata
+  -> bounded summary payload
+  -> human text or schema-versioned JSON
+
+one complete cross-generation audit
+  + exact metric/quantity selection
+  -> stdout matrix report
+```
+
 ## End-To-End Responsibilities
 
 1. Load one explicit compatible yadof workspace.
@@ -49,11 +61,13 @@ same per-generation sampled real individuals
    histories.
 11. Render a discrete generation-by-generation heatmap.
 12. Support cooperative stop and visible failure reporting.
+13. Print summary metadata without model loading or a window.
+14. Print selected audit matrices as text/JSON, keeping progress off stdout.
 
 ## Boundaries
 
-- Viewer subtree: GUI, plots, read-only adapter, aggregate contracts, and nested
-  developer documentation below `yadof.tools`.
+- Viewer subtree: GUI, plots, terminal reporting, read-only adapter, aggregate
+  contracts, and nested developer documentation below `yadof.tools`.
 - Enclosing yadof package: CLI routing, workspace/task/record/checkpoint/rawData
   mechanisms, model implementation, packaging, and maintained tests.
 - Selected workspace: external immutable inputs and evidence for the viewer.
@@ -96,12 +110,14 @@ no persistence recovery because the viewer writes no audit cache.
   fabricate recorded truth or modify the checkpoint.
 - Metric/quantity switching after a complete audit performs no model inference.
 - Cancellation never promotes partial aggregate state.
+- Terminal JSON replaces non-finite matrix cells with `null`; optional progress
+  goes only to stderr and reports are never persisted.
 
 ## Verification Boundary
 
 Unit tests cover checkpoint discovery, curve extraction, aggregate selection,
-sampling, cancellation, and Tcl-popup ancestry handling. Compile/import/CLI smoke
-checks cover the installed nested module, lazy CLI registration, and artifact
-membership. Real-workspace checks cover yadof checkpoint compatibility and
-error-array shapes. Hidden Tk checks cover focus handlers and plot layout without
-launching a simulator.
+sampling, cancellation, deterministic text/JSON reporting, and Tcl-popup ancestry
+handling. Compile/import/CLI smoke checks cover the installed nested module, lazy
+GUI/summary/audit registration, and artifact membership. Real-workspace checks
+cover yadof checkpoint compatibility and error-array shapes. Hidden Tk checks cover
+focus handlers and plot layout without launching a simulator.

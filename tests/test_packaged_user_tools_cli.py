@@ -169,6 +169,41 @@ def test_surrogate_viewer_cli_is_registered_without_loading_optional_modules():
     assert args.workspace == Path("D:/work/viewer")
     assert args.handler.__name__ == "_surrogate_viewer_command"
 
+    summary_args = parser.parse_args(
+        [
+            "view",
+            "surrogate",
+            "summary",
+            "--workspace",
+            "D:/work/viewer",
+            "--format",
+            "json",
+        ]
+    )
+    assert summary_args.surrogate_action == "summary"
+    assert summary_args.workspace == Path("D:/work/viewer")
+    assert summary_args.output_format == "json"
+    assert summary_args.handler.__name__ == "_surrogate_report_command"
+
+    audit_args = parser.parse_args(
+        [
+            "view",
+            "surrogate",
+            "audit",
+            "--sample-percent",
+            "25",
+            "--metric",
+            "both",
+            "--quantity",
+            "rawdata:gain",
+        ]
+    )
+    assert audit_args.surrogate_action == "audit"
+    assert audit_args.sample_percent == 25.0
+    assert audit_args.metric == "both"
+    assert audit_args.quantity == "rawdata:gain"
+    assert audit_args.handler.__name__ == "_surrogate_report_command"
+
 
 def test_view_all_prints_both_results_and_creates_both_images(capsys, tmp_path):
     workspace = _workspace(tmp_path, "view_all_workspace")

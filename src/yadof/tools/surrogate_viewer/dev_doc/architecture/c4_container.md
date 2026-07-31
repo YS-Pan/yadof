@@ -2,12 +2,14 @@
 
 ```mermaid
 flowchart LR
-    User["Viewer user"] --> App["app.py coordinator"]
+    User["Viewer user / AI agent"] --> App["app.py GUI coordinator"]
+    User --> Report["report.py terminal reporter"]
     App --> Interactive["InteractiveTab"]
     App --> Heatmap["HeatmapTab"]
     Interactive --> Plots["Matplotlib plot components"]
     Heatmap --> Plots
     App --> Backend["yadof.tools.surrogate_viewer.backend"]
+    Report --> Backend
     Backend --> Yadof["Enclosing yadof package"]
     Backend --> Workspace["Selected yadof workspace"]
     Workspace --> Records["Completed records + rawData"]
@@ -22,6 +24,14 @@ flowchart LR
 owns the single-worker executor, UI callback queue, request serials, cancellation
 event, workspace replacement, error dialogs, and shutdown. It does not own plot
 details or checkpoint parsing.
+
+## Terminal Reporter
+
+`report.py` constructs a bounded metadata summary without model loading or asks the
+same backend facade for one complete audit. It selects an aggregate quantity and
+one or both error metrics, then renders human-readable text or schema-versioned
+JSON. It owns no inference, workspace, or persistence logic and never imports the
+GUI.
 
 ## UI Components
 
@@ -54,4 +64,6 @@ values, and error aggregates are derived session memory.
 
 The interactive path caches at most one loaded predictor. The heatmap path releases
 each audit predictor after its checkpoint column and retains only aggregate
-`sum/count` arrays.
+`sum/count` arrays. The terminal audit follows that same path and releases all
+session state at process exit; terminal reports are stdout values, not workspace
+artifacts.
