@@ -129,6 +129,7 @@ Read `user_doc/adapters/README.md` first, then read the document for the specifi
 adapter:
 
 - `user_doc/adapters/hfss_com.md` for HFSS/PyAEDT workflows.
+- `user_doc/adapters/ngspice_com.md` for ngspice batch-process workflows.
 - `user_doc/adapters/test_com.md` for pure-Python synthetic workflows.
 
 A workflow should use adapter functions only to produce rawData. Final objective

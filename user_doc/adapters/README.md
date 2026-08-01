@@ -14,6 +14,7 @@ idempotent. The active task imports the local file from `job_template/`, so prep
 jobs remain self-contained and never depend on a source checkout.
 
 - [hfss_com.md](hfss_com.md) describes the optional HFSS/PyAEDT adapter.
+- [ngspice_com.md](ngspice_com.md) describes the ngspice batch-process adapter.
 - [test_com.md](test_com.md) describes the pure-Python simulator stand-in.
 
 New framework adapters belong in package resources with matching user

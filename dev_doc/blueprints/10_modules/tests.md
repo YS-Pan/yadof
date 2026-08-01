@@ -33,6 +33,9 @@ license, machine identity, or credential.
   active/held/removed/terminated historical timeout log fallback,
   evicted/never-executed timeout behavior,
   tools/adapters, and artifact exclusion of examples/runtime data;
+- ngspice adapter discovery/copying, parameter staging, owned batch-control
+  generation, real/complex ASCII rawfile parsing, explicit component conversion,
+  and schema-versioned rawData export without requiring a live simulator;
 - lazy `view surrogate` GUI/summary/audit registration and help, viewer
   wheel/sdist/dev_doc/report membership, deterministic text/JSON summary and audit
   encoding, checkpoint discovery, 0D/1D/2D rawData slice extraction from
