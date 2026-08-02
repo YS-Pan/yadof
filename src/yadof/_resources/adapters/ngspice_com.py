@@ -78,7 +78,11 @@ class NgspicePlot:
 
     def variable_index(self, name: str) -> int:
         selected = str(name).strip().lower()
-        matches = [item.index for item in self.variables if item.name.lower() == selected]
+        matches = [
+            item.index
+            for item in self.variables
+            if item.name.lower() == selected
+        ]
         if len(matches) != 1:
             choices = ", ".join(item.name for item in self.variables)
             raise KeyError(f"ngspice vector {name!r} not found; available vectors: {choices}")
