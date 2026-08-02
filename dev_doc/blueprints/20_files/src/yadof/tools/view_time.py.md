@@ -64,6 +64,10 @@
   publication timestamps. Explicit duration metadata avoids distorted elapsed time
   when lifecycle timestamps describe different stages.
 - Matplotlib/numpy imports are lazy and use the headless `Agg` backend.
+- The automatic date locator uses five minimum and twelve maximum major ticks. Five
+  aligns adjacent default Matplotlib year/month/day/hour/minute/second interval
+  tables, avoiding uncovered short-span ranges that otherwise emit locator warnings
+  during layout and image saving.
 - Completed-evaluation circles use the shared 0.4-point ordinary-marker edge and
   their fill color identifies the execute machine.
 - Machine lookup is provenance-ordered by key rather than record nesting:

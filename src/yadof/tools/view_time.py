@@ -993,7 +993,7 @@ def plot_rows(
         width=AXIS_LINE_WIDTH,
     )
 
-    locator = mdates.AutoDateLocator(minticks=6, maxticks=12)
+    locator = mdates.AutoDateLocator(minticks=5, maxticks=12)
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 

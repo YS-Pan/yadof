@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import importlib.util
 from pathlib import Path
+import warnings
+
 import pytest
 
 import yadof.tools.view_cost as view_cost
@@ -478,7 +480,7 @@ def test_view_time_splits_data_and_event_legends():
     assert axis.added == [axis.calls[0][2]]
 
 
-def test_plot_rows_writes_png_when_matplotlib_is_available(
+def test_plot_rows_writes_png_without_date_locator_warnings(
     tmp_path, monkeypatch
 ):
     if importlib.util.find_spec("matplotlib") is None:
@@ -562,7 +564,13 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(
         )
 
     monkeypatch.setattr(view_time, "_add_split_legends", capture_plot_contract)
-    output = view_time.plot_rows(object(), rows, tmp_path / "time.png")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "error",
+            message="AutoDateLocator was unable to pick an appropriate interval.*",
+            category=UserWarning,
+        )
+        output = view_time.plot_rows(object(), rows, tmp_path / "time.png")
 
     assert output.is_file()
     assert output.stat().st_size > 0
