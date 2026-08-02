@@ -7,8 +7,12 @@
 - rawData is one or more schema-versioned `.npz` evidence files. The directory is
   flat: every file is directly under `rawData/` and no subdirectory is valid.
 - Cost is the current objective tuple calculated by workspace `calc_cost.py` from
-  rawData. Objective names, count, physical meaning, scale, and windows are task
-  concerns.
+  rawData. Newly authored task objectives are independent, dimensionless
+  minimization costs in `[0, 1]`, with fixed task-owned physical `goal`/`worst`
+  thresholds and `1.0` as the task-level error fallback. Objective names, count,
+  physical meaning, thresholds, and windows are task concerns; physical units stay
+  in rawData and extraction logic. Framework execution failures may still use an
+  all-`inf` sentinel outside the normal task-cost scale.
 - A job is one candidate evaluation and owns parameters, task inputs, rawData,
   lifecycle metadata, transport artifacts, and diagnostics.
 - Recorded data is durable evidence and compact provenance. It is not an optimizer
@@ -61,5 +65,8 @@ path. Its schedules, state, and checkpoints are keyed by effective workspace pat
   successful evidence.
 - Stored rawData stays rich enough for later cost changes and surrogate learning;
   task cost code may select smaller windows when calculating objectives.
+- New task cost policies use fixed physical thresholds and a bounded mapping rather
+  than history/population-dependent normalization, so identical evidence retains
+  the same interpretation independently of other samples.
 - No task module duplicates behavior that is invariant across optimization tasks,
   and no package module hard-codes behavior that changes with a task.

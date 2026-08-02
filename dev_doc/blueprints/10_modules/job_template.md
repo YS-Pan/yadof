@@ -53,6 +53,19 @@ supplied when a task needs them, but rawData remains the evidence source.
 `get_objective_count()` is package-derived from validated objective names; task
 modules do not repeat that calculation.
 
+New task objectives are independently normalized dimensionless minimization costs
+in `[0, 1]`. `soft_cost()` is the canonical tanh mapping from fixed task-owned
+physical `goal`/`worst` thresholds; registered task-cost calculators use that
+mapping, and custom rawData callbacks call it explicitly. Task fallback uses
+`error_cost=1.0`. Physical units remain in rawData/extraction code, and observed
+history or population extrema never define the scale. Framework execution-failure
+rows may remain all-`inf` as a separate isolation sentinel.
+
+The default `edge_cost=0.1` makes `goal`/`worst` calibration anchors at `0.1`/`0.9`
+rather than clipping bounds at `0`/`1`. The outer tanh tails preserve ordering when
+conservative thresholds are exceeded; task code must not pre-clip physical values
+or linearly rescale away those tails.
+
 ## Invariants
 
 - Task modules are workspace-explicit and fresh-loaded.
@@ -60,6 +73,8 @@ modules do not repeat that calculation.
 - Workflows call copied package worker support, which samples `execute_machine` on
   the node where they run and includes it in returned individual metadata.
 - Rich rawData is preserved; cost code may select objective-relevant windows.
+- Identical rawData has the same fixed-threshold normalized cost regardless of the
+  other samples currently recorded or evaluated.
 - `cost.json` is never an authoritative task output.
 - Code invariant across optimization tasks lives in yadof; code that changes with
   the task lives in `workflow.py`/`calc_cost.py`.

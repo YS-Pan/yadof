@@ -44,6 +44,17 @@ def soft_cost(
     edge_cost: float = 0.1,
     tanh_slope: float | None = None,
 ) -> float:
+    """Map one physical minimization metric to a bounded tanh cost.
+
+    Finite valid inputs return a dimensionless value in ``[0, 1]``. With the
+    default slope, ``goal`` maps to ``edge_cost`` and ``worst`` maps to
+    ``1 - edge_cost``; values beyond those thresholds smoothly saturate toward
+    zero or one. The thresholds are calibration anchors, not clipping bounds, so
+    unexpectedly good or bad finite values retain ordering in the outer tails.
+    Set ``error_cost=1.0`` when task-level failures must preserve the normalized-
+    cost contract.
+    """
+
     if value_for_cost is False or value_for_cost is None:
         return float(error_cost)
     value, goal, worst = float(value_for_cost), float(goal), float(worst)

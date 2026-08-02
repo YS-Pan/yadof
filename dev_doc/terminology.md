@@ -14,7 +14,7 @@
 | `expensive evaluation` | A real simulator/custom workflow producing rawData and lifecycle metadata, never authoritative cost. |
 | `rawData` | Durable task evidence in schema-versioned direct `rawData/*.npz` files; subdirectories and non-`.npz` entries are invalid. |
 | `rawData.zip` | Distributed transport archive created on the execute node and explicitly returned by HTCondor instead of `rawData/`; every member is a direct `.npz` basename with no enclosing directory. |
-| `cost` | Current objective tuple dynamically calculated from rawData by workspace `calc_cost.py`. |
+| `cost` | Current objective tuple dynamically calculated from rawData by workspace `calc_cost.py`. Newly authored task objectives are independent dimensionless minimization values in `[0, 1]`, using fixed task-owned physical thresholds; `0` is best and `1` is the task-level worst/error value. The framework's `inf` execution-failure sentinel is outside this normal task-cost scale. |
 | `workspace recorded data` | Workspace-local JSONL/zip evidence and optimization metadata; normalized variables and costs are derived. |
 | `package worker support` | The single reserved `worker_misc.py` copied as a direct job-local file; it owns dependency-free invariant execute lifecycle, paths, metadata, machine identity, rawData preparation, cleanup/error handling, and flat zip creation without sending yadof to workers. |
 | `task-variable code` | Workflow or cost behavior that can change when the optimization task changes, such as simulator/project/design operations, measurements, rawData interpretation, objective definitions, thresholds, and importance regions. It belongs in workspace `workflow.py`/`calc_cost.py`; cross-task invariant behavior belongs in yadof. |

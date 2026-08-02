@@ -104,6 +104,34 @@ normalized candidate
   -> objective tuple
 ```
 
+Every objective in that tuple must normally be a dimensionless minimization cost
+in `[0, 1]`, independently normalized from its physical metric: `0` is best and `1`
+is worst. A `calc_cost.py` must not return values directly in seconds, microseconds,
+Hz, MHz, dB, metres, or other task units. Keep those values and units in rawData and
+local extraction variables, choose fixed task-owned physical `goal` and `worst`
+thresholds, and map them with `yadof.job_template.cost_misc.soft_cost()` or a
+defined-cost helper that uses it. Do not derive normalization bounds from the
+currently observed history; that would make an unchanged sample's cost depend on
+which other evaluations happen to exist.
+
+Treat `goal` and `worst` as tanh calibration anchors, not hard bounds. The default
+`edge_cost=0.1` maps them to costs `0.1` and `0.9`, deliberately reserving the outer
+intervals `(0, 0.1)` and `(0.9, 1)` for values outside the expected physical range.
+This matters when conservative thresholds underestimate what the simulator will
+produce: two results worse than `worst` still receive different costs and can guide
+the optimizer back toward the useful region. Likewise, unexpectedly strong results
+better than `goal` remain distinguishable. Do not clip a physical metric to
+`[goal, worst]`, and do not rescale the tanh result merely to force the two anchors
+to exact `0` and `1`; either operation would create flat plateaus precisely where
+the initial thresholds may be wrong. The normalized extrema are limits approached
+by the tails, while `0.1`/`0.9` are the default scientific anchor costs.
+
+Use `error_cost=1.0` for a task-level missing/invalid-data fallback so it remains at
+the normalized worst value. A framework execution failure may still return an
+all-`inf` row to preserve failure isolation; that sentinel is outside the normal
+`calc_cost.py` objective scale. Depart from the `[0, 1]` task-cost contract only
+when the user explicitly requests it and the workspace documents the reason.
+
 ## 4. Validate and smoke
 
 ```powershell

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from yadof.job_template import RAWDATA_SCHEMA_VERSION
+from yadof.job_template.cost_misc import soft_cost
 from yadof.recorded_data import api as recorded_api
 from yadof.workspace.init import init_workspace
 
@@ -51,13 +52,13 @@ def _replace_parameter_range(root: Path, old: str, new: str) -> None:
     path.write_text(source.replace(old, new), encoding="utf-8", newline="\n")
 
 
-def _multiply_cost(root: Path, factor: float) -> None:
+def _replace_response_worst(root: Path, worst: float) -> None:
     path = root / "job_template/calc_cost.py"
     source = path.read_text(encoding="utf-8")
-    old = "return (float(value.item()),)"
+    old = "RESPONSE_WORST = 1.0"
     assert old in source
     path.write_text(
-        source.replace(old, f"return (float(value.item()) * {float(factor)!r},)"),
+        source.replace(old, f"RESPONSE_WORST = {float(worst)!r}"),
         encoding="utf-8",
         newline="\n",
     )
@@ -78,7 +79,7 @@ def test_same_named_jobs_are_isolated_between_workspace_histories(tmp_path: Path
     first = _workspace(tmp_path / "first")
     second = _workspace(tmp_path / "second")
     _replace_parameter_range(second, "(-1.0, 1.0)", "(0.0, 2.0)")
-    _multiply_cost(second, 10.0)
+    _replace_response_worst(second, 10.0)
 
     first_record = recorded_api.record_job_result(
         first,
@@ -114,12 +115,22 @@ def test_same_named_jobs_are_isolated_between_workspace_histories(tmp_path: Path
     assert "job_metadata" not in raw_metadata
 
     assert recorded_api.get_historical_results(first) == (
-        ("same_job", pytest.approx((0.75,)), pytest.approx((1.0,))),
+        (
+            "same_job",
+            pytest.approx((0.75,)),
+            pytest.approx((soft_cost(1.0, goal=0.0, worst=1.0),)),
+        ),
     )
     assert recorded_api.get_historical_results(second) == (
-        ("same_job", pytest.approx((0.25,)), pytest.approx((20.0,))),
+        (
+            "same_job",
+            pytest.approx((0.25,)),
+            pytest.approx((soft_cost(2.0, goal=0.0, worst=10.0),)),
+        ),
     )
-    assert recorded_api.get_historical_results(first)[0][2] == pytest.approx((1.0,))
+    assert recorded_api.get_historical_results(first)[0][2] == pytest.approx(
+        (soft_cost(1.0, goal=0.0, worst=1.0),)
+    )
 
     for root in (first, second):
         recorded = root / "recorded_data"
@@ -143,17 +154,23 @@ def test_history_reinterprets_current_ranges_and_calc_cost(tmp_path: Path) -> No
         ("historical", pytest.approx((0.75,))),
     )
     assert recorded_api.calculate_costs(root) == (
-        ("historical", pytest.approx((2.0,))),
+        (
+            "historical",
+            pytest.approx((soft_cost(2.0, goal=0.0, worst=1.0),)),
+        ),
     )
 
     _replace_parameter_range(root, "(-1.0, 1.0)", "(0.0, 2.0)")
-    _multiply_cost(root, 3.0)
+    _replace_response_worst(root, 3.0)
 
     assert recorded_api.get_normalized_variables(root) == (
         ("historical", pytest.approx((0.25,))),
     )
     assert recorded_api.calculate_costs(root) == (
-        ("historical", pytest.approx((6.0,))),
+        (
+            "historical",
+            pytest.approx((soft_cost(2.0, goal=0.0, worst=3.0),)),
+        ),
     )
     row = recorded_api.list_records(root)[0]
     assert "cost" not in row
@@ -287,12 +304,11 @@ def test_concurrent_archive_and_manifest_writes_keep_every_record(
     assert sorted(recorded_api.get_job_names(root)) == [
         f"job_{index}" for index in range(4)
     ]
-    assert sorted(cost[0] for _name, cost in recorded_api.calculate_costs(root)) == [
-        1.0,
-        2.0,
-        3.0,
-        4.0,
-    ]
+    assert sorted(
+        cost[0] for _name, cost in recorded_api.calculate_costs(root)
+    ) == pytest.approx(
+        [soft_cost(value, goal=0.0, worst=1.0) for value in range(1, 5)]
+    )
     with zipfile.ZipFile(root / "recorded_data/rawData.npz", "r") as archive:
         assert sorted(archive.namelist()) == [
             f"job_{index}/response.npz" for index in range(4)
@@ -348,12 +364,11 @@ def test_batch_recording_copies_existing_archive_once(
         "batch_1",
         "batch_2",
     )
-    assert [costs[0] for _job_name, costs in recorded_api.calculate_costs(root)] == [
-        1.0,
-        2.0,
-        3.0,
-        4.0,
-    ]
+    assert [
+        costs[0] for _job_name, costs in recorded_api.calculate_costs(root)
+    ] == pytest.approx(
+        [soft_cost(value, goal=0.0, worst=1.0) for value in range(1, 5)]
+    )
     assert not tuple((root / "recorded_data").glob("*.tmp"))
 
 

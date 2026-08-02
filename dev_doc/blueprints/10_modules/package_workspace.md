@@ -22,7 +22,9 @@ overwriting existing files. The portable `.yadof/workspace.json` marker is publi
 last and records template/version provenance; it does not authorize repair or
 automatic upgrade. The generic workflow contains only its task-specific calculation
 and calls package worker support, which records execute-side machine identity and
-the fixed lifecycle metadata. `check` is read-only and reports marker, required
+the fixed lifecycle metadata. The generic cost module demonstrates package
+`soft_cost()` normalization from fixed physical thresholds into a dimensionless
+`[0, 1]` minimization objective with task error cost `1.0`. `check` is read-only and reports marker, required
 files, task contract, path, and optional static rawData diagnostics.
 
 ## Task loading and resources

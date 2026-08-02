@@ -12,7 +12,8 @@ license, machine identity, or credential.
 - package metadata, wheel/sdist members, console entry point, clean external install,
   and read-only site-packages operation;
 - initialization no-overwrite behavior, marker/check diagnostics, explicit paths,
-  config precedence, and two-workspace task/module isolation;
+  config precedence, normalized `[0, 1]` starter cost behavior, and two-workspace
+  task/module isolation;
 - parameter assignment, job static hash, task payload exclusions, minimal worker
   support, worker-owned lifecycle/execute metadata/flat transport, task/framework
   code-boundary templates, top-level-only AEDT results/lock exclusion, and absence
@@ -24,7 +25,7 @@ license, machine identity, or credential.
   autodetection, and population bounds;
 - explicit `rawData.zip` output transfer, flat zip members, rejection of nested
   rawData, local validation, reusable cost/rawData helpers, dynamic cost, and
-  persistence atomicity;
+  persistence atomicity, including bounded tanh costs and task fallback `1.0`;
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
 - CLI/docs, integrated cost/time views including grouped `view all`,

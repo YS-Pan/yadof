@@ -212,7 +212,8 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     root = _workspace(tmp_path)
     costs = run_smoke_test(root, env=_source_environment())
 
-    assert costs == ((0.0,),)
+    assert len(costs) == 1
+    assert costs[0] == pytest.approx((0.1,))
     jobs = tuple((root / "jobs").iterdir())
     assert len(jobs) == 1
     metadata = _metadata(jobs[0])
@@ -272,7 +273,8 @@ np.savez(raw / 'response.npz', values=data, metadata=json.dumps({
         env=_source_environment(),
     )
 
-    assert costs == ((math.inf,), (1.0,))
+    assert math.isinf(costs[0][0])
+    assert costs[1] == pytest.approx((0.9,))
     statuses = sorted(_metadata(path)["status"] for path in (root / "jobs").iterdir())
     assert statuses == ["done", "error"]
     assert sorted(record["status"] for record in recorded_api.list_records(root)) == [
@@ -292,7 +294,8 @@ def test_packaged_prepare_failure_does_not_write_metadata_at_jobs_root(tmp_path:
         env=_source_environment(),
     )
 
-    assert costs == ((math.inf,), (0.0,))
+    assert math.isinf(costs[0][0])
+    assert costs[1] == pytest.approx((0.1,))
     assert not (root / "jobs/metadata.json").exists()
     assert sorted(record["status"] for record in recorded_api.list_records(root)) == [
         "completed",
@@ -350,7 +353,8 @@ def test_packaged_record_failure_is_isolated_per_individual(
         env=_source_environment(),
     )
 
-    assert costs == ((math.inf,), (1.0,))
+    assert math.isinf(costs[0][0])
+    assert costs[1] == pytest.approx((0.9,))
     records = recorded_api.list_records(root)
     assert len(records) == 1
     assert records[0]["status"] == "completed"
@@ -375,7 +379,8 @@ def test_packaged_evaluation_uses_effective_recorded_data_path(tmp_path: Path) -
         env=_source_environment(),
     )
 
-    assert costs == ((0.0,),)
+    assert len(costs) == 1
+    assert costs[0] == pytest.approx((0.1,))
     effective_workspace = load_config(root).workspace
     assert recorded_api.get_job_names(effective_workspace)
     assert (root / "state/history/indMeta.jsonl").is_file()

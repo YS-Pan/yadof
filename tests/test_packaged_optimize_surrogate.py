@@ -149,13 +149,15 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     calc_cost = workspace_a / "job_template" / "calc_cost.py"
     calc_cost.write_text(
         calc_cost.read_text(encoding="utf-8").replace(
-            "return (float(value.item()),)",
-            "return (10.0 * float(value.item()),)",
+            "RESPONSE_WORST = 1.0",
+            "RESPONSE_WORST = 2.0",
         ),
         encoding="utf-8",
     )
     after = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
-    assert after == pytest.approx(before * 10.0)
+    assert after != pytest.approx(before)
+    assert 0.0 <= before <= 1.0
+    assert 0.0 <= after <= 1.0
 
     # Drop memory state and prove recovery is from A's checkpoint and current task.
     runtime.reset_workspace_state(workspace_a)

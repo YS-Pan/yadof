@@ -13,8 +13,10 @@ to direct users.
 
 `normalized variables -> rawData -> current cost`. Evaluations and surrogates emit
 rawData; costs and normalized history are derived from stored evidence and current
-task definitions. Local and distributed backends share job/result/persistence and
-failure-shape contracts.
+task definitions. New task objectives independently map fixed physical thresholds
+to dimensionless `[0, 1]` minimization costs; they never use observed-history bounds.
+Local and distributed backends share job/result/persistence and failure-shape
+contracts.
 
 ## End-to-end responsibilities
 
@@ -33,8 +35,8 @@ failure-shape contracts.
    worker-count planning.
 8. Atomically record raw variables, rawData, lifecycle/provenance metadata, and
    lightweight campaign metadata.
-9. Recalculate normalized history and objective costs through the current workspace
-   task definition.
+9. Recalculate normalized variables and fixed-threshold `[0, 1]` objective costs
+   through the current workspace task definition.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions
    only to screen candidates that still receive real evaluation.
 

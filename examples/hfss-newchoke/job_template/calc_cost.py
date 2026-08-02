@@ -25,7 +25,7 @@ from yadof.job_template.rawdata_contract import (
 )
 
 
-ERROR_COST = 1.1
+ERROR_COST = 1.0
 PIN_STATES = (1, 2, 3)
 TARGET_PHI_DEG = 90.0
 TARGET_FREQ_GHZ = 2.44

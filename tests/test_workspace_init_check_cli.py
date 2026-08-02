@@ -4,6 +4,7 @@ import builtins
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 import yadof
@@ -96,6 +97,37 @@ def test_generic_starter_task_logic_is_inert_during_module_load(tmp_path: Path) 
     assert "_execute_machine_name" not in workflow_source
     assert "write_rawdata_transfer_zip" not in workflow_source
     assert "def get_objective_count" not in cost_source
+
+
+def test_generic_starter_cost_normalizes_physical_values(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    init_workspace(root)
+    cost_module = load_task_module(root, "calc_cost")
+
+    def sample(value: float):
+        array = np.asarray(value, dtype=float)
+        return (
+            {
+                "values": array,
+                "metadata": json.dumps(
+                    {
+                        "schema_version": 1,
+                        "rawdata_name": "response",
+                        "shape": [],
+                    }
+                ),
+            },
+        )
+
+    goal_cost = cost_module.calculate_cost(sample(0.0))[0]
+    worst_cost = cost_module.calculate_cost(sample(1.0))[0]
+    error_cost = cost_module.calculate_cost(sample(float("nan")))[0]
+
+    assert cost_module.get_objective_names() == ("cost_response",)
+    assert goal_cost == pytest.approx(0.1)
+    assert worst_cost == pytest.approx(0.9)
+    assert error_cost == 1.0
+    assert all(0.0 <= cost <= 1.0 for cost in (goal_cost, worst_cost, error_cost))
 
 
 def test_init_defaults_to_current_directory_and_is_non_interactive(

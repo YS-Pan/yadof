@@ -8,11 +8,15 @@ import numpy as np
 
 from yadof.job_template.cost_misc import (
     calculate_rawdata_cost,
+    soft_cost,
 )
 from yadof.job_template.rawdata_contract import RawDataItem, RawDataView
 
 
-OBJECTIVE_NAMES = ("objective",)
+OBJECTIVE_NAMES = ("cost_response",)
+ERROR_COST = 1.0
+RESPONSE_GOAL = 0.0
+RESPONSE_WORST = 1.0
 
 
 def _calculate_loaded_cost(
@@ -25,8 +29,15 @@ def _calculate_loaded_cost(
     if value.shape != ():
         raise ValueError("response rawData must contain a scalar array")
     if not np.isfinite(value.item()):
-        return (float("inf"),)
-    return (float(value.item()),)
+        raise ValueError("response rawData must be finite")
+    return (
+        soft_cost(
+            float(value.item()),
+            goal=RESPONSE_GOAL,
+            worst=RESPONSE_WORST,
+            error_cost=ERROR_COST,
+        ),
+    )
 
 
 def calculate_cost(
@@ -38,6 +49,7 @@ def calculate_cost(
         raw_variables,
         objective_names=OBJECTIVE_NAMES,
         calculate_loaded_cost=_calculate_loaded_cost,
+        error_cost=ERROR_COST,
     )
 
 

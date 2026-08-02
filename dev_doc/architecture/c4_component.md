@@ -22,8 +22,9 @@
 - `rawdata_contract`: schema-versioned `.npz` validation, rawData views, reusable
   axis-curve reduction, and importance-weight allocation.
 - `cost_misc`: neutral multi-sample/defined/custom-callback cost calculation,
-  result-width validation, worst-curve aggregation, objective-name derivation,
-  constraint handling, and failure fallback.
+  tanh-based physical-to-`[0, 1]` objective mapping, result-width validation,
+  worst-curve aggregation, objective-name derivation, constraint handling, and
+  failure fallback.
 
 ## Evaluation
 

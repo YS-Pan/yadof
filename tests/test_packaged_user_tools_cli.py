@@ -113,7 +113,7 @@ def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):
     ) == 0
     cost_output = capsys.readouterr().out
     assert "rows: 1" in cost_output
-    assert "objectives: objective" in cost_output
+    assert "objectives: cost_response" in cost_output
     assert "saved:" in cost_output
     cost_plots = tuple(
         (workspace / ".yadof" / "tool_output").glob("cost_*.png")

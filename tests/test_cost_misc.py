@@ -80,6 +80,18 @@ def test_soft_cost_uses_configurable_edge_cost():
     assert soft_cost(-7.5, goal=-12.0, worst=-3.0, **COST_CURVE) == pytest.approx(0.5)
 
 
+def test_soft_cost_bounds_physical_values_and_normalizes_task_errors():
+    costs = tuple(
+        soft_cost(value, goal=0.0, worst=10.0, error_cost=1.0)
+        for value in (-1e6, 0.0, 5.0, 10.0, 1e6)
+    )
+
+    assert all(0.0 <= cost <= 1.0 for cost in costs)
+    assert costs == tuple(sorted(costs))
+    assert soft_cost(None, goal=0.0, worst=10.0, error_cost=1.0) == 1.0
+    assert soft_cost(float("nan"), goal=0.0, worst=10.0, error_cost=1.0) == 1.0
+
+
 def test_worst_curve_cost_uses_largest_member_cost():
     definition = {
         "goal": 0.0,
