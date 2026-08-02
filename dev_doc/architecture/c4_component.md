@@ -61,7 +61,9 @@
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
 - `tools`, `_resources`: cost view; integrated time/failure/machine/error view;
   grouped `view all` orchestration; history/task utilities; and read-only
-  adapter/template/doc resources. `tools.surrogate_viewer` is a lazy, optional
+  adapter/template/doc resources. The cost view isolates and reports unusable
+  history rows, omits unavailable optional annotations, and continues whenever at
+  least one finite, consistent objective row remains. `tools.surrogate_viewer` is a lazy, optional
   inspection leaf for GUI prediction, real-result comparison, metadata reports,
   and GUI/terminal cross-generation error audits; its backend owns yadof
   checkpoint/rawData adaptation while its UI and reporting layer never write

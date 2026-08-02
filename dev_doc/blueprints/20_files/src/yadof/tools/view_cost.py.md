@@ -11,7 +11,11 @@
   costs are recalculated by the current task.
 - Merge individual and optimization metadata to annotate optimization starts,
   generation/run identity, and static-input hash changes.
-- Validate finite numeric variables/costs and one consistent objective width.
+- Validate finite numeric variables/costs, finite combined sums, and one consistent
+  objective width; isolate unusable rows and report bounded details instead of
+  aborting when valid rows remain.
+- Treat individual/optimization metadata as optional plot annotations and fall back
+  to generic objective labels when task names cannot be read.
 - Obtain task objective names when their count matches, with deterministic generic
   fallbacks.
 - Identify the minimization Pareto front, show at most ten representatives selected
@@ -27,7 +31,9 @@
 ## I/O Format
 
 - `build_rows(workspace, status="completed")` returns dictionaries containing row
-  number, job name, normalized variables, dynamic costs, and available provenance.
+  number, job name, normalized variables, dynamic costs, finite combined cost, and
+  available provenance. Its optional issue collector receives skipped-row and
+  ignored-annotation diagnostics.
 - `view_cost(...)` returns `(summary_text, output_path_or_none)`.
 - Relative plot paths resolve below `.yadof/tool_output/`. The Python API keeps an
   omitted plot path as summary-only, while the CLI defaults to
@@ -39,6 +45,9 @@
   `Agg` backend.
 - Pareto membership uses strict all-objective minimization; the combined sum is for
   display/selection only and does not redefine dominance.
+- When historical objective widths disagree, the most common finite width is used
+  so a stray row cannot select or block the plot; original row numbers remain the
+  evaluation-index axis after filtering.
 - Scatter size and opacity decrease for large histories, and the right combined
   axis is an exact objective-count multiple of the left individual-cost axis.
 - The smoothed average combined-cost line is deliberately thicker than ordinary
@@ -63,6 +72,7 @@
 
 ## Mutability Profile
 
-- Dynamic-cost reading and objective-width validation are framework contracts.
+- Dynamic-cost reading, row-level display isolation, issue reporting, and
+  objective-width validation are framework contracts.
 - Colors, markers, smoothing, and table presentation may evolve without changing
   recorded-data ownership or cost semantics.

@@ -11,7 +11,12 @@ confirmed task edits. Pool/system administration remains under `admin_tool/`.
 
 Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected
-records/objectives. Time supports status filtering and owns elapsed time, failure
+records/objectives. It treats malformed, non-numeric, non-finite, empty, combined-
+overflow, and minority-width cost-history rows as isolated display failures,
+reports bounded issue details in the summary, and plots the remaining rows at their
+original evaluation indices. Optional metadata annotation failures do not block
+cost data, and unavailable task objective names use generic labels. It fails only
+when core history cannot be read or no plottable row remains. Time supports status filtering and owns elapsed time, failure
 rate, execute-machine color, and typed error occurrence reporting. Machine legend
 entries show the bare machine name plus that machine's average recorded elapsed
 time across completed evaluations; failed evaluations remain visible but do not

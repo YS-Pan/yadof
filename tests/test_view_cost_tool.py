@@ -203,6 +203,72 @@ def test_build_rows_reports_empty_recorded_data():
         view_cost.build_rows(object(), recorded_api=fake_api)
 
 
+def test_build_rows_skips_unplottable_history_rows_and_reports_them():
+    fake_api = FakeRecordedDataApi(
+        (
+            ("good_a", (0.1, 0.2), (0.5, 0.8)),
+            ("bad_cost", (0.2, 0.3), (float("inf"), 0.7)),
+            ("bad_variables", (float("nan"), 0.4), (0.4, 0.6)),
+            ("empty_costs", (0.4, 0.5), ()),
+            ("wrong_width", (0.5, 0.6), (0.3,)),
+            ("overflow", (0.6, 0.7), (1e308, 1e308)),
+            ("good_b", (0.7, 0.8), (0.2, 0.4)),
+            ("unexpected_shape",),
+        )
+    )
+    issues = []
+
+    rows = view_cost.build_rows(object(), recorded_api=fake_api, issues=issues)
+    summary = view_cost.summarize_rows(object(), rows, issues=issues)
+
+    assert [row["job_name"] for row in rows] == ["good_a", "good_b"]
+    assert [row["row_number"] for row in rows] == [1, 7]
+    assert [row["combined_cost"] for row in rows] == pytest.approx([1.3, 0.6])
+    assert len(issues) == 6
+    assert any("bad_cost" in issue and "non-finite" in issue for issue in issues)
+    assert any("wrong_width" in issue and "expected 2 objectives" in issue for issue in issues)
+    assert any("overflow" in issue and "combined cost is non-finite" in issue for issue in issues)
+    assert "rows: 2" in summary
+    assert "ignored issues: 6" in summary
+
+
+def test_build_rows_ignores_optional_annotation_errors():
+    class BrokenAnnotationApi(FakeRecordedDataApi):
+        def list_records(self, _workspace):
+            raise OSError("individual metadata is busy")
+
+        def list_optimization_metadata(self, _workspace):
+            raise ValueError("optimization metadata is malformed")
+
+    issues = []
+    rows = view_cost.build_rows(
+        object(),
+        recorded_api=BrokenAnnotationApi(
+            (("job_a", (0.1, 0.2), (0.5, 0.8)),)
+        ),
+        issues=issues,
+    )
+
+    assert rows[0]["optimization_index"] is None
+    assert rows[0]["generation_index"] is None
+    assert len(issues) == 2
+    assert "individual metadata annotations were ignored" in issues[0]
+    assert "optimization metadata annotations were ignored" in issues[1]
+
+
+def test_objective_names_fall_back_when_task_names_cannot_be_read():
+    class BrokenObjectiveApi:
+        @staticmethod
+        def get_objective_names(_workspace):
+            raise ValueError("task names are unavailable")
+
+    rows = [{"costs": (0.5, 0.8)}]
+
+    assert view_cost.objective_names(
+        object(), rows, BrokenObjectiveApi
+    ) == ["objective_1", "objective_2"]
+
+
 def test_build_rows_wraps_recorded_data_errors():
     class BrokenRecordedDataApi:
         def get_historical_results(self, _workspace, *, status="completed"):

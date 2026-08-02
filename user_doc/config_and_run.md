@@ -121,6 +121,14 @@ The cost view shows objective history. The time view combines elapsed time, fail
 rate, execute-machine colors, and error occurrences. Average-time curves and each
 machine's average use completed evaluations only; failed evaluations are excluded
 from time averages and remain visible through the failure/error encodings. Each
+cost-history row that cannot be plotted is isolated instead of aborting the whole
+cost view. This includes malformed, non-numeric, non-finite, empty, overflowed, or
+minority objective-width rows. The summary reports the ignored issues, and the PNG
+uses every remaining valid row while preserving its original evaluation index.
+Optional individual/optimization annotations are omitted when their metadata cannot
+be read, and unavailable task objective names fall back to deterministic generic
+labels. An unreadable core history or a history with no plottable row remains an
+actionable error. Each
 error type occupies a left-labeled horizontal band near the top of the plot, with
 the label centered on the line. Each machine legend entry includes that machine's
 average completed elapsed time; an error marker's fill identifies the execute

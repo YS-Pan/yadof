@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Sequence as SequenceABC
 from datetime import datetime
 from pathlib import Path
@@ -51,6 +52,7 @@ PARETO_EDGE_LINE_WIDTH = 0.75
 GENERATION_SHADE_COLOR = "black"
 GENERATION_SHADE_ALPHA = 0.1
 GENERATION_LABEL_Y = 0.98
+MAX_REPORTED_ISSUES = 10
 
 
 class ViewCostError(RuntimeError):
@@ -71,27 +73,44 @@ def _as_float_tuple(values: Sequence[object], *, field_name: str, job_name: str)
     return out
 
 
+def _record_issue(issues: list[str] | None, message: str) -> None:
+    if issues is not None:
+        issues.append(message)
+
+
 def _metadata_by_job(
-    workspace: WorkspaceLike, recorded_api=recorded_data_api
+    workspace: WorkspaceLike,
+    recorded_api=recorded_data_api,
+    *,
+    issues: list[str] | None = None,
 ) -> dict[str, dict[str, object]]:
     list_records = getattr(recorded_api, "list_records", None)
     if list_records is None:
         return {}
     out: dict[str, dict[str, object]] = {}
-    for record in list_records(workspace):
-        if not isinstance(record, dict) or "job_name" not in record:
-            continue
-        metadata = record.get("job_metadata")
-        row = dict(metadata) if isinstance(metadata, dict) else {}
-        for key in ("run_id", "optimization_index", "generation_index", "population_index"):
-            if key in record:
-                row[key] = record[key]
-        out[str(record["job_name"])] = row
+    try:
+        for record in list_records(workspace):
+            if not isinstance(record, dict) or "job_name" not in record:
+                continue
+            metadata = record.get("job_metadata")
+            row = dict(metadata) if isinstance(metadata, dict) else {}
+            for key in ("run_id", "optimization_index", "generation_index", "population_index"):
+                if key in record:
+                    row[key] = record[key]
+            out[str(record["job_name"])] = row
+    except Exception as exc:  # noqa: BLE001 - annotations must not block cost data.
+        _record_issue(
+            issues,
+            f"individual metadata annotations were ignored: {exc}",
+        )
     return out
 
 
 def _opt_metadata_by_job(
-    workspace: WorkspaceLike, recorded_api=recorded_data_api
+    workspace: WorkspaceLike,
+    recorded_api=recorded_data_api,
+    *,
+    issues: list[str] | None = None,
 ) -> dict[str, dict[str, object]]:
     list_optimization_metadata = getattr(recorded_api, "list_optimization_metadata", None)
     if list_optimization_metadata is None:
@@ -99,30 +118,36 @@ def _opt_metadata_by_job(
 
     out: dict[str, dict[str, object]] = {}
     run_order: dict[str, int] = {}
-    for row_number, raw_row in enumerate(
-        list_optimization_metadata(workspace), start=1
-    ):
-        if not isinstance(raw_row, Mapping):
-            continue
-        row = dict(raw_row)
-        run_id = str(row.get("run_id") or row.get("optimization_index") or f"run_{row_number}")
-        if run_id not in run_order:
-            run_order[run_id] = len(run_order) + 1
-        created_job_names = row.get("created_job_names", ())
-        if isinstance(created_job_names, (str, bytes)) or not isinstance(created_job_names, SequenceABC):
-            created_job_names = (created_job_names,)
-        for job_name_raw in created_job_names:
-            if job_name_raw in (None, ""):
+    try:
+        for row_number, raw_row in enumerate(
+            list_optimization_metadata(workspace), start=1
+        ):
+            if not isinstance(raw_row, Mapping):
                 continue
-            out[str(job_name_raw)] = {
-                "optimization_index": run_order[run_id],
-                "optimization_run_id": run_id,
-                "generation_index": _metadata_int(row, "generation_index"),
-                "started_at": row.get("started_at"),
-                "ended_at": row.get("ended_at"),
-                "source": row.get("source"),
-                "surrogate_used": row.get("surrogate_used"),
-            }
+            row = dict(raw_row)
+            run_id = str(row.get("run_id") or row.get("optimization_index") or f"run_{row_number}")
+            if run_id not in run_order:
+                run_order[run_id] = len(run_order) + 1
+            created_job_names = row.get("created_job_names", ())
+            if isinstance(created_job_names, (str, bytes)) or not isinstance(created_job_names, SequenceABC):
+                created_job_names = (created_job_names,)
+            for job_name_raw in created_job_names:
+                if job_name_raw in (None, ""):
+                    continue
+                out[str(job_name_raw)] = {
+                    "optimization_index": run_order[run_id],
+                    "optimization_run_id": run_id,
+                    "generation_index": _metadata_int(row, "generation_index"),
+                    "started_at": row.get("started_at"),
+                    "ended_at": row.get("ended_at"),
+                    "source": row.get("source"),
+                    "surrogate_used": row.get("surrogate_used"),
+                }
+    except Exception as exc:  # noqa: BLE001 - annotations must not block cost data.
+        _record_issue(
+            issues,
+            f"optimization metadata annotations were ignored: {exc}",
+        )
     return out
 
 
@@ -132,7 +157,7 @@ def _metadata_int(metadata: dict[str, object], key: str) -> int | None:
         return None
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -148,6 +173,7 @@ def build_rows(
     *,
     status: str | None = "completed",
     recorded_api=recorded_data_api,
+    issues: list[str] | None = None,
 ) -> list[dict[str, object]]:
     """Build display rows from recorded_data using dynamic cost calculation."""
 
@@ -162,24 +188,84 @@ def build_rows(
     except Exception as exc:  # noqa: BLE001 - keep the CLI from printing raw internals.
         raise ViewCostError(f"Could not read recorded_data history: {exc}") from exc
 
-    metadata = _metadata_by_job(workspace, recorded_api)
-    opt_metadata = _opt_metadata_by_job(workspace, recorded_api)
-    rows: list[dict[str, object]] = []
-    objective_count: int | None = None
+    candidates: list[dict[str, object]] = []
+    history_row_count = 0
     for row_number, item in enumerate(history, start=1):
-        if len(item) != 3:
-            raise ViewCostError("recorded_data.get_historical_results() returned an unexpected row shape")
-        job_name_raw, variables_raw, costs_raw = item
-        job_name = str(job_name_raw)
-        variables = _as_float_tuple(variables_raw, field_name="variables", job_name=job_name)
-        costs = _as_float_tuple(costs_raw, field_name="costs", job_name=job_name)
-        if not costs:
+        history_row_count += 1
+        try:
+            job_name_raw, variables_raw, costs_raw = item
+        except (TypeError, ValueError):
+            _record_issue(
+                issues,
+                f"history row {row_number} was skipped: unexpected row shape",
+            )
             continue
-        if objective_count is None:
-            objective_count = len(costs)
-        elif len(costs) != objective_count:
-            raise ViewCostError("Historical rows have inconsistent objective counts")
+        job_name = str(job_name_raw)
+        try:
+            variables = _as_float_tuple(
+                variables_raw, field_name="variables", job_name=job_name
+            )
+            costs = _as_float_tuple(
+                costs_raw, field_name="costs", job_name=job_name
+            )
+        except ViewCostError as exc:
+            _record_issue(issues, f"history row {row_number} was skipped: {exc}")
+            continue
+        if not costs:
+            _record_issue(
+                issues,
+                f"history row {row_number} for job {job_name!r} was skipped: costs are empty",
+            )
+            continue
+        try:
+            combined_cost = math.fsum(costs)
+        except OverflowError:
+            combined_cost = math.inf
+        if not math.isfinite(combined_cost):
+            _record_issue(
+                issues,
+                f"history row {row_number} for job {job_name!r} was skipped: combined cost is non-finite",
+            )
+            continue
+        candidates.append(
+            {
+                "row_number": row_number,
+                "job_name": job_name,
+                "variables": variables,
+                "costs": costs,
+                "combined_cost": combined_cost,
+            }
+        )
 
+    status_text = "all statuses" if status is None else f"status={status!r}"
+    if not candidates:
+        if history_row_count:
+            detail = ""
+            if issues:
+                detail = f" First issue: {issues[0]}"
+            raise ViewCostError(
+                f"No plottable historical results found in recorded_data ({status_text}).{detail}"
+            )
+        raise ViewCostError(
+            f"No completed historical results found in recorded_data ({status_text})."
+        )
+
+    width_counts = Counter(len(row["costs"]) for row in candidates)  # type: ignore[arg-type]
+    objective_count = width_counts.most_common(1)[0][0]
+    metadata = _metadata_by_job(workspace, recorded_api, issues=issues)
+    opt_metadata = _opt_metadata_by_job(workspace, recorded_api, issues=issues)
+    rows: list[dict[str, object]] = []
+    for row in candidates:
+        costs = row["costs"]
+        if len(costs) != objective_count:  # type: ignore[arg-type]
+            _record_issue(
+                issues,
+                f"history row {row['row_number']} for job {row['job_name']!r} was skipped: "
+                f"expected {objective_count} objectives, got {len(costs)}",  # type: ignore[arg-type]
+            )
+            continue
+
+        job_name = str(row["job_name"])
         job_metadata = metadata.get(job_name, {})
         job_opt_metadata = opt_metadata.get(job_name, {})
         optimization_index = _metadata_int(job_metadata, "optimization_index")
@@ -189,22 +275,15 @@ def build_rows(
         if generation_index is None:
             generation_index = job_opt_metadata.get("generation_index")
         optimization_run_id = _metadata_str(job_metadata, "run_id") or job_opt_metadata.get("optimization_run_id")
-        rows.append(
+        row.update(
             {
-                "row_number": row_number,
-                "job_name": job_name,
-                "variables": variables,
-                "costs": costs,
                 "optimization_index": optimization_index,
                 "optimization_run_id": optimization_run_id,
                 "generation_index": generation_index,
                 "job_static_hash": _metadata_str(job_metadata, "job_static_hash"),
             }
         )
-
-    if not rows:
-        status_text = "all statuses" if status is None else f"status={status!r}"
-        raise ViewCostError(f"No completed historical results found in recorded_data ({status_text}).")
+        rows.append(row)
     return rows
 
 
@@ -217,9 +296,12 @@ def objective_names(
     objective_count = len(first_costs)  # type: ignore[arg-type]
     get_names = getattr(objective_api, "get_objective_names", None)
     if callable(get_names):
-        names = [str(name) for name in get_names(workspace)]
-        if len(names) == objective_count:
-            return names
+        try:
+            names = [str(name) for name in get_names(workspace)]
+            if len(names) == objective_count:
+                return names
+        except Exception:  # noqa: BLE001 - generic labels keep the plot usable.
+            pass
     return [f"objective_{idx + 1}" for idx in range(objective_count)]
 
 
@@ -460,12 +542,13 @@ def summarize_rows(
     *,
     max_pareto: int = MAX_VISIBLE_PARETO,
     objective_api=job_template_api,
+    issues: Sequence[str] = (),
 ) -> str:
     import numpy as np
 
     names = objective_names(workspace, rows, objective_api)
     cost_matrix = np.asarray([row["costs"] for row in rows], dtype=float)
-    combined = np.sum(cost_matrix, axis=1)
+    combined = np.asarray([row["combined_cost"] for row in rows], dtype=float)
     raw_pareto = is_pareto_efficient(cost_matrix)
     pareto_mask = _visible_pareto_mask(raw_pareto, combined)
     if int(np.sum(pareto_mask)) > max_pareto:
@@ -474,6 +557,16 @@ def summarize_rows(
     lines = [
         f"rows: {len(rows)}",
         f"objectives: {_ascii(', '.join(names))}",
+        f"ignored issues: {len(issues)}",
+        *(
+            f"  - {_ascii(issue)}"
+            for issue in issues[:MAX_REPORTED_ISSUES]
+        ),
+        *(
+            [f"  - ... {len(issues) - MAX_REPORTED_ISSUES} more"]
+            if len(issues) > MAX_REPORTED_ISSUES
+            else []
+        ),
         f"Pareto front shown: {int(np.sum(pareto_mask))} of {int(np.sum(raw_pareto))}",
         "Pareto front:",
     ]
@@ -530,7 +623,7 @@ def plot_rows(
     names = objective_names(workspace, rows, objective_api)
     x = np.asarray([row["row_number"] for row in rows], dtype=float)
     cost_matrix = np.asarray([row["costs"] for row in rows], dtype=float)
-    combined = np.sum(cost_matrix, axis=1)
+    combined = np.asarray([row["combined_cost"] for row in rows], dtype=float)
     raw_pareto = is_pareto_efficient(cost_matrix)
     pareto_mask = _visible_pareto_mask(raw_pareto, combined)
     optimization_start_rows = _optimization_start_rows(rows)
@@ -728,8 +821,9 @@ def view_cost(
     """Return a dynamic-cost summary and optionally render a PNG."""
 
     config = load_config(workspace)
-    rows = build_rows(config.workspace, status=status)
-    summary = summarize_rows(config.workspace, rows)
+    issues: list[str] = []
+    rows = build_rows(config.workspace, status=status, issues=issues)
+    summary = summarize_rows(config.workspace, rows, issues=issues)
     output = (
         None
         if output_path is None
