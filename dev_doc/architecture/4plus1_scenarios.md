@@ -70,6 +70,17 @@ population-size bound. The explicit cap is never exceeded, and a missing system 
 history measurement falls back to the configured per-job resource hints rather than
 blocking the campaign.
 
+## Fast local campaign
+
+Select `EVALUATION_MODE = "fast"` only after adding a task-owned
+`job_template/evaluation.py` kernel. The kernel receives a read-only named-value
+mapping plus an evaluation context, returns direct `.npz` basenames mapped to
+schema-valid memory payloads and optional JSON diagnostics, and never returns cost.
+It may call a quick external simulator using the provided isolated scratch and
+environment. Reusable workers run concurrently within the fast-specific resource
+plan; a timeout or process exit replaces one worker. History receives the same
+rawData/current-cost meaning as local mode, but `jobs/` gains no candidate folder.
+
 ## Change current cost policy
 
 Edit only workspace `calc_cost.py`, run `check`, and query history again. Existing

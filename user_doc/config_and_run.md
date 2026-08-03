@@ -13,7 +13,8 @@ never rewrites config. Use `yadof check --workspace PATH` to see the selected mo
 and validate paths.
 
 Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
-`LOCAL_EVALUATION_MAX_WORKERS`, `OPTIMIZE_POPULATION_SIZE`,
+`LOCAL_EVALUATION_MAX_WORKERS`, `FAST_EVALUATION_MAX_WORKERS`,
+`FAST_EVALUATION_SCRATCH_DIR`, `OPTIMIZE_POPULATION_SIZE`,
 `OPTIMIZE_SMOKE_TEST_ENABLED`, HTCondor request/calibration/timeout settings, GPSAF
 alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
 shape stay in `job_template/`.
@@ -52,10 +53,35 @@ limits, calibration source, and sample count. A temporary `local_max_workers` AP
 override changes the cap; autodetection may still select a smaller safe count.
 Disable `LOCAL_RESOURCE_AUTODETECT_ENABLED` only to use the cap directly.
 
+## Fast concurrency, timeout, and scratch
+
+`EVALUATION_MODE = "fast"` selects reusable process-isolated workers on the current
+machine. `FAST_EVALUATION_MAX_WORKERS` defaults to 8. With
+`FAST_RESOURCE_AUTODETECT_ENABLED = True`, the effective count is the minimum of
+population/cap and host CPU, available memory, and free scratch disk divided by:
+
+- `FAST_EVALUATION_CPUS_PER_WORKER` (default 1);
+- `FAST_EVALUATION_MEMORY_MIB_PER_WORKER` (default 512);
+- `FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER` (default 1024).
+
+`FAST_RESOURCE_SYSTEM_RESERVE_FRACTION` defaults to `0.15`. These are explicit fast
+task/simulator declarations and are independent of HTCondor requests.
+`EVALUATION_TIMEOUT_SEC` is the hard candidate timeout; timeout/crash kills the
+worker tree and the next queued individual uses a replacement worker. A smoke still
+disables the timeout and caps fast at one worker.
+
+`FAST_EVALUATION_SCRATCH_DIR` defaults to `.yadof/fast_scratch`. It may be absolute
+or workspace-relative but must not overlap `job_template`, `jobs`, or
+`recorded_data`. Candidate subdirectories are temporary and normally leave the root
+empty. A cleanup failure is persisted as `scratch_cleanup_error`; inspect it rather
+than silently deleting evidence elsewhere. Fast subprocess environment overrides
+are applied only inside a worker evaluation and restored before worker reuse.
+
 ## Standalone smoke
 
 ```powershell
 yadof smoke-test --workspace PATH --mode local
+yadof smoke-test --workspace PATH --mode fast --real-task
 yadof smoke-test --workspace PATH --mode distributed --real-task
 ```
 
@@ -65,6 +91,10 @@ only if at least one finite objective is returned. Before it blocks on the real
 workflow, the CLI immediately prints the selected workspace, evaluation mode, jobs
 directory, and no-timeout warning. It then prints the returned costs on success or
 an actionable error with the jobs directory on failure.
+
+For fast, the same feedback says that there is no durable job directory and prints
+the ephemeral scratch root instead. Fast failure diagnostics are durable recorded
+history metadata rather than job-local stdout/stderr files.
 
 ## Start or resume
 

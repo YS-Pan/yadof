@@ -61,7 +61,9 @@ optimization task changes. Examples include simulator/project/design selection,
 task parameters, measurements to export, rawData interpretation, objective
 definitions, thresholds, and objective-relevant regions.
 
-Code that does not change between optimization tasks belongs in yadof. A workflow
+Code that does not change between optimization tasks belongs in yadof. A fast-
+compatible task puts its shared rawData-producing kernel in `evaluation.py`; a
+prepared `workflow.py` may call the same kernel. A workflow
 must call the copied package-owned `worker_misc.py` for execute-side lifecycle,
 machine identity, standard paths, metadata, rawData preparation, and transport.
 A cost module must call `yadof.job_template` helpers for reusable rawData reduction,

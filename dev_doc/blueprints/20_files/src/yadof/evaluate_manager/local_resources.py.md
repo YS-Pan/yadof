@@ -10,6 +10,8 @@
 
 - Snapshot physical/logical CPU counts, available memory, and free space on the
   jobs filesystem.
+- Expose that backend-neutral host snapshot probe for the fast-specific planner,
+  which supplies its own scratch path and per-worker declarations.
 - Reserve the configured host fraction and calculate independent CPU, memory, and
   disk concurrency limits.
 - Bound the effective worker count by population size and
@@ -52,4 +54,3 @@
   duplicated here.
 - New platform probes must retain a conservative fallback when the probe is
   unavailable.
-

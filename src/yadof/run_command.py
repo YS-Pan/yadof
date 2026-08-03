@@ -57,7 +57,7 @@ def run_from_args(args) -> int:
                 smoke_costs = run_smoke_test(config.workspace, mode=mode)
                 print(f"Smoke test costs: {smoke_costs[0]!r}", flush=True)
                 if _all_infinite(smoke_costs):
-                    _print_recent_job_failures(config.workspace.jobs_dir)
+                    _print_recent_evaluation_failures(config)
                     print(
                         "yadof: error: smoke test returned no finite objective; "
                         "optimization was not started",
@@ -76,11 +76,11 @@ def run_from_args(args) -> int:
             )
     except AllInfiniteGenerationError as exc:
         _print_result(exc.result)
-        _print_recent_job_failures(config.workspace.jobs_dir)
+        _print_recent_evaluation_failures(config)
         print(f"yadof: error: {exc}", file=sys.stderr)
         return 1
     except (ConfigError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-        _print_recent_job_failures(config.workspace.jobs_dir)
+        _print_recent_evaluation_failures(config)
         print(f"yadof: error: optimization could not run: {exc}", file=sys.stderr)
         return 1
 
@@ -107,7 +107,14 @@ def _print_run_summary(
 ) -> None:
     print(f"Workspace: {config.workspace.root}", flush=True)
     print(f"Evaluation mode: {mode}", flush=True)
-    print(f"Jobs directory: {config.workspace.jobs_dir}", flush=True)
+    if mode == "fast":
+        print("Durable per-job directory: none (fast mode)", flush=True)
+        print(
+            f"Ephemeral scratch directory: {config.workspace.fast_evaluation_scratch_dir}",
+            flush=True,
+        )
+    else:
+        print(f"Jobs directory: {config.workspace.jobs_dir}", flush=True)
     print(
         "Population size: "
         f"{config.OPTIMIZE_POPULATION_SIZE if population_size is None else population_size}",
@@ -124,6 +131,16 @@ def _print_run_summary(
     if mode == "local":
         print(
             f"Local worker cap: {config.LOCAL_EVALUATION_MAX_WORKERS}",
+            flush=True,
+        )
+    elif mode == "fast":
+        print(
+            f"Fast worker cap: {config.FAST_EVALUATION_MAX_WORKERS}",
+            flush=True,
+        )
+        print(
+            "Fast resource autodetect: "
+            f"{config.FAST_RESOURCE_AUTODETECT_ENABLED}",
             flush=True,
         )
         print(
@@ -184,6 +201,39 @@ def _print_recent_job_failures(jobs_dir: Path, limit: int = 8) -> None:
         suffix = "; ".join(details) if details else "no detail recorded"
         print(
             f"  {path.parent.name}: status={metadata.get('status')}; {suffix}",
+            file=sys.stderr,
+        )
+
+
+def _print_recent_evaluation_failures(config, limit: int = 8) -> None:
+    if str(config.EVALUATION_MODE) != "fast":
+        _print_recent_job_failures(config.workspace.jobs_dir, limit=limit)
+        return
+    try:
+        from .recorded_data import api as recorded_api
+
+        records = tuple(recorded_api.list_records(config.workspace))
+    except (OSError, TypeError, ValueError):
+        return
+    failures = [
+        record
+        for record in reversed(records)
+        if str(record.get("status", "")) in {"error", "timeout"}
+    ][: int(limit)]
+    if not failures:
+        return
+    print("Recent fast-evaluation failures:", file=sys.stderr)
+    for record in failures:
+        metadata = record.get("job_metadata")
+        details = metadata if isinstance(metadata, dict) else {}
+        summary = "; ".join(
+            f"{key}={_one_line(details[key])}"
+            for key in ("failure_stage", "error_type", "error_message")
+            if details.get(key) not in (None, "")
+        )
+        print(
+            f"  {record.get('job_name')}: status={record.get('status')}; "
+            f"{summary or 'no detail recorded'}",
             file=sys.stderr,
         )
 

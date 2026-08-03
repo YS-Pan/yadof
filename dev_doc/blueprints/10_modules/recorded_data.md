@@ -18,7 +18,12 @@ Mutable archive and JSONL publication uses process-local plus file locks and ato
 replacement. A result is validated before publication. Error/timeout records may
 have no rawData; completed evidence must satisfy the current rawData schema.
 
-`record_job_results()` is the population fast path. It validates a batch, copies the
+Sources may be file-backed direct `.npz` paths or named in-memory payloads. The
+recording layer validates memory payloads, canonicalizes metadata, rejects any field
+that would require pickle, encodes NPZ bytes, and writes the same
+`<logical-name>/<basename>.npz` archive shape. Workers never write the archive.
+
+`record_job_results()` is the population fast path for file-backed batches. It validates a batch, copies the
 existing archive once, appends all job members, and publishes the archive and JSONL
 manifest atomically under the workspace lock. Single-job recording remains available
 for direct callers and per-individual fallback.
@@ -37,5 +42,7 @@ the next query because costs are recalculated.
 - Archive member names are job-scoped and flat within each job namespace.
 - Partial publication does not replace the last valid archive/manifest.
 - Batch failure can fall back to isolated single-result publication.
+- A streamed fast result can use the single-result atomic path without retaining a
+  generation of memory evidence.
 - Clearing history validates the exact workspace-owned targets and is user-confirmed
   through tools/CLI rather than implicit runtime cleanup.

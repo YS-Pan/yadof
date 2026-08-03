@@ -72,6 +72,10 @@ def test_workspace_paths_are_explicit_absolute_and_read_only_to_construct(tmp_pa
     assert context.surrogate_checkpoint_dir == root.resolve() / ".yadof/surrogate/checkpoints"
     assert context.logs_dir == root.resolve() / ".yadof/logs"
     assert context.tool_output_dir == root.resolve() / ".yadof/tool_output"
+    assert (
+        context.fast_evaluation_scratch_dir
+        == root.resolve() / ".yadof/fast_scratch"
+    )
     assert not root.exists()
 
     package_dir = Path(yadof.__file__).resolve().parent
@@ -92,6 +96,12 @@ def test_config_precedence_paths_sources_and_non_mutating_override(tmp_path: Pat
     assert config.LOCAL_EVALUATION_MAX_WORKERS == 8
     assert config.LOCAL_RESOURCE_AUTODETECT_ENABLED is True
     assert config.LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION == 0.15
+    assert config.FAST_EVALUATION_MAX_WORKERS == 8
+    assert config.FAST_RESOURCE_AUTODETECT_ENABLED is True
+    assert config.FAST_EVALUATION_CPUS_PER_WORKER == 1
+    assert config.workspace.fast_evaluation_scratch_dir == (
+        context.root / ".yadof/fast_scratch"
+    )
     assert config.HTCONDOR_REQUEST_CPUS == 1
     assert config.workspace.jobs_dir == context.root / "state/jobs"
     assert config.JOBS_DIR == context.root / "state/jobs"
@@ -140,7 +150,10 @@ def test_config_preserves_explicit_context_paths_until_file_override(tmp_path: P
     [
         ("UNKNOWN_SETTING = 1\n", "unknown config setting"),
         ("OPTIMIZE_POPULATION_SIZE = 'many'\n", "must be an integer"),
-        ("EVALUATION_MODE = 'cluster'\n", "must be 'local' or 'distributed'"),
+        (
+            "EVALUATION_MODE = 'cluster'\n",
+            "must be 'fast', 'local', or 'distributed'",
+        ),
         ("HTCONDOR_JOB_TIMEOUT_MODE = 'sometimes'\n", "must be 'auto' or 'fixed'"),
         ("SURROGATE_RAWDATA_IMPORTANCE_FLOOR = -0.1\n", "must be >= 0"),
     ],

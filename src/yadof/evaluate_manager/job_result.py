@@ -32,6 +32,7 @@ def result_from_metadata(job: JobSpec, metadata: dict, raw_data_paths=()) -> Job
         job_dir=job.directory,
         status=str(metadata["status"]),
         unnormalized_variables=job.unnormalized_variables,
+        normalized_variables=job.normalized_variables,
         raw_data_paths=tuple(Path(p) for p in raw_data_paths),
         metadata=dict(metadata),
     )

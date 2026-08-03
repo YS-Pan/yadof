@@ -152,7 +152,8 @@ that depend on the current Windows code page.
 ## Task/framework ownership rule
 
 Code whose behavior is invariant across optimization tasks belongs under
-`src/yadof/`, not in workspace/reference `workflow.py` or `calc_cost.py`. Execute-
+`src/yadof/`, not in workspace/reference `evaluation.py`, `workflow.py`, or
+`calc_cost.py`. Execute-
 side invariant code must be exposed through the package-owned `worker_misc.py`
 copied into prepared jobs, because distributed workers do not import yadof.
 Submit-side invariant cost/rawData code must be exposed through

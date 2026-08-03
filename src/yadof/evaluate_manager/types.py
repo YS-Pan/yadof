@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..job_template import NamedRawDataItem
+
 
 @dataclass(frozen=True)
 class JobSpec:
@@ -20,9 +22,11 @@ class JobSpec:
 @dataclass(frozen=True)
 class JobResult:
     job_name: str
-    job_dir: Path
+    job_dir: Path | None
     status: str
     unnormalized_variables: tuple[float, ...]
+    normalized_variables: tuple[float, ...] = ()
     raw_data_paths: tuple[Path, ...] = ()
+    raw_data_items: tuple[NamedRawDataItem, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
     costs: tuple[float, ...] | None = None

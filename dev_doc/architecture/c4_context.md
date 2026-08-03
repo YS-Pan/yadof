@@ -25,7 +25,8 @@ Direct CLI/API use remains supported but is the lower-level surface.
 
 ## External systems
 
-- Local Python processes execute workflows and framework logic.
+- Local Python processes execute prepared workflows or reusable fast task kernels;
+  fast kernels may launch local external simulators through isolated worker trees.
 - Simulators/custom programs consume assigned variables and produce measurements.
 - HTCondor transports self-contained job folders to administrator-managed workers.
 - The filesystem durably stores job evidence, JSONL metadata, archives,
@@ -55,8 +56,9 @@ checkpoints, logs, caches, credentials, and secrets.
 - No stateful API silently selects another workspace.
 - A workflow writes task evidence; package worker support writes lifecycle metadata;
   neither writes authoritative costs.
-- Local and distributed backends converge on the same `JobResult` and recording
-  path.
+- Fast, local, and distributed backends converge on backend-neutral results and the
+  same recording path. Fast results carry named memory rawData and no fake job
+  path; local/distributed results carry file-backed rawData.
 - A failed candidate keeps population order and yields a correctly sized infinite
   objective row with diagnostics.
 - Historical rawData can be reinterpreted by the current cost definition.

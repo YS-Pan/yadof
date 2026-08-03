@@ -8,11 +8,14 @@ flowchart LR
     User -. direct advanced use .-> Package
     Package --> Workspace
     Package --> Local["Local workflow subprocess"]
+    Package --> Fast["Reusable fast worker processes"]
     Package --> Schedd["HTCondor submit side"]
     Schedd --> Worker["Windows slot-user execute node"]
     Workspace --> Local
     Workspace --> Schedd
     Local --> Result["JobResult"]
+    Fast --> Memory["Named in-memory rawData"]
+    Memory --> Result
     Worker --> Zip["rawData.zip + individual metadata"]
     Zip --> Schedd
     Schedd --> Result
@@ -59,7 +62,10 @@ authoritative `cost.json`.
 
 ## Execution and persistence
 
-Local mode runs the copied `workflow.py` with the selected Python. Distributed mode
+Fast mode runs an explicit task-owned `evaluation.py:evaluate_rawdata()` kernel in
+reusable, replaceable local worker processes. It creates no durable per-candidate
+job folder. Optional candidate scratch lives only below the configured fast scratch
+root and is reclaimed by the parent. Local mode runs the copied `workflow.py` with the selected Python. Distributed mode
 uses HTCondor to run the same `workflow.py` directly. Execute nodes need installed
 task dependencies such as NumPy/PyAEDT, but do not receive or import yadof. The
 workflow packages direct `.npz` files into top-level `rawData.zip`; Condor returns
@@ -67,5 +73,6 @@ that archive rather than the `rawData/` directory. Submit-side code validates an
 restores it before recording.
 
 Prepared jobs merge a current workspace task payload with package worker resources.
-Local and distributed results converge on the same `JobResult`, rawData validation,
-recording, current-cost derivation, failure isolation, and tuple-shape contracts.
+Fast results instead carry validated named memory payloads and explicitly set
+`job_dir=None`. All three backends converge on rawData validation, recording,
+current-cost derivation, failure isolation, and tuple-shape contracts.

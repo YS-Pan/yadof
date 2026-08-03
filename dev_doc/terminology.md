@@ -24,6 +24,10 @@
 | `standalone smoke test` | `yadof smoke-test`: exactly one midpoint real task, no generation/per-job/whole-generation timeout; edited tasks require explicit real-task intent. |
 | `run smoke` | Optional pre-run real-task smoke chosen by workspace config unless `--smoke-test` or `--no-smoke-test` overrides it. Failure prevents generation submission. |
 | `local mode` | Prepared workflow subprocess execution using the installed package and selected workspace. |
+| `fast mode` | A single-host evaluation backend using bounded reusable spawn workers and task-owned `evaluation.py`. It returns named memory rawData directly to the parent recorder, creates no durable per-candidate job folder, and replaces a worker after task failure, crash, or timeout. |
+| `fast task kernel` | Callable `job_template/evaluation.py:evaluate_rawdata(parameters, context)` for a fast-compatible task. It receives read-only assigned named values and a no-job-path context, may run external local software, and returns schema-valid named rawData payloads plus optional JSON diagnostics, never cost. |
+| `fast candidate scratch` | Ephemeral candidate-specific directory below `FAST_EVALUATION_SCRATCH_DIR`, disjoint from task/jobs/history. It exists only for external software that needs files, has no job/evidence/recovery meaning, and is reclaimed by the parent on every outcome. |
+| `memory-backed rawData` | A unique direct `.npz` basename paired with an in-memory schema-valid payload. Recorded data encodes it without pickle into the same job/evaluation-namespaced archive layout used by file-backed evidence. |
 | `distributed mode` | HTCondor transport preserving the local job/result/recording contract. |
 | `HTCondor runner` | `yadof.evaluate_manager.condor_runner`, which writes submit files, submits/polls/collects, records ClassAds, and diagnoses but never repairs the pool. |
 | `slot user` | Low-privilege Windows HTCondor execution account; normal policy is `run_as_owner=False`, `load_profile=True`. |

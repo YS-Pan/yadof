@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +18,7 @@ from .job_result import (
     write_metadata,
 )
 from .local_resources import ProcessTreeResourceMonitor, with_disk_usage
+from .process_control import terminate_process_tree
 from .types import JobResult, JobSpec
 
 
@@ -71,7 +71,7 @@ def run_local_job(
         stdout, stderr = proc.communicate(timeout=None if timeout_sec is None else float(timeout_sec))
     except subprocess.TimeoutExpired:
         timed_out = True
-        _terminate_process_tree(proc)
+        terminate_process_tree(proc.pid, process_group=os.name != "nt")
         stdout, stderr = proc.communicate()
     resource_metadata = resource_monitor.stop()
 
@@ -127,20 +127,3 @@ def run_local_job(
         metadata["rawdata_error"] = rawdata_error
     write_metadata(job.directory, metadata)
     return result_from_metadata(job, metadata, raw_paths)
-
-
-def _terminate_process_tree(proc: subprocess.Popen) -> None:
-    if proc.poll() is not None:
-        return
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    else:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except (OSError, ProcessLookupError):
-            proc.kill()

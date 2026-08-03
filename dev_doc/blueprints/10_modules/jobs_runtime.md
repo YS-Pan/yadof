@@ -7,6 +7,10 @@ unit sent to an execute backend. A prepared job contains copied task inputs,
 assigned self-contained `parameters_constraints.py`, `workflow.py`, one
 package-provided `worker_misc.py` owning the invariant execute lifecycle,
 preparation metadata, and empty `rawData/`.
+
+This module describes only local/distributed prepared jobs. Fast logical
+evaluations deliberately do not instantiate this lifecycle, copy task files, or
+use any path below the jobs directory; their optional scratch has no job semantics.
 Task-owned models/adapters/assets may be files or required subdirectories below the
 job; package support files themselves are direct files.
 Direct task-template children ending case-insensitively with `.aedtresults` or

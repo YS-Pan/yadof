@@ -25,12 +25,19 @@ _DEFAULT_ITEMS: tuple[tuple[str, object], ...] = (
     ("SURROGATE_CHECKPOINT_DIR", ".yadof/surrogate/checkpoints"),
     ("LOGS_DIR", ".yadof/logs"),
     ("TOOL_OUTPUT_DIR", ".yadof/tool_output"),
+    ("FAST_EVALUATION_SCRATCH_DIR", ".yadof/fast_scratch"),
     # Evaluation backend.
     ("EVALUATION_MODE", "local"),
     ("EVALUATION_TIMEOUT_SEC", 6 * 60 * 60),
     ("LOCAL_EVALUATION_MAX_WORKERS", 8),
     ("LOCAL_RESOURCE_AUTODETECT_ENABLED", True),
     ("LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION", 0.15),
+    ("FAST_EVALUATION_MAX_WORKERS", 8),
+    ("FAST_RESOURCE_AUTODETECT_ENABLED", True),
+    ("FAST_RESOURCE_SYSTEM_RESERVE_FRACTION", 0.15),
+    ("FAST_EVALUATION_CPUS_PER_WORKER", 1),
+    ("FAST_EVALUATION_MEMORY_MIB_PER_WORKER", 512),
+    ("FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER", 1024),
     # HTCondor backend.
     ("HTCONDOR_SUBMIT_EXE", "condor_submit"),
     ("HTCONDOR_REMOVE_EXE", "condor_rm"),
@@ -111,9 +118,11 @@ _PATH_NAMES = {
     "SURROGATE_CHECKPOINT_DIR",
     "LOGS_DIR",
     "TOOL_OUTPUT_DIR",
+    "FAST_EVALUATION_SCRATCH_DIR",
 }
 _BOOL_NAMES = {
     "LOCAL_RESOURCE_AUTODETECT_ENABLED",
+    "FAST_RESOURCE_AUTODETECT_ENABLED",
     "HTCONDOR_RESOURCE_AUTODETECT_ENABLED",
     "HTCONDOR_LOAD_PROFILE",
     "HTCONDOR_RUN_AS_OWNER",
@@ -122,6 +131,10 @@ _BOOL_NAMES = {
 }
 _POSITIVE_INT_NAMES = {
     "LOCAL_EVALUATION_MAX_WORKERS",
+    "FAST_EVALUATION_MAX_WORKERS",
+    "FAST_EVALUATION_CPUS_PER_WORKER",
+    "FAST_EVALUATION_MEMORY_MIB_PER_WORKER",
+    "FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER",
     "HTCONDOR_REQUEST_CPUS",
     "HTCONDOR_JOB_TIMEOUT_SEC",
     "OPTIMIZE_POPULATION_SIZE",
@@ -172,6 +185,7 @@ _NONNEGATIVE_REAL_NAMES = {
 }
 _FRACTION_NAMES = {
     "LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION",
+    "FAST_RESOURCE_SYSTEM_RESERVE_FRACTION",
     "HTCONDOR_RESOURCE_TRIM_TOP_FRACTION",
     "HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION",
     "OPTIMIZE_CROSSOVER_PROBABILITY",
@@ -307,8 +321,10 @@ def _validate_value(name: str, value: object) -> object:
             raise ConfigError(f"{name} must be None or a positive integer")
         return value
     if name == "EVALUATION_MODE":
-        if value not in {"local", "distributed"}:
-            raise ConfigError("EVALUATION_MODE must be 'local' or 'distributed'")
+        if value not in {"fast", "local", "distributed"}:
+            raise ConfigError(
+                "EVALUATION_MODE must be 'fast', 'local', or 'distributed'"
+            )
         return value
     if name == "HTCONDOR_JOB_TIMEOUT_MODE":
         if value not in {"auto", "fixed"}:

@@ -15,8 +15,9 @@ to direct users.
 rawData; costs and normalized history are derived from stored evidence and current
 task definitions. New task objectives independently map fixed physical thresholds
 to dimensionless `[0, 1]` minimization costs; they never use observed-history bounds.
-Local and distributed backends share job/result/persistence and failure-shape
-contracts.
+Fast, local, and distributed backends share result/persistence and failure-shape
+contracts. Fast is memory-backed and has no durable per-candidate job folder;
+local/distributed remain file-backed prepared-job transports.
 
 ## End-to-end responsibilities
 
@@ -24,12 +25,14 @@ contracts.
 2. Fresh-load current parameter/objective definitions without global module leakage.
 3. Generate normalized candidates and materialize a self-contained assigned
    parameter snapshot per job.
-4. Execute task-owned `workflow.py` locally or directly through HTCondor; its
-   task-specific callback runs inside package `worker_misc` lifecycle support.
+4. Execute task-owned `evaluation.py` in reusable isolated fast workers, or
+   `workflow.py` locally/directly through HTCondor; prepared workflows' fixed
+   lifecycle runs through package `worker_misc` support.
 5. Require schema-versioned direct `rawData/*.npz`; package worker support packages
    them as flat `rawData.zip` and Condor returns the zip rather than the directory.
 6. Normalize all outcomes into ordered `JobResult` rows with per-individual
-   diagnostics.
+   diagnostics and explicit file/memory evidence backing plus an optional real job
+   path.
 7. Normalize local process-tree and HTCondor ClassAd resource evidence, then reuse
    one smoke/preceding-generation calibration for scheduler requests or local
    worker-count planning.
@@ -74,7 +77,8 @@ metadata and execution provenance are durable diagnostics. Costs, normalized
 variables, surrogate predictions, and objective-specific windows are derived. This
 separation permits cost-policy changes without repeating compatible simulations.
 
-Prepared jobs own task execution inputs and outputs but not durable history. The
+Prepared jobs own local/distributed task execution inputs and outputs but not
+durable history. Fast logical evaluations own no durable intermediate directory. The
 installed package owns framework logic but no mutable user data. HTCondor execute
 scratch is ephemeral and administrator-controlled.
 
@@ -92,8 +96,9 @@ metadata. Submit-side code strictly restores/validates it before persistence.
 
 ## Failure, concurrency, and recovery
 
-Preparation, workflow, timeout, submit, hold, archive, validation, recording, and
-cost failures remain per individual. Standard memory/disk holds may trigger bounded
+Parameter assignment, fast worker/task, preparation, workflow, timeout, submit,
+hold, archive, validation, recording, and cost failures remain per individual. A
+failed fast worker/process tree is killed and replaced. Standard memory/disk holds may trigger bounded
 fresh-cluster retries; other failures do not. Population order/objective width is
 stable regardless of completion order.
 

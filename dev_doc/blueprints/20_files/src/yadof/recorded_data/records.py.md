@@ -5,6 +5,8 @@
 
 ## Functionalities
 - Record individual raw variables/rawData/job metadata.
+- Accept file-backed rawData or validated named memory payloads while delegating
+  NPZ byte encoding/archive ownership to `rawdata_store.py`.
 - Record a population batch with one archive/manifest publication.
 - Record generation-level metadata.
 - Record surrogate-training metadata through `record_surrogate_metadata()`.

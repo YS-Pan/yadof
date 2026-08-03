@@ -1,7 +1,9 @@
 """Stable framework support for user-owned workspace task files."""
 
 from .api import (
+    FAST_EVALUATION_MODULE_NAME,
     TaskDefinition,
+    assign_parameters,
     calculate_cost,
     calculate_costs_from_raw_data,
     calculate_rawdata_importance_weights,
@@ -18,22 +20,28 @@ from .api import (
     materialize_job_parameters,
     normalize_variables,
     validate_task,
+    validate_fast_task,
 )
 from .parameters_constraints_class import Parameter
 from .rawdata_contract import (
     RAWDATA_SCHEMA_VERSION,
+    NamedRawDataItem,
     RawDataContractError,
     RawDataView,
     validate_rawdata_directory,
     validate_rawdata_item,
+    validate_named_rawdata_items,
 )
 
 __all__ = [
+    "FAST_EVALUATION_MODULE_NAME",
+    "NamedRawDataItem",
     "Parameter",
     "RAWDATA_SCHEMA_VERSION",
     "RawDataContractError",
     "RawDataView",
     "TaskDefinition",
+    "assign_parameters",
     "calculate_cost",
     "calculate_costs_from_raw_data",
     "calculate_rawdata_importance_weights",
@@ -51,5 +59,7 @@ __all__ = [
     "normalize_variables",
     "validate_rawdata_directory",
     "validate_rawdata_item",
+    "validate_named_rawdata_items",
+    "validate_fast_task",
     "validate_task",
 ]

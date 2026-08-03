@@ -13,10 +13,22 @@ import zipfile
 
 import numpy as np
 
+from ..job_template.rawdata_contract import (
+    NamedRawDataItem,
+    metadata_from_item,
+    validate_rawdata_item,
+)
 from .paths import RecordedDataPaths
 
 
 RawDataItem = dict[str, object] | str
+RawDataSourceItem = Path | NamedRawDataItem
+RawDataSource = (
+    str
+    | Path
+    | NamedRawDataItem
+    | Sequence[str | Path | NamedRawDataItem]
+)
 RAWDATA_METADATA_FORBIDDEN_KEYS = {
     "variables",
     "raw_variables",
@@ -29,6 +41,34 @@ RAWDATA_METADATA_FORBIDDEN_KEYS = {
 def metadata_from_npz(path: Path) -> dict[str, object]:
     with np.load(path, allow_pickle=False) as data:
         return _metadata_from_npz_payload(data)
+
+
+def _metadata_from_memory_payload(payload: Mapping[str, object]) -> dict[str, object]:
+    return _scrub_rawdata_metadata(metadata_from_item(payload))
+
+
+def _npz_bytes_from_memory_item(item: NamedRawDataItem) -> bytes:
+    validated = validate_rawdata_item(item.payload)
+    arrays: dict[str, np.ndarray] = {}
+    for key, value in validated.items():
+        if key == "metadata":
+            arrays[key] = np.asarray(
+                json.dumps(metadata_from_item(validated), ensure_ascii=True, sort_keys=True)
+            )
+            continue
+        array = np.asarray(value)
+        if array.dtype.hasobject:
+            raise ValueError(
+                f"in-memory rawData {item.filename!r} field {key!r} "
+                "would require pickle"
+            )
+        arrays[str(key)] = array
+    buffer = BytesIO()
+    np.savez_compressed(buffer, **arrays)
+    payload = buffer.getvalue()
+    with np.load(BytesIO(payload), allow_pickle=False) as loaded:
+        validate_rawdata_item({key: loaded[key].copy() for key in loaded.files})
+    return payload
 
 
 def _metadata_from_npz_payload(data) -> dict[str, object]:
@@ -96,7 +136,7 @@ def rawdata_member_name(job_name: str, filename: str) -> str:
 def write_rawdata_files(
     storage: RecordedDataPaths,
     job_name: str,
-    source_paths: Sequence[Path],
+    source_paths: Sequence[RawDataSourceItem],
 ) -> tuple[list[str], dict[str, object]]:
     """Atomically replace one job's archive members and recover orphan members."""
 
@@ -105,30 +145,47 @@ def write_rawdata_files(
 
 def write_rawdata_file_groups(
     storage: RecordedDataPaths,
-    groups: Sequence[tuple[str, Sequence[Path]]],
+    groups: Sequence[tuple[str, Sequence[RawDataSourceItem]]],
 ) -> dict[str, tuple[list[str], dict[str, object]]]:
     """Atomically replace several jobs while copying the archive at most once."""
 
-    clean_groups: list[tuple[str, tuple[Path, ...]]] = []
+    clean_groups: list[tuple[str, tuple[RawDataSourceItem, ...]]] = []
     seen_jobs: set[str] = set()
-    prepared_items: dict[str, list[tuple[Path, str, dict[str, object]]]] = {}
+    prepared_items: dict[
+        str,
+        list[tuple[RawDataSourceItem, str, dict[str, object], bytes | None]],
+    ] = {}
     outputs: dict[str, tuple[list[str], dict[str, object]]] = {}
     for job_name, source_paths in groups:
         clean_job_name = str(job_name)
         if clean_job_name in seen_jobs:
             raise ValueError(f"duplicate rawData job group: {clean_job_name!r}")
         seen_jobs.add(clean_job_name)
-        paths = tuple(Path(path) for path in source_paths)
-        clean_groups.append((clean_job_name, paths))
+        sources = tuple(source_paths)
+        clean_groups.append((clean_job_name, sources))
         outputs[clean_job_name] = ([], {})
-        items: list[tuple[Path, str, dict[str, object]]] = []
+        items: list[
+            tuple[RawDataSourceItem, str, dict[str, object], bytes | None]
+        ] = []
         seen_members: set[str] = set()
-        for source_file in paths:
-            member = rawdata_member_name(clean_job_name, source_file.name)
-            if member in seen_members:
+        for source in sources:
+            filename = (
+                source.filename
+                if isinstance(source, NamedRawDataItem)
+                else source.name
+            )
+            member = rawdata_member_name(clean_job_name, filename)
+            folded_member = member.casefold()
+            if folded_member in seen_members:
                 raise ValueError(f"duplicate rawData archive member {member!r}")
-            seen_members.add(member)
-            items.append((source_file, member, metadata_from_npz(source_file)))
+            seen_members.add(folded_member)
+            if isinstance(source, NamedRawDataItem):
+                item_bytes = _npz_bytes_from_memory_item(source)
+                item_metadata = _metadata_from_memory_payload(source.payload)
+            else:
+                item_bytes = None
+                item_metadata = metadata_from_npz(source)
+            items.append((source, member, item_metadata, item_bytes))
         prepared_items[clean_job_name] = items
 
     if not clean_groups:
@@ -187,12 +244,15 @@ def write_rawdata_file_groups(
             names = set(target.namelist())
             for job_name, _source_paths in clean_groups:
                 members, metadata = outputs[job_name]
-                for source_file, member, item_metadata in prepared_items[job_name]:
+                for source, member, item_metadata, item_bytes in prepared_items[job_name]:
                     if member in names:
                         raise ValueError(
                             f"rawData archive already contains member {member!r}"
                         )
-                    target.write(source_file, member)
+                    if item_bytes is None:
+                        target.write(source, member)
+                    else:
+                        target.writestr(member, item_bytes)
                     names.add(member)
                     members.append(member)
                     metadata[member] = item_metadata
@@ -225,3 +285,33 @@ def source_files(
             )
         return [source_path]
     return [Path(path) for path in rawdata_source]
+
+
+def source_items(rawdata_source: RawDataSource) -> list[RawDataSourceItem]:
+    if isinstance(rawdata_source, NamedRawDataItem):
+        _validate_memory_filename(rawdata_source.filename)
+        return [rawdata_source]
+    if isinstance(rawdata_source, (str, Path)):
+        return source_files(rawdata_source)
+    output: list[RawDataSourceItem] = []
+    for item in rawdata_source:
+        if isinstance(item, NamedRawDataItem):
+            _validate_memory_filename(item.filename)
+            output.append(item)
+        else:
+            output.append(Path(item))
+    return output
+
+
+def _validate_memory_filename(filename: str) -> None:
+    path = Path(str(filename))
+    if (
+        not str(filename)
+        or path.name != str(filename)
+        or path.suffix.lower() != ".npz"
+        or "/" in str(filename)
+        or "\\" in str(filename)
+    ):
+        raise ValueError(
+            f"in-memory rawData name must be a direct .npz basename: {filename!r}"
+        )

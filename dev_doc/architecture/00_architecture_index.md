@@ -21,8 +21,10 @@ normalized variables
 ```
 
 Core architectural goals are task-agnostic expensive evaluation, resumable
-rawData-first history, local/distributed equivalence, per-individual failure
-isolation, and safe coexistence of multiple workspaces. Costs and normalized
+rawData-first history, fast/local/distributed evidence equivalence, per-individual
+failure isolation, and safe coexistence of multiple workspaces. Fast evaluation
+uses reusable isolated local workers and memory-backed evidence without durable
+per-candidate job folders; local/distributed retain prepared-job diagnostics. Costs and normalized
 history are interpretations of evidence, not stored source truth.
 Cross-task invariant behavior belongs in yadof; workspace workflow/cost files own
 only behavior that varies with the selected optimization task.

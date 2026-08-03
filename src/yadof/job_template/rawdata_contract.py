@@ -22,6 +22,56 @@ class RawDataContractError(ValueError):
 
 
 @dataclass(frozen=True)
+class NamedRawDataItem:
+    """One direct ``.npz`` basename and its in-memory rawData payload."""
+
+    filename: str
+    payload: Mapping[str, object]
+
+
+def validate_named_rawdata_items(
+    items: Mapping[str, Mapping[str, object]],
+) -> tuple[NamedRawDataItem, ...]:
+    """Validate a fast-task mapping without writing candidate files."""
+
+    if not isinstance(items, Mapping):
+        raise RawDataContractError(
+            "fast rawData output must be a mapping of .npz basenames to payloads"
+        )
+    output: list[NamedRawDataItem] = []
+    seen: set[str] = set()
+    for raw_name, raw_payload in items.items():
+        filename = str(raw_name)
+        path = Path(filename)
+        if (
+            not filename
+            or path.name != filename
+            or path.suffix.lower() != ".npz"
+            or "/" in filename
+            or "\\" in filename
+        ):
+            raise RawDataContractError(
+                f"fast rawData name must be a direct .npz basename: {filename!r}"
+            )
+        folded = filename.casefold()
+        if folded in seen:
+            raise RawDataContractError(
+                f"fast rawData names must be unique ignoring case: {filename!r}"
+            )
+        seen.add(folded)
+        if not isinstance(raw_payload, Mapping):
+            raise RawDataContractError(
+                f"fast rawData payload for {filename!r} must be a mapping"
+            )
+        output.append(
+            NamedRawDataItem(filename, validate_rawdata_item(raw_payload))
+        )
+    if not output:
+        raise RawDataContractError("fast task returned no rawData items")
+    return tuple(output)
+
+
+@dataclass(frozen=True)
 class RawDataView:
     item: Mapping[str, object]
     metadata: Mapping[str, object]
@@ -588,6 +638,7 @@ def _validate_declared_axes(
 
 __all__ = [
     "AxisConverter",
+    "NamedRawDataItem",
     "RAWDATA_SCHEMA_VERSION",
     "RawDataContractError",
     "RawDataItem",
@@ -605,5 +656,6 @@ __all__ = [
     "parse_metadata",
     "validate_rawdata_directory",
     "validate_rawdata_item",
+    "validate_named_rawdata_items",
     "with_schema_version",
 ]

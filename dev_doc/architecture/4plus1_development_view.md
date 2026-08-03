@@ -14,7 +14,10 @@ src/yadof/                 installed framework
   cli/                     command routing
   workspace/               context/init/check/marker
   job_template/            parameter, rawData, cost contracts
-  evaluate_manager/        job/local/HTCondor execution
+  evaluate_manager/        fast/job/local/HTCondor execution
+    fast_runner.py         reusable isolated no-job-folder fast workers
+    fast_resources.py      fast-specific host-capacity planning
+    process_control.py     shared exact process-tree termination
   recorded_data/           durable evidence
   optimize/                candidate mechanics and campaign loop
   surrogate/               rawData-first model and scheduling
@@ -62,10 +65,9 @@ or exact active variable set belong with a disposable/reference workspace, not i
 the reusable package suite. Small neutral shapes and fake adapters remain valid
 generic fixtures.
 
-psutil is a core dependency because local evaluation must observe a workflow's
-recursive simulator process tree and submit-host capacity on supported platforms.
-It is used only by local resource measurement/planning and is never copied into
-distributed job payloads.
+psutil is a core dependency because local and fast evaluation must observe process
+trees and submit-host capacity on supported platforms. It remains submit-host
+package logic and is never copied into distributed job payloads.
 
 The viewer remains a leaf below `tools`: CLI parser construction and
 `yadof.tools` imports must not load Torch, Matplotlib, or Tkinter. Its subpackage

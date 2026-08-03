@@ -13,11 +13,11 @@ pre-package implementation and uses 0.2.0 for the present installable-package li
 ## Workspace contract
 
 `WorkspaceContext` is an immutable absolute value containing root, config, task,
-jobs, recorded-data, checkpoint, log, and tool-output paths. Relative configuration
+jobs, recorded-data, checkpoint, log, tool-output, and fast scratch paths. Relative configuration
 paths resolve from its root. Stateful public APIs accept a context or workspace path;
 they never find user state relative to package source or a process-global project.
 
-`init` stages and validates a generic template, then publishes it without
+`init` stages and validates a generic local template, then publishes it without
 overwriting existing files. The portable `.yadof/workspace.json` marker is published
 last and records template/version provenance; it does not authorize repair or
 automatic upgrade. The generic workflow contains only its task-specific calculation
@@ -26,6 +26,8 @@ the fixed lifecycle metadata. The generic cost module demonstrates package
 `soft_cost()` normalization from fixed physical thresholds into a dimensionless
 `[0, 1]` minimization objective with task error cost `1.0`. `check` is read-only and reports marker, required
 files, task contract, path, and optional static rawData diagnostics.
+When fast is selected, check also requires callable task-owned
+`evaluation.py:evaluate_rawdata()` and a scratch path disjoint from task/jobs/history.
 
 ## Task loading and resources
 

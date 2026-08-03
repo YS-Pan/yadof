@@ -66,10 +66,12 @@ study-a/
   job_template/
     parameters_constraints.py
     workflow.py
+    evaluation.py                optional; required by fast mode
     calc_cost.py
     optional adapters and assets
   jobs/                         generated
   recorded_data/                generated raw evidence and metadata
+  .yadof/fast_scratch/          ephemeral fast candidate scratch; normally empty
   .yadof/surrogate/checkpoints/ generated
   .yadof/logs/                  generated
   .yadof/tool_output/           generated
@@ -90,6 +92,13 @@ library, and dependencies deliberately installed on execute nodes.
 Workspace `workflow.py` and `calc_cost.py` contain only behavior that can change
 with the optimization task. They call copied `worker_misc` or installed
 `yadof.job_template` helpers for every cross-task invariant.
+
+Fast mode is the third explicit backend beside local and distributed. It requires
+task-owned `evaluation.py:evaluate_rawdata()`, runs it in reusable crash-isolated
+processes on the submit machine, and creates no durable `jobs/<candidate>/`
+directory. A simulator may use the configured fast scratch root, but each candidate
+scratch is temporary, isolated, and cleaned; it is not evidence or a recovery point.
+The parent records returned memory rawData directly before calculating current cost.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

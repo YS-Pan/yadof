@@ -24,6 +24,7 @@ from .rawdata_contract import RawDataItem, RawDataView
 
 WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
 PARAMETERS_FILE_NAME = "parameters_constraints.py"
+FAST_EVALUATION_MODULE_NAME = "evaluation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +159,35 @@ def denormalize_variables(
     )
 
 
+def assign_parameters(
+    workspace: WorkspaceLike,
+    normalized_variables: Sequence[float],
+) -> tuple[Parameter, ...]:
+    """Create an in-memory assigned snapshot using canonical task semantics."""
+
+    parameters, _constraints = _parameter_payload(workspace)
+    normalized_values = tuple(float(value) for value in normalized_variables)
+    if len(normalized_values) != len(parameters):
+        raise ValueError(
+            f"expected {len(parameters)} normalized values, got {len(normalized_values)}"
+        )
+    assigned: list[Parameter] = []
+    for parameter, normalized_value in zip(parameters, normalized_values):
+        if not math.isfinite(normalized_value):
+            raise ValueError(
+                f"parameter {parameter.name!r} normalized_value must be finite"
+            )
+        task_parameter = Parameter(
+            parameter.name,
+            parameter.ranges,
+            normalized_value=normalized_value,
+            unit=parameter.unit,
+        )
+        task_parameter.denormalize(update=True)
+        assigned.append(task_parameter)
+    return tuple(assigned)
+
+
 def _ranges_source(ranges: Sequence[object]) -> str:
     parts = [
         repr(tuple(item)) if isinstance(item, tuple) else repr(item) for item in ranges
@@ -221,33 +251,15 @@ def materialize_job_parameters(
 ) -> tuple[float, ...]:
     """Write an assigned parameter snapshot into an explicit job directory."""
 
-    parameters, constraints = _parameter_payload(workspace)
-    normalized_values = tuple(float(value) for value in normalized_variables)
-    if len(normalized_values) != len(parameters):
-        raise ValueError(
-            f"expected {len(parameters)} normalized values, got {len(normalized_values)}"
-        )
-    assigned: list[Parameter] = []
-    for parameter, normalized_value in zip(parameters, normalized_values):
-        if not math.isfinite(normalized_value):
-            raise ValueError(
-                f"parameter {parameter.name!r} normalized_value must be finite"
-            )
-        job_parameter = Parameter(
-            parameter.name,
-            parameter.ranges,
-            normalized_value=normalized_value,
-            unit=parameter.unit,
-        )
-        job_parameter.denormalize(update=True)
-        assigned.append(job_parameter)
+    _parameters, constraints = _parameter_payload(workspace)
+    assigned = assign_parameters(workspace, normalized_variables)
 
     destination = Path(job_dir).resolve() / PARAMETERS_FILE_NAME
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + f".tmp_{uuid.uuid4().hex}")
     try:
         temporary.write_text(
-            _assigned_parameter_file_text(tuple(assigned), constraints),
+            _assigned_parameter_file_text(assigned, constraints),
             encoding="utf-8",
             newline="\n",
         )
@@ -255,6 +267,26 @@ def materialize_job_parameters(
     finally:
         temporary.unlink(missing_ok=True)
     return tuple(parameter.value for parameter in assigned)
+
+
+def validate_fast_task(workspace: WorkspaceLike) -> Path:
+    """Require the explicit fast task kernel without running an evaluation."""
+
+    context = _workspace(workspace)
+    source_path = context.job_template_dir / f"{FAST_EVALUATION_MODULE_NAME}.py"
+    if not source_path.is_file():
+        raise FileNotFoundError(
+            "fast evaluation requires task kernel "
+            f"{source_path} defining evaluate_rawdata(parameters, context)"
+        )
+    with task_module(context, FAST_EVALUATION_MODULE_NAME) as module:
+        evaluate_rawdata = getattr(module, "evaluate_rawdata", None)
+        if not callable(evaluate_rawdata):
+            raise TypeError(
+                f"{source_path} must define callable "
+                "evaluate_rawdata(parameters, context)"
+            )
+    return source_path
 
 
 def get_parameter_definition_signature(workspace: WorkspaceLike) -> dict[str, object]:
@@ -352,8 +384,10 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
 
 
 __all__ = [
+    "FAST_EVALUATION_MODULE_NAME",
     "PARAMETERS_FILE_NAME",
     "TaskDefinition",
+    "assign_parameters",
     "calculate_cost",
     "calculate_costs_from_raw_data",
     "calculate_rawdata_importance_weights",
@@ -370,4 +404,5 @@ __all__ = [
     "materialize_job_parameters",
     "normalize_variables",
     "validate_task",
+    "validate_fast_task",
 ]

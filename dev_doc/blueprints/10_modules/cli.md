@@ -15,11 +15,16 @@ commands. `version`, help, and documentation stay lightweight and read-only.
 ## Workspace and execution commands
 
 Workspace-mutating commands require explicit targets. `init` never overwrites;
-`check` never executes. `smoke-test` runs exactly one midpoint real task without
+`check` never executes and requires an explicit valid `evaluation.py` contract when
+fast is selected. `smoke-test` runs exactly one midpoint real task without
 timeout and requires explicit intent for an edited non-default task. `run` validates
 task/config, applies CLI overrides without rewriting config, handles optional smoke,
 supports start/resume/generation counts, displays progress, and can stop on an
 all-infinite generation with recent job diagnostics.
+
+Both execution commands accept `fast`, `local`, or `distributed`. Fast feedback
+states that no durable job directory exists, identifies the ephemeral scratch root,
+uses exactly one worker for smoke, and reports failures from recorded history.
 
 Before standalone smoke blocks on execution, it flushes the workspace, selected
 backend, jobs directory, and the fact that no timeout applies. Its terminal message

@@ -15,7 +15,7 @@ negative/fraction violations, and missing required task paths fail eagerly befor
 batch work. Relative path settings resolve from the explicit workspace root and are
 returned as absolute paths through the effective `WorkspaceContext`.
 
-The module owns generic evaluation, HTCondor, optimizer, and surrogate policy.
+The module owns generic fast/local/distributed evaluation, HTCondor, optimizer, and surrogate policy.
 Task variable shape, objective definitions, simulator/project names, frequencies,
 credentials, and adapter-specific scientific settings remain in workspace task files
 or deliberately supported worker environment entries.
@@ -25,6 +25,12 @@ and a 15% host reserve. The cap remains a positive integer. Autodetection and re
 settings are independently validated bool/fraction values. Existing HTCondor
 CPU/memory/disk request and calibration settings also provide the per-job bootstrap
 hints for local planning because both backends execute the same workflow.
+
+Fast evaluation separately defaults to eight reusable workers, host-capacity
+autodetection, a 15% reserve, and explicit one-worker CPU/memory/scratch-disk
+declarations. `FAST_EVALUATION_SCRATCH_DIR` resolves from the workspace like other
+path settings and must not overlap task, jobs, or recorded-data paths. Fast policy
+does not reuse HTCondor request fields.
 
 ## Dependencies and consumers
 

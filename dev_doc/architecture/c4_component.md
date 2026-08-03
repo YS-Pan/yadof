@@ -30,6 +30,9 @@
 
 - `evaluate_manager.api`: backend selection, population ordering, local worker pool,
   per-individual failure isolation, recording, and cost return.
+- `fast_runner`, `fast_resources`, `process_control`: reusable spawn workers,
+  memory-backed task-kernel execution, bounded host-capacity concurrency, ephemeral
+  scratch, hard timeout/crash replacement, and shared process-tree termination.
 - `job_files`: task copying, self-contained assigned parameter snapshots, job static
   hashes, package worker-lifecycle copying, top-level AEDT runtime-artifact
   exclusion, and preparation provenance.
@@ -50,12 +53,14 @@
   policy separated from backend orchestration. Resource requests format
   HTCondor-specific values over the shared calibration result; retry and time-limit
   policies remain backend-specific.
-- `job_result`, `types`: common result shape and metadata utilities.
+- `job_result`, `types`: common result shape and metadata utilities, including
+  explicit file-backed or memory-backed rawData and an optional real job path.
 - `recorded_data_client`: narrow evaluation-to-persistence boundary.
 
 ## Durable evidence and optimization
-- `recorded_data`: workspace-local JSONL/zip evidence, locks, atomic generation-
-  batch recording, diagnostics, and dynamically interpreted history.
+- `recorded_data`: workspace-local JSONL/zip evidence, file or named-memory source
+  normalization, no-pickle NPZ encoding, locks, atomic generation-batch recording,
+  diagnostics, and dynamically interpreted history.
 - `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,

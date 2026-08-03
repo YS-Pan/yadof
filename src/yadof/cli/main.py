@@ -75,7 +75,12 @@ def _smoke_test_command(args: argparse.Namespace) -> int:
         )
         print(
             "Exactly one midpoint individual will run with no timeout; "
-            f"live job files are under {config.workspace.jobs_dir}.",
+            + (
+                "fast mode creates no durable per-job folder; ephemeral scratch is "
+                f"under {config.workspace.fast_evaluation_scratch_dir}."
+                if str(config.EVALUATION_MODE) == "fast"
+                else f"live job files are under {config.workspace.jobs_dir}."
+            ),
             flush=True,
         )
         costs = run_smoke_test(config.workspace, mode=args.mode)
@@ -93,9 +98,14 @@ def _smoke_test_command(args: argparse.Namespace) -> int:
 
     finite = any(math.isfinite(value) for row in costs for value in row)
     if not finite:
+        diagnostic_location = (
+            "inspect workspace recorded history"
+            if str(config.EVALUATION_MODE) == "fast"
+            else f"inspect recent jobs under {config.workspace.jobs_dir}"
+        )
         print(
             "yadof: error: smoke test failed: no finite objective cost was returned; "
-            f"inspect recent jobs under {config.workspace.jobs_dir}",
+            f"{diagnostic_location}",
             file=sys.stderr,
         )
         return 1
@@ -474,9 +484,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     smoke_parser.add_argument(
         "--mode",
-        choices=("local", "distributed"),
+        choices=("fast", "local", "distributed"),
         default="local",
-        help="evaluation backend; distributed submits exactly one HTCondor job",
+        help=(
+            "evaluation backend; fast uses one isolated local worker without a "
+            "durable job folder, distributed submits one HTCondor job"
+        ),
     )
     smoke_parser.add_argument(
         "--real-task",
@@ -516,7 +529,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument(
         "--mode",
-        choices=("local", "distributed"),
+        choices=("fast", "local", "distributed"),
         default=None,
         help="temporary backend override; otherwise use workspace config",
     )

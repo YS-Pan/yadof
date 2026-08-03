@@ -1,4 +1,4 @@
-"""Workspace-explicit local and distributed evaluation API."""
+"""Workspace-explicit fast, local, and distributed evaluation API."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from ..config import LoadedConfig, load_config
-from ..job_template import get_objective_count, get_variable_count
+from ..job_template import get_objective_count, get_variable_count, validate_fast_task
 from ..workspace import WorkspaceContext
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
@@ -33,6 +33,7 @@ def evaluate_population(
     python_executable: str | Path = sys.executable,
     env: Mapping[str, str] | None = None,
     local_max_workers: int | None = None,
+    fast_max_workers: int | None = None,
     run_id: str | None = None,
     optimization_index: int | None = None,
     generation_index: int | None = None,
@@ -47,8 +48,26 @@ def evaluate_population(
         overrides["EVALUATION_TIMEOUT_SEC"] = float(timeout_sec)
     if local_max_workers is not None:
         overrides["LOCAL_EVALUATION_MAX_WORKERS"] = max(1, int(local_max_workers))
+    if fast_max_workers is not None:
+        overrides["FAST_EVALUATION_MAX_WORKERS"] = max(1, int(fast_max_workers))
     config = load_config(workspace, overrides=overrides)
     selected_mode = str(config.EVALUATION_MODE).strip().lower()
+    if selected_mode == "fast":
+        if Path(python_executable).resolve() != Path(sys.executable).resolve():
+            raise ValueError(
+                "fast evaluation workers use the current Python executable; "
+                "python_executable cannot select another runtime"
+            )
+        return _dispatch_fast(
+            config,
+            population,
+            timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
+            env=env,
+            fast_max_workers=int(config.FAST_EVALUATION_MAX_WORKERS),
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
     if selected_mode == "distributed":
         return _dispatch_distributed(
             config,
@@ -107,6 +126,17 @@ def run_smoke_test(
             generation_index=None,
             after_jobs_submitted=None,
         )
+    if selected_mode == "fast":
+        return _dispatch_fast(
+            config,
+            (row,),
+            timeout_sec=None,
+            env=env,
+            fast_max_workers=1,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=None,
+        )
     return _dispatch_local(
         config,
         (row,),
@@ -127,6 +157,62 @@ def evaluate_generation(*args: object, **kwargs: object) -> tuple[tuple[float, .
 
 def evaluate(*args: object, **kwargs: object) -> tuple[tuple[float, ...], ...]:
     return evaluate_population(*args, **kwargs)  # type: ignore[arg-type]
+
+
+def _dispatch_fast(
+    config: LoadedConfig,
+    population: Iterable[Iterable[float]],
+    *,
+    timeout_sec: float | None,
+    env: Mapping[str, str] | None,
+    fast_max_workers: int,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+) -> tuple[tuple[float, ...], ...]:
+    from .fast_runner import run_fast_population
+
+    validate_fast_task(config.workspace)
+    rows = tuple(_population_row(values) for values in population)
+    objective_width = get_objective_count(config.workspace)
+    costs: list[tuple[float, ...] | None] = [None] * len(rows)
+
+    def consume(index: int, result: JobResult) -> None:
+        if result.status != "done":
+            _best_effort_record_failure(config.workspace, result)
+            return
+        try:
+            row_costs = record_result(config.workspace, result)
+            if row_costs is None:
+                raise RuntimeError("completed fast result returned no costs")
+            costs[index] = tuple(float(value) for value in row_costs)
+        except Exception as exc:  # noqa: BLE001 - isolate recording per candidate.
+            _write_recording_failure(
+                config,
+                rows[index],
+                index,
+                result,
+                exc,
+                engine="fast",
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+            )
+
+    run_fast_population(
+        config,
+        rows,
+        timeout_sec=timeout_sec,
+        env=env,
+        max_workers=fast_max_workers,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        on_result=consume,
+    )
+    return tuple(
+        row if row is not None else _inf_costs(objective_width) for row in costs
+    )
 
 
 def _dispatch_local(
@@ -488,6 +574,7 @@ def _write_recording_failure(
         generation_index=generation_index,
     )
     _best_effort_write_failure(failure)
+    _best_effort_record_failure(config.workspace, failure)
 
 
 def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
@@ -500,7 +587,7 @@ def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
 
 
 def _best_effort_write_failure(result: JobResult) -> None:
-    if not result.job_dir.is_dir():
+    if result.job_dir is None or not result.job_dir.is_dir():
         return
     try:
         write_metadata(result.job_dir, result.metadata)
@@ -578,7 +665,13 @@ def _failed_result(
         job_dir=Path(job_dir),
         status="error",
         unnormalized_variables=variables,
+        normalized_variables=(
+            tuple(result.normalized_variables)
+            if result is not None
+            else tuple(float(value) for value in population_row)
+        ),
         raw_data_paths=tuple(result.raw_data_paths) if result is not None else (),
+        raw_data_items=tuple(result.raw_data_items) if result is not None else (),
         metadata=metadata,
     )
 

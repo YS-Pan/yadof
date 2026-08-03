@@ -18,7 +18,9 @@ from .manifest_store import (
 )
 from .paths import RecordedDataPaths, IND_META_SCHEMA_VERSION, OPT_META_SCHEMA_VERSION
 from .rawdata_store import (
-    source_files,
+    RawDataSource,
+    RawDataSourceItem,
+    source_items,
     write_rawdata_file_groups,
     write_rawdata_files,
 )
@@ -28,7 +30,7 @@ from .utils import now_utc_text
 JobRecordRequest = tuple[
     str,
     Sequence[float] | Mapping[str, float],
-    str | Path | Sequence[str | Path],
+    RawDataSource,
     Mapping[str, object] | None,
     str,
 ]
@@ -68,10 +70,10 @@ def _safe_metadata_value(value: object, forbidden: set[str]) -> object:
 def _prepare_job_payload(
     job_name: str,
     raw_variables: Sequence[float] | Mapping[str, float],
-    rawdata_source: str | Path | Sequence[str | Path],
+    rawdata_source: RawDataSource,
     job_metadata: Mapping[str, object] | None,
     status: str,
-) -> tuple[str, str, list[Path], object, dict[str, object]]:
+) -> tuple[str, str, list[RawDataSourceItem], object, dict[str, object]]:
     clean_job_name = str(job_name).strip()
     if not clean_job_name:
         raise ValueError("job_name must not be empty")
@@ -79,12 +81,12 @@ def _prepare_job_payload(
         raise ValueError("job_name must not contain path separators")
 
     clean_status = canonical_status(status)
-    source_paths = source_files(rawdata_source)
-    if any(path.suffix.lower() != ".npz" for path in source_paths):
+    sources = source_items(rawdata_source)
+    if any(not _source_name(item).lower().endswith(".npz") for item in sources):
         raise ValueError("rawdata_source must contain only .npz files")
-    for source_file in source_paths:
-        if not source_file.is_file():
-            raise FileNotFoundError(source_file)
+    for source in sources:
+        if isinstance(source, Path) and not source.is_file():
+            raise FileNotFoundError(source)
 
     if isinstance(raw_variables, Mapping):
         variable_payload: object = {
@@ -95,17 +97,21 @@ def _prepare_job_payload(
     return (
         clean_job_name,
         clean_status,
-        source_paths,
+        sources,
         variable_payload,
         safe_metadata(job_metadata),
     )
+
+
+def _source_name(item: RawDataSourceItem) -> str:
+    return str(item.filename if hasattr(item, "filename") else item.name)
 
 
 def record_job_result(
     storage: RecordedDataPaths,
     job_name: str,
     raw_variables: Sequence[float] | Mapping[str, float],
-    rawdata_source: str | Path | Sequence[str | Path],
+    rawdata_source: RawDataSource,
     job_metadata: Mapping[str, object] | None = None,
     *,
     status: str = "completed",

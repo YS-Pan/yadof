@@ -21,6 +21,11 @@ intervals; gamma controls replacement pressure. A configured exploration quota k
 some candidates outside surrogate preference. Every selected row is validated by the
 real evaluator before becoming durable truth.
 
+Distributed evaluation may invoke the scheduler-specific after-submit hook while
+real jobs are running. Fast creates no scheduler submission and does not fabricate
+that event; the existing orchestration fallback invokes deferred work only after
+the fast evaluation call returns.
+
 ## Warm start and orchestration
 
 History warm start derives current normalized variables and costs from workspace

@@ -15,6 +15,7 @@ _PATH_SETTING_TO_FIELD = {
     "SURROGATE_CHECKPOINT_DIR": "surrogate_checkpoint_dir",
     "LOGS_DIR": "logs_dir",
     "TOOL_OUTPUT_DIR": "tool_output_dir",
+    "FAST_EVALUATION_SCRATCH_DIR": "fast_evaluation_scratch_dir",
 }
 
 
@@ -47,6 +48,7 @@ class WorkspaceContext:
     surrogate_checkpoint_dir: Path
     logs_dir: Path
     tool_output_dir: Path
+    fast_evaluation_scratch_dir: Path
 
     @classmethod
     def from_path(
@@ -59,6 +61,7 @@ class WorkspaceContext:
         surrogate_checkpoint_dir: str | os.PathLike[str] = ".yadof/surrogate/checkpoints",
         logs_dir: str | os.PathLike[str] = ".yadof/logs",
         tool_output_dir: str | os.PathLike[str] = ".yadof/tool_output",
+        fast_evaluation_scratch_dir: str | os.PathLike[str] = ".yadof/fast_scratch",
     ) -> "WorkspaceContext":
         workspace_root = _absolute_root(root)
         return cls(
@@ -72,6 +75,9 @@ class WorkspaceContext:
             ),
             logs_dir=_workspace_path(workspace_root, logs_dir),
             tool_output_dir=_workspace_path(workspace_root, tool_output_dir),
+            fast_evaluation_scratch_dir=_workspace_path(
+                workspace_root, fast_evaluation_scratch_dir
+            ),
         )
 
     def with_path_settings(
@@ -105,6 +111,7 @@ class WorkspaceContext:
             self.surrogate_checkpoint_dir,
             self.logs_dir,
             self.tool_output_dir,
+            self.fast_evaluation_scratch_dir,
         )
 
 

@@ -23,6 +23,11 @@ license, machine identity, or credential.
 - shared cross-backend resource calibration, local process-tree measurements,
   default-eight local cap, CPU/memory/disk capacity limits, reserve policy, disabled
   autodetection, and population bounds;
+- explicit fast task validation; pure-memory and real-subprocess kernels; no
+  durable job folders; fast-specific resource planning; parallel overlap and
+  out-of-order completion; worker crash/timeout isolation, descendant cleanup, and
+  replacement; scratch cleanup; memory NPZ persistence; fast/local shared-kernel
+  equivalence; and two-workspace worker/history isolation;
 - explicit `rawData.zip` output transfer, flat zip members, rejection of nested
   rawData, local validation, reusable cost/rawData helpers, dynamic cost, and
   persistence atomicity, including bounded tanh costs and task fallback `1.0`;

@@ -18,6 +18,12 @@ It does not contain a concrete simulator or objective.
   lifecycle/error metadata, execute-side `execute_machine`, rawData preparation,
   and flat `rawData.zip`. The task file must not duplicate these mechanisms or
   write cost.
+- Optional `evaluation.py` declares fast compatibility through callable
+  `evaluate_rawdata(parameters, context)`. It receives a read-only named-value
+  mapping and a context without job paths, then returns unique direct `.npz`
+  basenames mapped to schema-valid memory payloads plus optional JSON diagnostics.
+  A normal `workflow.py` may call the same kernel and serialize those payloads so
+  fast/local task algorithms do not drift.
 - `calc_cost.py` reports objective names and contains task-specific rawData
   interpretation, objective definitions, thresholds, calculators, and importance
   regions. Importance regions assign relative attention to already modeled rawData;
@@ -29,8 +35,9 @@ It does not contain a concrete simulator or objective.
 
 ## Parameter handoff
 
-Canonical definitions are fresh-loaded for every preparation. Normalized values are
-validated, denormalized through ranges/levels, and written atomically as a
+Canonical definitions are fresh-loaded for every assignment. `assign_parameters()`
+validates normalized values and denormalizes through ranges/levels in memory.
+Prepared-job materialization adapts that same assigned snapshot and writes it atomically as a
 self-contained `parameters_constraints.py` in the job. The assigned snapshot has a
 small local `Parameter` representation and imports no yadof, so execute nodes do not
 receive the package. Static hashing interprets that representation through fields,
@@ -76,6 +83,8 @@ or linearly rescale away those tails.
 - Identical rawData has the same fixed-threshold normalized cost regardless of the
   other samples currently recorded or evaluated.
 - `cost.json` is never an authoritative task output.
+- Fast task kernels return rawData rather than cost and are rejected explicitly when
+  missing or malformed; there is no fallback to local workflow emulation.
 - Code invariant across optimization tasks lives in yadof; code that changes with
   the task lives in `workflow.py`/`calc_cost.py`.
 - A yadof helper must be a stable contract or a mechanism reasonably reusable

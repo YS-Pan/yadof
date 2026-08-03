@@ -13,8 +13,10 @@
   physical meaning, thresholds, and windows are task concerns; physical units stay
   in rawData and extraction logic. Framework execution failures may still use an
   all-`inf` sentinel outside the normal task-cost scale.
-- A job is one candidate evaluation and owns parameters, task inputs, rawData,
-  lifecycle metadata, transport artifacts, and diagnostics.
+- A prepared job is one local/distributed candidate evaluation and owns parameters,
+  task inputs, rawData, lifecycle metadata, transport artifacts, and diagnostics.
+  A fast logical evaluation keeps the identity/metadata contract but has no durable
+  job directory; its evidence is memory-backed until recorded.
 - Recorded data is durable evidence and compact provenance. It is not an optimizer
   cache of permanently authoritative cost values.
 
@@ -56,7 +58,10 @@ path. Its schedules, state, and checkpoints are keyed by effective workspace pat
 
 ## Invariants
 
-- Local/distributed evaluators differ only in execution transport.
+- Fast/local/distributed evaluators differ in execution transport and intermediate
+  evidence backing, but converge before durable recording and current cost.
+- Fast uses bounded reusable local processes. A crash or timeout discards and
+  replaces only that worker, cleans its configured scratch, and preserves ordering.
 - Local concurrency is bounded by population size, an explicit cap, physical CPU,
   currently available memory, and free disk; smoke remains exactly one worker.
 - Parameter and objective counts come from the currently selected workspace.

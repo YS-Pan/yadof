@@ -16,11 +16,16 @@ def record_result(
     """Persist one result and derive its cost from the current workspace task."""
 
     recorded_status = "completed" if result.status == "done" else result.status
+    rawdata_source = (
+        result.raw_data_items
+        if result.raw_data_items
+        else tuple(Path(path) for path in result.raw_data_paths)
+    )
     recorded_data_api.record_job_result(
         workspace,
         result.job_name,
         result.unnormalized_variables,
-        tuple(Path(path) for path in result.raw_data_paths),
+        rawdata_source,
         dict(result.metadata),
         status=recorded_status,
     )
@@ -49,7 +54,11 @@ def record_results(
         (
             result.job_name,
             result.unnormalized_variables,
-            tuple(Path(path) for path in result.raw_data_paths),
+            (
+                result.raw_data_items
+                if result.raw_data_items
+                else tuple(Path(path) for path in result.raw_data_paths)
+            ),
             dict(result.metadata),
             "completed" if result.status == "done" else result.status,
         )

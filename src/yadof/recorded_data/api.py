@@ -16,6 +16,7 @@ from .paths import (
     WorkspaceLike,
     recorded_data_paths,
 )
+from .rawdata_store import RawDataSource
 
 
 JobRecordRequest = _records.JobRecordRequest
@@ -32,7 +33,7 @@ def record_job_result(
     workspace: WorkspaceLike,
     job_name: str,
     raw_variables: Sequence[float] | Mapping[str, float],
-    rawdata_source: str | Path | Sequence[str | Path],
+    rawdata_source: RawDataSource,
     job_metadata: Mapping[str, object] | None = None,
     *,
     status: str = "completed",

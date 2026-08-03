@@ -29,6 +29,17 @@ job-local `workflow.py` directly, rejects forbidden cost output, validates the f
 rawData directory, captures stdout/stderr tails, and maps every outcome to a
 `JobResult`.
 
+Fast mode does not enter prepared-job composition. The parent assigns parameters in
+memory, creates only an ephemeral candidate scratch below the configured fast root,
+and sends a logical identity plus named values to one reusable spawn worker. The
+worker fresh-loads `evaluation.py`, may invoke external local software, and returns
+named rawData mappings and JSON diagnostics through one bounded pipe. The parent
+validates and records each completed item immediately, so at most one result per
+worker waits in transport and completion order does not change population order.
+Timeout, native/Python worker exit, or task failure terminates the observed process
+tree, cleans scratch, replaces the worker, records the isolated failure, and
+continues queued candidates. No scheduler-submitted callback is fabricated.
+
 Before starting a local batch, shared resource calibration reads compatible smoke
 or preceding-generation records. Local policy combines that per-job estimate with a
 fresh physical-CPU/available-memory/free-disk snapshot and the configured cap. Each
@@ -110,3 +121,5 @@ does not discard otherwise valid evidence.
   workspace and bounds model lag.
 - Population results are reassembled in original input order, independent of worker
   completion order.
+- Fast workers never write recorded data. The parent is the only recorder and
+  consumes memory results continuously under recorded-data locking/atomicity.

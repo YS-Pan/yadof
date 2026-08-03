@@ -2,9 +2,10 @@
 
 ## Responsibility
 
-`yadof.evaluate_manager` turns normalized candidates into prepared jobs, executes
-them locally or through HTCondor, normalizes every outcome into ordered `JobResult`
-rows, records durable evidence, and derives current costs. A preparation, execution,
+`yadof.evaluate_manager` turns normalized candidates into fast logical evaluations
+or prepared jobs, executes them in reusable local workers, prepared local
+subprocesses, or HTCondor, normalizes every outcome into ordered `JobResult` rows,
+records durable evidence, and derives current costs. A preparation, execution,
 collection, recording, or cost failure affects only its candidate.
 
 `resource_calibration.py` is the shared automation boundary. It reads backend-neutral
@@ -36,6 +37,24 @@ needs with physical CPU, currently available memory, free disk, reserve fraction
 population size, and the configured worker cap. The task workflow calls package
 worker support, which records the execute-machine name and the rest of the invariant
 lifecycle metadata.
+
+## Fast backend
+
+`fast_runner.py` maintains a bounded pool of non-daemon spawn workers so a kernel
+may launch external simulator descendants. Each worker handles one candidate at a
+time and returns a mapping of unique direct `.npz` basenames to validated in-memory
+payloads plus JSON diagnostics. A bounded pipe holds at most one result per worker;
+the parent records each completion before assigning more work. There is no
+`prepare_job()`, job-template copy, assigned parameter file, workflow process, or
+fake job path. `fast_resources.py` bounds the configured cap by population and
+declared per-worker CPU/memory/scratch disk against current host capacity.
+
+The parent owns candidate scratch creation/cleanup, records worker/machine/timing
+and process-tree diagnostics, enforces the hard timeout, and uses shared
+`process_control.py` to reap remaining descendants after every response or kill a
+timed-out/crashed worker tree. A failure discards that worker and creates a
+replacement. A successful worker is reused after descendant cleanup. Fast never
+calls the scheduler-specific `after_jobs_submitted` callback.
 
 ## Distributed backend
 
@@ -81,7 +100,8 @@ always matches candidate order.
 
 ## Invariants
 
-- Local/distributed share job preparation, result, recording, cost, and shape rules.
+- Fast/local/distributed share result, recording, cost, ordering, and shape rules;
+  only local/distributed share prepared-job composition.
 - Standalone smoke is exactly one midpoint job and has no job/generation timeout.
 - Local default worker cap is eight; adaptive planning may safely choose fewer and
   never exceeds the population or cap.

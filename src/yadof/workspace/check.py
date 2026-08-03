@@ -15,6 +15,7 @@ from ..config import LoadedConfig, load_config
 from ..job_template import (
     RAWDATA_SCHEMA_VERSION,
     validate_rawdata_directory,
+    validate_fast_task,
     validate_task,
 )
 from .context import WorkspaceContext, resolve_workspace
@@ -184,6 +185,19 @@ def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
             f"{task.variable_count} parameter(s), {task.objective_count} objective(s)",
         )
 
+    if str(config.EVALUATION_MODE) == "fast":
+        try:
+            kernel_path = validate_fast_task(config.workspace)
+        except (Exception, SystemExit) as exc:
+            _finding(findings, "error", "fast task kernel", str(exc))
+        else:
+            _finding(
+                findings,
+                "ok",
+                "fast task kernel",
+                f"callable evaluate_rawdata() in {kernel_path}",
+            )
+
     workflow_path = config.workspace.job_template_dir / "workflow.py"
     try:
         source = workflow_path.read_text(encoding="utf-8")
@@ -222,17 +236,34 @@ def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
 
 def _check_backend(config: LoadedConfig, findings: list[CheckFinding]) -> None:
     mode = str(config.EVALUATION_MODE)
-    if mode == "local":
+    if mode in {"fast", "local"}:
         executable = Path(sys.executable)
+        subject = f"{mode} backend"
         if executable.is_file():
-            _finding(findings, "ok", "local backend", f"Python executable: {executable}")
+            _finding(findings, "ok", subject, f"Python executable: {executable}")
         else:
             _finding(
                 findings,
                 "error",
-                "local backend",
+                subject,
                 f"Python executable is missing: {executable}",
             )
+        if mode == "fast":
+            try:
+                from ..evaluate_manager.fast_resources import (
+                    validate_fast_configuration,
+                )
+
+                scratch = validate_fast_configuration(config)
+            except (Exception, SystemExit) as exc:
+                _finding(findings, "error", subject, str(exc))
+            else:
+                _finding(
+                    findings,
+                    "ok",
+                    subject,
+                    f"ephemeral candidate scratch: {scratch}",
+                )
         return
 
     commands = (

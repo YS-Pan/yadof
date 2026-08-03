@@ -14,6 +14,14 @@ dependency. A configured reserve fraction protects host headroom. These snapshot
 are ephemeral planning inputs; durable records contain only the chosen plan and
 per-job process-tree measurements.
 
+Fast planning uses its own configured worker cap and declared CPU, memory, and
+scratch-disk requirement per worker; it does not reinterpret HTCondor requests.
+Reusable fast workers run only on this host. Each active candidate may own one
+temporary scratch directory below `FAST_EVALUATION_SCRATCH_DIR` (default
+`.yadof/fast_scratch`), never below `jobs/` or `recorded_data/`. Scratch carries no
+job, evidence, or recovery semantics and is removed after success, error, timeout,
+or crash cleanup. A pure/API task may leave it physically unused.
+
 ## Prepared job contents
 
 Every job places required task inputs directly below its own directory (including
@@ -74,6 +82,8 @@ workspace path setting.
 - `jobs/<job>/individual_metadata.json`: workflow-owned lifecycle state.
 - `jobs/<job>/rawData.zip`: distributed transport artifact.
 - `jobs/<job>/rawData/*.npz`: restored/direct evidence used by framework code.
+- fast logical evaluations have none of the `jobs/<job>/...` paths above; named
+  memory payloads enter `recorded_data/rawData.npz` directly through the recorder.
 - `recorded_data/indMeta.jsonl`: compact append-only individual records.
 - `recorded_data/rawData.npz`: zip-based durable evidence archive, namespaced by job.
 - configured checkpoint/log/tool-output directories: workspace-local mutable state.

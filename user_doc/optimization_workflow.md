@@ -61,6 +61,39 @@ yadof task adapters
 yadof task copy-adapter hfss_com.py --workspace D:\work\study-a
 ```
 
+### Fast-compatible shared task kernel
+
+Use fast only for computations or local simulators whose result can be returned as
+memory rawData. Add `job_template/evaluation.py` with:
+
+```python
+def evaluate_rawdata(parameters, context):
+    # parameters is a read-only {name: assigned_float} mapping.
+    # context includes evaluation_name, scratch_dir, environment, and identities.
+    return {
+        "response.npz": {
+            "values": response_array,
+            "metadata": metadata_json,
+        }
+    }, {"simulator_returncode": 0}
+```
+
+Names must be unique direct `.npz` basenames. Every payload follows the same schema
+as file rawData, diagnostics must be JSON-serializable, and neither return value may
+contain objective costs. Put the simulation algorithm in this kernel and make
+ordinary `workflow.py` call it and save each payload under its job-local
+`rawData/`; do not maintain two algorithms.
+
+The fast context has no job path. `scratch_dir` is the only candidate-specific
+filesystem exception. Pass it explicitly as a simulator working directory and pass
+`{**os.environ, **dict(context["environment"])}` explicitly to subprocesses. Parse
+all needed output into memory before returning. The parent reaps simulator
+descendants that remain after a task response and removes scratch after success,
+task error, timeout, or worker crash. Do not treat scratch as history,
+checkpoint, or recoverable job state. Prefer local/distributed when a task needs a
+durable task snapshot, detailed job-local files, remote execution, or recovery from
+large intermediate files.
+
 ## 3. rawData and cost
 
 Each flat `.npz` item carries schema-versioned metadata and numerical arrays. The
@@ -137,12 +170,15 @@ when the user explicitly requests it and the workspace documents the reason.
 ```powershell
 yadof check --workspace D:\work\study-a
 yadof smoke-test --workspace D:\work\study-a
+yadof smoke-test --workspace D:\work\study-a --mode fast --real-task
 ```
 
 An edited/external task requires `--real-task` for the standalone smoke command.
 This acknowledges that it may launch expensive software. Use `--mode distributed`
 to submit exactly one unlimited smoke job. Pool deployment and Windows slot-user
 configuration remain administrator responsibilities.
+Use `--mode fast` only after `check` confirms the explicit kernel. Fast smoke still
+runs exactly one worker and has no timeout or durable job directory.
 
 ## 5. Optimize and inspect
 
