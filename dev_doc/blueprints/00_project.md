@@ -124,6 +124,12 @@ Developer maintenance performs a bounded pre-completion check of active automati
 toDos against already in-scope evidence; recurring automatic toDos remain active
 after a single matching occurrence.
 
+A simulator-specific Python/Conda environment remains an external runtime. The
+defined PyChrono v1 boundary selects only an absolute configured interpreter,
+launches task-owned child code with an isolated environment/scratch/process tree,
+and accepts only bounded versioned JSON plus no-pickle schema-valid NPZ. It cannot
+move yadof into the child runtime or let task objects/costs/partial evidence cross.
+
 ## Verification boundary
 
 Generic tests use installed wheels, temporary neutral workspaces, mocked scheduler
@@ -132,5 +138,8 @@ site-packages, workspace isolation, job payload exclusions, direct workflow subm
 flat zip restoration, persistence, optimization, surrogate recovery, and CLI/tools,
 including lazy viewer registration and deterministic viewer backend/aggregate
 contracts plus schema-versioned text/JSON reporting when its optional dependencies
-are available. Live pools/simulators and concrete physical assertions remain
+are available. The pre-adapter PyChrono conformance suite uses fake child processes
+to lock protocol, diagnostics, environment, failure, timeout, and concurrency
+semantics without a PyChrono installation. Live pools/simulators and concrete
+physical assertions remain
 explicit integration tests outside the default package suite.

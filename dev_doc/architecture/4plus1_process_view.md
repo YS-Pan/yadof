@@ -92,6 +92,25 @@ archive and manifest are copied/published once per batch, then costs are derived
 one query. A failed batch falls back to individual recording so one malformed result
 does not discard otherwise valid evidence.
 
+## External PyChrono subprocess
+
+The canonical pre-adapter contract is
+[pychrono_subprocess_contract.md](pychrono_subprocess_contract.md). A task-side
+parent resolves only the absolute `YADOF_PYCHRONO_PYTHON` executable and launches a
+task-owned child script by argument vector, with no Conda activation, PATH search,
+parent-interpreter fallback, `pychrono` import in yadof, or yadof import in the
+child. Each invocation receives an isolated scratch, a v1 JSON request, a cleaned
+Python environment, captured bounded diagnostics, and an exact process-tree
+timeout/cancellation boundary.
+
+The child atomically publishes schema-compatible NPZ files and a v1 JSON result
+last. The parent accepts evidence only after exit-zero, identity/version/path,
+size/hash, no-pickle NPZ, rawData-schema, and complete-directory validation. A
+prepared workflow then publishes the files into its final flat `rawData/`; a fast
+kernel copies arrays into named memory before scratch cleanup. All missing runtime,
+missing entry, malformed output, child error/crash, timeout, and validation cases
+stay distinct and converge on normal per-individual failure isolation.
+
 ## Failure and retry semantics
 
 - Preparation, task loading, submit, workflow, timeout, hold, archive restoration,

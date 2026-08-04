@@ -14,6 +14,22 @@ dependency. A configured reserve fraction protects host headroom. These snapshot
 are ephemeral planning inputs; durable records contain only the chosen plan and
 per-job process-tree measurements.
 
+## External PyChrono runtime
+
+`YADOF_PYCHRONO_PYTHON` names one absolute, administrator-provisioned interpreter
+file on the machine that executes the task. Yadof does not activate its Conda
+environment, alter PATH, import PyChrono, or install itself into that environment.
+The shared prefix is read-only and contains no candidate data, cache, bytecode, or
+log output. A matching absolute string on another execute host is not proof that
+the runtime exists or is accessible there.
+
+Every PyChrono invocation has a distinct writable candidate scratch holding only
+its request, result, temporary content, and child rawData. The child working
+directory and TEMP/TMP point there, inherited PYTHONPATH is absent, and user-site
+and bytecode writes are disabled. Local/distributed publication moves only fully
+validated direct NPZ files into the prepared job's final rawData; fast publication
+copies their arrays into memory before deleting scratch.
+
 Fast planning uses its own configured worker cap and declared CPU, memory, and
 scratch-disk requirement per worker; it does not reinterpret HTCondor requests.
 Reusable fast workers run only on this host. Each active candidate may own one

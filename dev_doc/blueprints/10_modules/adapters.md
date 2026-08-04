@@ -45,8 +45,22 @@ values into the surrogate's float contract. The external executable remains an
 administrator/machine environment concern; no Python optional dependency is
 required beyond yadof's core NumPy dependency.
 
+## External Python simulator boundary
+
+The canonical PyChrono v1 subprocess contract lives in
+`dev_doc/architecture/pychrono_subprocess_contract.md`. It is deliberately defined
+before `chrono_com.py` is added: an adapter must launch only the configured absolute
+interpreter, cross the process/runtime boundary through bounded versioned JSON and
+schema-compatible NPZ, isolate scratch/environment/process trees, and preserve the
+documented failure taxonomy and backend-equivalent publication. Neither runtime may
+import the other's framework. Project Chrono is not listed or copyable until the
+separate adapter task is completed.
+
 ## Invariants
 
 - Active adapter code is self-contained in the job folder.
 - Adapter modules never import a concrete workspace or yadof runtime on workers.
 - New simulator families do not change core optimization/evaluation contracts.
+- External simulator environments are selected by absolute executable, never by
+  activation, PATH mutation, parent-interpreter fallback, or yadof installation
+  inside the simulator runtime.

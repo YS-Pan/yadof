@@ -19,6 +19,10 @@
   job directory; its evidence is memory-backed until recorded.
 - Recorded data is durable evidence and compact provenance. It is not an optimizer
   cache of permanently authoritative cost values.
+- An external simulator Python runtime is a separately provisioned interpreter and
+  process, not an alternative host environment for yadof. The PyChrono v1 contract
+  exchanges only bounded versioned JSON and schema-compatible NPZ evidence through
+  candidate-isolated scratch. No object identity or import namespace crosses it.
 
 The logical pipeline is `normalized variables -> assigned task parameters ->
 workflow rawData -> current calc_cost -> objective tuple`.
@@ -75,3 +79,6 @@ path. Its schedules, state, and checkpoints are keyed by effective workspace pat
   the same interpretation independently of other samples.
 - No task module duplicates behavior that is invariant across optimization tasks,
   and no package module hard-codes behavior that changes with a task.
+- External simulator subprocess failures never publish partial evidence. Validated
+  local/distributed files and fast in-memory payloads retain identical rawData
+  basenames, arrays, metadata, units, and meaning before common recording/cost.

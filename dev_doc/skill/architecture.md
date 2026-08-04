@@ -35,6 +35,9 @@ c4_component.md               important internal components
 4plus1_development_view.md    source layout, dependency rules, doc rules
 4plus1_physical_view.md       filesystem and deployment layout
 4plus1_scenarios.md           concrete use cases
+pychrono_subprocess_contract.md
+                              normative external-runtime protocol defined before
+                              the packaged Project Chrono adapter
 ```
 
 Recommended section shape:

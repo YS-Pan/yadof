@@ -29,6 +29,11 @@ history are interpretations of evidence, not stored source truth.
 Cross-task invariant behavior belongs in yadof; workspace workflow/cost files own
 only behavior that varies with the selected optimization task.
 
+The defined-but-not-yet-adapted PyChrono boundary treats a dedicated Python/Conda
+runtime as an external simulator installation. Its JSON/NPZ subprocess protocol,
+environment isolation, scratch ownership, failure taxonomy, and backend-equivalent
+publication rules are normative even before the packaged adapter is added.
+
 An optional read-only surrogate viewer is an installed `yadof.tools` leaf. It
 consumes the same workspace records, current cost policy, and saved checkpoints
 through an explicit GUI launch or terminal text/JSON reports, but it is outside
@@ -43,6 +48,8 @@ remains in the viewer subtree's own `dev_doc/`.
 - [4plus1_development_view.md](4plus1_development_view.md)
 - [4plus1_physical_view.md](4plus1_physical_view.md)
 - [4plus1_scenarios.md](4plus1_scenarios.md)
+- [pychrono_subprocess_contract.md](pychrono_subprocess_contract.md): normative
+  task-owned PyChrono child-process boundary
 
 For implementation-level current state, continue with
 `../blueprints/10_modules/`. Historical decisions live in `../change_records/` and

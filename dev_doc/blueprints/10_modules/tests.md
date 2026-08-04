@@ -43,6 +43,11 @@ license, machine identity, or credential.
 - ngspice adapter discovery/copying, parameter staging, owned batch-control
   generation, real/complex ASCII rawfile parsing, explicit component conversion,
   and schema-versioned rawData export without requiring a live simulator;
+- pre-adapter PyChrono subprocess conformance through fake external interpreters:
+  explicit absolute runtime resolution, paths with spaces, versioned JSON/NPZ,
+  cleaned Python environment, bounded diagnostics, invalid/escaping/missing output,
+  handled error versus crash, timeout descendant cleanup, and concurrent scratch
+  isolation without Miniforge or PyChrono;
 - lazy `view surrogate` GUI/summary/audit registration and help, viewer
   wheel/sdist/dev_doc/report membership, deterministic text/JSON summary and audit
   encoding, checkpoint discovery, 0D/1D/2D rawData slice extraction from
