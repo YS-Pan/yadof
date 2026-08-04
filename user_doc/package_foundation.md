@@ -28,6 +28,12 @@ lifecycle/error metadata, rawData preparation, and flat output transport. Python
 NumPy, adapters' third-party dependencies, PyAEDT, and simulator software still
 belong to the worker environment.
 
+The packaged Project Chrono adapter is also copied task code, but it launches the
+absolute interpreter configured by `YADOF_PYCHRONO_PYTHON`. The yadof environment
+does not import PyChrono, and the separately provisioned PyChrono environment does
+not install or import yadof. See `user_doc/adapters/chrono_com.md` before authoring
+that task boundary.
+
 The `viewer` extra installs the Torch and Matplotlib dependencies needed by
 `yadof view surrogate`. Tkinter must also be available when using its default
 desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewer is

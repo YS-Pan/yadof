@@ -43,16 +43,25 @@ def test_bundled_adapters_are_listed_and_only_selected_file_is_copied(
 ):
     workspace = _workspace(tmp_path, "adapter_workspace")
 
-    assert set(adapter_names()) == {"hfss_com.py", "ngspice_com.py", "test_com.py"}
+    assert set(adapter_names()) == {
+        "chrono_com.py",
+        "hfss_com.py",
+        "ngspice_com.py",
+        "test_com.py",
+    }
+    assert adapter_resource("chrono_com").is_file()
     assert adapter_resource("test_com").is_file()
     assert cli_main(["task", "adapters"]) == 0
-    assert "hfss_com.py" in capsys.readouterr().out
+    listed = capsys.readouterr().out
+    assert "chrono_com.py" in listed
+    assert "hfss_com.py" in listed
 
     result = copy_adapter(workspace, "test_com")
     assert result.created is True
     assert result.destination.is_file()
     assert not (workspace / "job_template" / "hfss_com.py").exists()
     assert not (workspace / "job_template" / "ngspice_com.py").exists()
+    assert not (workspace / "job_template" / "chrono_com.py").exists()
     repeated = copy_adapter(workspace, "test_com.py")
     assert repeated.created is False
 

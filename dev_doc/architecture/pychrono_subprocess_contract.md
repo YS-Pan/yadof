@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This is the canonical protocol contract for a future task-local Project Chrono
-adapter. It defines the boundary before the packaged `chrono_com.py` adapter is
-implemented. Project Chrono is therefore not yet a supported packaged adapter.
+This is the canonical protocol contract implemented by the packaged task-local
+`chrono_com.py` Project Chrono adapter. The adapter is listed and copied through
+the normal packaged-adapter resource workflow.
 
 The contract applies wherever a yadof task launches PyChrono: a prepared local
 workflow, an HTCondor execute workflow, or a fast task kernel. PyChrono is an
@@ -24,7 +24,7 @@ normalized/assigned parameters
 ```
 
 Mechanical models, bodies, loads, solver choices, measurements, and objective
-policy remain task-owned. A future packaged adapter owns only the invariant launch,
+policy remain task-owned. The packaged adapter owns only the invariant launch,
 isolation, protocol, validation, diagnostic, timeout, and publication mechanics.
 
 ## Protocol identity and constants
@@ -353,9 +353,10 @@ on another host is not proof of provisioning.
 
 ## Executable conformance tests
 
-`tests/test_pychrono_subprocess_contract.py` is the pre-adapter executable contract.
-It launches task-owned fake workers through an absolute Python executable and uses
-no Miniforge or PyChrono installation. It covers:
+`tests/test_pychrono_subprocess_contract.py` is the executable contract and adapter
+acceptance suite. It launches task-owned fake workers through the public packaged
+adapter surface and an absolute Python executable, with no Miniforge or PyChrono
+installation. It covers:
 
 - successful JSON/NPZ exchange through paths containing spaces;
 - removal of inherited `PYTHONPATH`, user-site/bytecode controls, and scratch temp;
@@ -365,6 +366,6 @@ no Miniforge or PyChrono installation. It covers:
 - timeout with descendant-process termination;
 - concurrent evaluations with isolated scratch and evidence.
 
-When the packaged Project Chrono adapter is added, these cases remain the protocol
-acceptance set and must run through that adapter's public launch surface. Real
-mechanics validation remains a separate, explicitly authorized integration task.
+These cases are the protocol acceptance set for the adapter's public launch
+surface. Real mechanics validation remains a separate, explicitly authorized
+integration task.

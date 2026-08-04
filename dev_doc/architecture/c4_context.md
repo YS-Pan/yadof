@@ -29,7 +29,7 @@ Direct CLI/API use remains supported but is the lower-level surface.
   fast kernels may launch local external simulators through isolated worker trees.
 - Simulators/custom programs consume assigned variables and produce measurements.
 - A dedicated PyChrono/Conda interpreter is treated as an external simulator:
-  task-owned child code runs in a separate OS process and crosses the future
+  task-owned child code runs in a separate OS process and crosses the packaged
   adapter boundary only through versioned JSON requests/results and NPZ evidence.
 - HTCondor transports self-contained job folders to administrator-managed workers.
 - The filesystem durably stores job evidence, JSONL metadata, archives,

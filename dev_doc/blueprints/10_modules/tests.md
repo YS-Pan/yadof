@@ -43,7 +43,7 @@ license, machine identity, or credential.
 - ngspice adapter discovery/copying, parameter staging, owned batch-control
   generation, real/complex ASCII rawfile parsing, explicit component conversion,
   and schema-versioned rawData export without requiring a live simulator;
-- pre-adapter PyChrono subprocess conformance through fake external interpreters:
+- packaged PyChrono adapter conformance through fake external interpreters:
   explicit absolute runtime resolution, paths with spaces, versioned JSON/NPZ,
   cleaned Python environment, bounded diagnostics, invalid/escaping/missing output,
   handled error versus crash, timeout descendant cleanup, and concurrent scratch

@@ -61,6 +61,11 @@ yadof task adapters
 yadof task copy-adapter hfss_com.py --workspace D:\work\study-a
 ```
 
+For Project Chrono, copy `chrono_com.py`, add the task-owned `chrono_worker.py`,
+and follow `user_doc/adapters/chrono_com.md`. The adapter uses
+`YADOF_PYCHRONO_PYTHON` as an external runtime; it does not make PyChrono a yadof
+dependency.
+
 ### Fast-compatible shared task kernel
 
 Use fast only for computations or local simulators whose result can be returned as

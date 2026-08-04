@@ -29,10 +29,10 @@ history are interpretations of evidence, not stored source truth.
 Cross-task invariant behavior belongs in yadof; workspace workflow/cost files own
 only behavior that varies with the selected optimization task.
 
-The defined-but-not-yet-adapted PyChrono boundary treats a dedicated Python/Conda
-runtime as an external simulator installation. Its JSON/NPZ subprocess protocol,
-environment isolation, scratch ownership, failure taxonomy, and backend-equivalent
-publication rules are normative even before the packaged adapter is added.
+The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
+external simulator installation. Its JSON/NPZ subprocess protocol, environment
+isolation, scratch ownership, failure taxonomy, and backend-equivalent publication
+rules are normative.
 
 An optional read-only surrogate viewer is an installed `yadof.tools` leaf. It
 consumes the same workspace records, current cost policy, and saved checkpoints

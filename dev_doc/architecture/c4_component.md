@@ -78,6 +78,8 @@
   types. Software-specific task commands live below an explicit software namespace,
   such as `yadof task hfss`, so future adapters do not collide on generic action
   names.
+  The `chrono_com.py` adapter resource owns the isolated Project Chrono
+  JSON/NPZ launch/validation boundary; task-owned `chrono_worker.py` owns mechanics.
 - `cli`, `run_command`: modular installed command routing, packaged-document access,
   and normal campaign orchestration.
 

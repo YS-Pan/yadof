@@ -94,7 +94,7 @@ does not discard otherwise valid evidence.
 
 ## External PyChrono subprocess
 
-The canonical pre-adapter contract is
+The canonical packaged-adapter contract is
 [pychrono_subprocess_contract.md](pychrono_subprocess_contract.md). A task-side
 parent resolves only the absolute `YADOF_PYCHRONO_PYTHON` executable and launches a
 task-owned child script by argument vector, with no Conda activation, PATH search,

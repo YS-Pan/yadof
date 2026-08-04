@@ -77,8 +77,8 @@ Fast results instead carry validated named memory payloads and explicitly set
 `job_dir=None`. All three backends converge on rawData validation, recording,
 current-cost derivation, failure isolation, and tuple-shape contracts.
 
-The PyChrono subprocess protocol is currently a defined pre-adapter contract, not a
-listed packaged adapter. Its future task-side parent/child pair remains inside the
-local, fast, or execute-node boundary: one absolute external interpreter, one
-task-owned child entry, one candidate scratch, and versioned JSON/NPZ artifacts.
-Only validated rawData crosses from that pair into the existing result container.
+The listed `chrono_com.py` resource implements the PyChrono subprocess protocol.
+Its task-side parent/child pair remains inside the local, fast, or execute-node
+boundary: one absolute external interpreter, one task-owned child entry, one
+candidate scratch, and versioned JSON/NPZ artifacts. Only validated rawData crosses
+from that pair into the existing result container.

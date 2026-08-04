@@ -60,12 +60,11 @@ priority: worker-reported `execute_machine` wins, timed-out active/held segments
 fall back to `condor_execute_machine`, historical terminal/removal tails are
 recognized, and never-executed queued jobs remain unassigned.
 
-The defined PyChrono subprocess protocol has a fake-child conformance suite before
-the packaged adapter exists. It launches an absolute ordinary Python interpreter as
-the external runtime and verifies JSON/NPZ exchange, environment isolation,
-diagnostic bounds, failure taxonomy, timeout descendant cleanup, path quoting, and
-concurrent scratch isolation without importing or installing PyChrono. When the
-adapter lands, the same acceptance cases must target its launch surface.
+The PyChrono subprocess protocol and packaged adapter share a fake-child conformance
+suite. It launches an absolute ordinary Python interpreter through `chrono_com.py`
+and verifies JSON/NPZ exchange, environment isolation, diagnostic bounds, failure
+taxonomy, timeout descendant cleanup, path quoting, and concurrent scratch
+isolation without importing or installing PyChrono.
 
 Task-specific tests that hard-code a concrete model, design, objective, frequency,
 or exact active variable set belong with a disposable/reference workspace, not in

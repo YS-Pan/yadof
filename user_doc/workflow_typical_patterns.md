@@ -203,6 +203,7 @@ adapter:
 - `user_doc/adapters/hfss_com.md` for HFSS/PyAEDT workflows.
 - `user_doc/adapters/ngspice_com.md` for ngspice batch-process workflows.
 - `user_doc/adapters/test_com.md` for pure-Python synthetic workflows.
+- `user_doc/adapters/chrono_com.md` for a separately provisioned PyChrono process.
 
 A workflow should use adapter functions only to produce rawData. Final objective
 costs still belong in `calc_cost.py`.

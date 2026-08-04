@@ -16,6 +16,8 @@ jobs remain self-contained and never depend on a source checkout.
 - [hfss_com.md](hfss_com.md) describes the optional HFSS/PyAEDT adapter.
 - [ngspice_com.md](ngspice_com.md) describes the ngspice batch-process adapter.
 - [test_com.md](test_com.md) describes the pure-Python simulator stand-in.
+- [chrono_com.md](chrono_com.md) describes the isolated Project Chrono/PyChrono
+  subprocess adapter.
 
 New framework adapters belong in package resources with matching user
 documentation written for the user's AI agent.

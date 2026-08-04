@@ -48,13 +48,14 @@ required beyond yadof's core NumPy dependency.
 ## External Python simulator boundary
 
 The canonical PyChrono v1 subprocess contract lives in
-`dev_doc/architecture/pychrono_subprocess_contract.md`. It is deliberately defined
-before `chrono_com.py` is added: an adapter must launch only the configured absolute
-interpreter, cross the process/runtime boundary through bounded versioned JSON and
-schema-compatible NPZ, isolate scratch/environment/process trees, and preserve the
-documented failure taxonomy and backend-equivalent publication. Neither runtime may
-import the other's framework. Project Chrono is not listed or copyable until the
-separate adapter task is completed.
+`dev_doc/architecture/pychrono_subprocess_contract.md`. The self-contained
+`chrono_com.py` resource implements it by resolving only the configured absolute
+interpreter, crossing the process/runtime boundary through bounded versioned JSON
+and schema-compatible NPZ, isolating scratch/environment/process trees, validating
+all child paths and evidence, and preserving the documented failure taxonomy and
+backend-equivalent publication. Its `worker_main()` helper lets task-owned
+`chrono_worker.py` import PyChrono only after request validation. Neither runtime
+imports the other's framework, and no Conda/yadof dependency is added.
 
 ## Invariants
 
