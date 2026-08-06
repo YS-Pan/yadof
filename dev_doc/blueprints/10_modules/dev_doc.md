@@ -37,6 +37,11 @@ the root developer README links to it instead of duplicating those contracts.
 copyable prompt. Its index may link placeholders whose prompt bodies remain empty
 until examples are supplied.
 
+`user_doc/agent_environment_permissions.md` is an optional, standalone host-agent
+troubleshooting reference. It keeps sandbox identity, filesystem ACL, Git
+ownership, `safe.directory`, and index-lock guidance structurally separate from
+yadof's package/workspace/runtime contracts.
+
 ## Maintenance rules
 
 Architecture and blueprints describe the present, so update them in place when code
@@ -61,5 +66,7 @@ build/force-reinstall/import-path/full-test workflow after package changes.
 - Current architecture/blueprints override historical change records.
 - User docs contain task-authoring/runtime instructions written primarily for the
   user's AI agent; administrator deployment remains in `admin_tool/`.
+- Generic agent-host and Git permission troubleshooting remains in its standalone
+  user reference and is explicitly identified as external to yadof behavior.
 - Automatic toDos are always evaluated within established task scope; they neither
   require accidental discovery nor authorize an unrelated repository-wide search.

@@ -30,6 +30,9 @@ dev_doc/                   developer source documentation
   development_environment.md detected reproducibility snapshot
   skill/                   module-specific documentation contracts
 user_doc/                  user-workflow documentation, primarily for the user's AI agent
+  agent_environment_permissions.md
+                            optional host sandbox/filesystem/Git troubleshooting;
+                            explicitly outside yadof runtime behavior
   example_prompts/         expandable prompt-example collection
 admin_tool/                administrator-only operations
 ```

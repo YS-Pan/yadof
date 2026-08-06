@@ -50,6 +50,12 @@ Task author references:
 - [example_prompts/README.md](example_prompts/README.md) for the expandable prompt
   example directory
 
+Optional agent-host troubleshooting:
+
+- [agent_environment_permissions.md](agent_environment_permissions.md) for
+  sandbox identity, filesystem ACL, Git ownership, and Git index permissions.
+  These are host-agent environment concerns rather than yadof behavior.
+
 When a source checkout is available, its top-level `examples/` directory may provide
 additional task-specific reference workspaces. Those examples are not installed
 package resources and must not be assumed to exist in a pip-only environment.
