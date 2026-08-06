@@ -662,7 +662,7 @@ def _failed_result(
         metadata.setdefault("generation_index", int(generation_index))
     return JobResult(
         job_name=job_name,
-        job_dir=Path(job_dir),
+        job_dir=Path(job_dir) if job_dir is not None else None,
         status="error",
         unnormalized_variables=variables,
         normalized_variables=(

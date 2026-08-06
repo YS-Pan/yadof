@@ -63,6 +63,30 @@ version-matched workspace is non-mutating. It does not repair user files or run 
 workflow. `check` is read-only: it validates marker/config/task/rawData structure and
 discovers backend executables, but never installs or configures software.
 
+## Agent sandbox and runtime write permissions
+
+An AI agent's shell may run with a sandbox identity or restricted security token
+that differs from the user's interactive terminal, even on the same machine. An
+existing workspace or generated subdirectory can therefore be readable to the
+agent but not writable by the process that launches a real evaluation. Read-only
+documentation and `check` commands may still pass because they do not exercise
+every create, replace, and cleanup operation used at runtime.
+
+The actual execution identity needs create, write, replace, and cleanup permission
+on the selected workspace's configured mutable paths, including `jobs/`,
+`recorded_data/`, the fast scratch root, surrogate checkpoints, logs, and tool
+output. This applies to pre-existing generated directories as well as the workspace
+root. If a smoke or run does not reach its first candidate and no new record or
+scratch item appears, inspect the exact runtime path's ownership/ACL and confirm
+that no earlier process still holds it before treating the task or simulator as
+faulty.
+
+Do not broadly weaken filesystem ACLs as a workaround. Prefer either an explicit
+user-approved out-of-sandbox execution of the exact yadof command, running that
+command in the user's own terminal, or granting the required identity permission
+only on the intended workspace runtime paths. Keep installed package resources
+read-only and never redirect mutable state into site-packages.
+
 ## Workspace layout
 
 ```text

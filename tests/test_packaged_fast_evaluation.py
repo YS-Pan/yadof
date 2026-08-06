@@ -146,6 +146,48 @@ def test_fast_parallel_results_are_ordered_recorded_and_jobless(tmp_path: Path) 
         assert all(name.endswith("/response.npz") for name in archive.namelist())
 
 
+def test_fast_record_failure_is_isolated_for_jobless_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yadof.evaluate_manager import api as evaluate_api
+
+    root = _workspace(tmp_path)
+    _write_evaluation(
+        root,
+        "def evaluate_rawdata(parameters, context):\n"
+        "    value = float(parameters['input_value'])\n"
+        f"    {_rawdata_result_expression('value')}\n",
+    )
+    real_record_result = evaluate_api.record_result
+
+    def flaky_record_result(workspace, result):
+        if result.status == "done" and result.unnormalized_variables[0] == 0.0:
+            raise OSError("simulated fast record failure")
+        return real_record_result(workspace, result)
+
+    monkeypatch.setattr(evaluate_api, "record_result", flaky_record_result)
+    costs = evaluate_population(
+        root,
+        ((0.0,), (1.0,)),
+        mode="fast",
+        timeout_sec=5.0,
+        fast_max_workers=1,
+    )
+
+    assert math.isinf(costs[0][0])
+    assert costs[1] == pytest.approx((0.9,))
+    assert _scratch_is_clean(root)
+    records = sorted(
+        recorded_api.list_records(root), key=lambda item: item["population_index"]
+    )
+    assert [record["status"] for record in records] == ["error", "completed"]
+    assert records[0]["job_metadata"]["failure_stage"] == "recorded_data"
+    assert records[0]["job_metadata"]["error_type"] == "OSError"
+    assert records[0]["job_metadata"]["error_message"] == (
+        "simulated fast record failure"
+    )
+
+
 def test_fast_and_local_can_share_one_task_kernel(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
     _write_evaluation(
