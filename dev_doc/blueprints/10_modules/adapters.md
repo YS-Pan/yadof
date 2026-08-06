@@ -63,5 +63,6 @@ imports the other's framework, and no Conda/yadof dependency is added.
 - Adapter modules never import a concrete workspace or yadof runtime on workers.
 - New simulator families do not change core optimization/evaluation contracts.
 - External simulator environments are selected by absolute executable, never by
-  activation, PATH mutation, parent-interpreter fallback, or yadof installation
-  inside the simulator runtime.
+  activation, PATH search, parent-interpreter fallback, or yadof installation inside
+  the simulator runtime. Windows child copies may prepend selected-prefix DLL
+  directories without mutating parent/user/machine PATH.

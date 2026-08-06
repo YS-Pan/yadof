@@ -28,9 +28,10 @@
 
 ## Invariants
 
-- No `import pychrono`, yadof import, Conda activation, PATH mutation, shell launch,
-  process-global environment/chdir mutation, pickle loading, objective calculation,
-  or task-specific mechanics.
+- No `import pychrono`, yadof import, Conda activation, PATH-based interpreter
+  selection, shell launch, process-global environment/chdir mutation, pickle
+  loading, objective calculation, or task-specific mechanics. Windows may prepend
+  standard selected-prefix DLL directories only in the per-child environment copy.
 - Child scratch never overlaps the external runtime prefix or final rawData; it is
   candidate-unique and reclaimed on every adapter-controlled outcome.
 - A nonzero exit, malformed manifest, escaping path, digest mismatch, or invalid

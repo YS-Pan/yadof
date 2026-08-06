@@ -18,10 +18,12 @@ per-job process-tree measurements.
 
 `YADOF_PYCHRONO_PYTHON` names one absolute, administrator-provisioned interpreter
 file on the machine that executes the task. Yadof does not activate its Conda
-environment, alter PATH, import PyChrono, or install itself into that environment.
-The shared prefix is read-only and contains no candidate data, cache, bytecode, or
-log output. A matching absolute string on another execute host is not proof that
-the runtime exists or is accessible there.
+environment, use PATH to select it, mutate the parent/user/machine PATH, import
+PyChrono, or install itself into that environment. On Windows, the adapter prepends
+the selected prefix's standard Conda DLL directories only to each child environment
+copy. The shared prefix is read-only and contains no candidate data, cache,
+bytecode, or log output. A matching absolute string on another execute host is not
+proof that the runtime exists or is accessible there.
 
 Every PyChrono invocation has a distinct writable candidate scratch holding only
 its request, result, temporary content, and child rawData. The child working

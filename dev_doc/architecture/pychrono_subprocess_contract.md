@@ -62,11 +62,13 @@ must:
 3. reject a missing path, directory, or non-executable file as `runtime_invalid`;
 4. use the resolved absolute file directly.
 
-The parent must not search `PATH`, run `conda`, activate an environment, change
-`PATH`, inspect a user shell profile, or fall back to `sys.executable`. On POSIX,
-the executable permission must be present. On Windows, the configured target is
-expected to be the dedicated `python.exe` file and must be launchable as a normal
-executable.
+The parent must not search `PATH`, run `conda`, activate an environment, mutate its
+process-global `PATH`, inspect a user shell profile, or fall back to
+`sys.executable`. On POSIX, the executable permission must be present. On Windows,
+the configured target is expected to be the dedicated `python.exe` file and must be
+launchable as a normal executable. The Windows child-only DLL search path described
+below supports that already-selected runtime; it is not an interpreter-selection
+mechanism.
 
 The task supplies one child script, conventionally `chrono_worker.py`. The adapter
 resolves it against the task payload, requires an existing regular file, and
@@ -130,11 +132,17 @@ globally. Apply these exact changes to the child copy:
 - set `PYTHONNOUSERSITE=1`;
 - set `PYTHONDONTWRITEBYTECODE=1`;
 - set `TEMP` and `TMP` to the absolute candidate scratch path.
+- on Windows only, replace case-insensitive `PATH` keys in the child copy with one
+  canonical `PATH` whose leading entries are the resolved runtime prefix,
+  `Library/mingw-w64/bin`, `Library/usr/bin`, `Library/bin`, `Scripts`, and `bin`
+  below that prefix, followed by the inherited child `PATH` value.
 
-Do not set `PYTHONHOME`, prepend the Conda prefix to `PATH`, or activate Conda. Other
+Do not set `PYTHONHOME`, change the POSIX child `PATH`, or activate Conda. Other
 task/administrator-provided environment values remain visible unless a future
-version explicitly classifies them as unsafe. The absolute interpreter is the
-runtime selection mechanism.
+version explicitly classifies them as unsafe. The Windows prefix entries provide
+process-local native-DLL discovery required by released PyChrono builds; they do not
+change the parent/user/machine environment. The absolute interpreter remains the
+only runtime selection mechanism.
 
 The child must observe its current working directory and both temporary-directory
 variables as its own candidate scratch. It may report interpreter/version/runtime
@@ -359,7 +367,8 @@ adapter surface and an absolute Python executable, with no Miniforge or PyChrono
 installation. It covers:
 
 - successful JSON/NPZ exchange through paths containing spaces;
-- removal of inherited `PYTHONPATH`, user-site/bytecode controls, and scratch temp;
+- removal of inherited `PYTHONPATH`, user-site/bytecode controls, scratch temp, and
+  Windows child-only runtime-prefix DLL search entries with inherited-path retention;
 - bounded large-stderr diagnostics;
 - malformed/version-mismatched/path-escaping/missing/invalid output;
 - handled child error versus an unreported crash;

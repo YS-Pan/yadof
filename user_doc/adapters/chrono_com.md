@@ -18,10 +18,13 @@ interpreter path to every evaluation host:
 )
 ```
 
-The adapter does not run `conda activate`, search `PATH`, alter `PATH`, install
-packages, or fall back to yadof's interpreter. Restart the calling process after a
-machine-level environment change. For distributed execution, the same absolute
-path must exist and be executable on the selected execute host.
+The adapter does not run `conda activate`, search `PATH` for an interpreter, alter
+the parent/user/machine `PATH`, install packages, or fall back to yadof's
+interpreter. On Windows it prepends the configured runtime prefix's standard Conda
+DLL directories only to the child environment copy so PyChrono's native modules can
+load. Restart the calling process after a machine-level environment change. For
+distributed execution, the same absolute path must exist and be executable on the
+selected execute host.
 
 Copy the adapter into the selected workspace without overwriting task code:
 
@@ -145,7 +148,10 @@ def evaluate_rawdata(parameters, context):
 The adapter removes inherited `PYTHONPATH`, disables user-site and bytecode writes,
 and points `TEMP`/`TMP` at the unique candidate scratch without mutating the parent
 environment. It launches an argument vector with the configured absolute
-interpreter; paths containing spaces need no manual quoting.
+interpreter; paths containing spaces need no manual quoting. On Windows only, the
+child `PATH` starts with the resolved runtime prefix plus its
+`Library/mingw-w64/bin`, `Library/usr/bin`, `Library/bin`, `Scripts`, and `bin`
+directories, then retains the inherited child `PATH`.
 
 ## Failures and diagnostics
 

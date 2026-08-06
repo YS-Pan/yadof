@@ -73,6 +73,17 @@ def simulate(request, rawdata_dir):
         pid_file.write_text(str(descendant.pid), encoding="utf-8")
         time.sleep(60)
     write_rawdata(rawdata_dir, request["parameters"]["assigned"]["x"])
+    runtime_prefix = Path(sys.executable).resolve().parent
+    if runtime_prefix.name.casefold() in {"bin", "scripts"}:
+        runtime_prefix = runtime_prefix.parent
+    expected_windows_path = [
+        str(runtime_prefix),
+        str(runtime_prefix / "Library" / "mingw-w64" / "bin"),
+        str(runtime_prefix / "Library" / "usr" / "bin"),
+        str(runtime_prefix / "Library" / "bin"),
+        str(runtime_prefix / "Scripts"),
+        str(runtime_prefix / "bin"),
+    ]
     return {
         "cwd": os.getcwd(),
         "temp": os.environ.get("TEMP"),
@@ -80,6 +91,8 @@ def simulate(request, rawdata_dir):
         "pythonpath_present": any(key.casefold() == "pythonpath" for key in os.environ),
         "python_no_user_site": os.environ.get("PYTHONNOUSERSITE"),
         "python_dont_write_bytecode": os.environ.get("PYTHONDONTWRITEBYTECODE"),
+        "path_entries": os.environ.get("PATH", "").split(os.pathsep),
+        "expected_windows_path": expected_windows_path,
         "executable": sys.executable,
         "pid": os.getpid(),
         "yadof_loaded": "yadof" in sys.modules,
@@ -195,6 +208,7 @@ def _run(
         environment={
             "YADOF_PYCHRONO_PYTHON": str(Path(sys.executable).resolve()),
             "PYTHONPATH": "poison import path",
+            "PATH": os.pathsep.join(("inherited path one", "inherited path two")),
         },
         timeout=timeout,
         cancel_requested=cancel_requested,
@@ -245,6 +259,17 @@ def test_fast_success_uses_clean_environment_paths_with_spaces_and_valid_npz(
     assert diagnostics["pythonpath_present"] is False
     assert diagnostics["python_no_user_site"] == "1"
     assert diagnostics["python_dont_write_bytecode"] == "1"
+    if os.name == "nt":
+        assert diagnostics["path_entries"][:6] == diagnostics["expected_windows_path"]
+        assert diagnostics["path_entries"][-2:] == [
+            "inherited path one",
+            "inherited path two",
+        ]
+    else:
+        assert diagnostics["path_entries"] == [
+            "inherited path one",
+            "inherited path two",
+        ]
     assert diagnostics["yadof_loaded"] is False
     assert diagnostics["pychrono_loaded"] is False
     assert "fake child completed" in result.stdout_tail

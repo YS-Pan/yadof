@@ -102,6 +102,9 @@ parent-interpreter fallback, `pychrono` import in yadof, or yadof import in the
 child. Each invocation receives an isolated scratch, a v1 JSON request, a cleaned
 Python environment, captured bounded diagnostics, and an exact process-tree
 timeout/cancellation boundary.
+On Windows, that child environment alone receives the selected runtime prefix's
+standard Conda DLL directories before its inherited PATH so released PyChrono
+native modules can load without activation or parent/global environment mutation.
 
 The child atomically publishes schema-compatible NPZ files and a v1 JSON result
 last. The parent accepts evidence only after exit-zero, identity/version/path,

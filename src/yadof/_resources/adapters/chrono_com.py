@@ -321,7 +321,9 @@ def run_pychrono(
                 request, maximum=MAX_REQUEST_BYTES, category="request_invalid"
             ),
         )
-        launch_environment = _child_environment(environment, scratch=scratch)
+        launch_environment = _child_environment(
+            environment, scratch=scratch, interpreter=interpreter_path
+        )
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         try:
             with stdout_path.open("wb") as stdout_stream, stderr_path.open("wb") as stderr_stream:
@@ -757,7 +759,10 @@ def _resolved_worker(worker: str | Path) -> Path:
 
 
 def _child_environment(
-    overrides: Mapping[str, str] | None, *, scratch: Path | None = None
+    overrides: Mapping[str, str] | None,
+    *,
+    scratch: Path | None = None,
+    interpreter: Path | None = None,
 ) -> dict[str, str]:
     output = {str(key): str(value) for key, value in os.environ.items()}
     if overrides:
@@ -770,6 +775,24 @@ def _child_environment(
     if scratch is not None:
         output["TEMP"] = str(scratch)
         output["TMP"] = str(scratch)
+    if os.name == "nt" and interpreter is not None:
+        inherited_path = ""
+        for key in tuple(output):
+            if key.casefold() == "path":
+                inherited_path = output.pop(key)
+        runtime_prefix = _runtime_prefix(interpreter)
+        runtime_entries = (
+            runtime_prefix,
+            runtime_prefix / "Library" / "mingw-w64" / "bin",
+            runtime_prefix / "Library" / "usr" / "bin",
+            runtime_prefix / "Library" / "bin",
+            runtime_prefix / "Scripts",
+            runtime_prefix / "bin",
+        )
+        path_entries = [str(entry) for entry in runtime_entries]
+        if inherited_path:
+            path_entries.append(inherited_path)
+        output["PATH"] = os.pathsep.join(path_entries)
     return output
 
 

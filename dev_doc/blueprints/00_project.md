@@ -128,8 +128,11 @@ A simulator-specific Python/Conda environment remains an external runtime. The
 packaged `chrono_com.py` resource implements the PyChrono v1 boundary: it selects
 only an absolute configured interpreter, launches task-owned child code with an
 isolated environment/scratch/process tree, and accepts only bounded versioned JSON
-plus no-pickle schema-valid NPZ. It cannot move yadof into the child runtime or let
-task objects/costs/partial evidence cross.
+plus no-pickle schema-valid NPZ. Windows launches add only the selected runtime's
+standard native-DLL directories to the child environment copy; they do not select
+an interpreter through PATH or mutate parent/user/machine state. The boundary
+cannot move yadof into the child runtime or let task objects/costs/partial evidence
+cross.
 
 ## Verification boundary
 

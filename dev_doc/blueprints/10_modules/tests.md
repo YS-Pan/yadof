@@ -45,7 +45,8 @@ license, machine identity, or credential.
   and schema-versioned rawData export without requiring a live simulator;
 - packaged PyChrono adapter conformance through fake external interpreters:
   explicit absolute runtime resolution, paths with spaces, versioned JSON/NPZ,
-  cleaned Python environment, bounded diagnostics, invalid/escaping/missing output,
+  cleaned Python environment, Windows child-only Conda DLL search entries with
+  inherited-PATH retention, bounded diagnostics, invalid/escaping/missing output,
   handled error versus crash, timeout descendant cleanup, and concurrent scratch
   isolation without Miniforge or PyChrono;
 - lazy `view surrogate` GUI/summary/audit registration and help, viewer
