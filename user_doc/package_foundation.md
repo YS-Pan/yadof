@@ -81,12 +81,23 @@ study-a/
   .yadof/surrogate/checkpoints/ generated
   .yadof/logs/                  generated
   .yadof/tool_output/           generated
+  visualization_outputs/       optional task-owned scripts and exported artifacts
 ```
 
 Relative configured paths resolve from the selected workspace. Two workspaces can
 be used consecutively or concurrently in one process without sharing task modules,
 records, surrogate state, or output paths. Installed package resources are read-only
 inputs and are never used as a runtime-data location.
+
+The workspace is user-owned and may contain additional directories beyond this
+example layout. Use them for task-specific helper scripts, debugging evidence,
+experiment notes, exported animations, images, reports, or other outputs. Choose
+names that do not collide with `.yadof/`, `job_template/`, `jobs/`,
+`recorded_data/`, or configured framework paths. Yadof ignores such extra
+directories unless task/config code explicitly references them. They are not
+automatically copied into prepared jobs; place execute-side assets below
+`job_template/` (or have task code copy them deliberately) when a worker needs
+them.
 
 Prepared distributed jobs contain the task payload, assigned
 `parameters_constraints.py`, and `worker_misc.py`. Direct `job_template/` children

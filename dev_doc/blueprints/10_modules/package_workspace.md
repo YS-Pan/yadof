@@ -28,6 +28,10 @@ the fixed lifecycle metadata. The generic cost module demonstrates package
 files, task contract, path, and optional static rawData diagnostics.
 When fast is selected, check also requires callable task-owned
 `evaluation.py:evaluate_rawdata()` and a scratch path disjoint from task/jobs/history.
+Additional user-created directories for task helpers, debugging evidence, and
+exported artifacts may coexist below the workspace root. Init/check do not reject
+or claim them, configured reserved paths retain their framework meaning, and only
+content deliberately selected by preparation becomes job payload.
 
 ## Task loading and resources
 
@@ -48,3 +52,5 @@ Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 - Wheel/sdist exclude concrete models, workspaces, jobs, records, caches, logs,
   checkpoints, credentials, and examples.
 - Loaded workspace modules and helper names are removed after use.
+- Unreserved user-created workspace directories remain user-owned and are not
+  inferred as framework state or prepared-job input.

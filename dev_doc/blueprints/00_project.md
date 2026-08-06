@@ -48,7 +48,9 @@ local/distributed remain file-backed prepared-job transports.
 - Package: framework APIs, CLI, defaults, job/worker support, templates, adapters,
   tools, embedded docs, and all behavior invariant across optimization tasks.
 - Workspace: `config.py`, task modules/assets, jobs, records, checkpoints, logs,
-  tool output; workflow/cost code contains only behavior that changes with the task.
+  tool output, and optional user-created task/debug/export directories;
+  workflow/cost code contains only behavior that changes with the task. Extra
+  directories are not implicit prepared-job inputs.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.

@@ -96,6 +96,9 @@ workspace path setting.
 
 ## Durable workspace layout
 
+- user-created task/debug/export directories may coexist with the reserved layout;
+  core workspace discovery/checking ignores them unless configuration or task code
+  explicitly references them, and they are not implicit prepared-job payload;
 - `jobs/<job>/metadata.json`: submit-side aggregate job state and diagnostics.
 - `jobs/<job>/individual_metadata.json`: workflow-owned lifecycle state.
 - `jobs/<job>/rawData.zip`: distributed transport artifact.

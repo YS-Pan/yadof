@@ -93,7 +93,10 @@ code.
 
 - Run `yadof init PATH` rather than inventing the workspace marker or starter files.
 - Edit only the selected workspace, normally `config.py`, `job_template/`, and
-  task-owned assets. Do not edit installed package resources.
+  task-owned assets. You may create additional workspace directories for task
+  scripts, debugging material, exported animations/images/reports, and other
+  outputs; avoid the reserved framework paths documented in
+  `package_foundation.md`. Do not edit installed package resources.
 - Run `yadof check --workspace PATH` after generating or modifying task files.
 - Do not run an edited task's smoke test or optimization unless the user explicitly
   authorizes execution of the real workflow; it may launch expensive software.
