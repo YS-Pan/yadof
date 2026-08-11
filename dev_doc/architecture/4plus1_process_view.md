@@ -40,6 +40,15 @@ Timeout, native/Python worker exit, or task failure terminates the observed proc
 tree, cleans scratch, replaces the worker, records the isolated failure, and
 continues queued candidates. No scheduler-submitted callback is fabricated.
 
+For CLI runs, progress is enabled by default in every backend. One generation-level
+bar starts at zero and advances on each terminal individual outcome, regardless of
+completion order. It reports finished/total plus successful, error, and remaining
+counts. Preparation, execution, collection, and recording failures therefore stay
+visible as completed error outcomes instead of leaving an apparently stalled
+generation. Non-interactive streams receive complete snapshot lines; interactive
+terminals update the active bar in place. `--no-progress` disables both the bar and
+the existing detailed backend messages for that invocation.
+
 Before starting a local batch, shared resource calibration reads compatible smoke
 or preceding-generation records. Local policy combines that per-job estimate with a
 fresh physical-CPU/available-memory/free-disk snapshot and the configured cap. Each

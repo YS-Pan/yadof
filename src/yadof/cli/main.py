@@ -625,11 +625,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="skip the pre-run smoke and use configured calibration baselines",
     )
     run_parser.set_defaults(smoke_test=None)
-    run_parser.add_argument(
+    progress_group = run_parser.add_mutually_exclusive_group()
+    progress_group.add_argument(
         "--progress",
+        dest="progress",
         action="store_true",
-        help="show detailed generation/backend progress during this invocation",
+        help=(
+            "show per-generation individual progress and backend details "
+            "(default)"
+        ),
     )
+    progress_group.add_argument(
+        "--no-progress",
+        dest="progress",
+        action="store_false",
+        help="disable per-generation individual progress and backend details",
+    )
+    run_parser.set_defaults(progress=True)
     run_parser.add_argument(
         "--fail-on-all-infinite",
         action="store_true",

@@ -34,7 +34,9 @@ license, machine identity, or credential.
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
 - CLI/docs, integrated cost/time views including grouped `view all`,
-  the 50-generation run default, flushed pre-execution standalone-smoke feedback,
+  the 50-generation run default, default-on run progress with an explicit quiet
+  override, per-generation successful/error/remaining outcome counts, streamed
+  distributed result notification, flushed pre-execution standalone-smoke feedback,
   cost-view isolation/reporting for unusable history rows and optional annotations,
   left-axis average cost, all-individual/current-generation hypervolume values,
   shade-only hypervolume plotting, compact HV legend text, staggered generation

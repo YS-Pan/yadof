@@ -7,6 +7,9 @@
 - Submit one `job.sub` per prepared `JobSpec`.
 - Write Windows HTCondor submit files from the workspace `LoadedConfig` through `evaluate_manager.config` and the adaptive `resource_requests`/`time_limits` helpers.
 - Invoke an optional `after_jobs_submitted` callback after successful submissions and before polling outputs.
+- Invoke an optional per-result callback exactly when each job reaches its terminal
+  collected, timeout, or submission-failure result; callback failure is diagnostic
+  only and cannot change the result.
 - Poll terminal job state or complete returned outputs, collect rawData and metadata, query final `condor_history`/held-job ClassAds for resource and execution-time measurements, and turn failures/timeouts into `JobResult` rows.
 - Parse local `condor.log` event timestamps to measure the current active execution
   segment, excluding queued, evicted-idle, and suspended intervals. Enforce each
@@ -35,7 +38,8 @@
 ## I/O Format
 - Input is prepared job specs.
 - Output is ordered `JobResult` rows.
-- Callback has no arguments and its return value is ignored.
+- The after-submit callback has no arguments. The result callback receives one
+  `JobResult`. Both return values are ignored.
 - Submit files use `executable = workflow.py`, omit the argument line, and set
   `transfer_executable = True`. The executable is not duplicated in
   `transfer_input_files`; selected task/support inputs are transferred from the job

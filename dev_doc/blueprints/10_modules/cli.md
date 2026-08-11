@@ -22,6 +22,13 @@ task/config, applies CLI overrides without rewriting config, handles optional sm
 supports start/resume/generation counts, displays progress, and can stop on an
 all-infinite generation with recent job diagnostics.
 
+`run` enables progress by default for fast, local, and distributed execution. The
+generation bar advances per terminal individual and displays finished/total,
+successful, error, and remaining counts while backend details continue to explain
+planning, scheduling, retries, and timeouts. `--no-progress` is the explicit quiet
+override; `--progress` explicitly selects the default behavior. The temporary
+progress environment is restored after every invocation.
+
 Both execution commands accept `fast`, `local`, or `distributed`. Fast feedback
 states that no durable job directory exists, identifies the ephemeral scratch root,
 uses exactly one worker for smoke, and reports failures from recorded history.

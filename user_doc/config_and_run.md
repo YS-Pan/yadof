@@ -108,11 +108,18 @@ When `--generations` is omitted, the CLI runs 50 generations. Supplying
 `--generations N` overrides that invocation. The Python `run_generations()` API
 continues to require an explicit generation count.
 
+Progress is enabled by default for `fast`, `local`, and `distributed` runs. Each
+generation immediately displays a population progress bar and the numeric counts
+of successful individuals, errors, and remaining individuals; it updates whenever
+an individual reaches a terminal outcome. Backend planning, scheduling, timeout,
+and retry details remain visible alongside it. Use `--no-progress` for a quiet
+invocation, or `--progress` to explicitly retain the default. Progress settings are
+temporary and the caller environment is restored afterward.
+
 The pre-run real-task smoke default comes from
 `OPTIMIZE_SMOKE_TEST_ENABLED`. `--smoke-test` and `--no-smoke-test` are opposite,
 explicit overrides and take precedence. `--mode`, `--population-size`, and
-`--random-seed` are also temporary. `--progress` enables detailed backend progress
-for that invocation and restores the caller environment afterward.
+`--random-seed` are also temporary.
 
 When smoke is skipped, configured memory/disk and job-timeout baselines act as the
 synthetic generation-zero calibration. Distributed normal jobs receive a scheduler

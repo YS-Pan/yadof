@@ -72,6 +72,15 @@ Completed population results use the recorded-data batch fast path so large arch
 are copied once per population rather than once per individual. A batch failure is
 retried through the single-result path to preserve failure isolation.
 
+When CLI progress is active, the manager owns one backend-neutral population bar.
+Fast reports after its streamed result has been recorded; local reports each
+completed future and reconciles outcomes after batch recording; distributed
+receives terminal results through the Condor runner's result callback and likewise
+reconciles after recording. Preparation failures count immediately. Each
+population index is idempotent so fallback paths cannot double-count it, and a
+recording/cost failure can correct a previously completed execution from successful
+to error without changing the finished total.
+
 Distributed support preserves concrete CPU/memory/disk requests, workspace-local
 calibration, bounded yadof memory/disk resubmission, automatic/fixed scheduler
 execution limits enforced both by Condor and a submit-side yadof watchdog, unlimited

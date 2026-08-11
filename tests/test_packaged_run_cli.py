@@ -50,8 +50,12 @@ def test_run_cli_defaults_to_fifty_generations():
     parser = __import__("yadof.cli", fromlist=["build_parser"]).build_parser()
     run_parser = parser._subparsers._group_actions[0].choices["run"]
 
-    assert parser.parse_args(["run"]).generations == 50
+    defaults = parser.parse_args(["run"])
+    assert defaults.generations == 50
+    assert defaults.progress is True
+    assert parser.parse_args(["run", "--no-progress"]).progress is False
     assert "default: 50" in run_parser.format_help()
+    assert "--no-progress" in run_parser.format_help()
 
 
 def test_run_cli_direct_start_and_resume_use_workspace_metadata(tmp_path, capsys):
@@ -177,13 +181,34 @@ def test_run_cli_passes_mode_progress_and_strict_failure_options(
             "--start-generation",
             "7",
             "--no-smoke-test",
-            "--progress",
             "--fail-on-all-infinite",
         ]
     ) == 0
     assert seen["config_overrides"] == {"EVALUATION_MODE": "distributed"}
     assert seen["fail_on_all_infinite"] is True
     assert "YADOF_PROGRESS" not in os.environ
+
+
+def test_population_progress_reports_generation_outcomes(
+    monkeypatch, capsys
+):
+    from yadof.evaluate_manager.api import _PopulationProgress
+
+    monkeypatch.setenv("YADOF_PROGRESS", "1")
+    progress = _PopulationProgress(total=3, mode="local", generation_index=7)
+    progress.start()
+    progress.complete(2, successful=True)
+    progress.complete(0, successful=False)
+    progress.complete(1, successful=True)
+    progress.close()
+
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 4
+    assert "generation 7 (local)" in lines[-1]
+    assert "3/3" in lines[-1]
+    assert "successful=2" in lines[-1]
+    assert "errors=1" in lines[-1]
+    assert "remaining=0" in lines[-1]
 
 
 def test_repository_root_launchers_are_removed():

@@ -167,6 +167,7 @@ def run_condor_jobs(
     timeout_sec: float | None,
     env: Mapping[str, str] | None = None,
     after_jobs_submitted: Callable[[], object] | None = None,
+    on_result: Callable[[JobResult], object] | None = None,
 ) -> tuple[JobResult, ...]:
     """Submit jobs to HTCondor, wait for job-local outputs, and collect results.
 
@@ -181,6 +182,19 @@ def run_condor_jobs(
     retry_states: dict[str, YadofResourceRetryState] = {}
     total = len(jobs)
     submit_failures = 0
+
+    def store_result(job_name: str, result: JobResult) -> None:
+        results_by_name[job_name] = result
+        if on_result is None:
+            return
+        try:
+            on_result(result)
+        except Exception as exc:  # noqa: BLE001 - progress cannot alter outcomes.
+            _progress(
+                "htcondor: result callback failed for "
+                f"{job_name}: {exc.__class__.__name__}: {exc}"
+            )
+
     _progress(f"htcondor: submitting {total} jobs")
     _progress(f"htcondor: submit progress 0/{total}; queued=0; submit_failures=0; last_cluster=none")
     for index, job in enumerate(jobs, start=1):
@@ -189,7 +203,7 @@ def run_condor_jobs(
                 effective.workspace, job, config=effective, env=env
             )
         except Exception as exc:  # noqa: BLE001 - preserve per-individual failure isolation.
-            results_by_name[job.name] = submit_failure_result(job, exc)
+            store_result(job.name, submit_failure_result(job, exc))
             submit_failures += 1
             _progress(f"htcondor: submit failed {index}/{total}: {job.name}")
             continue
@@ -229,16 +243,19 @@ def run_condor_jobs(
                 remove_error = remove_condor_job(
                     effective.workspace, submission, config=effective
                 )
-                results_by_name[job_name] = collect_condor_result(
-                    effective.workspace,
-                    submission.job,
-                    config=effective,
-                    submission=submission,
-                    timed_out=True,
-                    terminal_reason="yadof_job_timeout",
-                    remove_error=remove_error,
-                    preloaded_resource_usage={},
-                    extra_metadata=timeout_metadata,
+                store_result(
+                    job_name,
+                    collect_condor_result(
+                        effective.workspace,
+                        submission.job,
+                        config=effective,
+                        submission=submission,
+                        timed_out=True,
+                        terminal_reason="yadof_job_timeout",
+                        remove_error=remove_error,
+                        preloaded_resource_usage={},
+                        extra_metadata=timeout_metadata,
+                    ),
                 )
                 pending.pop(job_name, None)
                 completed_now += 1
@@ -291,12 +308,15 @@ def run_condor_jobs(
                                 try:
                                     reset_job_for_resource_retry(submission.job.directory)
                                 except Exception as exc:  # noqa: BLE001 - isolate one retry cleanup failure.
-                                    results_by_name[job_name] = collect_failure_result(
-                                        submission.job,
-                                        submission=submission,
-                                        exc=exc,
-                                        terminal_reason=terminal_reason,
-                                        extra_metadata=extra_metadata,
+                                    store_result(
+                                        job_name,
+                                        collect_failure_result(
+                                            submission.job,
+                                            submission=submission,
+                                            exc=exc,
+                                            terminal_reason=terminal_reason,
+                                            extra_metadata=extra_metadata,
+                                        ),
                                     )
                                     pending.pop(job_name, None)
                                     completed_now += 1
@@ -311,7 +331,10 @@ def run_condor_jobs(
                                         resource_retry_metadata=extra_metadata,
                                     )
                                 except Exception as exc:  # noqa: BLE001 - preserve per-individual isolation.
-                                    results_by_name[job_name] = submit_failure_result(submission.job, exc)
+                                    store_result(
+                                        job_name,
+                                        submit_failure_result(submission.job, exc),
+                                    )
                                     pending.pop(job_name, None)
                                     submit_failures += 1
                                     completed_now += 1
@@ -337,22 +360,28 @@ def run_condor_jobs(
             if extra_metadata is not None:
                 collection_options["extra_metadata"] = extra_metadata
             try:
-                results_by_name[job_name] = collect_condor_result(
-                    effective.workspace,
-                    submission.job,
-                    config=effective,
-                    submission=submission,
-                    timed_out=False,
-                    terminal_reason=terminal_reason,
-                    **collection_options,
+                store_result(
+                    job_name,
+                    collect_condor_result(
+                        effective.workspace,
+                        submission.job,
+                        config=effective,
+                        submission=submission,
+                        timed_out=False,
+                        terminal_reason=terminal_reason,
+                        **collection_options,
+                    ),
                 )
             except Exception as exc:  # noqa: BLE001 - isolate one bad returned payload.
-                results_by_name[job_name] = collect_failure_result(
-                    submission.job,
-                    submission=submission,
-                    exc=exc,
-                    terminal_reason=terminal_reason,
-                    extra_metadata=extra_metadata,
+                store_result(
+                    job_name,
+                    collect_failure_result(
+                        submission.job,
+                        submission=submission,
+                        exc=exc,
+                        terminal_reason=terminal_reason,
+                        extra_metadata=extra_metadata,
+                    ),
                 )
             pending.pop(job_name, None)
             completed_now += 1
@@ -396,16 +425,19 @@ def run_condor_jobs(
         remove_error = remove_condor_job(
             effective.workspace, submission, config=effective
         )
-        results_by_name[job_name] = collect_condor_result(
-            effective.workspace,
-            submission.job,
-            config=effective,
-            submission=submission,
-            timed_out=True,
-            terminal_reason="timeout",
-            remove_error=remove_error,
-            preloaded_resource_usage={},
-            extra_metadata=timeout_site_metadata,
+        store_result(
+            job_name,
+            collect_condor_result(
+                effective.workspace,
+                submission.job,
+                config=effective,
+                submission=submission,
+                timed_out=True,
+                terminal_reason="timeout",
+                remove_error=remove_error,
+                preloaded_resource_usage={},
+                extra_metadata=timeout_site_metadata,
+            ),
         )
         pending.pop(job_name, None)
     if timed_out_count:

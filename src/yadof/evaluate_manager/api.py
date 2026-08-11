@@ -41,6 +41,7 @@ def evaluate_population(
 ) -> tuple[tuple[float, ...], ...]:
     """Evaluate a population and return dynamic cost tuples in input order."""
 
+    rows = tuple(_population_row(values) for values in population)
     overrides: dict[str, object] = {}
     if mode is not None:
         overrides["EVALUATION_MODE"] = str(mode).strip().lower()
@@ -52,47 +53,59 @@ def evaluate_population(
         overrides["FAST_EVALUATION_MAX_WORKERS"] = max(1, int(fast_max_workers))
     config = load_config(workspace, overrides=overrides)
     selected_mode = str(config.EVALUATION_MODE).strip().lower()
-    if selected_mode == "fast":
-        if Path(python_executable).resolve() != Path(sys.executable).resolve():
-            raise ValueError(
-                "fast evaluation workers use the current Python executable; "
-                "python_executable cannot select another runtime"
+    progress = _PopulationProgress(
+        total=len(rows),
+        mode=selected_mode,
+        generation_index=generation_index,
+    )
+    progress.start()
+    try:
+        if selected_mode == "fast":
+            if Path(python_executable).resolve() != Path(sys.executable).resolve():
+                raise ValueError(
+                    "fast evaluation workers use the current Python executable; "
+                    "python_executable cannot select another runtime"
+                )
+            return _dispatch_fast(
+                config,
+                rows,
+                timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
+                env=env,
+                fast_max_workers=int(config.FAST_EVALUATION_MAX_WORKERS),
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+                progress=progress,
             )
-        return _dispatch_fast(
+        if selected_mode == "distributed":
+            return _dispatch_distributed(
+                config,
+                rows,
+                timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
+                env=env,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+                after_jobs_submitted=after_jobs_submitted,
+                progress=progress,
+            )
+        if selected_mode != "local":
+            raise ValueError(f"unsupported evaluation mode: {selected_mode!r}")
+        return _dispatch_local(
             config,
-            population,
+            rows,
             timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
+            python_executable=python_executable,
             env=env,
-            fast_max_workers=int(config.FAST_EVALUATION_MAX_WORKERS),
-            run_id=run_id,
-            optimization_index=optimization_index,
-            generation_index=generation_index,
-        )
-    if selected_mode == "distributed":
-        return _dispatch_distributed(
-            config,
-            population,
-            timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
-            env=env,
+            local_max_workers=int(config.LOCAL_EVALUATION_MAX_WORKERS),
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=generation_index,
             after_jobs_submitted=after_jobs_submitted,
+            progress=progress,
         )
-    if selected_mode != "local":
-        raise ValueError(f"unsupported evaluation mode: {selected_mode!r}")
-    return _dispatch_local(
-        config,
-        population,
-        timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
-        python_executable=python_executable,
-        env=env,
-        local_max_workers=int(config.LOCAL_EVALUATION_MAX_WORKERS),
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=generation_index,
-        after_jobs_submitted=after_jobs_submitted,
-    )
+    finally:
+        progress.close()
 
 
 def run_smoke_test(
@@ -115,40 +128,48 @@ def run_smoke_test(
     if normalized_variables is None:
         normalized_variables = (0.5,) * get_variable_count(config.workspace)
     row = tuple(float(value) for value in normalized_variables)
-    if selected_mode == "distributed":
-        return _dispatch_distributed(
+    progress = _PopulationProgress(total=1, mode=selected_mode, phase="smoke")
+    progress.start()
+    try:
+        if selected_mode == "distributed":
+            return _dispatch_distributed(
+                config,
+                (row,),
+                timeout_sec=None,
+                env=env,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=None,
+                after_jobs_submitted=None,
+                progress=progress,
+            )
+        if selected_mode == "fast":
+            return _dispatch_fast(
+                config,
+                (row,),
+                timeout_sec=None,
+                env=env,
+                fast_max_workers=1,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=None,
+                progress=progress,
+            )
+        return _dispatch_local(
             config,
             (row,),
             timeout_sec=None,
+            python_executable=python_executable,
             env=env,
+            local_max_workers=1,
             run_id=run_id,
             optimization_index=optimization_index,
             generation_index=None,
             after_jobs_submitted=None,
+            progress=progress,
         )
-    if selected_mode == "fast":
-        return _dispatch_fast(
-            config,
-            (row,),
-            timeout_sec=None,
-            env=env,
-            fast_max_workers=1,
-            run_id=run_id,
-            optimization_index=optimization_index,
-            generation_index=None,
-        )
-    return _dispatch_local(
-        config,
-        (row,),
-        timeout_sec=None,
-        python_executable=python_executable,
-        env=env,
-        local_max_workers=1,
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=None,
-        after_jobs_submitted=None,
-    )
+    finally:
+        progress.close()
 
 
 def evaluate_generation(*args: object, **kwargs: object) -> tuple[tuple[float, ...], ...]:
@@ -169,35 +190,39 @@ def _dispatch_fast(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
+    progress: _PopulationProgress,
 ) -> tuple[tuple[float, ...], ...]:
     from .fast_runner import run_fast_population
 
     validate_fast_task(config.workspace)
-    rows = tuple(_population_row(values) for values in population)
+    rows = tuple(population)
     objective_width = get_objective_count(config.workspace)
     costs: list[tuple[float, ...] | None] = [None] * len(rows)
 
     def consume(index: int, result: JobResult) -> None:
-        if result.status != "done":
-            _best_effort_record_failure(config.workspace, result)
-            return
         try:
-            row_costs = record_result(config.workspace, result)
-            if row_costs is None:
-                raise RuntimeError("completed fast result returned no costs")
-            costs[index] = tuple(float(value) for value in row_costs)
-        except Exception as exc:  # noqa: BLE001 - isolate recording per candidate.
-            _write_recording_failure(
-                config,
-                rows[index],
-                index,
-                result,
-                exc,
-                engine="fast",
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-            )
+            if result.status != "done":
+                _best_effort_record_failure(config.workspace, result)
+                return
+            try:
+                row_costs = record_result(config.workspace, result)
+                if row_costs is None:
+                    raise RuntimeError("completed fast result returned no costs")
+                costs[index] = tuple(float(value) for value in row_costs)
+            except Exception as exc:  # noqa: BLE001 - isolate recording per candidate.
+                _write_recording_failure(
+                    config,
+                    rows[index],
+                    index,
+                    result,
+                    exc,
+                    engine="fast",
+                    run_id=run_id,
+                    optimization_index=optimization_index,
+                    generation_index=generation_index,
+                )
+        finally:
+            progress.complete(index, successful=costs[index] is not None)
 
     run_fast_population(
         config,
@@ -227,9 +252,10 @@ def _dispatch_local(
     optimization_index: int | None,
     generation_index: int | None,
     after_jobs_submitted: Callable[[], object] | None,
+    progress: _PopulationProgress,
 ) -> tuple[tuple[float, ...], ...]:
     validate_task_payload(config)
-    population_rows = tuple(_population_row(variables) for variables in population)
+    population_rows = tuple(population)
     objective_width = get_objective_count(config.workspace)
     costs_by_individual: list[tuple[float, ...] | None] = [None] * len(population_rows)
     worker_plan = plan_local_workers(
@@ -261,9 +287,10 @@ def _dispatch_local(
     outcomes: list[tuple[int, JobResult | None]] = []
     worker_count = worker_plan.worker_count
     if worker_count <= 1 or len(population_rows) <= 1:
-        outcomes = [
-            evaluate_one(index, row) for index, row in enumerate(population_rows)
-        ]
+        for index, row in enumerate(population_rows):
+            outcome = evaluate_one(index, row)
+            outcomes.append(outcome)
+            progress.complete(index, successful=outcome[1] is not None)
     else:
         with ThreadPoolExecutor(
             max_workers=worker_count,
@@ -276,18 +303,20 @@ def _dispatch_local(
             for future in as_completed(futures):
                 index, row = futures[future]
                 try:
-                    outcomes.append(future.result())
+                    outcome = future.result()
                 except Exception as exc:  # noqa: BLE001 - isolate one worker.
                     _progress(
                         "local worker failed for individual "
                         f"{index}: {type(exc).__name__}: {exc}"
                     )
-                    outcomes.append((index, None))
+                    outcome = (index, None)
+                outcomes.append(outcome)
+                progress.complete(index, successful=outcome[1] is not None)
 
     completed = tuple(
         (index, result) for index, result in outcomes if result is not None
     )
-    for index, costs in _record_completed_results(
+    recorded_costs = _record_completed_results(
         config,
         completed,
         population_rows,
@@ -295,8 +324,14 @@ def _dispatch_local(
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=generation_index,
-    ).items():
+    )
+    for index, costs in recorded_costs.items():
         costs_by_individual[index] = costs
+    for index in range(len(population_rows)):
+        progress.complete(
+            index,
+            successful=costs_by_individual[index] is not None,
+        )
     _run_after_jobs_submitted(after_jobs_submitted)
     return tuple(
         costs if costs is not None else _inf_costs(objective_width)
@@ -391,11 +426,12 @@ def _dispatch_distributed(
     optimization_index: int | None,
     generation_index: int | None,
     after_jobs_submitted: Callable[[], object] | None,
+    progress: _PopulationProgress,
 ) -> tuple[tuple[float, ...], ...]:
     from .condor_runner import run_condor_jobs
 
     validate_task_payload(config)
-    rows = tuple(_population_row(values) for values in population)
+    rows = tuple(population)
     objective_width = get_objective_count(config.workspace)
     costs: list[tuple[float, ...] | None] = [None] * len(rows)
     jobs: list[JobSpec] = []
@@ -429,9 +465,19 @@ def _dispatch_distributed(
                 generation_index=generation_index,
             )
             _best_effort_record_failure(config.workspace, failure)
+            progress.complete(index, successful=False)
             continue
         jobs.append(job)
         positions.append(index)
+
+    positions_by_job = {
+        job.name: position for position, job in zip(positions, jobs)
+    }
+
+    def consume_result(result: JobResult) -> None:
+        position = positions_by_job.get(result.job_name)
+        if position is not None:
+            progress.complete(position, successful=result.status == "done")
 
     try:
         results = run_condor_jobs(
@@ -441,6 +487,7 @@ def _dispatch_distributed(
             timeout_sec=timeout_sec,
             env=env,
             after_jobs_submitted=after_jobs_submitted,
+            on_result=consume_result,
         )
     except Exception as exc:  # noqa: BLE001 - preserve generation shape.
         results = tuple(
@@ -462,12 +509,13 @@ def _dispatch_distributed(
 
     completed: list[tuple[int, JobResult]] = []
     for position, result in zip(positions, results):
+        progress.complete(position, successful=result.status == "done")
         if result.status != "done":
             _best_effort_record_failure(config.workspace, result)
             continue
         completed.append((position, result))
 
-    for position, row_costs in _record_completed_results(
+    recorded_costs = _record_completed_results(
         config,
         tuple(completed),
         rows,
@@ -475,8 +523,11 @@ def _dispatch_distributed(
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=generation_index,
-    ).items():
+    )
+    for position, row_costs in recorded_costs.items():
         costs[position] = row_costs
+    for position in range(len(rows)):
+        progress.complete(position, successful=costs[position] is not None)
 
     return tuple(
         row if row is not None else _inf_costs(objective_width) for row in costs
@@ -703,13 +754,98 @@ def _now_text() -> str:
 
 
 def _progress(message: str) -> None:
-    if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {
+    if _progress_enabled():
+        print(f"[yadof] {message}", flush=True)
+
+
+class _PopulationProgress:
+    """Render terminal outcomes for one generation or smoke population."""
+
+    width = 28
+
+    def __init__(
+        self,
+        *,
+        total: int,
+        mode: str,
+        generation_index: int | None = None,
+        phase: str | None = None,
+    ) -> None:
+        self.total = max(0, int(total))
+        self.mode = str(mode)
+        self.phase = (
+            str(phase)
+            if phase is not None
+            else (
+                f"generation {int(generation_index)}"
+                if generation_index is not None
+                else "population"
+            )
+        )
+        self._enabled = _progress_enabled()
+        self._outcomes: dict[int, bool] = {}
+        self._last_state: tuple[int, int] | None = None
+        self._line_open = False
+
+    def start(self) -> None:
+        self._render()
+
+    def complete(self, index: int, *, successful: bool) -> None:
+        if not self._enabled:
+            return
+        index = int(index)
+        if not 0 <= index < self.total:
+            return
+        value = bool(successful)
+        if self._outcomes.get(index) is value:
+            return
+        self._outcomes[index] = value
+        self._render()
+
+    def close(self) -> None:
+        if self._line_open:
+            print(file=sys.stderr)
+            self._line_open = False
+
+    def _render(self) -> None:
+        if not self._enabled:
+            return
+        finished = len(self._outcomes)
+        successful = sum(self._outcomes.values())
+        state = (finished, successful)
+        if state == self._last_state:
+            return
+        self._last_state = state
+        errors = finished - successful
+        remaining = max(0, self.total - finished)
+        filled = (
+            self.width
+            if self.total == 0
+            else int(self.width * finished / self.total)
+        )
+        bar = "#" * filled + "." * (self.width - filled)
+        text = (
+            f"[yadof] {self.phase} ({self.mode}) [{bar}] "
+            f"{finished}/{self.total} successful={successful} "
+            f"errors={errors} remaining={remaining}"
+        )
+        if sys.stderr.isatty():
+            print(f"\r{text}", end="", file=sys.stderr, flush=True)
+            self._line_open = True
+            if remaining == 0:
+                print(file=sys.stderr)
+                self._line_open = False
+            return
+        print(text, file=sys.stderr, flush=True)
+
+
+def _progress_enabled() -> bool:
+    return str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {
         "1",
         "true",
         "yes",
         "on",
-    }:
-        print(f"[yadof] {message}", flush=True)
+    }
 
 
 __all__ = [

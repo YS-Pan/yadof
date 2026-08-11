@@ -489,16 +489,19 @@ def test_distributed_yadof_watchdog_times_out_even_when_remove_fails(
 
     monkeypatch.setattr(condor_runner, "submit_condor_job", fake_submit)
     monkeypatch.setattr(condor_runner, "remove_condor_job", failed_remove)
+    streamed_results = []
 
     results = condor_runner.run_condor_jobs(
         workspace,
         (job,),
         config=config,
         timeout_sec=30,
+        on_result=streamed_results.append,
     )
 
     assert removed == [77]
     assert len(results) == 1
+    assert streamed_results == [results[0]]
     assert results[0].status == "timeout"
     assert results[0].metadata["timed_out"] is True
     assert (
