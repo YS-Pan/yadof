@@ -75,6 +75,33 @@ def _record_worker(root_text: str, index: int) -> None:
     )
 
 
+def test_historical_results_report_optional_calculation_progress(
+    tmp_path: Path,
+) -> None:
+    root = _workspace(tmp_path / "progress")
+    recorded_api.record_job_result(
+        root,
+        "job_a",
+        (0.5,),
+        _write_rawdata(root / "jobs/job_a/rawData", 1.0),
+    )
+    events: list[tuple[int, int, str]] = []
+
+    rows = recorded_api.get_historical_results(
+        root,
+        progress=lambda completed, total, message: events.append(
+            (completed, total, message)
+        ),
+    )
+
+    assert len(rows) == 1
+    assert (0, 1, "normalizing variables") in events
+    assert (1, 1, "normalizing variables") in events
+    assert (0, 0, "loading rawData") in events
+    assert (0, 1, "calculating costs") in events
+    assert (1, 1, "calculating costs") in events
+
+
 def test_same_named_jobs_are_isolated_between_workspace_histories(tmp_path: Path) -> None:
     first = _workspace(tmp_path / "first")
     second = _workspace(tmp_path / "second")

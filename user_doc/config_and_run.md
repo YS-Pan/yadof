@@ -147,7 +147,14 @@ yadof task adapters
 yadof task copy-adapter test_com.py --workspace PATH
 ```
 
-The cost view shows objective history. The time view combines elapsed time, failure
+The cost view shows objective history. Its `avg. cost` series is the arithmetic
+mean of every objective and shares the left cost axis, preserving the same plotted
+height that the former objective-count-scaled combined-cost axis produced. The
+right axis shows hypervolume: the shaded band is bounded above by the cumulative
+hypervolume of all recorded generations and below by the current generation's
+hypervolume, using the fixed normalized-cost reference point `(1, ..., 1)`.
+The CLI displays cost-history calculation progress on stderr while leaving the
+summary on stdout. The time view combines elapsed time, failure
 rate, execute-machine colors, and error occurrences. Average-time curves and each
 machine's average use completed evaluations only; failed evaluations are excluded
 from time averages and remain visible through the failure/error encodings. Each

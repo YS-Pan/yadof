@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 import zipfile
 
 from ..job_template import api as job_template_api
@@ -72,16 +72,24 @@ def get_normalized_variables(
     storage: RecordedDataPaths,
     *,
     status: str | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
     rows: list[tuple[str, tuple[float, ...]]] = []
-    for job_name, raw_variables in get_raw_variables(
+    raw_rows = get_raw_variables(
         workspace, storage, status=status
-    ):
+    )
+    total = len(raw_rows)
+    if progress is not None:
+        progress(0, total, "normalizing variables")
+    for index, (job_name, raw_variables) in enumerate(raw_rows, start=1):
         try:
             normalized = job_template_api.normalize_variables(workspace, raw_variables)
         except BAD_VARIABLE_EXCEPTIONS:
-            continue
-        rows.append((job_name, normalized))
+            pass
+        else:
+            rows.append((job_name, normalized))
+        if progress is not None:
+            progress(index, total, "normalizing variables")
     return tuple(rows)
 
 
@@ -155,7 +163,10 @@ def calculate_costs(
     *,
     job_names: Sequence[str] | None = None,
     status: str | None = "completed",
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
+    if progress is not None:
+        progress(0, 0, "loading rawData")
     samples = get_rawdata_samples(
         storage, job_names=job_names, as_paths=False, status=status
     )
@@ -163,19 +174,24 @@ def calculate_costs(
         get_raw_variables(workspace, storage, status=status)
     )
     rows: list[tuple[str, tuple[float, ...]]] = []
-    for job_name, rawdata in samples:
-        if job_name not in raw_variables_by_job:
-            continue
+    total = len(samples)
+    if progress is not None:
+        progress(0, total, "calculating costs")
+    for index, (job_name, rawdata) in enumerate(samples, start=1):
         try:
-            costs = job_template_api.calculate_cost(
-                workspace,
-                (rawdata,),
-                (raw_variables_by_job[job_name],),
-            )
+            if job_name in raw_variables_by_job:
+                costs = job_template_api.calculate_cost(
+                    workspace,
+                    (rawdata,),
+                    (raw_variables_by_job[job_name],),
+                )
+                if costs:
+                    rows.append((job_name, costs[0]))
         except BAD_RAWDATA_EXCEPTIONS:
-            continue
-        if costs:
-            rows.append((job_name, costs[0]))
+            pass
+        finally:
+            if progress is not None:
+                progress(index, total, "calculating costs")
     return tuple(rows)
 
 
@@ -184,11 +200,24 @@ def get_historical_results(
     storage: RecordedDataPaths,
     *,
     status: str | None = "completed",
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[tuple[str, tuple[float, ...], tuple[float, ...]], ...]:
     normalized_by_job = dict(
-        get_normalized_variables(workspace, storage, status=status)
+        get_normalized_variables(
+            workspace,
+            storage,
+            status=status,
+            progress=progress,
+        )
     )
-    costs_by_job = dict(calculate_costs(workspace, storage, status=status))
+    costs_by_job = dict(
+        calculate_costs(
+            workspace,
+            storage,
+            status=status,
+            progress=progress,
+        )
+    )
     return tuple(
         (job_name, normalized_by_job[job_name], costs_by_job[job_name])
         for job_name in normalized_by_job

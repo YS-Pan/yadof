@@ -5,7 +5,7 @@ from collections import Counter
 from collections.abc import Sequence as SequenceABC
 from datetime import datetime
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from ..config import load_config
 from ..job_template import api as job_template_api
@@ -17,7 +17,9 @@ WorkspaceLike = WorkspaceContext | str | Path
 MAX_VISIBLE_PARETO = 10
 TREND_LINE_ALPHA = 0.25
 TREND_LINE_WIDTH = 2.0
-COMBINED_TREND_LINE_WIDTH = 4.0
+AVG_TREND_LINE_WIDTH = 4.0
+HV_LINE_COLOR = "#0066CC"
+HV_SHADE_ALPHA = 0.2
 EVENT_LINE_ALPHA = TREND_LINE_ALPHA
 EVENT_LINE_WIDTH = 1.2
 EVENT_DASH_LENGTH = 4.0
@@ -174,6 +176,7 @@ def build_rows(
     status: str | None = "completed",
     recorded_api=recorded_data_api,
     issues: list[str] | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> list[dict[str, object]]:
     """Build display rows from recorded_data using dynamic cost calculation."""
 
@@ -182,7 +185,11 @@ def build_rows(
         raise ViewCostError("recorded_data.api does not provide get_historical_results()")
 
     try:
-        history = get_history(workspace, status=status)
+        history = get_history(
+            workspace,
+            status=status,
+            **({"progress": progress} if progress is not None else {}),
+        )
     except ViewCostError:
         raise
     except Exception as exc:  # noqa: BLE001 - keep the CLI from printing raw internals.
@@ -218,13 +225,13 @@ def build_rows(
             )
             continue
         try:
-            combined_cost = math.fsum(costs)
+            average_cost = math.fsum(costs) / len(costs)
         except OverflowError:
-            combined_cost = math.inf
-        if not math.isfinite(combined_cost):
+            average_cost = math.inf
+        if not math.isfinite(average_cost):
             _record_issue(
                 issues,
-                f"history row {row_number} for job {job_name!r} was skipped: combined cost is non-finite",
+                f"history row {row_number} for job {job_name!r} was skipped: average cost is non-finite",
             )
             continue
         candidates.append(
@@ -233,7 +240,7 @@ def build_rows(
                 "job_name": job_name,
                 "variables": variables,
                 "costs": costs,
-                "combined_cost": combined_cost,
+                "average_cost": average_cost,
             }
         )
 
@@ -328,13 +335,15 @@ def gaussian_kernel_smoother(x_data, y_data, fine_x, sigma):
     return smoothed
 
 
-def _visible_pareto_mask(pareto_mask, combined):
+def _visible_pareto_mask(pareto_mask, display_values):
     import numpy as np
 
     if int(np.sum(pareto_mask)) <= MAX_VISIBLE_PARETO:
         return pareto_mask
     out = np.zeros_like(pareto_mask)
-    keep = np.where(pareto_mask)[0][np.argsort(combined[pareto_mask])[:MAX_VISIBLE_PARETO]]
+    keep = np.where(pareto_mask)[0][
+        np.argsort(display_values[pareto_mask])[:MAX_VISIBLE_PARETO]
+    ]
     out[keep] = True
     return out
 
@@ -364,14 +373,11 @@ def _row_cell_edges(rows: Sequence[dict[str, object]]) -> list[float]:
     ]
 
 
-def _generation_regions(
+def _generation_groups(
     rows: Sequence[dict[str, object]],
-) -> list[tuple[int, float, float]]:
-    edges = _row_cell_edges(rows)
-    regions: list[tuple[int, float, float]] = []
+) -> list[dict[str, object]]:
+    groups: list[dict[str, object]] = []
     active_key: tuple[object, int] | None = None
-    active_generation: int | None = None
-    start_index = 0
 
     for index, row in enumerate(rows):
         generation = _metadata_int(row, "generation_index")
@@ -381,18 +387,41 @@ def _generation_regions(
         key = None if generation is None else (run_identity, generation)
 
         if key == active_key:
+            if key is not None:
+                groups[-1]["last_position"] = index
+                groups[-1]["last_x"] = float(row["row_number"])
+                groups[-1]["rows"].append(row)  # type: ignore[union-attr]
             continue
-        if active_key is not None and active_generation is not None:
-            regions.append(
-                (active_generation, edges[start_index], edges[index])
-            )
         active_key = key
-        active_generation = generation
-        start_index = index
+        if key is None:
+            continue
+        groups.append(
+            {
+                "generation_index": generation,
+                "first_position": index,
+                "last_position": index,
+                "first_x": float(row["row_number"]),
+                "last_x": float(row["row_number"]),
+                "rows": [row],
+            }
+        )
+    return groups
 
-    if active_key is not None and active_generation is not None:
+
+def _generation_regions(
+    rows: Sequence[dict[str, object]],
+) -> list[tuple[int, float, float]]:
+    edges = _row_cell_edges(rows)
+    regions: list[tuple[int, float, float]] = []
+    for group in _generation_groups(rows):
+        first_position = int(group["first_position"])
+        last_position = int(group["last_position"])
         regions.append(
-            (active_generation, edges[start_index], edges[len(rows)])
+            (
+                int(group["generation_index"]),
+                edges[first_position],
+                edges[last_position + 1],
+            )
         )
     return regions
 
@@ -445,30 +474,83 @@ def _scatter_alpha(row_count: int, *, threshold: int = 1000) -> float:
     return max(MIN_SCATTER_ALPHA, SCATTER_ALPHA * math.sqrt(float(threshold) / float(row_count)))
 
 
-def _combined_axis_ylim(
-    left_ylim: tuple[float, float], objective_count: int
-) -> tuple[float, float]:
-    objective_count = max(1, int(objective_count))
-    left_min, left_max = (float(left_ylim[0]), float(left_ylim[1]))
-    if not math.isfinite(left_min) or not math.isfinite(left_max) or left_max <= left_min:
-        return 0.0, float(objective_count)
-    return left_min * objective_count, left_max * objective_count
+def hypervolume_series(
+    rows: Sequence[dict[str, object]],
+    *,
+    reference_point: Sequence[float] | None = None,
+):
+    """Return all-individual and current-generation HV at generation endpoints."""
+
+    try:
+        import numpy as np
+        from pymoo.indicators.hv import HV
+    except ImportError as exc:
+        raise ViewCostError(
+            "numpy and pymoo are required to calculate hypervolume"
+        ) from exc
+
+    if not rows:
+        raise ViewCostError("Cannot calculate hypervolume from empty rows")
+
+    groups = _generation_groups(rows)
+    if not groups:
+        groups = [
+            {
+                "last_x": float(rows[-1]["row_number"]),
+                "rows": list(rows),
+            }
+        ]
+
+    all_costs = np.asarray([row["costs"] for row in rows], dtype=float)
+    objective_count = int(all_costs.shape[1])
+    if reference_point is None:
+        reference = (1.0,) * objective_count
+    else:
+        reference = tuple(float(value) for value in reference_point)
+        if len(reference) != objective_count:
+            raise ViewCostError(
+                f"hypervolume reference point has {len(reference)} values; "
+                f"expected {objective_count}"
+            )
+        if not all(math.isfinite(value) for value in reference):
+            raise ViewCostError(
+                "hypervolume reference point contains non-finite values"
+            )
+
+    indicator = HV(ref_point=np.asarray(reference, dtype=float))
+    cumulative_rows: list[dict[str, object]] = []
+    x_values: list[float] = []
+    all_values: list[float] = []
+    generation_values: list[float] = []
+
+    def calculate(group_rows: Sequence[dict[str, object]]) -> float:
+        matrix = np.asarray([row["costs"] for row in group_rows], dtype=float)
+        valid = matrix[np.all((matrix >= 0.0) & (matrix <= 1.0), axis=1)]
+        return float(indicator.do(valid)) if len(valid) else 0.0
+
+    for group in groups:
+        generation_rows = group["rows"]
+        cumulative_rows.extend(generation_rows)  # type: ignore[arg-type]
+        x_values.append(float(group["last_x"]))
+        generation_values.append(calculate(generation_rows))  # type: ignore[arg-type]
+        all_values.append(calculate(cumulative_rows))
+
+    return (
+        np.asarray(x_values, dtype=float),
+        np.asarray(all_values, dtype=float),
+        np.asarray(generation_values, dtype=float),
+        reference,
+    )
 
 
-def _aligned_combined_ticks(
-    left_ticks: Sequence[float],
-    left_ylim: tuple[float, float],
-    objective_count: int,
-) -> tuple[list[float], list[float]]:
-    left_min, left_max = sorted((float(left_ylim[0]), float(left_ylim[1])))
-    tolerance = max(1.0, abs(left_min), abs(left_max)) * 1e-12
-    visible_left = [
-        float(tick)
-        for tick in left_ticks
-        if left_min - tolerance <= float(tick) <= left_max + tolerance
-    ]
-    multiplier = max(1, int(objective_count))
-    return visible_left, [tick * multiplier for tick in visible_left]
+def _hypervolume_axis_ylim(*series) -> tuple[float, float]:
+    import numpy as np
+
+    values = np.concatenate([np.asarray(item, dtype=float) for item in series])
+    finite = values[np.isfinite(values)]
+    if len(finite) == 0 or float(np.max(finite)) <= 0.0:
+        return 0.0, 1.0
+    return 0.0, float(np.max(finite)) * 1.05
 
 
 def _add_split_legends(ax, axes: Sequence[object]) -> None:
@@ -548,11 +630,11 @@ def summarize_rows(
 
     names = objective_names(workspace, rows, objective_api)
     cost_matrix = np.asarray([row["costs"] for row in rows], dtype=float)
-    combined = np.asarray([row["combined_cost"] for row in rows], dtype=float)
+    average = np.asarray([row["average_cost"] for row in rows], dtype=float)
     raw_pareto = is_pareto_efficient(cost_matrix)
-    pareto_mask = _visible_pareto_mask(raw_pareto, combined)
+    pareto_mask = _visible_pareto_mask(raw_pareto, average)
     if int(np.sum(pareto_mask)) > max_pareto:
-        pareto_mask = _visible_pareto_mask(raw_pareto, combined)
+        pareto_mask = _visible_pareto_mask(raw_pareto, average)
 
     lines = [
         f"rows: {len(rows)}",
@@ -570,12 +652,12 @@ def summarize_rows(
         f"Pareto front shown: {int(np.sum(pareto_mask))} of {int(np.sum(raw_pareto))}",
         "Pareto front:",
     ]
-    headers = ["row", *[_ascii(name) for name in names], "combined", "job_name"]
+    headers = ["row", *[_ascii(name) for name in names], "avg. cost", "job_name"]
     table_rows = [
         [
             str(int(rows[idx]["row_number"])),
             *(f"{float(value):.4f}" for value in cost_matrix[idx]),
-            f"{float(combined[idx]):.4f}",
+            f"{float(average[idx]):.4f}",
             _ascii(rows[idx]["job_name"]),
         ]
         for idx in np.where(pareto_mask)[0]
@@ -623,13 +705,14 @@ def plot_rows(
     names = objective_names(workspace, rows, objective_api)
     x = np.asarray([row["row_number"] for row in rows], dtype=float)
     cost_matrix = np.asarray([row["costs"] for row in rows], dtype=float)
-    combined = np.asarray([row["combined_cost"] for row in rows], dtype=float)
+    average = np.asarray([row["average_cost"] for row in rows], dtype=float)
     raw_pareto = is_pareto_efficient(cost_matrix)
-    pareto_mask = _visible_pareto_mask(raw_pareto, combined)
+    pareto_mask = _visible_pareto_mask(raw_pareto, average)
     optimization_start_rows = _optimization_start_rows(rows)
     generation_regions = _generation_regions(rows)
     hash_change_rows = _hash_change_rows(rows)
     x_edges = _row_cell_edges(rows)
+    hv_x, all_hv, generation_hv, _hv_reference = hypervolume_series(rows)
 
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["font.size"] = PLOT_FONT_SIZE
@@ -716,8 +799,60 @@ def plot_rows(
                 zorder=3,
             )
 
+    if len(x) == 1:
+        fine_x = x.copy()
+        local_avg = average.copy()
+    else:
+        fine_x = np.linspace(float(np.min(x)), float(np.max(x)), 600)
+        avg_spacing = float(np.mean(np.diff(x)))
+        sigma = max(1e-12, max(1, int(0.03 * len(x))) * avg_spacing / 3.0)
+        local_avg = gaussian_kernel_smoother(x, average, fine_x, sigma)
+
+    ax1.plot(
+        fine_x,
+        local_avg,
+        color="black",
+        linewidth=AVG_TREND_LINE_WIDTH,
+        alpha=TREND_LINE_ALPHA,
+        linestyle="-",
+        marker=None,
+        zorder=1,
+    )
+    ax1.scatter(
+        x[~pareto_mask],
+        average[~pareto_mask],
+        color="black",
+        label=None if np.any(pareto_mask) else "avg. cost",
+        marker="o",
+        alpha=alpha,
+        s=markersize**2,
+        linewidths=SCATTER_EDGE_LINE_WIDTH,
+    )
+    if np.any(pareto_mask):
+        ax1.scatter(
+            x[pareto_mask],
+            average[pareto_mask],
+            facecolors="white",
+            edgecolors="white",
+            linewidths=0,
+            marker="o",
+            s=(math.sqrt(fixed_markersize_pareto) * border_size_multiplier) ** 2,
+            zorder=2,
+        )
+        ax1.scatter(
+            x[pareto_mask],
+            average[pareto_mask],
+            label="avg. cost",
+            facecolors="none",
+            edgecolors="black",
+            linewidths=PARETO_EDGE_LINE_WIDTH,
+            marker="o",
+            s=fixed_markersize_pareto,
+            zorder=3,
+        )
+
     ax1.set_xlabel("Evaluation index", fontsize=PLOT_FONT_SIZE)
-    ax1.set_ylabel("Individual costs", fontsize=PLOT_FONT_SIZE)
+    ax1.set_ylabel("Costs", fontsize=PLOT_FONT_SIZE)
     ax1.set_xlim(float(x_edges[0]), float(x_edges[-1]))
     y_max = max(1.0, float(np.max(cost_matrix)) * 1.05)
     y_min = min(0.0, float(np.min(cost_matrix)) * 1.05)
@@ -736,72 +871,49 @@ def plot_rows(
     )
 
     ax2 = ax1.twinx()
-    if len(x) == 1:
-        fine_x = x.copy()
-        local_avg = combined.copy()
-    else:
-        fine_x = np.linspace(float(np.min(x)), float(np.max(x)), 600)
-        avg_spacing = float(np.mean(np.diff(x)))
-        sigma = max(1e-12, max(1, int(0.03 * len(x))) * avg_spacing / 3.0)
-        local_avg = gaussian_kernel_smoother(x, combined, fine_x, sigma)
-
-    ax2.plot(
-        fine_x,
-        local_avg,
-        color="black",
-        linewidth=COMBINED_TREND_LINE_WIDTH,
-        alpha=TREND_LINE_ALPHA,
-        linestyle="-",
-        marker=None,
+    ax2.patch.set_visible(False)
+    ax2.fill_between(
+        hv_x,
+        generation_hv,
+        all_hv,
+        step="post",
+        facecolor=HV_LINE_COLOR,
+        edgecolor="none",
+        alpha=HV_SHADE_ALPHA,
+        zorder=0.8,
+    )
+    ax2.step(
+        hv_x,
+        all_hv,
+        where="post",
+        color=HV_LINE_COLOR,
+        linewidth=TREND_LINE_WIDTH,
+        alpha=0.7,
+        label="HV (all individuals)",
         zorder=1,
     )
-    ax2.scatter(
-        x[~pareto_mask],
-        combined[~pareto_mask],
-        color="black",
-        label=None if np.any(pareto_mask) else "Combined cost",
-        marker="o",
-        alpha=alpha,
-        s=markersize**2,
-        linewidths=SCATTER_EDGE_LINE_WIDTH,
+    ax2.step(
+        hv_x,
+        generation_hv,
+        where="post",
+        color=HV_LINE_COLOR,
+        linewidth=TREND_LINE_WIDTH,
+        alpha=0.7,
+        linestyle="--",
+        label="HV (current generation)",
+        zorder=1,
     )
-    if np.any(pareto_mask):
-        ax2.scatter(
-            x[pareto_mask],
-            combined[pareto_mask],
-            facecolors="white",
-            edgecolors="white",
-            linewidths=0,
-            marker="o",
-            s=(math.sqrt(fixed_markersize_pareto) * border_size_multiplier) ** 2,
-            zorder=2,
-        )
-        ax2.scatter(
-            x[pareto_mask],
-            combined[pareto_mask],
-            label="Combined cost",
-            facecolors="none",
-            edgecolors="black",
-            linewidths=PARETO_EDGE_LINE_WIDTH,
-            marker="o",
-            s=fixed_markersize_pareto,
-            zorder=3,
-        )
-
-    ax2.set_ylabel("Combined cost", fontsize=PLOT_FONT_SIZE)
-    ax2.set_ylim(*_combined_axis_ylim(ax1.get_ylim(), len(names)))
-    left_ticks, right_ticks = _aligned_combined_ticks(
-        ax1.get_yticks(), ax1.get_ylim(), len(names)
-    )
-    ax1.set_yticks(left_ticks)
-    ax2.set_yticks(right_ticks)
+    ax2.set_ylabel("Hypervolume (HV)", color=HV_LINE_COLOR, fontsize=PLOT_FONT_SIZE)
+    ax2.set_ylim(*_hypervolume_axis_ylim(all_hv, generation_hv))
     ax2.tick_params(
-        axis="both",
+        axis="y",
+        colors=HV_LINE_COLOR,
         labelsize=PLOT_TICK_FONT_SIZE,
         width=AXIS_LINE_WIDTH,
     )
+    ax2.spines["right"].set_color(HV_LINE_COLOR)
     ax1.set_title(
-        "Optimization costs from recorded_data",
+        "Optimization costs and hypervolume from recorded_data",
         fontsize=PLOT_TITLE_FONT_SIZE,
     )
 
@@ -817,12 +929,18 @@ def view_cost(
     *,
     status: str | None = "completed",
     output_path: str | Path | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[str, Path | None]:
     """Return a dynamic-cost summary and optionally render a PNG."""
 
     config = load_config(workspace)
     issues: list[str] = []
-    rows = build_rows(config.workspace, status=status, issues=issues)
+    rows = build_rows(
+        config.workspace,
+        status=status,
+        issues=issues,
+        progress=progress,
+    )
     summary = summarize_rows(config.workspace, rows, issues=issues)
     output = (
         None
@@ -835,6 +953,7 @@ def view_cost(
 __all__ = [
     "ViewCostError",
     "build_rows",
+    "hypervolume_series",
     "objective_names",
     "plot_rows",
     "summarize_rows",

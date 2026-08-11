@@ -158,16 +158,70 @@ def _run_view(
     *,
     output_path: str | Path | None,
     status: str | None = None,
+    progress=None,
 ) -> tuple[str, Path | None]:
     if view_kind == "cost":
         from ..tools.view_cost import view_cost
 
-        return view_cost(workspace, status=status, output_path=output_path)
+        return view_cost(
+            workspace,
+            status=status,
+            output_path=output_path,
+            progress=progress,
+        )
     if view_kind == "time":
         from ..tools.view_time import view_time
 
         return view_time(workspace, status=status, output_path=output_path)
     raise ValueError(f"unsupported view kind: {view_kind}")
+
+
+class _CostViewProgress:
+    """Render a bounded terminal progress bar without adding a CLI dependency."""
+
+    width = 28
+
+    def __init__(self) -> None:
+        self._last_key: tuple[str, int] | None = None
+        self._line_open = False
+
+    def __call__(self, completed: int, total: int, message: str) -> None:
+        completed = max(0, int(completed))
+        total = max(0, int(total))
+        if total:
+            completed = min(completed, total)
+        percent = 0 if total == 0 else min(100, int(100 * completed / total))
+        reporting_step = 1 if sys.stderr.isatty() else 10
+        if (
+            total > 0
+            and completed not in (0, total)
+            and percent % reporting_step
+        ):
+            return
+        key = (str(message), percent)
+        if key == self._last_key:
+            return
+        self._last_key = key
+
+        if self._line_open and not sys.stderr.isatty():
+            self._line_open = False
+        filled = 0 if total == 0 else int(self.width * completed / total)
+        bar = "#" * filled + "." * (self.width - filled)
+        count = "?" if total == 0 else f"{completed}/{total}"
+        text = f"view cost [{bar}] {count} {message}"
+        if sys.stderr.isatty() and (total == 0 or completed < total):
+            print(f"\r{text}", end="", file=sys.stderr, flush=True)
+            self._line_open = True
+        else:
+            if self._line_open:
+                print(file=sys.stderr)
+                self._line_open = False
+            print(text, file=sys.stderr, flush=True)
+
+    def close(self) -> None:
+        if self._line_open:
+            print(file=sys.stderr)
+            self._line_open = False
 
 
 def _write_view_result(
@@ -188,16 +242,21 @@ def _view_command(args: argparse.Namespace) -> int:
     )
     status_value = getattr(args, "status", None)
     status = None if status_value == "all" else status_value
+    progress = _CostViewProgress() if args.view_kind == "cost" else None
     try:
         summary, output = _run_view(
             args.view_kind,
             args.workspace,
             status=status,
             output_path=output_path,
+            progress=progress,
         )
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         print(f"yadof: error: could not view {args.view_kind}: {exc}", file=sys.stderr)
         return 1
+    finally:
+        if progress is not None:
+            progress.close()
     _write_view_result(args.view_kind, summary, output)
     return 0
 
@@ -214,12 +273,14 @@ def _view_all_command(args: argparse.Namespace) -> int:
             if args.summary_only
             else _default_view_output_name(view_kind, now=now)
         )
+        progress = _CostViewProgress() if view_kind == "cost" else None
         try:
             summary, output = _run_view(
                 view_kind,
                 args.workspace,
                 status=status,
                 output_path=output_path,
+                progress=progress,
             )
         except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
             failed = True
@@ -228,6 +289,9 @@ def _view_all_command(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             continue
+        finally:
+            if progress is not None:
+                progress.close()
         _write_view_result(view_kind, summary, output, heading=True)
     return 1 if failed else 0
 

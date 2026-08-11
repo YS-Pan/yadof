@@ -60,12 +60,16 @@
 ## Durable evidence and optimization
 - `recorded_data`: workspace-local JSONL/zip evidence, file or named-memory source
   normalization, no-pickle NPZ encoding, locks, atomic generation-batch recording,
-  diagnostics, and dynamically interpreted history.
+  diagnostics, and dynamically interpreted history. Historical-result queries may
+  report optional normalization/rawData/cost progress without changing their
+  returned rows.
 - `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
-- `tools`, `_resources`: cost view; integrated time/failure/machine/error view;
+- `tools`, `_resources`: cost view with left-axis objective/average costs and a
+  right-axis all-individual versus current-generation hypervolume band; integrated
+  time/failure/machine/error view;
   grouped `view all` orchestration; history/task utilities; and read-only
   adapter/template/doc resources. The cost view isolates and reports unusable
   history rows, omits unavailable optional annotations, and continues whenever at

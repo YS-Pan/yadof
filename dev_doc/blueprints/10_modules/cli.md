@@ -51,7 +51,9 @@ workspace's configured tool-output directory. `--output` selects another path an
 tools with one workspace and one timestamp, prints labeled results for every
 successful tool, continues attempting the later tool if the first fails, and
 returns failure if either tool failed. The corresponding Python tool APIs retain
-`output_path=None` as summary-only behavior.
+`output_path=None` as summary-only behavior. Cost-history normalization, rawData
+loading, and dynamic cost calculation automatically render a dependency-free,
+bounded progress bar on stderr; summaries and saved-path messages remain on stdout.
 
 `view surrogate` is a separate optional kind. Its bare/default `gui` mode
 optionally receives one workspace and loads `yadof.tools.surrogate_viewer.app`

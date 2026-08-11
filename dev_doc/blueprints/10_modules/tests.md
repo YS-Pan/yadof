@@ -36,6 +36,8 @@ license, machine identity, or credential.
 - CLI/docs, integrated cost/time views including grouped `view all`,
   the 50-generation run default, flushed pre-execution standalone-smoke feedback,
   cost-view isolation/reporting for unusable history rows and optional annotations,
+  left-axis average cost, all-individual/current-generation hypervolume boundaries,
+  shaded hypervolume plotting, and stderr calculation progress,
   execute-machine/error encodings, worker-over-Condor machine precedence,
   active/held/removed/terminated historical timeout log fallback,
   evicted/never-executed timeout behavior,

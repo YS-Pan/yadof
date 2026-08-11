@@ -34,7 +34,9 @@ Public queries list/filter records, recover raw variables, load archive members,
 derive current normalized variables and costs through `job_template`, and assemble
 training bundles. Invalid, legacy, missing, or corrupt rawData is skipped with
 diagnostics rather than poisoning all history. Objective changes are reflected on
-the next query because costs are recalculated.
+the next query because costs are recalculated. Historical-result queries accept an
+optional `(completed, total, message)` callback covering normalization, rawData
+loading, and dynamic cost calculation; omitting it preserves the normal quiet API.
 
 ## Invariants
 

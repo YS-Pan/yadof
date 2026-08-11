@@ -11,7 +11,7 @@ confirmed task edits. Pool/system administration remains under `admin_tool/`.
 
 Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected
-records/objectives. It treats malformed, non-numeric, non-finite, empty, combined-
+records/objectives. It treats malformed, non-numeric, non-finite, empty, average-
 overflow, and minority-width cost-history rows as isolated display failures,
 reports bounded issue details in the summary, and plots the remaining rows at their
 original evaluation indices. Optional metadata annotation failures do not block
@@ -35,6 +35,13 @@ the error type. The failure-rate trend is highly transparent.
 
 Individual CLI view commands write timestamped PNGs by default, accept `--output`
 to override the destination, and accept `--summary-only` to suppress plotting.
+Cost CLI calculation always renders bounded normalization/rawData/cost progress on
+stderr; the final summary remains on stdout. The cost PNG places the arithmetic
+`avg. cost` on the left objective axis. This has the same vertical position as the
+former summed cost on an objective-count-scaled right axis. Its right axis instead
+shows a shaded hypervolume band whose upper boundary accumulates all generations
+and whose lower boundary uses only the current generation, both against the fixed
+normalized reference `(1, ..., 1)`.
 `view all` invokes cost and time with their normal defaults, prints two labeled
 summaries, and uses one timestamp for the two default image names. The
 views do not mutate durable evidence. History clear requires explicit confirmation,
@@ -77,9 +84,9 @@ values are:
 | Medium text | `PLOT_FONT_SIZE` | `10` pt |
 | Title / tick / legend / generation text | explicit `fontsize` constants | `11 / 8 / 7 / 8` pt |
 | Axis / trend / event / grid width | explicit width constants | `0.8 / 2.0 / 1.2 / 0.4` pt |
-| Combined-cost average width | `COMBINED_TREND_LINE_WIDTH` in viewCost | `4.0` pt |
+| Average-cost trend width | `AVG_TREND_LINE_WIDTH` in viewCost | `4.0` pt |
 | Average cost/time trend opacity | `TREND_LINE_ALPHA` | `0.25` |
-| Ordinary Combined-cost and viewTime marker diameter / ring width | `SCATTER_MARKER_SIZE` / `SCATTER_EDGE_LINE_WIDTH` | `3.0` pt / `0.4` pt |
+| Ordinary avg.-cost and viewTime marker diameter / ring width | `SCATTER_MARKER_SIZE` / `SCATTER_EDGE_LINE_WIDTH` | `3.0` pt / `0.4` pt |
 | Pareto emphasis in viewCost | marker area / ring width | `60.0` pt² / `0.75` pt |
 | Generation background | `axvspan(..., facecolor="black", alpha=0.1)` | odd generations only |
 | Optimization-start dashes | `linestyle=(0, (4, 4))` | butt dash caps |

@@ -120,10 +120,13 @@ def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):
     assert cli_main(
         ["view", "cost", "--workspace", str(workspace)]
     ) == 0
-    cost_output = capsys.readouterr().out
+    cost_capture = capsys.readouterr()
+    cost_output = cost_capture.out
     assert "rows: 1" in cost_output
     assert "objectives: cost_response" in cost_output
     assert "saved:" in cost_output
+    assert "view cost [" in cost_capture.err
+    assert "calculating costs" in cost_capture.err
     cost_plots = tuple(
         (workspace / ".yadof" / "tool_output").glob("cost_*.png")
     )
@@ -224,7 +227,8 @@ def test_view_all_prints_both_results_and_creates_both_images(capsys, tmp_path):
     ) == 0
 
     output = capsys.readouterr()
-    assert output.err == ""
+    assert "view cost [" in output.err
+    assert "calculating costs" in output.err
     assert "=== cost ===" in output.out
     assert "=== time ===" in output.out
     assert "=== error ===" not in output.out

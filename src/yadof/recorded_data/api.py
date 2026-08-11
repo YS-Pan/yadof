@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from ..workspace import WorkspaceContext, resolve_workspace
 from . import query as _query
@@ -163,10 +163,18 @@ def calculate_costs(
 
 
 def get_historical_results(
-    workspace: WorkspaceLike, *, status: str | None = "completed"
+    workspace: WorkspaceLike,
+    *,
+    status: str | None = "completed",
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[tuple[str, tuple[float, ...], tuple[float, ...]], ...]:
     context, storage = _context_and_storage(workspace)
-    return _query.get_historical_results(context, storage, status=status)
+    return _query.get_historical_results(
+        context,
+        storage,
+        status=status,
+        progress=progress,
+    )
 
 
 def get_optimization_history(

@@ -14,9 +14,16 @@ class FakeRecordedDataApi:
         self.opt_metadata = opt_metadata
         self.records = records
         self.history_calls = []
+        self.progress_calls = []
 
-    def get_historical_results(self, _workspace, *, status="completed"):
+    def get_historical_results(
+        self, _workspace, *, status="completed", progress=None
+    ):
         self.history_calls.append(status)
+        if progress is not None:
+            progress(0, len(self.history), "calculating costs")
+            progress(len(self.history), len(self.history), "calculating costs")
+            self.progress_calls.append(progress)
         return self.history
 
     def list_records(self, _workspace):
@@ -75,6 +82,7 @@ def test_build_rows_uses_recorded_data_history():
     )
     assert "rows: 3" in summary
     assert "objectives: objective_1, objective_2" in summary
+    assert "avg. cost" in summary
     assert "Pareto front:" in summary
 
 
@@ -119,23 +127,51 @@ def test_build_rows_prefers_individual_context_over_opt_metadata():
     assert rows[0]["job_static_hash"] == "hash_a"
 
 
-def test_plot_scaling_helpers_keep_dense_points_readable_and_axes_aligned():
+def test_average_cost_keeps_old_combined_cost_vertical_position():
     assert view_cost._scatter_alpha(1000) == pytest.approx(0.6)
     assert view_cost._scatter_alpha(64000) == pytest.approx(0.15)
 
-    left_ylim = (0.0, 1.05)
-    right_ylim = view_cost._combined_axis_ylim(left_ylim, objective_count=2)
-    left_position = (1.0 - left_ylim[0]) / (left_ylim[1] - left_ylim[0])
-    right_position = (2.0 - right_ylim[0]) / (right_ylim[1] - right_ylim[0])
-    left_ticks, right_ticks = view_cost._aligned_combined_ticks(
-        (-0.2, 0.0, 0.5, 1.0, 1.2),
-        left_ylim,
-        objective_count=2,
+    rows = view_cost.build_rows(
+        object(),
+        recorded_api=FakeRecordedDataApi(
+            (("job_a", (0.1,), (0.4, 0.8)),)
+        ),
     )
 
-    assert right_position == pytest.approx(left_position)
-    assert left_ticks == pytest.approx([0.0, 0.5, 1.0])
-    assert right_ticks == pytest.approx([0.0, 1.0, 2.0])
+    combined_cost = 1.2
+    old_right_axis_position = combined_cost / 2.0
+    assert rows[0]["average_cost"] == pytest.approx(old_right_axis_position)
+
+
+def test_hypervolume_series_has_all_and_current_generation_boundaries():
+    rows = [
+        {
+            "row_number": 1,
+            "optimization_run_id": "run_a",
+            "generation_index": 0,
+            "costs": (0.5, 0.5),
+        },
+        {
+            "row_number": 2,
+            "optimization_run_id": "run_a",
+            "generation_index": 1,
+            "costs": (0.2, 0.8),
+        },
+        {
+            "row_number": 3,
+            "optimization_run_id": "run_a",
+            "generation_index": 1,
+            "costs": (1.1, 0.1),
+        },
+    ]
+
+    x, all_hv, generation_hv, reference = view_cost.hypervolume_series(rows)
+
+    assert x == pytest.approx([1.0, 3.0])
+    assert all_hv == pytest.approx([0.25, 0.31])
+    assert generation_hv == pytest.approx([0.25, 0.16])
+    assert reference == pytest.approx((1.0, 1.0))
+    assert all(all_hv >= generation_hv)
 
 
 def test_generation_regions_restart_per_run_and_skip_rows_without_generation():
@@ -223,11 +259,11 @@ def test_build_rows_skips_unplottable_history_rows_and_reports_them():
 
     assert [row["job_name"] for row in rows] == ["good_a", "good_b"]
     assert [row["row_number"] for row in rows] == [1, 7]
-    assert [row["combined_cost"] for row in rows] == pytest.approx([1.3, 0.6])
+    assert [row["average_cost"] for row in rows] == pytest.approx([0.65, 0.3])
     assert len(issues) == 6
     assert any("bad_cost" in issue and "non-finite" in issue for issue in issues)
     assert any("wrong_width" in issue and "expected 2 objectives" in issue for issue in issues)
-    assert any("overflow" in issue and "combined cost is non-finite" in issue for issue in issues)
+    assert any("overflow" in issue and "average cost is non-finite" in issue for issue in issues)
     assert "rows: 2" in summary
     assert "ignored issues: 6" in summary
 
@@ -299,7 +335,8 @@ def test_view_cost_plot_style_contract():
     assert view_cost.PLOT_LEGEND_EDGE_PAD == pytest.approx(0.015)
     assert view_cost.TREND_LINE_WIDTH == pytest.approx(2.0)
     assert view_cost.TREND_LINE_ALPHA == pytest.approx(0.25)
-    assert view_cost.COMBINED_TREND_LINE_WIDTH == pytest.approx(4.0)
+    assert view_cost.AVG_TREND_LINE_WIDTH == pytest.approx(4.0)
+    assert view_cost.HV_SHADE_ALPHA == pytest.approx(0.2)
     assert view_cost.EVENT_LINE_ALPHA == pytest.approx(0.25)
     assert view_cost.EVENT_LINE_WIDTH == pytest.approx(1.2)
     assert view_cost.GRID_LINE_WIDTH == pytest.approx(0.4)
@@ -360,13 +397,13 @@ def test_view_cost_splits_data_and_event_legends():
     axis = FakeLegendAxis()
     sources = (
         FakeSourceAxis(["cost_a", "Opt. start"]),
-        FakeSourceAxis(["Combined cost", "Hash change"]),
+        FakeSourceAxis(["avg. cost", "Hash change"]),
     )
 
     view_cost._add_split_legends(axis, sources)
 
     assert [call[0] for call in axis.calls] == [
-        ["cost_a", "Combined cost"],
+        ["cost_a", "avg. cost"],
         ["Opt. start", "Hash change"],
     ]
     assert axis.calls[0][1]["framealpha"] == pytest.approx(0.6)

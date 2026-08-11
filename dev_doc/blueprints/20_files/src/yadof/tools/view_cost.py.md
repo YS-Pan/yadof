@@ -11,7 +11,7 @@
   costs are recalculated by the current task.
 - Merge individual and optimization metadata to annotate optimization starts,
   generation/run identity, and static-input hash changes.
-- Validate finite numeric variables/costs, finite combined sums, and one consistent
+- Validate finite numeric variables/costs, finite arithmetic averages, and one consistent
   objective width; isolate unusable rows and report bounded details instead of
   aborting when valid rows remain.
 - Treat individual/optimization metadata as optional plot annotations and fall back
@@ -19,19 +19,22 @@
 - Obtain task objective names when their count matches, with deterministic generic
   fallbacks.
 - Identify the minimization Pareto front, show at most ten representatives selected
-  by lowest summed cost, and render an aligned text table.
-- Optionally plot per-objective costs, combined cost, a Gaussian-smoothed combined
-  trend, visible Pareto markers, optimization starts, generation bands, and
-  static-hash changes.
+  by lowest average cost, and render an aligned text table.
+- Optionally plot per-objective costs, `avg. cost`, its Gaussian-smoothed trend,
+  visible Pareto markers, optimization starts, generation bands, and static-hash
+  changes on the left axis.
+- Calculate current-generation and cumulative-all-individual hypervolume at each
+  generation endpoint against reference `(1, ..., 1)`, exclude rows outside the
+  normalized `[0, 1]` cube, and shade between the two right-axis boundaries.
 - Render cost/time-aligned 5.5-by-3.5-inch, 600-dpi figures with a compact font and
   line hierarchy, plus separate data and event legends.
-- Scale and explicitly place right-axis ticks so, for `N` objectives, combined cost
-  `N` aligns with individual cost `1` and every visible left/right tick is aligned.
+- Accept optional history-calculation progress and pass it to the public
+  recorded-data query without changing quiet Python callers.
 
 ## I/O Format
 
 - `build_rows(workspace, status="completed")` returns dictionaries containing row
-  number, job name, normalized variables, dynamic costs, finite combined cost, and
+  number, job name, normalized variables, dynamic costs, finite average cost, and
   available provenance. Its optional issue collector receives skipped-row and
   ignored-annotation diagnostics.
 - `view_cost(...)` returns `(summary_text, output_path_or_none)`.
@@ -43,19 +46,23 @@
 
 - Plot dependencies are imported lazily and matplotlib is forced to the headless
   `Agg` backend.
-- Pareto membership uses strict all-objective minimization; the combined sum is for
-  display/selection only and does not redefine dominance.
+- Pareto membership uses strict all-objective minimization; the arithmetic average
+  is for display/selection only and does not redefine dominance. For a fixed
+  objective count it preserves the former combined-cost point's plotted height
+  because that right axis was scaled by the same count.
 - When historical objective widths disagree, the most common finite width is used
   so a stray row cannot select or block the plot; original row numbers remain the
   evaluation-index axis after filtering.
-- Scatter size and opacity decrease for large histories, and the right combined
-  axis is an exact objective-count multiple of the left individual-cost axis.
-- The smoothed average combined-cost line is deliberately thicker than ordinary
+- Scatter size and opacity decrease for large histories. The right axis belongs to
+  hypervolume; both objective and average costs share the left axis.
+- The smoothed average-cost line is deliberately thicker than ordinary
   time/cost trends so it remains visually prominent.
 - Individual-cost Pareto points use a larger 60-square-point marker with a
   0.75-point ring, making selected points prominent without a heavy outline.
-  Emphasized combined-cost points use the same ring width, while ordinary
-  combined-cost circles use a lighter 0.4-point edge.
+  Emphasized average-cost points use the same ring width, while ordinary
+  average-cost circles use a lighter 0.4-point edge.
+- One contiguous run/generation grouping implementation supplies both background
+  regions and hypervolume generation membership so their boundaries cannot drift.
 - Contiguous generations are scoped by optimization run, labeled with their
   zero-based generation index inside the top of the plot, and odd generations use
   a black background at 10% opacity. Rows without generation metadata are not
