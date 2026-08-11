@@ -98,7 +98,8 @@
   legend is positioned immediately to the right of the measured data legend, and
   both are inset from the axes frame by 0.015 axes units.
 - Shared dimensions, typography, widths, generation styling, event dashes, and
-  event names mirror `view_cost.py` under the tools module alignment contract.
+  event names mirror `cost_viewer/plotting.py` and `cost_viewer/style.py` under the
+  tools module alignment contract.
 
 ## Mutability Profile
 

@@ -22,6 +22,7 @@ src/yadof/                 installed framework
   optimize/                candidate mechanics and campaign loop
   surrogate/               rawData-first model and scheduling
   tools/                   optional user-launched utilities
+    cost_viewer/           reusable cost analysis/rendering and dev_doc
     surrogate_viewer/      optional read-only GUI/text inspection and dev_doc
   _resources/              templates/adapters/docs/worker helper
 tests/                     maintained generic verification
@@ -78,14 +79,16 @@ psutil is a core dependency because local and fast evaluation must observe proce
 trees and submit-host capacity on supported platforms. It remains submit-host
 package logic and is never copied into distributed job payloads.
 
-The viewer remains a leaf below `tools`: CLI parser construction and
-`yadof.tools` imports must not load Torch, Matplotlib, or Tkinter. Its subpackage
-loads backend/model dependencies only for a selected viewer mode, and loads
-Matplotlib/Tkinter only for the GUI. Text reports use the same viewer backend and
-write only stdout/stderr.
-Viewer-specific architecture and blueprints remain below
-`tools/surrogate_viewer/dev_doc/`, while maintained pytest coverage lives in the
-repository's top-level `tests/`.
+The viewers remain leaves below `tools`: CLI parser construction and
+`yadof.tools` imports must not load Torch, Matplotlib, or Tkinter. The surrogate
+subpackage loads backend/model dependencies only for a selected viewer mode, and
+loads Matplotlib/Tkinter only for the GUI. Text reports use the same viewer backend
+and write only stdout/stderr.
+Cost-view numerical/plot dependencies are loaded only by the selected operation;
+its stable functions are reusable by CLI, Python, and a future unified GUI without
+owning widgets. Viewer-specific architecture and blueprints remain below
+`tools/cost_viewer/dev_doc/` and `tools/surrogate_viewer/dev_doc/`, while
+maintained pytest coverage lives in the repository's top-level `tests/`.
 
 The canonical local environment is the repository sibling `../.venv`, created from
 the system Python. Development acceptance never uses an editable install or

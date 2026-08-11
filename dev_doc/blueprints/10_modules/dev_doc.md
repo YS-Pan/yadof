@@ -9,10 +9,11 @@ rejects traversal, and never requires callers to locate site-packages.
 The `user` audience is named for the role whose workflow it serves; its documents
 are written primarily for an AI coding agent acting under a human user's direction.
 
-The integrated surrogate viewer retains a second, relatively independent
-developer tree at `src/yadof/tools/surrogate_viewer/dev_doc/`. That tree ships with
-the tool package and owns viewer-specific architecture, blueprints, and terminology;
-the root developer README links to it instead of duplicating those contracts.
+The integrated cost and surrogate viewers retain relatively independent developer
+trees at `src/yadof/tools/cost_viewer/dev_doc/` and
+`src/yadof/tools/surrogate_viewer/dev_doc/`. Those trees ship with their tool
+packages and own viewer-specific architecture, blueprints, and terminology; the
+root developer README links to them instead of duplicating those contracts.
 
 ## Developer document roles
 
@@ -61,7 +62,7 @@ build/force-reinstall/import-path/full-test workflow after package changes.
 - Documentation-only changes still receive a change record.
 - `README.md` links every module contract instead of duplicating its detailed rules.
 - Installed docs are generated from root source, never edited under site-packages.
-- Viewer-specific docs are edited only in the viewer subtree and ship beside its
+- Viewer-specific docs are edited only in the owning viewer subtree and ship beside its
   code; they are not duplicated into the root documentation lifecycle.
 - Current architecture/blueprints override historical change records.
 - User docs contain task-authoring/runtime instructions written primarily for the

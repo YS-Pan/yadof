@@ -53,7 +53,10 @@ successful tool, continues attempting the later tool if the first fails, and
 returns failure if either tool failed. The corresponding Python tool APIs retain
 `output_path=None` as summary-only behavior. Cost-history normalization, rawData
 loading, and dynamic cost calculation automatically render a dependency-free,
-bounded progress bar on stderr; summaries and saved-path messages remain on stdout.
+bounded progress bar on stderr; interactive frames overwrite in place and leave
+one final line per stage, while summaries and saved-path messages remain on stdout.
+The handler imports the stable `yadof.tools.cost_viewer` package surface rather
+than the legacy flat compatibility module.
 
 `view surrogate` is a separate optional kind. Its bare/default `gui` mode
 optionally receives one workspace and loads `yadof.tools.surrogate_viewer.app`

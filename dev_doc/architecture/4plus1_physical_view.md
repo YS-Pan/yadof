@@ -113,8 +113,11 @@ JSON and archive publication requiring replacement is atomic and protected by
 workspace locks. Package resources remain read-only even when site-packages itself
 is read-only.
 
-The wheel also carries `yadof/tools/surrogate_viewer/`, including its independent
-developer-documentation subtree. Its Torch and Matplotlib dependencies are exposed
+The wheel also carries `yadof/tools/cost_viewer/` and
+`yadof/tools/surrogate_viewer/`, including their independent developer-
+documentation subtrees. Cost-view rendering uses the package's normal numerical
+and plotting dependencies only when selected. Surrogate-viewer Torch and
+Matplotlib dependencies are exposed
 through the `viewer` extra and are used only on the submit/user desktop. Viewer code
 and dependencies are never copied into a prepared job or transferred to execute
 nodes.

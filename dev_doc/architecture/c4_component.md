@@ -67,13 +67,17 @@
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
-- `tools`, `_resources`: cost view with left-axis objective/average costs and a
-  right-axis all-individual versus current-generation hypervolume band; integrated
+- `tools`, `_resources`: reusable `tools.cost_viewer` package with left-axis
+  objective/average costs and a shade-only right-axis all-individual versus
+  current-generation hypervolume interval; integrated
   time/failure/machine/error view;
   grouped `view all` orchestration; history/task utilities; and read-only
   adapter/template/doc resources. The cost view isolates and reports unusable
   history rows, omits unavailable optional annotations, and continues whenever at
-  least one finite, consistent objective row remains. `tools.surrogate_viewer` is a lazy, optional
+  least one finite, consistent objective row remains. Its history, analysis,
+  reporting, plotting, style, and orchestration modules expose a stable non-GUI
+  surface; `tools.view_cost` remains a compatibility facade.
+  `tools.surrogate_viewer` is a lazy, optional
   inspection leaf for GUI prediction, real-result comparison, metadata reports,
   and GUI/terminal cross-generation error audits; its backend owns yadof
   checkpoint/rawData adaptation while its UI and reporting layer never write

@@ -41,7 +41,9 @@ stderr; the final summary remains on stdout. The cost PNG places the arithmetic
 former summed cost on an objective-count-scaled right axis. Its right axis instead
 shows a shaded hypervolume band whose upper boundary accumulates all generations
 and whose lower boundary uses only the current generation, both against the fixed
-normalized reference `(1, ..., 1)`.
+normalized reference `(1, ..., 1)`. The band has no drawn upper/lower boundary
+lines. Cost history implementation lives in the reusable `tools/cost_viewer/`
+subpackage; `tools/view_cost.py` is only the compatibility import facade.
 `view all` invokes cost and time with their normal defaults, prints two labeled
 summaries, and uses one timestamp for the two default image names. The
 views do not mutate durable evidence. History clear requires explicit confirmation,
@@ -72,10 +74,10 @@ subtree's own `dev_doc/`; yadof's main developer README links to that entry.
 
 ### Cost/time plot alignment contract
 
-Unless a requested change explicitly says otherwise, `view_cost.py` is the visual
-reference and `view_time.py` must remain aligned with it. Update both files and the
-cross-view style test whenever a shared value changes. The aligned commands and
-values are:
+Unless a requested change explicitly says otherwise, `cost_viewer/plotting.py` and
+`cost_viewer/style.py` are the cost visual reference and `view_time.py` must remain
+aligned with them. Update both tool implementations and the cross-view style test
+whenever a shared value changes. The aligned commands and values are:
 
 | Concern | Matplotlib command / constant | Default |
 |---|---|---|
@@ -96,8 +98,8 @@ values are:
 
 Plot-specific colors, axes, scientific data series, and domain labels may differ.
 Shared presentation values do not drift independently: make a visual change in
-`view_cost.py` first, mirror it in `view_time.py`, and update the alignment table
-and tests in the same change.
+`cost_viewer/plotting.py` or `cost_viewer/style.py` first, mirror it in
+`view_time.py`, and update the alignment table and tests in the same change.
 
 ## Task utilities
 

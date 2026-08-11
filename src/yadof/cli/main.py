@@ -161,7 +161,7 @@ def _run_view(
     progress=None,
 ) -> tuple[str, Path | None]:
     if view_kind == "cost":
-        from ..tools.view_cost import view_cost
+        from ..tools.cost_viewer import view_cost
 
         return view_cost(
             workspace,
@@ -209,14 +209,16 @@ class _CostViewProgress:
         bar = "#" * filled + "." * (self.width - filled)
         count = "?" if total == 0 else f"{completed}/{total}"
         text = f"view cost [{bar}] {count} {message}"
-        if sys.stderr.isatty() and (total == 0 or completed < total):
+        if sys.stderr.isatty():
             print(f"\r{text}", end="", file=sys.stderr, flush=True)
             self._line_open = True
-        else:
-            if self._line_open:
+            if total > 0 and completed >= total:
                 print(file=sys.stderr)
                 self._line_open = False
-            print(text, file=sys.stderr, flush=True)
+            return
+        if self._line_open:
+            self._line_open = False
+        print(text, file=sys.stderr, flush=True)
 
     def close(self) -> None:
         if self._line_open:

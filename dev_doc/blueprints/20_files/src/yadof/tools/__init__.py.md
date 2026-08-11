@@ -11,8 +11,8 @@
 - Re-export their immutable result and confirmation-error types.
 - Keep visualization and software-specific tools in explicit submodules so their
   heavier or optional dependencies are not imported with `yadof.tools`.
-- Keep `surrogate_viewer` as a nested package rather than re-exporting its backend
-  or GUI from `yadof.tools`.
+- Keep `cost_viewer` and `surrogate_viewer` as nested packages rather than
+  re-exporting their analysis/backend or GUI surfaces from `yadof.tools`.
 
 ## I/O Format
 
@@ -23,7 +23,7 @@
 
 - The deliberately narrow export list prevents importing plotting libraries,
   PyAEDT, or simulator-specific code merely to use a lightweight task tool.
-- The nested viewer owns its own lazy export surface so CLI construction remains
+- Each nested viewer owns its own import surface so CLI construction remains
   usable without Torch, Matplotlib, or Tkinter imports.
 
 ## Mutability Profile

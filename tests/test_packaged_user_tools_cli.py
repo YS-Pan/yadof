@@ -10,7 +10,11 @@ import pytest
 import yadof
 
 from yadof.cli import main as cli_main
-from yadof.cli.main import _default_view_output_name, build_parser
+from yadof.cli.main import (
+    _CostViewProgress,
+    _default_view_output_name,
+    build_parser,
+)
 from yadof.evaluate_manager import evaluate_population
 from yadof.recorded_data import list_records
 from yadof.resources import adapter_names, adapter_resource
@@ -123,7 +127,8 @@ def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):
     cost_capture = capsys.readouterr()
     cost_output = cost_capture.out
     assert "rows: 1" in cost_output
-    assert "objectives: cost_response" in cost_output
+    assert "objectives:" not in cost_output
+    assert "cost_response" in cost_output
     assert "saved:" in cost_output
     assert "view cost [" in cost_capture.err
     assert "calculating costs" in cost_capture.err
@@ -170,6 +175,22 @@ def test_view_default_output_name_matches_legacy_timestamp_format():
     assert _default_view_output_name("time", now=now) == Path(
         "time_20260724_173045.png"
     )
+
+
+def test_cost_progress_overwrites_tty_frame_before_finishing(
+    capsys, monkeypatch
+):
+    monkeypatch.setattr("sys.stderr.isatty", lambda: True)
+    progress = _CostViewProgress()
+
+    progress(4948, 4997, "calculating costs")
+    progress(4997, 4997, "calculating costs")
+    progress.close()
+
+    output = capsys.readouterr().err
+    assert output.count("\n") == 1
+    assert "4948/4997 calculating costs\rview cost" in output
+    assert output.endswith("4997/4997 calculating costs\n")
 
 
 def test_surrogate_viewer_cli_is_registered_without_loading_optional_modules():
@@ -325,6 +346,12 @@ def test_hfss_extract_parameters_uses_workspace_paths_and_confirmation(capsys, t
 def test_only_the_package_tool_namespace_is_present():
     assert not Path("project").exists()
     assert Path("src/yadof/tools/view_cost.py").is_file()
+    assert Path("src/yadof/tools/cost_viewer/api.py").is_file()
+    assert Path("src/yadof/tools/cost_viewer/analysis.py").is_file()
+    assert Path("src/yadof/tools/cost_viewer/plotting.py").is_file()
+    assert Path(
+        "src/yadof/tools/cost_viewer/dev_doc/README.md"
+    ).is_file()
     assert Path("src/yadof/tools/view_time.py").is_file()
     assert Path("src/yadof/tools/surrogate_viewer/app.py").is_file()
     assert Path(

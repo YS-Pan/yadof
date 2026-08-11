@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
+import yadof.tools.cost_viewer as cost_viewer
 import yadof.tools.view_cost as view_cost
+from yadof.tools.cost_viewer import plotting
 
 
 class FakeRecordedDataApi:
@@ -81,7 +83,9 @@ def test_build_rows_uses_recorded_data_history():
         workspace, rows, objective_api=FakeObjectiveApi
     )
     assert "rows: 3" in summary
-    assert "objectives: objective_1, objective_2" in summary
+    assert "objectives:" not in summary
+    assert "objective_1" in summary
+    assert "objective_2" in summary
     assert "avg. cost" in summary
     assert "Pareto front:" in summary
 
@@ -315,13 +319,25 @@ def test_build_rows_wraps_recorded_data_errors():
 
 
 def test_view_cost_source_does_not_reference_legacy_jsonl_inputs():
-    source = Path(view_cost.__file__).read_text(encoding="utf-8")
+    package_root = Path(cost_viewer.__file__).parent
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in package_root.glob("*.py")
+    )
 
     assert "para_cost.jsonl" not in source
     assert "optMeta.jsonl" not in source
     assert "indMeta.jsonl" not in source
     assert "sys.path" not in source
     assert source.count("linewidths=PARETO_EDGE_LINE_WIDTH") == 2
+
+
+def test_hypervolume_is_rendered_as_shading_without_boundary_lines():
+    source = Path(plotting.__file__).read_text(encoding="utf-8")
+
+    assert "fill_between(" in source
+    assert ".step(" not in source
+    assert 'edgecolor="none"' in source
 
 
 def test_view_cost_plot_style_contract():
@@ -429,7 +445,7 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path, monkeypatch
     )
 
     monkeypatch.setattr(
-        view_cost,
+        plotting,
         "objective_names",
         lambda _workspace, _rows, _objective_api: ["objective_1", "objective_2"],
     )
@@ -444,3 +460,5 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path, monkeypatch
 
 def test_view_cost_has_a_package_entrypoint():
     assert Path(view_cost.__file__).name == "view_cost.py"
+    assert Path(cost_viewer.__file__).name == "__init__.py"
+    assert view_cost.view_cost is cost_viewer.view_cost

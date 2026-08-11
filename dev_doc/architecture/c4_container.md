@@ -36,7 +36,9 @@ execute nodes.
 The package owns defaults, config validation, workspace handling, task loading, job
 composition, evaluation backends, optimization, rawData-first persistence and
 surrogate logic, tools, invariant worker lifecycle support, templates, adapters,
-and docs. The optional `tools/surrogate_viewer/` subtree reads workspace evidence
+and docs. The optional `tools/cost_viewer/` subtree provides reusable read-only
+history analysis, terminal reporting, and static rendering for CLI, Python, and
+future GUI callers. The optional `tools/surrogate_viewer/` subtree reads workspace evidence
 and checkpoints through either the desktop process or the `summary`/`audit`
 terminal modes selected below `yadof view surrogate`; it does not enter the
 execution or persistence pipeline. The package is read-only at runtime and never

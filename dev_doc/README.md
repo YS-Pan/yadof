@@ -61,6 +61,12 @@ by the [toDo and obsolete contract](skill/toDo.md).
 
 ## Integrated Tool Documentation
 
+The cost-history viewer is packaged as a reusable analysis/rendering subtree. Its
+developer entry point is
+[cost_viewer/dev_doc/README.md](../src/yadof/tools/cost_viewer/dev_doc/README.md);
+read that tree before changing its API, history adaptation, analysis, reports,
+plots, or future GUI integration.
+
 The surrogate checkpoint viewer is packaged as a relatively independent tool
 subtree. Its developer entry point remains
 [surrogate_viewer/dev_doc/README.md](../src/yadof/tools/surrogate_viewer/dev_doc/README.md);

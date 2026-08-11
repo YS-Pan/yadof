@@ -67,6 +67,8 @@ local/distributed remain file-backed prepared-job transports.
 - `surrogate` owns conditional INR training, rawData prediction, uncertainty
   intervals, audits, scheduling, and checkpoints.
 - `tools` and `cli` are optional user-facing orchestration/inspection layers.
+  `tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf
+  with its own nested developer documentation and a compatibility facade.
   `tools.surrogate_viewer` is an explicitly launched, read-only GUI/text inspection
   leaf with its own nested developer documentation and optional dependency group.
 - `_resources` contains immutable templates, adapter references, documentation, and

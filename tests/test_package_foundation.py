@@ -528,6 +528,32 @@ def test_surrogate_viewer_developer_documentation_links_resolve() -> None:
             )
 
 
+def test_cost_viewer_developer_documentation_links_resolve() -> None:
+    root_entry = REPOSITORY_ROOT / "dev_doc" / "README.md"
+    root_targets = MARKDOWN_LINK.findall(root_entry.read_text(encoding="utf-8"))
+    expected = "../src/yadof/tools/cost_viewer/dev_doc/README.md"
+    assert expected in root_targets
+    assert (root_entry.parent / expected).is_file()
+
+    viewer_root = (
+        REPOSITORY_ROOT
+        / "src"
+        / "yadof"
+        / "tools"
+        / "cost_viewer"
+        / "dev_doc"
+    )
+    for document in viewer_root.rglob("*.md"):
+        for target in MARKDOWN_LINK.findall(document.read_text(encoding="utf-8")):
+            path_text = target.split("#", 1)[0]
+            if not path_text or "://" in path_text:
+                continue
+            assert (document.parent / path_text).is_file(), (
+                "broken cost viewer documentation link in "
+                f"{document.relative_to(viewer_root)}: {target}"
+            )
+
+
 def test_minimal_cli_output_and_streams(capsys) -> None:
     assert cli.main([]) == 0
     output = capsys.readouterr()
@@ -622,6 +648,17 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/runtime.py" in wheel_names
         assert "yadof/surrogate/scheduler.py" in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
+        assert "yadof/tools/cost_viewer/__init__.py" in wheel_names
+        assert "yadof/tools/cost_viewer/api.py" in wheel_names
+        assert "yadof/tools/cost_viewer/analysis.py" in wheel_names
+        assert "yadof/tools/cost_viewer/history.py" in wheel_names
+        assert "yadof/tools/cost_viewer/plotting.py" in wheel_names
+        assert "yadof/tools/cost_viewer/report.py" in wheel_names
+        assert "yadof/tools/cost_viewer/style.py" in wheel_names
+        assert "yadof/tools/cost_viewer/types.py" in wheel_names
+        assert (
+            "yadof/tools/cost_viewer/dev_doc/README.md"
+        ) in wheel_names
         assert "yadof/tools/view_time.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/__init__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/__main__.py" in wheel_names
@@ -694,6 +731,14 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         )
         assert any(
             name.endswith("/src/yadof/tools/surrogate_viewer/dev_doc/README.md")
+            for name in sdist_names
+        )
+        assert any(
+            name.endswith("/src/yadof/tools/cost_viewer/api.py")
+            for name in sdist_names
+        )
+        assert any(
+            name.endswith("/src/yadof/tools/cost_viewer/dev_doc/README.md")
             for name in sdist_names
         )
         assert any(name.endswith("/dev_doc/README.md") for name in sdist_names)
