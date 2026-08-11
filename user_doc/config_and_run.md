@@ -157,7 +157,9 @@ two boundaries are conveyed by the shade and are not drawn as lines. Objective
 names appear in the Pareto-table header, without a separate redundant
 `objectives:` summary line. The CLI displays cost-history calculation progress on
 stderr while leaving the summary on stdout; an interactive progress frame is
-overwritten in place and each stage leaves only its final line. The time view combines elapsed time, failure
+overwritten in place and each stage leaves only its final line. The HV legend is
+abbreviated as `HV (all & current gen.)`, and dense generation numbers alternate
+between two heights. The time view combines elapsed time, failure
 rate, execute-machine colors, and error occurrences. Average-time curves and each
 machine's average use completed evaluations only; failed evaluations are excluded
 from time averages and remain visible through the failure/error encodings. Each

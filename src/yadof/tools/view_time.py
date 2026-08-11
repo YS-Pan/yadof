@@ -55,6 +55,7 @@ ERROR_LABEL_X = 0.015
 GENERATION_SHADE_COLOR = "black"
 GENERATION_SHADE_ALPHA = 0.1
 GENERATION_LABEL_Y = 0.98
+GENERATION_LABEL_STAGGER = 0.05
 
 
 class ViewTimeError(RuntimeError):
@@ -591,7 +592,8 @@ def _draw_generation_regions(
             )
         ax.text(
             left + (right - left) / 2,
-            GENERATION_LABEL_Y,
+            GENERATION_LABEL_Y
+            - (GENERATION_LABEL_STAGGER if generation % 2 else 0.0),
             str(generation),
             transform=xaxis_transform,
             ha="center",

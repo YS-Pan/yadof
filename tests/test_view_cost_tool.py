@@ -8,6 +8,7 @@ import pytest
 import yadof.tools.cost_viewer as cost_viewer
 import yadof.tools.view_cost as view_cost
 from yadof.tools.cost_viewer import plotting
+from yadof.tools.cost_viewer import style
 
 
 class FakeRecordedDataApi:
@@ -197,7 +198,7 @@ def test_generation_regions_restart_per_run_and_skip_rows_without_generation():
     ]
 
 
-def test_generation_regions_label_every_generation_and_shade_only_odd_ones():
+def test_generation_regions_stagger_labels_and_shade_only_odd_ones():
     class FakeAxis:
         def __init__(self):
             self.spans = []
@@ -219,7 +220,9 @@ def test_generation_regions_label_every_generation_and_shade_only_odd_ones():
     view_cost._draw_generation_regions(axis, regions)
 
     assert [label[2] for label in axis.labels] == ["0", "1", "2"]
-    assert all(label[1] == pytest.approx(0.98) for label in axis.labels)
+    assert [label[1] for label in axis.labels] == pytest.approx(
+        [0.98, 0.93, 0.98]
+    )
     assert all(label[3]["transform"] is axis.transform for label in axis.labels)
     assert all(label[3]["fontsize"] == 8 for label in axis.labels)
     assert axis.spans == [
@@ -338,6 +341,8 @@ def test_hypervolume_is_rendered_as_shading_without_boundary_lines():
     assert "fill_between(" in source
     assert ".step(" not in source
     assert 'edgecolor="none"' in source
+    assert style.HV_SHADE_LABEL == "HV (all & current gen.)"
+    assert style.GENERATION_LABEL_STAGGER == pytest.approx(0.05)
 
 
 def test_view_cost_plot_style_contract():

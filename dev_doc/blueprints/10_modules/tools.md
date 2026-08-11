@@ -42,7 +42,9 @@ former summed cost on an objective-count-scaled right axis. Its right axis inste
 shows a shaded hypervolume band whose upper boundary accumulates all generations
 and whose lower boundary uses only the current generation, both against the fixed
 normalized reference `(1, ..., 1)`. The band has no drawn upper/lower boundary
-lines. Cost history implementation lives in the reusable `tools/cost_viewer/`
+lines and uses the compact legend label `HV (all & current gen.)`. Dense generation
+indices alternate between two vertical positions at the top of the axes. Cost
+history implementation lives in the reusable `tools/cost_viewer/`
 subpackage; `tools/view_cost.py` is only the compatibility import facade.
 `view all` invokes cost and time with their normal defaults, prints two labeled
 summaries, and uses one timestamp for the two default image names. The
@@ -90,7 +92,7 @@ whenever a shared value changes. The aligned commands and values are:
 | Average cost/time trend opacity | `TREND_LINE_ALPHA` | `0.25` |
 | Ordinary avg.-cost and viewTime marker diameter / ring width | `SCATTER_MARKER_SIZE` / `SCATTER_EDGE_LINE_WIDTH` | `3.0` pt / `0.4` pt |
 | Pareto emphasis in viewCost | marker area / ring width | `60.0` pt² / `0.75` pt |
-| Generation background | `axvspan(..., facecolor="black", alpha=0.1)` | odd generations only |
+| Generation background / labels | `axvspan(..., facecolor="black", alpha=0.1)` / alternating axes-relative y | odd generations shaded; labels at `0.98 / 0.93` |
 | Optimization-start dashes | `linestyle=(0, (4, 4))` | butt dash caps |
 | Hash-change dashes | `linestyle=(4, (4, 4))` | complementary butt dash caps |
 | Event-line opacity | `EVENT_LINE_ALPHA` | `0.25` |

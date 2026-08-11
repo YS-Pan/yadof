@@ -37,7 +37,8 @@ license, machine identity, or credential.
   the 50-generation run default, flushed pre-execution standalone-smoke feedback,
   cost-view isolation/reporting for unusable history rows and optional annotations,
   left-axis average cost, all-individual/current-generation hypervolume values,
-  shade-only hypervolume plotting, non-redundant summaries, compatibility/package
+  shade-only hypervolume plotting, compact HV legend text, staggered generation
+  labels, non-redundant summaries, compatibility/package
   imports, and stderr calculation progress without duplicate TTY completion lines,
   execute-machine/error encodings, worker-over-Condor machine precedence,
   active/held/removed/terminated historical timeout log fallback,

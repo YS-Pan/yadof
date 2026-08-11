@@ -90,7 +90,8 @@
   stays visible without dominating the time data or error bands.
 - Contiguous generations are scoped by optimization run, labeled with their
   zero-based generation index inside the plot, and odd generations use a black
-  background at 10% opacity.
+  background at 10% opacity. Even/odd generation labels alternate between two
+  vertical positions so dense labels remain distinguishable.
 - Optimization-start and hash-change lines use equal-length complementary dash
   phases, butt caps, and opacity 0.25, so coincident event lines remain independently
   visible without dominating the data.

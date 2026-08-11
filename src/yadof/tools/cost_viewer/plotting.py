@@ -29,6 +29,7 @@ from .style import (
     EVENT_LINE_LABELS,
     EVENT_LINE_WIDTH,
     GENERATION_LABEL_Y,
+    GENERATION_LABEL_STAGGER,
     GENERATION_SHADE_ALPHA,
     GENERATION_SHADE_COLOR,
     GRID_LINE_WIDTH,
@@ -37,6 +38,7 @@ from .style import (
     HASH_LINE_STYLE,
     HV_LINE_COLOR,
     HV_SHADE_ALPHA,
+    HV_SHADE_LABEL,
     OPT_LINE_COLOR,
     OPT_LINE_LABEL,
     OPT_LINE_STYLE,
@@ -78,7 +80,8 @@ def _draw_generation_regions(
             )
         axis.text(
             (left + right) / 2.0,
-            GENERATION_LABEL_Y,
+            GENERATION_LABEL_Y
+            - (GENERATION_LABEL_STAGGER if generation % 2 else 0.0),
             str(generation),
             transform=xaxis_transform,
             ha="center",
@@ -384,7 +387,7 @@ def plot_rows(
         facecolor=HV_LINE_COLOR,
         edgecolor="none",
         alpha=HV_SHADE_ALPHA,
-        label="HV (current generation to all individuals)",
+        label=HV_SHADE_LABEL,
         zorder=0.8,
     )
     ax2.set_ylabel(

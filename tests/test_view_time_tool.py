@@ -309,7 +309,7 @@ def test_generation_regions_use_time_midpoints_and_restart_per_run():
     ]
 
 
-def test_generation_regions_label_every_generation_and_shade_only_odd_ones():
+def test_generation_regions_stagger_labels_and_shade_only_odd_ones():
     class FakeAxis:
         def __init__(self):
             self.spans = []
@@ -335,7 +335,7 @@ def test_generation_regions_label_every_generation_and_shade_only_odd_ones():
     view_time._draw_generation_regions(axis, regions)
 
     assert [label[2] for label in axis.labels] == ["0", "1"]
-    assert all(label[1] == pytest.approx(0.98) for label in axis.labels)
+    assert [label[1] for label in axis.labels] == pytest.approx([0.98, 0.93])
     assert all(label[3]["transform"] is axis.transform for label in axis.labels)
     assert all(label[3]["fontsize"] == 8 for label in axis.labels)
     assert axis.spans == [
@@ -404,6 +404,7 @@ def test_view_time_plot_style_stays_aligned_to_view_cost():
         "GENERATION_SHADE_COLOR",
         "GENERATION_SHADE_ALPHA",
         "GENERATION_LABEL_Y",
+        "GENERATION_LABEL_STAGGER",
         "OPT_LINE_LABEL",
         "HASH_LINE_LABEL",
     )
