@@ -93,14 +93,14 @@ fast/local/distributed backend
   -> common rawData validation and current cost calculation
   -> ordered EvaluationOutcome returned to optimizer
   -> best-effort bounded recording enqueue
-  -> asynchronous immutable per-candidate publication
+  -> asynchronous immutable micro-batch segment publication
   -> optional rebuildable query index
 ```
 
 When the work is complete:
 
-- the cost of publishing one candidate is proportional to that candidate's record
-  size, not to the number or total size of earlier candidates;
+- amortized publication work is proportional to newly recorded candidate bytes,
+  not to the number or total size of earlier candidates;
 - no backend contains its own persistence policy or directly calls a single/batch
   history writer;
 - a valid evaluation can contribute its current cost to the optimizer even if its
@@ -151,26 +151,35 @@ objective-width `inf` sentinel. Recording failure does not alter a successfully
 calculated finite cost. Strict all-infinite behavior must be based on execution,
 rawData, and cost failures, never on persistence loss.
 
-### 2. Replace global mutable history with immutable candidate records
+### 2. Replace global mutable history with immutable candidate frames and segments
 
 Do not retain a campaign-wide rawData ZIP or a campaign-wide individual JSONL as
-the authoritative store. Publish one self-contained immutable record per logical
-candidate. A suggested physical organization is:
+the authoritative store. Keep one self-contained logical record per candidate, but
+do not require one filesystem file or one durability transaction per candidate.
+The recorder should pack a bounded micro-batch of independently framed candidate
+records into one immutable segment. A suggested physical organization is:
 
 ```text
 recorded_data/
-  records/
+  segments/
     <run-id>/
       generation_000000/
-        <candidate-id>.yadrec
+        segment_000000.yadseg
+        segment_000001.yadseg
       generation_000001/
-        <candidate-id>.yadrec
+        segment_000000.yadseg
   cache/
     history_index.sqlite
 ```
 
-The exact extension and container encoding may change during implementation, but a
-candidate record should contain, as applicable:
+The exact extension and container encoding may change during implementation. A
+segment should be a sequential container whose candidate frames are independently
+length-delimited and checksummed. Compression should be per candidate frame or per
+rawData payload rather than one indivisible whole-segment compression stream, so a
+bad candidate can be skipped without making valid siblings undecodable. A compact
+footer/index may contain candidate identities, offsets, sizes, and checksums; its
+absence or corruption must make the reader skip or boundedly salvage the segment,
+never crash. A candidate frame should contain, as applicable:
 
 - format/schema version and a collision-resistant candidate identity;
 - run, optimization, generation, and population identities;
@@ -181,11 +190,21 @@ candidate record should contain, as applicable:
   a diagnostic cache. A stored cost must never become scientific source truth or
   silently override recalculation through the current compatible `calc_cost.py`.
 
-Use same-directory temporary creation followed by atomic replacement of the one
-candidate file. A finalized candidate file is never reopened for mutation. Readers
-ignore temporary files. Failure before replacement loses at most that candidate;
-it cannot make an earlier candidate unreadable. Candidate filenames must not rely
-solely on a user/job name that can collide across resumes or concurrent calls.
+Use same-directory temporary creation followed by atomic replacement of one whole
+segment. A finalized segment is never reopened for mutation. Readers ignore
+temporary files. Failure before replacement loses at most that bounded micro-batch;
+it cannot make an earlier segment unreadable. Segment and candidate identities must
+not rely solely on a user/job name that can collide across resumes or concurrent
+calls. The selected item/byte/time flush limits therefore also define the maximum
+normal-process loss domain and must be visible in configuration or diagnostics.
+
+Do not use an append-open campaign ZIP, one compression stream spanning the whole
+campaign, or one file per candidate as the default physical layout. The first two
+recreate a central mutable failure domain; the last avoids campaign-size copying
+but performs poorly on rotational media because every small record causes file and
+directory metadata work plus additional seeks. Per-candidate files may remain only
+as a focused test codec or deliberately selected debugging mode, not as the normal
+writer.
 
 Apply the same immutable-event principle to run/generation/surrogate metadata that
 would otherwise recreate a growing central rewrite. It is acceptable to maintain
@@ -225,35 +244,120 @@ Default queue limits should permit normal simulator throughput without allowing
 large rawData to exhaust host memory. If they are configurable, validation must
 reject unbounded values and configuration must remain common to all three backends.
 
-### 4. Treat indexes and summaries as disposable caches
+Queue ownership should reuse the validation/cost read whenever practical. The
+common finalizer should produce one canonical owned envelope instead of forcing the
+writer to reopen scattered local/distributed job files after cost calculation.
+Fast memory payloads and local/distributed file payloads must converge to the same
+owned envelope representation before queue admission. The envelope byte estimate
+must include rawData backing; an individual envelope larger than the total byte
+limit is dropped immediately after its cost is returned rather than blocking or
+escaping the bound.
+
+### 4. Make the physical writer friendly to rotational disks
+
+Use one serial writer per workspace. Multiple compression workers may prepare
+independent candidate frames when CPU policy permits, but only one component should
+create and publish history segments for a workspace. Parallel disk writers that
+look attractive on SSDs commonly reduce HDD throughput by forcing head movement
+between files and directories. The same single-writer contract applies to fast,
+local, and distributed results and must not be selected by backend.
+
+The writer should form a segment when the first of three bounded conditions is met:
+
+- target encoded bytes, initially benchmarked in the 4--32 MiB range;
+- maximum candidate count, initially benchmarked in the 32--256 range;
+- maximum residence time, initially benchmarked in the 0.2--1.0 second range.
+
+One reasonable starting profile for small SAW-like records is 4 MiB, 128
+candidates, or 0.5 seconds, whichever comes first. These are benchmark starting
+points, not immutable public constants. The byte and item bounds cap data loss;
+the residence bound prevents a slow evaluator from leaving one candidate pending
+indefinitely. Do not infer HDD versus SSD from fragile platform/model-name
+heuristics. Prefer one portable sequential-write default and expose only bounded
+common tuning when measured workloads justify it.
+
+For each segment:
+
+1. encode/compress every candidate independently in memory or bounded staging;
+2. issue large buffered sequential writes into one same-directory temporary file;
+3. write the segment footer/index last;
+4. close and atomically rename the temporary file;
+5. never modify, compact, or append to the published segment.
+
+Do not call `fsync`/`FlushFileBuffers` for every candidate. The accepted durability
+policy permits losing recent data after a power or machine failure, so the default
+may rely on ordinary close plus atomic rename and operating-system writeback.
+If an explicit stronger durability option is added, flush at most once per segment
+or generation and keep it off the evaluator's synchronous path. Document clearly
+that atomic rename prevents normal readers from accepting a half-published file but
+does not by itself guarantee power-loss durability.
+
+Avoid synchronous per-candidate index transactions, directory scans, and global
+manifest updates. Update a disposable index in grouped transactions after segment
+publication, checkpoint index state infrequently, and allow several new segments
+to exist before indexing. Compression should reduce device bytes without making
+the disk writer wait on an unbounded CPU pool; store already-compressed candidate
+frames without a second whole-segment compression pass.
+
+Do not run online compaction or rewrite old segments during an optimization. Such
+work turns linear append traffic back into competing reads and writes and causes
+severe seek amplification on one HDD. Any future compaction is an explicit offline
+maintenance operation whose failure leaves the original immutable segments
+untouched.
+
+Optimizer-facing state should not rescan the records directory after every
+candidate or generation. Load one tolerant history snapshot at run start, update
+the current run's usable outcomes in memory, and let immutable segment discovery
+or index refresh occur at bounded checkpoints. Full-history surrogate or viewer
+reads should traverse a stable segment snapshot sequentially and must not hold the
+writer lock. Where a background surrogate reads the same HDD while recording, its
+I/O should be chunked/yielding or schedulable so one large scan cannot indefinitely
+starve sequential publication; storage contention may reduce throughput but must
+not propagate as campaign failure.
+
+The 5,000-candidate SAW evidence provides a scale check. About 170 MB of useful
+rawData plus metadata caused roughly 425 GB of logical archive/manifest rewriting;
+the archive-copy portion also required reading the old bytes before writing the new
+copy. Immutable segments should reduce authoritative publication to approximately
+the newly encoded evidence plus small framing/index overhead--about 2,500 times
+less logical rewrite work for that run. A typical HDD may then spend seconds to
+tens of seconds on the history payload instead of tens of minutes or hours on
+repeated same-volume copies. This is an order-of-magnitude expectation for design
+and benchmark selection, not a promised wall-clock result: simulator scratch,
+antivirus, compression CPU, filesystem cache, and concurrent readers still matter.
+
+### 5. Treat indexes and summaries as disposable caches
 
 An SQLite index may accelerate filtering by run, generation, status, or candidate,
-but immutable candidate files are the durable source when publication succeeds.
+but immutable segments and their valid candidate frames are the durable source when
+publication succeeds.
 The index must be deletable and reconstructible by scanning records. Index absence,
 lock contention, transaction failure, schema mismatch, or corruption must not
-invalidate candidate files or stop optimization.
+invalidate candidate frames/segments or stop optimization.
 
-The writer may update the cache after candidate publication. If cache update fails,
-keep the candidate file and mark/rebuild the cache later. Do not implement a
-two-resource transaction that makes candidate publication depend on SQLite. Avoid
-storing rawData only as database BLOBs, which would recreate one central mutable
-failure domain.
+The writer may update the cache after segment publication. If cache update fails,
+keep the segment and mark/rebuild the cache later. Do not implement a two-resource
+transaction that makes segment publication depend on SQLite. Avoid storing rawData
+only as database BLOBs, which would recreate one central mutable failure domain.
 
 Readers should use an index only when it is valid. They must fall back to a bounded,
-diagnostic directory scan and may rebuild the cache asynchronously or on an
-explicit maintenance path. Cache rebuild failure returns the valid subset already
-found or an empty history; it does not abort a campaign.
+diagnostic segment scan and may rebuild the cache asynchronously or on an explicit
+maintenance path. Scan segment files in stable name order, read each segment
+sequentially, and avoid one random open per candidate. Cache rebuild failure returns
+the valid subset already found or an empty history; it does not abort a campaign.
 
-### 5. Define tolerant read and recovery semantics
+### 6. Define tolerant read and recovery semantics
 
 Every history consumer, including optimizer warm start, resource calibration,
 surrogate training/recovery, cost/time views, history tools, and checkpoint
 inspection, must share these rules:
 
-- a malformed, truncated, checksum-invalid, or unreadable candidate record is
-  skipped individually;
-- temporary files, unknown non-record files, gaps in generation/population indices,
-  and missing candidates are accepted;
+- a malformed, truncated, checksum-invalid, or unreadable candidate frame is
+  skipped individually when the segment directory remains trustworthy;
+- a malformed/truncated segment header or footer may discard that complete bounded
+  segment, but never any earlier segment or the running campaign;
+- temporary files, unknown non-segment files, gaps in generation/population indices,
+  missing candidates, and missing segments are accepted;
 - duplicate identities are resolved by one deterministic rule and reported, not
   raised as a global error;
 - incompatible task/static signatures are excluded without poisoning compatible
@@ -272,7 +376,7 @@ purpose cannot be fulfilled, but an inspection failure must not mutate history o
 leak into a running optimizer. The optimizer-facing history APIs must always offer
 a non-throwing partial/empty recovery path for storage failures.
 
-### 6. Remove old-format and backend-specific machinery
+### 7. Remove old-format and backend-specific machinery
 
 Backward compatibility is not required. Prefer a clean replacement over dual
 writing, automatic migration, legacy aliases, or permanent fallback branches.
@@ -294,7 +398,7 @@ new paths. Remove tests that exist only to preserve the old storage format; repl
 them with tests of the new intent instead of layering compatibility onto the new
 implementation.
 
-### 7. Keep failure domains precise
+### 8. Keep failure domains precise
 
 Do not broaden “recording must not crash optimization” into hiding scientific or
 execution errors:
@@ -315,14 +419,15 @@ record publication should have distinct measurements. Evaluation elapsed time an
 timeout logic must not include time spent waiting for unrelated history I/O after
 the backend result is available.
 
-### 8. Suggested implementation sequence
+### 9. Suggested implementation sequence
 
 1. Introduce the backend-neutral outcome/finalizer and direct-from-result current
    cost calculation while retaining temporary test adapters around old storage.
-2. Implement the immutable candidate codec, atomic writer, tolerant scanner, and
-   optional disposable index.
-3. Implement the bounded recorder supervisor, ownership rules, loss counters,
-   circuit breaker, and bounded shutdown.
+2. Implement the independently framed candidate codec, immutable micro-batch
+   segment codec, atomic serial writer, tolerant sequential scanner, and optional
+   disposable index.
+3. Implement the bounded recorder supervisor, item/byte/time segmenter, owned
+   envelope rules, loss counters, circuit breaker, and bounded shutdown.
 4. Route fast, local, and distributed results through the common finalizer and
    recorder, then delete backend-specific publication branches.
 5. Convert optimizer history, calibration, surrogate, viewers, history clearing,
@@ -334,25 +439,42 @@ Intermediate stages must not claim the final reliability contract while a
 recording exception can still propagate into a campaign or one backend retains a
 different writer.
 
-### 9. Verification and acceptance tests
+### 10. Verification and acceptance tests
 
 Use deterministic failure injection in generic package tests. At minimum cover:
 
 - fast, local, and mocked distributed results entering the same finalizer and the
   same writer API, with no direct backend persistence calls;
 - equivalent file-backed and memory-backed rawData producing the same current
-  costs and candidate-record contents;
-- a write operation that never reads or copies earlier candidate payloads;
+  costs and candidate-frame contents;
+- a segment write that never reads, opens, copies, or modifies earlier segments;
 - thousands of synthetic candidates without write work proportional to accumulated
   history size; prefer operation-count assertions and a generously bounded
   integration timing trend over a fragile microbenchmark alone;
+- one serial workspace writer, with instrumented assertions that concurrent backend
+  completions cannot produce competing segment writes;
+- deterministic byte/count/time segment flush behavior, including the configured
+  maximum loss domain and a low-rate evaluator reaching the residence deadline;
+- independently corrupting one candidate frame inside a valid multi-candidate
+  segment and retaining valid siblings; corrupting/truncating a segment footer must
+  skip at most that segment and allow optimization/history recovery to continue;
+- instrumented HDD-shape tests that bound segment/file creation, directory updates,
+  flushes, index transactions, and seeks/opens by segment count rather than
+  candidate or historical-record count;
+- a sequential-throughput integration profile using small SAW-like payloads and a
+  deliberately slow/seek-penalized filesystem double; the result should favor
+  micro-batch segments over per-candidate files without requiring a physical HDD in
+  the default suite;
+- no per-candidate durability flush, index transaction, or history-directory scan;
+  an optional stronger flush policy, if present, is bounded to segment/generation
+  granularity and remains asynchronous;
 - queue-full behavior, byte-limit behavior, and an oversized single record being
   dropped without blocking or changing its optimizer cost;
 - permission denied, disk-full simulation, temporary-file creation failure,
   encoding failure, atomic-replace failure, index lock/corruption, and recorder
   thread/process death while later candidates and generations continue;
-- abrupt termination leaving a temporary file that the next run ignores;
-- one corrupt finalized candidate among valid siblings, returning all valid
+- abrupt termination leaving a temporary segment that the next run ignores;
+- one corrupt finalized candidate frame among valid siblings, returning all valid
   history and bounded diagnostics;
 - missing records, generation gaps, duplicate identities, incompatible signatures,
   and completely unreadable/empty history;
@@ -378,6 +500,11 @@ time must not absorb asynchronous record publication latency.
 - Providing a generation-level durability barrier before optimization continues.
 - Recovering queued-but-unpublished records after process or machine loss.
 - Making the candidate store transactional as a whole campaign.
+- Guaranteeing power-loss durability for an atomically renamed but unflushed
+  segment, or flushing every candidate to obtain that guarantee.
+- Automatically detecting storage media type or maintaining separate backend-
+  specific HDD/SSD writers.
+- Performing online segment compaction during optimization.
 - Preserving or automatically migrating the current JSONL/global-ZIP format.
 - Treating stored cost snapshots as authoritative after task cost policy changes.
 - Retrying indefinitely, allowing an unbounded queue, or blocking simulator
@@ -389,15 +516,20 @@ time must not absorb asynchronous record publication latency.
 
 This toDo is complete only when all of the following are true:
 
-- fast, local, and distributed evaluation share one backend-neutral finalizer and
-  one immutable per-candidate recording implementation;
+- fast, local, and distributed evaluation share one backend-neutral finalizer,
+  candidate-envelope contract, and immutable micro-batch segment writer;
 - current costs are calculated before and independently of durable publication;
 - the running optimizer continues through every injected recording, index, and
   partial-history failure described above;
 - the writer has bounded item/byte capacity, bounded failure/retry behavior, and a
   bounded shutdown path that may explicitly lose records;
 - no authoritative campaign-wide individual manifest or rawData archive is copied,
-  rewritten, or required for new-format recovery;
+  rewritten, or required for new-format recovery, and published segments are never
+  mutated or compacted during optimization;
+- one workspace-scoped serial writer performs bounded byte/count/time micro-batching
+  and sequential segment publication without per-candidate flush/index/scan work;
+- candidate frames remain individually checksummed and recoverable within a valid
+  segment, while a completely bad segment is a bounded non-fatal loss domain;
 - history, optimizer, calibration, surrogate, and inspection consumers isolate bad
   candidates and support partial or empty history according to their runtime role;
 - the old format and backend-specific recording paths are removed rather than kept
