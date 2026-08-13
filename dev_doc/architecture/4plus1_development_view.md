@@ -92,9 +92,13 @@ maintained pytest coverage lives in the repository's top-level `tests/`.
 
 The canonical local environment is the repository sibling `../.venv`, created from
 the system Python. Development acceptance never uses an editable install or
-repository `src/` on `PYTHONPATH`: after each change, build a wheel, force-reinstall
-that wheel without dependency churn, verify the import path is below the venv's
-site-packages, and only then run pytest with the venv interpreter.
+repository `src/` on `PYTHONPATH`: after package code/build/resource changes, build
+a wheel, force-reinstall that wheel without dependency churn, verify the import path
+is below the venv's site-packages, and only then run pytest with the venv
+interpreter. Content-only documentation edits do not require that software test
+cycle unless they change documentation packaging/discovery, command routing,
+generation, or executable examples; they receive proportional static/reference
+checks instead.
 
 ## Change discipline
 
@@ -106,7 +110,10 @@ site-packages, and only then run pytest with the venv interpreter.
   must not become an unrelated repository scan.
 - Update architecture when system relationships change; update blueprints when
   module/file contracts change; update user docs when task-authoring behavior
-  changes; add one append-only change record.
+  changes; add one append-only change record. A localized correction to exactly one
+  existing documentation file may skip both the record and Git commit only under
+  the narrow no-contract/no-workflow exception defined by the development guide
+  and change-record contract.
 - Prefer current contracts over compatibility aliases and silent fallbacks. Obsolete
   design notes are preserved only as historical evidence.
 - Protect workspace isolation, rawData schema, persistence atomicity, direct

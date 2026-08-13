@@ -146,7 +146,8 @@ explicitly brings that fact forward.
 
 When adding future work, put manual-trigger work directly under `toDo/` and
 automatic-trigger work under `toDo/auto/`. When a task is fully completed, update
-the current code, tests, user documentation, architecture, blueprints, terminology,
-and change record first; only then move a completed one-shot toDo to `obsolete/`.
-Keep a recurring automatic toDo active after each completed occurrence unless its
-own completion rule or an explicit user decision retires the document.
+the applicable code/tests, user documentation, architecture, blueprints,
+terminology, and change record first; documentation-only work does not require
+inapplicable software tests. Only then move a completed one-shot toDo to
+`obsolete/`. Keep a recurring automatic toDo active after each completed occurrence
+unless its own completion rule or an explicit user decision retires the document.

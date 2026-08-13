@@ -50,6 +50,14 @@ Recommended record structure:
 ## Maintenance Contract
 
 Add one change record after every code change. Documentation-only changes also
-require a record. Describe the completed work; unresolved future work belongs in
-`toDo/`, not in `change_records/`. Never rewrite an older record to make it describe
-the current system.
+require a record except for a trivial correction that changes exactly one existing
+documentation file, is limited to localized typo/grammar/formatting/link repair,
+adds/deletes/renames/moves no file, and changes no architecture, blueprint,
+contract, workflow, toDo state, user instruction, public behavior, or historical
+decision. An exempt correction may remain uncommitted unless the user requests a
+commit; report that working-tree diff and do not create a change record for it.
+
+Every non-exempt documentation change receives a record and a commit. Describe the
+completed work; unresolved future work belongs in `toDo/`, not in
+`change_records/`. Never rewrite an older record to make it describe the current
+system.

@@ -96,8 +96,10 @@ Do not use an editable install for acceptance testing and do not add `src/` to
 `PYTHONPATH`. Tests must import the regular yadof installation in `.venv`, including
 its wheel documentation, templates, adapters, and console entry point.
 
-After changing source or documentation, build first, then replace the installed
-yadof with the newest successful wheel before testing:
+After changing package code, tests, build configuration, resource mapping, or any
+documentation mechanism that affects wheel contents or `yadof docs` behavior,
+build first, then replace the installed yadof with the newest successful wheel
+before testing:
 
 ```powershell
 & "..\.venv\Scripts\python.exe" -m build --wheel
@@ -120,6 +122,22 @@ Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 The reported package path must be below `../.venv/Lib/site-packages/yadof`, never
 below repository `src/`. Build/install failure stops the workflow; do not test the
 previous installed copy as though it contained the current edits.
+
+### Documentation-only validation
+
+A content-only edit under `dev_doc/`, `user_doc/`, or `admin_tool/` does not require
+a wheel build, reinstall, import-origin check, or pytest run when no code, test,
+build configuration, package-resource mapping, documentation command, or document
+generation mechanism changed. Software tests provide little evidence for prose-
+only changes and should not be run merely to satisfy a blanket workflow step.
+
+Still perform lightweight checks appropriate to the edit: preserve UTF-8, inspect
+the final diff, run `git diff --check`, and verify any paths, links, examples, or
+cross-document references that were changed. If a documentation-only change alters
+packaging/discovery, `yadof docs` routing, generated documentation, or executable
+examples, run the corresponding focused build or command check. A code change still
+uses the installed-wheel test workflow above even when most of its diff is
+documentation.
 
 ## Encoding And Mojibake
 
@@ -193,7 +211,19 @@ After each code change:
    [user-document contract](skill/user_doc.md).
 
 For documentation-only changes, still update architecture and blueprints when the
-documentation system itself changes, and add a change record.
+documentation system itself changes. A trivial documentation correction may skip
+both a change record and a Git commit only when all of these conditions hold:
+
+- exactly one existing documentation file changes;
+- the diff is a localized typo, grammar, formatting, or link correction;
+- no file is added, deleted, renamed, or moved; and
+- no architecture, blueprint, contract, workflow, toDo state, user instruction,
+  public behavior, or historical decision changes.
+
+Report the remaining uncommitted diff. Commit when the user explicitly requests it.
+Every other documentation-only change remains a normal documented change: add its
+change record and commit it. Do not create a change record for an exempt correction,
+because doing so would make the change multi-file and defeat the exception.
 
 When adding new future work, put manual-trigger work directly under `toDo/` and
 automatic-trigger work under `toDo/auto/`, rather than putting either in

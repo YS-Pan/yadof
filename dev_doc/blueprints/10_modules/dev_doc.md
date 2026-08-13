@@ -48,18 +48,27 @@ yadof's package/workspace/runtime contracts.
 Architecture and blueprints describe the present, so update them in place when code
 changes. Change records remain append-only. Old external references may restore lost
 rationale, but obsolete layouts, names, and fallbacks are filtered against current
-code before inclusion. A completed toDo moves to `obsolete/` only after code, tests,
-user docs, architecture, blueprints, terminology, and one change record agree.
+code before inclusion. A completed toDo moves to `obsolete/` only after applicable
+code/tests, user docs, architecture, blueprints, terminology, and one change record
+agree; documentation-only work does not invent inapplicable software tests.
 Completing one occurrence of a recurring automatic toDo does not complete its
 document-level goal, so the handoff remains active until its own completion rule or
 an explicit user decision retires it.
 
 The development guide defines the sibling installed-package venv and mandatory
-build/force-reinstall/import-path/full-test workflow after package changes.
+build/force-reinstall/import-path/full-test workflow after package code, build, or
+resource changes. Content-only documentation edits use proportional
+UTF-8/diff/link/reference checks and enter that software test workflow only when
+documentation packaging, discovery, routing, generation, or executable examples
+are affected.
 
 ## Invariants
 
-- Documentation-only changes still receive a change record.
+- Documentation-only changes receive a change record and commit except for one
+  localized correction in exactly one existing documentation file that changes no
+  contract, workflow, architecture, blueprint, toDo state, user instruction,
+  public behavior, or historical decision; that narrow exception is reported as an
+  uncommitted diff unless the user requests a commit.
 - `README.md` links every module contract instead of duplicating its detailed rules.
 - Installed docs are generated from root source, never edited under site-packages.
 - Viewer-specific docs are edited only in the owning viewer subtree and ship beside its
