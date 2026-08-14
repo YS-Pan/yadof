@@ -106,10 +106,12 @@ does not discard otherwise valid evidence.
 `run_generations()` reloads effective configuration for each generation, and task
 queries fresh-load the selected workspace modules. The supported coherence contract
 is one current task/config snapshot per generation. Between generations, a user may
-change cost interpretation, parameters, objective width, evaluator/workflow logic,
-or task helpers to correct or deliberately redefine the optimization problem. The
-following generation reconstructs its optimizer problem and reinterprets
-mechanically usable history through the new definitions.
+change cost interpretation, parameter ranges/levels, fixed-width objective policy,
+evaluator/workflow logic, or task helpers to correct or deliberately redefine the
+optimization problem. The following generation reinterprets mechanically usable
+history through the new definitions. Parameter identity/count and objective count
+remain stable in the current contract; structural dimension changes are separate
+future work.
 
 Yadof does not decide whether that change is scientifically valid. Source hashes or
 signatures may identify the reload and invalidate a derived cache, but they are not

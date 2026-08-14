@@ -50,10 +50,12 @@ local/distributed remain file-backed prepared-job transports.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions
    only to screen candidates that still receive real evaluation.
 
-Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen. A parameter
-or objective-width change reconstructs the next generation's optimizer context;
-mechanically unusable old records are isolated, while a mere source-fingerprint
-change never excludes evidence by itself.
+Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen.
+Shape-preserving parameter-range/level and fixed-width objective changes rebuild
+affected derived history for the next generation; mechanically unusable old records
+are isolated, while a mere source-fingerprint change never excludes evidence by
+itself. Parameter identity/count and objective count remain stable in the current
+hot-change contract; structural dimension changes are future work.
 
 ## Boundaries
 

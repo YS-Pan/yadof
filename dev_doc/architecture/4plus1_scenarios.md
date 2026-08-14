@@ -90,14 +90,16 @@ generation uses the new policy coherently.
 
 The same supported boundary applies when correcting parameter definitions,
 configuration, workflow/evaluation code, or task helpers. The new generation may
-have different parameter or objective counts and is intentionally a different
-optimization problem. Yadof trusts the user to decide whether retaining pre-edit
-evidence is scientifically reasonable. It does not infer scientific equivalence
-from source signatures. If current code cannot normalize or calculate a particular
-old record, that record is isolated; if the user does not want old evidence
-considered at all, the user explicitly clears history or uses another workspace.
-Task files continue to call reusable `yadof.job_template` helpers rather than
-copying framework mechanisms.
+use different parameter ranges/levels, objective meanings or thresholds, and is
+intentionally allowed to be a scientifically different optimization problem.
+Parameter identity/count and objective count remain stable for this supported
+in-campaign path; structural dimension changes are future work. Yadof trusts the
+user to decide whether retaining pre-edit evidence is scientifically reasonable.
+It does not infer scientific equivalence from source signatures. If current code
+cannot normalize or calculate a particular old record, that record is isolated; if
+the user does not want old evidence considered at all, the user explicitly clears
+history or uses another workspace. Task files continue to call reusable
+`yadof.job_template` helpers rather than copying framework mechanisms.
 
 ## Inspect saved surrogate checkpoints
 

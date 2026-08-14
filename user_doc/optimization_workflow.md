@@ -118,6 +118,12 @@ actually process are skipped. The user decides whether keeping that mixture is
 reasonable, whether to clear history, or whether the corrected task belongs in a
 new workspace.
 
+For this in-campaign correction path, keep parameter names/order/count and objective
+count unchanged. Parameter ranges/levels, objective meaning/thresholds, cost code,
+and task execution code may change at the boundary. Structural parameter or
+objective-width changes need separate optimizer-state support; use a new workspace
+and campaign for them for now.
+
 Keep these three decisions separate:
 
 1. `workflow.py` decides what evidence is saved. To make every far-field value

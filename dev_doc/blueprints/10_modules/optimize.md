@@ -35,13 +35,14 @@ and generation metadata including timings and populations. Config is loaded once
 generation so one coherent policy applies to its work.
 
 Task flexibility is generation-scoped. At each generation boundary, optimization
-must use the current parameter and objective definitions and reconstruct pymoo
-problem/reference-direction state when their counts change. A changed
-`calc_cost.py` reinterprets mechanically usable history before selection. Changes
-to workflow/evaluation code affect the next generation's real evaluations. Source
-fingerprints are cache-invalidation/provenance inputs only; optimize does not decide
-whether the user's old and new problems are scientifically equivalent or silently
-discard history because a signature changed.
+must use current shape-preserving parameter and fixed-width objective definitions.
+A changed `calc_cost.py` reinterprets mechanically usable history before selection.
+Changes to workflow/evaluation code affect the next generation's real evaluations.
+Parameter identity/count and objective count remain stable during a campaign;
+rebuilding pymoo problem/reference-direction state for structural dimension changes
+is separate future work. Source fingerprints are cache-invalidation/provenance
+inputs only; optimize does not decide whether the user's old and new problems are
+scientifically equivalent or silently discard history because a signature changed.
 
 ## Failure behavior
 

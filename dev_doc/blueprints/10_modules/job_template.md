@@ -61,12 +61,15 @@ supplied when a task needs them, but rawData remains the evidence source.
 modules do not repeat that calculation.
 
 Fresh loading is also the campaign hot-change boundary. One generation selects one
-coherent task snapshot. The next generation may observe changed parameter names,
-ranges/count, objective names/count, cost code, workflow/evaluation code, and local
-task helpers. Stored raw variables and rawData are reinterpreted through that
-current snapshot when mechanically possible. Task/source signatures may invalidate
-derived caches and record provenance, but job_template does not use them to judge
-scientific equivalence or automatically reject old evidence.
+coherent task snapshot. The next generation may observe changed parameter
+ranges/levels, fixed-width objective names/definitions, cost code,
+workflow/evaluation code, and local task helpers. Parameter identity/count and
+objective count remain stable in the current hot-change contract; add/remove/rename
+or objective-width changes are future work. Stored raw variables and rawData are
+reinterpreted through the current snapshot when mechanically possible. Task/source
+signatures may invalidate derived caches and record provenance, but job_template
+does not use them to judge scientific equivalence or automatically reject old
+evidence.
 
 New task objectives are independently normalized dimensionless minimization costs
 in `[0, 1]`. `soft_cost()` is the canonical tanh mapping from fixed task-owned

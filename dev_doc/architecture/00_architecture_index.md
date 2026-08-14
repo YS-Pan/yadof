@@ -24,9 +24,11 @@ Core architectural goals are task-agnostic expensive evaluation, resumable
 rawData-first history, fast/local/distributed evidence equivalence, per-individual
 failure isolation, user-authoritative generation-boundary task correction, and safe
 coexistence of multiple workspaces. A campaign does not freeze its initial
-parameters, objectives, cost policy, or task code; the next generation reconstructs
-derived state from the current workspace definition without asking yadof to judge
-scientific equivalence. Fast evaluation uses reusable isolated local workers and
+parameter ranges/levels, fixed-width objective/cost policy, or task code; the next
+generation reconstructs derived state from the current workspace definition
+without asking yadof to judge scientific equivalence. Parameter identity/count and
+objective count remain stable in this contract. Fast evaluation uses reusable
+isolated local workers and
 memory-backed evidence without durable per-candidate job folders;
 local/distributed retain prepared-job diagnostics. Costs and normalized history are
 interpretations of evidence, not stored source truth.

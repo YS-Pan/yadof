@@ -10,6 +10,10 @@ pre-revision document is preserved at
 The work may make large incompatible changes. The current global
 `recorded_data/rawData.npz` and `indMeta.jsonl` format does not need a
 compatibility reader, automatic migration, or dual-write period.
+The v2 implementation does not inspect those legacy files: if they happen to be
+present, it starts with empty v2 history and leaves every legacy file untouched.
+The user is responsible for not mixing old-format and v2 campaigns in one
+workspace.
 
 The expected campaign scale for this design is normally several tens of thousands
 of candidates and is not expected to exceed 100,000 in the foreseeable future.
@@ -112,8 +116,15 @@ not a scientific-equivalence judgment.
 Hot changes take effect at the next generation boundary. One generation uses one
 coherent task/config snapshot; yadof must not let candidates within the same
 generation silently mix pre-edit and post-edit definitions. At the next boundary
-the optimizer problem, parameter normalization, objective names/count, evaluator,
-and derived history view are rebuilt from current workspace code.
+parameter normalization, current cost interpretation, evaluator behavior, and the
+derived history view are rebuilt from current workspace code.
+
+This recording project assumes that parameter identity/count and objective count
+stay fixed for the campaign. Users may correct parameter ranges or levels, cost
+logic and thresholds, configuration, workflow/evaluation code, and task helpers,
+but they are responsible for preserving the parameter schema and objective width.
+Supporting parameter add/remove/rename operations or objective-width changes
+requires separate optimizer-state semantics and belongs in a future toDo.
 
 ## Locked Product Decisions
 
@@ -127,18 +138,28 @@ The implementation must preserve these decisions:
    and cost is recording loss, not an evaluation failure.
 4. One independent background writer thread keeps disk publication off the
    evaluation scheduling path.
-5. It is acceptable to lose a bounded batch of 16 or 32 candidates. It is not
-   acceptable to make a whole generation the normal loss unit.
+5. Recording loss should be as small as practical and must remain bounded by the
+   selected runtime limits. Initial 16-candidate segment and 32-candidate total
+   unpublished limits are tuning defaults, not a product boundary where one more
+   lost candidate suddenly becomes unacceptable. Generation is not a persistence
+   transaction or intentional batching unit, but systemic storage/process failure
+   may still lose a complete generation.
 6. The loss bound counts every unpublished candidate: assembling, queued, encoding,
    temporary-file, and in-flight publication states.
 7. One workspace has at most one active optimization campaign. Concurrent
    campaigns use different workspaces.
-8. Task and configuration edits remain supported between generations. Yadof does
-   not judge scientific compatibility and does not silently freeze a campaign's
+8. Task and task-semantic configuration edits remain supported between generations
+   while parameter identity/count and objective count stay fixed. Yadof does not
+   judge scientific compatibility and does not silently freeze a campaign's
    original task.
 9. The design targets at most 100,000 candidates. SQLite and custom segment
    protocols require measured evidence before they enter the implementation.
-10. Old history-format compatibility is not required.
+10. Old history-format compatibility or detection is not required. V2 ignores old
+    files, starts cold, and never deletes or rewrites them.
+11. Recorder infrastructure configuration, including history paths, segment/queue
+    budgets, writer failure policy, and shutdown policy, is frozen when the
+    campaign starts. Changing those settings takes effect only for a later
+    campaign/process.
 
 ## Goal
 
@@ -165,8 +186,8 @@ When complete:
   written;
 - recording loss, corrupt segments, unreadable history, and a dead writer cannot
   terminate the campaign;
-- task edits are observed coherently at generation boundaries and cause current
-  history reinterpretation without a scientific-equivalence gate;
+- shape-preserving task edits are observed coherently at generation boundaries and
+  cause current history reinterpretation without a scientific-equivalence gate;
 - bad or mechanically incompatible records are isolated, while valid records and
   later generations remain usable;
 - HDD file creation, directory updates, seeks, and flushes scale with segment count,
@@ -183,24 +204,37 @@ affecting task inputs or simulator scratch, or machine loss.
 
 At the start of every generation:
 
-1. reload effective workspace configuration;
-2. fresh-load current parameters, objective names/count, cost code, evaluator, and
-   task helpers through the normal isolated task loader;
-3. calculate a content fingerprint for cache invalidation and provenance;
-4. build a new optimizer problem/context from the current variable and objective
-   counts;
-5. reinterpret the usable history view with that snapshot when the fingerprint
+1. reload generation-scoped task/evaluation/optimizer configuration while retaining
+   the campaign-start recorder infrastructure configuration;
+2. fresh-load current parameters with the campaign's stable identities/count,
+   current objective names with the stable objective count, cost code, evaluator,
+   and task helpers through the normal isolated task loader;
+3. calculate component fingerprints plus one complete task-snapshot identity;
+4. retain the optimizer dimensional structure and apply current shape-preserving
+   task definitions;
+5. reinterpret the usable history view only when its interpretation fingerprint
    changed.
 
-The fingerprint is not a scientific signature. Its only purposes are to notice
-that derived values may be stale, invalidate caches, and explain which source
-snapshot produced diagnostics. A changed fingerprint must not automatically
-exclude old records. Every old record is attempted under current definitions:
+Do not use one monolithic fingerprint as every cache key. Maintain at least:
+
+- an `interpretation_fingerprint` covering parameter ranges/levels, objective
+  naming/cost code, and helpers used to normalize evidence or calculate cost;
+- an `evaluation_fingerprint` covering workflow/evaluation code and execution-side
+  helpers, used as provenance for newly produced evidence rather than as a reason
+  to recalculate unchanged historical costs;
+- a complete `task_snapshot_id` identifying the coherent combination used by one
+  generation for diagnostics and provenance.
+
+These fingerprints are not scientific signatures. Their purposes are to notice
+that particular derived values may be stale, invalidate only the affected caches,
+and explain which source snapshot produced evidence or diagnostics. A changed
+fingerprint must not automatically exclude old records. Every old record is
+attempted under current shape-preserving definitions:
 
 - changed parameter ranges renormalize stored raw values;
-- changed parameter names/count may make individual records mechanically unusable;
+- parameter names and count remain fixed for this project;
 - changed `calc_cost.py` recalculates current costs from compatible rawData;
-- changed objective names/count rebuilds the optimizer and reference directions;
+- changed objective definitions or names retain the existing objective count;
 - changed workflow/evaluation code affects future evidence at the next generation;
 - old rawData remains eligible when current code can interpret it.
 
@@ -215,6 +249,11 @@ bytes at generation start; calculating a fingerprint and then continuing to impo
 mutable live files is not a coherent snapshot. Large task-owned simulator assets
 need not be duplicated merely for this mechanism, but users who replace such assets
 must use a stopped generation boundary or a separate workspace.
+
+Recorder infrastructure is not part of this hot reload. The active writer keeps
+the history root, lock identity, count/byte limits, segment policy, failure policy,
+and shutdown deadline captured at campaign start. Later edits to those settings do
+not redirect or resize an existing writer.
 
 ### 2. Reuse the existing result model
 
@@ -251,40 +290,67 @@ The envelope contains:
   generation source fingerprint;
 - status, timestamps, execution provenance, and bounded diagnostics;
 - every validated rawData item needed for future reinterpretation;
-- current objective names/costs as a derived diagnostic cache, tagged with the
-  fingerprint that produced them.
+- optional current objective names/costs as a derived diagnostic cache, tagged with
+  the interpretation fingerprint that produced them.
 
 Stored costs are never source truth. A reader may reuse them only as a derived cache
-when the current fingerprint exactly matches; otherwise it recalculates from
-rawData.
+when the current interpretation fingerprint exactly matches; otherwise it
+recalculates from rawData. The format and reader must work when this optional cache
+is absent, so cache persistence can be deferred if first-version benchmarks do not
+justify it.
 
-Admission accounts for the owned rawData's actual or conservative encoded-byte
-size. An envelope larger than the total byte budget is dropped after current cost
-is returned. Do not copy or serialize the same payload repeatedly merely to move it
-between finalizer, queue, and writer.
+Admission accounts conservatively for peak resident ownership, not merely the
+eventual compressed member size. The reservation must cover source arrays,
+metadata, encoding buffers or temporary files, and any overlap while ownership is
+transferred or released. Do not copy or serialize the same payload repeatedly
+merely to move it between finalizer, queue, and writer.
+
+A representative large yadof result is an antenna pattern containing
+`10 * 360 * 360 = 1,296,000` floating-point values. Its main array alone is about
+4.94 MiB as float32 or 9.89 MiB as float64 before axes, metadata, other rawData
+items, and encoding overhead. Default byte limits must be benchmarked against both
+small SAW-like candidates and at least this large-payload shape. The normal segment
+byte target must not double as the maximum legal candidate size.
 
 ### 4. Use one bounded background writer thread
 
 Create one writer thread for one active campaign in one workspace. Use a daemon
-thread or an equivalent lifecycle that cannot keep the interpreter alive after the
-bounded shutdown deadline. Do not create one writer per backend, worker, generation,
-or segment.
+thread so a permanently blocked filesystem call cannot keep a command-line process
+alive forever. Do not create one writer per backend, worker, generation, or
+segment.
 
 Initial loss/throughput profile:
 
-- target segment: up to 16 candidates;
-- total unpublished capacity: up to 32 candidates;
-- segment byte cap: benchmark a bounded starting value such as 8--16 MiB;
-- total unpublished byte cap: no more than twice the selected segment byte cap;
+- candidate-count segment target/default limit: 16;
+- total unpublished candidate default limit: 32;
+- normal segment byte target: benchmark an initial 8--16 MiB value against both
+  small and large tasks rather than treating the SAW payload size as representative
+  of all yadof tasks;
+- separate maximum single-candidate reservation and total unpublished byte limits,
+  chosen so the default admits at least the representative antenna payload above;
 - flush a partial segment at population/generation/evaluation-call boundaries;
 - no residence-time timer is required for generation-based calls.
+
+The count values above are initial defaults and the implementation may expose them
+as advanced configuration. Every campaign freezes and enforces the selected values,
+but product correctness does not depend on 16 or 32 being universally special.
+Count and byte limits remain independent because small candidates stress file/seek
+shape while large candidates stress memory and I/O volume.
+
+The byte target is a normal flush threshold, not a hard per-candidate rejection
+threshold. A candidate that exceeds the target but fits the maximum
+single-candidate reservation is published as a singleton segment. A candidate that
+exceeds the maximum single-candidate reservation or cannot fit the total
+unpublished byte budget is dropped only after its current cost has been returned.
 
 The unpublished budget includes candidates being assembled, waiting in the queue,
 encoded into a temporary file, and actively written but not atomically published.
 Credits are released only after publication succeeds or the data is explicitly
-dropped. This makes the actual abrupt-process-loss exposure no greater than the
-documented 32-candidate/byte budget. A single failed or corrupt segment normally
-loses at most 16 candidates.
+dropped. This keeps abrupt-process-loss exposure within the campaign's configured
+candidate and byte budgets. One failed or corrupt segment normally loses no more
+than that segment's configured candidate/byte limits. Yadof minimizes this exposure
+but does not promise that systemic storage failure, writer disablement, or process
+loss can never remove a complete generation.
 
 Admission is non-blocking. When either budget is exhausted:
 
@@ -302,12 +368,29 @@ automatic restart service, cooldown scheduler, or unbounded retry loop.
 
 If the writer thread dies unexpectedly, future admissions detect the state,
 disable recording for that campaign, and keep optimization running. Normal shutdown
-requests a flush and joins only for a bounded deadline; remaining candidates are
-counted as shutdown-dropped and process exit continues.
+requests a flush and joins only for a bounded deadline. The deadline bounds how long
+the optimization caller waits for best-effort history after evaluation has already
+finished; it does not claim that Python can cancel a thread blocked inside an OS
+filesystem call.
+
+If the deadline expires, queued or assembling envelopes that have not entered the
+blocking operation may be released and counted as shutdown-dropped. An in-flight
+segment whose thread has not returned has an unknown outcome, not a proven drop,
+because the call may later complete and publish it. A normal CLI command may then
+return and its process may exit without the daemon writer keeping it alive.
+
+For a long-lived Python process, a timed-out writer retains the workspace campaign
+lock until the thread actually exits or the process ends. Later same-workspace
+campaign or destructive-history calls fail fast during that interval. This is an
+edge-case safety rule for notebook/service/API embedding, not the normal CLI flow
+where each finite run/resume command owns one process. The shutdown timeout is
+therefore a bound on caller/process-exit latency, not a promise of immediate
+same-process workspace reuse.
 
 Expose bounded counters such as offered, admitted, published candidates/segments,
 queue-dropped, oversized-dropped, write-failed, disabled-dropped, and
-shutdown-dropped. Logging failure is itself non-fatal.
+shutdown-dropped, plus an in-flight-shutdown-unknown indicator. Logging failure is
+itself non-fatal.
 
 ### 5. Publish immutable standard-ZIP segments
 
@@ -328,7 +411,7 @@ recorded_data/
 Each segment is a normal ZIP containing:
 
 - one versioned manifest with candidate identities, metadata, member names, sizes,
-  and generation fingerprint;
+  interpretation/evaluation fingerprints, and the complete task snapshot identity;
 - candidate-scoped metadata members;
 - candidate-scoped NPZ rawData members.
 
@@ -347,7 +430,7 @@ Use ZIP member CRC and manifest size/member mapping instead of inventing a
 length-delimited `.yadseg` frame protocol. If one candidate member fails CRC or
 is missing, skip that candidate and keep valid siblings when the ZIP directory is
 readable. If the central directory or manifest is unusable, skip the complete
-segment; its maximum candidate count is the bounded failure unit.
+segment; the campaign's configured segment limits define that bounded failure unit.
 
 Run/generation/surrogate metadata must also avoid one growing mutable JSONL. Publish
 small immutable event files or include the authoritative metadata in segment
@@ -359,6 +442,13 @@ At campaign start, discover a stable snapshot of finalized segment names once an
 build an in-memory catalog. Do not rescan the complete records tree after every
 candidate or unchanged generation.
 
+Keep this state private to an explicit campaign/session object; do not turn the
+general recorded-data layer into a process-global in-memory database or registry.
+The session owns its startup durable rows, lightweight finalized rows from the
+current process, and the bounded recent pending/publication state needed by the
+writer. Only rows still inside the recorder ownership window retain rawData in
+memory.
+
 Maintain a derived in-memory history view containing raw-variable coordinates,
 current costs, provenance, and references to published segment evidence. Current
 generation results may enter that view immediately so the optimizer need not wait
@@ -368,18 +458,21 @@ the bounded recorder ownership window.
 Track whether each in-process row is backed by a finalized segment, still owns a
 pending envelope, or has been dropped. Publication replaces pending ownership with
 a segment reference. A dropped row may remain usable from its already derived
-variables/costs while the generation fingerprint is unchanged, but it has no
+variables/costs while the interpretation fingerprint is unchanged, but it has no
 recoverable evidence: remove it from the derived history when a later task change
 requires reinterpretation, and expect it to be absent after process restart.
 
-When the generation fingerprint is unchanged, append new derived rows and reuse
-the existing view. When relevant task sources change:
+When the interpretation fingerprint is unchanged, append new derived rows and
+reuse the existing view. An evaluation-only fingerprint change records new
+provenance but does not by itself rebuild old normalized variables or costs. When
+interpretation-relevant task sources change:
 
 1. invalidate derived normalization/cost caches;
 2. take a stable snapshot of all finalized segments plus still-owned envelopes;
 3. sequentially load candidate evidence and apply the new generation snapshot;
 4. omit records that are missing, lost, corrupt, or mechanically uninterpretable;
-5. build the next optimizer context from the new parameter/objective definitions.
+5. update the derived history and next optimizer context without changing parameter
+   identity/count or objective width.
 
 This re-interpretation can create a one-time pause after an intentional task edit.
 That cost is required by the flexibility contract and must be measured separately
@@ -438,6 +531,10 @@ Do not exclude a candidate merely because its stored fingerprint differs from th
 current generation. Fingerprints trigger recalculation. Only concrete current
 normalization/rawData/cost failures make a record mechanically unusable.
 
+Legacy global-ZIP/JSONL paths are outside this query surface. Their presence does
+not trigger migration, confirmation, deletion, or an error; v2 discovery behaves
+as if they do not exist.
+
 An explicitly invoked viewer may return a nonzero status when it cannot satisfy its
 inspection request. That user-facing error must not mutate history or propagate
 into a running optimizer.
@@ -477,9 +574,11 @@ preparation, simulator scratch, the Python process, or shared machine resources.
 
 ## Implementation Sequence
 
-1. Add tests for generation-boundary task/config reload, changed parameter and
-   objective counts, current-cost reinterpretation, and the rule that fingerprints
-   invalidate caches without making scientific compatibility decisions.
+1. Add tests for generation-boundary shape-preserving task/config reload, changed
+   parameter ranges, current-cost reinterpretation, the fixed parameter/objective
+   dimensions assumed by this project, and the rule that component fingerprints
+   invalidate only their affected caches without making scientific compatibility
+   decisions.
 2. Refactor the existing `JobResult` finalization so all backends calculate cost
    directly from one owned validation load. Temporary old-store adapters may remain
    only during this stage.
@@ -489,7 +588,7 @@ preparation, simulator scratch, the Python process, or shared machine resources.
    accounting, non-blocking admission, failure disablement, and bounded shutdown.
 5. Route fast, local, and distributed through the common finalizer/recorder and
    remove fast inline recording plus local/distributed batch/fallback policy.
-6. Implement the hot derived-history catalog and generation-fingerprint
+6. Implement the campaign-owned derived-history state and component-fingerprint
    invalidation/reinterpretation behavior.
 7. Convert optimizer, resource calibration, surrogate, viewers, history clear, and
    workspace checks to the tolerant segment query surface and campaign lock.
@@ -513,30 +612,42 @@ optimization.
   tested semantic distinction.
 - Editing `calc_cost.py` between generations recalculates old compatible rawData
   and affects the next generation.
-- Editing parameter ranges renormalizes stored raw variables; adding/removing or
-  renaming parameters rebuilds the problem and skips only concretely unusable
-  records.
-- Changing objective names/count rebuilds GA/NSGA-III problem state and reference
-  directions for the next generation.
+- Editing parameter ranges/levels renormalizes stored raw variables while parameter
+  identity/count remains fixed.
+- Editing objective definitions or names affects the next generation while the
+  objective count remains fixed.
 - Editing workflow/evaluation/task helper code affects the next generation and
   does not split the current generation across source snapshots.
-- A changed fingerprint never excludes a record by itself.
-- An unchanged fingerprint does not cause a full segment-tree scan or full cost
-  recalculation every generation.
+- A changed fingerprint never excludes a record by itself; an evaluation-only
+  fingerprint change does not recalculate unchanged historical costs.
+- An unchanged interpretation fingerprint does not cause a full segment-tree scan
+  or full cost recalculation every generation.
+- Editing recorder infrastructure configuration during a campaign does not redirect
+  or resize the already running writer.
 
 ### Bounded asynchronous loss
 
-- The selected default publishes no more than 16 candidates in one segment.
+- The selected campaign configuration, including the initial 16-candidate segment
+  and 32-candidate unpublished defaults, is enforced exactly but is tested through
+  parameterized limits rather than treated as a universal acceptability boundary.
 - Instrumentation proves that assembling + queued + encoding + temporary +
-  in-flight candidates never exceed 32 or the total byte budget.
-- Queue/byte exhaustion and an oversized candidate drop immediately without
-  changing the returned cost or delaying worker release.
+  in-flight candidates and their resident/encoding reservations never exceed the
+  selected count or total byte budgets.
+- A candidate larger than the normal segment byte target but within the maximum
+  single-candidate reservation publishes as a singleton segment.
+- Queue/byte exhaustion and a candidate above the real single-candidate hard limit
+  drop immediately without changing the returned cost or delaying worker release.
 - Segment errors lose at most that segment; later admitted segments can publish.
 - Consecutive systemic failures disable recording without stopping later
   generations.
 - Unexpected writer death disables recording without an automatic restart loop and
   without terminating optimization.
-- Bounded shutdown reports and discards remaining candidates after its deadline.
+- Bounded shutdown releases candidates that have not entered a blocked I/O call,
+  reports an in-flight unknown outcome when necessary, and never claims to cancel a
+  blocked Python thread.
+- A timed-out writer cannot keep a CLI process alive; a long-lived embedding retains
+  the workspace lock and rejects later same-workspace mutation until that thread
+  actually exits or the process ends.
 
 ### Format, HDD shape, and recovery
 
@@ -544,13 +655,17 @@ optimization.
   segment.
 - Temporary files are ignored after abrupt termination.
 - Corrupting one candidate member skips that candidate while readable siblings
-  survive; corrupting the ZIP directory skips at most one 16-candidate segment.
+  survive; corrupting the ZIP directory skips at most one configured segment.
 - No per-candidate filesystem file, `fsync`, index transaction, global manifest
   rewrite, or history-directory scan exists in the hot write path.
-- Instrumented tests bound file creation, directory updates, opens, flushes, and
-  seek-like operations by segment count.
-- A seek-penalized filesystem double favors sequential micro-batches over
-  per-candidate files without requiring a physical HDD in the generic suite.
+- Instrumented tests prove that a new publication opens no old segment, writes bytes
+  proportional to new evidence, and performs file creation, rename, directory
+  update, and durability flushes only per segment. Per-member ZIP operations may
+  have a documented constant factor bounded by the configured candidates per
+  segment.
+- An operation-count test plus a broad seek-penalized integration model favors
+  sequential micro-batches over per-candidate files without requiring a physical
+  HDD or asserting implementation-specific exact seek counts.
 - Missing segments, duplicate identities, generation gaps, permission errors,
   disk-full errors, atomic-replace failures, and empty history return a valid
   partial/cold-start result.
@@ -564,6 +679,9 @@ optimization.
   evaluation.
 - A synthetic 5,000-candidate SAW-shaped regression has no evaluation-time trend
   proportional to already persisted candidates.
+- A large-payload regression includes a `10 * 360 * 360` float32 and float64 main
+  array, verifies singleton publication above the normal segment target, and
+  measures peak reservation/encoding memory rather than only final compressed size.
 - A synthetic upper-scale catalog near 100,000 candidates measures cold-start and
   reinterpretation costs without requiring SQLite. Record the result so a later
   index decision is evidence-based.
@@ -577,10 +695,16 @@ millisecond-level benchmarks.
 
 - Guaranteeing that every successful candidate becomes durable.
 - Making one generation a durability transaction or normal loss unit.
+- Guaranteeing that a systemic writer/storage/process failure can never lose a
+  complete generation; the design only bounds and minimizes best-effort loss.
 - Recovering queued but unpublished data after process/machine loss.
 - Guaranteeing power-loss durability or flushing every candidate.
 - Automatically deciding whether a user's task change is scientifically correct.
 - Freezing task definitions for a campaign.
+- Supporting parameter add/remove/rename operations, parameter-count changes, or
+  objective-count changes during a campaign. This needs separate optimizer-state
+  semantics and a future toDo; this project assumes stable parameter identity/count
+  and objective width.
 - Preserving or migrating the old JSONL/global-ZIP format.
 - A custom `.yadseg` framing/footer/salvage protocol in the first implementation.
 - SQLite in the first implementation.
@@ -602,12 +726,15 @@ This toDo is complete only when:
 - current cost is available before and independently of persistence;
 - one background writer thread per active workspace campaign publishes immutable
   segments and never rewrites prior history;
-- one segment loses at most 16 candidates and the complete unpublished state is
-  proven to remain within 32 candidates plus the byte budget;
+- one segment and the complete unpublished state are proven to remain within their
+  campaign-selected count and peak-resident byte budgets, with 16/32 retained only
+  as initial defaults;
 - every injected catchable recording/read failure leaves optimization able to
   continue;
-- generation-boundary edits to cost, parameters, objectives, evaluator, and config
-  are supported without a scientific-equivalence gate;
+- generation-boundary shape-preserving edits to cost, parameter ranges/levels,
+  objective definitions, evaluator/task code, and task-semantic config are
+  supported without a scientific-equivalence gate, while recorder infrastructure
+  remains campaign-frozen;
 - one active campaign per workspace is enforced and documented;
 - tolerant readers, cold start, surrogate fallback, viewers, clear-history, and
   resume use the new segment contract;

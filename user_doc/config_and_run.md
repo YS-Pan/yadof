@@ -134,9 +134,10 @@ HTCondor but never installs or repairs it.
 
 Task mutability is intentional. Between generations, the user may change:
 
-- `job_template/calc_cost.py`, including objective names/count and thresholds;
-- `job_template/parameters_constraints.py`, including names, ranges, levels, and
-  parameter count;
+- `job_template/calc_cost.py`, including objective names, meanings, and thresholds,
+  while preserving the objective count;
+- `job_template/parameters_constraints.py`, including ranges and levels, while
+  preserving parameter names, order, and count;
 - `config.py`;
 - `job_template/workflow.py`, `evaluation.py`, adapters, and task helpers.
 
@@ -147,6 +148,12 @@ code attempts to reinterpret stored raw variables/rawData; a record is omitted o
 when it cannot actually be normalized, loaded, or converted to the current
 objective tuple. A source hash may identify that code changed, but it is not a
 scientific rejection rule.
+
+The current in-campaign correction contract assumes stable parameter identity,
+parameter count, and objective count. Adding, removing, reordering, or renaming
+parameters, or changing objective width, requires optimizer-state migration rules
+that are not yet supported by this workflow. Use a new workspace/campaign for such
+a structural change until that separate feature is implemented.
 
 Use a generation boundary as the coherence point. For a strictly controlled edit
 with the current command surface, run a finite group of generations, let that

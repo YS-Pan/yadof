@@ -54,14 +54,17 @@ explicitly; the package does not guess a scientific migration.
 
 This user-authoritative mutability also applies during an active campaign.
 Generation boundaries are the coherent reload point for current configuration,
-parameters, objective names/count, cost policy, evaluator/workflow task code, and
-task helpers. The next generation reconstructs its problem and derived history view
-from current definitions. A content fingerprint may invalidate derived caches and
-record provenance, but fingerprint inequality is not a scientific-compatibility
-decision and cannot by itself reject old evidence. Yadof attempts to reinterpret
-old records under current code and isolates only concrete normalization, rawData, or
-cost failures. Whether combining pre-edit and post-edit evidence is scientifically
-appropriate remains the user's decision.
+parameter ranges/levels, fixed-width objective/cost policy, evaluator/workflow task
+code, and task helpers. The next generation reconstructs its affected derived
+history view from current definitions. The current hot-change contract assumes
+stable parameter identity/count and objective count; structural parameter or
+objective-width changes require separate optimizer-state semantics and are future
+work. A content fingerprint may invalidate derived caches and record provenance,
+but fingerprint inequality is not a scientific-compatibility decision and cannot
+by itself reject old evidence. Yadof attempts to reinterpret old records under
+current code and isolates only concrete normalization, rawData, or cost failures.
+Whether combining pre-edit and post-edit evidence is scientifically appropriate
+remains the user's decision.
 
 Optimizer and surrogate are consumers of the same evidence. The surrogate predicts
 rawData before cost, constructs its modeled query table from compatible recorded
@@ -79,7 +82,8 @@ path. Its schedules, state, and checkpoints are keyed by effective workspace pat
   replaces only that worker, cleans its configured scratch, and preserves ordering.
 - Local concurrency is bounded by population size, an explicit cap, physical CPU,
   currently available memory, and free disk; smoke remains exactly one worker.
-- Parameter and objective counts come from the currently selected workspace.
+- Parameter and objective counts come from the workspace snapshot selected at
+  campaign start and remain stable for supported in-campaign edits.
 - One generation uses one coherent task/config snapshot; supported task edits become
   visible at the following generation boundary rather than dividing a population
   between definitions.

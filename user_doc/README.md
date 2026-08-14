@@ -18,11 +18,13 @@ agent, and provide the task together with the repository prompt starter. OpenAI
 Codex is recommended because it was used to develop and verify yadof.
 
 Yadof also treats task flexibility as a core capability. A user may correct cost,
-parameter, configuration, workflow/evaluator, or helper code between optimization
-generations and continue the campaign. The new problem is allowed to be
+parameter ranges/levels, configuration, workflow/evaluator, or helper code between
+optimization generations and continue the campaign while keeping parameter
+identity/count and objective count stable. The new problem is allowed to be
 scientifically different. Yadof does not decide whether retaining earlier evidence
 is scientifically appropriate; it trusts the user to keep, clear, or separate that
-history deliberately. See `config_and_run.md` for the safe change boundary.
+history deliberately. Structural dimension changes need separate future support.
+See `config_and_run.md` for the safe change boundary.
 
 ## First decide the request type
 
