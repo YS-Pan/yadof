@@ -60,6 +60,14 @@ supplied when a task needs them, but rawData remains the evidence source.
 `get_objective_count()` is package-derived from validated objective names; task
 modules do not repeat that calculation.
 
+Fresh loading is also the campaign hot-change boundary. One generation selects one
+coherent task snapshot. The next generation may observe changed parameter names,
+ranges/count, objective names/count, cost code, workflow/evaluation code, and local
+task helpers. Stored raw variables and rawData are reinterpreted through that
+current snapshot when mechanically possible. Task/source signatures may invalidate
+derived caches and record provenance, but job_template does not use them to judge
+scientific equivalence or automatically reject old evidence.
+
 New task objectives are independently normalized dimensionless minimization costs
 in `[0, 1]`. `soft_cost()` is the canonical tanh mapping from fixed task-owned
 physical `goal`/`worst` thresholds; registered task-cost calculators use that
@@ -76,6 +84,8 @@ or linearly rescale away those tails.
 ## Invariants
 
 - Task modules are workspace-explicit and fresh-loaded.
+- A campaign does not freeze the task selected at startup; supported edits become
+  coherent at the next generation boundary.
 - Workflows do not import yadof in distributed execution.
 - Workflows call copied package worker support, which samples `execute_machine` on
   the node where they run and includes it in returned individual metadata.

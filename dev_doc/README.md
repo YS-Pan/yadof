@@ -189,6 +189,17 @@ optimization task belongs in `workflow.py` or `calc_cost.py`; it must not be
 hard-coded into yadof. Task files call framework helpers but do not duplicate their
 implementations.
 
+Task mutability during a campaign is a core yadof capability, not an accidental
+side effect of Python imports. A user may correct `calc_cost.py`, parameter
+definitions, configuration, workflow/evaluator code, or task helpers between
+generations. Generation boundaries are the supported coherence point: the next
+generation must use the current workspace definition consistently and reconstruct
+any affected derived optimizer/history view. Yadof may detect source changes to
+invalidate caches and may skip records that current code cannot mechanically
+interpret, but it must not decide whether the old and new optimization problems are
+scientifically equivalent. The user owns that judgment and decides whether to keep,
+clear, or separate history.
+
 The package boundary is not a destination for every extracted function. Add a
 helper to yadof only when it represents a broadly recurring mechanism across
 different optimization tasks or a stable framework contract. A one-off data shape,

@@ -65,5 +65,9 @@ checkpoints, logs, caches, credentials, and secrets.
 - A failed candidate keeps population order and yields a correctly sized infinite
   objective row with diagnostics.
 - Historical rawData can be reinterpreted by the current cost definition.
+- Users may correct parameters, objectives, cost, configuration, and task execution
+  code between generations. The next generation uses one coherent current
+  definition; yadof isolates mechanically unusable evidence but leaves the
+  scientific decision to retain or clear old history to the user.
 - Cross-task invariant code is implemented in yadof and called by task files;
   task-varying workflow/objective code is not hard-coded into yadof.

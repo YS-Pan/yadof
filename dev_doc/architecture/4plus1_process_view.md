@@ -101,6 +101,25 @@ archive and manifest are copied/published once per batch, then costs are derived
 one query. A failed batch falls back to individual recording so one malformed result
 does not discard otherwise valid evidence.
 
+## Generation-boundary task changes
+
+`run_generations()` reloads effective configuration for each generation, and task
+queries fresh-load the selected workspace modules. The supported coherence contract
+is one current task/config snapshot per generation. Between generations, a user may
+change cost interpretation, parameters, objective width, evaluator/workflow logic,
+or task helpers to correct or deliberately redefine the optimization problem. The
+following generation reconstructs its optimizer problem and reinterprets
+mechanically usable history through the new definitions.
+
+Yadof does not decide whether that change is scientifically valid. Source hashes or
+signatures may identify the reload and invalidate a derived cache, but they are not
+an automatic old-history exclusion policy. A record is omitted only when the
+current parameter/rawData/cost path cannot process it. The user decides whether old
+evidence should be retained, explicitly cleared, or separated into another
+workspace. Runtime components, including future in-memory history caches and
+asynchronous recorders, must not freeze the task snapshot selected when the
+campaign began.
+
 ## External PyChrono subprocess
 
 The canonical packaged-adapter contract is

@@ -52,6 +52,17 @@ rawData. Changing parameter definitions changes normalization and job static has
 If task semantics make old evidence invalid, users must remove or exclude it
 explicitly; the package does not guess a scientific migration.
 
+This user-authoritative mutability also applies during an active campaign.
+Generation boundaries are the coherent reload point for current configuration,
+parameters, objective names/count, cost policy, evaluator/workflow task code, and
+task helpers. The next generation reconstructs its problem and derived history view
+from current definitions. A content fingerprint may invalidate derived caches and
+record provenance, but fingerprint inequality is not a scientific-compatibility
+decision and cannot by itself reject old evidence. Yadof attempts to reinterpret
+old records under current code and isolates only concrete normalization, rawData, or
+cost failures. Whether combining pre-edit and post-edit evidence is scientifically
+appropriate remains the user's decision.
+
 Optimizer and surrogate are consumers of the same evidence. The surrogate predicts
 rawData before cost, constructs its modeled query table from compatible recorded
 numeric rawData, reconstructs full public rawData, and calls current cost logic.
@@ -69,6 +80,9 @@ path. Its schedules, state, and checkpoints are keyed by effective workspace pat
 - Local concurrency is bounded by population size, an explicit cap, physical CPU,
   currently available memory, and free disk; smoke remains exactly one worker.
 - Parameter and objective counts come from the currently selected workspace.
+- One generation uses one coherent task/config snapshot; supported task edits become
+  visible at the following generation boundary rather than dividing a population
+  between definitions.
 - All population-return paths preserve input order and objective width.
 - Individual failures yield diagnostic records and infinite costs without deleting
   successful evidence.

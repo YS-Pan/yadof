@@ -130,6 +130,54 @@ succeed. The whole-generation deadline remains separate. Memory/disk holds may b
 freshly resubmitted by yadof with bounded, independent doubling. yadof diagnoses
 HTCondor but never installs or repairs it.
 
+### Correct the task during a campaign
+
+Task mutability is intentional. Between generations, the user may change:
+
+- `job_template/calc_cost.py`, including objective names/count and thresholds;
+- `job_template/parameters_constraints.py`, including names, ranges, levels, and
+  parameter count;
+- `config.py`;
+- `job_template/workflow.py`, `evaluation.py`, adapters, and task helpers.
+
+The corrected task is allowed to define a different optimization problem. Yadof
+does not evaluate “scientific equivalence” between the old and new versions. It
+trusts the user to decide whether earlier evidence remains useful. Current task
+code attempts to reinterpret stored raw variables/rawData; a record is omitted only
+when it cannot actually be normalized, loaded, or converted to the current
+objective tuple. A source hash may identify that code changed, but it is not a
+scientific rejection rule.
+
+Use a generation boundary as the coherence point. For a strictly controlled edit
+with the current command surface, run a finite group of generations, let that
+command return, edit and check the task, then resume:
+
+```powershell
+yadof run --workspace PATH --start-generation 0 --generations 10
+# Edit the workspace task, then:
+yadof check --workspace PATH
+yadof run --workspace PATH --start-generation 10 --generations 10
+```
+
+The run/resume APIs load current configuration and task definitions for subsequent
+generations. Do not edit files while candidates from a generation are being
+prepared or executed when a coherent transition matters; already prepared or
+running work may have captured the earlier source. Splitting the command at the
+boundary avoids mixing definitions inside one generation.
+
+Before continuing, the user should decide:
+
+- Keep history when old raw variables and rawData are still meaningful under the
+  correction.
+- Run `yadof history clear --workspace PATH --yes` when no old evidence should
+  influence the corrected problem.
+- Use a new workspace when both versions should remain independently reproducible
+  or run concurrently.
+
+This is a scientific/user decision rather than a framework inference. Run only one
+active optimization campaign per workspace. Separate concurrent campaigns into
+different workspaces.
+
 The Windows distributed submit contract runs `workflow.py` directly with
 `transfer_executable=True`, `load_profile=True`, and `run_as_owner=False`. Input
 transfer contains the task/job files and `worker_misc.py`, never a yadof runtime

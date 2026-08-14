@@ -89,6 +89,14 @@ be used consecutively or concurrently in one process without sharing task module
 records, surrogate state, or output paths. Installed package resources are read-only
 inputs and are never used as a runtime-data location.
 
+One workspace is one active optimization campaign/write domain. Do not start two
+optimization processes against the same workspace. If two optimizations must run at
+the same time, initialize or copy their task definitions into different workspaces;
+each workspace then has independent history, locks, recording, checkpoints, and
+task changes. Read-only inspection may share a workspace only where the selected
+command explicitly supports it, and destructive history clearing must never run
+against an active campaign.
+
 The workspace is user-owned and may contain additional directories beyond this
 example layout. Use them for task-specific helper scripts, debugging evidence,
 experiment notes, exported animations, images, reports, or other outputs. Choose

@@ -17,6 +17,13 @@ coding agent before preparing a task, open the intended writable workspace in th
 agent, and provide the task together with the repository prompt starter. OpenAI
 Codex is recommended because it was used to develop and verify yadof.
 
+Yadof also treats task flexibility as a core capability. A user may correct cost,
+parameter, configuration, workflow/evaluator, or helper code between optimization
+generations and continue the campaign. The new problem is allowed to be
+scientifically different. Yadof does not decide whether retaining earlier evidence
+is scientifically appropriate; it trusts the user to keep, clear, or separate that
+history deliberately. See `config_and_run.md` for the safe change boundary.
+
 ## First decide the request type
 
 - For a question, list the available documents and read only the relevant pages.
@@ -103,6 +110,9 @@ code.
   scripts, debugging material, exported animations/images/reports, and other
   outputs; avoid the reserved framework paths documented in
   `package_foundation.md`. Do not edit installed package resources.
+- Run at most one optimization campaign in a workspace at a time. To run campaigns
+  concurrently, create separate workspaces so their task snapshot, history,
+  writer, checkpoints, and destructive operations cannot collide.
 - Run `yadof check --workspace PATH` after generating or modifying task files.
 - Do not run an edited task's smoke test or optimization unless the user explicitly
   authorizes execution of the real workflow; it may launch expensive software.

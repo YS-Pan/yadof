@@ -83,12 +83,21 @@ rawData/current-cost meaning as local mode, but `jobs/` gains no candidate folde
 
 ## Change current cost policy
 
-Edit only workspace `calc_cost.py`, run `check`, and query history again. Existing
-compatible rawData stays unchanged while objective names/values are recalculated.
-If the scientific meaning or schema of old evidence is no longer compatible, the
-user explicitly clears or separates history. The task file changes its rawData
-interpretation and objective policy while continuing to call reusable
-`yadof.job_template` cost/rawData helpers.
+Edit workspace `calc_cost.py`, run `check`, and query history again. Existing
+mechanically compatible rawData stays unchanged while objective names/values are
+recalculated. During a campaign, make the edit between generations; the next
+generation uses the new policy coherently.
+
+The same supported boundary applies when correcting parameter definitions,
+configuration, workflow/evaluation code, or task helpers. The new generation may
+have different parameter or objective counts and is intentionally a different
+optimization problem. Yadof trusts the user to decide whether retaining pre-edit
+evidence is scientifically reasonable. It does not infer scientific equivalence
+from source signatures. If current code cannot normalize or calculate a particular
+old record, that record is isolated; if the user does not want old evidence
+considered at all, the user explicitly clears history or uses another workspace.
+Task files continue to call reusable `yadof.job_template` helpers rather than
+copying framework mechanisms.
 
 ## Inspect saved surrogate checkpoints
 
@@ -121,6 +130,10 @@ mode writes a plot or workspace cache.
 Every call passes a workspace. Config, task modules, jobs, records, locks, surrogate
 state, checkpoints, logs, and tools remain path-keyed. Same-named task helpers are
 fresh-loaded and removed so one workspace cannot contaminate the other.
+
+Concurrent optimization campaigns use different workspaces. One workspace is one
+active campaign/write domain; do not run two optimizers against it at the same
+time.
 
 ## Failure
 

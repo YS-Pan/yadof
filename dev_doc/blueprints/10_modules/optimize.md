@@ -34,6 +34,15 @@ identities, deterministic seed, temporary config overrides, optional pre-run smo
 and generation metadata including timings and populations. Config is loaded once per
 generation so one coherent policy applies to its work.
 
+Task flexibility is generation-scoped. At each generation boundary, optimization
+must use the current parameter and objective definitions and reconstruct pymoo
+problem/reference-direction state when their counts change. A changed
+`calc_cost.py` reinterprets mechanically usable history before selection. Changes
+to workflow/evaluation code affect the next generation's real evaluations. Source
+fingerprints are cache-invalidation/provenance inputs only; optimize does not decide
+whether the user's old and new problems are scientifically equivalent or silently
+discard history because a signature changed.
+
 ## Failure behavior
 
 Individual infinite rows remain in shape and may be handled by optimizer mechanics.
@@ -43,6 +52,8 @@ recent per-job diagnostics. A smoke failure prevents generation submission.
 ## Invariants
 
 - No workspace-global optimizer singleton or implicit history path.
+- One workspace has one active optimization campaign; concurrent campaigns use
+  different workspaces.
 - Surrogate predictions never bypass real-evaluation validation.
 - Resume reuses compatible evidence/checkpoints but does not copy another workspace.
 - Stored optimization metadata stays lightweight; rawData remains in recorded_data.

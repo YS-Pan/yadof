@@ -107,6 +107,17 @@ framework records raw evidence and derives cost through the current
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
 
+A campaign is not required to keep its original task definition forever. If the
+user discovers a mistake, they may correct `calc_cost.py`, parameter definitions,
+`config.py`, `workflow.py`, `evaluation.py`, or task helpers and continue at a
+generation boundary. This intentionally creates a new optimization problem. Yadof
+does not attempt to judge whether pre-edit and post-edit problems are scientifically
+equivalent and does not override the user's decision. Old records remain candidates
+for reinterpretation; records that the current parameter/rawData/cost code cannot
+actually process are skipped. The user decides whether keeping that mixture is
+reasonable, whether to clear history, or whether the corrected task belongs in a
+new workspace.
+
 Keep these three decisions separate:
 
 1. `workflow.py` decides what evidence is saved. To make every far-field value

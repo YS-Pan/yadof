@@ -9,6 +9,13 @@ AI-agent-first: a human user directs an installed coding agent, which reads pack
 user guidance and authors the workspace through the same public CLI/API available
 to direct users.
 
+Workspace task flexibility remains live during a campaign. A user may correct or
+redefine cost, parameters, configuration, and task execution code between
+generations. The next generation uses one coherent current snapshot and rebuilds
+affected derived state. The framework detects changes for cache invalidation and
+provenance but does not decide whether two task versions are scientifically
+equivalent; the user owns whether old evidence should remain.
+
 ## Main contract
 
 `normalized variables -> rawData -> current cost`. Evaluations and surrogates emit
@@ -42,6 +49,11 @@ local/distributed remain file-backed prepared-job transports.
    through the current workspace task definition.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions
    only to screen candidates that still receive real evaluation.
+
+Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen. A parameter
+or objective-width change reconstructs the next generation's optimizer context;
+mechanically unusable old records are isolated, while a mere source-fingerprint
+change never excludes evidence by itself.
 
 ## Boundaries
 
@@ -109,6 +121,8 @@ stable regardless of completion order.
 Workspace locks and atomic replacement protect JSONL/archive/checkpoint publication.
 Background surrogate training is at most one task per workspace. Resume uses current
 compatible evidence and checkpoint signatures and never reads another workspace.
+Concurrent optimization campaigns use different workspaces; one workspace is one
+active campaign/write domain.
 
 ## Invariants
 
