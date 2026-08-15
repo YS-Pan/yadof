@@ -189,6 +189,17 @@ def get_historical_results(
     )
 
 
+def open_historical_rawdata_snapshot(
+    workspace: WorkspaceLike,
+    *,
+    status: str | None = "completed",
+):
+    """Return one frozen, streamed rawData history snapshot for a reader."""
+
+    _context, storage = _context_and_storage(workspace)
+    return _query.open_historical_rawdata_snapshot(storage, status=status)
+
+
 def get_optimization_history(
     workspace: WorkspaceLike,
 ) -> tuple[tuple[str, tuple[float, ...], tuple[float, ...]], ...]:
@@ -254,6 +265,7 @@ __all__ = [
     "list_records",
     "list_surrogate_metadata",
     "open_campaign_session",
+    "open_historical_rawdata_snapshot",
     "record_job_result",
     "record_job_results",
     "record_optimization_metadata",

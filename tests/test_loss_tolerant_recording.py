@@ -24,6 +24,7 @@ from yadof.recorded_data.segment_store import (
     CatalogSnapshot,
     SegmentReference,
     discover_catalog,
+    open_historical_rawdata_snapshot,
     publish_segment,
 )
 from yadof.recorded_data.session import CampaignSession
@@ -477,6 +478,46 @@ def test_temporary_and_corrupt_segments_are_tolerated(tmp_path: Path) -> None:
     assert recorded_api.get_job_names(root) == ("good",)
     catalog = discover_catalog(recorded_data_paths(root))
     assert any(item["error_type"] == "segment_unreadable" for item in catalog.diagnostics)
+
+
+def test_historical_rawdata_snapshot_freezes_paths_and_opens_each_segment_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _workspace(tmp_path / "workspace")
+    recorded_api.record_job_result(
+        root,
+        "first",
+        (0.0,),
+        (NamedRawDataItem("response.npz", _payload(0.1)),),
+    )
+    snapshot = open_historical_rawdata_snapshot(recorded_data_paths(root))
+    recorded_api.record_job_result(
+        root,
+        "later",
+        (0.0,),
+        (NamedRawDataItem("response.npz", _payload(0.2)),),
+    )
+
+    real_zip = zipfile.ZipFile
+    opened: list[Path] = []
+
+    def counted_zip(file, mode="r", *args, **kwargs):
+        if mode == "r" and isinstance(file, (str, Path)):
+            opened.append(Path(file))
+        return real_zip(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "yadof.recorded_data.segment_store.zipfile.ZipFile", counted_zip
+    )
+    batches = tuple(snapshot.iter_batches())
+
+    assert len(snapshot.segment_paths) == 1
+    assert len(opened) == 1
+    assert [
+        reference.record["job_name"]
+        for batch in batches
+        for reference, _items in batch.records
+    ] == ["first"]
 
 
 def test_publication_never_opens_an_older_segment(

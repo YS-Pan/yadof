@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from typing import Mapping, Sequence
+from typing import Iterator, Mapping, Sequence
 import zipfile
 
 from ..job_template.rawdata_contract import NamedRawDataItem
@@ -54,6 +54,30 @@ class CatalogSnapshot:
     references: tuple[SegmentReference, ...]
     diagnostics: tuple[dict[str, object], ...]
     segment_paths: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RawDataBatch:
+    """Validated candidate evidence read from one already-open segment."""
+
+    records: tuple[
+        tuple[SegmentReference, tuple[NamedRawDataItem, ...]], ...
+    ]
+    diagnostics: tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalRawDataSnapshot:
+    """One stable list of finalized segments for a history interpretation."""
+
+    segment_paths: tuple[Path, ...]
+    diagnostics: tuple[dict[str, object], ...]
+    status: str | None
+
+    def iter_batches(self) -> Iterator[RawDataBatch]:
+        """Open each frozen segment once and yield its valid decoded evidence."""
+
+        return _iter_snapshot_batches(self.segment_paths, self.status)
 
 
 def candidate_identity(record: Mapping[str, object]) -> str:
@@ -175,15 +199,9 @@ def publish_segment(
 def discover_catalog(storage: RecordedDataPaths) -> CatalogSnapshot:
     """Take one stable finalized-name snapshot and tolerate every bad segment."""
 
-    try:
-        paths = tuple(
-            sorted(
-                storage.segments_directory.rglob("segment_*.zip"),
-                key=lambda item: item.as_posix().casefold(),
-            )
-        )
-    except OSError as exc:
-        return CatalogSnapshot((), (_diagnostic("catalog_unreadable", exc),), ())
+    paths, snapshot_diagnostics = _finalized_segment_paths(storage)
+    if snapshot_diagnostics:
+        return CatalogSnapshot((), snapshot_diagnostics, paths)
     references: list[SegmentReference] = []
     diagnostics: list[dict[str, object]] = []
     seen: dict[str, Path] = {}
@@ -211,106 +229,175 @@ def discover_catalog(storage: RecordedDataPaths) -> CatalogSnapshot:
     return CatalogSnapshot(tuple(references), tuple(diagnostics), paths)
 
 
+def open_historical_rawdata_snapshot(
+    storage: RecordedDataPaths,
+    *,
+    status: str | None = "completed",
+) -> HistoricalRawDataSnapshot:
+    """Freeze final segment names before one streamed history interpretation."""
+
+    paths, diagnostics = _finalized_segment_paths(storage)
+    return HistoricalRawDataSnapshot(paths, diagnostics, status)
+
+
 def scan_segment(
     path: Path,
 ) -> tuple[tuple[SegmentReference, ...], tuple[dict[str, object], ...]]:
+    """Inspect one segment without decoding its rawData members."""
+
+    with zipfile.ZipFile(path, "r") as archive:
+        return _scan_open_segment(path, archive)
+
+
+def _scan_open_segment(
+    path: Path, archive: zipfile.ZipFile
+) -> tuple[tuple[SegmentReference, ...], tuple[dict[str, object], ...]]:
     references: list[SegmentReference] = []
     diagnostics: list[dict[str, object]] = []
-    with zipfile.ZipFile(path, "r") as archive:
-        manifest = _json_object(archive.read(MANIFEST_MEMBER), "segment manifest")
-        if manifest.get("format") != SEGMENT_FORMAT:
-            raise ValueError("unsupported recorded-data segment manifest")
-        candidates = manifest.get("candidates")
-        if not isinstance(candidates, list):
-            raise ValueError("segment candidates must be a list")
-        if int(manifest.get("candidate_count", -1)) != len(candidates):
-            raise ValueError("segment candidate count mismatch")
-        names = set(archive.namelist())
-        for candidate in candidates:
-            try:
-                if not isinstance(candidate, Mapping):
-                    raise ValueError("candidate manifest entry must be an object")
-                candidate_id = str(candidate["candidate_id"])
-                metadata_member = str(candidate["metadata_member"])
-                if not metadata_member.startswith(
-                    "candidates/"
-                ) or not metadata_member.endswith("/metadata.json"):
-                    raise ValueError("invalid candidate metadata member mapping")
-                candidate_prefix = metadata_member.removesuffix("/metadata.json")
-                if metadata_member not in names:
-                    raise KeyError(metadata_member)
-                metadata_payload = archive.read(metadata_member)
-                if len(metadata_payload) != int(
-                    candidate.get("metadata_size_bytes", -1)
+    manifest = _json_object(archive.read(MANIFEST_MEMBER), "segment manifest")
+    if manifest.get("format") != SEGMENT_FORMAT:
+        raise ValueError("unsupported recorded-data segment manifest")
+    candidates = manifest.get("candidates")
+    if not isinstance(candidates, list):
+        raise ValueError("segment candidates must be a list")
+    if int(manifest.get("candidate_count", -1)) != len(candidates):
+        raise ValueError("segment candidate count mismatch")
+    names = set(archive.namelist())
+    for candidate in candidates:
+        try:
+            if not isinstance(candidate, Mapping):
+                raise ValueError("candidate manifest entry must be an object")
+            candidate_id = str(candidate["candidate_id"])
+            metadata_member = str(candidate["metadata_member"])
+            if not metadata_member.startswith(
+                "candidates/"
+            ) or not metadata_member.endswith("/metadata.json"):
+                raise ValueError("invalid candidate metadata member mapping")
+            candidate_prefix = metadata_member.removesuffix("/metadata.json")
+            if metadata_member not in names:
+                raise KeyError(metadata_member)
+            metadata_payload = archive.read(metadata_member)
+            if len(metadata_payload) != int(
+                candidate.get("metadata_size_bytes", -1)
+            ):
+                raise ValueError("candidate metadata size mismatch")
+            record = _json_object(metadata_payload, "candidate metadata")
+            if str(record.get("candidate_id")) != candidate_id:
+                raise ValueError("candidate identity mismatch")
+            raw_entries = candidate.get("rawdata", ())
+            if not isinstance(raw_entries, list):
+                raise ValueError("candidate rawdata map must be a list")
+            raw_members: list[tuple[str, str, int]] = []
+            seen_filenames: set[str] = set()
+            seen_members: set[str] = set()
+            for entry in raw_entries:
+                if not isinstance(entry, Mapping):
+                    raise ValueError("rawData manifest entry must be an object")
+                filename = str(entry["filename"])
+                member = str(entry["member"])
+                size = int(entry["size_bytes"])
+                if Path(filename).name != filename or not filename.lower().endswith(
+                    ".npz"
                 ):
-                    raise ValueError("candidate metadata size mismatch")
-                record = _json_object(metadata_payload, "candidate metadata")
-                if str(record.get("candidate_id")) != candidate_id:
-                    raise ValueError("candidate identity mismatch")
-                raw_entries = candidate.get("rawdata", ())
-                if not isinstance(raw_entries, list):
-                    raise ValueError("candidate rawdata map must be a list")
-                raw_members: list[tuple[str, str, int]] = []
-                seen_filenames: set[str] = set()
-                seen_members: set[str] = set()
-                for entry in raw_entries:
-                    if not isinstance(entry, Mapping):
-                        raise ValueError("rawData manifest entry must be an object")
-                    filename = str(entry["filename"])
-                    member = str(entry["member"])
-                    size = int(entry["size_bytes"])
-                    if Path(filename).name != filename or not filename.lower().endswith(
-                        ".npz"
-                    ):
-                        raise ValueError("invalid rawData filename")
-                    if member != f"{candidate_prefix}/rawdata/{filename}":
-                        raise ValueError("invalid candidate rawData member mapping")
-                    if filename.casefold() in seen_filenames or member in seen_members:
-                        raise ValueError("duplicate candidate rawData member mapping")
-                    seen_filenames.add(filename.casefold())
-                    seen_members.add(member)
-                    if member not in names:
-                        raise KeyError(member)
-                    info = archive.getinfo(member)
-                    if int(info.file_size) != size:
-                        raise ValueError("rawData member size mismatch")
-                    raw_members.append((filename, member, size))
-                if list(record.get("rawdata_files", ())) != [
-                    filename for filename, _member, _size in raw_members
-                ]:
-                    raise ValueError("candidate rawData metadata mismatch")
-                references.append(
-                    SegmentReference(
-                        candidate_id, path, record, tuple(raw_members)
-                    )
+                    raise ValueError("invalid rawData filename")
+                if member != f"{candidate_prefix}/rawdata/{filename}":
+                    raise ValueError("invalid candidate rawData member mapping")
+                if filename.casefold() in seen_filenames or member in seen_members:
+                    raise ValueError("duplicate candidate rawData member mapping")
+                seen_filenames.add(filename.casefold())
+                seen_members.add(member)
+                if member not in names:
+                    raise KeyError(member)
+                info = archive.getinfo(member)
+                if int(info.file_size) != size:
+                    raise ValueError("rawData member size mismatch")
+                raw_members.append((filename, member, size))
+            if list(record.get("rawdata_files", ())) != [
+                filename for filename, _member, _size in raw_members
+            ]:
+                raise ValueError("candidate rawData metadata mismatch")
+            references.append(
+                SegmentReference(candidate_id, path, record, tuple(raw_members))
+            )
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            diagnostics.append(
+                _diagnostic(
+                    "candidate_unreadable",
+                    exc,
+                    path=path,
+                    candidate_id=(
+                        str(candidate.get("candidate_id", ""))
+                        if isinstance(candidate, Mapping)
+                        else ""
+                    ),
                 )
-            except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
-                diagnostics.append(
-                    _diagnostic(
-                        "candidate_unreadable",
-                        exc,
-                        path=path,
-                        candidate_id=(
-                            str(candidate.get("candidate_id", ""))
-                            if isinstance(candidate, Mapping)
-                            else ""
-                        ),
-                    )
-                )
+            )
     return tuple(references), tuple(diagnostics)
 
 
 def load_reference_rawdata(
     reference: SegmentReference,
 ) -> tuple[NamedRawDataItem, ...]:
-    output: list[NamedRawDataItem] = []
     with zipfile.ZipFile(reference.segment_path, "r") as archive:
-        for filename, member, expected_size in reference.rawdata_members:
-            payload = archive.read(member)
-            if len(payload) != expected_size:
-                raise ValueError(f"rawData member size changed: {member}")
-            output.append(NamedRawDataItem(filename, decode_npz(payload)))
+        return _load_reference_rawdata_from_archive(reference, archive)
+
+
+def _load_reference_rawdata_from_archive(
+    reference: SegmentReference, archive: zipfile.ZipFile
+) -> tuple[NamedRawDataItem, ...]:
+    output: list[NamedRawDataItem] = []
+    for filename, member, expected_size in reference.rawdata_members:
+        payload = archive.read(member)
+        if len(payload) != expected_size:
+            raise ValueError(f"rawData member size changed: {member}")
+        output.append(NamedRawDataItem(filename, decode_npz(payload)))
     return tuple(output)
+
+
+def _iter_snapshot_batches(
+    paths: Sequence[Path], status: str | None
+) -> Iterator[RawDataBatch]:
+    seen: dict[str, Path] = {}
+    for path in paths:
+        records: list[tuple[SegmentReference, tuple[NamedRawDataItem, ...]]] = []
+        diagnostics: list[dict[str, object]] = []
+        try:
+            with zipfile.ZipFile(path, "r") as archive:
+                references, scan_diagnostics = _scan_open_segment(path, archive)
+                diagnostics.extend(scan_diagnostics)
+                for reference in references:
+                    previous = seen.get(reference.candidate_id)
+                    if previous is not None:
+                        diagnostics.append(
+                            {
+                                "error_type": "duplicate_candidate",
+                                "candidate_id": reference.candidate_id,
+                                "kept_segment": str(previous),
+                                "ignored_segment": str(path),
+                            }
+                        )
+                        continue
+                    seen[reference.candidate_id] = path
+                    if status is not None and str(
+                        reference.record.get("status")
+                    ) != status:
+                        continue
+                    try:
+                        items = _load_reference_rawdata_from_archive(reference, archive)
+                    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+                        diagnostics.append(
+                            _diagnostic(
+                                "unreadable_rawdata",
+                                exc,
+                                path=path,
+                                candidate_id=reference.candidate_id,
+                            )
+                        )
+                        continue
+                    records.append((reference, items))
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            diagnostics.append(_diagnostic("segment_unreadable", exc, path=path))
+        yield RawDataBatch(tuple(records), tuple(diagnostics))
 
 
 def next_sequence_by_directory(
@@ -335,6 +422,21 @@ def segment_counter_key(
     run_id: str, generation_index: int | None
 ) -> tuple[str, int | None]:
     return (_safe_component(run_id), generation_index)
+
+
+def _finalized_segment_paths(
+    storage: RecordedDataPaths,
+) -> tuple[tuple[Path, ...], tuple[dict[str, object], ...]]:
+    try:
+        paths = tuple(
+            sorted(
+                storage.segments_directory.rglob("segment_*.zip"),
+                key=lambda item: item.as_posix().casefold(),
+            )
+        )
+    except OSError as exc:
+        return (), (_diagnostic("catalog_unreadable", exc),)
+    return paths, ()
 
 
 def _segment_directory(
@@ -398,12 +500,15 @@ def _diagnostic(
 
 __all__ = [
     "CatalogSnapshot",
+    "HistoricalRawDataSnapshot",
     "RecordEnvelope",
+    "RawDataBatch",
     "SegmentReference",
     "candidate_identity",
     "discover_catalog",
     "load_reference_rawdata",
     "next_sequence_by_directory",
+    "open_historical_rawdata_snapshot",
     "publish_segment",
     "scan_segment",
     "segment_counter_key",

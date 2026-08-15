@@ -45,6 +45,7 @@ def summarize_rows(
     *,
     max_pareto: int = MAX_VISIBLE_PARETO,
     objective_api=None,
+    resolved_objective_names: Sequence[str] | None = None,
     issues: Sequence[str] = (),
 ) -> str:
     """Format the compact CLI summary and Pareto table."""
@@ -52,9 +53,13 @@ def summarize_rows(
     import numpy as np
 
     names = (
-        objective_names(workspace, rows)
-        if objective_api is None
-        else objective_names(workspace, rows, objective_api)
+        [str(name) for name in resolved_objective_names]
+        if resolved_objective_names is not None
+        else (
+            objective_names(workspace, rows)
+            if objective_api is None
+            else objective_names(workspace, rows, objective_api)
+        )
     )
     cost_matrix = np.asarray(
         [row["costs"] for row in rows], dtype=float

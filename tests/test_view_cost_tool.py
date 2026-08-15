@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,15 +21,45 @@ class FakeRecordedDataApi:
         self.history_calls = []
         self.progress_calls = []
 
-    def get_historical_results(
-        self, _workspace, *, status="completed", progress=None
-    ):
+    def open_historical_rawdata_snapshot(self, _workspace, *, status="completed"):
         self.history_calls.append(status)
-        if progress is not None:
-            progress(0, len(self.history), "calculating costs")
-            progress(len(self.history), len(self.history), "calculating costs")
-            self.progress_calls.append(progress)
-        return self.history
+        records_by_job = {
+            str(record.get("job_name")): record
+            for record in self.list_records(_workspace)
+            if isinstance(record, dict)
+        }
+        rows = []
+        max_variable_count = max(
+            (
+                len(item[1])
+                for item in self.history
+                if isinstance(item, tuple) and len(item) >= 2
+            ),
+            default=2,
+        )
+        max_variable_count = max(2, max_variable_count)
+        for item in self.history:
+            job_name = str(item[0]) if isinstance(item, tuple) and item else ""
+            record = dict(records_by_job.get(job_name, {"job_name": job_name}))
+            if isinstance(item, tuple) and len(item) >= 3:
+                variables = tuple(item[1])
+                record["raw_variables"] = {
+                    f"x{index}": value
+                    for index, value in enumerate(
+                        variables + (0.0,) * (max_variable_count - len(variables))
+                    )
+                }
+                items = (SimpleNamespace(payload={"costs": item[2]}),)
+            else:
+                items = ()
+            rows.append((SimpleNamespace(record=record), items))
+        return SimpleNamespace(
+            diagnostics=(),
+            segment_paths=("history",),
+            iter_batches=lambda: iter(
+                (SimpleNamespace(records=tuple(rows), diagnostics=()),)
+            ),
+        )
 
     def list_records(self, _workspace):
         if self.records is not None:
@@ -49,6 +81,30 @@ class FakeRecordedDataApi:
 
     def list_optimization_metadata(self, _workspace):
         return self.opt_metadata
+
+
+class FakeCostInterpreter:
+    def __init__(self):
+        self.parameter_names = ("x0", "x1")
+        self.objective_names = ("objective_1", "objective_2")
+
+    def normalize_variables(self, raw_variables):
+        return tuple(float(value) for value in raw_variables)
+
+    def calculate_costs(self, samples, _raw_variables):
+        return tuple(tuple(sample[0]["costs"]) for sample in samples)
+
+
+@pytest.fixture(autouse=True)
+def fake_task_interpreter(monkeypatch):
+    @contextmanager
+    def open_interpreter(_workspace):
+        yield FakeCostInterpreter()
+
+    monkeypatch.setattr(
+        "yadof.tools.cost_viewer.history.job_template_api.task_cost_interpreter",
+        open_interpreter,
+    )
 
 
 def test_build_rows_uses_recorded_data_history():
@@ -179,6 +235,35 @@ def test_hypervolume_series_has_all_and_current_generation_boundaries():
     assert all(all_hv >= generation_hv)
 
 
+def test_hypervolume_passes_only_cumulative_pareto_points_to_indicator(monkeypatch):
+    from pymoo.indicators import hv as hv_module
+
+    calls = []
+
+    class CapturingHV:
+        def __init__(self, *, ref_point):
+            self.ref_point = ref_point
+
+        def do(self, points):
+            calls.append(points.copy())
+            return 0.0
+
+    monkeypatch.setattr(hv_module, "HV", CapturingHV)
+    rows = [
+        {"row_number": 1, "generation_index": 0, "costs": (0.4, 0.4)},
+        {"row_number": 2, "generation_index": 0, "costs": (0.7, 0.7)},
+        {"row_number": 3, "generation_index": 1, "costs": (0.3, 0.5)},
+        {"row_number": 4, "generation_index": 1, "costs": (0.8, 0.8)},
+    ]
+
+    view_cost.hypervolume_series(rows)
+
+    assert [len(points) for points in calls] == [1, 1, 1, 2]
+    assert all(
+        points.tolist() != [[0.4, 0.4], [0.7, 0.7]] for points in calls
+    )
+
+
 def test_generation_regions_restart_per_run_and_skip_rows_without_generation():
     rows = [
         {"row_number": 1, "optimization_run_id": "run_a", "generation_index": 0},
@@ -277,9 +362,6 @@ def test_build_rows_skips_unplottable_history_rows_and_reports_them():
 
 def test_build_rows_ignores_optional_annotation_errors():
     class BrokenAnnotationApi(FakeRecordedDataApi):
-        def list_records(self, _workspace):
-            raise OSError("individual metadata is busy")
-
         def list_optimization_metadata(self, _workspace):
             raise ValueError("optimization metadata is malformed")
 
@@ -294,9 +376,8 @@ def test_build_rows_ignores_optional_annotation_errors():
 
     assert rows[0]["optimization_index"] is None
     assert rows[0]["generation_index"] is None
-    assert len(issues) == 2
-    assert "individual metadata annotations were ignored" in issues[0]
-    assert "optimization metadata annotations were ignored" in issues[1]
+    assert len(issues) == 1
+    assert "optimization metadata annotations were ignored" in issues[0]
 
 
 def test_objective_names_fall_back_when_task_names_cannot_be_read():
@@ -314,7 +395,7 @@ def test_objective_names_fall_back_when_task_names_cannot_be_read():
 
 def test_build_rows_wraps_recorded_data_errors():
     class BrokenRecordedDataApi:
-        def get_historical_results(self, _workspace, *, status="completed"):
+        def open_historical_rawdata_snapshot(self, _workspace, *, status="completed"):
             raise OSError("rawData archive is busy")
 
     with pytest.raises(view_cost.ViewCostError, match="rawData archive is busy"):

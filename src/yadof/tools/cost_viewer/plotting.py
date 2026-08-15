@@ -172,6 +172,7 @@ def plot_rows(
     output_path: str | Path | None = None,
     *,
     objective_api=job_template_api,
+    resolved_objective_names: Sequence[str] | None = None,
 ) -> Path:
     """Render normalized costs and hypervolume into a PNG."""
 
@@ -189,7 +190,11 @@ def plot_rows(
             )
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    names = objective_names(workspace, rows, objective_api)
+    names = (
+        [str(name) for name in resolved_objective_names]
+        if resolved_objective_names is not None
+        else objective_names(workspace, rows, objective_api)
+    )
     x = np.asarray([row["row_number"] for row in rows], dtype=float)
     cost_matrix = np.asarray(
         [row["costs"] for row in rows], dtype=float

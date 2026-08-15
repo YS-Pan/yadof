@@ -22,17 +22,29 @@ def view_cost(
 
     config = load_config(workspace)
     issues: list[str] = []
+    resolved_objective_names: list[str] = []
     rows = build_rows(
         config.workspace,
         status=status,
         issues=issues,
         progress=progress,
+        objective_names_out=resolved_objective_names,
     )
-    summary = summarize_rows(config.workspace, rows, issues=issues)
+    summary = summarize_rows(
+        config.workspace,
+        rows,
+        issues=issues,
+        resolved_objective_names=resolved_objective_names,
+    )
     output = (
         None
         if output_path is None
-        else plot_rows(config.workspace, rows, output_path)
+        else plot_rows(
+            config.workspace,
+            rows,
+            output_path,
+            resolved_objective_names=resolved_objective_names,
+        )
     )
     return summary, output
 

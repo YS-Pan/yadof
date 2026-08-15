@@ -43,13 +43,17 @@ imposing a one-minute minimum.
 
 Individual CLI view commands write timestamped PNGs by default, accept `--output`
 to override the destination, and accept `--summary-only` to suppress plotting.
-Cost CLI calculation always renders bounded normalization/rawData/cost progress on
-stderr; the final summary remains on stdout. The cost PNG places the arithmetic
+Cost CLI calculation renders bounded frozen-segment reinterpretation progress on
+stderr; the final summary remains on stdout. One cost command freezes its task
+parameters/cost callback and finalized segment names, then combines rawData decode,
+schema validation, normalization, and cost recalculation while each segment ZIP is
+open once. The cost PNG places the arithmetic
 `avg. cost` on the left objective axis. This has the same vertical position as the
 former summed cost on an objective-count-scaled right axis. Its right axis instead
 shows a shaded hypervolume band whose upper boundary accumulates all generations
 and whose lower boundary uses only the current generation, both against the fixed
-normalized reference `(1, ..., 1)`. Thin translucent upper/lower polylines connect
+normalized reference `(1, ..., 1)`. Each cumulative calculation retains only its
+nondominated front before invoking the HV indicator. Thin translucent upper/lower polylines connect
 the values at the generation plotting positions while the band remains shaded, and
 it uses the compact legend label `HV (all & current gen.)`. Dense generation indices
 alternate between two vertical positions at the top of the axes. Cost

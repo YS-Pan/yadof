@@ -33,37 +33,20 @@ def _record_issue(issues: list[str] | None, message: str) -> None:
         issues.append(message)
 
 
-def _metadata_by_job(
-    workspace: WorkspaceLike,
-    recorded_api=recorded_data_api,
-    *,
-    issues: list[str] | None = None,
-) -> dict[str, dict[str, object]]:
-    list_records = getattr(recorded_api, "list_records", None)
-    if list_records is None:
-        return {}
-    out: dict[str, dict[str, object]] = {}
-    try:
-        for record in list_records(workspace):
-            if not isinstance(record, dict) or "job_name" not in record:
-                continue
-            metadata = record.get("job_metadata")
-            row = dict(metadata) if isinstance(metadata, dict) else {}
-            for key in (
-                "run_id",
-                "optimization_index",
-                "generation_index",
-                "population_index",
-            ):
-                if key in record:
-                    row[key] = record[key]
-            out[str(record["job_name"])] = row
-    except Exception as exc:  # noqa: BLE001 - annotations must not block costs.
-        _record_issue(
-            issues,
-            f"individual metadata annotations were ignored: {exc}",
-        )
-    return out
+def _metadata_from_record(record: Mapping[str, object]) -> dict[str, object]:
+    """Extract display provenance from the record already read with rawData."""
+
+    metadata = record.get("job_metadata")
+    row = dict(metadata) if isinstance(metadata, Mapping) else {}
+    for key in (
+        "run_id",
+        "optimization_index",
+        "generation_index",
+        "population_index",
+    ):
+        if key in record:
+            row[key] = record[key]
+    return row
 
 
 def _opt_metadata_by_job(
@@ -138,6 +121,15 @@ def _metadata_str(metadata: Mapping[str, object], key: str) -> str | None:
     return str(value)
 
 
+def _raw_variables(
+    record: Mapping[str, object], names: Sequence[str]
+) -> tuple[float, ...]:
+    values = record.get("raw_variables")
+    if not isinstance(values, Mapping):
+        raise TypeError("raw_variables must be a mapping")
+    return tuple(float(values[name]) for name in names)
+
+
 def build_rows(
     workspace: WorkspaceLike,
     *,
@@ -145,96 +137,185 @@ def build_rows(
     recorded_api=recorded_data_api,
     issues: list[str] | None = None,
     progress: ProgressCallback | None = None,
+    objective_names_out: list[str] | None = None,
 ) -> list[dict[str, object]]:
-    """Build display rows from recorded_data using dynamic cost calculation."""
+    """Build display rows in one frozen task/history interpretation pass."""
 
-    get_diagnostics = getattr(recorded_api, "get_rawdata_diagnostics", None)
-    if callable(get_diagnostics):
-        try:
-            for diagnostic in get_diagnostics(
-                workspace,
-                status=status,
-                include_valid=False,
-            ):
-                _record_issue(
-                    issues,
-                    "recorded row/segment was ignored: "
-                    f"{diagnostic.get('error_type', 'unknown')}: "
-                    f"{diagnostic.get('error_message', '')}",
-                )
-        except Exception as exc:  # noqa: BLE001 - diagnostics are optional.
-            _record_issue(issues, f"recorded-data diagnostics were unavailable: {exc}")
-
-    get_history = getattr(recorded_api, "get_historical_results", None)
-    if get_history is None:
+    open_snapshot = getattr(
+        recorded_api, "open_historical_rawdata_snapshot", None
+    )
+    if not callable(open_snapshot):
         raise ViewCostError(
-            "recorded_data.api does not provide get_historical_results()"
+            "recorded_data.api does not provide "
+            "open_historical_rawdata_snapshot()"
         )
     try:
-        history = get_history(
-            workspace,
-            status=status,
-            **({"progress": progress} if progress is not None else {}),
-        )
-    except ViewCostError:
-        raise
+        snapshot = open_snapshot(workspace, status=status)
     except Exception as exc:  # noqa: BLE001 - hide raw internals from CLI.
         raise ViewCostError(
             f"Could not read recorded_data history: {exc}"
         ) from exc
 
-    candidates: list[dict[str, object]] = []
-    history_row_count = 0
-    for row_number, item in enumerate(history, start=1):
-        history_row_count += 1
-        try:
-            job_name_raw, variables_raw, costs_raw = item
-        except (TypeError, ValueError):
-            _record_issue(
-                issues,
-                f"history row {row_number} was skipped: unexpected row shape",
-            )
-            continue
-        job_name = str(job_name_raw)
-        try:
-            variables = _as_float_tuple(
-                variables_raw, field_name="variables", job_name=job_name
-            )
-            costs = _as_float_tuple(
-                costs_raw, field_name="costs", job_name=job_name
-            )
-        except ViewCostError as exc:
-            _record_issue(
-                issues, f"history row {row_number} was skipped: {exc}"
-            )
-            continue
-        if not costs:
-            _record_issue(
-                issues,
-                f"history row {row_number} for job {job_name!r} was skipped: "
-                "costs are empty",
-            )
-            continue
-        try:
-            average_cost = math.fsum(costs) / len(costs)
-        except OverflowError:
-            average_cost = math.inf
-        if not math.isfinite(average_cost):
-            _record_issue(
-                issues,
-                f"history row {row_number} for job {job_name!r} was skipped: "
-                "average cost is non-finite",
-            )
-            continue
-        candidates.append(
-            {
-                "row_number": row_number,
-                "job_name": job_name,
-                "variables": variables,
-                "costs": costs,
-                "average_cost": average_cost,
-            }
+    for diagnostic in snapshot.diagnostics:
+        _record_issue(
+            issues,
+            "recorded row/segment was ignored: "
+            f"{diagnostic.get('error_type', 'unknown')}: "
+            f"{diagnostic.get('error_message', '')}",
         )
+
+    candidates: list[dict[str, object]] = []
+    metadata_by_job: dict[str, dict[str, object]] = {}
+    history_row_count = 0
+    total_segments = len(snapshot.segment_paths)
+    if progress is not None:
+        progress(0, total_segments, "reinterpreting history")
+
+    try:
+        with job_template_api.task_cost_interpreter(workspace) as interpreter:
+            if objective_names_out is not None:
+                objective_names_out[:] = list(interpreter.objective_names)
+            for segment_number, batch in enumerate(
+                snapshot.iter_batches(), start=1
+            ):
+                for diagnostic in batch.diagnostics:
+                    _record_issue(
+                        issues,
+                        "recorded row/segment was ignored: "
+                        f"{diagnostic.get('error_type', 'unknown')}: "
+                        f"{diagnostic.get('error_message', '')}",
+                    )
+
+                pending: list[
+                    tuple[
+                        int,
+                        str,
+                        tuple[float, ...],
+                        tuple[float, ...],
+                        tuple[object, ...],
+                    ]
+                ] = []
+                for reference, rawdata_items in batch.records:
+                    history_row_count += 1
+                    row_number = history_row_count
+                    job_name = str(reference.record.get("job_name", ""))
+                    try:
+                        raw_variables = _raw_variables(
+                            reference.record, interpreter.parameter_names
+                        )
+                        normalized = _as_float_tuple(
+                            interpreter.normalize_variables(raw_variables),
+                            field_name="variables",
+                            job_name=job_name,
+                        )
+                    except (
+                        OSError,
+                        ValueError,
+                        TypeError,
+                        KeyError,
+                        ViewCostError,
+                    ) as exc:
+                        _record_issue(
+                            issues,
+                            f"recorded row for job {job_name!r} was skipped: {exc}",
+                        )
+                        continue
+                    metadata_by_job[job_name] = _metadata_from_record(
+                        reference.record
+                    )
+                    pending.append(
+                        (
+                            row_number,
+                            job_name,
+                            raw_variables,
+                            normalized,
+                            tuple(item.payload for item in rawdata_items),
+                        )
+                    )
+
+                def add_costed_row(
+                    pending_row: tuple[
+                        int,
+                        str,
+                        tuple[float, ...],
+                        tuple[float, ...],
+                        tuple[object, ...],
+                    ],
+                    costs_raw: Sequence[object],
+                ) -> None:
+                    row_number, job_name, _raw_variables, variables, _sample = (
+                        pending_row
+                    )
+                    try:
+                        costs = _as_float_tuple(
+                            costs_raw, field_name="costs", job_name=job_name
+                        )
+                    except ViewCostError as exc:
+                        _record_issue(
+                            issues, f"history row {row_number} was skipped: {exc}"
+                        )
+                        return
+                    if not costs:
+                        _record_issue(
+                            issues,
+                            f"history row {row_number} for job {job_name!r} "
+                            "was skipped: costs are empty",
+                        )
+                        return
+                    try:
+                        average_cost = math.fsum(costs) / len(costs)
+                    except OverflowError:
+                        average_cost = math.inf
+                    if not math.isfinite(average_cost):
+                        _record_issue(
+                            issues,
+                            f"history row {row_number} for job {job_name!r} "
+                            "was skipped: average cost is non-finite",
+                        )
+                        return
+                    candidates.append(
+                        {
+                            "row_number": row_number,
+                            "job_name": job_name,
+                            "variables": variables,
+                            "costs": costs,
+                            "average_cost": average_cost,
+                        }
+                    )
+
+                if pending:
+                    samples = tuple(row[4] for row in pending)
+                    variables = tuple(row[2] for row in pending)
+                    try:
+                        cost_rows = interpreter.calculate_costs(samples, variables)
+                    except (OSError, ValueError, TypeError, KeyError):
+                        cost_rows = ()
+                        for pending_row, sample, raw_variables in zip(
+                            pending, samples, variables
+                        ):
+                            try:
+                                individual = interpreter.calculate_costs(
+                                    (sample,), (raw_variables,)
+                                )[0]
+                            except (OSError, ValueError, TypeError, KeyError) as exc:
+                                _record_issue(
+                                    issues,
+                                    "recorded row for job "
+                                    f"{pending_row[1]!r} was skipped: {exc}",
+                                )
+                            else:
+                                add_costed_row(pending_row, individual)
+                    if cost_rows:
+                        for pending_row, costs in zip(pending, cost_rows):
+                            add_costed_row(pending_row, costs)
+                if progress is not None:
+                    progress(segment_number, total_segments, "reinterpreting history")
+    except ViewCostError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - task loading remains one clear error.
+        raise ViewCostError(
+            f"Could not reinterpret recorded_data history: {exc}"
+        ) from exc
 
     status_text = (
         "all statuses" if status is None else f"status={status!r}"
@@ -255,7 +336,6 @@ def build_rows(
         len(row["costs"]) for row in candidates  # type: ignore[arg-type]
     )
     objective_count = width_counts.most_common(1)[0][0]
-    metadata = _metadata_by_job(workspace, recorded_api, issues=issues)
     opt_metadata = _opt_metadata_by_job(
         workspace, recorded_api, issues=issues
     )
@@ -272,7 +352,7 @@ def build_rows(
             continue
 
         job_name = str(row["job_name"])
-        job_metadata = metadata.get(job_name, {})
+        job_metadata = metadata_by_job.get(job_name, {})
         job_opt_metadata = opt_metadata.get(job_name, {})
         optimization_index = _metadata_int(
             job_metadata, "optimization_index"

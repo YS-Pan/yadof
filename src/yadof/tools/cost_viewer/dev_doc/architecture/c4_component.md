@@ -1,10 +1,10 @@
 # C4 Component
 
 - `types.py` defines caller-facing type aliases and `ViewCostError`.
-- `history.py` adapts dynamic recorded history and optional provenance into
-  validated display rows.
+- `history.py` adapts one frozen rawData-history snapshot and direct record
+  provenance into validated display rows while one frozen task interpreter is open.
 - `analysis.py` owns Pareto, generation, smoothing, layout, and hypervolume
-  calculations without drawing.
+  calculations without drawing; cumulative HV retains its nondominated front.
 - `report.py` owns terminal summary and Pareto-table presentation.
 - `style.py` owns cost-plot presentation constants shared by rendering and tests.
 - `plotting.py` owns Matplotlib import, artists, axes, legends, and PNG output.

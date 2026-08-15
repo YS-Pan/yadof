@@ -10,9 +10,11 @@ from ..job_template.rawdata_contract import RawDataContractError, validate_rawda
 from ..workspace import WorkspaceContext
 from .paths import RecordedDataPaths
 from .segment_store import (
+    HistoricalRawDataSnapshot,
     SegmentReference,
     discover_catalog,
     load_reference_rawdata,
+    open_historical_rawdata_snapshot as _open_historical_rawdata_snapshot,
 )
 
 
@@ -203,6 +205,16 @@ def get_historical_results(
     return tuple(output)
 
 
+def open_historical_rawdata_snapshot(
+    storage: RecordedDataPaths,
+    *,
+    status: str | None = "completed",
+) -> HistoricalRawDataSnapshot:
+    """Freeze final segment names for one merged decode/validation read."""
+
+    return _open_historical_rawdata_snapshot(storage, status=status)
+
+
 def get_surrogate_training_data(
     workspace: WorkspaceContext, storage: RecordedDataPaths
 ) -> dict[str, object]:
@@ -310,4 +322,5 @@ __all__ = [
     "get_rawdata_diagnostics",
     "get_rawdata_samples",
     "get_surrogate_training_data",
+    "open_historical_rawdata_snapshot",
 ]

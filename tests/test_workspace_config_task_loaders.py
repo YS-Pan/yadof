@@ -13,6 +13,7 @@ from yadof.job_template import (
     calculate_cost,
     get_parameter_definition_signature,
     materialize_job_parameters,
+    task_cost_interpreter,
     validate_rawdata_item,
     validate_task,
 )
@@ -230,6 +231,27 @@ def test_two_workspaces_and_fresh_edits_are_module_and_cache_isolated(tmp_path: 
     assert sys.modules.get("local_values") is original_local_module
     assert not tuple(first.root.rglob("__pycache__"))
     assert not tuple(second.root.rglob("__pycache__"))
+
+
+def test_cost_interpreter_keeps_one_task_definition_for_a_history_batch(
+    tmp_path: Path,
+) -> None:
+    context = _task_files(tmp_path / "workspace", limit=2, offset=1)
+
+    with task_cost_interpreter(context) as interpreter:
+        assert interpreter.parameter_names == ("x",)
+        assert interpreter.objective_names == ("objective_1",)
+        assert interpreter.normalize_variables((1.0,)) == pytest.approx((0.5,))
+        assert interpreter.calculate_costs((({"value": 3.0},),)) == ((4.0,),)
+
+        (context.job_template_dir / "local_values.py").write_text(
+            "LIMIT = 8\nOFFSET = 7\n", encoding="utf-8"
+        )
+        assert interpreter.objective_names == ("objective_1",)
+        assert interpreter.normalize_variables((1.0,)) == pytest.approx((0.5,))
+        assert interpreter.calculate_costs((({"value": 3.0},),)) == ((4.0,),)
+
+    assert calculate_cost(context, (({"value": 3.0},),)) == ((10.0,),)
 
 
 def test_task_loader_supports_local_packages_without_global_cache(tmp_path: Path) -> None:

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import math
 import os
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Iterator, Sequence
 import uuid
 
 import numpy as np
@@ -42,6 +43,45 @@ class TaskDefinition:
     @property
     def objective_count(self) -> int:
         return len(self.objective_names)
+
+
+@dataclass(frozen=True, slots=True)
+class CostInterpreter:
+    """One frozen parameter and cost-definition view of a workspace task."""
+
+    parameters: tuple[Parameter, ...]
+    objective_names: tuple[str, ...]
+    _source_path: Path
+    _calculate_sample: Callable[
+        [Sequence[RawDataItem], RawVariables | None], Sequence[float]
+    ]
+
+    @property
+    def parameter_names(self) -> tuple[str, ...]:
+        return tuple(parameter.name for parameter in self.parameters)
+
+    def normalize_variables(
+        self, raw_variables: Sequence[float]
+    ) -> tuple[float, ...]:
+        """Normalize one recorded vector under the frozen parameters."""
+
+        return normalize_values(self.parameters, raw_variables)
+
+    def calculate_costs(
+        self,
+        samples: Sequence[Sequence[RawDataItem]],
+        raw_variables: Sequence[RawVariables | None] | None = None,
+    ) -> tuple[tuple[float, ...], ...]:
+        """Calculate one batch with the frozen ``calc_cost.py`` callback."""
+
+        rows = _calculate_costs(samples, self._calculate_sample, raw_variables)
+        for row in rows:
+            if len(row) != len(self.objective_names):
+                raise ValueError(
+                    f"{self._source_path} returned {len(row)} costs; expected "
+                    f"{len(self.objective_names)}"
+                )
+        return rows
 
 
 def _workspace(workspace: WorkspaceLike) -> WorkspaceContext:
@@ -320,6 +360,33 @@ def calculate_cost(
     return rows
 
 
+@contextmanager
+def task_cost_interpreter(
+    workspace: WorkspaceLike,
+) -> Iterator[CostInterpreter]:
+    """Freeze parameters and ``calc_cost.py`` for one multi-row interpretation.
+
+    Point-in-time APIs intentionally reload task code on every call.  A history
+    view instead holds one coherent task definition for its complete read and
+    reuses it across its decoded-record batches.
+    """
+
+    context = _workspace(workspace)
+    parameters, _constraints = _parameter_payload(context)
+    source_path = context.job_template_dir / "calc_cost.py"
+    with task_module(context, "calc_cost") as module:
+        names = _objective_names_from_module(module, source_path)
+        calculate_sample = getattr(module, "calculate_cost", None)
+        if not callable(calculate_sample):
+            raise TypeError(f"{source_path} must define callable calculate_cost()")
+        yield CostInterpreter(
+            parameters,
+            names,
+            source_path,
+            calculate_sample,
+        )
+
+
 def calculate_costs_from_raw_data(
     workspace: WorkspaceLike,
     samples: Sequence[Sequence[RawDataItem]],
@@ -384,6 +451,7 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
 
 
 __all__ = [
+    "CostInterpreter",
     "FAST_EVALUATION_MODULE_NAME",
     "PARAMETERS_FILE_NAME",
     "TaskDefinition",
@@ -403,6 +471,7 @@ __all__ = [
     "get_variable_count",
     "materialize_job_parameters",
     "normalize_variables",
+    "task_cost_interpreter",
     "validate_task",
     "validate_fast_task",
 ]

@@ -11,6 +11,8 @@
   current task code.
 - Load rawData samples, assemble surrogate training bundles, and report bounded
   segment/candidate diagnostics.
+- Expose a cost-view history snapshot whose batches carry already decoded and
+  schema-validated evidence from one open segment.
 - Skip malformed, missing, incompatible, or non-finite candidates while preserving
   readable siblings and stable record order.
 

@@ -40,7 +40,9 @@ warnings rather than evaluation failures.
 
 Public queries list/filter records, recover raw variables, load segment members,
 derive current normalized variables and costs through `job_template`, and assemble
-training bundles. Invalid, missing, or corrupt rawData is skipped with
+training bundles. The cost-view reader freezes one finalized segment-name snapshot,
+then opens each selected ZIP once to combine manifest checks, NPZ decode/schema
+validation, and current-cost input delivery. Invalid, missing, or corrupt rawData is skipped with
 diagnostics rather than poisoning all history. Objective changes are reflected on
 the next query because costs are recalculated. Historical-result queries accept an
 optional `(completed, total, message)` callback covering reinterpretation; omitting

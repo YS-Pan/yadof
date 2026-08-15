@@ -20,6 +20,8 @@
   return segment/candidate diagnostics while retaining readable siblings.
 - Produce stable sorted catalog references and deterministic first-wins handling of
   duplicate identities.
+- Freeze a finalized segment-name snapshot for streaming history readers, then
+  inspect and decode each selected ZIP in one open-archive pass.
 
 ## Invariants
 
@@ -28,3 +30,4 @@
 - Publication never opens, copies, or rewrites an older segment.
 - Central-directory or manifest failure skips only its segment; candidate/member
   corruption skips only that candidate when possible.
+- A snapshot never admits a segment published after its names were frozen.

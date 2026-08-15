@@ -53,7 +53,9 @@ axis mismatches, and invalid item structures.
 
 ## Cost contract
 
-Costs are recomputed through freshly loaded current `calc_cost.py`. Returned rows
+Costs are recomputed through freshly loaded current `calc_cost.py`. A long-running
+cost-history view instead opens one explicit package-owned interpreter context,
+freezing parameter definitions and `calc_cost.py` for all of its batches. Returned rows
 must match reported objective width. The same path is used for completed simulation
 evidence, history queries, and surrogate-predicted rawData. Raw variables may be
 supplied when a task needs them, but rawData remains the evidence source.

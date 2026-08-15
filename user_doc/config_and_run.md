@@ -233,7 +233,11 @@ hypervolume, using the fixed normalized-cost reference point `(1, ..., 1)`. Thin
 translucent upper and lower polylines connect the values at each generation plotting
 position while the interval remains shaded. Objective
 names appear in the Pareto-table header, without a separate redundant
-`objectives:` summary line. The CLI displays cost-history calculation progress on
+`objectives:` summary line. At the start of one `view cost` command, yadof freezes
+the finalized history-segment list and the current parameter/cost definitions. It
+then opens each frozen segment once to decode and validate rawData before
+recalculating cost, so newly published records or task edits are picked up by the
+next command rather than mixed into the active result. The CLI displays cost-history calculation progress on
 stderr while leaving the summary on stdout; an interactive progress frame is
 overwritten in place and each stage leaves only its final line. The HV legend is
 abbreviated as `HV (all & current gen.)`, and dense generation numbers alternate

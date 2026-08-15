@@ -2,6 +2,7 @@
 
 from .api import (
     FAST_EVALUATION_MODULE_NAME,
+    CostInterpreter,
     TaskDefinition,
     assign_parameters,
     calculate_cost,
@@ -19,6 +20,7 @@ from .api import (
     get_variable_count,
     materialize_job_parameters,
     normalize_variables,
+    task_cost_interpreter,
     validate_task,
     validate_fast_task,
 )
@@ -35,6 +37,7 @@ from .rawdata_contract import (
 
 __all__ = [
     "FAST_EVALUATION_MODULE_NAME",
+    "CostInterpreter",
     "NamedRawDataItem",
     "Parameter",
     "RAWDATA_SCHEMA_VERSION",
@@ -57,6 +60,7 @@ __all__ = [
     "get_variable_count",
     "materialize_job_parameters",
     "normalize_variables",
+    "task_cost_interpreter",
     "validate_rawdata_directory",
     "validate_rawdata_item",
     "validate_named_rawdata_items",

@@ -199,28 +199,38 @@ def hypervolume_series(
             )
 
     indicator = HV(ref_point=np.asarray(reference, dtype=float))
-    cumulative_rows: list[dict[str, object]] = []
+    cumulative_front = np.empty((0, objective_count), dtype=float)
     x_values: list[float] = []
     all_values: list[float] = []
     generation_values: list[float] = []
 
-    def calculate(group_rows: Sequence[dict[str, object]]) -> float:
+    def valid_front(group_rows: Sequence[dict[str, object]]):
         matrix = np.asarray(
             [row["costs"] for row in group_rows], dtype=float
         )
         valid = matrix[
             np.all((matrix >= 0.0) & (matrix <= 1.0), axis=1)
         ]
-        return float(indicator.do(valid)) if len(valid) else 0.0
+        return valid[is_pareto_efficient(valid)] if len(valid) else valid
 
     for group in groups:
         generation_rows = group["rows"]
-        cumulative_rows.extend(generation_rows)  # type: ignore[arg-type]
+        generation_front = valid_front(generation_rows)  # type: ignore[arg-type]
+        merged = (
+            generation_front
+            if not len(cumulative_front)
+            else np.vstack((cumulative_front, generation_front))
+        )
+        cumulative_front = (
+            merged[is_pareto_efficient(merged)] if len(merged) else merged
+        )
         x_values.append(float(group["last_x"]))
         generation_values.append(
-            calculate(generation_rows)  # type: ignore[arg-type]
+            float(indicator.do(generation_front)) if len(generation_front) else 0.0
         )
-        all_values.append(calculate(cumulative_rows))
+        all_values.append(
+            float(indicator.do(cumulative_front)) if len(cumulative_front) else 0.0
+        )
 
     return (
         np.asarray(x_values, dtype=float),

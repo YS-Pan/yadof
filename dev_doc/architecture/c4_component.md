@@ -68,8 +68,9 @@
   conversion, immutable standard-ZIP micro-batch segments, candidate-scoped
   metadata/evidence, atomic same-directory publication, and tolerant discovery.
 - `recorded_data.query`: partial history over finalized segments only; temporary
-  and unrelated files are outside its surface. Dynamic
-  interpretation and candidate/segment diagnostics isolate readable siblings.
+  and unrelated files are outside its surface. Its cost-view snapshot freezes names
+  once and streams every segment through one open ZIP for structural checks, NPZ
+  decode/schema validation, and candidate diagnostics.
 - `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,
@@ -84,7 +85,9 @@
   history rows, omits unavailable optional annotations, and continues whenever at
   least one finite, consistent objective row remains. Its history, analysis,
   reporting, plotting, style, and orchestration modules expose a stable non-GUI
-  surface; `tools.view_cost` remains a compatibility facade.
+  surface; its one command-local task interpreter freezes parameters and cost code
+  while the history snapshot is processed, and cumulative HV retains only the
+  nondominated front; `tools.view_cost` remains a compatibility facade.
   `tools.surrogate_viewer` is a lazy, optional
   inspection leaf for GUI prediction, real-result comparison, metadata reports,
   and GUI/terminal cross-generation error audits; its backend owns yadof
