@@ -8,5 +8,5 @@
 | generation group | One contiguous sequence sharing optimization-run identity and generation index. |
 | all-individual hypervolume | Hypervolume of every valid display row through a generation endpoint. |
 | current-generation hypervolume | Hypervolume of only the display rows in the generation group at that endpoint. |
-| hypervolume interval | The shaded right-axis area between current-generation and all-individual hypervolume; it has no drawn boundary lines. |
+| hypervolume interval | The shaded right-axis area between current-generation and all-individual hypervolume, bounded by thin translucent polylines that connect values at generation plotting positions. |
 | compatibility facade | `yadof.tools.view_cost`, which forwards the former import surface to this package. |

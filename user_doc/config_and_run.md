@@ -229,8 +229,9 @@ mean of every objective and shares the left cost axis, preserving the same plott
 height that the former objective-count-scaled combined-cost axis produced. The
 right axis shows hypervolume: the shaded band is bounded above by the cumulative
 hypervolume of all recorded generations and below by the current generation's
-hypervolume, using the fixed normalized-cost reference point `(1, ..., 1)`. The
-two boundaries are conveyed by the shade and are not drawn as lines. Objective
+hypervolume, using the fixed normalized-cost reference point `(1, ..., 1)`. Thin,
+translucent upper and lower polylines connect the values at each generation plotting
+position while the interval remains shaded. Objective
 names appear in the Pareto-table header, without a separate redundant
 `objectives:` summary line. The CLI displays cost-history calculation progress on
 stderr while leaving the summary on stdout; an interactive progress frame is

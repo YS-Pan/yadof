@@ -75,8 +75,9 @@
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,
   rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
 - `tools`, `_resources`: reusable `tools.cost_viewer` package with left-axis
-  objective/average costs and a shade-only right-axis all-individual versus
-  current-generation hypervolume interval; integrated
+  objective/average costs and a right-axis all-individual versus
+  current-generation hypervolume interval, shaded and bounded by thin translucent
+  polylines at generation plotting positions; integrated
   time/failure/machine/error view;
   grouped `view all` orchestration; history/task utilities; and read-only
   adapter/template/doc resources. The cost view isolates and reports unusable

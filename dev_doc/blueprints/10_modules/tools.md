@@ -49,9 +49,10 @@ stderr; the final summary remains on stdout. The cost PNG places the arithmetic
 former summed cost on an objective-count-scaled right axis. Its right axis instead
 shows a shaded hypervolume band whose upper boundary accumulates all generations
 and whose lower boundary uses only the current generation, both against the fixed
-normalized reference `(1, ..., 1)`. The band has no drawn upper/lower boundary
-lines and uses the compact legend label `HV (all & current gen.)`. Dense generation
-indices alternate between two vertical positions at the top of the axes. Cost
+normalized reference `(1, ..., 1)`. Thin translucent upper/lower polylines connect
+the values at the generation plotting positions while the band remains shaded, and
+it uses the compact legend label `HV (all & current gen.)`. Dense generation indices
+alternate between two vertical positions at the top of the axes. Cost
 history implementation lives in the reusable `tools/cost_viewer/`
 subpackage; `tools/view_cost.py` is only the compatibility import facade.
 `view all` invokes cost and time with their normal defaults, prints two labeled

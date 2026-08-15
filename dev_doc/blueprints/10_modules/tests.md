@@ -46,7 +46,7 @@ license, machine identity, or credential.
   result notification, flushed pre-execution standalone-smoke feedback,
   cost-view isolation/reporting for unusable history rows and optional annotations,
   left-axis average cost, all-individual/current-generation hypervolume values,
-  shade-only hypervolume plotting, compact HV legend text, staggered generation
+  shaded hypervolume plotting with thin translucent boundary polylines, compact HV legend text, staggered generation
   labels, non-redundant summaries, compatibility/package
   imports, and stderr calculation progress without duplicate TTY completion lines,
   execute-machine/error encodings, worker-over-Condor machine precedence,

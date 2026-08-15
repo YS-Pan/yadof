@@ -335,13 +335,19 @@ def test_view_cost_source_does_not_reference_legacy_jsonl_inputs():
     assert source.count("linewidths=PARETO_EDGE_LINE_WIDTH") == 2
 
 
-def test_hypervolume_is_rendered_as_shading_without_boundary_lines():
+def test_hypervolume_is_rendered_as_a_bounded_translucent_polyline_band():
     source = Path(plotting.__file__).read_text(encoding="utf-8")
 
     assert "fill_between(" in source
-    assert ".step(" not in source
+    assert "step=\"post\"" not in source
     assert 'edgecolor="none"' in source
+    assert source.count("ax2.plot(") == 1
+    assert "for boundary in (generation_hv, all_hv):" in source
+    assert "linewidth=HV_BOUNDARY_LINE_WIDTH" in source
+    assert "alpha=HV_BOUNDARY_LINE_ALPHA" in source
     assert style.HV_SHADE_LABEL == "HV (all & current gen.)"
+    assert style.HV_BOUNDARY_LINE_WIDTH == pytest.approx(1.0)
+    assert style.HV_BOUNDARY_LINE_ALPHA == pytest.approx(0.5)
     assert style.GENERATION_LABEL_STAGGER == pytest.approx(0.05)
 
 

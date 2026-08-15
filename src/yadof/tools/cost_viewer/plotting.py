@@ -36,6 +36,8 @@ from .style import (
     HASH_LINE_COLOR,
     HASH_LINE_LABEL,
     HASH_LINE_STYLE,
+    HV_BOUNDARY_LINE_ALPHA,
+    HV_BOUNDARY_LINE_WIDTH,
     HV_LINE_COLOR,
     HV_SHADE_ALPHA,
     HV_SHADE_LABEL,
@@ -383,13 +385,21 @@ def plot_rows(
         hv_x,
         generation_hv,
         all_hv,
-        step="post",
         facecolor=HV_LINE_COLOR,
         edgecolor="none",
         alpha=HV_SHADE_ALPHA,
         label=HV_SHADE_LABEL,
         zorder=0.8,
     )
+    for boundary in (generation_hv, all_hv):
+        ax2.plot(
+            hv_x,
+            boundary,
+            color=HV_LINE_COLOR,
+            linewidth=HV_BOUNDARY_LINE_WIDTH,
+            alpha=HV_BOUNDARY_LINE_ALPHA,
+            zorder=0.9,
+        )
     ax2.set_ylabel(
         "Hypervolume (HV)",
         color=HV_LINE_COLOR,
