@@ -122,10 +122,12 @@ continues to require an explicit generation count.
 Progress is enabled by default for `fast`, `local`, and `distributed` runs. Each
 generation immediately displays a population progress bar and the numeric counts
 of successful individuals, errors, and remaining individuals; it updates whenever
-an individual reaches a terminal outcome. Backend planning, scheduling, timeout,
-and retry details remain visible alongside it. Use `--no-progress` for a quiet
-invocation, or `--progress` to explicitly retain the default. Progress settings are
-temporary and the caller environment is restored afterward.
+an individual reaches a terminal outcome. Backend scheduling, timeout, and retry
+details remain visible alongside it. Fast worker-plan details are retained in
+evaluation diagnostics instead of being printed once per generation. Use
+`--no-progress` for a quiet invocation, or `--progress` to explicitly retain the
+default. Progress settings are temporary and the caller environment is restored
+afterward.
 
 The pre-run real-task smoke default comes from
 `OPTIMIZE_SMOKE_TEST_ENABLED`. `--smoke-test` and `--no-smoke-test` are opposite,

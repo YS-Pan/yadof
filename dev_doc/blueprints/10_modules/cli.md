@@ -24,8 +24,9 @@ all-infinite generation with recent job diagnostics.
 
 `run` enables progress by default for fast, local, and distributed execution. The
 generation bar advances per terminal individual and displays finished/total,
-successful, error, and remaining counts while backend details continue to explain
-planning, scheduling, retries, and timeouts. `--no-progress` is the explicit quiet
+successful, error, and remaining counts while backend scheduling, retry, and timeout
+details remain visible. Fast worker-plan details remain in evaluation diagnostics
+rather than recurring terminal lines. `--no-progress` is the explicit quiet
 override; `--progress` explicitly selects the default behavior. The temporary
 progress environment is restored after every invocation.
 

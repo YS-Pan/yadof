@@ -53,7 +53,8 @@ visible as completed error outcomes instead of leaving an apparently stalled
 generation. Best-effort recording loss does not alter progress success. Non-
 interactive streams receive complete snapshot lines; interactive
 terminals update the active bar in place. `--no-progress` disables both the bar and
-the existing detailed backend messages for that invocation.
+the existing detailed backend messages for that invocation. Fast worker-plan detail
+is retained in evaluation diagnostics rather than repeated as a generation line.
 
 Before starting a local batch, shared resource calibration reads compatible smoke
 or preceding-generation records. Local policy combines that per-job estimate with a

@@ -174,6 +174,31 @@ def test_fast_record_failure_is_isolated_for_jobless_result(
     assert recorded_api.list_records(root) == ()
 
 
+def test_fast_worker_plan_is_not_repeated_in_progress_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _workspace(tmp_path)
+    (root / "config.py").write_text(
+        "EVALUATION_MODE = 'fast'\n"
+        "FAST_RESOURCE_AUTODETECT_ENABLED = False\n",
+        encoding="utf-8",
+    )
+    _write_evaluation(
+        root,
+        "def evaluate_rawdata(parameters, context):\n"
+        "    value = float(parameters['input_value'])\n"
+        f"    {_rawdata_result_expression('value')}\n",
+    )
+    monkeypatch.setenv("YADOF_PROGRESS", "1")
+
+    costs = evaluate_population(root, ((0.5,),), mode="fast")
+    assert costs[0] == pytest.approx((0.5,))
+
+    assert "fast: workers=" not in capsys.readouterr().out
+
+
 def test_fast_and_local_can_share_one_task_kernel(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
     _write_evaluation(

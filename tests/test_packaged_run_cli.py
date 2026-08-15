@@ -189,6 +189,25 @@ def test_run_cli_passes_mode_progress_and_strict_failure_options(
     assert "YADOF_PROGRESS" not in os.environ
 
 
+def test_run_cli_omits_generation_lifecycle_messages(tmp_path, capsys):
+    workspace = _workspace(tmp_path)
+
+    assert cli_main(
+        [
+            "run",
+            "--workspace",
+            str(workspace),
+            "--generations",
+            "1",
+            "--no-smoke-test",
+        ]
+    ) == 0
+
+    output = capsys.readouterr()
+    assert "[yadof] generation 0: start" not in output.out
+    assert "[yadof] generation 0: finished" not in output.out
+
+
 def test_population_progress_reports_generation_outcomes(
     monkeypatch, capsys
 ):

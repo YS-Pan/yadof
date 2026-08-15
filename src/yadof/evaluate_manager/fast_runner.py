@@ -134,7 +134,6 @@ def run_fast_population(
         population_size=len(pending),
         configured_max=max_workers,
     )
-    _progress(plan.summary())
     plan_metadata = plan.metadata()
     scratch_existed = scratch_root.exists()
     scratch_root.mkdir(parents=True, exist_ok=True)
@@ -747,16 +746,6 @@ def _logical_evaluation_name(index: int) -> str:
 
 def _now_text() -> str:
     return datetime.now().astimezone().isoformat(timespec="milliseconds")
-
-
-def _progress(message: str) -> None:
-    if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        print(f"[yadof] {message}", flush=True)
 
 
 __all__ = ["run_fast_population"]

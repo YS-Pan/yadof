@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 import os
-from pathlib import Path
 from typing import Mapping
 
 from ..config import LoadedConfig, load_config
@@ -133,7 +132,6 @@ def run_generations(
             snapshot = session.begin_generation(live_config)
             config = snapshot.config
             generation_index = int(start_generation) + offset
-            _progress(f"generation {generation_index}: start")
             started_at = now_text()
             before = _session_job_names(session)
             result = _run_one_generation_with_config(
@@ -163,7 +161,6 @@ def run_generations(
                 snapshot=snapshot,
             )
             results.append(result)
-            _progress(f"generation {generation_index}: finished")
             if fail_on_all_infinite and _all_infinite(result.costs):
                 raise AllInfiniteGenerationError(result)
     finally:
@@ -204,11 +201,6 @@ def _all_infinite(costs) -> bool:
     return bool(rows) and not any(
         math.isfinite(value) for row in rows for value in row
     )
-
-
-def _progress(message: str) -> None:
-    if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {"1", "true", "yes", "on"}:
-        print(f"[yadof] {message}", flush=True)
 
 
 __all__ = [

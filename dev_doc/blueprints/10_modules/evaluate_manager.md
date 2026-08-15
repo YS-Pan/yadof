@@ -55,8 +55,9 @@ The parent owns candidate scratch creation/cleanup, records worker/machine/timin
 and process-tree diagnostics, enforces the hard timeout, and uses shared
 `process_control.py` to reap remaining descendants after every response or kill a
 timed-out/crashed worker tree. A failure discards that worker and creates a
-replacement. A successful worker is reused after descendant cleanup. Fast never
-calls the scheduler-specific `after_jobs_submitted` callback.
+replacement. A successful worker is reused after descendant cleanup. Fast worker
+plans are stored in evaluation metadata, not emitted once per generation as CLI
+progress. Fast never calls the scheduler-specific `after_jobs_submitted` callback.
 
 ## Distributed backend
 
