@@ -10,6 +10,9 @@
   history、容错查询和 recording-loss counters。
 - 完整设计与验收边界保存在已归档的
   [原实施 toDo](../../obsolete/20260813_165610_unify-loss-tolerant-evaluation-recording.md)。
+- 迁移前的实现保存在
+  [老项目 `20260719 test package`](<../../../../../20260719 test package>)，可在定位
+  迁移遗漏时用于对照；它仅是历史参考，不能覆盖当前代码、文档和 v2 契约。
 - 这次修改同时跨越 evaluation backend、optimizer、resource calibration、
   surrogate、viewer、history clear、文档和测试，后续修改可能暴露遗漏的调用路径、
   新旧语义不一致或实现与文档不一致。
