@@ -9,7 +9,7 @@ from typing import Mapping, Sequence
 
 from ...job_template import api as job_template_api
 from ...recorded_data import api as recorded_data_api
-from .types import ProgressCallback, ViewCostError, WorkspaceLike
+from .types import ProgressCallback, ProgressMessage, ViewCostError, WorkspaceLike
 
 
 def _as_float_tuple(
@@ -167,14 +167,25 @@ def build_rows(
     candidates: list[dict[str, object]] = []
     metadata_by_job: dict[str, dict[str, object]] = {}
     history_row_count = 0
+    total_segments = len(snapshot.segment_paths)
     if progress is not None:
-        progress(0, None, "reinterpreting candidates")
+        progress(
+            0,
+            None,
+            ProgressMessage(
+                "reinterpreting candidates",
+                bar_completed=0,
+                bar_total=total_segments,
+            ),
+        )
 
     try:
         with job_template_api.task_cost_interpreter(workspace) as interpreter:
             if objective_names_out is not None:
                 objective_names_out[:] = list(interpreter.objective_names)
-            for batch in snapshot.iter_batches():
+            for segment_number, batch in enumerate(
+                snapshot.iter_batches(), start=1
+            ):
                 for diagnostic in batch.diagnostics:
                     _record_issue(
                         issues,
@@ -307,13 +318,23 @@ def build_rows(
                             add_costed_row(pending_row, costs)
                 if progress is not None:
                     progress(
-                        history_row_count, None, "reinterpreting candidates"
+                        history_row_count,
+                        None,
+                        ProgressMessage(
+                            "reinterpreting candidates",
+                            bar_completed=segment_number,
+                            bar_total=total_segments,
+                        ),
                     )
         if progress is not None:
             progress(
                 history_row_count,
                 history_row_count,
-                "reinterpreting candidates",
+                ProgressMessage(
+                    "reinterpreting candidates",
+                    bar_completed=total_segments,
+                    bar_total=total_segments,
+                ),
             )
     except ViewCostError:
         raise

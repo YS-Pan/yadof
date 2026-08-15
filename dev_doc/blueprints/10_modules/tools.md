@@ -45,10 +45,12 @@ Individual CLI view commands write timestamped PNGs by default, accept `--output
 to override the destination, and accept `--summary-only` to suppress plotting.
 Cost CLI calculation renders streamed candidate reinterpretation progress on stderr:
 the exact candidate total is deliberately unknown until the one-pass read completes,
-then the final frame reports the precise candidate count. The final summary remains
-on stdout. One cost command freezes its task parameters/cost callback and finalized
-segment names, then combines rawData decode, schema validation, normalization, and
-cost recalculation while each segment ZIP is open once. The cost PNG places the arithmetic
+then the final frame reports the precise candidate count. While streaming, its bar
+fill uses the frozen segment position, so the visual indicator advances without
+requiring an extra ZIP scan. The final summary remains on stdout. One cost command
+freezes its task parameters/cost callback and finalized segment names, then combines
+rawData decode, schema validation, normalization, and cost recalculation while each
+segment ZIP is open once. The cost PNG places the arithmetic
 `avg. cost` on the left objective axis. This has the same vertical position as the
 former summed cost on an objective-count-scaled right axis. Its right axis instead
 shows a shaded hypervolume band whose upper boundary accumulates all generations

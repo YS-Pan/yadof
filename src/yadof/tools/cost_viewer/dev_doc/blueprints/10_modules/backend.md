@@ -7,7 +7,9 @@ combines rawData decode/schema validation, normalization, and current-cost
 calculation before validating numeric finiteness, objective width, and finite
 arithmetic average at the original row index. Progress advances by decoded candidate
 count; the total remains unknown until the streamed pass can publish its exact final
-count, avoiding a separate manifest scan.
+count, avoiding a separate manifest scan. A string-compatible progress message
+carries frozen-segment position separately so the CLI bar still visibly advances
+through the one-open-per-segment pass.
 
 `analysis.py` owns Pareto membership, visible selection, generation grouping,
 event locations, smoothing, scatter scaling, and fixed-reference minimization

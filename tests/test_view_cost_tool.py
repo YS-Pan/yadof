@@ -11,6 +11,7 @@ import yadof.tools.cost_viewer as cost_viewer
 import yadof.tools.view_cost as view_cost
 from yadof.tools.cost_viewer import plotting
 from yadof.tools.cost_viewer import style
+from yadof.tools.cost_viewer.types import ProgressMessage
 
 
 class FakeRecordedDataApi:
@@ -169,6 +170,10 @@ def test_build_rows_reports_streamed_candidate_progress_before_final_total():
         (3, None, "reinterpreting candidates"),
         (3, 3, "reinterpreting candidates"),
     ]
+    assert all(isinstance(call[2], ProgressMessage) for call in progress_calls)
+    assert [
+        (call[2].bar_completed, call[2].bar_total) for call in progress_calls
+    ] == [(0, 1), (1, 1), (1, 1)]
 
 
 def test_objective_names_use_job_template_names():

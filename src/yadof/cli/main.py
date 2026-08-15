@@ -191,6 +191,17 @@ class _CostViewProgress:
         self, completed: int, total: int | None, message: str
     ) -> None:
         completed = max(0, int(completed))
+        bar_completed = max(
+            0, int(getattr(message, "bar_completed", completed) or 0)
+        )
+        bar_total_value = getattr(message, "bar_total", total)
+        bar_total = (
+            None
+            if bar_total_value is None
+            else max(0, int(bar_total_value))
+        )
+        if bar_total:
+            bar_completed = min(bar_completed, bar_total)
         if total is None:
             if (
                 not sys.stderr.isatty()
@@ -200,7 +211,11 @@ class _CostViewProgress:
             ):
                 return
             key = (str(message), None, completed)
-            filled = 0
+            filled = (
+                0
+                if not bar_total
+                else int(self.width * bar_completed / bar_total)
+            )
             count = f"{completed}/?"
             self._last_unknown_completed = completed
         else:
@@ -218,7 +233,11 @@ class _CostViewProgress:
             ):
                 return
             key = (str(message), total, percent)
-            filled = 0 if total == 0 else int(self.width * completed / total)
+            filled = (
+                0
+                if not bar_total
+                else int(self.width * bar_completed / bar_total)
+            )
             count = f"{completed}/{total}"
         if key == self._last_key:
             return

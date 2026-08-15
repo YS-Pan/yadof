@@ -15,6 +15,7 @@ from yadof.cli.main import (
     _default_view_output_name,
     build_parser,
 )
+from yadof.tools.cost_viewer.types import ProgressMessage
 from yadof.evaluate_manager import evaluate_population
 from yadof.recorded_data import list_records
 from yadof.resources import adapter_names, adapter_resource
@@ -198,14 +199,28 @@ def test_cost_progress_streams_candidate_count_before_exact_total(capsys):
 
     progress(0, None, "reinterpreting candidates")
     progress(999, None, "reinterpreting candidates")
-    progress(1_000, None, "reinterpreting candidates")
-    progress(2_345, 2_345, "reinterpreting candidates")
+    progress(
+        1_000,
+        None,
+        ProgressMessage(
+            "reinterpreting candidates", bar_completed=25, bar_total=100
+        ),
+    )
+    progress(
+        2_345,
+        2_345,
+        ProgressMessage(
+            "reinterpreting candidates", bar_completed=100, bar_total=100
+        ),
+    )
 
     output = capsys.readouterr().err
     assert "0/? reinterpreting candidates" in output
     assert "999/? reinterpreting candidates" not in output
     assert "1000/? reinterpreting candidates" in output
     assert "2345/2345 reinterpreting candidates" in output
+    assert "view cost [#######.....................] 1000/?" in output
+    assert "view cost [############################] 2345/2345" in output
 
 
 def test_surrogate_viewer_cli_is_registered_without_loading_optional_modules():

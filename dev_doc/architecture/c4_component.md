@@ -88,8 +88,9 @@
   surface; its one command-local task interpreter freezes parameters and cost code
   while the history snapshot is processed. Its streamed progress counts decoded
   candidates, defers the exact total until completion without reopening segments,
-  and cumulative HV retains only the nondominated front; `tools.view_cost` remains
-  a compatibility facade.
+  and uses the frozen segment position only for terminal-bar fill; cumulative HV
+  retains only the nondominated front; `tools.view_cost` remains a compatibility
+  facade.
   `tools.surrogate_viewer` is a lazy, optional
   inspection leaf for GUI prediction, real-result comparison, metadata reports,
   and GUI/terminal cross-generation error audits; its backend owns yadof
