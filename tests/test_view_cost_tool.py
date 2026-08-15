@@ -147,6 +147,30 @@ def test_build_rows_uses_recorded_data_history():
     assert "Pareto front:" in summary
 
 
+def test_build_rows_reports_streamed_candidate_progress_before_final_total():
+    progress_calls = []
+    rows = view_cost.build_rows(
+        object(),
+        recorded_api=FakeRecordedDataApi(
+            (
+                ("job_a", (0.1, 0.2), (0.5, 0.8)),
+                ("job_b", (0.2, 0.3), (0.4, 0.9)),
+                ("job_c", (0.3, 0.4), (0.7, 0.3)),
+            )
+        ),
+        progress=lambda completed, total, message: progress_calls.append(
+            (completed, total, message)
+        ),
+    )
+
+    assert len(rows) == 3
+    assert progress_calls == [
+        (0, None, "reinterpreting candidates"),
+        (3, None, "reinterpreting candidates"),
+        (3, 3, "reinterpreting candidates"),
+    ]
+
+
 def test_objective_names_use_job_template_names():
     class FakeObjectiveApi:
         @staticmethod

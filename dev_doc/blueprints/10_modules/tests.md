@@ -45,6 +45,7 @@ license, machine identity, or credential.
   lifecycle marker lines or repeated fast worker-plan output, streamed distributed
   result notification, flushed pre-execution standalone-smoke feedback,
   cost-view isolation/reporting for unusable history rows and optional annotations,
+  streamed candidate progress with its exact final total,
   left-axis average cost, all-individual/current-generation hypervolume values,
   shaded hypervolume plotting with thin translucent boundary polylines, compact HV legend text, staggered generation
   labels, non-redundant summaries, compatibility/package

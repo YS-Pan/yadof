@@ -131,7 +131,7 @@ def test_view_commands_use_one_explicit_workspace(capsys, tmp_path):
     assert "cost_response" in cost_output
     assert "saved:" in cost_output
     assert "view cost [" in cost_capture.err
-    assert "reinterpreting history" in cost_capture.err
+    assert "reinterpreting candidates" in cost_capture.err
     cost_plots = tuple(
         (workspace / ".yadof" / "tool_output").glob("cost_*.png")
     )
@@ -193,6 +193,21 @@ def test_cost_progress_overwrites_tty_frame_before_finishing(
     assert output.endswith("4997/4997 calculating costs\n")
 
 
+def test_cost_progress_streams_candidate_count_before_exact_total(capsys):
+    progress = _CostViewProgress()
+
+    progress(0, None, "reinterpreting candidates")
+    progress(999, None, "reinterpreting candidates")
+    progress(1_000, None, "reinterpreting candidates")
+    progress(2_345, 2_345, "reinterpreting candidates")
+
+    output = capsys.readouterr().err
+    assert "0/? reinterpreting candidates" in output
+    assert "999/? reinterpreting candidates" not in output
+    assert "1000/? reinterpreting candidates" in output
+    assert "2345/2345 reinterpreting candidates" in output
+
+
 def test_surrogate_viewer_cli_is_registered_without_loading_optional_modules():
     parser = build_parser()
     args = parser.parse_args(
@@ -249,7 +264,7 @@ def test_view_all_prints_both_results_and_creates_both_images(capsys, tmp_path):
 
     output = capsys.readouterr()
     assert "view cost [" in output.err
-    assert "reinterpreting history" in output.err
+    assert "reinterpreting candidates" in output.err
     assert "=== cost ===" in output.out
     assert "=== time ===" in output.out
     assert "=== error ===" not in output.out

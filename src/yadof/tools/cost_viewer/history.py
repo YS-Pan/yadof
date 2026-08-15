@@ -167,17 +167,14 @@ def build_rows(
     candidates: list[dict[str, object]] = []
     metadata_by_job: dict[str, dict[str, object]] = {}
     history_row_count = 0
-    total_segments = len(snapshot.segment_paths)
     if progress is not None:
-        progress(0, total_segments, "reinterpreting history")
+        progress(0, None, "reinterpreting candidates")
 
     try:
         with job_template_api.task_cost_interpreter(workspace) as interpreter:
             if objective_names_out is not None:
                 objective_names_out[:] = list(interpreter.objective_names)
-            for segment_number, batch in enumerate(
-                snapshot.iter_batches(), start=1
-            ):
+            for batch in snapshot.iter_batches():
                 for diagnostic in batch.diagnostics:
                     _record_issue(
                         issues,
@@ -309,7 +306,15 @@ def build_rows(
                         for pending_row, costs in zip(pending, cost_rows):
                             add_costed_row(pending_row, costs)
                 if progress is not None:
-                    progress(segment_number, total_segments, "reinterpreting history")
+                    progress(
+                        history_row_count, None, "reinterpreting candidates"
+                    )
+        if progress is not None:
+            progress(
+                history_row_count,
+                history_row_count,
+                "reinterpreting candidates",
+            )
     except ViewCostError:
         raise
     except Exception as exc:  # noqa: BLE001 - task loading remains one clear error.

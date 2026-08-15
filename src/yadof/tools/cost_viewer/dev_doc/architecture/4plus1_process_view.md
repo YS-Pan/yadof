@@ -8,7 +8,8 @@ readable siblings continue. It then validates display rows and builds a text sum
 Plotting is optional. When selected, numerical analysis prepares Pareto,
 generation, smoothing, and hypervolume series before Matplotlib writes one PNG.
 
-The calculation progress callback is caller-owned and advances over the frozen
-segment count. The CLI renders it on stderr;
-another caller may translate the same callback into GUI state without changing
-the analysis pipeline.
+The calculation progress callback is caller-owned and advances over actually
+decoded candidates. Its total is unknown while the one-pass stream is still
+discovering candidates, then closes as the exact final candidate count. The CLI
+renders this on stderr; another caller may translate the same callback into GUI
+state without changing the analysis pipeline or adding a pre-scan of the ZIPs.

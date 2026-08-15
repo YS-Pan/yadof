@@ -180,39 +180,58 @@ class _CostViewProgress:
     """Render a bounded terminal progress bar without adding a CLI dependency."""
 
     width = 28
+    unknown_total_reporting_step = 1_000
 
     def __init__(self) -> None:
-        self._last_key: tuple[str, int] | None = None
+        self._last_key: tuple[str, int | None, int] | None = None
+        self._last_unknown_completed = 0
         self._line_open = False
 
-    def __call__(self, completed: int, total: int, message: str) -> None:
+    def __call__(
+        self, completed: int, total: int | None, message: str
+    ) -> None:
         completed = max(0, int(completed))
-        total = max(0, int(total))
-        if total:
-            completed = min(completed, total)
-        percent = 0 if total == 0 else min(100, int(100 * completed / total))
-        reporting_step = 1 if sys.stderr.isatty() else 10
-        if (
-            total > 0
-            and completed not in (0, total)
-            and percent % reporting_step
-        ):
-            return
-        key = (str(message), percent)
+        if total is None:
+            if (
+                not sys.stderr.isatty()
+                and completed != 0
+                and completed - self._last_unknown_completed
+                < self.unknown_total_reporting_step
+            ):
+                return
+            key = (str(message), None, completed)
+            filled = 0
+            count = f"{completed}/?"
+            self._last_unknown_completed = completed
+        else:
+            total = max(0, int(total))
+            if total:
+                completed = min(completed, total)
+            percent = (
+                0 if total == 0 else min(100, int(100 * completed / total))
+            )
+            reporting_step = 1 if sys.stderr.isatty() else 10
+            if (
+                total > 0
+                and completed not in (0, total)
+                and percent % reporting_step
+            ):
+                return
+            key = (str(message), total, percent)
+            filled = 0 if total == 0 else int(self.width * completed / total)
+            count = f"{completed}/{total}"
         if key == self._last_key:
             return
         self._last_key = key
 
         if self._line_open and not sys.stderr.isatty():
             self._line_open = False
-        filled = 0 if total == 0 else int(self.width * completed / total)
         bar = "#" * filled + "." * (self.width - filled)
-        count = "?" if total == 0 else f"{completed}/{total}"
         text = f"view cost [{bar}] {count} {message}"
         if sys.stderr.isatty():
             print(f"\r{text}", end="", file=sys.stderr, flush=True)
             self._line_open = True
-            if total > 0 and completed >= total:
+            if total is not None and total > 0 and completed >= total:
                 print(file=sys.stderr)
                 self._line_open = False
             return

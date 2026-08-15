@@ -8,7 +8,7 @@ from pathlib import Path
 from ...workspace import WorkspaceContext
 
 WorkspaceLike = WorkspaceContext | str | Path
-ProgressCallback = Callable[[int, int, str], None]
+ProgressCallback = Callable[[int, int | None, str], None]
 
 
 class ViewCostError(RuntimeError):
