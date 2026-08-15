@@ -8,8 +8,8 @@ from pathlib import Path
 import time
 
 from ..job_template import api as job_template_api
-from ..recorded_data.rawdata_v2 import own_rawdata_source
-from ..recorded_data.records_v2 import build_owned_envelope
+from ..recorded_data.rawdata import own_rawdata_source
+from ..recorded_data.records import build_owned_envelope
 from ..recorded_data.session import CampaignSession
 from ..task_snapshot import GenerationTaskSnapshot
 from .types import JobResult

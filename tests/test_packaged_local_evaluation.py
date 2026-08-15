@@ -238,7 +238,7 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     assert records[0]["started_at"]
     assert records[0]["ended_at"]
     assert records[0]["job_metadata"]["execute_machine"] == metadata["execute_machine"]
-    assert len(tuple(root.glob("recorded_data/v2/segments/*/*/segment_*.zip"))) == 1
+    assert len(tuple(root.glob("recorded_data/segments/*/*/segment_*.zip"))) == 1
 
 
 def test_packaged_local_failures_are_isolated_and_return_inf(tmp_path: Path) -> None:
@@ -372,7 +372,7 @@ def test_packaged_evaluation_uses_effective_recorded_data_path(tmp_path: Path) -
     assert costs[0] == pytest.approx((0.1,))
     effective_workspace = load_config(root).workspace
     assert recorded_api.get_job_names(effective_workspace)
-    assert len(tuple(root.glob("state/history/v2/segments/*/*/segment_*.zip"))) == 1
+    assert len(tuple(root.glob("state/history/segments/*/*/segment_*.zip"))) == 1
     assert not (root / "recorded_data").exists()
 
 

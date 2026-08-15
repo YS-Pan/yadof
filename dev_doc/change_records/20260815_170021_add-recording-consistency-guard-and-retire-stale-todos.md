@@ -12,7 +12,7 @@
 
 ## Change
 
-- Added a persistent automatic toDo that briefly records the v2 recording change,
+- Added a persistent automatic toDo that briefly records the segmented recording change,
   links its completed change record and archived implementation toDo, and defines a
   bounded trigger check over naturally in-scope evidence.
 - Required a matched occurrence to report the concrete inconsistency, impact, and
@@ -33,7 +33,7 @@
 
 ## Impact
 
-- Future work that naturally touches the recording-v2 surface now checks relevant
+- Future work that naturally touches the recording surface now checks relevant
   local evidence for regressions and repairs a confirmed match within normal task
   authority.
 - The two archived plans are historical references only and no longer constitute

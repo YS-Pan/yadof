@@ -1,4 +1,4 @@
-# File blueprint: src/yadof/recorded_data/rawdata_v2.py
+# File blueprint: src/yadof/recorded_data/rawdata.py
 
 ## Intent
 

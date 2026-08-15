@@ -1,4 +1,4 @@
-"""Tolerant public queries over immutable v2 segments."""
+"""Tolerant public queries over immutable segments."""
 
 from __future__ import annotations
 
@@ -296,7 +296,7 @@ def _raw_variables(
 ) -> tuple[float, ...]:
     values = record.get("raw_variables")
     if not isinstance(values, Mapping):
-        raise TypeError("v2 raw_variables must be a mapping")
+        raise TypeError("raw_variables must be a mapping")
     return tuple(float(values[name]) for name in names)
 
 

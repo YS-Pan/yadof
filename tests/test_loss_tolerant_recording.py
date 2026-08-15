@@ -19,7 +19,7 @@ from yadof.job_template import RAWDATA_SCHEMA_VERSION, NamedRawDataItem
 from yadof.recorded_data import api as recorded_api
 from yadof.recorded_data.campaign_lock import CampaignActiveError
 from yadof.recorded_data.paths import recorded_data_paths
-from yadof.recorded_data.records_v2 import build_owned_envelope
+from yadof.recorded_data.records import build_owned_envelope
 from yadof.recorded_data.segment_store import (
     CatalogSnapshot,
     SegmentReference,
@@ -151,15 +151,31 @@ def test_segment_count_limit_and_immutable_zip_layout(tmp_path: Path) -> None:
     assert counters["published_candidates"] == 5
     assert counters["peak_unpublished_candidates"] <= 8
     assert counters["peak_unpublished_bytes"] <= 32 * 1024 * 1024
-    paths = tuple(root.glob("recorded_data/v2/segments/*/*/segment_*.zip"))
+    paths = tuple(root.glob("recorded_data/segments/*/*/segment_*.zip"))
     assert len(paths) == 3
     counts = []
     for path in paths:
         with zipfile.ZipFile(path) as archive:
             manifest = json.loads(archive.read("manifest.json"))
             counts.append(manifest["candidate_count"])
+            assert "format_version" not in manifest
+            metadata_member = manifest["candidates"][0]["metadata_member"]
+            assert "schema_version" not in json.loads(
+                archive.read(metadata_member)
+            )
             assert archive.namelist()[-1] == "manifest.json"
     assert sorted(counts) == [1, 2, 2]
+
+
+def test_metadata_events_have_no_record_layer_version(tmp_path: Path) -> None:
+    root = _workspace(tmp_path / "workspace")
+    record = recorded_api.record_optimization_metadata(
+        root,
+        {"record_type": "generation", "generation_index": 0},
+    )
+    assert "schema_version" not in record
+    (event,) = (root / "recorded_data/metadata/generation").glob("event_*.json")
+    assert "schema_version" not in json.loads(event.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
@@ -184,7 +200,7 @@ def test_large_candidate_above_target_publishes_singleton(
     finally:
         counters = session.close()
     assert counters["published_candidates"] == 1
-    (segment,) = root.glob("recorded_data/v2/segments/*/*/segment_*.zip")
+    (segment,) = root.glob("recorded_data/segments/*/*/segment_*.zip")
     with zipfile.ZipFile(segment) as archive:
         assert json.loads(archive.read("manifest.json"))["candidate_count"] == 1
 
@@ -303,15 +319,17 @@ def test_second_campaign_and_clear_fail_while_lock_is_held(tmp_path: Path) -> No
     assert clear_history(root, confirm=True)["workspace"] == str(root.resolve())
 
 
-def test_legacy_files_are_ignored_and_left_untouched(tmp_path: Path) -> None:
+def test_unowned_recorded_data_entries_are_ignored_and_left_untouched(
+    tmp_path: Path,
+) -> None:
     root = _workspace(tmp_path / "workspace")
-    legacy = root / "recorded_data/indMeta.jsonl"
-    legacy.parent.mkdir(parents=True)
-    legacy.write_text('{"job_name":"legacy"}\n', encoding="utf-8")
+    unowned = root / "recorded_data/user_notes.jsonl"
+    unowned.parent.mkdir(parents=True)
+    unowned.write_text('{"note":"keep"}\n', encoding="utf-8")
     recorded_api.record_job_result(root, "new", (), (), status="error")
     assert recorded_api.get_job_names(root) == ("new",)
     clear_history(root, confirm=True)
-    assert legacy.read_text(encoding="utf-8") == '{"job_name":"legacy"}\n'
+    assert unowned.read_text(encoding="utf-8") == '{"note":"keep"}\n'
 
 
 def test_bad_candidate_member_does_not_hide_readable_sibling(tmp_path: Path) -> None:
@@ -327,7 +345,7 @@ def test_bad_candidate_member_does_not_hide_readable_sibling(tmp_path: Path) -> 
         session.flush_boundary()
     finally:
         session.close()
-    (segment,) = root.glob("recorded_data/v2/segments/*/*/segment_*.zip")
+    (segment,) = root.glob("recorded_data/segments/*/*/segment_*.zip")
     with zipfile.ZipFile(segment) as archive:
         member = next(name for name in archive.namelist() if name.endswith("response.npz"))
         info = archive.getinfo(member)
@@ -453,7 +471,7 @@ def test_campaign_locks_are_independent_between_workspaces(tmp_path: Path) -> No
 def test_temporary_and_corrupt_segments_are_tolerated(tmp_path: Path) -> None:
     root = _workspace(tmp_path / "workspace")
     recorded_api.record_job_result(root, "good", (), (), status="error")
-    segment_dir = next((root / "recorded_data/v2/segments").glob("*/*"))
+    segment_dir = next((root / "recorded_data/segments").glob("*/*"))
     (segment_dir / "segment_999998.zip.tmp").write_bytes(b"partial")
     (segment_dir / "segment_999999.zip").write_bytes(b"not a zip")
     assert recorded_api.get_job_names(root) == ("good",)

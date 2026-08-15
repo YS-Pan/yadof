@@ -273,9 +273,9 @@ written below `.yadof/tool_output/`. `view all` runs cost and time together, pri
 both summaries, and creates both timestamped images. Use `--summary-only` to print
 without creating PNGs. Destructive history clear requires interactive confirmation
 or `--yes`, validates its exact workspace targets, refuses while the campaign lock
-is held, clears only v2 history/checkpoints/jobs in that workspace, and recreates
-the jobs directory. Legacy global ZIP/JSONL files are outside the v2 query and clear
-surface and remain untouched.
+is held, clears only generated segment/event history, checkpoints, and jobs in that
+workspace, and recreates the jobs directory. Other entries below `recorded_data/`
+remain untouched.
 
 `view surrogate` is a separate, explicitly launched read-only tool. With no mode,
 or with the explicit `gui` mode, it opens the selected workspace (or lets the user

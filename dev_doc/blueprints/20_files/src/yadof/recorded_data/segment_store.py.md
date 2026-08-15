@@ -2,19 +2,21 @@
 
 ## Intent
 
-- Publish and discover immutable, independently readable v2 evidence segments.
+- Publish and discover immutable, independently readable evidence segments.
 
 ## I/O format
 
-- Standard ZIP under `v2/segments/<run>/<generation>/` with candidate-scoped JSON
+- Standard ZIP under `segments/<run>/<generation>/` with candidate-scoped JSON
   metadata, stored NPZ members, and `manifest.json` last.
+- The manifest has a stable format identity and structural/member checks without a
+  recorded-data version number; embedded rawData NPZ schema validation is separate.
 - Same-directory temporary ZIP followed by atomic rename is the sole publication
-  boundary; temporary and legacy files are ignored by discovery.
+  boundary; temporary and unrelated files are ignored by discovery.
 
 ## Functionalities
 
 - Give every candidate a stable campaign/run/generation/population/job identity.
-- Validate manifest/schema/member mappings, declared sizes, and metadata identity;
+- Validate manifest/member mappings, declared sizes, and metadata identity;
   return segment/candidate diagnostics while retaining readable siblings.
 - Produce stable sorted catalog references and deterministic first-wins handling of
   duplicate identities.

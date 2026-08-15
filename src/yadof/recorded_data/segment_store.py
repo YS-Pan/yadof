@@ -1,4 +1,4 @@
-"""Immutable standard-ZIP segment publication and tolerant v2 discovery."""
+"""Immutable standard-ZIP segment publication and tolerant discovery."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from typing import Mapping, Sequence
 import zipfile
 
 from ..job_template.rawdata_contract import NamedRawDataItem
-from .paths import IND_META_SCHEMA_VERSION, RECORD_FORMAT_VERSION, RecordedDataPaths
-from .rawdata_v2 import decode_npz, encode_npz
+from .paths import RecordedDataPaths
+from .rawdata import decode_npz, encode_npz
 from .utils import json_ready, now_utc_text
 
 
@@ -112,7 +112,6 @@ def publish_segment(
                 metadata_member = f"{prefix}/metadata.json"
                 record = {
                     **dict(envelope.record),
-                    "schema_version": IND_META_SCHEMA_VERSION,
                     "candidate_id": envelope.candidate_id,
                 }
                 metadata_payload = _json_bytes(record)
@@ -154,7 +153,6 @@ def publish_segment(
                 )
             manifest = {
                 "format": SEGMENT_FORMAT,
-                "format_version": RECORD_FORMAT_VERSION,
                 "published_at": now_utc_text(),
                 "run_id": first.run_id,
                 "generation_index": first.generation_index,
@@ -220,9 +218,7 @@ def scan_segment(
     diagnostics: list[dict[str, object]] = []
     with zipfile.ZipFile(path, "r") as archive:
         manifest = _json_object(archive.read(MANIFEST_MEMBER), "segment manifest")
-        if manifest.get("format") != SEGMENT_FORMAT or int(
-            manifest.get("format_version", -1)
-        ) != RECORD_FORMAT_VERSION:
+        if manifest.get("format") != SEGMENT_FORMAT:
             raise ValueError("unsupported recorded-data segment manifest")
         candidates = manifest.get("candidates")
         if not isinstance(candidates, list):
@@ -251,8 +247,6 @@ def scan_segment(
                 record = _json_object(metadata_payload, "candidate metadata")
                 if str(record.get("candidate_id")) != candidate_id:
                     raise ValueError("candidate identity mismatch")
-                if int(record.get("schema_version", -1)) != IND_META_SCHEMA_VERSION:
-                    raise ValueError("unsupported candidate metadata schema")
                 raw_entries = candidate.get("rawdata", ())
                 if not isinstance(raw_entries, list):
                     raise ValueError("candidate rawdata map must be a list")

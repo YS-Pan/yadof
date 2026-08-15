@@ -20,11 +20,11 @@ src/yadof/                 installed framework
     fast_resources.py      fast-specific host-capacity planning
     process_control.py     shared exact process-tree termination
   task_snapshot.py         immutable generation task capture/fingerprints
-  recorded_data/           campaign session and immutable v2 segments
+  recorded_data/           campaign session and immutable segments
     session.py             hot history, bounded writer, counters, lock lifetime
     segment_store.py       standard-ZIP publication/tolerant discovery
-    records_v2.py          owned envelopes and immutable event files
-    query_v2.py            partial/corruption-tolerant history
+    records.py             owned envelopes and immutable event files
+    query.py               partial/corruption-tolerant history
   optimize/                candidate mechanics and campaign loop
   surrogate/               rawData-first model and scheduling
   tools/                   optional user-launched utilities

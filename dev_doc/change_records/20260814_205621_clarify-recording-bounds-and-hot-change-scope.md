@@ -34,7 +34,7 @@
 - Scoped supported in-campaign task correction to stable parameter identity/count
   and objective count, and aligned architecture, blueprints, and user guidance with
   that limitation.
-- Clarified that the v2 reader ignores legacy global-ZIP/JSONL history and never
+- Clarified that the segment reader ignores legacy global-ZIP/JSONL history and never
   migrates, deletes, or rewrites it.
 
 ## Rationale

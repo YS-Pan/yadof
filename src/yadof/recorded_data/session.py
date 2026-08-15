@@ -20,7 +20,7 @@ from ..task_snapshot import (
 )
 from .campaign_lock import CampaignLock
 from .paths import RecordedDataPaths, recorded_data_paths
-from .records_v2 import catalog_snapshot
+from .records import catalog_snapshot
 from .segment_store import (
     RecordEnvelope,
     SegmentReference,
@@ -573,7 +573,7 @@ def _raw_variables_tuple(
     snapshot: GenerationTaskSnapshot, value: object
 ) -> tuple[float, ...]:
     if not isinstance(value, Mapping):
-        raise TypeError("v2 raw_variables must be a name/value mapping")
+        raise TypeError("raw_variables must be a name/value mapping")
     return tuple(float(value[name]) for name in snapshot.parameter_names)
 
 

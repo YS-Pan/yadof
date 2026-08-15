@@ -1,4 +1,4 @@
-"""Owned no-pickle rawData conversion used by finalizers and v2 segments."""
+"""Owned no-pickle rawData conversion used by finalizers and segments."""
 
 from __future__ import annotations
 

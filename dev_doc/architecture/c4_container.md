@@ -21,7 +21,7 @@ flowchart LR
     Schedd --> Result
     Result --> Finalizer["Common current-cost finalizer"]
     Finalizer --> Optimizer["Optimizer and surrogate"]
-    Finalizer -. non-blocking owned envelope .-> Records["Bounded v2 segment recorder"]
+    Finalizer -. non-blocking owned envelope .-> Records["Bounded segment recorder"]
 ```
 
 ## Agent interaction

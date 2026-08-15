@@ -240,7 +240,7 @@ def _get_current_value_and_unit(hfss: Any, var_name: str, var_obj: Any) -> tuple
 @dataclass(frozen=True)
 class OptParam:
     name: str
-    ranges: tuple[RangeElem, ...]   # e.g. ((lo,hi),)  or  (v1, v2, v3, ...)
+    ranges: tuple[RangeElem, ...]   # e.g. ((lo, hi),) or (value_1, value_2, ...)
     value: float
     unit: str
 
@@ -347,7 +347,7 @@ def _parse_level_string(level_str: str) -> tuple[list[RangeElem], str]:
         except ValueError:
             return [], unit
 
-    # Discrete values  →  "v1, v2, v3, …"
+    # Discrete values become "value_1, value_2, value_3, ..."
     if "," in bracket_content:
         try:
             values: list[RangeElem] = [

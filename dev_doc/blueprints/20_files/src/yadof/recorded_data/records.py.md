@@ -1,8 +1,8 @@
-# File blueprint: src/yadof/recorded_data/records_v2.py
+# File blueprint: src/yadof/recorded_data/records.py
 
 ## Intent
 
-- Construct v2 candidate envelopes and publish immutable evidence or diagnostic
+- Construct candidate envelopes and publish immutable evidence or diagnostic
   metadata events through workspace-explicit public APIs.
 
 ## Functionalities

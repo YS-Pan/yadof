@@ -1,8 +1,8 @@
-# File blueprint: src/yadof/recorded_data/query_v2.py
+# File blueprint: src/yadof/recorded_data/query.py
 
 ## Intent
 
-- Expose tolerant workspace-explicit reads over finalized v2 evidence without
+- Expose tolerant workspace-explicit reads over finalized evidence without
   relying on mutable aggregate files.
 
 ## Functionalities
@@ -16,7 +16,7 @@
 
 ## Invariants
 
-- Legacy JSONL/global-ZIP files and temporary segments are ignored.
+- Temporary and unrelated files are ignored.
 - Public reads perform no repair, overwrite, or publication.
 - Derived values are recalculated under the caller's current task interpretation;
   durable evidence remains unchanged.

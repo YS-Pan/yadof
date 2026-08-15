@@ -140,10 +140,10 @@ interpretation fingerprint invalidates cached normalization/current-cost values;
 an evaluation-only edit records new provenance without forcing old cost work.
 
 History is stored as immutable standard-ZIP micro-batch segments below
-`recorded_data/v2/segments/`. Published segments are never appended or rewritten.
-Readers ignore temporary files and legacy `indMeta.jsonl`/`rawData.npz`, skip a bad
-candidate member where possible, and skip one whole segment when its ZIP directory
-or manifest is unreadable. Legacy files are neither migrated nor deleted.
+`recorded_data/segments/`. Published segments are never appended or rewritten.
+Readers ignore temporary and unrelated files, skip a bad candidate member where
+possible, and skip one whole segment when its ZIP directory or manifest is
+unreadable.
 
 Keep these three decisions separate:
 

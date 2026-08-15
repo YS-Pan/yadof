@@ -7,10 +7,8 @@ explicitly selected user workspaces. Distribution metadata has one version sourc
 and one console entry point. Wheel/sdist membership is allowlisted around package
 code, generic templates/adapters, and version-matched documentation.
 
-The current package version is 0.3.0. Project history reserves 0.1.0 for the older
-pre-package implementation, uses 0.2.0 for the first installable-package line, and
-uses 0.3.0 for the incompatible immutable v2 history-segment line. Legacy aggregate
-JSONL/global-ZIP history is outside the v2 query and migration surface.
+The current package version is 0.3.0. Recorded history uses immutable standard-ZIP
+segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Workspace contract
 

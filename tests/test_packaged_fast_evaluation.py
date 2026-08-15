@@ -141,7 +141,7 @@ def test_fast_parallel_results_are_ordered_recorded_and_jobless(tmp_path: Path) 
     second_start = datetime.fromisoformat(records[1]["started_at"])
     assert second_start < first_end
     assert len(recorded_api.get_rawdata_samples(root)) == 5
-    assert len(tuple(root.glob("recorded_data/v2/segments/*/*/segment_*.zip"))) == 1
+    assert len(tuple(root.glob("recorded_data/segments/*/*/segment_*.zip"))) == 1
 
 
 def test_fast_record_failure_is_isolated_for_jobless_result(

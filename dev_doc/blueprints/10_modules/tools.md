@@ -16,7 +16,7 @@ overflow, and minority-width cost-history rows as isolated display failures,
 reports bounded issue details in the summary, and plots the remaining rows at their
 original evaluation indices. Optional metadata annotation failures do not block
 cost data, and unavailable task objective names use generic labels. It fails only
-when core history cannot be read or no plottable row remains. Corrupt v2 candidates
+when core history cannot be read or no plottable row remains. Corrupt candidates
 and segments are reported as bounded ignored-record diagnostics while readable
 siblings remain usable. Time supports status filtering and owns elapsed time, failure
 rate, execute-machine color, and typed error occurrence reporting. Machine legend
@@ -57,9 +57,8 @@ subpackage; `tools/view_cost.py` is only the compatibility import facade.
 `view all` invokes cost and time with their normal defaults, prints two labeled
 summaries, and uses one timestamp for the two default image names. The
 views do not mutate durable evidence. History clear requires explicit confirmation,
-resolves and validates exact workspace-owned v2 targets, refuses while the campaign
-OS lock is held, leaves ignored legacy JSONL/global-ZIP evidence untouched, and
-avoids package or unrelated paths.
+resolves and validates exact workspace-owned segment and event targets, refuses
+while the campaign OS lock is held, and avoids package or unrelated paths.
 
 ## Surrogate checkpoint viewer
 

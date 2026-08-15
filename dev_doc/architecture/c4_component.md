@@ -64,11 +64,11 @@
 ## Durable evidence and optimization
 - `recorded_data.session`: one explicit campaign-owned hot catalog, bounded daemon
   writer, current derived history, recorder counters, and OS campaign-lock lifetime.
-- `recorded_data.rawdata_v2`, `records_v2`, `segment_store`: owned no-pickle NPZ
+- `recorded_data.rawdata`, `records`, `segment_store`: owned no-pickle NPZ
   conversion, immutable standard-ZIP micro-batch segments, candidate-scoped
   metadata/evidence, atomic same-directory publication, and tolerant discovery.
-- `recorded_data.query_v2`: partial v2 history over finalized segments only; legacy
-  global ZIP/JSONL files and temporary segments are outside its surface. Dynamic
+- `recorded_data.query`: partial history over finalized segments only; temporary
+  and unrelated files are outside its surface. Dynamic
   interpretation and candidate/segment diagnostics isolate readable siblings.
 - `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
   metadata, start/resume, and optional strict all-infinite failure.

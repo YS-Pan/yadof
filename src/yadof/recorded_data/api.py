@@ -6,17 +6,15 @@ from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
 from ..workspace import WorkspaceContext, resolve_workspace
-from . import query_v2 as _query
-from . import records_v2 as _records
+from . import query as _query
+from . import records as _records
 from .paths import (
-    IND_META_SCHEMA_VERSION,
-    OPT_META_SCHEMA_VERSION,
     VALID_RECORD_STATUSES,
     RecordedDataPaths,
     WorkspaceLike,
     recorded_data_paths,
 )
-from .rawdata_v2 import RawDataSource
+from .rawdata import RawDataSource
 from .session import CampaignSession
 
 
@@ -44,7 +42,7 @@ def record_job_result(
 
     context, storage = _context_and_storage(workspace)
     if overwrite:
-        raise ValueError("v2 immutable segments do not support record overwrite")
+        raise ValueError("immutable segments do not support record overwrite")
     envelope = _records.build_envelope(
         context,
         job_name,
@@ -237,8 +235,6 @@ def open_campaign_session(workspace: WorkspaceLike) -> CampaignSession:
 
 
 __all__ = [
-    "IND_META_SCHEMA_VERSION",
-    "OPT_META_SCHEMA_VERSION",
     "VALID_RECORD_STATUSES",
     "calculate_costs",
     "get_historical_optimization_results",

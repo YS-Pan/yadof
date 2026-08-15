@@ -1,11 +1,8 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.3.0**. In this project's
-version history, **0.1.0** names the older pre-package codebase, **0.2.0** names the
-first installable-package line, and **0.3.0** introduces the incompatible immutable
-v2 history-segment format. Legacy aggregate JSONL/global-ZIP history is not read or
-migrated automatically.
+or HTCondor workflows. The current packaged release is **0.3.0**. Evaluation
+history uses immutable standard-ZIP segments plus immutable metadata events.
 
 Its durable modeling contract is:
 

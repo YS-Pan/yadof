@@ -7,7 +7,7 @@
   affect valid results and every append rewrote campaign-scale state.
 - The explicitly requested
   `20260813_165610_unify-loss-tolerant-evaluation-recording.md` contract permits an
-  incompatible v2 format and requires current cost to remain independent of
+  incompatible segmented format and requires current cost to remain independent of
   best-effort persistence.
 - The migrated checkout also contained two environmental/source artifacts: the
   source/test directories deny some cache/temp creation, and `fast_runner.py`
@@ -24,9 +24,9 @@
   memory-backed rawData, calculates current cost, returns that cost, and only then
   makes a non-blocking recorder offer. Invalid rawData/cost remains an evaluation
   failure; every later recording failure is isolated from the result.
-- Replaced mutable global history with v2 immutable standard-ZIP segments. Each
+- Replaced mutable global history with immutable standard-ZIP segments. Each
   same-run/generation micro-batch has candidate-scoped metadata/NPZ members and a
-  versioned manifest written last, then publishes through a same-directory atomic
+  manifest written last, then publishes through a same-directory atomic
   rename. Existing segments are never reopened.
 - Added one explicit `CampaignSession` with an OS workspace lock, one bounded daemon
   writer, exact candidate/byte admission accounting, generation-boundary flush,
@@ -38,9 +38,9 @@
   them. Dropped rows remain useful only until reinterpretation requires unavailable
   evidence.
 - Converted public history queries, viewers, surrogate recovery/training, resource
-  planning, optimization metadata, and history clear to v2. Readers tolerate bad
+  planning, optimization metadata, and history clear to segmented storage. Readers tolerate bad
   candidates/segments and report bounded diagnostics. History clear refuses an
-  active campaign and deletes only the v2 subtree.
+  active campaign and deletes only framework-owned segment and event directories.
 - Deleted the old JSONL/global-ZIP readers, writers, backend client, and compatibility
   tests. Legacy files are neither inspected nor deleted.
 - Removed the migrated duplicate fast-worker request send. The persistent automatic
@@ -79,7 +79,7 @@
 
 ## Impact
 
-- Newly recorded evidence uses only `recorded_data/v2/`; old history does not appear
+- Newly recorded evidence uses only `recorded_data/segments/`; old history does not appear
   in new queries and requires an explicit external migration if ever needed.
 - Valid evaluation costs and optimizer progress no longer depend on history
   publication. Recent best-effort history may be lost within the configured

@@ -3,9 +3,13 @@
 ## Responsibility and files
 
 `yadof.recorded_data` owns durable workspace evidence and one explicit campaign
-session. Paths are derived only from the effective workspace. V2 individual
-evidence is stored in immutable standard-ZIP micro-batch segments; optimization and
-surrogate metadata uses unique immutable JSON event files.
+session. Paths are derived only from the effective workspace. Individual evidence
+is stored in immutable standard-ZIP micro-batch segments; optimization and surrogate
+metadata uses unique immutable JSON event files.
+The native layout is directly `recorded_data/segments/` and
+`recorded_data/metadata/`; neither paths nor record JSON add a recorded-data version
+layer. Segment format identity and structural/member validation remain explicit,
+while each embedded rawData NPZ keeps its independent schema contract.
 
 ## Recording contract
 
@@ -36,22 +40,23 @@ warnings rather than evaluation failures.
 
 Public queries list/filter records, recover raw variables, load segment members,
 derive current normalized variables and costs through `job_template`, and assemble
-training bundles. Invalid, legacy, missing, or corrupt rawData is skipped with
+training bundles. Invalid, missing, or corrupt rawData is skipped with
 diagnostics rather than poisoning all history. Objective changes are reflected on
 the next query because costs are recalculated. Historical-result queries accept an
 optional `(completed, total, message)` callback covering reinterpretation; omitting
-it preserves the normal quiet API. Temporary and legacy global-ZIP/JSONL files are
-ignored. Candidate/member failure skips that candidate where siblings remain
+it preserves the normal quiet API. Temporary and unrelated files are ignored.
+Candidate/member failure skips that candidate where siblings remain
 readable; central-directory/manifest failure skips one segment.
 
 ## Invariants
 
 - One OS lock and one writer exist per active workspace campaign; separate
   workspaces remain independent.
-- Published segments are immutable, versioned, finalized only by atomic rename,
+- Published segments are immutable, finalized only by atomic rename,
   and bounded by campaign-selected count/byte policy.
 - In-flight envelopes stay within the complete unpublished count/byte budget.
 - A dropped current row may remain in derived hot history only while its existing
   interpretation remains valid; a later reinterpretation removes it.
-- Clearing history validates exact workspace-owned v2 targets, requires user
-  confirmation, refuses an active lock, and leaves legacy data untouched.
+- Clearing history validates the exact workspace-owned segment and event targets,
+  requires user confirmation, refuses an active lock, and leaves unrelated entries
+  untouched.

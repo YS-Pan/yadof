@@ -10,9 +10,9 @@
 ## Change
 
 - Added the relative local link to `20260719 test package` in the persistent
-  recording-v2 automatic toDo.
+  recording-consistency automatic toDo.
 - Marked the old project as historical comparison material rather than an
-  authoritative source that can override current code, documentation, or v2
+  authoritative source that can override current code, documentation, or recording
   contracts.
 
 ## Impact

@@ -1,4 +1,4 @@
-# 持续检查 loss-tolerant recording v2 一致性
+# 持续检查 loss-tolerant recording 一致性
 
 ## 背景
 
@@ -6,13 +6,13 @@
   描述了一次较大的持久化与求值链路重构：fast/local/distributed 统一经过
   `JobResult` finalizer，在 current cost 返回后才向有界 recorder 提交 owned
   envelope；workspace 使用一个 campaign session、OS lock 和后台 segment writer；
-  历史格式改为 immutable v2 ZIP segments，并加入 generation task snapshot、hot
+  历史采用 immutable ZIP segments，并加入 generation task snapshot、hot
   history、容错查询和 recording-loss counters。
 - 完整设计与验收边界保存在已归档的
   [原实施 toDo](../../obsolete/20260813_165610_unify-loss-tolerant-evaluation-recording.md)。
 - 迁移前的实现保存在
   [老项目 `20260719 test package`](<../../../../../20260719 test package>)，可在定位
-  迁移遗漏时用于对照；它仅是历史参考，不能覆盖当前代码、文档和 v2 契约。
+  迁移遗漏时用于对照；它仅是历史参考，不能覆盖当前代码、文档和记录契约。
 - 这次修改同时跨越 evaluation backend、optimizer、resource calibration、
   surrogate、viewer、history clear、文档和测试，后续修改可能暴露遗漏的调用路径、
   新旧语义不一致或实现与文档不一致。
@@ -23,7 +23,7 @@
   做一次有界一致性检查。
 - 如果发现由这次重构引入或遗留的具体问题，明确报告问题、影响和证据，并在当前授权
   与安全边界内修复；不要只增加兼容包装或隐藏异常。
-- 让 current cost、recording loss、campaign lifetime、task snapshot、v2 format 和
+- 让 current cost、recording loss、campaign lifetime、task snapshot、segment format 和
   各消费者始终保持同一份可验证的契约。
 
 ## 指导
@@ -43,7 +43,7 @@
 
 ### 报告与修复
 
-- 发现匹配时，先说明具体不一致、可复现证据、受影响路径以及它违反的 v2 契约，再实施
+- 发现匹配时，先说明具体不一致、可复现证据、受影响路径以及它违反的记录契约，再实施
   最小完整修复。修复应删除错误分支或统一到既有边界，不应恢复已删除的旧存储链路。
 - 同步修改直接相关测试；行为或契约变化时，按项目规则更新 architecture、blueprint、
   terminology、user documentation 和 change record。运行最接近的回归测试，并按影响面
@@ -56,7 +56,7 @@
 
 ## Completion Rule（完成规则）
 
-- 对一次自然触发而言：已报告一个有证据的 v2 重构一致性问题，完成当前权限与范围内的
+- 对一次自然触发而言：已报告一个有证据的记录重构一致性问题，完成当前权限与范围内的
   最小完整修复，并通过与风险相称的测试；若受外部授权阻塞，则已明确报告阻塞、影响和
   后续所需决定。
 - 本 toDo 是持续性的；一次问题修复后仍保留在 `toDo/auto/`，供未来任务继续检查。

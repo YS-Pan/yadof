@@ -1,8 +1,6 @@
 """Workspace-local durable evaluation evidence and dynamic history queries."""
 
 from .api import (
-    IND_META_SCHEMA_VERSION,
-    OPT_META_SCHEMA_VERSION,
     VALID_RECORD_STATUSES,
     calculate_costs,
     get_historical_results,
@@ -28,8 +26,6 @@ from .campaign_lock import CampaignActiveError
 from .session import CampaignSession
 
 __all__ = [
-    "IND_META_SCHEMA_VERSION",
-    "OPT_META_SCHEMA_VERSION",
     "VALID_RECORD_STATUSES",
     "CampaignActiveError",
     "CampaignSession",

@@ -280,7 +280,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 successful_records[0]["job_metadata"]["execute_machine"]
                 == successful_metadata["execute_machine"]
             )
-            assert len(tuple(recorded_dir.glob("v2/segments/*/*/segment_*.zip"))) == 1
+            assert len(tuple(recorded_dir.glob("segments/*/*/segment_*.zip"))) == 1
 
             run_workspace = outside_dir / "run-workspace"
             run_initialized = _run(
@@ -438,8 +438,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 "job_template/calc_cost.py",
                 "job_template/parameters_constraints.py",
                 "job_template/workflow.py",
-                "recorded_data/v2",
-                "recorded_data/v2/segments",
+                "recorded_data/segments",
             } <= workspace_paths
             assert any(path.endswith(".zip") for path in workspace_paths)
             for forbidden in (
@@ -653,15 +652,13 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/recorded_data/api.py" in wheel_names
         assert "yadof/recorded_data/campaign_lock.py" in wheel_names
         assert "yadof/recorded_data/paths.py" in wheel_names
-        assert "yadof/recorded_data/query_v2.py" in wheel_names
-        assert "yadof/recorded_data/rawdata_v2.py" in wheel_names
-        assert "yadof/recorded_data/records_v2.py" in wheel_names
+        assert "yadof/recorded_data/query.py" in wheel_names
+        assert "yadof/recorded_data/rawdata.py" in wheel_names
+        assert "yadof/recorded_data/records.py" in wheel_names
         assert "yadof/recorded_data/segment_store.py" in wheel_names
         assert "yadof/recorded_data/session.py" in wheel_names
         assert "yadof/recorded_data/manifest_store.py" not in wheel_names
-        assert "yadof/recorded_data/query.py" not in wheel_names
         assert "yadof/recorded_data/rawdata_store.py" not in wheel_names
-        assert "yadof/recorded_data/records.py" not in wheel_names
         assert "yadof/recorded_data/utils.py" in wheel_names
         assert "yadof/task_snapshot.py" in wheel_names
         assert "yadof/job_template/api.py" in wheel_names

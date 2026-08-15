@@ -1,4 +1,4 @@
-"""V2 record-envelope creation, direct publication, and immutable events."""
+"""Record-envelope creation, direct publication, and immutable events."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ import uuid
 from ..job_template import api as job_template_api
 from ..workspace import WorkspaceContext
 from .campaign_lock import CampaignLock
-from .paths import OPT_META_SCHEMA_VERSION, RecordedDataPaths, VALID_RECORD_STATUSES
-from .rawdata_v2 import RawDataSource, own_rawdata_source, reservation_bytes
+from .paths import RecordedDataPaths, VALID_RECORD_STATUSES
+from .rawdata import RawDataSource, own_rawdata_source, reservation_bytes
 from .segment_store import (
     CatalogSnapshot,
     RecordEnvelope,
@@ -170,7 +170,6 @@ def record_optimization_metadata(
     storage: RecordedDataPaths, metadata: Mapping[str, object]
 ) -> dict[str, object]:
     record = {
-        "schema_version": OPT_META_SCHEMA_VERSION,
         "recorded_at": now_utc_text(),
         **safe_metadata(metadata),
     }

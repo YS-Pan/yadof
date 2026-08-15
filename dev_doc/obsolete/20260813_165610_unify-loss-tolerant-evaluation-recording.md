@@ -10,9 +10,9 @@ pre-revision document is preserved at
 The work may make large incompatible changes. The current global
 `recorded_data/rawData.npz` and `indMeta.jsonl` format does not need a
 compatibility reader, automatic migration, or dual-write period.
-The v2 implementation does not inspect those legacy files: if they happen to be
-present, it starts with empty v2 history and leaves every legacy file untouched.
-The user is responsible for not mixing old-format and v2 campaigns in one
+The segment implementation does not inspect those legacy files: if they happen to be
+present, it starts with empty segmented history and leaves every legacy file untouched.
+The user is responsible for not mixing old-format and segmented campaigns in one
 workspace.
 
 The expected campaign scale for this design is normally several tens of thousands
@@ -154,7 +154,7 @@ The implementation must preserve these decisions:
    original task.
 9. The design targets at most 100,000 candidates. SQLite and custom segment
    protocols require measured evidence before they enter the implementation.
-10. Old history-format compatibility or detection is not required. V2 ignores old
+10. Old history-format compatibility or detection is not required. Segment storage ignores old
     files, starts cold, and never deletes or rewrites them.
 11. Recorder infrastructure configuration, including history paths, segment/queue
     budgets, writer failure policy, and shutdown policy, is frozen when the
@@ -398,9 +398,8 @@ Use a versioned layout such as:
 
 ```text
 recorded_data/
-  v2/
-    segments/
-      <run-id>/
+  segments/
+    <run-id>/
         generation_000000/
           segment_000000.zip
           segment_000001.zip
@@ -532,7 +531,7 @@ current generation. Fingerprints trigger recalculation. Only concrete current
 normalization/rawData/cost failures make a record mechanically unusable.
 
 Legacy global-ZIP/JSONL paths are outside this query surface. Their presence does
-not trigger migration, confirmation, deletion, or an error; v2 discovery behaves
+not trigger migration, confirmation, deletion, or an error; segment discovery behaves
 as if they do not exist.
 
 An explicitly invoked viewer may return a nonzero status when it cannot satisfy its

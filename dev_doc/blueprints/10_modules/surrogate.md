@@ -12,7 +12,7 @@ error, and publishes recoverable checkpoints/metadata.
 
 Training bundles come from the active campaign session when one exists, so finalized
 segments and accepted unpublished current rows share one validated view. Outside a
-campaign they come from tolerant public v2 queries. RawData fields are flattened
+campaign they come from tolerant public recorded-data queries. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
 constant or near-constant fields. Task-owned importance weights do not add or remove
 rawData: they emphasize objective-relevant positions already present in the modeled

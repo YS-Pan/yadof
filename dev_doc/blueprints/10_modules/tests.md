@@ -31,7 +31,7 @@ license, machine identity, or credential.
 - explicit `rawData.zip` output transfer, flat zip members, rejection of nested
   rawData, local validation, reusable cost/rawData helpers, dynamic cost, and
   persistence atomicity, including bounded tanh costs and task fallback `1.0`;
-- backend-neutral finalization; immutable v2 segments; exact unpublished count/byte
+- backend-neutral finalization; immutable segments; exact unpublished count/byte
   budgets; float32/float64 large-candidate singleton publication; recording-loss,
   circuit-breaker, writer-death, and bounded-shutdown isolation; OS campaign-lock
   exclusivity; corrupt candidate/segment tolerance; task-snapshot hot reload and

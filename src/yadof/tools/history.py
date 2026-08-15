@@ -71,8 +71,11 @@ def clear_history(
     checkpoints_dir = _validate_runtime_directory(
         context.surrogate_checkpoint_dir, context.root, "surrogate checkpoint"
     )
-    records_dir = _validate_runtime_directory(
-        storage.v2_directory, context.root, "v2 recorded-data"
+    segments_dir = _validate_runtime_directory(
+        storage.segments_directory, context.root, "recorded-data segments"
+    )
+    metadata_dir = _validate_runtime_directory(
+        storage.metadata_directory, context.root, "recorded-data metadata"
     )
 
     # Finish any workspace-local background writer before removing its outputs.
@@ -89,8 +92,9 @@ def clear_history(
     jobs_deleted = _clear_directory(jobs_dir)
     checkpoints_deleted = _remove_path(checkpoints_dir)
     removed_record_targets: list[str] = []
-    if _remove_path(records_dir):
-        removed_record_targets.append(str(records_dir))
+    for record_target in (segments_dir, metadata_dir):
+        if _remove_path(record_target):
+            removed_record_targets.append(str(record_target))
 
     jobs_dir.mkdir(parents=True, exist_ok=True)
     return {

@@ -40,11 +40,8 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-Version `0.1.0` identifies the older pre-package project. Version `0.2.0`
-identifies the first installable-package line. Version `0.3.0` identifies the
-current line with immutable v2 history segments. Its recorded history is
-intentionally incompatible with the legacy aggregate `indMeta.jsonl` and global
-`rawData.npz` format: those files are ignored and are not migrated automatically.
+The current package version is `0.3.0`. Recorded history uses immutable
+standard-ZIP segments and immutable metadata event files.
 
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
 Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and
@@ -79,7 +76,7 @@ study-a/
     calc_cost.py
     optional adapters and assets
   jobs/                         generated
-  recorded_data/v2/             generated immutable evidence segments and events
+  recorded_data/                generated recorded-data root
     segments/<run>/<generation>/segment_*.zip
     metadata/<event-type>/event_*.json
   .yadof/campaign.lock          OS-backed active-campaign lock file
