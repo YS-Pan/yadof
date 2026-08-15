@@ -14,9 +14,9 @@ Install a built wheel into the Python environment used by submit and local worke
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.2.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.2.0-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.2.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.3.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.3.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.3.0-py3-none-any.whl[viewer]"
 ```
 
 `yadof --version` and `yadof version` report the same package version. Distributed
@@ -41,7 +41,10 @@ submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
 Version `0.1.0` identifies the older pre-package project. Version `0.2.0`
-identifies the current installable-package line.
+identifies the first installable-package line. Version `0.3.0` identifies the
+current line with immutable v2 history segments. Its recorded history is
+intentionally incompatible with the legacy aggregate `indMeta.jsonl` and global
+`rawData.npz` format: those files are ignored and are not migrated automatically.
 
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
 Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and

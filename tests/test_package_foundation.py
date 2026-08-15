@@ -475,7 +475,7 @@ def test_package_metadata_and_source_resources() -> None:
     assert "psutil>=5.9,<8" in project["dependencies"]
     assert {"surrogate", "plot", "hfss", "dev"} <= set(project["optional-dependencies"])
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.2.0"
+    assert yadof.__version__ == "0.3.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(

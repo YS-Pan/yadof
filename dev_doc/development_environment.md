@@ -29,10 +29,10 @@ HTCondor deployment.
 | Optional surrogate/viewer | PyTorch 2.10.0+cu128; Matplotlib 3.11.1 |
 | Build and test | build 1.5.0; hatchling 1.31.0; pytest 9.1.1 |
 
-The installed yadof version was 0.1.0 when the snapshot was collected before this
-release update. Acceptance for the present change must build and force-install the
-0.2.0 wheel into the same `.venv`, then verify that imports resolve from
-`.venv\Lib\site-packages\yadof`.
+The installed yadof version was 0.1.0 when the snapshot was collected before the
+installable-package work. Acceptance for the current packaged line must build and
+force-install the 0.3.0 wheel into the same `.venv`, then verify that imports
+resolve from `.venv\Lib\site-packages\yadof`.
 
 ## Detection notes
 

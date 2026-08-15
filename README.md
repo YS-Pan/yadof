@@ -1,9 +1,11 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.2.0**. In this project's
-version history, **0.1.0** names the older pre-package codebase and **0.2.0** names
-the current installable-package line.
+or HTCondor workflows. The current packaged release is **0.3.0**. In this project's
+version history, **0.1.0** names the older pre-package codebase, **0.2.0** names the
+first installable-package line, and **0.3.0** introduces the incompatible immutable
+v2 history-segment format. Legacy aggregate JSONL/global-ZIP history is not read or
+migrated automatically.
 
 Its durable modeling contract is:
 
@@ -37,8 +39,8 @@ ready for additional examples.
 Install the wheel into the Python environment used on the submit machine:
 
 ```powershell
-python -m pip install .\dist\yadof-0.2.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.2.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.3.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.3.0-py3-none-any.whl[viewer]"
 ```
 
 Ask the AI agent to initialize and author the task, or use the underlying commands
