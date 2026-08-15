@@ -237,7 +237,10 @@ stderr while leaving the summary on stdout; an interactive progress frame is
 overwritten in place and each stage leaves only its final line. The HV legend is
 abbreviated as `HV (all & current gen.)`, and dense generation numbers alternate
 between two heights. The time view combines elapsed time, failure
-rate, execute-machine colors, and error occurrences. Average-time curves and each
+rate, execute-machine colors, and error occurrences. Its elapsed-time axis
+automatically uses minutes for minute-scale completed evaluations, seconds below a
+minute, and milliseconds below a second; its upper limit is proportional to the
+completed durations instead of being fixed at one minute. Average-time curves and each
 machine's average use completed evaluations only; failed evaluations are excluded
 from time averages and remain visible through the failure/error encodings. Each
 cost-history row that cannot be plotted is isolated instead of aborting the whole

@@ -239,7 +239,9 @@ different count.
 
 The two individual view commands create timestamped PNGs below
 `.yadof/tool_output/` by default. `view time` includes failure rate, execute-machine
-colors, machine-specific average-time labels, and left-labeled error-type bands.
+colors, machine-specific average-time labels, left-labeled error-type bands, and an
+elapsed-time axis that automatically changes between minutes, seconds, and
+milliseconds to keep fast evaluations readable.
 `view all` prints both summaries and creates both images. Use `--summary-only` when
 only terminal output is wanted. Worker-reported machine identity is preferred; a
 timed-out distributed job may use its source-labeled Condor user-log machine when

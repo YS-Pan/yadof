@@ -44,6 +44,12 @@
   plus optimization starts, generation bands, and static-input hash changes.
 - Render cost-aligned 5.5-by-3.5-inch, 600-dpi figures with a compact font and line
   hierarchy, plus separate data and event legends.
+- Select elapsed-time axis units automatically from completed durations: minutes at
+  one minute or above, seconds from one second to under one minute, and milliseconds
+  below one second. Scale points and completed-time legend/trend values with the
+  selected unit, then use a bounded linear major-tick locator and a data-proportional
+  upper limit so fast points remain below the reserved error bands without collapsing
+  at zero.
 
 ## I/O Format
 

@@ -475,6 +475,20 @@ def _error_band_positions(error_types: Sequence[str]) -> dict[str, float]:
     }
 
 
+def _elapsed_axis_unit(max_elapsed_min: float) -> tuple[str, str, float]:
+    """Return the elapsed-time axis label, abbreviation, and minute multiplier."""
+
+    if max_elapsed_min >= 1.0:
+        return "minutes", "min", 1.0
+    if max_elapsed_min >= 1.0 / 60.0:
+        return "seconds", "s", 60.0
+    return "milliseconds", "ms", 60_000.0
+
+
+def _format_elapsed(elapsed_min: float, abbreviation: str, multiplier: float) -> str:
+    return f"{elapsed_min * multiplier:.2f} {abbreviation}"
+
+
 def _optimization_starts(rows: Sequence[dict[str, object]]) -> list[tuple[int, datetime]]:
     starts: list[tuple[int, datetime]] = []
     seen: set[int] = set()
@@ -758,10 +772,11 @@ def _import_plot_modules():
         matplotlib.use("Agg", force=True)
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
+        import matplotlib.ticker as mticker
         import numpy as np
     except ImportError as exc:
         raise ViewTimeError("matplotlib and numpy are required to render viewTime PNG output") from exc
-    return plt, np, mdates
+    return plt, np, mdates, mticker
 
 
 def plot_rows(
@@ -769,7 +784,7 @@ def plot_rows(
     rows: Sequence[dict[str, object]],
     output_path: str | Path | None = None,
 ) -> Path:
-    plt, np, mdates = _import_plot_modules()
+    plt, np, mdates, mticker = _import_plot_modules()
 
     if output_path is None:
         output = (
@@ -790,7 +805,6 @@ def plot_rows(
         [(row["start"] - rows[0]["start"]).total_seconds() / 3600.0 for row in rows],  # type: ignore[operator]
         dtype=float,
     )
-    elapsed = np.asarray([row["elapsed_min"] for row in rows], dtype=float)
     failures = np.asarray([row["failed"] for row in rows], dtype=float)
     time_limits = _plot_time_limits(rows)
     generation_regions = _generation_regions(rows)
@@ -809,6 +823,12 @@ def plot_rows(
 
     done_rows = [row for row in rows if row["success"]]
     fail_rows = [row for row in rows if row["failed"]]
+    completed_max = (
+        max(float(row["elapsed_min"]) for row in done_rows)
+        if done_rows
+        else 0.0
+    )
+    axis_unit, axis_abbreviation, axis_multiplier = _elapsed_axis_unit(completed_max)
     computers = tuple(dict.fromkeys(str(row["computer"]) for row in rows))
     computer_colors = _categorical_colors(computers)
     error_types = tuple(
@@ -832,7 +852,11 @@ def plot_rows(
         average_label = (
             "n/a"
             if not matching
-            else f"{float(np.mean([float(row['elapsed_min']) for row in matching])):.2f} min"
+            else _format_elapsed(
+                float(np.mean([float(row["elapsed_min"]) for row in matching])),
+                axis_abbreviation,
+                axis_multiplier,
+            )
         )
         ax.scatter(
             [],
@@ -848,7 +872,7 @@ def plot_rows(
             continue
         ax.scatter(
             [row["start"] for row in matching],
-            [row["elapsed_min"] for row in matching],
+            [float(row["elapsed_min"]) * axis_multiplier for row in matching],
             facecolors=computer_colors[computer],
             edgecolors=computer_colors[computer],
             alpha=0.75,
@@ -907,7 +931,10 @@ def plot_rows(
             [(row["start"] - rows[0]["start"]).total_seconds() / 3600.0 for row in done_rows],  # type: ignore[operator]
             dtype=float,
         )
-        done_y = np.asarray([row["elapsed_min"] for row in done_rows], dtype=float)
+        done_y = np.asarray(
+            [float(row["elapsed_min"]) * axis_multiplier for row in done_rows],
+            dtype=float,
+        )
         global_avg = float(np.mean(done_y))
         local_avg = gaussian_kernel_smoother(done_x, done_y, fine_x, sigma)
         ax.plot(
@@ -916,7 +943,7 @@ def plot_rows(
             color="orange",
             linewidth=TREND_LINE_WIDTH,
             alpha=TREND_LINE_ALPHA,
-            label=f"avg. time (global: {global_avg:.2f} min)",
+            label=f"avg. time (global: {global_avg:.2f} {axis_abbreviation})",
         )
 
     global_failure = float(np.mean(failures) * 100.0)
@@ -962,7 +989,7 @@ def plot_rows(
         first_hash = False
 
     ax.set_xlabel("Time", fontsize=PLOT_FONT_SIZE)
-    ax.set_ylabel("Elapsed time (minutes)", fontsize=PLOT_FONT_SIZE)
+    ax.set_ylabel(f"Elapsed time ({axis_unit})", fontsize=PLOT_FONT_SIZE)
     ax.set_title(
         "Evaluation time and failures from recorded_data",
         fontsize=PLOT_TITLE_FONT_SIZE,
@@ -975,12 +1002,16 @@ def plot_rows(
         linewidth=GRID_LINE_WIDTH,
         alpha=0.6,
     )
-    completed_max = (
-        max(float(row["elapsed_min"]) for row in done_rows)
-        if done_rows
-        else 0.0
+    completed_max_scaled = completed_max * axis_multiplier
+    elapsed_axis_max = (
+        completed_max_scaled / ELAPSED_DATA_TOP
+        if completed_max_scaled > 0.0
+        else 1.0
     )
-    ax.set_ylim(0.0, max(1.0, completed_max / ELAPSED_DATA_TOP))
+    ax.set_ylim(0.0, elapsed_axis_max)
+    ax.yaxis.set_major_locator(
+        mticker.MaxNLocator(nbins=6, steps=(1, 2, 2.5, 5, 10), min_n_ticks=4)
+    )
     ax.tick_params(
         axis="both",
         labelsize=PLOT_TICK_FONT_SIZE,

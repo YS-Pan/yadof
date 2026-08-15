@@ -227,6 +227,16 @@ def test_computer_colors_and_error_bands_are_distinct():
     assert view_time.ELAPSED_DATA_TOP < view_time.ERROR_BAND_BOTTOM
 
 
+def test_elapsed_axis_unit_adapts_to_completed_duration():
+    assert view_time._elapsed_axis_unit(1.0) == ("minutes", "min", 1.0)
+    assert view_time._elapsed_axis_unit(0.5) == ("seconds", "s", 60.0)
+    assert view_time._elapsed_axis_unit(0.5 / 60.0) == (
+        "milliseconds",
+        "ms",
+        60_000.0,
+    )
+
+
 def test_computer_name_prefers_worker_identity_then_condor_log_fallback():
     assert (
         view_time._computer_name(
@@ -588,6 +598,49 @@ def test_plot_rows_writes_png_without_date_locator_warnings(
         assert error_text.get_verticalalignment() == "center"
     assert len(captured["failure_lines"]) == 1
     assert captured["failure_lines"][0].get_alpha() == pytest.approx(0.1)
+
+
+def test_plot_rows_scales_fast_elapsed_time_in_milliseconds(tmp_path, monkeypatch):
+    if importlib.util.find_spec("matplotlib") is None:
+        pytest.skip("matplotlib is not installed")
+
+    started_at = datetime(2026, 5, 14, 8, 0, 0)
+    rows = [
+        {
+            "start": started_at,
+            "end": started_at,
+            "event_time": started_at,
+            "elapsed_min": 0.005 / 60.0,
+            "success": True,
+            "failed": False,
+            "computer": "worker-fast",
+            "error_type": None,
+            "optimization_index": None,
+            "optimization_run_id": None,
+            "generation_index": None,
+            "job_static_hash": None,
+        }
+    ]
+    captured = {}
+
+    def capture_plot_contract(axis, axes):
+        captured["axis"] = axis
+        captured["labels"] = [
+            label
+            for source_axis in axes
+            for label in source_axis.get_legend_handles_labels()[1]
+        ]
+
+    monkeypatch.setattr(view_time, "_add_split_legends", capture_plot_contract)
+    output = view_time.plot_rows(object(), rows, tmp_path / "fast_time.png")
+
+    assert output.is_file()
+    assert captured["axis"].get_ylabel() == "Elapsed time (milliseconds)"
+    assert captured["axis"].get_ylim() == pytest.approx(
+        (0.0, 5.0 / view_time.ELAPSED_DATA_TOP)
+    )
+    assert "worker-fast (avg. 5.00 ms)" in captured["labels"]
+    assert "avg. time (global: 5.00 ms)" in captured["labels"]
 
 
 def test_view_time_has_a_package_entrypoint():

@@ -35,6 +35,12 @@ labeled horizontal band near the plot top, with the label vertically centered on
 its line; marker fill identifies the execute machine and the outer ring identifies
 the error type. The failure-rate trend is highly transparent.
 
+The time view scales completed elapsed data into minutes, seconds, or milliseconds
+automatically: minute-scale data stays in minutes, sub-minute data uses seconds,
+and sub-second data uses milliseconds. Its finite completed-data limit is based on
+the observed maximum and reserves the existing upper error-band region instead of
+imposing a one-minute minimum.
+
 Individual CLI view commands write timestamped PNGs by default, accept `--output`
 to override the destination, and accept `--summary-only` to suppress plotting.
 Cost CLI calculation always renders bounded normalization/rawData/cost progress on
