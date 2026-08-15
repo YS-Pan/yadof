@@ -15,10 +15,16 @@ src/yadof/                 installed framework
   workspace/               context/init/check/marker
   job_template/            parameter, rawData, cost contracts
   evaluate_manager/        fast/job/local/HTCondor execution
+    finalizer.py           common current-cost and recorder-offer boundary
     fast_runner.py         reusable isolated no-job-folder fast workers
     fast_resources.py      fast-specific host-capacity planning
     process_control.py     shared exact process-tree termination
-  recorded_data/           durable evidence
+  task_snapshot.py         immutable generation task capture/fingerprints
+  recorded_data/           campaign session and immutable v2 segments
+    session.py             hot history, bounded writer, counters, lock lifetime
+    segment_store.py       standard-ZIP publication/tolerant discovery
+    records_v2.py          owned envelopes and immutable event files
+    query_v2.py            partial/corruption-tolerant history
   optimize/                candidate mechanics and campaign loop
   surrogate/               rawData-first model and scheduling
   tools/                   optional user-launched utilities

@@ -9,6 +9,8 @@ from ..config import LoadedConfig
 from ..evaluate_manager import api as evaluate_api
 from ..job_template import api as job_template_api
 from ..recorded_data import api as recorded_api
+from ..recorded_data.session import CampaignSession
+from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
 
 
@@ -85,9 +87,18 @@ def better_costs(left: Sequence[float], right: Sequence[float], rng: random.Rand
     return rng.random() < 0.5
 
 
-def history_records(workspace: WorkspaceContext) -> tuple[HistoryRecord, ...]:
+def history_records(
+    workspace: WorkspaceContext,
+    *,
+    session: CampaignSession | None = None,
+    snapshot: GenerationTaskSnapshot | None = None,
+) -> tuple[HistoryRecord, ...]:
     try:
-        raw_records = recorded_api.get_historical_results(workspace)
+        raw_records = (
+            session.historical_results(snapshot)
+            if session is not None
+            else recorded_api.get_historical_results(workspace)
+        )
     except Exception:
         return ()
 
@@ -144,6 +155,8 @@ def evaluate(
     optimization_index: int | None = None,
     generation_index: int | None = None,
     after_jobs_submitted: Callable[[], object] | None = None,
+    session: CampaignSession | None = None,
+    snapshot: GenerationTaskSnapshot | None = None,
 ) -> Costs:
     callback_ran = False
 
@@ -166,6 +179,8 @@ def evaluate(
             if after_jobs_submitted is not None
             else None
         ),
+        _campaign_session=session,
+        _task_snapshot=snapshot,
     )
     if after_jobs_submitted is not None and not callback_ran:
         after_jobs_submitted()

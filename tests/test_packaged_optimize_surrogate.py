@@ -79,8 +79,8 @@ def test_packaged_optimizer_recovers_history_without_crossing_workspaces(tmp_pat
     assert first_b.history_count == 0
     assert len(get_historical_results(workspace_a)) == 4
     assert len(get_historical_results(workspace_b)) == 2
-    assert len(list_optimization_metadata(workspace_a)) == 0
-    assert len(list_optimization_metadata(workspace_b)) == 0
+    assert len(list_optimization_metadata(workspace_a)) == 2
+    assert len(list_optimization_metadata(workspace_b)) == 1
     assert not (workspace_a / ".yadof" / "surrogate" / "checkpoints").exists()
     assert not (workspace_b / ".yadof" / "surrogate" / "checkpoints").exists()
 

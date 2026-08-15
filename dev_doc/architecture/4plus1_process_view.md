@@ -9,7 +9,8 @@ sequenceDiagram
     participant J as prepared job
     participant W as workflow.py
     participant S as worker_misc.py
-    participant R as recorded_data
+    participant F as common finalizer
+    participant R as bounded segment writer
     participant C as calc_cost.py
     O->>E: normalized population + workspace
     loop each candidate
@@ -19,9 +20,11 @@ sequenceDiagram
         W->>J: write task-specific flat rawData/*.npz
         S->>J: write lifecycle/execute-machine metadata and flat rawData.zip
     end
-    E->>R: batch-record completed/error results
-    R->>C: calculate current costs from recorded rawData
-    C-->>O: ordered objective rows
+    E->>F: each terminal JobResult
+    F->>C: validate owned rawData and calculate current cost
+    C-->>O: ordered objective row independent of persistence
+    F-->>R: non-blocking owned-envelope offer
+    R-->>R: immutable standard-ZIP micro-batch publication
 ```
 
 Local mode uses bounded process concurrency and per-individual timeouts. It runs the
@@ -34,8 +37,10 @@ memory, creates only an ephemeral candidate scratch below the configured fast ro
 and sends a logical identity plus named values to one reusable spawn worker. The
 worker fresh-loads `evaluation.py`, may invoke external local software, and returns
 named rawData mappings and JSON diagnostics through one bounded pipe. The parent
-validates and records each completed item immediately, so at most one result per
-worker waits in transport and completion order does not change population order.
+finalizes each completed item immediately, so at most one result per worker waits
+in transport and completion order does not change population order. Current cost
+and worker release complete before the finalizer's non-blocking best-effort
+recorder offer.
 Timeout, native/Python worker exit, or task failure terminates the observed process
 tree, cleans scratch, replaces the worker, records the isolated failure, and
 continues queued candidates. No scheduler-submitted callback is fabricated.
@@ -43,9 +48,10 @@ continues queued candidates. No scheduler-submitted callback is fabricated.
 For CLI runs, progress is enabled by default in every backend. One generation-level
 bar starts at zero and advances on each terminal individual outcome, regardless of
 completion order. It reports finished/total plus successful, error, and remaining
-counts. Preparation, execution, collection, and recording failures therefore stay
+counts. Preparation, execution, collection, rawData, and current-cost failures stay
 visible as completed error outcomes instead of leaving an apparently stalled
-generation. Non-interactive streams receive complete snapshot lines; interactive
+generation. Best-effort recording loss does not alter progress success. Non-
+interactive streams receive complete snapshot lines; interactive
 terminals update the active bar in place. `--no-progress` disables both the bar and
 the existing detailed backend messages for that invocation.
 
@@ -93,19 +99,23 @@ or failing the queue.
 
 Surrogate training has at most one background task per workspace. Scheduler and
 model state maps are workspace-keyed and protected by locks. Clearing one workspace
-waits/resets only its schedule/state. Persistence uses workspace-local locks and
-atomic replacement for mutable files.
+waits/resets only its schedule/state. Training consumes a captured campaign-hot
+history bundle, so pending or same-generation evidence need not wait for durability.
 
-Completed population results are recorded as one atomic batch when possible. The
-archive and manifest are copied/published once per batch, then costs are derived in
-one query. A failed batch falls back to individual recording so one malformed result
-does not discard otherwise valid evidence.
+One daemon writer belongs to one campaign, not to a backend or generation. Its
+candidate and byte reservations include queued and in-flight envelopes. It flushes
+at evaluation/population/generation boundaries into count/byte-bounded immutable
+segments. Queue refusal, oversized input, writer failure, or writer death increments
+loss counters and never changes a current objective row. A bounded shutdown may
+report an unknown in-flight outcome; such a writer retains the OS campaign lock
+until its filesystem call returns.
 
 ## Generation-boundary task changes
 
-`run_generations()` reloads effective configuration for each generation, and task
-queries fresh-load the selected workspace modules. The supported coherence contract
-is one current task/config snapshot per generation. Between generations, a user may
+`run_generations()` reloads effective configuration for each generation and copies
+the complete task source tree into one immutable snapshot before evaluation. The
+supported coherence contract is exactly one task/config snapshot per generation;
+even fast worker imports use that tree. Between generations, a user may
 change cost interpretation, parameter ranges/levels, fixed-width objective policy,
 evaluator/workflow logic, or task helpers to correct or deliberately redefine the
 optimization problem. The following generation reinterprets mechanically usable
@@ -113,8 +123,9 @@ history through the new definitions. Parameter identity/count and objective coun
 remain stable in the current contract; structural dimension changes are separate
 future work.
 
-Yadof does not decide whether that change is scientifically valid. Source hashes or
-signatures may identify the reload and invalidate a derived cache, but they are not
+Yadof does not decide whether that change is scientifically valid. Separate
+interpretation/evaluation fingerprints identify the reload and invalidate only the
+relevant derived cache, but they are not
 an automatic old-history exclusion policy. A record is omitted only when the
 current parameter/rawData/cost path cannot process it. The user decides whether old
 evidence should be retained, explicitly cleared, or separated into another
@@ -147,7 +158,8 @@ stay distinct and converge on normal per-individual failure isolation.
 ## Failure and retry semantics
 
 - Preparation, task loading, submit, workflow, timeout, hold, archive restoration,
-  rawData validation, recording, and cost calculation failures are per individual.
+  rawData validation, and cost calculation failures are per individual. Recording
+  loss is a separate best-effort outcome and cannot convert a successful result.
 - Standard HTCondor memory/disk holds may create a fresh bounded submission with
   only the exhausted request doubled. The old cluster is removed and stale runtime
   outputs are cleared first. Workflow and timeout failures are never resource
@@ -167,11 +179,12 @@ stay distinct and converge on normal per-individual failure isolation.
 
 - Job directory creation is collision-safe.
 - Task modules are fresh-loaded and removed from global module state after use.
-- Recorded-data JSONL and archive writes use workspace-local process/file locks and
-  atomic replacement.
+- One OS byte-range lock permits one campaign per workspace. One bounded daemon
+  writer publishes new standard-ZIP segments by atomic rename and never opens an
+  older segment in the hot write path.
 - Surrogate training scheduling permits at most one background trainer per
   workspace and bounds model lag.
 - Population results are reassembled in original input order, independent of worker
   completion order.
-- Fast workers never write recorded data. The parent is the only recorder and
-  consumes memory results continuously under recorded-data locking/atomicity.
+- Fast workers never write recorded data. The parent is the only finalizer and the
+  campaign writer is the only segment publisher.

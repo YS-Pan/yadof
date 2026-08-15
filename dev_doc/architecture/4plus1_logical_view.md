@@ -19,6 +19,12 @@
   job directory; its evidence is memory-backed until recorded.
 - Recorded data is durable evidence and compact provenance. It is not an optimizer
   cache of permanently authoritative cost values.
+- A record envelope is candidate-owned validated rawData plus bounded provenance
+  offered only after current cost is known. A campaign session owns the hot derived
+  row even while the envelope is pending; a deliberately dropped row remains usable
+  only until changed interpretation requires evidence it no longer has.
+- A segment is an immutable standard ZIP containing a bounded micro-batch. Candidate
+  member loss and whole-segment loss are distinct recovery units.
 - An external simulator Python runtime is a separately provisioned interpreter and
   process, not an alternative host environment for yadof. The PyChrono v1 contract
   exchanges only bounded versioned JSON and schema-compatible NPZ evidence through
@@ -55,7 +61,8 @@ explicitly; the package does not guess a scientific migration.
 This user-authoritative mutability also applies during an active campaign.
 Generation boundaries are the coherent reload point for current configuration,
 parameter ranges/levels, fixed-width objective/cost policy, evaluator/workflow task
-code, and task helpers. The next generation reconstructs its affected derived
+code, and task helpers. The complete source tree is copied once at the boundary;
+the next generation reconstructs its affected derived
 history view from current definitions. The current hot-change contract assumes
 stable parameter identity/count and objective count; structural parameter or
 objective-width changes require separate optimizer-state semantics and are future
@@ -77,19 +84,25 @@ path. Its schedules, state, and checkpoints are keyed by effective workspace pat
 ## Invariants
 
 - Fast/local/distributed evaluators differ in execution transport and intermediate
-  evidence backing, but converge before durable recording and current cost.
+  evidence backing, but converge on one finalizer. Current cost precedes and is
+  independent of best-effort durable recording.
 - Fast uses bounded reusable local processes. A crash or timeout discards and
   replaces only that worker, cleans its configured scratch, and preserves ordering.
 - Local concurrency is bounded by population size, an explicit cap, physical CPU,
   currently available memory, and free disk; smoke remains exactly one worker.
-- Parameter and objective counts come from the workspace snapshot selected at
-  campaign start and remain stable for supported in-campaign edits.
+- Parameter identity/order/count and objective width are checked against the first
+  generation and remain stable for supported in-campaign edits; the task snapshot
+  itself is refreshed every generation.
 - One generation uses one coherent task/config snapshot; supported task edits become
   visible at the following generation boundary rather than dividing a population
   between definitions.
 - All population-return paths preserve input order and objective width.
-- Individual failures yield diagnostic records and infinite costs without deleting
-  successful evidence.
+- Individual execution/rawData/current-cost failures yield diagnostic rows and
+  infinite costs without deleting successful evidence. Recording loss never turns
+  a valid result into a failure.
+- One campaign lock and one bounded daemon writer exist per active workspace. Count
+  and conservative peak-resident byte credits cover queued and in-flight envelopes;
+  published segments and legacy files are never rewritten.
 - Stored rawData stays rich enough for later cost changes and surrogate learning;
   task cost code may select smaller windows when calculating objectives.
 - New task cost policies use fixed physical thresholds and a bounded mapping rather

@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
 from ..workspace import WorkspaceContext, resolve_workspace
-from . import query as _query
-from . import records as _records
+from . import query_v2 as _query
+from . import records_v2 as _records
 from .paths import (
     IND_META_SCHEMA_VERSION,
     OPT_META_SCHEMA_VERSION,
@@ -16,7 +16,8 @@ from .paths import (
     WorkspaceLike,
     recorded_data_paths,
 )
-from .rawdata_store import RawDataSource
+from .rawdata_v2 import RawDataSource
+from .session import CampaignSession
 
 
 JobRecordRequest = _records.JobRecordRequest
@@ -41,26 +42,39 @@ def record_job_result(
 ) -> dict[str, object]:
     """Store raw evidence for one completed or failed job without derived cost."""
 
-    _context, storage = _context_and_storage(workspace)
-    return _records.record_job_result(
-        storage,
+    context, storage = _context_and_storage(workspace)
+    if overwrite:
+        raise ValueError("v2 immutable segments do not support record overwrite")
+    envelope = _records.build_envelope(
+        context,
         job_name,
         raw_variables,
         rawdata_source,
         job_metadata,
         status=status,
-        overwrite=overwrite,
     )
+    return _records.publish_direct(storage, (envelope,))[0]
 
 
 def record_job_results(
     workspace: WorkspaceLike,
     requests: Sequence[JobRecordRequest],
 ) -> tuple[dict[str, object], ...]:
-    """Atomically store one evaluation batch without per-job archive copies."""
+    """Store one explicit batch in new immutable bounded segments."""
 
-    _context, storage = _context_and_storage(workspace)
-    return _records.record_job_results(storage, requests)
+    context, storage = _context_and_storage(workspace)
+    envelopes = tuple(
+        _records.build_envelope(
+            context,
+            job_name,
+            raw_variables,
+            rawdata_source,
+            job_metadata,
+            status=status,
+        )
+        for job_name, raw_variables, rawdata_source, job_metadata, status in requests
+    )
+    return _records.publish_direct(storage, envelopes)
 
 
 def list_records(workspace: WorkspaceLike) -> tuple[dict[str, object], ...]:
@@ -214,6 +228,14 @@ def get_rawdata_diagnostics(
     )
 
 
+def open_campaign_session(workspace: WorkspaceLike) -> CampaignSession:
+    """Open the one active best-effort recorder/history session for a workspace."""
+
+    from ..config import load_config
+
+    return CampaignSession(load_config(workspace))
+
+
 __all__ = [
     "IND_META_SCHEMA_VERSION",
     "OPT_META_SCHEMA_VERSION",
@@ -235,6 +257,7 @@ __all__ = [
     "list_optimization_metadata",
     "list_records",
     "list_surrogate_metadata",
+    "open_campaign_session",
     "record_job_result",
     "record_job_results",
     "record_optimization_metadata",

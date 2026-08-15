@@ -168,6 +168,7 @@ def run_condor_jobs(
     env: Mapping[str, str] | None = None,
     after_jobs_submitted: Callable[[], object] | None = None,
     on_result: Callable[[JobResult], object] | None = None,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> tuple[JobResult, ...]:
     """Submit jobs to HTCondor, wait for job-local outputs, and collect results.
 
@@ -200,7 +201,11 @@ def run_condor_jobs(
     for index, job in enumerate(jobs, start=1):
         try:
             submission = submit_condor_job(
-                effective.workspace, job, config=effective, env=env
+                effective.workspace,
+                job,
+                config=effective,
+                env=env,
+                history_records=history_records,
             )
         except Exception as exc:  # noqa: BLE001 - preserve per-individual failure isolation.
             store_result(job.name, submit_failure_result(job, exc))
@@ -284,6 +289,7 @@ def run_condor_jobs(
                                 effective.workspace,
                                 submission.job,
                                 config=effective,
+                                history_records=history_records,
                             ),
                             config=effective,
                         )
@@ -329,6 +335,7 @@ def run_condor_jobs(
                                         env=env,
                                         resource_request=decision.state.request,
                                         resource_retry_metadata=extra_metadata,
+                                        history_records=history_records,
                                     )
                                 except Exception as exc:  # noqa: BLE001 - preserve per-individual isolation.
                                     store_result(
@@ -463,13 +470,22 @@ def submit_condor_job(
     env: Mapping[str, str] | None = None,
     resource_request: HTCondorResourceRequest | None = None,
     resource_retry_metadata: Mapping[str, object] | None = None,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> CondorSubmission:
     effective = load_config(workspace) if config is None else config
     clear_stale_runtime_artifacts(job.directory)
     resource_request = resource_request or request_for_job(
-        effective.workspace, job, config=effective
+        effective.workspace,
+        job,
+        config=effective,
+        history_records=history_records,
     )
-    time_limit = time_limit_for_job(effective.workspace, job, config=effective)
+    time_limit = time_limit_for_job(
+        effective.workspace,
+        job,
+        config=effective,
+        history_records=history_records,
+    )
     submit_file = write_condor_submit_file(
         effective.workspace,
         job,

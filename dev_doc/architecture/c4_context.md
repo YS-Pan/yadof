@@ -32,8 +32,8 @@ Direct CLI/API use remains supported but is the lower-level surface.
   task-owned child code runs in a separate OS process and crosses the packaged
   adapter boundary only through versioned JSON requests/results and NPZ evidence.
 - HTCondor transports self-contained job folders to administrator-managed workers.
-- The filesystem durably stores job evidence, JSONL metadata, archives,
-  checkpoints, logs, and tool output.
+- The filesystem durably stores job evidence, immutable standard-ZIP history
+  segments and event files, checkpoints, logs, and tool output.
 - Terminal stdout/JSON and the Tkinter/Matplotlib desktop UI provide two explicit,
   read-only surrogate checkpoint inspection surfaces; PyTorch performs checkpoint
   inference for audits and interactive predictions.
@@ -60,15 +60,17 @@ checkpoints, logs, caches, credentials, and secrets.
 - A workflow writes task evidence; package worker support writes lifecycle metadata;
   neither writes authoritative costs.
 - Fast, local, and distributed backends converge on backend-neutral results and the
-  same recording path. Fast results carry named memory rawData and no fake job
-  path; local/distributed results carry file-backed rawData.
+  same finalizer. Fast results carry named memory rawData and no fake job path;
+  local/distributed results carry file-backed rawData. Current cost is complete
+  before best-effort segment admission and cannot be invalidated by recording loss.
 - A failed candidate keeps population order and yields a correctly sized infinite
   objective row with diagnostics.
 - Historical rawData can be reinterpreted by the current cost definition.
 - Users may correct parameter ranges/levels, fixed-width objective/cost policy,
   configuration, and task execution code between generations. Parameter
   identity/count and objective count remain stable until separate structural-change
-  support exists. The next generation uses one coherent current definition; yadof
+  support exists. An immutable task tree is captured once at each boundary, so the
+  next generation uses one coherent current definition; yadof
   isolates mechanically unusable evidence but leaves the scientific decision to
   retain or clear old history to the user.
 - Cross-task invariant code is implemented in yadof and called by task files;

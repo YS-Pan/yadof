@@ -120,11 +120,12 @@ failed fast worker/process tree is killed and replaced. Standard memory/disk hol
 fresh-cluster retries; other failures do not. Population order/objective width is
 stable regardless of completion order.
 
-Workspace locks and atomic replacement protect JSONL/archive/checkpoint publication.
-Background surrogate training is at most one task per workspace. Resume uses current
-compatible evidence and checkpoint signatures and never reads another workspace.
-Concurrent optimization campaigns use different workspaces; one workspace is one
-active campaign/write domain.
+An OS campaign lock plus atomic rename protects immutable v2 segment publication;
+checkpoint publication retains its own atomic replacement. Background surrogate
+training is at most one task per workspace. Resume uses current compatible evidence
+and checkpoint signatures and never reads another workspace. Concurrent optimization
+campaigns use different workspaces; one workspace is one active campaign/write
+domain.
 
 ## Invariants
 

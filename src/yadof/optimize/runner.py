@@ -4,6 +4,8 @@ from datetime import datetime
 from uuid import uuid4
 
 from ..recorded_data import api as recorded_api
+from ..recorded_data.session import CampaignSession
+from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
 from .gpsaf import OptimizationResult
 
@@ -72,6 +74,8 @@ def record_generation_metadata(
     ended_at: str,
     jobs_before: tuple[str, ...],
     jobs_after: tuple[str, ...],
+    session: CampaignSession | None = None,
+    snapshot: GenerationTaskSnapshot | None = None,
 ) -> dict[str, object]:
     data = {
         "record_type": "generation",
@@ -85,10 +89,27 @@ def record_generation_metadata(
         "created_job_names": list(created_job_names(jobs_before, jobs_after)),
         "started_at": str(started_at),
         "ended_at": str(ended_at),
+        "recording": session.counters() if session is not None else {},
+        "reinterpretation_sec": (
+            float(session.last_reinterpretation_sec)
+            if session is not None
+            else 0.0
+        ),
         "diagnostics": {
             key: value
             for key, value in result.diagnostics.items()
             if key not in {"costs", "pred_costs", "cost_intervals"}
         },
     }
-    return recorded_api.record_optimization_metadata(workspace, data)
+    if snapshot is not None:
+        data.update(
+            {
+                "interpretation_fingerprint": snapshot.interpretation_fingerprint,
+                "evaluation_fingerprint": snapshot.evaluation_fingerprint,
+                "task_snapshot_id": snapshot.task_snapshot_id,
+            }
+        )
+    try:
+        return recorded_api.record_optimization_metadata(workspace, data)
+    except Exception:
+        return data

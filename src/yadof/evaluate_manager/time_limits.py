@@ -29,6 +29,7 @@ def time_limit_for_job(
     job: JobSpec,
     *,
     config: LoadedConfig | None = None,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> HTCondorTimeLimit:
     """Calculate one job's execution limit without changing source config.
 
@@ -71,7 +72,10 @@ def time_limit_for_job(
         )
 
     durations, source = _calibration_durations(
-        effective, job, generation_index=generation_index
+        effective,
+        job,
+        generation_index=generation_index,
+        history_records=history_records,
     )
     if durations:
         trim_fraction = _fraction(
@@ -102,8 +106,15 @@ def _calibration_durations(
     job: JobSpec,
     *,
     generation_index: int,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> tuple[list[float], str]:
-    records = recorded_data_api.list_records(config.workspace)
+    if history_records is None:
+        try:
+            records = recorded_data_api.list_records(config.workspace)
+        except Exception:
+            records = ()
+    else:
+        records = history_records
     if generation_index == 0:
         smoke_candidates: list[tuple[str, float]] = []
         for record in records:

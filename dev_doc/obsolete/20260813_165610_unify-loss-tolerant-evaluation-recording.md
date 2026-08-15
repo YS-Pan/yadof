@@ -1,41 +1,60 @@
-# Unify Loss-Tolerant Evaluation Recording
+# Unify Hot-Reloadable, Loss-Tolerant Evaluation Recording
 
-## Context
+## Status And Scope
 
-### Why this work is needed
+This is a manual future-work specification. Reading it does not authorize an
+implementation. It replaces the earlier design of the same name; the complete
+pre-revision document is preserved at
+`dev_doc/obsolete/20260813_165610_unify-loss-tolerant-evaluation-recording.md`.
+
+The work may make large incompatible changes. The current global
+`recorded_data/rawData.npz` and `indMeta.jsonl` format does not need a
+compatibility reader, automatic migration, or dual-write period.
+The v2 implementation does not inspect those legacy files: if they happen to be
+present, it starts with empty v2 history and leaves every legacy file untouched.
+The user is responsible for not mixing old-format and v2 campaigns in one
+workspace.
+
+The expected campaign scale for this design is normally several tens of thousands
+of candidates and is not expected to exceed 100,000 in the foreseeable future.
+The implementation should remain structurally linear, but it must not add database
+or distributed-storage machinery solely for hypothetical million-candidate use.
+
+## Background
+
+### Observed fast-mode slowdown
 
 Yadof intends fast, local, and distributed evaluation to differ only in execution
-transport. Once a backend has produced a backend-neutral result, validation, cost
-calculation, recording, population ordering, and failure isolation should have one
-meaning. The current implementation does not fully satisfy that intent:
+transport. After a backend produces rawData and diagnostics, validation, current
+cost calculation, population ordering, failure isolation, and best-effort recording
+should have one meaning.
 
-- local and distributed evaluation collect a population and normally call the
-  batch `record_results()` path;
-- fast evaluation calls the single-result `record_result()` path synchronously from
-  each worker-completion callback;
-- both paths ultimately mutate the same campaign-wide `recorded_data/rawData.npz`
-  archive and rewrite campaign-wide JSONL metadata.
+The current implementation violates that intent:
 
-The current single-result publication algorithm reads the existing individual
-manifest, copies the complete existing rawData archive to a temporary file, appends
-one candidate, rewrites the complete manifest, and atomically replaces both files.
-Batch publication reduces that cost to once per population, but it still copies an
-archive whose size grows with the complete campaign. The resulting write cost is
-therefore coupled to historical campaign size rather than to the size of the new
-candidate evidence.
+- local and distributed normally collect a population and call the batch
+  `record_results()` path;
+- fast calls single-result `record_result()` synchronously from each worker
+  completion callback;
+- both paths mutate one campaign-wide rawData ZIP and rewrite campaign-wide JSONL;
+- cost return reopens recorded history instead of calculating directly from the
+  already available result.
 
-Fast mode exposes the problem most strongly. `fast_runner.py` invokes the result
-consumer before it releases the worker slot or resumes draining other worker pipes.
-The consumer records the candidate and recalculates cost through recorded history.
-When recording grows slower, already-completed workers wait behind parent-side I/O,
-and their scheduler-observed elapsed time includes that wait. This makes a constant-
-time simulator look progressively slower and prevents reusable workers from being
-kept busy.
+For one single-result publication, the existing recorder reads the growing
+manifest, copies the complete growing rawData archive, appends one candidate,
+rewrites the manifest, and atomically replaces both files. The cost of recording
+candidate N is therefore proportional to all earlier history, not to candidate N's
+new evidence. Batch recording reduces how often this occurs but does not remove
+the campaign-size dependency.
+
+Fast mode amplifies the defect because its completion callback performs that
+synchronous publication before releasing the worker slot or draining other
+completed worker pipes. Other workers can be finished yet wait behind parent-side
+history I/O. Their scheduler-observed elapsed time then looks like simulation time
+even though the simulator itself stayed fast.
 
 ### Reproduction evidence
 
-The `20260807 saw` workspace produced 5,000 records over 50 generations. Its
-existing history showed:
+The `20260807 saw` workspace recorded 5,000 candidates over 50 generations:
 
 | Measurement | Generation 0 | Generation 49 |
 |---|---:|---:|
@@ -45,499 +64,685 @@ existing history showed:
 | Whole-generation wall time | 13.728 s | 166.624 s |
 
 Generation wall time fit approximately
-`15.437 + 3.062 * generation_index` seconds with `R^2 = 0.9973`, while the actual
-simulation time stayed flat or improved. At the end of the run,
-`recorded_data/rawData.npz` was about 147.9 MB and `indMeta.jsonl` was about
-22.1 MB. Repeated atomic replacement implied roughly 369.6 GB of cumulative
-rawData archive copying and 55.2 GB of cumulative metadata rewriting. The same run
-contained no scratch-cleanup errors, left no fast scratch directory, and never
-observed more than the expected worker-plus-simulator process tree, excluding
-simulator, descendant-process, and scratch accumulation as the cause.
+`15.437 + 3.062 * generation_index` seconds with `R^2 = 0.9973`, while
+ngspice time stayed flat or improved. The final useful history was only about
+170 MB, but the algorithm performed an estimated 369.6 GB of logical rawData
+archive copying plus 55.2 GB of logical manifest rewriting. These figures are
+algorithmic byte estimates, not physical-drive SMART measurements; they still
+demonstrate the quadratic rewrite shape.
 
-The run also contained three successful evaluations that became recorded-data
-errors after Windows denied an `indMeta.jsonl` temporary-file replacement. This is
-a second symptom of the same design: a central mutable publication failure can
-change an otherwise usable evaluation into an optimization failure.
+The same history contained three successful evaluations that became recording
+errors after Windows denied a manifest temporary-file replacement. No fast scratch
+leak, descendant-process leak, or simulator-time growth was found.
 
-### Product decisions governing the redesign
+### Why HDD behavior affects the design
 
-This future work is intentionally allowed to make a large change and to replace the
-current history format without a compatibility reader or migration path. It must
-follow these decisions:
+Removing whole-history copying is the dominant improvement on every storage
+device. Mechanical disks add three constraints:
 
-1. Fast, local, and distributed evaluation use one post-execution finalization and
-   one recording implementation. Backend-specific orchestration must stop at a
-   backend-neutral result boundary.
-2. Losing a small number of candidate records is acceptable. The evolutionary,
-   generation-based optimizer is expected to tolerate missing samples.
-3. A recording failure, full recording queue, corrupt record, unavailable history,
-   broken index, permission error, or exhausted history volume must not crash or
-   stop optimization. Evaluation and subsequent generations must continue.
-4. The main evaluation path must not wait indefinitely for durability. Bounded loss
-   is preferable to allowing storage latency or failure to control simulator
-   throughput.
+- many per-candidate files cause directory updates, small writes, and seeks;
+- multiple disk writers can reduce throughput by moving the head between streams;
+- per-candidate durability flushes can add a rotation wait to every result.
 
-These decisions deliberately replace the existing evidence-first rule that a
-completed result must be published before its cost can be returned. RawData remains
-the scientific input to cost calculation and, when successfully persisted, remains
-available for later reinterpretation. Durability itself is no longer a prerequisite
-for using the current evaluation in the running optimizer.
+Therefore the physical writer should use one workspace-scoped serial stream and
+publish small immutable batches through large buffered sequential writes. The
+logical unit remains one candidate, but the normal filesystem unit is a bounded
+segment containing several candidates. This HDD requirement justifies
+micro-batching; it does not by itself justify a new custom binary container,
+multiple compression workers, or a database.
+
+### Flexibility and live task correction are core behavior
+
+Yadof deliberately lets a user edit `calc_cost.py`, parameter definitions,
+configuration, `workflow.py`, `evaluation.py`, and task helpers while a campaign
+is running. A common reason is that the user discovers an error in the optimization
+problem after expensive evaluations already exist and wants to correct it without
+restarting the process or being forced to discard all compatible evidence.
+
+The corrected optimization problem is expected to be different. Yadof must not ask
+whether the old and new problems are “scientifically equivalent”, infer whether the
+change was scientifically wise, or use a hash mismatch as a reason to reject
+otherwise mechanically interpretable evidence. Scientific suitability is a user
+decision. Yadof trusts the user to decide whether old evidence should remain,
+whether history should be cleared, or whether a separate workspace should be used.
+
+For this document, **mechanically interpretable** has a narrower software meaning:
+the current parameter and cost code can load a record, normalize its stored raw
+variables, read its rawData schema, and produce the current objective tuple. A
+record that lacks a newly required variable or contains rawData the new cost code
+cannot read may be skipped with diagnostics. That is an actual processing failure,
+not a scientific-equivalence judgment.
+
+Hot changes take effect at the next generation boundary. One generation uses one
+coherent task/config snapshot; yadof must not let candidates within the same
+generation silently mix pre-edit and post-edit definitions. At the next boundary
+parameter normalization, current cost interpretation, evaluator behavior, and the
+derived history view are rebuilt from current workspace code.
+
+This recording project assumes that parameter identity/count and objective count
+stay fixed for the campaign. Users may correct parameter ranges or levels, cost
+logic and thresholds, configuration, workflow/evaluation code, and task helpers,
+but they are responsible for preserving the parameter schema and objective width.
+Supporting parameter add/remove/rename operations or objective-width changes
+requires separate optimizer-state semantics and belongs in a future toDo.
+
+## Locked Product Decisions
+
+The implementation must preserve these decisions:
+
+1. Fast, local, and distributed share one backend-neutral finalizer and one
+   recording implementation.
+2. Current cost is calculated from the completed result before and independently
+   of durable publication.
+3. History persistence is best effort. A persistence failure after valid rawData
+   and cost is recording loss, not an evaluation failure.
+4. One independent background writer thread keeps disk publication off the
+   evaluation scheduling path.
+5. Recording loss should be as small as practical and must remain bounded by the
+   selected runtime limits. Initial 16-candidate segment and 32-candidate total
+   unpublished limits are tuning defaults, not a product boundary where one more
+   lost candidate suddenly becomes unacceptable. Generation is not a persistence
+   transaction or intentional batching unit, but systemic storage/process failure
+   may still lose a complete generation.
+6. The loss bound counts every unpublished candidate: assembling, queued, encoding,
+   temporary-file, and in-flight publication states.
+7. One workspace has at most one active optimization campaign. Concurrent
+   campaigns use different workspaces.
+8. Task and task-semantic configuration edits remain supported between generations
+   while parameter identity/count and objective count stay fixed. Yadof does not
+   judge scientific compatibility and does not silently freeze a campaign's
+   original task.
+9. The design targets at most 100,000 candidates. SQLite and custom segment
+   protocols require measured evidence before they enter the implementation.
+10. Old history-format compatibility or detection is not required. V2 ignores old
+    files, starts cold, and never deletes or rewrites them.
+11. Recorder infrastructure configuration, including history paths, segment/queue
+    budgets, writer failure policy, and shutdown policy, is frozen when the
+    campaign starts. Changing those settings takes effect only for a later
+    campaign/process.
 
 ## Goal
 
-Implement one backend-neutral, loss-tolerant result pipeline with these properties:
+Implement this pipeline:
 
 ```text
-fast/local/distributed backend
+generation controller
+  -> load one current config/task snapshot
+  -> fast/local/distributed backend
   -> backend-neutral JobResult
-  -> common rawData validation and current cost calculation
-  -> ordered EvaluationOutcome returned to optimizer
-  -> best-effort bounded recording enqueue
-  -> asynchronous immutable micro-batch segment publication
-  -> optional rebuildable query index
+  -> common validation + current cost finalizer
+  -> finalized JobResult returned to optimizer immediately
+  -> non-blocking owned-envelope admission
+  -> one workspace background writer thread
+  -> immutable standard-ZIP micro-batch segment
 ```
 
-When the work is complete:
+When complete:
 
-- amortized publication work is proportional to newly recorded candidate bytes,
-  not to the number or total size of earlier candidates;
-- no backend contains its own persistence policy or directly calls a single/batch
-  history writer;
-- a valid evaluation can contribute its current cost to the optimizer even if its
-  durable record is dropped or cannot be written;
-- corrupt or missing stored candidates are isolated and skipped, leaving every
-  other valid candidate usable;
-- recording work has bounded memory, bounded shutdown delay, bounded retries, and
-  no path by which its failure can terminate an optimization campaign;
-- history and surrogate consumers accept partial or empty history and degrade to a
-  safe cold-start or real-evaluation path.
+- new publication work is proportional to newly admitted bytes and never rewrites
+  older segments;
+- worker release and result-pipe draining never wait for history I/O;
+- a finite candidate cost stays finite when its record is dropped or cannot be
+  written;
+- recording loss, corrupt segments, unreadable history, and a dead writer cannot
+  terminate the campaign;
+- shape-preserving task edits are observed coherently at generation boundaries and
+  cause current history reinterpretation without a scientific-equivalence gate;
+- bad or mechanically incompatible records are isolated, while valid records and
+  later generations remain usable;
+- HDD file creation, directory updates, seeks, and flushes scale with segment count,
+  not candidate count or total prior history.
 
-The performance intent is to remove algorithmic history-size growth from the write
-path. It does not promise that simulation and recording can never contend for the
-same physical CPU, memory, or disk bandwidth. The queue and writer must prevent
-that contention from becoming unbounded backpressure or a synchronous dependency
-on the total campaign history.
+This guarantee is scoped to catchable history-persistence and history-reading
+failures after a backend has produced a result. It cannot promise continuation
+after process termination, interpreter failure, OOM, arbitrary filesystem failure
+affecting task inputs or simulator scratch, or machine loss.
 
-## Guidance
+## Detailed Design Intent
 
-### 1. Establish one common outcome finalizer
+### 1. Use a generation-scoped task snapshot
 
-Move all post-execution behavior behind one component called by fast, local, and
-distributed orchestration. A backend may prepare, execute, time out, retry, or
-collect differently, but it should only return a `JobResult` containing identity,
-status, raw variables, diagnostics, and either file-backed or memory-backed
-rawData.
+At the start of every generation:
 
-The common finalizer should:
+1. reload generation-scoped task/evaluation/optimizer configuration while retaining
+   the campaign-start recorder infrastructure configuration;
+2. fresh-load current parameters with the campaign's stable identities/count,
+   current objective names with the stable objective count, cost code, evaluator,
+   and task helpers through the normal isolated task loader;
+3. calculate component fingerprints plus one complete task-snapshot identity;
+4. retain the optimizer dimensional structure and apply current shape-preserving
+   task definitions;
+5. reinterpret the usable history view only when its interpretation fingerprint
+   changed.
+
+Do not use one monolithic fingerprint as every cache key. Maintain at least:
+
+- an `interpretation_fingerprint` covering parameter ranges/levels, objective
+  naming/cost code, and helpers used to normalize evidence or calculate cost;
+- an `evaluation_fingerprint` covering workflow/evaluation code and execution-side
+  helpers, used as provenance for newly produced evidence rather than as a reason
+  to recalculate unchanged historical costs;
+- a complete `task_snapshot_id` identifying the coherent combination used by one
+  generation for diagnostics and provenance.
+
+These fingerprints are not scientific signatures. Their purposes are to notice
+that particular derived values may be stale, invalidate only the affected caches,
+and explain which source snapshot produced evidence or diagnostics. A changed
+fingerprint must not automatically exclude old records. Every old record is
+attempted under current shape-preserving definitions:
+
+- changed parameter ranges renormalize stored raw values;
+- parameter names and count remain fixed for this project;
+- changed `calc_cost.py` recalculates current costs from compatible rawData;
+- changed objective definitions or names retain the existing objective count;
+- changed workflow/evaluation code affects future evidence at the next generation;
+- old rawData remains eligible when current code can interpret it.
+
+The user, not yadof, decides whether combining old and new evidence is scientifically
+appropriate. History clear and using a new workspace remain explicit user choices.
+
+Do not reload task files independently for each candidate in a way that permits a
+mid-generation edit to split one population across definitions. Local/distributed
+prepared jobs and fast worker requests must identify the same generation snapshot.
+Materialize or content-address the relevant configuration and Python task-source
+bytes at generation start; calculating a fingerprint and then continuing to import
+mutable live files is not a coherent snapshot. Large task-owned simulator assets
+need not be duplicated merely for this mechanism, but users who replace such assets
+must use a stopped generation boundary or a separate workspace.
+
+Recorder infrastructure is not part of this hot reload. The active writer keeps
+the history root, lock identity, count/byte limits, segment policy, failure policy,
+and shutdown deadline captured at campaign start. Later edits to those settings do
+not redirect or resize an existing writer.
+
+### 2. Reuse the existing result model
+
+`JobResult` already carries identity, status, raw variables, diagnostics, rawData
+backing, and optional costs. Prefer completing that object, for example with
+`dataclasses.replace()`, or using a thin internal finalizer return. Do not add a
+second public `EvaluationOutcome` model unless implementation evidence finds a
+semantic invariant that `JobResult` cannot express.
+
+The common finalizer must:
 
 1. validate the backend-neutral rawData source;
-2. calculate the current objective tuple directly from that source and the current
-   workspace task definition, without first reopening durable history;
-3. construct an ordered `EvaluationOutcome` containing the current costs and the
-   diagnostic result;
-4. hand the outcome to the optimizer/progress path immediately;
-5. offer an owned record envelope to the best-effort recorder without blocking on
-   campaign history publication.
+2. load it once into canonical owned `RawDataItem`-equivalent values;
+3. calculate current costs using the generation snapshot, without opening durable
+   history;
+4. return the finalized ordered result to progress/optimizer control;
+5. offer an owned record envelope to the recorder through a non-blocking call.
 
-The finalizer must define source lifetime explicitly. Memory-backed fast payloads
-must remain owned until the recorder either publishes or drops them. File-backed
-local/distributed sources must remain readable for the same interval; a later job-
-cleanup feature must not delete those files while a queued envelope still refers to
-them. Envelopes should carry a measured or conservatively estimated byte size so
-the queue can bound total memory rather than only item count.
+Invalid rawData and current-cost errors remain evaluation failures with the current
+objective-width `inf` sentinel. Queue refusal or later persistence error must not
+change a successful cost, strict all-infinite handling, or worker lifecycle.
 
-Cost-calculation failure remains an evaluation failure and returns the current
-objective-width `inf` sentinel. Recording failure does not alter a successfully
-calculated finite cost. Strict all-infinite behavior must be based on execution,
-rawData, and cost failures, never on persistence loss.
+### 3. Give the recorder owned data, not borrowed paths
 
-### 2. Replace global mutable history with immutable candidate frames and segments
+The finalizer should reuse the rawData load already needed for validation and cost.
+Fast memory payloads and local/distributed files converge to one owned envelope
+before admission. The background writer must not depend on a job path remaining
+alive after the evaluator returns.
 
-Do not retain a campaign-wide rawData ZIP or a campaign-wide individual JSONL as
-the authoritative store. Keep one self-contained logical record per candidate, but
-do not require one filesystem file or one durability transaction per candidate.
-The recorder should pack a bounded micro-batch of independently framed candidate
-records into one immutable segment. A suggested physical organization is:
+The envelope contains:
+
+- stable candidate/run/optimization/generation/population identities;
+- raw variables as a name/value mapping, not only a positional tuple, plus the
+  generation source fingerprint;
+- status, timestamps, execution provenance, and bounded diagnostics;
+- every validated rawData item needed for future reinterpretation;
+- optional current objective names/costs as a derived diagnostic cache, tagged with
+  the interpretation fingerprint that produced them.
+
+Stored costs are never source truth. A reader may reuse them only as a derived cache
+when the current interpretation fingerprint exactly matches; otherwise it
+recalculates from rawData. The format and reader must work when this optional cache
+is absent, so cache persistence can be deferred if first-version benchmarks do not
+justify it.
+
+Admission accounts conservatively for peak resident ownership, not merely the
+eventual compressed member size. The reservation must cover source arrays,
+metadata, encoding buffers or temporary files, and any overlap while ownership is
+transferred or released. Do not copy or serialize the same payload repeatedly
+merely to move it between finalizer, queue, and writer.
+
+A representative large yadof result is an antenna pattern containing
+`10 * 360 * 360 = 1,296,000` floating-point values. Its main array alone is about
+4.94 MiB as float32 or 9.89 MiB as float64 before axes, metadata, other rawData
+items, and encoding overhead. Default byte limits must be benchmarked against both
+small SAW-like candidates and at least this large-payload shape. The normal segment
+byte target must not double as the maximum legal candidate size.
+
+### 4. Use one bounded background writer thread
+
+Create one writer thread for one active campaign in one workspace. Use a daemon
+thread so a permanently blocked filesystem call cannot keep a command-line process
+alive forever. Do not create one writer per backend, worker, generation, or
+segment.
+
+Initial loss/throughput profile:
+
+- candidate-count segment target/default limit: 16;
+- total unpublished candidate default limit: 32;
+- normal segment byte target: benchmark an initial 8--16 MiB value against both
+  small and large tasks rather than treating the SAW payload size as representative
+  of all yadof tasks;
+- separate maximum single-candidate reservation and total unpublished byte limits,
+  chosen so the default admits at least the representative antenna payload above;
+- flush a partial segment at population/generation/evaluation-call boundaries;
+- no residence-time timer is required for generation-based calls.
+
+The count values above are initial defaults and the implementation may expose them
+as advanced configuration. Every campaign freezes and enforces the selected values,
+but product correctness does not depend on 16 or 32 being universally special.
+Count and byte limits remain independent because small candidates stress file/seek
+shape while large candidates stress memory and I/O volume.
+
+The byte target is a normal flush threshold, not a hard per-candidate rejection
+threshold. A candidate that exceeds the target but fits the maximum
+single-candidate reservation is published as a singleton segment. A candidate that
+exceeds the maximum single-candidate reservation or cannot fit the total
+unpublished byte budget is dropped only after its current cost has been returned.
+
+The unpublished budget includes candidates being assembled, waiting in the queue,
+encoded into a temporary file, and actively written but not atomically published.
+Credits are released only after publication succeeds or the data is explicitly
+dropped. This keeps abrupt-process-loss exposure within the campaign's configured
+candidate and byte budgets. One failed or corrupt segment normally loses no more
+than that segment's configured candidate/byte limits. Yadof minimizes this exposure
+but does not promise that systemic storage failure, writer disablement, or process
+loss can never remove a complete generation.
+
+Admission is non-blocking. When either budget is exhausted:
+
+- drop the new envelope;
+- increment an in-memory counter;
+- issue a rate-limited warning;
+- return to evaluation immediately.
+
+The writer catches segment creation, encoding, permission, disk-full, close, and
+atomic-replace failures. It drops only the affected segment and continues with
+later admitted data. A successful publication resets the consecutive-failure
+count. After a small documented number of consecutive systemic failures, disable
+recording for the rest of that campaign and drop later offers. Do not build an
+automatic restart service, cooldown scheduler, or unbounded retry loop.
+
+If the writer thread dies unexpectedly, future admissions detect the state,
+disable recording for that campaign, and keep optimization running. Normal shutdown
+requests a flush and joins only for a bounded deadline. The deadline bounds how long
+the optimization caller waits for best-effort history after evaluation has already
+finished; it does not claim that Python can cancel a thread blocked inside an OS
+filesystem call.
+
+If the deadline expires, queued or assembling envelopes that have not entered the
+blocking operation may be released and counted as shutdown-dropped. An in-flight
+segment whose thread has not returned has an unknown outcome, not a proven drop,
+because the call may later complete and publish it. A normal CLI command may then
+return and its process may exit without the daemon writer keeping it alive.
+
+For a long-lived Python process, a timed-out writer retains the workspace campaign
+lock until the thread actually exits or the process ends. Later same-workspace
+campaign or destructive-history calls fail fast during that interval. This is an
+edge-case safety rule for notebook/service/API embedding, not the normal CLI flow
+where each finite run/resume command owns one process. The shutdown timeout is
+therefore a bound on caller/process-exit latency, not a promise of immediate
+same-process workspace reuse.
+
+Expose bounded counters such as offered, admitted, published candidates/segments,
+queue-dropped, oversized-dropped, write-failed, disabled-dropped, and
+shutdown-dropped, plus an in-flight-shutdown-unknown indicator. Logging failure is
+itself non-fatal.
+
+### 5. Publish immutable standard-ZIP segments
+
+Use a versioned layout such as:
 
 ```text
 recorded_data/
-  segments/
-    <run-id>/
-      generation_000000/
-        segment_000000.yadseg
-        segment_000001.yadseg
-      generation_000001/
-        segment_000000.yadseg
-  cache/
-    history_index.sqlite
+  v2/
+    segments/
+      <run-id>/
+        generation_000000/
+          segment_000000.zip
+          segment_000001.zip
+    metadata/
+      <immutable generation/run event files>
 ```
 
-The exact extension and container encoding may change during implementation. A
-segment should be a sequential container whose candidate frames are independently
-length-delimited and checksummed. Compression should be per candidate frame or per
-rawData payload rather than one indivisible whole-segment compression stream, so a
-bad candidate can be skipped without making valid siblings undecodable. A compact
-footer/index may contain candidate identities, offsets, sizes, and checksums; its
-absence or corruption must make the reader skip or boundedly salvage the segment,
-never crash. A candidate frame should contain, as applicable:
+Each segment is a normal ZIP containing:
 
-- format/schema version and a collision-resistant candidate identity;
-- run, optimization, generation, and population identities;
-- raw variables and task/static signatures required to interpret compatibility;
-- status, timestamps, execution provenance, bounded diagnostics, and failure data;
-- every schema-valid rawData item needed for later current-cost reinterpretation;
-- optionally, the cost and objective/task signature observed at evaluation time as
-  a diagnostic cache. A stored cost must never become scientific source truth or
-  silently override recalculation through the current compatible `calc_cost.py`.
+- one versioned manifest with candidate identities, metadata, member names, sizes,
+  interpretation/evaluation fingerprints, and the complete task snapshot identity;
+- candidate-scoped metadata members;
+- candidate-scoped NPZ rawData members.
 
-Use same-directory temporary creation followed by atomic replacement of one whole
-segment. A finalized segment is never reopened for mutation. Readers ignore
-temporary files. Failure before replacement loses at most that bounded micro-batch;
-it cannot make an earlier segment unreadable. Segment and candidate identities must
-not rely solely on a user/job name that can collide across resumes or concurrent
-calls. The selected item/byte/time flush limits therefore also define the maximum
-normal-process loss domain and must be visible in configuration or diagnostics.
+NPZ payloads are already compressed where appropriate. Prefer `ZIP_STORED` for
+those members rather than performing a second whole-segment compression pass.
+Small JSON members may use ordinary bounded compression if benchmarks justify it.
 
-Do not use an append-open campaign ZIP, one compression stream spanning the whole
-campaign, or one file per candidate as the default physical layout. The first two
-recreate a central mutable failure domain; the last avoids campaign-size copying
-but performs poorly on rotational media because every small record causes file and
-directory metadata work plus additional seeks. Per-candidate files may remain only
-as a focused test codec or deliberately selected debugging mode, not as the normal
-writer.
+Write one same-directory temporary ZIP through large buffered sequential writes,
+close it, then atomically rename it. Published segments are never reopened for
+append, compaction, index repair, or metadata updates. The default does not call
+`fsync`/`FlushFileBuffers`; process or power loss may lose the recent bounded
+budget. Atomic rename prevents normal readers from accepting a half-published
+temporary file but is not a power-loss durability guarantee.
 
-Apply the same immutable-event principle to run/generation/surrogate metadata that
-would otherwise recreate a growing central rewrite. It is acceptable to maintain
-derived summaries, but they cannot be required to recover authoritative candidate
-records.
+Use ZIP member CRC and manifest size/member mapping instead of inventing a
+length-delimited `.yadseg` frame protocol. If one candidate member fails CRC or
+is missing, skip that candidate and keep valid siblings when the ZIP directory is
+readable. If the central directory or manifest is unusable, skip the complete
+segment; the campaign's configured segment limits define that bounded failure unit.
 
-### 3. Make asynchronous recording bounded and explicitly lossy
+Run/generation/surrogate metadata must also avoid one growing mutable JSONL. Publish
+small immutable event files or include the authoritative metadata in segment
+manifests. Derived summaries may be rebuilt and are never required for recovery.
 
-Use one workspace-scoped recorder service for every evaluation backend. A dedicated
-thread or process is an implementation choice, but exceptions must be contained
-inside a supervised boundary and must never escape into evaluation or optimization
-control flow.
+### 6. Keep current history hot without freezing task meaning
 
-The recorder must have both an item-count limit and a byte limit. Enqueue is
-non-blocking or has only a small fixed upper bound. Required behavior is:
+At campaign start, discover a stable snapshot of finalized segment names once and
+build an in-memory catalog. Do not rescan the complete records tree after every
+candidate or unchanged generation.
 
-- when capacity is available, transfer the envelope to the recorder;
-- when the queue is full, drop the new envelope (or apply one documented stable
-  drop policy), increment in-memory loss counters, issue a rate-limited warning,
-  and continue evaluation;
-- on a write, permission, encoding, checksum, or atomic-replace failure, isolate
-  that envelope, increment failure counters, and continue consuming later items;
-- after repeated systemic failures, use a circuit breaker to disable or cool down
-  recording for the workspace rather than retrying without bound;
-- at normal process shutdown, attempt a bounded drain; once the deadline expires,
-  discard the remainder and let the program exit;
-- if the recorder itself exits unexpectedly, detect it, disable or perform a
-  bounded restart according to a documented policy, and keep optimization alive.
+Keep this state private to an explicit campaign/session object; do not turn the
+general recorded-data layer into a process-global in-memory database or registry.
+The session owns its startup durable rows, lightweight finalized rows from the
+current process, and the bounded recent pending/publication state needed by the
+writer. Only rows still inside the recorder ownership window retain rawData in
+memory.
 
-Warnings and summaries are observability, not another durability dependency. If
-stderr/log reporting fails, the campaign still continues. Expose concise counters
-such as enqueued, published, queue-dropped, write-failed, and shutdown-dropped in
-progress/final diagnostics when available. Do not print one unbounded traceback per
-lost candidate.
+Maintain a derived in-memory history view containing raw-variable coordinates,
+current costs, provenance, and references to published segment evidence. Current
+generation results may enter that view immediately so the optimizer need not wait
+for persistence. Retain an unpublished result's rawData only while it remains in
+the bounded recorder ownership window.
 
-Default queue limits should permit normal simulator throughput without allowing
-large rawData to exhaust host memory. If they are configurable, validation must
-reject unbounded values and configuration must remain common to all three backends.
+Track whether each in-process row is backed by a finalized segment, still owns a
+pending envelope, or has been dropped. Publication replaces pending ownership with
+a segment reference. A dropped row may remain usable from its already derived
+variables/costs while the interpretation fingerprint is unchanged, but it has no
+recoverable evidence: remove it from the derived history when a later task change
+requires reinterpretation, and expect it to be absent after process restart.
 
-Queue ownership should reuse the validation/cost read whenever practical. The
-common finalizer should produce one canonical owned envelope instead of forcing the
-writer to reopen scattered local/distributed job files after cost calculation.
-Fast memory payloads and local/distributed file payloads must converge to the same
-owned envelope representation before queue admission. The envelope byte estimate
-must include rawData backing; an individual envelope larger than the total byte
-limit is dropped immediately after its cost is returned rather than blocking or
-escaping the bound.
+When the interpretation fingerprint is unchanged, append new derived rows and
+reuse the existing view. An evaluation-only fingerprint change records new
+provenance but does not by itself rebuild old normalized variables or costs. When
+interpretation-relevant task sources change:
 
-### 4. Make the physical writer friendly to rotational disks
+1. invalidate derived normalization/cost caches;
+2. take a stable snapshot of all finalized segments plus still-owned envelopes;
+3. sequentially load candidate evidence and apply the new generation snapshot;
+4. omit records that are missing, lost, corrupt, or mechanically uninterpretable;
+5. update the derived history and next optimizer context without changing parameter
+   identity/count or objective width.
 
-Use one serial writer per workspace. Multiple compression workers may prepare
-independent candidate frames when CPU policy permits, but only one component should
-create and publish history segments for a workspace. Parallel disk writers that
-look attractive on SSDs commonly reduce HDD throughput by forcing head movement
-between files and directories. The same single-writer contract applies to fast,
-local, and distributed results and must not be selected by backend.
+This re-interpretation can create a one-time pause after an intentional task edit.
+That cost is required by the flexibility contract and must be measured separately
+from simulator and recorder timing. It must not become an every-generation disk
+scan when source content is unchanged.
 
-The writer should form a segment when the first of three bounded conditions is met:
+If a record was deliberately dropped and its rawData ownership has ended, it is
+absent from future history. That is accepted data loss. It must never crash resume
+or force the optimizer to wait for nonexistent durability.
 
-- target encoded bytes, initially benchmarked in the 4--32 MiB range;
-- maximum candidate count, initially benchmarked in the 32--256 range;
-- maximum residence time, initially benchmarked in the 0.2--1.0 second range.
+### 7. Do not add SQLite in the first implementation
 
-One reasonable starting profile for small SAW-like records is 4 MiB, 128
-candidates, or 0.5 seconds, whichever comes first. These are benchmark starting
-points, not immutable public constants. The byte and item bounds cap data loss;
-the residence bound prevents a slow evaluator from leaving one candidate pending
-indefinitely. Do not infer HDD versus SSD from fragile platform/model-name
-heuristics. Prefer one portable sequential-write default and expose only bounded
-common tuning when measured workloads justify it.
+For the stated sub-100,000-candidate horizon, immutable segment discovery, compact
+per-segment manifests, and one in-memory catalog are the first implementation.
+Measure cold-start scan and viewer latency using the expected upper scale.
 
-For each segment:
+Add a rebuildable SQLite index only in a later measured change if startup or
+interactive queries miss an explicit performance target. If introduced later, it
+remains a disposable cache: segment publication never depends on an index
+transaction, rawData is never stored only as BLOBs, and index failure cannot stop a
+campaign.
 
-1. encode/compress every candidate independently in memory or bounded staging;
-2. issue large buffered sequential writes into one same-directory temporary file;
-3. write the segment footer/index last;
-4. close and atomically rename the temporary file;
-5. never modify, compact, or append to the published segment.
+### 8. Enforce one active campaign per workspace
 
-Do not call `fsync`/`FlushFileBuffers` for every candidate. The accepted durability
-policy permits losing recent data after a power or machine failure, so the default
-may rely on ordinary close plus atomic rename and operating-system writeback.
-If an explicit stronger durability option is added, flush at most once per segment
-or generation and keep it off the evaluator's synchronous path. Document clearly
-that atomic rename prevents normal readers from accepting a half-published file but
-does not by itself guarantee power-loss durability.
+Acquire an OS-backed workspace campaign lock for the lifetime of
+`run_generations()` or the equivalent active optimization session. Two
+optimizations must not write, reinterpret, or clear the same workspace
+concurrently. A second optimization request fails early with an actionable message
+directing the user to create another workspace.
 
-Avoid synchronous per-candidate index transactions, directory scans, and global
-manifest updates. Update a disposable index in grouped transactions after segment
-publication, checkpoint index state infrequently, and allow several new segments
-to exist before indexing. Compression should reduce device bytes without making
-the disk writer wait on an unbounded CPU pool; store already-compressed candidate
-frames without a second whole-segment compression pass.
+Different workspaces retain independent locks, writers, queues, histories, and
+surrogate state and may run concurrently.
 
-Do not run online compaction or rewrite old segments during an optimization. Such
-work turns linear append traffic back into competing reads and writes and causes
-severe seek amplification on one HDD. Any future compaction is an explicit offline
-maintenance operation whose failure leaves the original immutable segments
-untouched.
+Read-only viewers may inspect finalized immutable segments without taking the
+campaign writer lock. `history clear` and other destructive history operations
+must refuse while that workspace has an active campaign. Use an OS lock rather
+than trusting a stale marker file after a process crash.
 
-Optimizer-facing state should not rescan the records directory after every
-candidate or generation. Load one tolerant history snapshot at run start, update
-the current run's usable outcomes in memory, and let immutable segment discovery
-or index refresh occur at bounded checkpoints. Full-history surrogate or viewer
-reads should traverse a stable segment snapshot sequentially and must not hold the
-writer lock. Where a background surrogate reads the same HDD while recording, its
-I/O should be chunked/yielding or schedulable so one large scan cannot indefinitely
-starve sequential publication; storage contention may reduce throughput but must
-not propagate as campaign failure.
+### 9. Share tolerant reader semantics
 
-The 5,000-candidate SAW evidence provides a scale check. About 170 MB of useful
-rawData plus metadata caused roughly 425 GB of logical archive/manifest rewriting;
-the archive-copy portion also required reading the old bytes before writing the new
-copy. Immutable segments should reduce authoritative publication to approximately
-the newly encoded evidence plus small framing/index overhead--about 2,500 times
-less logical rewrite work for that run. A typical HDD may then spend seconds to
-tens of seconds on the history payload instead of tens of minutes or hours on
-repeated same-volume copies. This is an order-of-magnitude expectation for design
-and benchmark selection, not a promised wall-clock result: simulator scratch,
-antivirus, compression CPU, filesystem cache, and concurrent readers still matter.
+Optimizer warm start, resource calibration, surrogate training/recovery, history
+tools, cost/time views, and checkpoint inspection must use one tolerant query
+surface:
 
-### 5. Treat indexes and summaries as disposable caches
+- ignore temporary and unknown files;
+- skip an unreadable ZIP as one bounded segment loss;
+- skip a candidate with missing/CRC-invalid/malformed members;
+- accept gaps in generation and population indices;
+- resolve duplicate candidate identities deterministically and report them;
+- return a partial or empty history for storage/read failures;
+- skip surrogate training/use when too little compatible evidence remains and fall
+  back to real evaluation;
+- never hold a long-lived reader lock that blocks atomic segment publication.
 
-An SQLite index may accelerate filtering by run, generation, status, or candidate,
-but immutable segments and their valid candidate frames are the durable source when
-publication succeeds.
-The index must be deletable and reconstructible by scanning records. Index absence,
-lock contention, transaction failure, schema mismatch, or corruption must not
-invalidate candidate frames/segments or stop optimization.
+Do not exclude a candidate merely because its stored fingerprint differs from the
+current generation. Fingerprints trigger recalculation. Only concrete current
+normalization/rawData/cost failures make a record mechanically unusable.
 
-The writer may update the cache after segment publication. If cache update fails,
-keep the segment and mark/rebuild the cache later. Do not implement a two-resource
-transaction that makes segment publication depend on SQLite. Avoid storing rawData
-only as database BLOBs, which would recreate one central mutable failure domain.
+Legacy global-ZIP/JSONL paths are outside this query surface. Their presence does
+not trigger migration, confirmation, deletion, or an error; v2 discovery behaves
+as if they do not exist.
 
-Readers should use an index only when it is valid. They must fall back to a bounded,
-diagnostic segment scan and may rebuild the cache asynchronously or on an explicit
-maintenance path. Scan segment files in stable name order, read each segment
-sequentially, and avoid one random open per candidate. Cache rebuild failure returns
-the valid subset already found or an empty history; it does not abort a campaign.
+An explicitly invoked viewer may return a nonzero status when it cannot satisfy its
+inspection request. That user-facing error must not mutate history or propagate
+into a running optimizer.
 
-### 6. Define tolerant read and recovery semantics
+### 10. Keep timing and failure domains precise
 
-Every history consumer, including optimizer warm start, resource calibration,
-surrogate training/recovery, cost/time views, history tools, and checkpoint
-inspection, must share these rules:
+Measure separately:
 
-- a malformed, truncated, checksum-invalid, or unreadable candidate frame is
-  skipped individually when the segment directory remains trustworthy;
-- a malformed/truncated segment header or footer may discard that complete bounded
-  segment, but never any earlier segment or the running campaign;
-- temporary files, unknown non-segment files, gaps in generation/population indices,
-  missing candidates, and missing segments are accepted;
-- duplicate identities are resolved by one deterministic rule and reported, not
-  raised as a global error;
-- incompatible task/static signatures are excluded without poisoning compatible
-  records;
-- an unreadable records directory or zero valid candidates yields an empty-history
-  result plus bounded diagnostics;
-- insufficient surrogate evidence skips training/use and falls back to the base
-  real-evaluation optimizer path;
-- incompatible or orphaned surrogate checkpoints are ignored rather than required
-  for continuation;
-- no query holds a lock that blocks candidate publication for the duration of a
-  full-history cost or surrogate calculation.
+- backend/simulator execution;
+- parent completion-pipe wait;
+- rawData validation and current cost;
+- recorder admission;
+- asynchronous segment encoding/publication;
+- task-change history reinterpretation.
 
-User-invoked inspection commands may return a nonzero status when their explicit
-purpose cannot be fulfilled, but an inspection failure must not mutate history or
-leak into a running optimizer. The optimizer-facing history APIs must always offer
-a non-throwing partial/empty recovery path for storage failures.
+Evaluation elapsed time and timeout logic stop when the backend result is available;
+they do not absorb unrelated history publication.
 
-### 7. Remove old-format and backend-specific machinery
+Scientific and execution failures remain normal candidate failures:
 
-Backward compatibility is not required. Prefer a clean replacement over dual
-writing, automatic migration, legacy aliases, or permanent fallback branches.
+- simulator crash or timeout;
+- distributed submit/collection failure;
+- invalid task rawData;
+- current `calc_cost.py` failure.
 
-- Stop writing `recorded_data/rawData.npz` and `indMeta.jsonl`.
-- Remove the single-versus-batch public distinction from evaluation orchestration.
-- Remove the fast inline `record_result()` path and the local/distributed
-  `record_results()` plus per-individual publication fallback.
-- Remove old archive-copy, whole-JSONL-rewrite, and global-record-lock logic once no
-  current reader/writer uses it.
-- Put the new format below a distinct directory/version so old files cannot be
-  mistaken for new records. A run may issue one bounded warning that legacy
-  history is ignored; it must then continue as an empty/new-format history.
-- Do not automatically delete or rewrite legacy user data. Destructive cleanup
-  remains explicit and workspace-scoped.
+Recording failures after a valid cost are non-fatal recording loss:
 
-Update history clearing, workspace checks, package documentation, and tools for the
-new paths. Remove tests that exist only to preserve the old storage format; replace
-them with tests of the new intent instead of layering compatibility onto the new
-implementation.
+- queue or byte-budget refusal;
+- segment encoding/write/rename failure;
+- exhausted history volume;
+- corrupt/missing stored segment;
+- writer disablement or death;
+- index/cache failure if a cache is later added.
 
-### 8. Keep failure domains precise
+The persistence guarantee does not hide failures in task source files, job
+preparation, simulator scratch, the Python process, or shared machine resources.
 
-Do not broaden “recording must not crash optimization” into hiding scientific or
-execution errors:
+## Implementation Sequence
 
-- invalid task rawData, task cost errors, simulator crashes, and timeouts remain
-  candidate evaluation failures with correct-width infinite costs;
-- a persistence failure after a valid cost is a recording loss, not an evaluation
-  failure;
-- a recorder failure cannot cancel, time out, retry, or replace a backend worker;
-- a backend worker failure cannot corrupt or stop the recorder;
-- distributed submit/collection failure still follows distributed candidate
-  failure semantics before the common finalizer;
-- queue loss must be visible in bounded diagnostics even though it is non-fatal.
+1. Add tests for generation-boundary shape-preserving task/config reload, changed
+   parameter ranges, current-cost reinterpretation, the fixed parameter/objective
+   dimensions assumed by this project, and the rule that component fingerprints
+   invalidate only their affected caches without making scientific compatibility
+   decisions.
+2. Refactor the existing `JobResult` finalization so all backends calculate cost
+   directly from one owned validation load. Temporary old-store adapters may remain
+   only during this stage.
+3. Implement the standard-ZIP segment encoder/scanner and immutable run/generation
+   metadata events. Verify that new writes never open older segments.
+4. Implement the single bounded background thread, complete unpublished-budget
+   accounting, non-blocking admission, failure disablement, and bounded shutdown.
+5. Route fast, local, and distributed through the common finalizer/recorder and
+   remove fast inline recording plus local/distributed batch/fallback policy.
+6. Implement the campaign-owned derived-history state and component-fingerprint
+   invalidation/reinterpretation behavior.
+7. Convert optimizer, resource calibration, surrogate, viewers, history clear, and
+   workspace checks to the tolerant segment query surface and campaign lock.
+8. Delete old global ZIP/JSONL readers, writers, locks, and compatibility tests.
+9. Update current architecture, blueprints, terminology, user documentation, and
+   generic tests; then archive this one-shot toDo.
 
-This separation must also correct timing semantics. Simulator/worker execution,
-parent-side completion wait, cost calculation, queue admission, and asynchronous
-record publication should have distinct measurements. Evaluation elapsed time and
-timeout logic must not include time spent waiting for unrelated history I/O after
-the backend result is available.
+Intermediate commits must not claim final reliability while one backend still has
+a different persistence policy or a recording exception can propagate into
+optimization.
 
-### 9. Suggested implementation sequence
+## Verification And Acceptance
 
-1. Introduce the backend-neutral outcome/finalizer and direct-from-result current
-   cost calculation while retaining temporary test adapters around old storage.
-2. Implement the independently framed candidate codec, immutable micro-batch
-   segment codec, atomic serial writer, tolerant sequential scanner, and optional
-   disposable index.
-3. Implement the bounded recorder supervisor, item/byte/time segmenter, owned
-   envelope rules, loss counters, circuit breaker, and bounded shutdown.
-4. Route fast, local, and distributed results through the common finalizer and
-   recorder, then delete backend-specific publication branches.
-5. Convert optimizer history, calibration, surrogate, viewers, history clearing,
-   and metadata recording to the new tolerant query surface.
-6. Delete the old history format and compatibility scaffolding, then update current
-   architecture, blueprints, terminology, user documentation, and change records.
+### Common finalization and hot reload
 
-Intermediate stages must not claim the final reliability contract while a
-recording exception can still propagate into a campaign or one backend retains a
-different writer.
+- Fast, local, and mocked distributed results enter the same finalizer and recorder
+  offer API.
+- File-backed and memory-backed evidence produce equal finalized costs and equal
+  logical record content.
+- The finalizer reuses `JobResult`; any new result type must be justified by a
+  tested semantic distinction.
+- Editing `calc_cost.py` between generations recalculates old compatible rawData
+  and affects the next generation.
+- Editing parameter ranges/levels renormalizes stored raw variables while parameter
+  identity/count remains fixed.
+- Editing objective definitions or names affects the next generation while the
+  objective count remains fixed.
+- Editing workflow/evaluation/task helper code affects the next generation and
+  does not split the current generation across source snapshots.
+- A changed fingerprint never excludes a record by itself; an evaluation-only
+  fingerprint change does not recalculate unchanged historical costs.
+- An unchanged interpretation fingerprint does not cause a full segment-tree scan
+  or full cost recalculation every generation.
+- Editing recorder infrastructure configuration during a campaign does not redirect
+  or resize the already running writer.
 
-### 10. Verification and acceptance tests
+### Bounded asynchronous loss
 
-Use deterministic failure injection in generic package tests. At minimum cover:
+- The selected campaign configuration, including the initial 16-candidate segment
+  and 32-candidate unpublished defaults, is enforced exactly but is tested through
+  parameterized limits rather than treated as a universal acceptability boundary.
+- Instrumentation proves that assembling + queued + encoding + temporary +
+  in-flight candidates and their resident/encoding reservations never exceed the
+  selected count or total byte budgets.
+- A candidate larger than the normal segment byte target but within the maximum
+  single-candidate reservation publishes as a singleton segment.
+- Queue/byte exhaustion and a candidate above the real single-candidate hard limit
+  drop immediately without changing the returned cost or delaying worker release.
+- Segment errors lose at most that segment; later admitted segments can publish.
+- Consecutive systemic failures disable recording without stopping later
+  generations.
+- Unexpected writer death disables recording without an automatic restart loop and
+  without terminating optimization.
+- Bounded shutdown releases candidates that have not entered a blocked I/O call,
+  reports an in-flight unknown outcome when necessary, and never claims to cancel a
+  blocked Python thread.
+- A timed-out writer cannot keep a CLI process alive; a long-lived embedding retains
+  the workspace lock and rejects later same-workspace mutation until that thread
+  actually exits or the process ends.
 
-- fast, local, and mocked distributed results entering the same finalizer and the
-  same writer API, with no direct backend persistence calls;
-- equivalent file-backed and memory-backed rawData producing the same current
-  costs and candidate-frame contents;
-- a segment write that never reads, opens, copies, or modifies earlier segments;
-- thousands of synthetic candidates without write work proportional to accumulated
-  history size; prefer operation-count assertions and a generously bounded
-  integration timing trend over a fragile microbenchmark alone;
-- one serial workspace writer, with instrumented assertions that concurrent backend
-  completions cannot produce competing segment writes;
-- deterministic byte/count/time segment flush behavior, including the configured
-  maximum loss domain and a low-rate evaluator reaching the residence deadline;
-- independently corrupting one candidate frame inside a valid multi-candidate
-  segment and retaining valid siblings; corrupting/truncating a segment footer must
-  skip at most that segment and allow optimization/history recovery to continue;
-- instrumented HDD-shape tests that bound segment/file creation, directory updates,
-  flushes, index transactions, and seeks/opens by segment count rather than
-  candidate or historical-record count;
-- a sequential-throughput integration profile using small SAW-like payloads and a
-  deliberately slow/seek-penalized filesystem double; the result should favor
-  micro-batch segments over per-candidate files without requiring a physical HDD in
-  the default suite;
-- no per-candidate durability flush, index transaction, or history-directory scan;
-  an optional stronger flush policy, if present, is bounded to segment/generation
-  granularity and remains asynchronous;
-- queue-full behavior, byte-limit behavior, and an oversized single record being
-  dropped without blocking or changing its optimizer cost;
-- permission denied, disk-full simulation, temporary-file creation failure,
-  encoding failure, atomic-replace failure, index lock/corruption, and recorder
-  thread/process death while later candidates and generations continue;
-- abrupt termination leaving a temporary segment that the next run ignores;
-- one corrupt finalized candidate frame among valid siblings, returning all valid
-  history and bounded diagnostics;
-- missing records, generation gaps, duplicate identities, incompatible signatures,
-  and completely unreadable/empty history;
-- surrogate fallback and optimizer cold start when too little valid history
-  remains;
-- bounded recorder shutdown when a writer is blocked, including explicit accounting
-  of discarded queued envelopes;
-- progress and strict all-infinite behavior depending on evaluation/cost results,
-  not on recording success;
-- isolation of simultaneous workspaces and absence of a package-global recorder or
-  index path;
-- artifact, read-only-site-packages, CLI, history-view, and clear-history contracts
-  for the new format.
+### Format, HDD shape, and recovery
 
-Include a regression based on the SAW failure shape or an equivalent synthetic
-small-result workload: actual evaluation throughput must not show a linear trend
-with the number of already persisted candidates, and scheduler-observed evaluation
-time must not absorb asynchronous record publication latency.
+- A segment write never reads, opens, copies, appends, or modifies an earlier
+  segment.
+- Temporary files are ignored after abrupt termination.
+- Corrupting one candidate member skips that candidate while readable siblings
+  survive; corrupting the ZIP directory skips at most one configured segment.
+- No per-candidate filesystem file, `fsync`, index transaction, global manifest
+  rewrite, or history-directory scan exists in the hot write path.
+- Instrumented tests prove that a new publication opens no old segment, writes bytes
+  proportional to new evidence, and performs file creation, rename, directory
+  update, and durability flushes only per segment. Per-member ZIP operations may
+  have a documented constant factor bounded by the configured candidates per
+  segment.
+- An operation-count test plus a broad seek-penalized integration model favors
+  sequential micro-batches over per-candidate files without requiring a physical
+  HDD or asserting implementation-specific exact seek counts.
+- Missing segments, duplicate identities, generation gaps, permission errors,
+  disk-full errors, atomic-replace failures, and empty history return a valid
+  partial/cold-start result.
+
+### Campaign and scale behavior
+
+- A second campaign in one workspace fails before evaluation; campaigns in two
+  workspaces run independently.
+- History clear refuses while the target workspace campaign lock is held.
+- Surrogate insufficiency or incompatible checkpoints fall back to base real
+  evaluation.
+- A synthetic 5,000-candidate SAW-shaped regression has no evaluation-time trend
+  proportional to already persisted candidates.
+- A large-payload regression includes a `10 * 360 * 360` float32 and float64 main
+  array, verifies singleton publication above the normal segment target, and
+  measures peak reservation/encoding memory rather than only final compressed size.
+- A synthetic upper-scale catalog near 100,000 candidates measures cold-start and
+  reinterpretation costs without requiring SQLite. Record the result so a later
+  index decision is evidence-based.
+- Progress and strict all-infinite behavior depend on execution/current-cost
+  results, never on record publication success.
+
+Prefer operation-count assertions and broad trend bounds over fragile
+millisecond-level benchmarks.
 
 ## Non-Goals
 
 - Guaranteeing that every successful candidate becomes durable.
-- Providing a generation-level durability barrier before optimization continues.
-- Recovering queued-but-unpublished records after process or machine loss.
-- Making the candidate store transactional as a whole campaign.
-- Guaranteeing power-loss durability for an atomically renamed but unflushed
-  segment, or flushing every candidate to obtain that guarantee.
-- Automatically detecting storage media type or maintaining separate backend-
-  specific HDD/SSD writers.
-- Performing online segment compaction during optimization.
-- Preserving or automatically migrating the current JSONL/global-ZIP format.
-- Treating stored cost snapshots as authoritative after task cost policy changes.
-- Retrying indefinitely, allowing an unbounded queue, or blocking simulator
-  scheduling until storage recovers.
-- Hiding simulator, task, rawData-validation, or cost-calculation failures as though
-  they were harmless recording loss.
+- Making one generation a durability transaction or normal loss unit.
+- Guaranteeing that a systemic writer/storage/process failure can never lose a
+  complete generation; the design only bounds and minimizes best-effort loss.
+- Recovering queued but unpublished data after process/machine loss.
+- Guaranteeing power-loss durability or flushing every candidate.
+- Automatically deciding whether a user's task change is scientifically correct.
+- Freezing task definitions for a campaign.
+- Supporting parameter add/remove/rename operations, parameter-count changes, or
+  objective-count changes during a campaign. This needs separate optimizer-state
+  semantics and a future toDo; this project assumes stable parameter identity/count
+  and objective width.
+- Preserving or migrating the old JSONL/global-ZIP format.
+- A custom `.yadseg` framing/footer/salvage protocol in the first implementation.
+- SQLite in the first implementation.
+- Multiple compression or disk-writer workers for one workspace.
+- Automatic writer restart, indefinite retries, or unbounded queues.
+- Online compaction or rewriting published segments.
+- Automatic HDD/SSD detection or backend-specific storage implementations.
+- Concurrent optimization campaigns inside one workspace.
+- Optimizing for more than 100,000 candidates without new measured requirements.
+- Hiding simulator, task, rawData, cost, process, or non-history filesystem
+  failures as harmless recording loss.
 
 ## Completion Rule
 
-This toDo is complete only when all of the following are true:
+This toDo is complete only when:
 
-- fast, local, and distributed evaluation share one backend-neutral finalizer,
-  candidate-envelope contract, and immutable micro-batch segment writer;
-- current costs are calculated before and independently of durable publication;
-- the running optimizer continues through every injected recording, index, and
-  partial-history failure described above;
-- the writer has bounded item/byte capacity, bounded failure/retry behavior, and a
-  bounded shutdown path that may explicitly lose records;
-- no authoritative campaign-wide individual manifest or rawData archive is copied,
-  rewritten, or required for new-format recovery, and published segments are never
-  mutated or compacted during optimization;
-- one workspace-scoped serial writer performs bounded byte/count/time micro-batching
-  and sequential segment publication without per-candidate flush/index/scan work;
-- candidate frames remain individually checksummed and recoverable within a valid
-  segment, while a completely bad segment is a bounded non-fatal loss domain;
-- history, optimizer, calibration, surrogate, and inspection consumers isolate bad
-  candidates and support partial or empty history according to their runtime role;
-- the old format and backend-specific recording paths are removed rather than kept
-  as compatibility layers;
-- current architecture, blueprints, terminology, user documentation, and generic
-  tests describe and enforce the new durability and loss semantics;
-- a large synthetic regression demonstrates write work independent of accumulated
-  history and no linear evaluation-time slowdown.
+- all evaluation backends share the same `JobResult` finalizer, owned envelope,
+  non-blocking recorder offer, and standard-ZIP segment writer;
+- current cost is available before and independently of persistence;
+- one background writer thread per active workspace campaign publishes immutable
+  segments and never rewrites prior history;
+- one segment and the complete unpublished state are proven to remain within their
+  campaign-selected count and peak-resident byte budgets, with 16/32 retained only
+  as initial defaults;
+- every injected catchable recording/read failure leaves optimization able to
+  continue;
+- generation-boundary shape-preserving edits to cost, parameter ranges/levels,
+  objective definitions, evaluator/task code, and task-semantic config are
+  supported without a scientific-equivalence gate, while recorder infrastructure
+  remains campaign-frozen;
+- one active campaign per workspace is enforced and documented;
+- tolerant readers, cold start, surrogate fallback, viewers, clear-history, and
+  resume use the new segment contract;
+- old format and backend-specific persistence branches are removed;
+- tests demonstrate HDD-shaped sequential I/O, sub-100,000-candidate scale, and no
+  history-size-dependent evaluation slowdown;
+- current architecture, blueprints, terminology, user documentation, and one
+  change record agree with the implemented behavior.
 
-After implementation and documentation are complete, move this one-shot manual
-toDo to `dev_doc/obsolete/` according to the documentation contract.
+After implementation is fully complete, move this manual toDo to
+`dev_doc/obsolete/` according to the documentation contract.

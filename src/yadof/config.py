@@ -26,6 +26,15 @@ _DEFAULT_ITEMS: tuple[tuple[str, object], ...] = (
     ("LOGS_DIR", ".yadof/logs"),
     ("TOOL_OUTPUT_DIR", ".yadof/tool_output"),
     ("FAST_EVALUATION_SCRATCH_DIR", ".yadof/fast_scratch"),
+    # Best-effort immutable-segment history recorder. These values are frozen for
+    # one active campaign even when other workspace config is hot-reloaded.
+    ("HISTORY_SEGMENT_MAX_CANDIDATES", 16),
+    ("HISTORY_SEGMENT_TARGET_BYTES", 16 * 1024 * 1024),
+    ("HISTORY_MAX_CANDIDATE_BYTES", 64 * 1024 * 1024),
+    ("HISTORY_UNPUBLISHED_MAX_CANDIDATES", 32),
+    ("HISTORY_UNPUBLISHED_MAX_BYTES", 512 * 1024 * 1024),
+    ("HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES", 3),
+    ("HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC", 5.0),
     # Evaluation backend.
     ("EVALUATION_MODE", "local"),
     ("EVALUATION_TIMEOUT_SEC", 6 * 60 * 60),
@@ -135,6 +144,12 @@ _POSITIVE_INT_NAMES = {
     "FAST_EVALUATION_CPUS_PER_WORKER",
     "FAST_EVALUATION_MEMORY_MIB_PER_WORKER",
     "FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER",
+    "HISTORY_SEGMENT_MAX_CANDIDATES",
+    "HISTORY_SEGMENT_TARGET_BYTES",
+    "HISTORY_MAX_CANDIDATE_BYTES",
+    "HISTORY_UNPUBLISHED_MAX_CANDIDATES",
+    "HISTORY_UNPUBLISHED_MAX_BYTES",
+    "HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES",
     "HTCONDOR_REQUEST_CPUS",
     "HTCONDOR_JOB_TIMEOUT_SEC",
     "OPTIMIZE_POPULATION_SIZE",
@@ -174,6 +189,7 @@ _POSITIVE_REAL_NAMES = {
     "SURROGATE_INR_LR",
     "SURROGATE_INR_RELATIVE_LOSS_EPS",
     "SURROGATE_INR_BOOTSTRAP_FRACTION",
+    "HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC",
 }
 _NONNEGATIVE_REAL_NAMES = {
     "SURROGATE_CONSTANT_ATOL",
@@ -387,6 +403,23 @@ def load_config(
     )
     if overrides:
         _merge_layer(values, sources, overrides, "temporary override")
+
+    if (
+        int(values["HISTORY_SEGMENT_MAX_CANDIDATES"])
+        > int(values["HISTORY_UNPUBLISHED_MAX_CANDIDATES"])
+    ):
+        raise ConfigError(
+            "HISTORY_SEGMENT_MAX_CANDIDATES must not exceed "
+            "HISTORY_UNPUBLISHED_MAX_CANDIDATES"
+        )
+    if (
+        int(values["HISTORY_MAX_CANDIDATE_BYTES"])
+        > int(values["HISTORY_UNPUBLISHED_MAX_BYTES"])
+    ):
+        raise ConfigError(
+            "HISTORY_MAX_CANDIDATE_BYTES must not exceed "
+            "HISTORY_UNPUBLISHED_MAX_BYTES"
+        )
 
     path_values = {name: values[name] for name in _PATH_NAMES}
     effective_workspace = base_workspace.with_path_settings(path_values)  # type: ignore[arg-type]

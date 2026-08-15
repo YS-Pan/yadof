@@ -76,7 +76,10 @@ study-a/
     calc_cost.py
     optional adapters and assets
   jobs/                         generated
-  recorded_data/                generated raw evidence and metadata
+  recorded_data/v2/             generated immutable evidence segments and events
+    segments/<run>/<generation>/segment_*.zip
+    metadata/<event-type>/event_*.json
+  .yadof/campaign.lock          OS-backed active-campaign lock file
   .yadof/fast_scratch/          ephemeral fast candidate scratch; normally empty
   .yadof/surrogate/checkpoints/ generated
   .yadof/logs/                  generated
@@ -89,13 +92,14 @@ be used consecutively or concurrently in one process without sharing task module
 records, surrogate state, or output paths. Installed package resources are read-only
 inputs and are never used as a runtime-data location.
 
-One workspace is one active optimization campaign/write domain. Do not start two
-optimization processes against the same workspace. If two optimizations must run at
+One workspace is one active optimization campaign/write domain. Yadof takes a
+non-stale OS file lock before evaluation and a second campaign fails before it can
+start. If two optimizations must run at
 the same time, initialize or copy their task definitions into different workspaces;
 each workspace then has independent history, locks, recording, checkpoints, and
 task changes. Read-only inspection may share a workspace only where the selected
 command explicitly supports it, and destructive history clearing must never run
-against an active campaign.
+against an active campaign; `history clear` checks the same lock and refuses.
 
 The workspace is user-owned and may contain additional directories beyond this
 example layout. Use them for task-specific helper scripts, debugging evidence,
@@ -123,7 +127,10 @@ task-owned `evaluation.py:evaluate_rawdata()`, runs it in reusable crash-isolate
 processes on the submit machine, and creates no durable `jobs/<candidate>/`
 directory. A simulator may use the configured fast scratch root, but each candidate
 scratch is temporary, isolated, and cleaned; it is not evidence or a recovery point.
-The parent records returned memory rawData directly before calculating current cost.
+The parent validates returned memory rawData and calculates current cost in the same
+backend-neutral finalizer used by local and distributed execution. It then offers an
+owned evidence envelope to a bounded best-effort recorder. Recording refusal or a
+later disk error never changes an already valid returned cost.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 
 from ..config import load_config
+from ..recorded_data.campaign_lock import assert_campaign_inactive
+from ..recorded_data.paths import recorded_data_paths
 from ..workspace import WorkspaceContext
 
 
@@ -61,6 +63,8 @@ def clear_history(
 
     config = load_config(workspace)
     context = config.workspace
+    storage = recorded_data_paths(context)
+    assert_campaign_inactive(storage.campaign_lock_path)
     jobs_dir = _validate_runtime_directory(
         context.jobs_dir, context.root, "jobs"
     )
@@ -68,7 +72,7 @@ def clear_history(
         context.surrogate_checkpoint_dir, context.root, "surrogate checkpoint"
     )
     records_dir = _validate_runtime_directory(
-        context.recorded_data_dir, context.root, "recorded-data"
+        storage.v2_directory, context.root, "v2 recorded-data"
     )
 
     # Finish any workspace-local background writer before removing its outputs.
@@ -85,17 +89,8 @@ def clear_history(
     jobs_deleted = _clear_directory(jobs_dir)
     checkpoints_deleted = _remove_path(checkpoints_dir)
     removed_record_targets: list[str] = []
-    for target in (
-        records_dir / "indMeta.jsonl",
-        records_dir / "indMeta.jsonl.lock",
-        records_dir / "rawData.npz",
-        records_dir / "optMeta",
-    ):
-        if _remove_path(target):
-            removed_record_targets.append(str(target))
-    for target in tuple(records_dir.glob("*.tmp*")):
-        if _remove_path(target):
-            removed_record_targets.append(str(target))
+    if _remove_path(records_dir):
+        removed_record_targets.append(str(records_dir))
 
     jobs_dir.mkdir(parents=True, exist_ok=True)
     return {

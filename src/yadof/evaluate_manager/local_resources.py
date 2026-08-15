@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from threading import Event, Thread
 import time
-from typing import Mapping
+from typing import Mapping, Sequence
 
 import psutil
 
@@ -96,6 +96,7 @@ def plan_local_workers(
     generation_index: int | None,
     run_id: str | None,
     system: SystemResourceSnapshot | None = None,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> LocalWorkerPlan:
     """Choose local concurrency from configured and detected resource capacity."""
 
@@ -119,6 +120,7 @@ def plan_local_workers(
         autodetect_enabled=autodetect_enabled,
         calibrate_cpus=True,
         disk_multiplier=1.0,
+        history_records=history_records,
     )
 
     cpu_limit: int | None = None

@@ -13,7 +13,8 @@
 - Rows include generation index, status, timing, sample/query/member counts, error summaries, checkpoint file, and artifact directory.
 
 ## Non-Obvious Techniques
-- Surrogate metadata is not individual evidence and must not enter `indMeta.jsonl`.
+- Surrogate metadata is not individual evidence and must not enter v2 evidence
+  segments.
 - Metadata should stay JSON-safe and avoid storing full arrays, populations, or costs.
 
 ## Mutability Profile

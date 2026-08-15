@@ -5,8 +5,9 @@
 `yadof.evaluate_manager` turns normalized candidates into fast logical evaluations
 or prepared jobs, executes them in reusable local workers, prepared local
 subprocesses, or HTCondor, normalizes every outcome into ordered `JobResult` rows,
-records durable evidence, and derives current costs. A preparation, execution,
-collection, recording, or cost failure affects only its candidate.
+derives current cost through one common finalizer, and offers owned evidence to the
+campaign recorder. A preparation, execution, collection, rawData, or cost failure
+affects only its candidate. Recording loss never changes a valid result.
 
 `resource_calibration.py` is the shared automation boundary. It reads backend-neutral
 resource keys with legacy backend-key fallback, selects compatible smoke or
@@ -44,7 +45,8 @@ lifecycle metadata.
 may launch external simulator descendants. Each worker handles one candidate at a
 time and returns a mapping of unique direct `.npz` basenames to validated in-memory
 payloads plus JSON diagnostics. A bounded pipe holds at most one result per worker;
-the parent records each completion before assigning more work. There is no
+the parent finalizes each completion before assigning more work. Every worker uses
+the generation's immutable task snapshot. There is no
 `prepare_job()`, job-template copy, assigned parameter file, workflow process, or
 fake job path. `fast_resources.py` bounds the configured cap by population and
 declared per-worker CPU/memory/scratch disk against current host capacity.
@@ -68,18 +70,14 @@ held/timed-out jobs when needed. A per-job timeout becomes locally final even wh
 bounded `condor_rm` cleanup fails. Normal policy is `run_as_owner=False`,
 `load_profile=True`; pool repair is outside the module.
 
-Completed population results use the recorded-data batch fast path so large archives
-are copied once per population rather than once per individual. A batch failure is
-retried through the single-result path to preserve failure isolation.
+Distributed completion callbacks enter the same finalizer used by fast and local;
+no backend contains a persistence branch or publication fallback.
 
 When CLI progress is active, the manager owns one backend-neutral population bar.
-Fast reports after its streamed result has been recorded; local reports each
-completed future and reconciles outcomes after batch recording; distributed
-receives terminal results through the Condor runner's result callback and likewise
-reconciles after recording. Preparation failures count immediately. Each
-population index is idempotent so fallback paths cannot double-count it, and a
-recording/cost failure can correct a previously completed execution from successful
-to error without changing the finished total.
+Fast reports after current-cost finalization; local reports each completed future;
+distributed receives terminal results through the Condor runner's result callback.
+Preparation failures count immediately. Each population index is idempotent, and
+recorder refusal/publication failure cannot revise progress success.
 
 Distributed support preserves concrete CPU/memory/disk requests, workspace-local
 calibration, bounded yadof memory/disk resubmission, automatic/fixed scheduler
@@ -102,14 +100,15 @@ the same calibration module; only backend-specific enforcement remains separate.
 
 ## Recording and cost return
 
-Completed population results use the batch recording path and one cost query. If
-batch publication fails, the manager retries individual recording to retain good
-evidence. Failed candidates return `inf` with current objective width. Result order
-always matches candidate order.
+`finalizer.py` converts file-backed or memory-backed evidence to one owned validated
+envelope, calculates cost with the generation snapshot, returns the finalized
+`JobResult`, and only then makes a non-blocking session offer. Failed candidates
+return `inf` with current objective width. Result order always matches candidate
+order.
 
 ## Invariants
 
-- Fast/local/distributed share result, recording, cost, ordering, and shape rules;
+- Fast/local/distributed share finalization, offer, cost, ordering, and shape rules;
   only local/distributed share prepared-job composition.
 - Standalone smoke is exactly one midpoint job and has no job/generation timeout.
 - Local default worker cap is eight; adaptive planning may safely choose fewer and

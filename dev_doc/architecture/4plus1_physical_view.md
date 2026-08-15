@@ -104,14 +104,21 @@ workspace path setting.
 - `jobs/<job>/rawData.zip`: distributed transport artifact.
 - `jobs/<job>/rawData/*.npz`: restored/direct evidence used by framework code.
 - fast logical evaluations have none of the `jobs/<job>/...` paths above; named
-  memory payloads enter `recorded_data/rawData.npz` directly through the recorder.
-- `recorded_data/indMeta.jsonl`: compact append-only individual records.
-- `recorded_data/rawData.npz`: zip-based durable evidence archive, namespaced by job.
+  memory payloads cross the same owned-envelope finalizer as file-backed results.
+- `recorded_data/v2/segments/<run>/<generation>/segment_*.zip`: immutable,
+  candidate-scoped metadata plus stored NPZ members and a versioned manifest.
+- `recorded_data/v2/metadata/<type>/event_*.json`: immutable optimization and
+  surrogate event files.
+- `.yadof/campaign.lock`: persistent lock identity whose byte-range lock is held by
+  the one active campaign writer; the file's mere presence does not mean stale work.
 - configured checkpoint/log/tool-output directories: workspace-local mutable state.
 
-JSON and archive publication requiring replacement is atomic and protected by
-workspace locks. Package resources remain read-only even when site-packages itself
-is read-only.
+Each segment is written through one same-directory temporary standard ZIP, closed,
+and atomically renamed. It is never reopened for append, index repair, compaction,
+or metadata updates, and no per-candidate durability flush occurs. Temporary files,
+legacy global ZIP/JSONL files, and corrupt segments are outside or isolated by the
+v2 reader. Package resources remain read-only even when site-packages itself is
+read-only.
 
 The wheel also carries `yadof/tools/cost_viewer/` and
 `yadof/tools/surrogate_viewer/`, including their independent developer-

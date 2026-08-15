@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 import random
 
 from ..config import LoadedConfig
+from ..recorded_data.session import CampaignSession
+from ..task_snapshot import GenerationTaskSnapshot
 
 from .gpsaf_pymoo import (
     baseline_records,
@@ -57,10 +59,16 @@ def run_one_generation(
     random_seed: int | None = None,
     run_id: str | None = None,
     optimization_index: int | None = None,
+    session: CampaignSession | None = None,
+    snapshot: GenerationTaskSnapshot | None = None,
 ) -> OptimizationResult:
     size = _config_population_size(config, population_size)
     seed = _config_seed(config, random_seed)
-    history = history_records(config.workspace)
+    history = history_records(
+        config.workspace,
+        session=session,
+        snapshot=snapshot,
+    )
     problem = resolve_problem_info(config.workspace, variable_count, history)
     context = make_context(
         config,
@@ -84,7 +92,10 @@ def run_one_generation(
     if history and _surrogate_requested(config):
         diagnostics.update(
             ensure_surrogate_fresh_enough(
-                config.workspace, int(generation_index)
+                config.workspace,
+                int(generation_index),
+                session=session,
+                snapshot=snapshot,
             )
         )
         population, surrogate_info = surrogate_population(
@@ -124,7 +135,10 @@ def run_one_generation(
     after_jobs_submitted = (
         (
             lambda: notify_surrogate_after_submission(
-                config.workspace, int(generation_index)
+                config.workspace,
+                int(generation_index),
+                session=session,
+                snapshot=snapshot,
             )
         )
         if _surrogate_requested(config)
@@ -137,6 +151,8 @@ def run_one_generation(
         optimization_index=optimization_index,
         generation_index=int(generation_index),
         after_jobs_submitted=after_jobs_submitted,
+        session=session,
+        snapshot=snapshot,
     )
     return OptimizationResult(
         generation_index=int(generation_index),

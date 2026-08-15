@@ -18,16 +18,21 @@ from .api import (
     list_optimization_metadata,
     list_records,
     list_surrogate_metadata,
+    open_campaign_session,
     record_job_result,
     record_job_results,
     record_optimization_metadata,
     record_surrogate_metadata,
 )
+from .campaign_lock import CampaignActiveError
+from .session import CampaignSession
 
 __all__ = [
     "IND_META_SCHEMA_VERSION",
     "OPT_META_SCHEMA_VERSION",
     "VALID_RECORD_STATUSES",
+    "CampaignActiveError",
+    "CampaignSession",
     "calculate_costs",
     "get_historical_results",
     "get_job_names",
@@ -42,6 +47,7 @@ __all__ = [
     "list_optimization_metadata",
     "list_records",
     "list_surrogate_metadata",
+    "open_campaign_session",
     "record_job_result",
     "record_job_results",
     "record_optimization_metadata",

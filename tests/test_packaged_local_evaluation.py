@@ -238,7 +238,7 @@ def test_packaged_local_evaluation_success_and_smoke_contract(tmp_path: Path) ->
     assert records[0]["started_at"]
     assert records[0]["ended_at"]
     assert records[0]["job_metadata"]["execute_machine"] == metadata["execute_machine"]
-    assert (root / "recorded_data/rawData.npz").is_file()
+    assert len(tuple(root.glob("recorded_data/v2/segments/*/*/segment_*.zip"))) == 1
 
 
 def test_packaged_local_failures_are_isolated_and_return_inf(tmp_path: Path) -> None:
@@ -329,22 +329,14 @@ def test_packaged_local_timeout_is_per_individual_failure(tmp_path: Path) -> Non
 def test_packaged_record_failure_is_isolated_per_individual(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from yadof.evaluate_manager import api as evaluate_api
+    from yadof.recorded_data import session as session_module
 
     root = _workspace(tmp_path)
-    real_record_result = evaluate_api.record_result
 
-    def force_individual_fallback(workspace, results):
-        del workspace, results
-        raise OSError("simulated batch record failure")
+    def fail_publication(*args, **kwargs):
+        raise OSError("simulated segment publication failure")
 
-    def flaky_record_result(workspace, result):
-        if result.unnormalized_variables[0] < 0:
-            raise OSError("simulated individual record failure")
-        return real_record_result(workspace, result)
-
-    monkeypatch.setattr(evaluate_api, "record_results", force_individual_fallback)
-    monkeypatch.setattr(evaluate_api, "record_result", flaky_record_result)
+    monkeypatch.setattr(session_module, "publish_segment", fail_publication)
     costs = evaluate_population(
         root,
         ((0.0,), (1.0,)),
@@ -353,12 +345,9 @@ def test_packaged_record_failure_is_isolated_per_individual(
         env=_source_environment(),
     )
 
-    assert math.isinf(costs[0][0])
+    assert math.isfinite(costs[0][0])
     assert costs[1] == pytest.approx((0.9,))
-    records = recorded_api.list_records(root)
-    assert len(records) == 1
-    assert records[0]["status"] == "completed"
-    assert records[0]["raw_variables"] == [1.0]
+    assert recorded_api.list_records(root) == ()
 
 
 def test_packaged_evaluation_uses_effective_recorded_data_path(tmp_path: Path) -> None:
@@ -383,7 +372,7 @@ def test_packaged_evaluation_uses_effective_recorded_data_path(tmp_path: Path) -
     assert costs[0] == pytest.approx((0.1,))
     effective_workspace = load_config(root).workspace
     assert recorded_api.get_job_names(effective_workspace)
-    assert (root / "state/history/indMeta.jsonl").is_file()
+    assert len(tuple(root.glob("state/history/v2/segments/*/*/segment_*.zip"))) == 1
     assert not (root / "recorded_data").exists()
 
 

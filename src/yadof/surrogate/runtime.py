@@ -13,6 +13,8 @@ import torch
 from ..config import LoadedConfig, load_config
 from ..job_template import api as job_template_api
 from ..recorded_data import api as recorded_api
+from ..recorded_data.session import CampaignSession
+from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
 
 from .checkpoints import write_checkpoint
@@ -49,7 +51,7 @@ def workspace_state_key(config: LoadedConfig) -> StateKey:
     workspace = config.workspace
     return (
         str(workspace.root),
-        str(workspace.job_template_dir),
+        str(workspace.config_file),
         str(workspace.recorded_data_dir),
         str(workspace.surrogate_checkpoint_dir),
     )
@@ -124,6 +126,30 @@ def _costs_from_raw(
         raw_variables=raw_variables,
     )
     return tuple(tuple(float(value) for value in row) for row in raw_costs)
+
+
+def training_data_from_session(
+    session: CampaignSession,
+    snapshot: GenerationTaskSnapshot,
+) -> TrainingData:
+    historical = session.historical_results(snapshot)
+    names = tuple(name for name, _variables, _costs in historical)
+    samples = dict(
+        session.rawdata_samples(job_names=names, status="completed")
+    )
+    variables = []
+    raw_data = []
+    for name, normalized, _costs in historical:
+        sample = samples.get(name)
+        if sample is None:
+            continue
+        variables.append(tuple(normalized))
+        raw_data.append(tuple(sample))
+    return TrainingData(
+        parameter_names=tuple(snapshot.parameter_names),
+        normalized_variables=tuple(variables),
+        raw_data=_as_raw_samples(tuple(raw_data)),
+    )
 
 
 def _copy_template_value(value: object) -> object:
@@ -828,12 +854,13 @@ def train_with_config(
     *,
     generation_index: int = 0,
     started_at: str | None = None,
+    training_data: TrainingData | None = None,
 ) -> SurrogateState:
 
     training_started_at = now_text() if started_at is None else str(started_at)
     started_monotonic = monotonic_time()
 
-    data = _load_training_data(config.workspace)
+    data = training_data or _load_training_data(config.workspace)
     if len(data.normalized_variables) != len(data.raw_data):
         raise ValueError("surrogate training needs one rawData sample per normalized variable row")
     raw_sample_count = len(data.raw_data)

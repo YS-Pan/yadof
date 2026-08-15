@@ -6,6 +6,7 @@ from pathlib import Path
 import threading
 
 from ..config import LoadedConfig, load_config
+from ..task_snapshot import create_generation_snapshot
 from ..workspace import WorkspaceContext
 from . import metadata as surrogate_metadata
 from . import runtime
@@ -93,14 +94,18 @@ def start_training(
     generation_index: int,
     *,
     block: bool = False,
+    _config: LoadedConfig | None = None,
+    _training_data=None,
 ) -> TrainingScheduleStatus:
-    config = load_config(workspace)
+    config = load_config(workspace) if _config is None else _config
     key = runtime.workspace_state_key(config)
     generation = int(generation_index)
 
     if block:
         wait_for_pending_training(config.workspace)
-        return _train_blocking(config, key, generation)
+        return _train_blocking(
+            config, key, generation, training_data=_training_data
+        )
 
     with _LOCK:
         schedule = _schedule_locked(key)
@@ -109,21 +114,31 @@ def start_training(
             return _status_locked(
                 config, key, "already_running", generation_index=generation
             )
-        future = _EXECUTOR.submit(_train_in_background, config, generation)
+        owned_snapshot = create_generation_snapshot(config)
+        future = _EXECUTOR.submit(
+            _train_in_background,
+            owned_snapshot.config,
+            generation,
+            _training_data,
+        )
         schedule.pending = future
         schedule.pending_generation = generation
         future.add_done_callback(
-            lambda completed, *, state_key=key, selected=config, selected_generation=generation: _training_done(
-                state_key, selected, selected_generation, completed
+            lambda completed, *, state_key=key, selected=config, selected_generation=generation, owned=owned_snapshot: _training_done_owned(
+                state_key, selected, selected_generation, completed, owned
             )
         )
         return _status_locked(config, key, "started", generation_index=generation)
 
 
 def ensure_fresh_enough(
-    workspace: WorkspaceLike, generation_index: int
+    workspace: WorkspaceLike,
+    generation_index: int,
+    *,
+    _config: LoadedConfig | None = None,
+    _training_data=None,
 ) -> TrainingScheduleStatus:
-    config = load_config(workspace)
+    config = load_config(workspace) if _config is None else _config
     key = runtime.workspace_state_key(config)
     max_lag = max(0, int(config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG))
     generation = int(generation_index)
@@ -144,7 +159,9 @@ def ensure_fresh_enough(
             error=waited.error,
         )
 
-    return _train_blocking(config, key, generation)
+    return _train_blocking(
+        config, key, generation, training_data=_training_data
+    )
 
 
 def reset_workspace_schedule(workspace: WorkspaceLike) -> None:
@@ -162,7 +179,11 @@ def reset_workspace_schedule(workspace: WorkspaceLike) -> None:
 
 
 def _train_blocking(
-    config: LoadedConfig, key: runtime.StateKey, generation_index: int
+    config: LoadedConfig,
+    key: runtime.StateKey,
+    generation_index: int,
+    *,
+    training_data=None,
 ) -> TrainingScheduleStatus:
     started_at = surrogate_metadata.now_text()
     try:
@@ -170,6 +191,7 @@ def _train_blocking(
             config,
             generation_index=int(generation_index),
             started_at=started_at,
+            training_data=training_data,
         )
     except Exception as exc:  # noqa: BLE001 - optimizer may continue without a model.
         surrogate_metadata.record_training_failure(
@@ -201,12 +223,28 @@ def _train_blocking(
     )
 
 
-def _train_in_background(config: LoadedConfig, generation_index: int):
+def _train_in_background(
+    config: LoadedConfig, generation_index: int, training_data=None
+):
     return runtime.train_with_config(
         config,
         generation_index=int(generation_index),
         started_at=surrogate_metadata.now_text(),
+        training_data=training_data,
     )
+
+
+def _training_done_owned(
+    key: runtime.StateKey,
+    config: LoadedConfig,
+    generation_index: int,
+    future: Future,
+    owned_snapshot,
+) -> None:
+    try:
+        _training_done(key, config, generation_index, future)
+    finally:
+        owned_snapshot.close()
 
 
 def _training_done(

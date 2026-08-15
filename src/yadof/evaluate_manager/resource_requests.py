@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping, Sequence
 
 from ..config import LoadedConfig, load_config
 from ..workspace import WorkspaceContext
@@ -45,6 +46,7 @@ def request_for_job(
     job: JobSpec,
     *,
     config: LoadedConfig | None = None,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> HTCondorResourceRequest:
     """Return the initial CPU, memory, and disk values for one Condor job.
 
@@ -74,6 +76,7 @@ def request_for_job(
             effective.HTCONDOR_REQUEST_DISK_MULTIPLIER,
             "HTCONDOR_REQUEST_DISK_MULTIPLIER",
         ),
+        history_records=history_records,
     )
 
     return HTCondorResourceRequest(

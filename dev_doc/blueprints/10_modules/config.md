@@ -32,6 +32,12 @@ declarations. `FAST_EVALUATION_SCRATCH_DIR` resolves from the workspace like oth
 path settings and must not overlap task, jobs, or recorded-data paths. Fast policy
 does not reuse HTCondor request fields.
 
+Recorder policy defines the segment candidate cap/byte target, maximum one-candidate
+size, complete unpublished candidate/byte budgets, consecutive-write-failure circuit
+breaker, and bounded shutdown timeout. Validation enforces positive finite values
+and cross-field bounds. A campaign freezes these storage policy values and the
+recorded-data path at session creation; generation task semantics may still reload.
+
 ## Dependencies and consumers
 
 The module depends on workspace context only. CLI, evaluation, optimization,

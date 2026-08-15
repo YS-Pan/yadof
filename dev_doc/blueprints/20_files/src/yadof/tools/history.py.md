@@ -16,9 +16,10 @@
   directories.
 - Wait for pending workspace-local surrogate training, then reset only that
   workspace's scheduler and in-memory surrogate state.
-- Clear job entries, remove the checkpoint tree, remove the known record archive,
-  lock, legacy aggregate, optimization metadata, and temporary targets, and finally
-  recreate an empty jobs directory.
+- Acquire a non-active campaign check before mutation.
+- Clear job entries, remove the checkpoint tree and the framework-owned v2
+  recorded-data directory, and finally recreate an empty jobs directory. Legacy
+  aggregate JSONL/global-ZIP files remain untouched.
 
 ## I/O Format
 
@@ -32,11 +33,11 @@
 
 - Optional surrogate imports happen only during clearing; an unavailable optional
   surrogate stack does not prevent cleanup.
-- Record cleanup targets the framework-owned mutable files rather than recursively
-  deleting the entire configured recorded-data directory.
+- Record cleanup recursively targets only the framework-owned v2 subtree after the
+  exact workspace boundary and campaign-lock checks.
 
 ## Mutability Profile
 
 - Confirmation, broad-path rejection, link/junction handling, and workspace
   isolation are non-negotiable safety contracts.
-- Add a record target only when persistence owns that exact generated path.
+- Add a record target only when v2 persistence owns that exact generated path.

@@ -31,6 +31,7 @@ from ..job_template import (
     validate_named_rawdata_items,
 )
 from ..task_loader import task_module
+from ..workspace import WorkspaceContext
 from .fast_resources import plan_fast_workers, validate_fast_configuration
 from .job_result import tail
 from .process_control import (
@@ -139,7 +140,7 @@ def run_fast_population(
     scratch_root.mkdir(parents=True, exist_ok=True)
     context = multiprocessing.get_context("spawn")
     slots = [
-        _spawn_worker(context, slot_index, config.workspace.root)
+        _spawn_worker(context, slot_index, config.workspace)
         for slot_index in range(plan.worker_count)
     ]
     try:
@@ -206,7 +207,7 @@ def run_fast_population(
                         slot.active = None
                         if result.status != "done":
                             slots[slot_index] = _replace_worker(
-                                context, slot, config.workspace.root
+                                context, slot, config.workspace
                             )
                         continue
 
@@ -249,7 +250,7 @@ def run_fast_population(
                     on_result(active.task.index, result)
                     slot.active = None
                     slots[slot_index] = _replace_worker(
-                        context, slot, config.workspace.root
+                        context, slot, config.workspace
                     )
                     continue
 
@@ -287,7 +288,7 @@ def run_fast_population(
                     on_result(active.task.index, result)
                     slot.active = None
                     slots[slot_index] = _replace_worker(
-                        context, slot, config.workspace.root
+                        context, slot, config.workspace
                     )
     finally:
         for slot in slots:
@@ -302,12 +303,12 @@ def run_fast_population(
 def _spawn_worker(
     context: multiprocessing.context.BaseContext,
     slot_index: int,
-    workspace_root: Path,
+    workspace: WorkspaceContext,
 ) -> _WorkerSlot:
     parent_connection, child_connection = context.Pipe(duplex=True)
     process = context.Process(
         target=_fast_worker_main,
-        args=(child_connection, str(workspace_root)),
+        args=(child_connection, workspace),
         name=f"yadof-fast-worker-{slot_index}",
         daemon=False,
     )
@@ -319,10 +320,10 @@ def _spawn_worker(
 def _replace_worker(
     context: multiprocessing.context.BaseContext,
     slot: _WorkerSlot,
-    workspace_root: Path,
+    workspace: WorkspaceContext,
 ) -> _WorkerSlot:
     _stop_worker(slot)
-    return _spawn_worker(context, slot.index, workspace_root)
+    return _spawn_worker(context, slot.index, workspace)
 
 
 def _stop_worker(slot: _WorkerSlot) -> None:
@@ -402,7 +403,7 @@ def _observe_worker_tree(slot: _WorkerSlot) -> None:
     )
 
 
-def _fast_worker_main(connection: Any, workspace_root: str) -> None:
+def _fast_worker_main(connection: Any, workspace: WorkspaceContext) -> None:
     try:
         while True:
             request = connection.recv()
@@ -414,7 +415,7 @@ def _fast_worker_main(connection: Any, workspace_root: str) -> None:
                     "worker_started_at": _now_text(),
                 }
             )
-            response = _execute_worker_request(Path(workspace_root), request)
+            response = _execute_worker_request(workspace, request)
             connection.send(response)
             if str(response.get("status")) != "done":
                 return
@@ -428,7 +429,7 @@ def _fast_worker_main(connection: Any, workspace_root: str) -> None:
 
 
 def _execute_worker_request(
-    workspace_root: Path,
+    workspace: WorkspaceContext,
     request: Mapping[str, object],
 ) -> dict[str, object]:
     started_monotonic = time.monotonic()
@@ -460,7 +461,7 @@ def _execute_worker_request(
             _temporary_environment(environment),
             redirect_stdout(stdout_buffer),
             redirect_stderr(stderr_buffer),
-            task_module(workspace_root, "evaluation") as module,
+            task_module(workspace, "evaluation") as module,
         ):
             evaluate_rawdata = getattr(module, "evaluate_rawdata")
             output = evaluate_rawdata(

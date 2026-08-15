@@ -19,6 +19,17 @@ Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
 shape stay in `job_template/`.
 
+Advanced history-recorder settings are
+`HISTORY_SEGMENT_MAX_CANDIDATES` (default 16),
+`HISTORY_SEGMENT_TARGET_BYTES` (16 MiB),
+`HISTORY_MAX_CANDIDATE_BYTES` (64 MiB),
+`HISTORY_UNPUBLISHED_MAX_CANDIDATES` (default 32),
+`HISTORY_UNPUBLISHED_MAX_BYTES` (512 MiB),
+`HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES` (3), and
+`HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC` (5 seconds). Count and byte budgets are
+independent. They are frozen when a campaign starts even though task-semantic
+configuration remains hot-reloadable at generation boundaries.
+
 ## Local concurrency and resource calibration
 
 `LOCAL_EVALUATION_MAX_WORKERS` is a safety cap, not always the number that will run.
@@ -155,9 +166,11 @@ parameters, or changing objective width, requires optimizer-state migration rule
 that are not yet supported by this workflow. Use a new workspace/campaign for such
 a structural change until that separate feature is implemented.
 
-Use a generation boundary as the coherence point. For a strictly controlled edit
-with the current command surface, run a finite group of generations, let that
-command return, edit and check the task, then resume:
+Use a generation boundary as the coherence point. Yadof takes one immutable task
+snapshot before the first candidate in each generation. An edit made while that
+generation runs cannot affect any of its candidates and is picked up at the next
+boundary. You may still split commands when you want an explicit manual inspection
+point:
 
 ```powershell
 yadof run --workspace PATH --start-generation 0 --generations 10
@@ -166,11 +179,11 @@ yadof check --workspace PATH
 yadof run --workspace PATH --start-generation 10 --generations 10
 ```
 
-The run/resume APIs load current configuration and task definitions for subsequent
-generations. Do not edit files while candidates from a generation are being
-prepared or executed when a coherent transition matters; already prepared or
-running work may have captured the earlier source. Splitting the command at the
-boundary avoids mixing definitions inside one generation.
+The run/resume APIs load current configuration and task definitions once per
+subsequent generation. A complete task snapshot identity plus separate
+interpretation/evaluation fingerprints is attached to every result. Fingerprints
+provide provenance and cache invalidation; they never decide scientific
+compatibility or reject a record by themselves.
 
 Before continuing, the user should decide:
 
@@ -244,9 +257,9 @@ log; this source-labeled value never overrides worker identity. A job that timed
 without ever executing remains `unknown`. Historical records can derive this value
 in memory from their stored log tail, without changing recorded evidence.
 Failure-rate timing prefers the workflow or scheduler-observed execution start from
-either the individual row or its job metadata; the later batch recording timestamp
-is only a last resort, so generation publication does not artificially cluster
-failures at a boundary.
+either the individual row or its job metadata; the later evidence-recording
+timestamp is only a last resort, so segment publication does not artificially
+cluster failures at a boundary.
 
 Individual view commands print a summary and create
 `cost_YYYYMMDD_HHMMSS.png` or `time_YYYYMMDD_HHMMSS.png` by default.
@@ -254,8 +267,10 @@ Individual view commands print a summary and create
 written below `.yadof/tool_output/`. `view all` runs cost and time together, prints
 both summaries, and creates both timestamped images. Use `--summary-only` to print
 without creating PNGs. Destructive history clear requires interactive confirmation
-or `--yes`, validates its exact workspace targets, clears only that workspace, and
-recreates the jobs directory.
+or `--yes`, validates its exact workspace targets, refuses while the campaign lock
+is held, clears only v2 history/checkpoints/jobs in that workspace, and recreates
+the jobs directory. Legacy global ZIP/JSONL files are outside the v2 query and clear
+surface and remain untouched.
 
 `view surrogate` is a separate, explicitly launched read-only tool. With no mode,
 or with the explicit `gui` mode, it opens the selected workspace (or lets the user

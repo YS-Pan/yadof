@@ -259,11 +259,20 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             assert not (successful_job / "calc_cost.py").exists()
             assert not (successful_job / "cost.json").exists()
             recorded_dir = workspace / "recorded_data"
-            successful_records = [
-                json.loads(line)
-                for line in (recorded_dir / "indMeta.jsonl").read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
+            queried = _run(
+                [
+                    str(python_executable),
+                    "-c",
+                    (
+                        "import json; from pathlib import Path; "
+                        "from yadof.recorded_data import list_records; "
+                        f"print(json.dumps(list_records(Path({str(workspace)!r}))))"
+                    ),
+                ],
+                cwd=outside_dir,
+            )
+            assert queried.returncode == 0, queried.stdout + queried.stderr
+            successful_records = json.loads(queried.stdout)
             assert len(successful_records) == 1
             assert successful_records[0]["status"] == "completed"
             assert successful_records[0]["job_name"] == successful_job.name
@@ -271,8 +280,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 successful_records[0]["job_metadata"]["execute_machine"]
                 == successful_metadata["execute_machine"]
             )
-            assert (recorded_dir / "rawData.npz").is_file()
-            assert (recorded_dir / "indMeta.jsonl.lock").is_file()
+            assert len(tuple(recorded_dir.glob("v2/segments/*/*/segment_*.zip"))) == 1
 
             run_workspace = outside_dir / "run-workspace"
             run_initialized = _run(
@@ -400,11 +408,20 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             )
             assert timeout_check.returncode == 0, timeout_check.stdout + timeout_check.stderr
 
-            all_records = [
-                json.loads(line)
-                for line in (recorded_dir / "indMeta.jsonl").read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
+            queried = _run(
+                [
+                    str(python_executable),
+                    "-c",
+                    (
+                        "import json; from pathlib import Path; "
+                        "from yadof.recorded_data import list_records; "
+                        f"print(json.dumps(list_records(Path({str(workspace)!r}))))"
+                    ),
+                ],
+                cwd=outside_dir,
+            )
+            assert queried.returncode == 0, queried.stdout + queried.stderr
+            all_records = json.loads(queried.stdout)
             assert sorted(record["status"] for record in all_records) == [
                 "completed",
                 "error",
@@ -421,10 +438,10 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 "job_template/calc_cost.py",
                 "job_template/parameters_constraints.py",
                 "job_template/workflow.py",
-                "recorded_data/indMeta.jsonl",
-                "recorded_data/indMeta.jsonl.lock",
-                "recorded_data/rawData.npz",
+                "recorded_data/v2",
+                "recorded_data/v2/segments",
             } <= workspace_paths
+            assert any(path.endswith(".zip") for path in workspace_paths)
             for forbidden in (
                 "job_template/api.py",
                 "job_template/parameters_constraints_class.py",
@@ -625,7 +642,8 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/evaluate_manager/resource_requests.py" in wheel_names
         assert "yadof/evaluate_manager/resource_retries.py" in wheel_names
         assert "yadof/evaluate_manager/time_limits.py" in wheel_names
-        assert "yadof/evaluate_manager/recorded_data_client.py" in wheel_names
+        assert "yadof/evaluate_manager/finalizer.py" in wheel_names
+        assert "yadof/evaluate_manager/recorded_data_client.py" not in wheel_names
         assert "yadof/evaluate_manager/types.py" in wheel_names
         assert "yadof/evaluate_manager/worker_files/worker_misc.py" in wheel_names
         assert "yadof/evaluate_manager/worker_files/sitecustomize.py" not in wheel_names
@@ -633,12 +651,19 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/evaluate_manager/worker_files/run_workflow.py" not in wheel_names
         assert "yadof/recorded_data/__init__.py" in wheel_names
         assert "yadof/recorded_data/api.py" in wheel_names
-        assert "yadof/recorded_data/manifest_store.py" in wheel_names
+        assert "yadof/recorded_data/campaign_lock.py" in wheel_names
         assert "yadof/recorded_data/paths.py" in wheel_names
-        assert "yadof/recorded_data/query.py" in wheel_names
-        assert "yadof/recorded_data/rawdata_store.py" in wheel_names
-        assert "yadof/recorded_data/records.py" in wheel_names
+        assert "yadof/recorded_data/query_v2.py" in wheel_names
+        assert "yadof/recorded_data/rawdata_v2.py" in wheel_names
+        assert "yadof/recorded_data/records_v2.py" in wheel_names
+        assert "yadof/recorded_data/segment_store.py" in wheel_names
+        assert "yadof/recorded_data/session.py" in wheel_names
+        assert "yadof/recorded_data/manifest_store.py" not in wheel_names
+        assert "yadof/recorded_data/query.py" not in wheel_names
+        assert "yadof/recorded_data/rawdata_store.py" not in wheel_names
+        assert "yadof/recorded_data/records.py" not in wheel_names
         assert "yadof/recorded_data/utils.py" in wheel_names
+        assert "yadof/task_snapshot.py" in wheel_names
         assert "yadof/job_template/api.py" in wheel_names
         assert "yadof/job_template/parameters_constraints_class.py" in wheel_names
         assert "yadof/job_template/rawdata_contract.py" in wheel_names

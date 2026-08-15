@@ -6,6 +6,8 @@ import os
 import random
 from typing import Sequence
 
+from ..recorded_data.session import CampaignSession
+from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
 
 from .gpsaf_pymoo import (
@@ -50,14 +52,24 @@ def try_train_surrogate(workspace: WorkspaceContext, generation_index: int):
 
 
 def ensure_surrogate_fresh_enough(
-    workspace: WorkspaceContext, generation_index: int
+    workspace: WorkspaceContext,
+    generation_index: int,
+    *,
+    session: CampaignSession | None = None,
+    snapshot: GenerationTaskSnapshot | None = None,
 ) -> dict[str, object]:
     try:
         surrogate_api = importlib.import_module("yadof.surrogate.api")
         func = getattr(surrogate_api, "ensure_fresh_enough", None)
         if not callable(func):
             return {"surrogate_training_gate": "unavailable"}
-        status = func(workspace, int(generation_index))
+        training_data = _session_training_data(session, snapshot)
+        status = func(
+            workspace,
+            int(generation_index),
+            _config=None if snapshot is None else snapshot.config,
+            _training_data=training_data,
+        )
     except Exception as exc:  # noqa: BLE001 - a stale model should fall back, not stop the generation.
         return {
             "surrogate_training_gate": "failed",
@@ -81,14 +93,23 @@ def surrogate_state_ready(workspace: WorkspaceContext) -> bool:
 
 
 def notify_surrogate_after_submission(
-    workspace: WorkspaceContext, generation_index: int
+    workspace: WorkspaceContext,
+    generation_index: int,
+    *,
+    session: CampaignSession | None = None,
+    snapshot: GenerationTaskSnapshot | None = None,
 ) -> None:
     try:
         surrogate_api = importlib.import_module("yadof.surrogate.api")
         func = getattr(surrogate_api, "start_training", None)
         if callable(func):
+            training_data = _session_training_data(session, snapshot)
             status = func(
-                workspace, generation_index=int(generation_index), block=False
+                workspace,
+                generation_index=int(generation_index),
+                block=False,
+                _config=None if snapshot is None else snapshot.config,
+                _training_data=training_data,
             )
             _progress(
                 f"surrogate: background training request generation {int(generation_index)}; "
@@ -104,6 +125,16 @@ def notify_surrogate_after_evaluation(
     workspace: WorkspaceContext, generation_index: int
 ) -> None:
     notify_surrogate_after_submission(workspace, generation_index)
+
+
+def _session_training_data(
+    session: CampaignSession | None,
+    snapshot: GenerationTaskSnapshot | None,
+):
+    if session is None or snapshot is None:
+        return None
+    surrogate_runtime = importlib.import_module("yadof.surrogate.runtime")
+    return surrogate_runtime.training_data_from_session(session, snapshot)
 
 def predict_records(
     workspace: WorkspaceContext, records: Sequence[CandidateRecord]

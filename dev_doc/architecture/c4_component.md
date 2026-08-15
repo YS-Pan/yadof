@@ -55,14 +55,21 @@
   policies remain backend-specific.
 - `job_result`, `types`: common result shape and metadata utilities, including
   explicit file-backed or memory-backed rawData and an optional real job path.
-- `recorded_data_client`: narrow evaluation-to-persistence boundary.
+- `finalizer`: the single backend-neutral rawData ownership, current-cost,
+  `JobResult` finalization, and non-blocking recorder-offer boundary.
+- `task_snapshot`: generation-scoped task-tree capture, separate
+  interpretation/evaluation fingerprints, full snapshot identity, and stable
+  parameter/objective-shape validation.
 
 ## Durable evidence and optimization
-- `recorded_data`: workspace-local JSONL/zip evidence, file or named-memory source
-  normalization, no-pickle NPZ encoding, locks, atomic generation-batch recording,
-  diagnostics, and dynamically interpreted history. Historical-result queries may
-  report optional normalization/rawData/cost progress without changing their
-  returned rows.
+- `recorded_data.session`: one explicit campaign-owned hot catalog, bounded daemon
+  writer, current derived history, recorder counters, and OS campaign-lock lifetime.
+- `recorded_data.rawdata_v2`, `records_v2`, `segment_store`: owned no-pickle NPZ
+  conversion, immutable standard-ZIP micro-batch segments, candidate-scoped
+  metadata/evidence, atomic same-directory publication, and tolerant discovery.
+- `recorded_data.query_v2`: partial v2 history over finalized segments only; legacy
+  global ZIP/JSONL files and temporary segments are outside its surface. Dynamic
+  interpretation and candidate/segment diagnostics isolate readable siblings.
 - `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
   metadata, start/resume, and optional strict all-infinite failure.
 - `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,

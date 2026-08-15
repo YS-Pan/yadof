@@ -83,6 +83,7 @@ def estimate_resources(
     autodetect_enabled: bool,
     calibrate_cpus: bool,
     disk_multiplier: float = 1.0,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> ResourceEstimate:
     """Return one shared local/distributed per-job resource estimate."""
 
@@ -98,6 +99,7 @@ def estimate_resources(
         run_id=run_id,
         autodetect_enabled=autodetect_enabled,
         trim_fraction=float(config.HTCONDOR_RESOURCE_TRIM_TOP_FRACTION),
+        history_records=history_records,
     )
     if calibration is not None:
         sample_count = calibration.sample_count
@@ -152,6 +154,7 @@ def calibration_for_generation(
     run_id: str | None,
     autodetect_enabled: bool,
     trim_fraction: float,
+    history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> ResourceCalibration | None:
     """Select compatible smoke or preceding-generation resource observations."""
 
@@ -164,7 +167,13 @@ def calibration_for_generation(
     cpu_values: list[float] = []
     memory_values: list[float] = []
     disk_values: list[float] = []
-    for record in recorded_data_api.list_records(config.workspace):
+    records = history_records
+    if records is None:
+        try:
+            records = recorded_data_api.list_records(config.workspace)
+        except Exception:
+            records = ()
+    for record in records:
         if _generation_index(record.get("generation_index")) != target_generation:
             continue
         if str(record.get("status", "")).lower() != "completed":

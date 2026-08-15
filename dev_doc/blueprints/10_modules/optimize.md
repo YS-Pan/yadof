@@ -8,6 +8,11 @@ surrogate-assisted GPSAF selection, invokes real evaluation, and records lightwe
 generation/campaign metadata. It does not execute simulators or persist rawData
 itself.
 
+One `CampaignSession` spans a complete `run_generations` campaign. It owns the
+workspace lock, bounded recorder, startup catalog, and in-memory current-campaign
+rows. Standalone `run_one_generation` owns a shorter session with the same
+contracts.
+
 ## Candidate and objective handling
 
 Variable count comes from current workspace parameters; objective count/names come
@@ -28,16 +33,21 @@ the fast evaluation call returns.
 
 ## Warm start and orchestration
 
-History warm start derives current normalized variables and costs from workspace
-evidence. `run_generations` supports start/resume, stable run and optimization
+History warm start derives current normalized variables and costs from the session's
+startup catalog plus accepted current rows. `run_generations` supports start/resume,
+stable run and optimization
 identities, deterministic seed, temporary config overrides, optional pre-run smoke,
-and generation metadata including timings and populations. Config is loaded once per
-generation so one coherent policy applies to its work.
+and generation metadata including timings, populations, task fingerprints, and
+recorder counters. Config is loaded once per generation so one coherent policy
+applies to its work; recorder capacities and storage path remain frozen at campaign
+start.
 
 Task flexibility is generation-scoped. At each generation boundary, optimization
-must use current shape-preserving parameter and fixed-width objective definitions.
-A changed `calc_cost.py` reinterprets mechanically usable history before selection.
-Changes to workflow/evaluation code affect the next generation's real evaluations.
+creates an immutable task snapshot and uses its shape-preserving parameter and
+fixed-width objective definitions. An interpretation-fingerprint change
+reinterprets mechanically usable history before selection; an evaluation-only
+change reuses the existing derived view. Changes to workflow/evaluation code affect
+the next generation's real evaluations.
 Parameter identity/count and objective count remain stable during a campaign;
 rebuilding pymoo problem/reference-direction state for structural dimension changes
 is separate future work. Source fingerprints are cache-invalidation/provenance
@@ -55,6 +65,9 @@ recent per-job diagnostics. A smoke failure prevents generation submission.
 - No workspace-global optimizer singleton or implicit history path.
 - One workspace has one active optimization campaign; concurrent campaigns use
   different workspaces.
+- Current accepted rows are available to later generations even before segment
+  publication; recording loss never removes a valid current cost from its own
+  generation result.
 - Surrogate predictions never bypass real-evaluation validation.
 - Resume reuses compatible evidence/checkpoints but does not copy another workspace.
 - Stored optimization metadata stays lightweight; rawData remains in recorded_data.

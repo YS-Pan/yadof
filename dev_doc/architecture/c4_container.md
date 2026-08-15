@@ -19,8 +19,9 @@ flowchart LR
     Worker --> Zip["rawData.zip + individual metadata"]
     Zip --> Schedd
     Schedd --> Result
-    Result --> Records["Workspace recorded_data"]
-    Records --> Optimizer["Optimizer and surrogate"]
+    Result --> Finalizer["Common current-cost finalizer"]
+    Finalizer --> Optimizer["Optimizer and surrogate"]
+    Finalizer -. non-blocking owned envelope .-> Records["Bounded v2 segment recorder"]
 ```
 
 ## Agent interaction
@@ -76,8 +77,11 @@ restores it before recording.
 
 Prepared jobs merge a current workspace task payload with package worker resources.
 Fast results instead carry validated named memory payloads and explicitly set
-`job_dir=None`. All three backends converge on rawData validation, recording,
-current-cost derivation, failure isolation, and tuple-shape contracts.
+`job_dir=None`. All three backends converge on one `JobResult` finalizer for rawData
+ownership, current-cost derivation, worker release, failure isolation, and
+tuple-shape contracts. Only afterward does a non-blocking offer enter the
+campaign's bounded best-effort segment writer; recording loss cannot change a
+valid result.
 
 The listed `chrono_com.py` resource implements the PyChrono subprocess protocol.
 Its task-side parent/child pair remains inside the local, fast, or execute-node

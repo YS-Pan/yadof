@@ -148,6 +148,23 @@ def build_rows(
 ) -> list[dict[str, object]]:
     """Build display rows from recorded_data using dynamic cost calculation."""
 
+    get_diagnostics = getattr(recorded_api, "get_rawdata_diagnostics", None)
+    if callable(get_diagnostics):
+        try:
+            for diagnostic in get_diagnostics(
+                workspace,
+                status=status,
+                include_valid=False,
+            ):
+                _record_issue(
+                    issues,
+                    "recorded row/segment was ignored: "
+                    f"{diagnostic.get('error_type', 'unknown')}: "
+                    f"{diagnostic.get('error_message', '')}",
+                )
+        except Exception as exc:  # noqa: BLE001 - diagnostics are optional.
+            _record_issue(issues, f"recorded-data diagnostics were unavailable: {exc}")
+
     get_history = getattr(recorded_api, "get_historical_results", None)
     if get_history is None:
         raise ViewCostError(

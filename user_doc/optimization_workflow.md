@@ -96,7 +96,7 @@ all needed output into memory before returning. The parent reaps simulator
 descendants that remain after a task response and removes scratch after success,
 task error, timeout, or worker crash. Do not treat scratch as history,
 checkpoint, or recoverable job state. Prefer local/distributed when a task needs a
-durable task snapshot, detailed job-local files, remote execution, or recovery from
+durable job directory, detailed job-local files, remote execution, or recovery from
 large intermediate files.
 
 ## 3. rawData and cost
@@ -106,6 +106,13 @@ framework records raw evidence and derives cost through the current
 `job_template/calc_cost.py`. Changing a cost policy therefore reinterprets history
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
+
+Current cost is an execution result, not a persistence result. Fast, local, and
+distributed backends all return `JobResult` to one finalizer, which owns and
+validates rawData once, calculates the current objective tuple, releases the worker,
+and makes a non-blocking best-effort recording offer. A full history queue,
+oversized record, permission error, disk-full error, or dead recorder may lose that
+record but cannot turn its valid cost into `inf`.
 
 A campaign is not required to keep its original task definition forever. If the
 user discovers a mistake, they may correct `calc_cost.py`, parameter definitions,
@@ -123,6 +130,20 @@ count unchanged. Parameter ranges/levels, objective meaning/thresholds, cost cod
 and task execution code may change at the boundary. Structural parameter or
 objective-width changes need separate optimizer-state support; use a new workspace
 and campaign for them for now.
+
+At each generation boundary yadof copies the complete task source tree into one
+immutable snapshot. Every candidate in that generation—including fast worker task
+imports—uses that same snapshot. Changes made while a generation is running are
+therefore visible at the next boundary and cannot split the current generation.
+Interpretation and evaluation fingerprints are recorded separately: only a changed
+interpretation fingerprint invalidates cached normalization/current-cost values;
+an evaluation-only edit records new provenance without forcing old cost work.
+
+History is stored as immutable standard-ZIP micro-batch segments below
+`recorded_data/v2/segments/`. Published segments are never appended or rewritten.
+Readers ignore temporary files and legacy `indMeta.jsonl`/`rawData.npz`, skip a bad
+candidate member where possible, and skip one whole segment when its ZIP directory
+or manifest is unreadable. Legacy files are neither migrated nor deleted.
 
 Keep these three decisions separate:
 
@@ -226,6 +247,7 @@ worker metadata could not return, while a job that never executed remains
 `unknown`. Existing timeout records use their stored Condor log tail for the same
 read-only display fallback; history is not rewritten.
 
-Individual prepare/run/timeout/record failures become diagnostic records and
-correct-width `inf` costs. `--fail-on-all-infinite` stops after the first generation
+Individual prepare/run/timeout/rawData/current-cost failures become diagnostic rows
+and correct-width `inf` costs. History-recording loss is independent and preserves
+the valid current cost. `--fail-on-all-infinite` stops after the first generation
 with no finite objective.

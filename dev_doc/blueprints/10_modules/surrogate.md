@@ -10,7 +10,9 @@ error, and publishes recoverable checkpoints/metadata.
 
 ## Training data and model
 
-Training bundles come from validated recorded evidence. RawData fields are flattened
+Training bundles come from the active campaign session when one exists, so finalized
+segments and accepted unpublished current rows share one validated view. Outside a
+campaign they come from tolerant public v2 queries. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
 constant or near-constant fields. Task-owned importance weights do not add or remove
 rawData: they emphasize objective-relevant positions already present in the modeled
@@ -38,7 +40,9 @@ spread becomes uncertainty input for optimizer screening; it is not durable trut
 Runtime state and training schedules are keyed by effective workspace/checkpoint
 paths. At most one background training task runs per workspace. Real jobs are
 submitted first, then training may use the waiting interval; maximum generation lag
-bounds stale models. Clearing one workspace waits/resets only that workspace.
+bounds stale models. An asynchronous trainer receives an owned task snapshot and
+training bundle rather than reopening mutable task files. Clearing one workspace
+waits/resets only that workspace.
 
 Checkpoints contain model artifacts, auxiliary arrays, parameter/rawData signatures,
 generation identity, config summary, and audit metadata. Recovery requires
@@ -49,6 +53,8 @@ predicted rawData after recovery, so cost policy is never frozen in a checkpoint
 
 - No direct authoritative `variables -> cost` model path.
 - No checkpoint or scheduler collision across workspaces.
+- Training never needs to scan history per candidate and never depends on a segment
+  being published before a current accepted row becomes useful.
 - Non-finite/corrupt history is diagnosed and bounded by policy.
 - Prediction output passes the same rawData/cost interpretation used for real data.
 - Full-grid prediction never routes through optional off-grid interpolation.

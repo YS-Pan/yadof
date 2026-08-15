@@ -50,7 +50,8 @@ For every candidate, the submit side copies the task, materializes self-containe
 assigned parameters, and writes `job.sub` with `executable = workflow.py`. The
 execute node runs as a slot user, creates direct `rawData/*.npz` and flat
 `rawData.zip`, and returns only the zip plus individual metadata. The submit side
-restores/validates evidence, records it, and calculates costs. Normal jobs retain
+restores/validates evidence, calculates current cost in the common finalizer, and
+offers owned evidence to the campaign recorder. Normal jobs retain
 Condor's `allowed_execute_duration` and are independently watched from their local
 `condor.log` execute events. At the per-job limit, yadof records timeout immediately,
 attempts bounded `condor_rm` cleanup, and does not wait for queue removal.
@@ -86,7 +87,9 @@ rawData/current-cost meaning as local mode, but `jobs/` gains no candidate folde
 Edit workspace `calc_cost.py`, run `check`, and query history again. Existing
 mechanically compatible rawData stays unchanged while objective names/values are
 recalculated. During a campaign, make the edit between generations; the next
-generation uses the new policy coherently.
+generation uses the new policy coherently. The full task tree was captured before
+that generation's first candidate, so an edit during execution cannot split its
+population; it becomes visible at the following boundary.
 
 The same supported boundary applies when correcting parameter definitions,
 configuration, workflow/evaluation code, or task helpers. The new generation may
@@ -134,14 +137,16 @@ state, checkpoints, logs, and tools remain path-keyed. Same-named task helpers a
 fresh-loaded and removed so one workspace cannot contaminate the other.
 
 Concurrent optimization campaigns use different workspaces. One workspace is one
-active campaign/write domain; do not run two optimizers against it at the same
-time.
+active campaign/write domain; an OS-backed non-blocking lock rejects the second
+optimizer before evaluation. Destructive history clearing checks the same lock.
 
 ## Failure
 
 Prepare, workflow, timeout, submit, resource exhaustion, invalid/nested rawData,
-missing or malformed `rawData.zip`, collection, and record errors are isolated per
-individual. Strict CLI mode stops after an all-infinite generation and prints recent
+missing or malformed `rawData.zip`, collection, and current-cost errors are isolated
+per individual. Queue exhaustion, oversized evidence, segment corruption, and
+writer/storage failure are best-effort history loss and preserve a valid returned
+cost. Strict CLI mode stops after an all-infinite generation and prints recent
 diagnostic summaries. Pending unmatched Condor jobs receive one read-only match
 analysis rather than being incorrectly marked failed. A missing, failed, or hung
 `condor_rm` cannot keep a yadof-timed-out individual pending. If timeout prevents

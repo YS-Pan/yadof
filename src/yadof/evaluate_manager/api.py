@@ -13,11 +13,13 @@ from typing import Any, Callable, Iterable, Mapping
 from ..config import LoadedConfig, load_config
 from ..job_template import get_objective_count, get_variable_count, validate_fast_task
 from ..workspace import WorkspaceContext
+from ..recorded_data.session import CampaignSession
+from ..task_snapshot import GenerationTaskSnapshot
+from .finalizer import finalize_result
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
 from .local_runner import run_local_job
 from .local_resources import plan_local_workers
-from .recorded_data_client import record_result, record_results
 from .types import JobResult, JobSpec
 
 
@@ -38,6 +40,8 @@ def evaluate_population(
     optimization_index: int | None = None,
     generation_index: int | None = None,
     after_jobs_submitted: Callable[[], object] | None = None,
+    _campaign_session: CampaignSession | None = None,
+    _task_snapshot: GenerationTaskSnapshot | None = None,
 ) -> tuple[tuple[float, ...], ...]:
     """Evaluate a population and return dynamic cost tuples in input order."""
 
@@ -51,7 +55,22 @@ def evaluate_population(
         overrides["LOCAL_EVALUATION_MAX_WORKERS"] = max(1, int(local_max_workers))
     if fast_max_workers is not None:
         overrides["FAST_EVALUATION_MAX_WORKERS"] = max(1, int(fast_max_workers))
-    config = load_config(workspace, overrides=overrides)
+    owns_session = _campaign_session is None
+    if _campaign_session is None:
+        live_config = load_config(workspace, overrides=overrides)
+        session = CampaignSession(live_config)
+        try:
+            snapshot = session.begin_generation(live_config)
+        except Exception:
+            session.close()
+            raise
+        config = snapshot.config
+    else:
+        if _task_snapshot is None:
+            raise ValueError("_task_snapshot is required with _campaign_session")
+        session = _campaign_session
+        snapshot = _task_snapshot
+        config = snapshot.config
     selected_mode = str(config.EVALUATION_MODE).strip().lower()
     progress = _PopulationProgress(
         total=len(rows),
@@ -76,6 +95,8 @@ def evaluate_population(
                 optimization_index=optimization_index,
                 generation_index=generation_index,
                 progress=progress,
+                session=session,
+                snapshot=snapshot,
             )
         if selected_mode == "distributed":
             return _dispatch_distributed(
@@ -88,6 +109,8 @@ def evaluate_population(
                 generation_index=generation_index,
                 after_jobs_submitted=after_jobs_submitted,
                 progress=progress,
+                session=session,
+                snapshot=snapshot,
             )
         if selected_mode != "local":
             raise ValueError(f"unsupported evaluation mode: {selected_mode!r}")
@@ -103,9 +126,13 @@ def evaluate_population(
             generation_index=generation_index,
             after_jobs_submitted=after_jobs_submitted,
             progress=progress,
+            session=session,
+            snapshot=snapshot,
         )
     finally:
         progress.close()
+        if owns_session:
+            session.close()
 
 
 def run_smoke_test(
@@ -120,10 +147,17 @@ def run_smoke_test(
 ) -> tuple[tuple[float, ...], ...]:
     """Run exactly one deterministic representative individual with no timeout."""
 
-    config = load_config(
+    live_config = load_config(
         workspace,
         overrides={"EVALUATION_MODE": str(mode).strip().lower()},
     )
+    session = CampaignSession(live_config)
+    try:
+        snapshot = session.begin_generation(live_config)
+    except Exception:
+        session.close()
+        raise
+    config = snapshot.config
     selected_mode = str(config.EVALUATION_MODE).strip().lower()
     if normalized_variables is None:
         normalized_variables = (0.5,) * get_variable_count(config.workspace)
@@ -142,6 +176,8 @@ def run_smoke_test(
                 generation_index=None,
                 after_jobs_submitted=None,
                 progress=progress,
+                session=session,
+                snapshot=snapshot,
             )
         if selected_mode == "fast":
             return _dispatch_fast(
@@ -154,6 +190,8 @@ def run_smoke_test(
                 optimization_index=optimization_index,
                 generation_index=None,
                 progress=progress,
+                session=session,
+                snapshot=snapshot,
             )
         return _dispatch_local(
             config,
@@ -167,9 +205,12 @@ def run_smoke_test(
             generation_index=None,
             after_jobs_submitted=None,
             progress=progress,
+            session=session,
+            snapshot=snapshot,
         )
     finally:
         progress.close()
+        session.close()
 
 
 def evaluate_generation(*args: object, **kwargs: object) -> tuple[tuple[float, ...], ...]:
@@ -191,6 +232,8 @@ def _dispatch_fast(
     optimization_index: int | None,
     generation_index: int | None,
     progress: _PopulationProgress,
+    session: CampaignSession,
+    snapshot: GenerationTaskSnapshot,
 ) -> tuple[tuple[float, ...], ...]:
     from .fast_runner import run_fast_population
 
@@ -201,26 +244,9 @@ def _dispatch_fast(
 
     def consume(index: int, result: JobResult) -> None:
         try:
-            if result.status != "done":
-                _best_effort_record_failure(config.workspace, result)
-                return
-            try:
-                row_costs = record_result(config.workspace, result)
-                if row_costs is None:
-                    raise RuntimeError("completed fast result returned no costs")
-                costs[index] = tuple(float(value) for value in row_costs)
-            except Exception as exc:  # noqa: BLE001 - isolate recording per candidate.
-                _write_recording_failure(
-                    config,
-                    rows[index],
-                    index,
-                    result,
-                    exc,
-                    engine="fast",
-                    run_id=run_id,
-                    optimization_index=optimization_index,
-                    generation_index=generation_index,
-                )
+            finalized = finalize_result(session, snapshot, result)
+            if finalized.costs is not None:
+                costs[index] = tuple(finalized.costs)
         finally:
             progress.complete(index, successful=costs[index] is not None)
 
@@ -235,6 +261,7 @@ def _dispatch_fast(
         generation_index=generation_index,
         on_result=consume,
     )
+    session.flush_boundary()
     return tuple(
         row if row is not None else _inf_costs(objective_width) for row in costs
     )
@@ -253,6 +280,8 @@ def _dispatch_local(
     generation_index: int | None,
     after_jobs_submitted: Callable[[], object] | None,
     progress: _PopulationProgress,
+    session: CampaignSession,
+    snapshot: GenerationTaskSnapshot,
 ) -> tuple[tuple[float, ...], ...]:
     validate_task_payload(config)
     population_rows = tuple(population)
@@ -264,13 +293,14 @@ def _dispatch_local(
         configured_max=local_max_workers,
         generation_index=generation_index,
         run_id=run_id,
+        history_records=session.records(),
     )
     worker_plan_metadata = worker_plan.metadata()
     _progress(worker_plan.summary())
 
     def evaluate_one(
         index: int, population_row: tuple[Any, ...]
-    ) -> tuple[int, JobResult | None]:
+    ) -> tuple[int, JobResult]:
         return _evaluate_one_local(
             config=config,
             index=index,
@@ -284,13 +314,14 @@ def _dispatch_local(
             worker_plan_metadata=worker_plan_metadata,
         )
 
-    outcomes: list[tuple[int, JobResult | None]] = []
     worker_count = worker_plan.worker_count
     if worker_count <= 1 or len(population_rows) <= 1:
         for index, row in enumerate(population_rows):
             outcome = evaluate_one(index, row)
-            outcomes.append(outcome)
-            progress.complete(index, successful=outcome[1] is not None)
+            finalized = finalize_result(session, snapshot, outcome[1])
+            if finalized.costs is not None:
+                costs_by_individual[index] = tuple(finalized.costs)
+            progress.complete(index, successful=finalized.costs is not None)
     else:
         with ThreadPoolExecutor(
             max_workers=worker_count,
@@ -309,29 +340,28 @@ def _dispatch_local(
                         "local worker failed for individual "
                         f"{index}: {type(exc).__name__}: {exc}"
                     )
-                    outcome = (index, None)
-                outcomes.append(outcome)
-                progress.complete(index, successful=outcome[1] is not None)
+                    outcome = (
+                        index,
+                        _failed_result(
+                            stage="local_worker",
+                            engine="local",
+                            exc=exc,
+                            population_row=row,
+                            index=index,
+                            jobs_dir=config.workspace.jobs_dir,
+                            job=None,
+                            result=None,
+                            run_id=run_id,
+                            optimization_index=optimization_index,
+                            generation_index=generation_index,
+                        ),
+                    )
+                finalized = finalize_result(session, snapshot, outcome[1])
+                if finalized.costs is not None:
+                    costs_by_individual[index] = tuple(finalized.costs)
+                progress.complete(index, successful=finalized.costs is not None)
 
-    completed = tuple(
-        (index, result) for index, result in outcomes if result is not None
-    )
-    recorded_costs = _record_completed_results(
-        config,
-        completed,
-        population_rows,
-        engine="local",
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=generation_index,
-    )
-    for index, costs in recorded_costs.items():
-        costs_by_individual[index] = costs
-    for index in range(len(population_rows)):
-        progress.complete(
-            index,
-            successful=costs_by_individual[index] is not None,
-        )
+    session.flush_boundary()
     _run_after_jobs_submitted(after_jobs_submitted)
     return tuple(
         costs if costs is not None else _inf_costs(objective_width)
@@ -351,7 +381,7 @@ def _evaluate_one_local(
     optimization_index: int | None,
     generation_index: int | None,
     worker_plan_metadata: Mapping[str, object],
-) -> tuple[int, JobResult | None]:
+) -> tuple[int, JobResult]:
     job: JobSpec | None = None
     result: JobResult | None = None
     try:
@@ -381,8 +411,7 @@ def _evaluate_one_local(
             generation_index=generation_index,
         )
         _best_effort_write_failure(failure)
-        _best_effort_record_failure(config.workspace, failure)
-        return index, None
+        return index, failure
 
     try:
         result = run_local_job(
@@ -407,12 +436,8 @@ def _evaluate_one_local(
             generation_index=generation_index,
         )
         _best_effort_write_failure(failure)
-        _best_effort_record_failure(config.workspace, failure)
-        return index, None
+        return index, failure
 
-    if result.status != "done":
-        _best_effort_record_failure(config.workspace, result)
-        return index, None
     return index, result
 
 
@@ -427,6 +452,8 @@ def _dispatch_distributed(
     generation_index: int | None,
     after_jobs_submitted: Callable[[], object] | None,
     progress: _PopulationProgress,
+    session: CampaignSession,
+    snapshot: GenerationTaskSnapshot,
 ) -> tuple[tuple[float, ...], ...]:
     from .condor_runner import run_condor_jobs
 
@@ -464,8 +491,8 @@ def _dispatch_distributed(
                 optimization_index=optimization_index,
                 generation_index=generation_index,
             )
-            _best_effort_record_failure(config.workspace, failure)
-            progress.complete(index, successful=False)
+            finalized = finalize_result(session, snapshot, failure)
+            progress.complete(index, successful=finalized.costs is not None)
             continue
         jobs.append(job)
         positions.append(index)
@@ -474,10 +501,16 @@ def _dispatch_distributed(
         job.name: position for position, job in zip(positions, jobs)
     }
 
+    finalized_by_job: dict[str, JobResult] = {}
+
     def consume_result(result: JobResult) -> None:
+        finalized = finalize_result(session, snapshot, result)
+        finalized_by_job[result.job_name] = finalized
         position = positions_by_job.get(result.job_name)
         if position is not None:
-            progress.complete(position, successful=result.status == "done")
+            if finalized.costs is not None:
+                costs[position] = tuple(finalized.costs)
+            progress.complete(position, successful=finalized.costs is not None)
 
     try:
         results = run_condor_jobs(
@@ -488,6 +521,7 @@ def _dispatch_distributed(
             env=env,
             after_jobs_submitted=after_jobs_submitted,
             on_result=consume_result,
+            history_records=session.records(),
         )
     except Exception as exc:  # noqa: BLE001 - preserve generation shape.
         results = tuple(
@@ -507,125 +541,21 @@ def _dispatch_distributed(
             for position, job in zip(positions, jobs)
         )
 
-    completed: list[tuple[int, JobResult]] = []
     for position, result in zip(positions, results):
-        progress.complete(position, successful=result.status == "done")
-        if result.status != "done":
-            _best_effort_record_failure(config.workspace, result)
-            continue
-        completed.append((position, result))
-
-    recorded_costs = _record_completed_results(
-        config,
-        tuple(completed),
-        rows,
-        engine="htcondor",
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=generation_index,
-    )
-    for position, row_costs in recorded_costs.items():
-        costs[position] = row_costs
+        finalized = finalized_by_job.get(result.job_name)
+        if finalized is None:
+            finalized = finalize_result(session, snapshot, result)
+            finalized_by_job[result.job_name] = finalized
+        if finalized.costs is not None:
+            costs[position] = tuple(finalized.costs)
+        progress.complete(position, successful=finalized.costs is not None)
     for position in range(len(rows)):
         progress.complete(position, successful=costs[position] is not None)
 
+    session.flush_boundary()
     return tuple(
         row if row is not None else _inf_costs(objective_width) for row in costs
     )
-
-
-def _record_completed_results(
-    config: LoadedConfig,
-    indexed_results: tuple[tuple[int, JobResult], ...],
-    population_rows: tuple[tuple[Any, ...], ...],
-    *,
-    engine: str,
-    run_id: str | None,
-    optimization_index: int | None,
-    generation_index: int | None,
-) -> dict[int, tuple[float, ...]]:
-    """Use the batch fast path, with individual fallback for isolation."""
-
-    if not indexed_results:
-        return {}
-    results = tuple(result for _index, result in indexed_results)
-    try:
-        costs_by_job = record_results(config.workspace, results)
-    except Exception as batch_exc:  # noqa: BLE001 - retry individually for isolation.
-        _progress(
-            "batch recording failed; retrying individuals: "
-            f"{type(batch_exc).__name__}: {batch_exc}"
-        )
-        costs_by_index: dict[int, tuple[float, ...]] = {}
-        for index, result in indexed_results:
-            try:
-                row_costs = record_result(config.workspace, result)
-                if row_costs is None:
-                    raise RuntimeError("completed recorded result returned no costs")
-                costs_by_index[index] = tuple(float(value) for value in row_costs)
-            except Exception as exc:  # noqa: BLE001 - isolate one recording failure.
-                _write_recording_failure(
-                    config,
-                    population_rows[index],
-                    index,
-                    result,
-                    exc,
-                    engine=engine,
-                    run_id=run_id,
-                    optimization_index=optimization_index,
-                    generation_index=generation_index,
-                )
-        return costs_by_index
-
-    costs_by_index: dict[int, tuple[float, ...]] = {}
-    for index, result in indexed_results:
-        row_costs = costs_by_job.get(result.job_name)
-        if row_costs is None:
-            _write_recording_failure(
-                config,
-                population_rows[index],
-                index,
-                result,
-                RuntimeError(
-                    f"recorded job {result.job_name!r} has no dynamically calculable cost"
-                ),
-                engine=engine,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-            )
-            continue
-        costs_by_index[index] = tuple(float(value) for value in row_costs)
-    return costs_by_index
-
-
-def _write_recording_failure(
-    config: LoadedConfig,
-    population_row: tuple[Any, ...],
-    index: int,
-    result: JobResult,
-    exc: BaseException,
-    *,
-    engine: str,
-    run_id: str | None,
-    optimization_index: int | None,
-    generation_index: int | None,
-) -> None:
-    failure = _failed_result(
-        stage="recorded_data",
-        engine=engine,
-        exc=exc,
-        population_row=population_row,
-        index=index,
-        jobs_dir=config.workspace.jobs_dir,
-        job=None,
-        result=result,
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=generation_index,
-    )
-    _best_effort_write_failure(failure)
-    _best_effort_record_failure(config.workspace, failure)
 
 
 def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
@@ -643,15 +573,6 @@ def _best_effort_write_failure(result: JobResult) -> None:
     try:
         write_metadata(result.job_dir, result.metadata)
     except OSError:
-        return
-
-
-def _best_effort_record_failure(
-    workspace: WorkspaceContext, result: JobResult
-) -> None:
-    try:
-        record_result(workspace, result)
-    except Exception:  # noqa: BLE001 - recording never stops the remaining population.
         return
 
 
