@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import yadof
 
+from yadof.config import load_config
 from yadof.recorded_data import get_historical_results, list_optimization_metadata
 from yadof.workspace.init import init_workspace
 
@@ -44,6 +45,7 @@ def _workspace(tmp_path: Path, name: str, *, surrogate: bool = False) -> Path:
                 "SURROGATE_INR_COORD_FOURIER_FEATURES = 4",
                 "SURROGATE_INR_HIDDEN_DIM = 16",
                 "SURROGATE_INR_HIDDEN_LAYERS = 1",
+                "SURROGATE_INR_MIXUP_WEIGHT = 0.0",
                 "SURROGATE_INR_BOOTSTRAP_MEMBERS = False",
             ]
         )
@@ -139,6 +141,9 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     wait_for_pending_training(workspace_a)
     assert runtime.has_trained_state(workspace_a)
     assert not runtime.has_trained_state(workspace_b)
+    state = runtime._require_state(load_config(workspace_a))
+    assert state.train_history["mixup_weight"] == pytest.approx(0.0)
+    assert state.train_history["mixup"] == pytest.approx(0.0)
 
     checkpoint_dir_a = workspace_a / ".yadof" / "surrogate" / "checkpoints"
     checkpoint_dir_b = workspace_b / ".yadof" / "surrogate" / "checkpoints"

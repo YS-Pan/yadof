@@ -673,6 +673,7 @@ def _train_config_from_loaded_config(config: LoadedConfig) -> INRTrainConfig:
             getattr(config, "SURROGATE_INR_RELATIVE_LOSS_WEIGHT", defaults.relative_loss_weight)
         ),
         relative_loss_eps=float(getattr(config, "SURROGATE_INR_RELATIVE_LOSS_EPS", defaults.relative_loss_eps)),
+        mixup_weight=float(getattr(config, "SURROGATE_INR_MIXUP_WEIGHT", defaults.mixup_weight)),
         x_latent_dim=int(getattr(config, "SURROGATE_INR_X_LATENT_DIM", defaults.x_latent_dim)),
         field_emb_dim=int(getattr(config, "SURROGATE_INR_FIELD_EMB_DIM", defaults.field_emb_dim)),
         coord_fourier_features=int(

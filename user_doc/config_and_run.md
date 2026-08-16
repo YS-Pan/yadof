@@ -19,6 +19,13 @@ Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
 shape stay in `job_template/`.
 
+`SURROGATE_INR_MIXUP_WEIGHT` controls the interpolation regularizer used while
+training the rawData INR.  Its default is `0.10`: real evaluated rawData remains
+the dominant loss, while mixup supplies a small smoothness prior.  Set it to `0.0`
+to disable mixup for strongly nonlinear responses such as moving resonances or
+sharp thresholds; increase it only when holdout evidence shows the task benefits
+from additional interpolation regularization.
+
 Advanced history-recorder settings are
 `HISTORY_SEGMENT_MAX_CANDIDATES` (default 16),
 `HISTORY_SEGMENT_TARGET_BYTES` (16 MiB),

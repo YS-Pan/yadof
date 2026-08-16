@@ -24,6 +24,7 @@ class INRTrainConfig:
     loss_beta: float = 0.05
     relative_loss_weight: float = 0.15
     relative_loss_eps: float = 0.05
+    mixup_weight: float = 0.10
     x_latent_dim: int = 96
     field_emb_dim: int = 12
     coord_fourier_features: int = 24
@@ -341,6 +342,7 @@ def _train_one_member(
     batch_size = _positive_int("batch_size", cfg.batch_size)
     train_query_sample_count = _positive_int("train_query_sample_count", cfg.train_query_sample_count)
     relative_weight = _nonnegative_float("relative_loss_weight", cfg.relative_loss_weight)
+    mixup_weight = _nonnegative_float("mixup_weight", cfg.mixup_weight)
     n_queries = _positive_int("query_count", Y_train.shape[1])
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
@@ -408,7 +410,7 @@ def _train_one_member(
                 coeff_sum += relative_weight
 
             mix_loss = torch.zeros((), dtype=value_loss.dtype, device=value_loss.device)
-            if X_train.shape[0] >= 2:
+            if mixup_weight > 0.0 and X_train.shape[0] >= 2:
                 rng = np.random.default_rng(int(shuffle_seed) + epoch * 104729 + start)
                 other_idx = rng.integers(0, X_train.shape[0], size=idx.size)
                 lam_np = rng.uniform(0.10, 0.90, size=(idx.size, 1)).astype(np.float32)
@@ -430,8 +432,8 @@ def _train_one_member(
                     beta=float(cfg.loss_beta),
                     query_weights=weights_batch,
                 )
-                loss_terms.append(mix_loss)
-                coeff_sum += 1.0
+                loss_terms.append(mixup_weight * mix_loss)
+                coeff_sum += mixup_weight
 
             loss = torch.stack(loss_terms).sum() / coeff_sum
 
@@ -594,6 +596,7 @@ def fit_deep_ensemble_conditional_inr(
         "value": _mean([float(item["value"]) for item in records]),
         "relative": _mean([float(item["relative"]) for item in records]),
         "mixup": _mean([float(item["mixup"]) for item in records]),
+        "mixup_weight": float(train_cfg.mixup_weight),
     }
     if query_weight_stats is not None:
         history.update(query_weight_stats)

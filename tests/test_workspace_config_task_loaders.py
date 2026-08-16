@@ -157,6 +157,7 @@ def test_config_preserves_explicit_context_paths_until_file_override(tmp_path: P
         ),
         ("HTCONDOR_JOB_TIMEOUT_MODE = 'sometimes'\n", "must be 'auto' or 'fixed'"),
         ("SURROGATE_RAWDATA_IMPORTANCE_FLOOR = -0.1\n", "must be >= 0"),
+        ("SURROGATE_INR_MIXUP_WEIGHT = -0.1\n", "must be >= 0"),
     ],
 )
 def test_config_rejects_unknown_names_types_and_modes(

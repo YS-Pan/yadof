@@ -32,8 +32,12 @@ full-grid reconstruction, optimizer prediction, and audit behavior remain
 unchanged.
 
 Ensemble members may bootstrap samples and use configured latent, embedding,
-Fourier-feature, hidden-layer, batch, optimizer, and non-finite policies. Member
-spread becomes uncertainty input for optimizer screening; it is not durable truth.
+Fourier-feature, hidden-layer, batch, optimizer, non-finite, and mixup policies.
+Mixup is a configurable low-weight interpolation regularizer rather than a second
+source of truth: real evaluated rawData remains the dominant training loss, and a
+workspace may set its weight to zero for sharply nonlinear physical responses.
+Member spread becomes uncertainty input for optimizer screening; it is not durable
+truth.
 
 ## Scheduling and recovery
 

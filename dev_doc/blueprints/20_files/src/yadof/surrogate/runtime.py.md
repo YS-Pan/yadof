@@ -11,6 +11,8 @@
 - Apply task-owned rawData importance weights only after compatible numeric rawData
   slots have entered the modeled query table; the weights alter full-query loss
   attention or stochastic query-sampling probability, not data inclusion.
+- Forward the configured low-weight mixup regularizer to modeling while keeping
+  evaluated rawData as the dominant training target.
 - Train the INR ensemble through `modeling.py`.
 - Write checkpoints through `checkpoints.py` and training metadata through `metadata.py`.
 - Predict rawData/costs using the latest in-memory trained state.
