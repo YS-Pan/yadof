@@ -25,10 +25,14 @@
   不再用人为线性插值样本，也不根据某条曲线或 objective window 定制训练注意力。
 - yadof 的 rawData-first 契约不变。surrogate 仍预测完整兼容 rawData，再通过当前
   `calc_cost.py` 计算 objective；cost window 只决定 cost，不再反向改变模型训练分布。
-- 当前 deep-ensemble member 的 current-cost min/max spread 与在训练行上回算的
-  `historical error` 会共同进入 GPSAF noise scale。训练集内误差不是 out-of-sample
-  trust evidence，ensemble spread 也尚未经过真实 benchmark 校准；两者在本阶段都应退出
-  GPSAF 候选选择，但 ensemble、bootstrap 和 spread 输出本身继续保留。
+- 当前代码仍保留用 deep-ensemble current-cost min/max spread 与训练行回算
+  `historical error` 构造 GPSAF noise scale 的 helper、optimizer-facing error 读取和
+  interval handoff，但 live alpha/beta survival 只使用 mean predicted costs，并没有调用
+  probabilistic knockout/noisy comparison；`historical_error` 只被读取后传入一个未使用的
+  参数。因此两者当前已经不改变候选选择，但死路径、额外计算、API 和 diagnostics 仍会
+  误导维护者。训练集内误差不是 out-of-sample trust evidence，ensemble spread 也尚未经过
+  真实 benchmark 校准；本阶段应删除这些无效 decision surfaces 并用测试固定现有的
+  selection invariance，同时保留 ensemble、bootstrap 和 spread 输出本身。
 - 本任务只面向新的优化。旧仿真 history、旧 checkpoint 和旧 workspace 配置不属于迁移
   输入；开始新优化时使用空 workspace，或由用户显式执行 `history clear`。
 
@@ -43,8 +47,9 @@
   mixup-loss 分支；每个 field/slot 先计算 pointwise loss 平均值，再做等权 macro average，
   避免大 field 仅凭 scalar 数量淹没小 field。
 - 保留 conditional-INR deep ensemble、真实 row bootstrap、member mean 和 member min/max
-  spread 输出；暂时切断 ensemble spread 与训练集内 fit error 对 GPSAF candidate decision
-  的影响，等真实 benchmark 后再单独设计 trust policy。
+  spread 输出；保持并明确 ensemble spread 与训练集内 fit error 不影响 GPSAF candidate
+  decision，删除暗示或试图实现这种影响的死路径，等真实 benchmark 后再单独设计 trust
+  policy。
 - 删除不再需要的配置、task hook、job-template API、checkpoint/state 字段、示例、测试
   和有效文档，不保留静默忽略的 compatibility wrapper。
 - 建立职责清楚的 checkpoint schema 和真正的原子发布；不实现旧 checkpoint/history
@@ -110,16 +115,18 @@
 - 测试必须证明每个 slot 在有限、可计算的 step 数内得到覆盖，并覆盖 query budget 小于、
   等于和大于 slot 数，以及 slot size 小于和大于分配 quota 的情况。
 
-### 5. Remove uncalibrated trust inputs from GPSAF decisions
+### 5. Remove dead uncalibrated GPSAF trust surfaces
 
 - 保留 ensemble member prediction、mean prediction 和 per-objective member min/max spread
   的 API、checkpoint 和 viewer 输出。
 - 保留 `SURROGATE_INR_BOOTSTRAP_MEMBERS`、`SURROGATE_INR_BOOTSTRAP_FRACTION` 及真实 row
   bootstrap。bootstrap 不构造 synthetic target，仍符合 real-only contract。
-- 删除 GPSAF candidate comparison/noise path 对 ensemble interval half-width 的使用；仅改变
-  spread 数值不得改变本阶段 GPSAF 选择出的 candidates。
+- 删除未接入 live selection 的 probabilistic knockout/noisy comparison/noise-scale helper
+  及 ensemble interval half-width handoff；仅改变 spread 数值不得改变本阶段 GPSAF 选择出的
+  candidates。
 - 删除 optimizer-facing `evaluate_historical_errors()` trust surface 及 GPSAF 对训练行回算
-  error 的使用。若训练集 fit error 对 viewer/debug 仍有价值，必须改名为明确的
+  error 的无效读取、传递和 diagnostics。若训练集 fit error 对 viewer/debug 仍有价值，
+  必须改名为明确的
   `training_fit_*` audit，只允许按需诊断，不得作为 uncertainty 或 candidate noise。
 - 暂不以其他 heuristic 替代上述 noise scale。未来只有在快速真实 benchmark 上用
   evaluation 前 prediction 与 evaluation 后真值组成 out-of-sample residual，并验证 spread
@@ -203,8 +210,8 @@ completed real evaluations
   query-weight state 和 optimizer-facing in-sample historical error；
 - `src/yadof/surrogate/types.py`、`checkpoints.py`：精简 train config/state/artifact，保留
   ensemble/bootstrap/spread，并实现最终 schema、method namespace 和 atomic publication；
-- `src/yadof/optimize/gpsaf_phases.py`：删除 ensemble spread 与训练集 error 驱动的 noise/
-  noisy comparison 路径；
+- `src/yadof/optimize/gpsaf_phases.py`：删除使用 ensemble spread 与训练集 error 的死
+  noise/noisy-comparison 路径；
 - `src/yadof/config.py`、`src/yadof/job_template/api.py`、
   `job_template/__init__.py`、`job_template/rawdata_contract.py`；
 - `examples/hfss-newchoke/job_template/calc_cost.py` 及任何后续新增的 reference workspace；
@@ -239,11 +246,11 @@ completed real evaluations
   defensive fallback，不增加新的调权抽象。
 - [ ] 验证 deep-ensemble 每个 member 只看到真实 rows 或其 bootstrap resample。
 
-### Phase 2 - Disconnect Uncalibrated GPSAF Trust Inputs
+### Phase 2 - Remove Dead Uncalibrated GPSAF Trust Inputs
 
 - [ ] 保留 ensemble/bootstrap 训练、member prediction、mean 和 min/max spread 输出。
-- [ ] 删除 GPSAF noise scale 对 interval half-width 与训练集内 historical error 的读取；
-  删除仅为该路径存在的 noisy-cost helper/config/diagnostics。
+- [ ] 删除没有 live caller 的 noise scale、probabilistic knockout 和 noisy-cost helper，以及
+  interval half-width 与训练集内 historical error 的无效读取、传递和 diagnostics。
 - [ ] 对相同 predicted costs/seed，在人为改变 spread 和 training-fit audit 后断言 candidate
   selection 不变。
 - [ ] 删除 optimizer-facing historical-error API；如 viewer 保留 training-fit audit，重命名

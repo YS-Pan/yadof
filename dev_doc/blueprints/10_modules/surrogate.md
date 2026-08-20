@@ -36,8 +36,9 @@ Fourier-feature, hidden-layer, batch, optimizer, non-finite, and mixup policies.
 Mixup is a configurable low-weight interpolation regularizer rather than a second
 source of truth: real evaluated rawData remains the dominant training loss, and a
 workspace may set its weight to zero for sharply nonlinear physical responses.
-Member spread becomes uncertainty input for optimizer screening; it is not durable
-truth.
+Member spread is exposed as a diagnostic and is not durable truth. The live GPSAF
+survival path currently selects from mean predicted costs only; member intervals
+and training-row historical error do not affect its selected candidates.
 
 ## Scheduling and recovery
 

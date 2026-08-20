@@ -21,10 +21,12 @@ configured crossover/mutation probabilities and distribution indices. NSGA-III
 reference directions are generated from objective count and configured partitions.
 Duplicate/archive keys use configured decimal precision and bounded refill attempts.
 
-GPSAF alpha/beta pools are ranked using surrogate-predicted current costs and member
-intervals; gamma controls replacement pressure. A configured exploration quota keeps
-some candidates outside surrogate preference. Every selected row is validated by the
-real evaluator before becoming durable truth.
+GPSAF alpha/beta pools are ranked using surrogate-predicted mean current costs
+through pymoo survival. Member intervals and training-row historical error are
+carried or computed by current dead trust/noise surfaces but do not affect live
+selection. A configured exploration quota keeps some candidates outside surrogate
+preference. Every selected row is validated by the real evaluator before becoming
+durable truth.
 
 Distributed evaluation may invoke the scheduler-specific after-submit hook while
 real jobs are running. Fast creates no scheduler submission and does not fabricate
