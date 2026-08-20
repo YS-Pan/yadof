@@ -4,10 +4,15 @@
 
 - 这是手工触发、一次性的第一阶段任务。
 - 必须先完整执行本 toDo，完成代码、测试、文档、安装态验收和归档，再执行
-  `dev_doc/toDo/20260818_173629_modular-surrogate-optimize-methods.md`。
+  `dev_doc/toDo/20260820_125457_workspace-submit-optimization-composition.md` 与
+  `dev_doc/toDo/20260818_173629_modular-surrogate-optimize-methods.md` 的协调实现。
 - 本任务直接在当前 `surrogate/`、`optimize/` 文件布局中建立最终训练语义。后续目录重构
   只能移动和解耦已经简化的实现，不得先迁移再删除 mixup、task-owned query weights、
   相对损失、rank-based forced queries 或旧 checkpoint compatibility。
+- 本任务也在当前 workspace 布局中删除
+  `job_template/calc_cost.py:rawdata_importance_weights()`。后续协调任务再把精简后的 cost
+  policy 和 canonical parameters 移到 `submit/`；不得为了预适配新路径引入双位置 loader、
+  compatibility wrapper 或重复 hook removal。
 - 本任务允许有意识地改变现有 surrogate/GPSAF 数值行为。当前 surrogate 在真实问题上的
   效果本身尚不理想；本次优先获得可解释、可调试的干净基线，而不是保持旧启发式的行为
   等价性。
@@ -75,7 +80,9 @@
 
 ### 2. Remove curve/window-specific importance training
 
-- 删除 workspace `calc_cost.py:rawdata_importance_weights()` surrogate hook。
+- 删除当前 workspace
+  `job_template/calc_cost.py:rawdata_importance_weights()` surrogate hook；后续新标准中的
+  `submit/calc_cost.py` 也不得重新提供或消费该 hook。
 - 删除 `SURROGATE_RAWDATA_IMPORTANCE_FLOOR`、
   `SURROGATE_RAWDATA_IMPORTANCE_BOOST`。
 - 删除 `job_template.api.get_rawdata_importance_weights()`、
@@ -214,14 +221,16 @@ completed real evaluations
   noise/noisy-comparison 路径；
 - `src/yadof/config.py`、`src/yadof/job_template/api.py`、
   `job_template/__init__.py`、`job_template/rawdata_contract.py`；
-- `examples/hfss-newchoke/job_template/calc_cost.py` 及任何后续新增的 reference workspace；
+- 当前布局的 `examples/hfss-newchoke/job_template/calc_cost.py` 及任何后续新增的 reference
+  workspace；后续 workspace 标准任务负责把已经精简的文件迁移到 `submit/calc_cost.py`；
 - optimizer-facing surrogate tests、rawData contract tests、config tests、checkpoint/viewer
   tests和 artifact tests；
 - root architecture、terminology、surrogate module/file blueprints、user workflow/cost/config
   docs，以及 surrogate-viewer nested documentation 中受 checkpoint policy 影响的部分。
 
-完成后由后续 modular toDo 移动这些文件；本任务不提前创建完整 method registry 或重构
-目录，也不为将来的路径保留双实现/转发层。
+完成后由 workspace/composition 与 modular 两份协调 toDo 移动这些文件并建立 component
+boundary；本任务不提前创建完整 method registry、workspace plan loader 或新目录，也不为
+将来的路径保留双实现/转发层。
 
 ## Implementation Plan
 
@@ -331,4 +340,5 @@ completed real evaluations
 - 只有带明确 format/method/policy 的新 checkpoint 可恢复，发布真正原子；没有旧 history/
   checkpoint compatibility，用户从空 workspace 或显式 clear 后开始新优化。
 - 结构/数据流验收、所有文档和 blueprints、安装态完整 pytest 均通过；真实问题指标不作为
-  本任务门槛。本 toDo 随完成变更记录移入 `dev_doc/obsolete/` 后，才开始 modular toDo。
+  本任务门槛。本 toDo 随完成变更记录移入 `dev_doc/obsolete/` 后，才开始 workspace
+  submit/composition 与 modular component 两份协调 toDo。

@@ -7,10 +7,13 @@
 - Before starting this work, complete and archive these active manual toDos in
   order:
   1. `20260819_144148_simplify-surrogate-real-only-training.md`;
-  2. `20260818_173629_modular-surrogate-optimize-methods.md`.
+  2. the coordinated
+     `20260820_125457_workspace-submit-optimization-composition.md` and
+     `20260818_173629_modular-surrogate-optimize-methods.md` work.
 - Use their final real-only, field/slot-balanced conditional-INR training contract,
-  method boundaries, method-namespaced checkpoint schema, and one method combination
-  per workspace as the only baseline. Do not build this feature on the
+  component boundaries, component-namespaced checkpoint schema, snapshotted
+  `submit/optimization.py`, and one immutable plan per workspace/campaign as the
+  only baseline. Do not build this feature on the
   current mixup/importance/relative-loss paths, optimizer-facing training-fit error,
   ensemble-driven GPSAF noise, flat module layout, or legacy checkpoint behavior.
 - Real out-of-sample benchmark evidence is an implementation prerequisite, not a
@@ -27,9 +30,10 @@
 - The current concrete surrogate is a conditional-INR deep ensemble. Its Torch
   decoder is differentiable with respect to normalized variables, but the
   production prediction path converts tensors to NumPy, reconstructs task rawData,
-  and calls arbitrary task-owned `calc_cost.py`. Therefore the current objective is
-  not generically differentiable end to end. “The surrogate is differentiable” is
-  not sufficient evidence that a usable objective gradient exists.
+  and calls arbitrary task-owned `calc_cost.py` (moved to `submit/calc_cost.py` by
+  the prerequisite workspace change). Therefore the current objective is not
+  generically differentiable end to end. “The surrogate is differentiable” is not
+  sufficient evidence that a usable objective gradient exists.
 - Yadof parameters may be continuous, discrete, or mixed piecewise ranges. A step
   in the normalized unit box can cross a discontinuous parameter segment, so a
   generic gradient method cannot silently treat every dimension as smooth.
@@ -42,10 +46,12 @@
   calibrated confidence. Training-row fit error is in-sample evidence. Neither may
   drive trust-region acceptance, candidate comparison, noise, or radius changes
   unless a later real benchmark establishes an explicit out-of-sample calibration.
-- After the modular-method toDo, this feature is optimizer behavior that consumes a
-  surrogate capability. It is not merely another GPSAF internal evolutionary
-  search backend: a trust-region loop owns surrogate use, real validation, and
-  model-management feedback.
+- After the coordinated prerequisites, this feature is an appendable refinement
+  component selected by the workspace optimization plan. It consumes a surrogate
+  capability and package-owned real-evaluation handoff. It is not another GPSAF
+  internal search component and not a package-owned complete optimizer: a trust-
+  region stage owns local proposals and model-management feedback while the common
+  engine owns real validation/session/recording.
 
 ## Goal
 
@@ -70,8 +76,9 @@ The intended combination remains:
 
 ## Decisions Required Before Implementation
 
-These choices materially change public task contracts and optimizer ownership and
-must be made explicitly rather than inferred while coding.
+The remaining choices materially change public task contracts and must be made
+explicitly rather than inferred while coding. Component ownership is already fixed
+by the prerequisite workspace-composition contract below.
 
 ### 1. How local objective derivatives are obtained
 
@@ -80,7 +87,7 @@ Choose one primary proposal contract:
 - **Task-opt-in differentiable objective:** define a narrow task-owned differentiable
   mapping from predicted rawData tensors to one scalarized objective. This permits
   true autograd but adds a new task API, restricts supported cost operations, and
-  must be checked against the normal `calc_cost.py` result.
+  must be checked against the normal `submit/calc_cost.py` result.
 - **Derivative-free local optimization of current predicted cost:** repeatedly use
   the normal rawData reconstruction/current-cost prediction inside a trust region.
   This preserves the existing task contract but is not surrogate-gradient
@@ -95,19 +102,19 @@ ignoring a non-differentiable cost boundary. Do not make all surrogate methods
 implement gradients unless the selected optimizer contract genuinely requires that
 capability.
 
-### 2. Optimizer ownership
+### Resolved: refinement ownership
 
-Choose whether refinement is:
+- Implement refinement as a reusable package component appended by
+  `submit/optimization.py` to a workspace plan, for example after the default GPSAF
+  proposal stage.
+- The component may own trust-region proposal/radius/model-management state, but the
+  package campaign engine owns snapshot selection, common real evaluation,
+  finalization, session history, recording, and generation metadata.
+- It is neither a GPSAF global-search replacement nor another package-selected
+  complete optimizer. Do not add a complete-method registry/config selector or
+  copy GPSAF/campaign infrastructure into it.
 
-- an optional phase inside the complete GPSAF method; or
-- a separate complete optimizer method that can own a different lifecycle and
-  model-management policy.
-
-It must not be registered as a replacement for `pymoo_ga_nsga3` under the GPSAF
-search-backend selector, because that backend contract deliberately excludes
-surrogate phases and real-validation policy.
-
-### 3. Continuous, discrete, and mixed parameters
+### 2. Continuous, discrete, and mixed parameters
 
 Choose and document one policy, for example:
 
@@ -119,7 +126,7 @@ Choose and document one policy, for example:
 Projection to `[0, 1]` alone is not an adequate mixed-parameter policy. Task
 constraints and duplicate/history keys must also remain valid after projection.
 
-### 4. Trust calibration and benchmark gate
+### 3. Trust calibration and benchmark gate
 
 Select representative fast real-evaluation tasks, including sharply nonlinear
 cases such as the deferred `20260807 saw` problem if it remains available, and
@@ -162,14 +169,15 @@ training-row reconstruction error are insufficient.
 - Record compact method, anchor, scalarization, radius, predicted-improvement,
   actual-improvement, and acceptance diagnostics without storing predictions as
   source truth or duplicating rawData.
-- Respect the post-modularization workspace provenance rule. Changing optimizer,
-  surrogate, or internal backend/method selection requires a new workspace or the
-  documented explicit clear operation.
+- Respect the workspace-plan provenance rule. Adding/removing this refinement or
+  changing its search/surrogate component graph changes the optimization
+  fingerprint and requires a new workspace or the documented explicit clear
+  operation; it cannot hot-switch against retained plan state.
 
 ## Candidate Workflow
 
-1. Start from one generation task snapshot and its mechanically interpretable real
-   history.
+1. Start from one generation snapshot containing the exact `submit/` plan/cost and
+   `job_template/` evaluation sources plus mechanically interpretable real history.
 2. Select a diverse set of nondominated or otherwise promising real-evaluated
    anchors.
 3. Assign scalarizations/reference directions and initialize bounded local regions
@@ -205,15 +213,17 @@ training-row reconstruction error are insufficient.
   that uncalibrated member spread or training-fit diagnostics cannot affect
   selection, then add any calibrated signal only with reliability/ranking evidence
   and an ablation test.
-- Verify method dispatch and workspace provenance at the optimizer-method boundary;
-  do not couple the implementation to the pre-modular flat files.
+- Verify component sequencing, capability validation, plan fingerprint freeze, and
+  workspace provenance through `submit/optimization.py`; do not couple the
+  implementation to pre-modular flat files or a package complete-method selector.
 - Update architecture, blueprints, terminology, user documentation, checkpoint/
   metadata contracts, and installed-wheel tests in proportion to the chosen design.
 
 ## Completion Rule
 
-- Both prerequisite toDos are complete and archived, and the four decisions above
-  are recorded with their rationale.
+- All three prerequisite toDos are complete and archived, the three remaining
+  decisions above are recorded with their rationale, and refinement ownership
+  follows the resolved workspace-plan component boundary.
 - The project has a documented and tested local-refinement workflow with explicit
   multi-objective goals, parameter-domain handling, trust-region limits, bounded
   real-evaluation validation, and feedback-driven model management.
@@ -227,3 +237,6 @@ training-row reconstruction error are insufficient.
 - Real validation uses yadof's rawData-first generation-snapshot/evaluation/session
   contracts, preserves Pareto diversity and exploration, and introduces no legacy
   checkpoint reader, parallel history, or unvalidated direct-cost truth path.
+- A workspace can append the completed component to its default or another
+  compatible plan without copying engine/GPSAF/evaluation code, while a plan that
+  omits it remains unaffected.

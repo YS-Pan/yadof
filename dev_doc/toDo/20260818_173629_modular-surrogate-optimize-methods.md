@@ -1,353 +1,345 @@
-# Surrogate 方法与 Optimize 两级方法目录重构
+# Surrogate 与 Optimize 可组合组件重构
 
 ## Execution Dependency
 
-- 这是手工触发、一次性的第二阶段任务。
-- 必须先完整执行
-  `dev_doc/toDo/20260819_144148_simplify-surrogate-real-only-training.md`，确认其代码、测试、
-  文档、安装态验收和归档条件全部满足，并把该文件移入 `dev_doc/obsolete/`，才能开始本
-  toDo。
-- 本任务以简化后的 real-only、field/slot-balanced、ensemble-with-bootstrap 训练实现和最终
-  checkpoint schema 为唯一基线。不得重新引入 mixup、relative loss、task importance、
-  rank-based forced queries、GPSAF ensemble/error noise 或 legacy compatibility。
+- 这是手工触发、一次性的组件重构工作流；不能因读取本文而自动执行。
+- 必须先完整执行并归档
+  `20260819_144148_simplify-surrogate-real-only-training.md`，以最终 real-only、
+  field/slot-balanced、ensemble-with-bootstrap 训练和 fresh-only atomic checkpoint 为唯一
+  基线。
+- 随后必须把本 toDo 作为
+  `20260820_125457_workspace-submit-optimization-composition.md` 的协调工作流执行。后者
+  负责新 `submit/` workspace 标准、`optimization.py` 加载、snapshot、provenance、
+  init/check 与迁移；本文负责把 package 实现拆成可由 workspace 组合的组件。
+- 两份协调 toDo 不得独立落地临时中间态，也不得保留 package-owned 完整算法再由
+  workspace 做一层表面包装。共享安装态验收全部通过后，两份文件一起归档。
 
-## Context
+## Revised Context
 
-- 当前 `src/yadof/surrogate/` 只有 conditional INR deep ensemble 一套方法，
-  `src/yadof/optimize/` 只有 GPSAF + pymoo GA/NSGA-III 一套完整方法组合。两套实现都把
-  公共编排、workspace 状态和具体算法放在同一层，新增方法时容易复制 campaign、
-  history、scheduler、checkpoint、evaluation 和 metadata 逻辑。
-- Optimize 有两个不同的扩展轴：一是完整替代 GPSAF 的 optimizer method；二是保留
-  GPSAF 流程，只替换其内部 evolutionary/search backend，例如将当前 GA/NSGA-III
-  backend 替换为 future particle-swarm backend。两级扩展不得挤进同一个 method ID。
-- 现有公开入口是 `yadof.surrogate` 与 `yadof.optimize`。优化、历史清理、
-  surrogate viewer 和测试还直接依赖部分具体实现文件；仅移动文件会破坏这些调用，
-  不能把目录整理当成机械重命名。
-- yadof 的稳定数据链仍然是
-  `normalized variables -> rawData -> current cost`。新 surrogate 方法必须预测
-  rawData，再用当前 workspace cost 解释结果；optimizer 和 surrogate 都不能建立
-  平行的权威 `variables -> cost` 路径。
-- 这次重构的目标是让内置方法具有清楚、可扩展的边界，不是建立第三方插件系统，
-  也不是同时实现第二套真实算法。
+- 当前 `yadof.optimize.api` 直接调用完整的 `gpsaf.run_one_generation()`；GPSAF 又直接
+  绑定 pymoo GA/NSGA-III、surrogate phases、real evaluation 和 history helpers。
+- 当前 `yadof.surrogate` 直接公开 conditional-INR runtime；scheduler、checkpoint、
+  metadata、viewer 与模型具体 state 互相耦合。
+- 旧版本文计划在 package 内建立 complete optimizer method、surrogate method 和 GPSAF
+  search backend 三层 static registry，再通过三个 config selector 选择完整组合。新的
+  workspace 标准已经改变这一所有权：完整算法只在
+  `submit/optimization.py:build_optimization()` 中组合，不能再由 package config/registry
+  选择第二次。
+- Optimize 仍有多个真实组件角色：global search、GPSAF assistance、surrogate model、
+  可追加 refinement，以及 package-owned campaign/evaluation engine。它们需要清楚
+  contract，但不再被压成一个 complete method ID。
+- 稳定数据链仍是
+  `normalized variables -> predicted/real rawData -> current submit calc_cost -> cost`。
+  任一 surrogate 组件都必须预测 rawData；workspace composition 不能建立平行的权威
+  `variables -> cost` 或 predicted-history 路径。
+- 本次重构只建立当前真实调用面需要的组件边界，不建立第三方插件系统，也不实现第二套
+  生产 search/surrogate/refinement 数值方法。
 
 ## Goal
 
-- 在 `surrogate/` 与 `optimize/` 下为每套具体方法建立独立子包。
-- 把真正跨方法稳定的机制留在父包，由所有方法复用；方法特有模型、候选生成、
-  checkpoint artifact 和算法状态只留在对应子包。
-- 增加两级、最小、可验证的静态注册边界：顶层选择完整 surrogate/optimizer method；
-  GPSAF method 内部独立选择 search backend。以后既可以新增完整 optimizer 子包，也可以
-  只在 `gpsaf/search/` 增加 backend，而不复制 campaign 或 GPSAF surrogate phases。
-- 保持当前默认行为：未指定方法时仍使用 conditional INR、GPSAF 和 pymoo
-  GA/NSGA-III backend；
-  `yadof.optimize.run_*`、`yadof.surrogate` 的现有稳定公开调用继续可用。
-- 保持 workspace 隔离、generation task snapshot、rawData-first、current-cost、
-  staggered training、recording-loss isolation 和安装态 wheel 测试契约。
-- 一个 workspace 从首次 campaign 起固定一个 surrogate method、一个完整 optimizer method
-  以及该 optimizer 的内部 backend；切换任一项必须使用新 workspace 或先显式 clear。
+- 把 conditional INR、GPSAF pressure 和 pymoo GA/NSGA-III mechanics 从 package 根层的
+  完整算法耦合中拆出，成为可直接导入、具有稳定 role/identity 的组件。
+- package 父层只保留跨组合稳定的 campaign、plan validation、history/evaluation、
+  rawData-first training data、scheduler lifecycle、checkpoint publication、metadata 和
+  公共 result contracts。
+- 新 workspace starter 用这些组件定义当前默认：GPSAF +（单目标 GA / 多目标
+  NSGA-III）+ simplified conditional INR。
+- 同一个 engine 能运行 multi-objective NSGA-III-only plan，并用 test components 证明
+  search/surrogate 可替换、refinement 可追加，而不复制 session、snapshot、real evaluator、
+  history、recorder 或 metadata。
+- 保持 workspace isolation、generation snapshot、current-cost reinterpretation、staggered
+  training、recording-loss isolation、real validation、fresh-only checkpoint 和 lazy
+  optional dependencies。
 
 ## Non-Goals
 
-- 本任务不实现新的真实 surrogate 或 optimizer 算法。
-- 本任务不实现 particle swarm，只建立 current pymoo backend 能够被未来 backend 替换的
-  边界；test double 只能验证 dispatch/依赖方向，不能被描述成第二算法的有效性证明。
-- 本任务不允许 workspace 通过任意 Python import path 加载不受信任实现；第一版使用
-  package 内静态 registry。
-- 本任务不借结构调整重新调参、改变 GPSAF 数值策略、修改 conditional INR 网络，
-  重新连接 ensemble trust，或改变默认 candidate/checkpoint 数值结果。
-- 本任务不支持同一 workspace 保存并切换多种方法状态，也不读取、转换或展示本系列任务
-  之前的旧 history/checkpoint。
-- 本任务不顺带创建泛化的 `utils.py`。只有具有稳定跨方法语义的代码才能留在父包；
-  只有一个调用方的便利函数继续属于具体方法。
+- 不实现 production particle swarm、第二 surrogate 或 trust-region refinement；test double
+  只验证 contract 和依赖方向，不证明数值有效性。
+- 不通过任意 Python import path 加载第三方插件。workspace 只组合安装版 yadof 暴露的公共
+  组件和自己的轻量 plan；新增真实组件仍先进入 yadof 并接受 package 测试。
+- 不在重构中重新调参、改变 GPSAF 数值策略、恢复 ensemble/error trust、改变 simplified
+  conditional-INR 网络或读取 legacy checkpoint/history。
+- 不支持一个 workspace 同时维护或切换多套 plan state。改变完整 plan 必须新 workspace
+  或显式 clear，并遵守新 toDo 的 plan fingerprint/provenance 规则。
+- 不为了目录对称创建空壳 contract、通用 `utils.py` 或多层原样转发；只有至少两个真实
+  组件共享且语义稳定的机制才进入父包。
 
-## Current Coupling To Resolve
+## Component Roles
 
-- `optimize/api.py` 和 `optimize/runner.py` 从 `gpsaf.py` 取得
-  `OptimizationResult`，导致公共 campaign 层反向依赖具体算法。
-- `gpsaf_misc.py` 同时含有公共 population/cost/history/evaluation 逻辑和 GPSAF
-  candidate 逻辑，需要按职责拆分，不能整文件搬迁。
-- `gpsaf.py`、`gpsaf_phases.py` 和 `gpsaf_pymoo.py` 通过 pymoo `Algorithm`、
-  `Population`、`Individual`、ask/tell/clone 细节耦合；若只替换为 particle swarm，当前
-  边界会迫使新 backend 复制或改写 GPSAF phase orchestration。
-- `surrogate/scheduler.py` 直接使用 `runtime.StateKey` 和 conditional-INR runtime；
-  scheduler 目前不是方法无关的。
-- `surrogate/types.py` 同时含有通用 training bundle 和带 Torch/
-  `INRTrainConfig` 的具体 state，公共类型会加载具体模型依赖。
-- 简化 toDo 已建立 method-aware checkpoint manifest/path；目录重构必须保留其
-  format/method/policy 与 atomic publication，不得再做第二次格式迁移。
-- `optimize/gpsaf_phases.py` 动态导入 `yadof.surrogate.runtime` 来构造 session
-  training data，绕过了 surrogate 的父包 API。
-- `tools/history.py` 直接 reset 当前 surrogate runtime/scheduler；重构后应走父包 lifecycle
-  API，但一个 workspace 只会有当前选定方法的 pending task、state 和 checkpoint。
-- surrogate viewer backend 与相应测试直接导入
-  `surrogate.modeling/runtime/types` 的 conditional-INR 私有函数和类型。重构后需要一个
-  有能力声明的 package-internal inspection 边界，不能把这些私有依赖散布到 UI。
-- `tests/test_packaged_optimize_surrogate.py` 的 source-import 检查只扫描父目录
-  `*.py`；新增子包后必须改成递归检查。
+### Campaign engine and plan contract
 
-## Proposed Source Layout
+- `yadof.optimize.api` 继续拥有 `CampaignSession`、每 generation config reload、双
+  source-root snapshot、run/optimization/generation identity、metadata、progress、
+  all-infinite policy 和 recorder lifecycle。
+- 公共 `OptimizationResult`、normalized population/cost/history types 不能从 GPSAF
+  组件反向导入。
+- plan contract 只暴露 engine 真正需要的 generation lifecycle 和 component graph；
+  `build_optimization()` 返回的完整 graph 位于 workspace snapshot，不在 package registry。
+- plan validation 收集 component role、ID/version、state/checkpoint needs 和 capability
+  compatibility；不得执行训练、预测或真实 evaluation。
+- common real-evaluation handoff 由 engine 提供。组件只能提出 normalized candidates、
+  接收 real result 和返回 diagnostics，不能直接写 recorder/history 或把 surrogate 预测
+  当作 accepted result。
 
-最终文件名可在实现时小幅调整，但职责和依赖方向应保持如下：
+### Global-search components
+
+- 当前 single-objective GA 与 multi-objective NSGA-III 的 pymoo state、ask/tell、clone、
+  seed、reference directions、survival 和 diagnostics 从 GPSAF orchestration 中抽离。
+- workspace 默认通过 objective-count dispatch 选择 GA/NSGA-III；NSGA-III-only plan 在
+  objective count 小于 2 时必须清楚失败，不能静默回退 GA。
+- search contract 使用 normalized arrays、objective rows、backend-neutral problem info 和
+  opaque state。不得把 pymoo `Algorithm`、`Population`、`Individual` 或 reference-
+  direction 类型提升到 plan/GPSAF/public engine contract。
+- future particle swarm 实现同一个 search role；GPSAF 不复制 particle-swarm-specific
+  参数或假设。
+
+### GPSAF assistance component
+
+- GPSAF 组件拥有 alpha/beta/exploration、surrogate pressure、warmup/fallback、candidate
+  source 和 real-validation policy，但不拥有 campaign/session/recorder。
+- 它显式接收 global-search 和可选 surrogate-model 组件，不从 config selector 或 global
+  registry 查询默认实现。
+- after-submit staggered training、fast-mode fallback 和 lag gate 顺序保持当前行为；
+  scheduler-specific callback 仍不能由 fast 伪造。
+- post-simplification member spread 和 training-fit diagnostics 保持可观察但不影响
+  candidate decision，直到真实 benchmark 后另行设计 trust policy。
+
+### Surrogate-model component
+
+- 公共 training bundle 只含 parameter names、normalized real rows 和 owned/rawData
+  samples。query table、field embedding、target scaler、Torch model/device 是
+  conditional-INR 私有实现。
+- component contract 提供 train/recover/predict rawData、state/checkpoint identity、必要
+  lifecycle reset 和 compact summary。optimizer-facing current costs 只能由预测完整 rawData
+  经当前 `submit/calc_cost.py` 计算得到。
+- scheduler 依赖选中 component 的 contract/state key，不导入 conditional-INR backend。
+  一个 workspace 至多一个当前 plan 的 background training task。
+- checkpoint 公共层拥有 component namespace、manifest-last atomic publication、discovery
+  和通用 provenance；conditional-INR 子包拥有模型 payload、query/scaler/schema
+  serialization 和 inspection adapter。
+- viewer 通过 artifact component ID 和 inspection adapter 工作；未知或无 inspection
+  capability 的组件明确报错，不能默认按 INR 解释。
+
+### Refinement components
+
+- 定义最小可追加 stage role，使 workspace plan 能在 global/GPSAF proposal 后追加 bounded
+  proposal + common real-validation 步骤。
+- 本任务只用无数值意义的 test component 证明 stage sequencing、budget、diagnostics 和
+  evaluator ownership；真正 trust-region surrogate refinement 由其现有 toDo 实现。
+- refinement 不是 GPSAF search backend，也不能绕过 rawData-first/current-cost/real-
+  validation/session contracts。
+
+## Proposed Source Responsibility Layout
+
+最终文件名可从实际调用面小幅调整；职责和依赖方向必须保持：
 
 ```text
 src/yadof/surrogate/
-  __init__.py                 稳定、轻量的公开 re-export
-  api.py                      workspace-explicit 公共调用与 method dispatch
-  contracts.py                最小 method protocol 与公共结果类型
-  registry.py                 内置 method ID -> lazy backend factory
-  training_data.py            公共 rawData-first training bundle/session 适配
-  scheduler.py                当前 workspace method 的 staggered training
-  metadata.py                 方法无关的 compact training metadata
-  checkpoints.py              已定稿 manifest/path/atomic discovery 公共规则
+  __init__.py                  lightweight public component exports
+  contracts.py                shared surrogate component/result protocols
+  training_data.py            campaign/public rawData-first bundle adaptation
+  scheduler.py                selected component's staggered lifecycle
+  metadata.py                 component-neutral compact metadata
+  checkpoints.py              namespace/manifest/atomic discovery rules
   conditional_inr/
-    __init__.py               method registration surface
-    backend.py                method contract 实现、state/recovery/prediction
-    data.py                   INR query table、flatten/reconstruct/scaler/off-grid
-    modeling.py               Torch conditional INR 与 deep ensemble
-    checkpoints.py            INR artifact 序列化/恢复
-    types.py                  INR schema、scaler、train config 和 state
-    inspection.py             conditional-INR viewer/audit 适配
+    __init__.py                public component constructor/identity
+    backend.py                 train/recover/predict implementation
+    data.py                    query table, reconstruct, scaler, off-grid
+    modeling.py                Torch conditional INR deep ensemble
+    checkpoints.py            component-specific artifacts
+    types.py                   INR-only config/schema/state
+    inspection.py              viewer/audit adapter
 
 src/yadof/optimize/
-  __init__.py                 稳定公开 re-export
-  api.py                      campaign/session/config/snapshot 编排与 dispatch
-  contracts.py               完整 optimizer method 的最小 protocol
-  registry.py                内置完整 optimizer method 的 static lazy registry
-  types.py                    Population、Costs、HistoryRecord、OptimizationResult
-  history.py                  当前 session/history 的公共只读适配
-  evaluation.py               backend-neutral real-evaluation handoff
-  problem_info.py             参数/目标 shape 公共解析
-  runner.py                   run ID、generation metadata、strict failure 辅助
-  gpsaf/
-    __init__.py               完整 GPSAF method registration surface
-    backend.py                一代 GPSAF 主流程与 search-backend dispatch
-    phases.py                 alpha/beta/exploration 与 surrogate pressure
-    types.py                  CandidateRecord、SearchContext 等 GPSAF 内部类型
+  __init__.py                  stable campaign and component exports
+  api.py                       campaign engine + workspace plan invocation
+  plan.py                      minimal immutable plan graph/validation
+  types.py                     common Population/Costs/History/Result
+  history.py                   session/current-history adapter if substantive
+  evaluation.py                common real-evaluation handoff if substantive
+  problem_info.py              parameter/objective shape
+  runner.py                    run identity/metadata/strict helpers
+  components/
+    dispatch.py                objective-count dispatch if substantive
+    gpsaf/
+      backend.py               GPSAF assistance role
+      phases.py                alpha/beta/exploration
+      types.py                 GPSAF-only records/context
     search/
-      contracts.py            GPSAF 内部 search backend 的最小 contract
-      registry.py             内置 search backend 的 static lazy registry
-      pymoo_ga_nsga3/
-        __init__.py           backend registration surface
-        backend.py            当前 GA/NSGA-III、reference directions、ask/tell
+      contracts.py             minimal search role
+      pymoo/
+        ga.py                  single-objective mechanics
+        nsga3.py               multi-objective/reference directions
+        common.py              only genuinely shared pymoo helpers
+    refinement/
+      contracts.py             appendable stage role if separately useful
 ```
 
-父包文件不应导入 Torch、具体 pymoo algorithm 或 viewer UI。registry 只在选中方法时
-lazy import 对应子包，保证普通 CLI/config/help 路径仍然轻量。
+若某个 `history.py`、`evaluation.py`、`common.py` 或 contract 只有一个薄调用方，应
+合并回最近的领域文件。不得为了符合图形机械创建文件；Torch/pymoo/private artifact state
+也不能为了少文件而泄漏到父层。
 
-这是职责布局而不是必须机械创建的文件清单。实现时若 `history.py`、`evaluation.py` 或某个
-contract 只有一个薄调用方，应合并回最近的领域模块；不得为了图形对称制造二三十行的
-空壳文件、通用 `utils.py` 或多层原样转发。相反，`gpsaf/phases.py` 与 search backend
-拥有独立状态和依赖时可以继续分文件，不以最少文件数为目标。
+## Current Coupling To Resolve
 
-## Common Contracts
+- `optimize/api.py`、`runner.py` 从 `gpsaf.py` 导入 `OptimizationResult`，公共
+  engine 反向依赖具体算法。
+- `gpsaf_misc.py` 混合 common population/cost/history/evaluation 与 GPSAF candidate
+  helpers，需要按实际职责拆分，不能整文件移动。
+- `gpsaf.py`、`gpsaf_phases.py`、`gpsaf_pymoo.py` 共享具体 pymoo object，阻止
+  search role 被替换或独立用 NSGA-III。
+- `gpsaf_phases.py` 动态导入 `surrogate.runtime` 获取 session training data，绕过
+  公共边界。
+- `surrogate/scheduler.py` 直接依赖 `runtime.StateKey` 和 concrete runtime；
+  `surrogate/types.py` 混合 common bundle 与 Torch/INR state。
+- `tools/history.py` 直接 reset current runtime/scheduler；新实现应走 workspace
+  component lifecycle manager，处理该 workspace 已实例化的状态，而不是加载全部组件。
+- surrogate viewer 和测试散布 modeling/runtime/types 私有导入，需要集中到
+  `conditional_inr/inspection.py`。
+- package/source artifact 测试只扫描父目录 `*.py` 的位置必须递归覆盖子包。
 
-### Surrogate parent package
+## Selection, Identity, And Lifecycle Decisions
 
-- 为内置方法定义稳定 `method_id`；当前方法使用 `conditional_inr`。
-- 公共 training bundle 只包含 parameter names、normalized rows 和 owned/rawData
-  samples。rawData query table、field embedding、target scaler 和 Torch device 都是
-  conditional-INR 私有实现。
-- optimizer-facing prediction 继续返回每个 candidate 的 current-cost row 与每目标
-  interval。方法必须先生成完整兼容 rawData，再调用当前 task cost。
-- scheduler 只依赖 method contract：train、has/latest/reset 和 state key；不得导入
-  `conditional_inr.backend`。
-- metadata 接受小型公共 training summary，并记录 `surrogate_method`；不得要求具体
-  `SurrogateState`。
-- 当前 viewer adapter 归入 `conditional_inr/inspection.py`，不得继续从 viewer 散布对
-  modeling/runtime/types 私有函数的导入。等第二个真实 method 出现后，再根据实际能力差异
-  决定是否需要公共 capability facade；本任务不预建 capability matrix。
-
-### Complete optimizer method
-
-- 为完整 optimizer 定义稳定 `method_id`；当前 method 使用 `gpsaf`。GA/NSGA-III 属于其
-  内部 search backend，不进入完整 method ID。
-- `api.py` 继续唯一拥有 CampaignSession、每 generation config reload、task snapshot、
-  metadata 记录和 all-infinite policy。具体方法只实现一代 candidate mechanics。
-- `OptimizationResult` 移到公共 `types.py`，至少保留现有字段并增加稳定
-  `optimizer_method` / `surrogate_method` provenance；公共层不能从具体方法导入类型。
-- history loading、problem shape 和 real-evaluation dispatch 由父包提供。方法子包只
-  选择 normalized candidates，不直接操作 recorder 或 simulator。
-- GPSAF 只通过 `yadof.surrogate.api`/contract 使用当前 surrogate，不直接导入某个
-  surrogate runtime。real evaluation 仍验证每个 surrogate 选中的 candidate。
-
-### GPSAF internal search backend
-
-- 当前 backend ID 使用 `pymoo_ga_nsga3`：单目标由 GA 处理，多目标由 NSGA-III 处理。
-- `gpsaf.backend/phases` 继续拥有 surrogate-assisted alpha/beta/exploration、fallback、
-  candidate source 和 real-validation policy；search backend 只拥有 population state、
-  evolutionary proposal/advance、clone/seed 与其算法内部 diagnostics。
-- backend contract 只能使用 normalized candidate arrays、backend-neutral problem/objective
-  信息和最小 opaque state；不得把 pymoo `Individual`、`Population`、`Algorithm` 或
-  reference-direction 类型提升到 GPSAF/父包公共 contract。
-- contract 需要支持从当前真实 history 初始化、按 seed 提议候选、接收真实 objective、
-  clone/continue state，并对 objective count/bounds 不支持给出明确错误。具体函数划分应从
-  现有 GPSAF 调用点提取，不预先设计第三方插件 API。
-- future `particle_swarm` 可以作为同级 backend 注册。它替换 proposal/evolution mechanics，
-  不复制 GPSAF phases、campaign、real evaluation、history、surrogate 或 metadata。
-
-## Configuration And Lifecycle Decisions
-
-- 新增三个结构型配置：
-  - `SURROGATE_METHOD = "conditional_inr"`；
-  - `OPTIMIZE_METHOD = "gpsaf"`；
-  - `OPTIMIZE_GPSAF_SEARCH_BACKEND = "pymoo_ga_nsga3"`。
-- search-backend 配置只由选中的完整 optimizer method 解释；未来非 GPSAF method 不得被迫
-  实现或接受 GPSAF-specific backend。未知/不适用 ID 在任何 evaluation 开始前明确失败并
-  给出允许值。
-- 第一轮重构保留现有 `OPTIMIZE_*`、`OPTIMIZE_SURROGATE_*` 和
-  `SURROGATE_INR_*` 配置名，避免把目录迁移与 workspace 配置重命名混在一起。新增
-  方法的配置必须使用清晰 method-specific 前缀；如需重命名旧配置，单独制定迁移。
-- 三个 selector 都在 workspace 首次 campaign 启动时冻结并记录。generation reload 发现
-  任一 selector 与 workspace provenance 不同，必须在 evaluation 前失败，要求使用新
-  workspace 或显式 `history clear`；不支持同 workspace 多方法 state/checkpoint 共存。
-- surrogate checkpoint 继续使用前置简化任务已经定稿的
-  `SURROGATE_CHECKPOINT_DIR/<method_id>/generation_*.json`、`format_version`、
-  `surrogate_method`、`training_policy` 和 atomic publication。目录重构只移动 writer/
-  loader 代码，不改变格式，也不增加 legacy reader。
-- `history clear` 等 workspace 操作等待并 reset 当前 workspace 唯一选定的 method/backend
-  state，然后删除 checkpoint/history root；无需实例化或 reset 所有 registry entries。
-- optimization/surrogate metadata 同时记录 `optimizer_method`、适用时的
-  `optimizer_search_backend` 和 `surrogate_method`。本任务只支持新优化，不处理缺失字段的
-  旧 metadata。
+- 删除旧计划准备新增的 `SURROGATE_METHOD`、`OPTIMIZE_METHOD` 和
+  `OPTIMIZE_GPSAF_SEARCH_BACKEND`。当前代码尚未拥有这些设置，实现时不得新增。
+- 完整 plan 的唯一来源是 snapshotted `submit/optimization.py`。component constructors
+  可以拥有 stable ID/version，但这些字段用于 validation/provenance/checkpoint，不是另一个
+  complete-plan selector。
+- generation/campaign metadata 记录 plan fingerprint、component roles/IDs 和适用
+  backend/model identity。checkpoint 使用 component namespace 和 final real-only policy；
+  目录重构不再做第二次格式迁移。
+- workspace 第一次 generation 后 plan fingerprint/graph 固定。reload 发现变化必须在
+  evaluation 前失败，要求新 workspace 或显式 clear；不支持 retained history 上 method
+  switch。
+- `history clear` 在 campaign lock 空闲时 reset 该 workspace 已存在的 scheduler/component
+  state，再删除 checkpoint/history/jobs。它不实例化全部可用组件，也不能因用户已编辑
+  plan 而遗留旧 workspace-keyed in-memory state。
+- parent package/lightweight CLI/config/help import 不加载 Torch、具体 pymoo algorithms、
+  Matplotlib、Tkinter 或 viewer UI。选择相应 component 时才 lazy import。
 
 ## Migration Map
 
-| Current file/responsibility | Target |
+| Current responsibility | Target responsibility |
 |---|---|
-| `optimize/gpsaf.py` generation flow | `optimize/gpsaf/backend.py` |
-| `optimize/gpsaf_phases.py` | `optimize/gpsaf/phases.py`；session bundle 调用改走父包 surrogate API |
-| `optimize/gpsaf_pymoo.py` | pymoo-independent GPSAF orchestration 留 `gpsaf/`；GA/NSGA-III state/ask/tell 移入 `gpsaf/search/pymoo_ga_nsga3/backend.py` |
-| `gpsaf_misc.py` population/cost/history/evaluate | 分到父包 `types.py`、`history.py`、`evaluation.py` |
-| `gpsaf_misc.py` GPSAF comparison/key/candidate helpers | 留在 `gpsaf/` 的明确领域文件中 |
-| `OptimizationResult` | `optimize/types.py` |
-| `surrogate/modeling.py` | `surrogate/conditional_inr/modeling.py` |
-| `surrogate/runtime.py` history/session loading | `surrogate/training_data.py` |
-| `surrogate/runtime.py` flatten/query/scaler/off-grid | `surrogate/conditional_inr/data.py` |
-| `surrogate/runtime.py` training/state/recovery/predict | `surrogate/conditional_inr/backend.py` |
-| `surrogate/checkpoints.py` | 已定稿 manifest/path/atomic 规则留父包，INR payload 移入 method 子包；持久化格式不变 |
-| `surrogate/types.py` | common bundle/result 留父包 contract；INR/Torch state 移入 method 子包 |
-| `surrogate/scheduler.py` | 留父包，改为当前 workspace method 的 registry/contract 驱动 |
-| viewer 的 private INR imports | 集中改走 `surrogate/conditional_inr/inspection.py`；出现第二真实 method 后再评估公共 facade |
+| `optimize/api.py` hard-coded GPSAF | common engine loads/invokes workspace plan |
+| `OptimizationResult` in `gpsaf.py` | public optimize common type |
+| `gpsaf.py` complete generation | common engine + GPSAF assistance component |
+| `gpsaf_phases.py` | GPSAF phases using search/surrogate contracts |
+| `gpsaf_pymoo.py` | private GA/NSGA-III pymoo components/shared mechanics |
+| `gpsaf_misc.py` history/evaluate/types | common optimize boundaries where truly shared |
+| `gpsaf_misc.py` candidate helpers | GPSAF or search component owning semantics |
+| `surrogate/runtime.py` history/session bundle | common training-data boundary |
+| `surrogate/runtime.py` query/scaler/off-grid | conditional-INR data |
+| `surrogate/runtime.py` train/state/recover/predict | conditional-INR backend |
+| `surrogate/modeling.py` | conditional-INR modeling |
+| `surrogate/types.py` | common contracts plus INR-private types |
+| `surrogate/checkpoints.py` | common atomic manifest plus INR payload |
+| viewer private imports | conditional-INR inspection adapter |
 
-删除旧模块前必须用 import/caller/test 搜索证明没有剩余生产调用。不要永久保留只做原样
-转发的兼容模块；迁移同一次变更中的内部调用后直接删除旧路径。稳定公开入口
-`yadof.optimize` 和 `yadof.surrogate` 继续保留。
+删除旧模块前必须搜索直接/动态 import、public exports、CLI、tests、wheel members 和 docs。
+稳定 `yadof.optimize.run_*` 入口保留；旧 internal 路径不保留原样转发 compatibility
+module。
 
 ## Implementation Plan
 
-### Phase 0 - Freeze Existing Behavior
+### Phase 0 - Freeze The Simplified Behavior
 
-- [ ] 确认前置简化 toDo 已归档，active code 没有 mixup/importance/relative/rank heuristic、
-  GPSAF spread/error noise 或 legacy checkpoint reader。
-- [ ] 为当前公开 API、seeded candidate generation、single/multi-objective GA/NSGA-III、
-  warm start、GPSAF fallback/alpha/beta/exploration 增加结构重构行为测试。
-- [ ] 固定简化后的 conditional-INR field-balanced training、ensemble/bootstrap/spread、
-  current-cost re-evaluation、当前 checkpoint recovery、workspace isolation 和 staggered
-  scheduling 测试；不冻结已删除的旧行为。
-- [ ] 记录当前 import-time dependency；证明普通 `yadof --help`、config 和 optimize
-  import 不会因为 registry 提前加载 Torch/viewer UI。
+- [ ] 确认 real-only toDo 已归档，active code 不含 mixup/importance/relative/rank
+  heuristic、GPSAF spread/error noise 或 legacy checkpoint reader。
+- [ ] 固定 seeded GA/NSGA-III、warm start、fallback、alpha/beta/exploration、staggered
+  scheduling、field-balanced conditional INR、ensemble/bootstrap/spread、current-cost、
+  checkpoint recovery 和 workspace isolation 行为测试。
+- [ ] 记录 import-time dependency，证明普通 CLI/config/optimize import 仍轻量。
 
-### Phase 1 - Add Minimal Common Types, Dispatch, And Selectors
+### Phase 1 - Add Common Types And Component Contracts
 
-- [ ] 只建立当前调用面实际需要的父包 types、最小 contracts 和 static lazy registry；
-  不增加 capability matrix、第三方 plugin hooks 或 speculative lifecycle methods。
-- [ ] 将 `OptimizationResult` 和真正公共的 normalized population/history/evaluation
-  类型移到父包，消除公共 API 对 `gpsaf.py` 的反向依赖。
-- [ ] 添加 surrogate、完整 optimizer、GPSAF search backend 三个 selector 的验证、默认值、
-  `check` 输出、workspace freeze 和 metadata provenance。
-- [ ] 内部 test double 只验证 dispatch、错误处理和 common layer 不导入具体数值 backend；
-  不把它写成“第二真实算法已经证明可接入”的完成结论。
+- [ ] 先移动 `OptimizationResult` 和真正公共的 problem/population/history/evaluation
+  types，消除 engine 对 GPSAF 反向依赖。
+- [ ] 从当前调用点提取最小 plan、search、surrogate 和 refinement role；不预建第三方
+  plugin lifecycle 或 capability matrix。
+- [ ] 用 test components 验证 role validation、diagnostics、failure 和 dependency
+  direction，不声称新算法质量。
 
-### Phase 2 - Move Conditional INR Into Its Method Package
+### Phase 2 - Extract Conditional INR
 
-- [ ] 先拆分 common training bundle 与 conditional-INR schema/model/state，再移动实现；
-  每一步运行 focused tests，避免一次搬动 2,000 多行后定位失败。
-- [ ] scheduler/runtime 通过当前 workspace 固定 method dispatch；不实现同 workspace 多
-  method state key 或共存 discovery。
-- [ ] 移动 checkpoint writer/loader 时保持前置任务的 method namespace、format/method/
-  policy 和 atomic publication 逐字段不变；不新增 legacy reader。
-- [ ] 保留 full-grid optimizer/audit 路径和 off-grid viewer 路径的现有数值语义。
-- [ ] 将 `surrogate/api.py` 改为 registry dispatch；移除 optimizer 对具体 runtime 的
-  session training-data 导入。
+- [ ] 拆分 common training bundle 与 INR query/schema/model/state，再逐步移动并运行
+  focused tests。
+- [ ] scheduler 接收当前 plan 选择的 component，不再 import concrete runtime；保持 one-
+  workspace/one-pending-training 和 lag policy。
+- [ ] 保持 final namespace、format/method/policy、manifest-last atomic publication、
+  full-grid optimizer/audit 和 off-grid viewer 数值语义，不加 legacy reader。
+- [ ] viewer 私有依赖集中到 inspection adapter；unknown/unsupported component 明确失败。
 
-### Phase 3 - Move GPSAF And Extract Its Search Backend
+### Phase 3 - Extract Search And GPSAF Components
 
-- [ ] 将完整 GPSAF method flow 与 phases 移入 `optimize/gpsaf/`，公共 campaign API 不变；
-  将 pymoo GA/NSGA-III mechanics 移入 `gpsaf/search/pymoo_ga_nsga3/` 子包。
-- [ ] 拆开 `gpsaf_misc.py`，只把至少两个方法会共享且语义稳定的 history/evaluation/
-  result 机制留在父包；不要仅为了计划布局拆出薄文件。
-- [ ] 从当前 GPSAF 实际调用点提取 backend-neutral search contract，使 phases 不导入 pymoo
-  类型。contract 覆盖 init/propose/tell/clone/continue 与 objective compatibility，但不预建
-  particle-swarm-specific 参数或状态。
-- [ ] 保证 surrogate disabled、first-generation warmup、stale-model fallback、
-  after-submit training hook 和 fast-mode fallback 的调用顺序不变。
-- [ ] 对相同 history/config/seed 比较迁移前后的 candidate population、source 和核心
-  diagnostics；real evaluator 返回顺序与 objective width 必须不变。
-- [ ] 证明替换一个最小 search-backend test double 不需要复制 GPSAF alpha/beta/exploration、
-  campaign、evaluation 或 history；该测试只证明边界，不宣称算法质量。
+- [ ] 将 pymoo GA、NSGA-III 和真实共享 mechanics 从 GPSAF 分离，保持 seed、ask/tell、
+  clone/continue、reference directions、survival 和 diagnostics。
+- [ ] 让 GPSAF 只通过 search/surrogate roles 工作，保留 alpha/beta/exploration、fallback、
+  real validation 和 after-submit scheduling 顺序。
+- [ ] 对相同 post-simplification history/config/seed 比较默认 workspace plan 与迁移前的
+  candidate population/source/core diagnostics；real evaluator 顺序和 objective width 不变。
+- [ ] 证明 NSGA-III-only plan 不复制 GPSAF/campaign/evaluation/history，并在单目标清楚
+  拒绝。
 
-### Phase 4 - Update Cross-Module Consumers
+### Phase 4 - Integrate Workspace Composition Consumers
 
-- [ ] `tools/history.py` 通过父包 lifecycle API 等待/reset 当前 workspace 唯一方法/backend。
-- [ ] surrogate viewer 通过 conditional-INR inspection adapter 读取当前 method checkpoint；
-  summary 显示 method，未知 method 明确报错，不预建通用 capability matrix。
-- [ ] conditional-INR viewer 的 checkpoint、stored-grid、off-grid、member interval 和
-  audit 结果保持不变；未知/不支持方法给出明确错误，不静默按 INR 读取。
-- [ ] 更新 tests 中对具体 internals 的 import；公共契约测试优先走公开入口，只有 method
-  单元测试直接导入子包。
-- [ ] 将 package/source 扫描改为递归，覆盖新子包和 wheel members。
+- [ ] 与新 workspace toDo 一起把 engine 接到 snapshot plan loader，移除完整算法 package
+  registry/config selector。
+- [ ] 更新 history clear、metadata、scheduler state、checkpoint discovery 和 viewer
+  inspection 使用 plan/component identity。
+- [ ] 公共 contract tests 走 workspace `build_optimization()`；只有 component 单元测试
+  直接导入子包。
+- [ ] 递归更新 source/wheel scanning，删除旧 imports、空转发模块和重复 helpers。
 
-### Phase 5 - Documentation And Cleanup
+### Phase 5 - Documentation And Installed Acceptance
 
-- [ ] 更新 root architecture、module/file blueprints、terminology、user
-  `config_and_run.md`、模板配置和 surrogate-viewer nested dev_doc。
-- [ ] 增加完成变更记录，说明两级 selector、目录职责、一个 workspace 一种方法、fresh-
-  only checkpoint 边界，以及 ensemble trust 仍未重新连接。
-- [ ] 搜索并删除旧内部 import、旧空转发模块、失效 blueprint 与仅因搬迁留下的重复
-  helper；不要保留双实现。
-- [ ] 只有所有 completion criteria 满足后，才把本 toDo 移到 `dev_doc/obsolete/`。
+- [ ] 更新 root architecture、module/file blueprints、terminology、user workflow/config、
+  template、examples 和 surrogate-viewer nested dev_doc；历史 change records 不改。
+- [ ] 构建 wheel、force-reinstall 到 sibling `.venv`，确认 site-packages import，无
+  `PYTHONPATH`，运行 focused tests 与完整 pytest。
+- [ ] 添加完成 change record；只有与 workspace composition toDo 全部 criteria 同时满足
+  后，才一起归档两份 toDo。
 
 ## Verification Plan
 
-- Focused static/import checks:
-  - `python -m compileall -q src/yadof/optimize src/yadof/surrogate`
-  - 递归检查两个子树没有旧 project namespace、父包没有具体数值 backend 的反向导入。
-- Focused tests:
-  - surrogate/full-optimizer/GPSAF-search-backend 三个 selector、invalid/not-applicable ID、
-    defaults 和 workspace freeze；
-  - 完整 optimizer contract、GPSAF search contract、seeded behavior、history/failure/
-    workspace isolation；
-  - surrogate registry、field-balanced training、ensemble/bootstrap/spread、当前 checkpoint
-    recovery、scheduler/state isolation；
-  - history clear 只处理当前 workspace 唯一 method/backend state；
-  - surrogate viewer conditional-INR adapter 与 unknown-method error；
-  - 改变 ensemble spread 或 training-fit audit 不改变 GPSAF candidate selection；
-  - package artifact 成员和 lazy imports。
+- Static/import:
+  - 两个子树递归无旧 internal import 或完整算法副本；
+  - parent API/help/config import 不提前加载数值/GUI backend；
+  - 没有 complete-method selector/registry 与 workspace plan 并存；
+  - 没有 legacy checkpoint/workspace fallback 或无意义 compatibility facade。
+- Focused behavior:
+  - 默认 objective-count GA/NSGA-III + GPSAF + simplified conditional INR；
+  - NSGA-III-only multi-objective plan 和 invalid objective compatibility；
+  - fake search replacement、fake rawData-first surrogate、fake appended refinement，且不
+    复制或直接调用 recorder/evaluator internals；
+  - scheduler/state/checkpoint/history clear/workspace isolation；
+  - ensemble/bootstrap/spread 保留但不影响 GPSAF selection；
+  - viewer conditional-INR inspection 与 unknown-component error；
+  - one-generation snapshot 与 plan provenance/freeze。
 - Installed acceptance:
-  - 按 `dev_doc/README.md` 构建 wheel、force-reinstall 到 sibling `.venv`；
-  - 确认 `yadof.__file__` 来自 `.venv/Lib/site-packages` 且没有 `PYTHONPATH` 注入；
-  - 运行完整 pytest；
-  - 运行 CLI/help、viewer help 和一个 synthetic workspace 的 optimize/surrogate recovery
-    测试，不启动真实 simulator 或 HTCondor。
-- Diff checks:
+  - compileall 两个子树；
+  - build + force-reinstall wheel，验证 import origin；
+  - CLI/help、fresh synthetic workspace、default plan、NSGA-III-only plan、checkpoint
+    recovery 和完整 pytest；
+  - 不启动真实 simulator 或 HTCondor，除非用户另行授权。
+- Diff/artifact:
   - `git diff --check`；
-  - 检查 wheel 包含 conditional-INR method、GPSAF method 和 pymoo search-backend 子包、
-    更新后的 docs/blueprints，以及不包含 runtime checkpoint/history。
+  - wheel 包含组件子包、新 template/docs，不含 workspace runtime/checkpoint/history；
+  - 不通过制造空壳文件满足目录图。
 
 ## Completion Rule
 
-- 前置 real-only/field-balanced surrogate toDo 已完整完成并归档。
-- `surrogate/conditional_inr/`、`optimize/gpsaf/` 和
-  `optimize/gpsaf/search/pymoo_ga_nsga3/` 分别成为当前 surrogate method、完整 optimizer
-  method 和 GPSAF 内部 search backend 的唯一生产实现；父包只保留稳定公共编排。
-- 默认 workspace 在未设置 method selector 时与重构前行为等价，现有公开
-  `yadof.optimize` / `yadof.surrogate` 调用继续工作。
-- 三个 selector 的职责互不混淆：可完整替代 GPSAF，也可只替换 GPSAF search backend；
-  test double 证明 dispatch/依赖边界，但不作为未来算法适配性的永久证明。
-- 一个 workspace 只持有一组 surrogate/optimizer/search-backend provenance 和 state；改变
-  组合必须新建 workspace 或显式 clear，不存在 all-method coexist/reset 机制。
-- conditional-INR 当前 checkpoint 格式、atomic publication 和 fresh-only policy 在搬迁前后
-  不变；没有 legacy compatibility，viewer 不再直接依赖旧顶层私有模块路径。
-- ensemble/bootstrap/spread 输出保持，spread 与 training-fit error 仍不参与 GPSAF 决策。
-- 所有相关文档、blueprints、测试和 wheel 内容已更新，安装态完整 pytest 通过；没有
-  旧实现、无意义转发层或未说明的 compatibility path 留在生产代码中。
+- 前置 real-only/field-balanced toDo 已完成并归档。
+- package 不再拥有或选择一套完整 GPSAF + GA/NSGA-III + conditional-INR algorithm；完整
+  graph 只由 workspace `submit/optimization.py` 组合。
+- `yadof.optimize` 保留 campaign engine/common contracts，并暴露可组合 GPSAF、GA、
+  NSGA-III/refinement roles；`yadof.surrogate` 暴露 simplified conditional-INR component
+  和 method-neutral lifecycle/data/checkpoint mechanisms。
+- 默认 workspace 行为与 post-simplification baseline 等价；NSGA-III-only 与 fake
+  append/swap tests 证明边界，但不冒充未实现算法的有效性证明。
+- 一个 workspace 只有一套 frozen plan/component provenance/state；改变 plan 需要新
+  workspace 或显式 clear，不存在 package selector、all-method coexistence 或 legacy
+  compatibility。
+- rawData-first、current submit cost、real validation、generation snapshot、staggered
+  training、recording-loss isolation、checkpoint atomicity 和 viewer isolation 全部保持。
+- 所有相关 docs/blueprints/tests/wheel 内容已更新，安装态完整 pytest 通过；本文与
+  workspace composition toDo 同时归档。
