@@ -53,6 +53,65 @@ This checkpoint may use focused searches needed to establish callers, imports,
 exports, tests, or documented contracts for an already encountered candidate. It
 must not become an unrelated repository-wide hunt for candidates.
 
+## Standalone Handoff Contract
+
+A toDo is a future-work handoff, not shorthand for the conversation that created
+it. Write every new or substantially revised toDo so that a capable maintainer with
+the current repository and its documentation, but none of the originating chat or
+unstated user context, can understand the need and evaluate or execute the work
+without inventing product intent. A thread, change record, benchmark, or adjacent
+toDo may provide provenance and detail, but it must not be the only place that an
+essential requirement, constraint, or rationale is stated.
+
+Include the task-specific information that changes a future maintainer's decisions:
+
+- Describe the concrete current problem or gap, its observable impact, the evidence
+  for it, and the desired outcome and reason. Distinguish verified current behavior
+  from a suspected cause, user recollection, and proposed future behavior.
+- When confusion is plausible, identify whether a material statement is an
+  explicit user requirement or decision, a verified project/environment constraint,
+  a maintainer recommendation, an assumption, or an unresolved question. Explain
+  the short rationale and deliberately accepted tradeoff behind a non-obvious
+  settled choice; mention a rejected obvious alternative only when its omission
+  would otherwise invite the same misunderstanding.
+- Record the relevant operating envelope rather than silently generalizing from one
+  incident: for example hardware constraints, representative data sizes, expected
+  scale, concurrency, failure model, and lifespan. Include only facts that affect
+  the design.
+- State prerequisites and what they provide, in-scope and out-of-scope work,
+  compatibility or migration policy, user-owned responsibilities, and material
+  open decisions. Do not encode an unresolved choice in implementation steps as
+  though it were approved.
+- Qualify important numbers and promises. Say whether a value is an example,
+  initial default, tuning target, configurable limit, hard safety bound, acceptance
+  gate, best-effort objective, or guarantee; when failure or data loss matters,
+  state the unit and boundary of the claim.
+- After revising an active toDo, make the active document internally coherent with
+  the latest settled decisions. A reader must not have to reconstruct the effective
+  plan from superseded wording, old copies, change records, or several sessions.
+
+Keep this context proportional. Do not paste a transcript, defend every ordinary
+engineering choice, or repeat stable project-wide contracts already available in
+the required documentation. Summarize or link those contracts and embed the
+non-obvious task-specific facts that a context-free reader would otherwise have to
+guess. Mark facts that are likely to become stale for revalidation when the toDo is
+executed.
+
+Before finishing a toDo, check that the document itself answers these questions:
+
+1. What concrete situation created this work, and what evidence describes the
+   current state?
+2. What outcome is wanted, why is it wanted, and which tradeoffs are deliberate?
+3. Which facts, requirements, decisions, assumptions, and questions are settled or
+   open, and who or what establishes them?
+4. Which scope, dependencies, operating conditions, compatibility policy, and
+   numeric or reliability semantics materially constrain implementation?
+5. How will completion be recognized without access to the originating
+   conversation?
+
+If an answer still depends on hidden conversation context, add the missing
+task-specific information before treating the toDo as complete.
+
 ## Naming And Content Contract
 
 Use this filename format:
@@ -77,16 +136,24 @@ Examples:
 auto/20260714_120000_normalize-incidental-formatting.md
 ```
 
-Recommended structure:
+Recommended structure follows. This is an adaptable outline rather than a required
+heading checklist; combine or omit sections when a small toDo remains unambiguous
+and satisfies the standalone handoff contract.
 
 ```text
 # Short Future Task Title
 
 ## Context
-- Why this future work matters.
+- The originating problem, verified current behavior/evidence, material operating
+  conditions or scale, and why the work matters.
 
-## Goal
-- What should be true when the task is complete.
+## Intent And Goal
+- The requested outcome, why it is wanted, and deliberate priorities or tradeoffs.
+
+## Scope And Decisions
+- Settled requirements and decisions, assumptions, dependencies, non-goals,
+  compatibility policy, open questions, and the meaning of important values or
+  guarantees.
 
 ## Guidance
 - Technical direction, constraints, and relevant files.

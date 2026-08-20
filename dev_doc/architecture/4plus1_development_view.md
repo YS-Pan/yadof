@@ -110,6 +110,13 @@ checks instead.
 
 - Read the development guide and its linked module contracts, then architecture,
   terminology, relevant blueprints, and active toDos before editing.
+- Author and substantially revise toDos as standalone handoffs for a maintainer who
+  has the current repository and documentation but not the originating
+  conversation. Embed the task-specific problem, intent, evidence, material
+  operating envelope, settled versus open decisions, and the semantics of defaults,
+  limits, best-effort goals, and guarantees; links remain supplemental provenance.
+  Keep the active document internally coherent after later decisions supersede
+  earlier wording.
 - Before reporting normal work complete, compare active automatic toDos with the
   already in-scope files, their direct evidence, and the current diff. Execute only
   objective matches that stay within the documented scope; this bounded checkpoint

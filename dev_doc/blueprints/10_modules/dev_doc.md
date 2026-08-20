@@ -29,7 +29,11 @@ root developer README links to them instead of duplicating those contracts.
 - `blueprints/20_files/`: file lineage for high-risk/specialized implementation.
 - `terminology.md`: project-specific terms whose meaning is not obvious.
 - `change_records/`: append-only time-named decision/implementation explanations.
-- `toDo/`: unresolved work; root entries require explicit request, while active
+- `toDo/`: unresolved work recorded as standalone handoffs. Each active document
+  embeds the task-specific problem, intent, evidence, material operating envelope,
+  decision status, scope, and completion meaning needed by a maintainer who lacks
+  the originating conversation; references provide supplemental provenance rather
+  than hidden requirements. Root entries require explicit request, while active
   `auto/` entries receive a bounded match check against already in-scope evidence
   before normal work is reported complete.
 - `obsolete/`: historical completed/cancelled toDos, not current guidance.
@@ -48,7 +52,12 @@ yadof's package/workspace/runtime contracts.
 Architecture and blueprints describe the present, so update them in place when code
 changes. Change records remain append-only. Old external references may restore lost
 rationale, but obsolete layouts, names, and fallbacks are filtered against current
-code before inclusion. A completed toDo moves to `obsolete/` only after applicable
+code before inclusion. A new or substantially revised toDo distinguishes verified
+current facts, explicit requirements or decisions, proposals, assumptions, and open
+questions where their status affects implementation. It qualifies important values
+as defaults, targets, limits, gates, best-effort goals, or guarantees, and folds
+later settled decisions into one coherent active handoff rather than relying on
+conversation history. A completed toDo moves to `obsolete/` only after applicable
 code/tests, user docs, architecture, blueprints, terminology, and one change record
 agree; documentation-only work does not invent inapplicable software tests.
 Completing one occurrence of a recurring automatic toDo does not complete its
