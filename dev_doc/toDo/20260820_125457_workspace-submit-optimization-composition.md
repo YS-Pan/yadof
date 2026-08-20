@@ -23,11 +23,12 @@
 - `job_template/calc_cost.py` is currently submit-side code. `prepare_job()`
   explicitly excludes it, and distributed workers never receive or import it. The
   user's recollection is correct.
-- The canonical workspace `job_template/parameters_constraints.py` is also loaded
-  only on the submit side. Job preparation excludes that source and generates a
-  different, self-contained assigned `parameters_constraints.py` inside each job.
-  The canonical source therefore belongs with the other submit-side task code even
-  though its generated handoff keeps the same filename on execute nodes.
+- The canonical workspace `job_template/parameters_constraints.py` is loaded by the
+  submit process, but it defines the worker parameter/constraint handoff and remains
+  in the worker-facing `job_template/` tree by explicit workspace-contract decision.
+  Job preparation does not copy that source verbatim: it generates a different,
+  self-contained assigned `parameters_constraints.py` inside each job. The new
+  submit-only directory must not move or duplicate the canonical source.
 - `job_template/evaluation.py` is different. Fast mode runs it in isolated processes
   on the submit host, but the supported shared-kernel pattern also allows
   distributed `workflow.py` to import it on an execute node. It remains
@@ -40,14 +41,22 @@
   implementation, while `yadof.surrogate` directly exposes one concrete conditional
   INR runtime. Workspace-defined composition therefore requires a real package
   boundary change, not only a new script or directory move.
+- The installed numerical baseline is `pymoo 0.6.2`, `scipy 1.18.0`, and
+  `torch 2.10.0`. That pymoo version already supplies GA, NSGA-III, and
+  single-objective PSO, but it does not expose a GPSAF implementation. SciPy supplies
+  mature local/global scalar-objective solvers, not a drop-in multi-objective
+  NSGA-III or GPSAF replacement. Reuse therefore needs a capability/semantics audit;
+  package removal cannot be inferred from an algorithm name alone.
 
 ## Goal
 
 - Introduce a reserved workspace `submit/` directory for task-owned Python that is
   never copied into local/distributed prepared jobs and is never imported by an
   execute-side workflow.
-- Move the canonical parameter definition and current cost policy out of
-  `job_template/` into `submit/`.
+- Move the current cost policy, and only other code that is exclusively submit-side,
+  out of `job_template/` into `submit/`. Keep canonical
+  `parameters_constraints.py` under `job_template/` and preserve its generated
+  assigned-file handoff.
 - Add `submit/optimization.py` as the authoritative definition of the one complete
   optimization plan used by that workspace.
 - Keep campaign/session ownership, generation boundaries, evaluation, failure
@@ -69,11 +78,11 @@ workspace/
   .yadof/workspace.json
   config.py
   submit/
-    parameters_constraints.py   canonical unassigned task parameters
     calc_cost.py                 rawData -> current objective tuple
     optimization.py              complete optimization-plan composition
     optional submit-only helpers
   job_template/
+    parameters_constraints.py   canonical worker parameter/constraint definition
     workflow.py                  local/distributed execute entry
     evaluation.py                optional shared fast/evaluate-side kernel
     optional adapters, models, assets, and execute-side helpers
@@ -82,22 +91,25 @@ workspace/
 ```
 
 The directory name is deliberately `submit`: it describes the execution boundary,
-not one numerical method. Do not call it `optimizer/`, because cost interpretation,
-canonical parameters, and future submit-only task helpers also belong there.
+not one numerical method. Do not call it `optimizer/`, because cost interpretation
+and future submit-only task helpers also belong there.
 
 ### Ownership rules
 
 - `submit/` is user-owned task source, but every file in it is submit-side only. Job
   preparation, Condor input discovery, and worker execution must ignore the complete
   tree rather than maintain a filename-by-filename exclusion list.
-- `job_template/` is evaluate-side payload. Subject to explicit runtime/cache and
-  reserved generated-file rules, its task content is copied into local/distributed
-  jobs. A misplaced `calc_cost.py`, canonical `parameters_constraints.py`, or
-  `optimization.py` must produce an actionable `check`/preparation error rather than
-  be silently excluded.
-- Job preparation materializes `submit/parameters_constraints.py` into the existing
+- `job_template/` is the worker-facing source root. Subject to explicit runtime/cache
+  and reserved generated-file rules, its evaluate-side task content is copied into
+  local/distributed jobs. Canonical `parameters_constraints.py` is the deliberate
+  exception: it stays in this root but is materialized rather than copied verbatim.
+  A misplaced `calc_cost.py` or `optimization.py` must produce an actionable
+  `check`/preparation error rather than be silently excluded.
+- Job preparation loads the snapshotted
+  `job_template/parameters_constraints.py` and materializes the existing
   self-contained job-local `parameters_constraints.py`. The generated file remains
-  importable by `workflow.py` without yadof on execute nodes.
+  importable by `workflow.py` without yadof on execute nodes; the canonical source
+  itself never enters the prepared job or transfer list.
 - Root `config.py` remains in its established location. It is framework/campaign
   configuration, not a task module moved merely because it executes on the submit
   host.
@@ -172,6 +184,44 @@ trust-region algorithm. Focused test components must prove that each role can be
 replaced or appended without duplicating campaign/evaluation/history code. Numerical
 validity for a real added method remains its own implementation task.
 
+## Library-First Numerical Policy
+
+- Yadof should own orchestration and task-boundary semantics, not generic numerical
+  algorithms. Before extracting or writing any search, local solver, loss, sampler,
+  neural layer, or population operator, audit mature installed packages and their
+  supported versions, licenses, state/restart behavior, objective/domain support,
+  determinism, and serialization boundaries.
+- A package imported directly by yadof must be declared as a direct core or optional
+  dependency with a supported version range; do not rely on it only because another
+  dependency happens to install it transitively. In particular, direct SciPy-backed
+  code requires an explicit dependency decision during implementation.
+- Where a compatible implementation exists, expose a thin lazy adapter/factory that
+  constructs the library object with explicit keyword defaults. The few yadof-owned
+  lines should make the effective default parameters inspectable for workspace
+  composition and provenance, translate normalized arrays/results, and enforce
+  yadof invariants. They must not copy or subtly fork the library's numerical loop.
+- Prefer pymoo's GA, NSGA-III, and PSO implementations and SciPy's applicable
+  scalar-objective local/global solvers instead of reimplementing them. A pymoo PSO
+  is single-objective and therefore is not a semantic drop-in replacement for the
+  current multi-objective NSGA-III path; plan validation must reject incompatible
+  objective/constraint capabilities rather than silently scalarize or fall back.
+- The installed pymoo has no GPSAF component. Preserve only the yadof-specific GPSAF
+  assistance/orchestration that cannot be delegated, and re-audit mature packages
+  before implementation in case a compatible maintained dependency can replace
+  more of it. Adopting or upgrading a dependency requires focused equivalence and
+  recovery tests; this toDo does not assume an upgrade.
+- Conditional INR should use mature PyTorch primitives for modeling, optimization,
+  losses, batching, and serialization wherever their semantics fit. Yadof retains
+  only rawData schema/query reconstruction, task/campaign adaptation, component
+  lifecycle, provenance, and checkpoint integration that are specific to its
+  contract. If a maintained package can satisfy that complete capability later, it
+  should be preferred behind the same component boundary.
+- "Expose defaults" is an adapter concern, not permission to mirror an implementation.
+  Each public numerical factory must document and pass explicit effective defaults,
+  identify its backend/version for provenance, and leave unsupported backend options
+  available only through a deliberately reviewed narrow escape hatch, if one is
+  genuinely needed.
+
 ## Package Boundary
 
 ### `yadof.optimize`
@@ -182,9 +232,10 @@ validity for a real added method remains its own implementation task.
   of the current complete GPSAF implementation.
 - Load and validate the workspace plan through one public/internal plan boundary;
   the engine invokes it once per generation under the generation snapshot.
-- Expose GPSAF pressure, objective-count dispatch, GA, NSGA-III, and their actual
-  shared mechanics as composable components. Pymoo types must remain private to
-  pymoo-backed components.
+- Expose GPSAF pressure and objective-count dispatch as small composable yadof
+  boundaries. Expose GA and NSGA-III through thin pymoo-backed factories with
+  explicit effective defaults; do not extract or duplicate pymoo numerical
+  mechanics into yadof. Pymoo types remain private to those adapters.
 - Do not add `OPTIMIZE_METHOD`, `SURROGATE_METHOD`, or
   `OPTIMIZE_GPSAF_SEARCH_BACKEND` selectors. Those choices belong in
   `submit/optimization.py`, and a package selector would create a second source of
@@ -196,9 +247,11 @@ validity for a real added method remains its own implementation task.
 
 ### `yadof.surrogate`
 
-- Separate method-independent training-data/session adaptation, scheduling,
-  lifecycle, compact metadata, and checkpoint publication from the conditional-INR
-  model/data/artifact implementation.
+- Keep only method-independent training-data/session adaptation, scheduling,
+  lifecycle, compact metadata, and checkpoint publication that yadof actually needs;
+  do not build generic surrogate-framework machinery already supplied by mature
+  dependencies. Separate those boundaries from the conditional-INR
+  model/data/artifact adapter.
 - Expose the simplified conditional INR as a rawData-first surrogate component with
   explicit stable identity and capabilities. It must still reconstruct full rawData
   before current cost and must never become an authoritative direct-cost model.
@@ -207,10 +260,11 @@ validity for a real added method remains its own implementation task.
 - Viewer integration may use a component-specific inspection adapter or artifact
   identity, but it must not silently assume every plan uses conditional INR.
 
-The detailed source split, dependency direction, and component tests are maintained
-in the coordinated modularization toDo. Avoid symmetric empty files, generic
-`utils.py`, speculative third-party plugin APIs, and wrappers that only forward the
-old complete algorithm.
+The detailed source split, dependency direction, dependency-reuse audit, and
+component tests are maintained in the coordinated modularization toDo. Avoid
+symmetric empty files, generic `utils.py`, speculative third-party plugin APIs,
+wrappers that only forward the old complete algorithm, and yadof-owned copies of
+backend algorithms.
 
 ## Snapshot, Identity, And Campaign Policy
 
@@ -218,8 +272,9 @@ old complete algorithm.
   paths into one immutable temporary workspace and keeps jobs, history, checkpoints,
   logs, and tool output pointed at the real workspace.
 - Interpretation fingerprints start from
-  `submit/parameters_constraints.py` and `submit/calc_cost.py` plus dependency-aware
-  submit-local imports.
+  `job_template/parameters_constraints.py` and `submit/calc_cost.py`, following each
+  root's dependency-aware local imports. Physical ownership does not remove the
+  canonical parameter source from submit-side interpretation provenance.
 - Evaluation fingerprints start from `job_template/workflow.py` and optional
   `job_template/evaluation.py` plus evaluate-side dependencies and semantic config.
 - Add an optimization-definition fingerprint rooted at
@@ -251,8 +306,9 @@ old complete algorithm.
   overlap `submit/` or make it overlap `job_template/`, jobs, recorded data,
   checkpoints, logs, tool output, or fast scratch.
 - Update the bundled template manifest/version and `yadof init` staging validation
-  to publish `submit/parameters_constraints.py`, `submit/calc_cost.py`, and
-  `submit/optimization.py`; stop publishing their old `job_template/` sources.
+  to publish `submit/calc_cost.py`, `submit/optimization.py`, and the retained
+  `job_template/parameters_constraints.py`; stop publishing only the old
+  `job_template/calc_cost.py` source.
 - The starter optimization file composes the current objective-count-dependent
   default. It contains composition only, not copied GPSAF, pymoo, surrogate,
   scheduler, evaluator, or campaign implementations.
@@ -263,9 +319,10 @@ old complete algorithm.
 - Update generic smoke assessment to compare every starter source that affects its
   evaluation/cost contract. Merely relocating submit files must not make an edited
   real task look like the untouched starter.
-- Update packaged adapters/tools that locate canonical parameters to use
-  `submit/parameters_constraints.py`; adapters and models copied for execution still
-  target `job_template/`.
+- Keep packaged adapters/tools that locate canonical parameters on
+  `job_template/parameters_constraints.py`; update only cost/optimization consumers
+  to the new submit root. Adapters and models copied for execution still target
+  `job_template/`.
 - Migrate repository reference workspaces and tests to the new layout. Do not add a
   dual-path loader or silently accept legacy files in both locations.
 - Existing user workspaces are never rewritten by `init`. Bump template provenance
@@ -286,18 +343,25 @@ old complete algorithm.
 - [ ] Characterize the current seeded default for single-objective GA,
   multi-objective NSGA-III, GPSAF warmup/fallback/alpha/beta/exploration, staggered
   conditional-INR training, current-cost conversion, and real validation.
-- [ ] Inventory every loader/path/test/tool that assumes canonical parameters or
-  `calc_cost.py` lives below `job_template/`.
+- [ ] Inventory every loader/path/test/tool that consumes canonical parameters from
+  `job_template/` or assumes `calc_cost.py` is beside them.
+- [ ] Produce a library-reuse matrix for every numerical responsibility: installed
+  backend/version, capabilities, explicit defaults, state/restart and determinism,
+  yadof adapter duties, and evidence for any algorithm code that must remain in
+  yadof. Confirm locally that pymoo GA/NSGA-III/PSO are available, installed pymoo
+  GPSAF is not, and SciPy candidates are evaluated only for compatible scalar goals.
 
 ### Phase 1 - Establish The Two-Root Workspace
 
 - [ ] Add the explicit submit path to workspace context/config validation and teach
   the fresh loader to isolate submit-local modules independently of execute modules.
-- [ ] Move canonical parameters and cost in the template, examples, neutral test
-  workspaces, tools, and task APIs.
+- [ ] Move only cost and other exclusively submit-side sources in the template,
+  examples, neutral test workspaces, tools, and task APIs; retain canonical
+  parameters under `job_template/` without a duplicate submit copy.
 - [ ] Make job preparation copy only evaluate-side task content and generate the
-  assigned parameter handoff from the submit snapshot. Replace silent legacy
-  exclusions with actionable misplaced-file validation.
+  assigned parameter handoff from the snapshotted canonical source. Replace the old
+  cost exclusion with actionable misplaced-file validation while preserving the
+  intentional canonical-parameter materialization exception.
 
 ### Phase 2 - Extend Generation Snapshots And Provenance
 
@@ -311,8 +375,13 @@ old complete algorithm.
 ### Phase 3 - Extract Composable Package Components
 
 - [ ] Execute the coordinated modularization toDo: separate campaign/common
-  contracts, GPSAF assistance, pymoo search mechanics, conditional-INR implementation,
-  scheduling, checkpoints, and inspection along actual call boundaries.
+  contracts, irreducible GPSAF assistance, thin pymoo/SciPy adapters,
+  conditional-INR-specific adaptation, scheduling, checkpoints, and inspection along
+  actual call boundaries.
+- [ ] Delete or avoid yadof numerical mechanics already supplied by an accepted
+  mature dependency. Factories expose explicit effective defaults and backend
+  identity; equivalence tests compare behavior through public yadof contracts rather
+  than copying backend implementation details.
 - [ ] Remove the package-owned complete-algorithm dispatch and any planned selector
   configs/registries that duplicate workspace composition.
 - [ ] Preserve current behavior through the new component graph and keep optional
@@ -353,12 +422,13 @@ old complete algorithm.
 ## Verification Plan
 
 - Initialization/check tests assert the exact new files, no old submit-only files
-  under `job_template/`, no overwrite/repair, two-workspace isolation, and clear
-  legacy-layout diagnostics.
+  under `job_template/` except the retained canonical parameter contract, no
+  duplicate canonical source under `submit/`, no overwrite/repair, two-workspace
+  isolation, and clear legacy-layout diagnostics.
 - Prepared-job and distributed-submit tests prove the complete `submit/` tree,
-  canonical parameters, cost policy, optimization definition, and submit helpers
-  never enter a job or transfer list; the generated assigned parameter file and
-  evaluate-side assets still do.
+  canonical parameter source, cost policy, optimization definition, and submit
+  helpers never enter a job or transfer list; the generated assigned parameter file
+  and evaluate-side assets still do.
 - Snapshot tests edit cost, workflow/evaluation, and optimization sources at
   controlled boundaries. One generation remains coherent; cost/evaluation changes
   follow current rules; a plan change after campaign start fails before candidate
@@ -377,20 +447,22 @@ old complete algorithm.
   workspace state isolation, viewer method handling, scheduler reset, recording-loss
   isolation, and absence of a second config/registry selection source.
 - Static checks recursively reject old internal imports, duplicate complete
-  algorithm implementations, task code copied into package fixtures, legacy
-  workspace fallback paths, and package parent imports that eagerly load Torch,
-  pymoo method implementations, Matplotlib, Tkinter, or viewer UI.
+  algorithm implementations, backend numerical loops copied into yadof, task code
+  copied into package fixtures, legacy workspace fallback paths, and package parent
+  imports that eagerly load Torch, pymoo method implementations, SciPy solvers,
+  Matplotlib, Tkinter, or viewer UI. Adapter tests assert explicit forwarded defaults,
+  capability rejection, backend identity, and deterministic state/restart behavior.
 - Finish with `git diff --check`, UTF-8/link/path validation, installed-wheel focused
   tests, and the complete installed-package pytest suite.
 
 ## Completion Rule
 
-- New workspaces have the exact two-root source boundary: submit-only canonical
-  parameters, cost, and optimization composition under `submit/`; evaluate-side
-  workflow/kernel/assets under `job_template/`.
+- New workspaces have the exact two-root source boundary: submit-only cost and
+  optimization composition under `submit/`; canonical worker parameter/constraint
+  source plus evaluate-side workflow/kernel/assets under `job_template/`.
 - Prepared local/distributed jobs contain no submit source and receive only the
-  generated assigned parameter snapshot plus evaluate-side payload and package
-  worker support.
+  generated assigned parameter snapshot—not the canonical source—plus evaluate-side
+  payload and package worker support.
 - The complete algorithm exists only as the workspace's snapshotted
   `build_optimization()` composition. Yadof owns reusable components and invariant
   campaign/evaluation/persistence mechanisms, with no competing complete-method
@@ -398,6 +470,11 @@ old complete algorithm.
 - The starter reproduces GPSAF + objective-count-dependent GA/NSGA-III + simplified
   conditional INR. NSGA-III-only and fake append/swap plans prove the intended
   composition roles without claiming unimplemented numerical methods are ready.
+- Yadof contains no copied implementation of an accepted backend algorithm. Mature
+  package implementations are reached through thin lazy adapters whose explicit
+  defaults and capabilities are inspectable; only yadof-specific orchestration,
+  rawData/task adaptation, real-validation, and persistence glue remain, with a
+  written justification wherever no compatible mature implementation exists.
 - Plan/component/source provenance is durable, one generation is coherent, one
   campaign cannot silently change plans, and rawData-first plus real-validation
   invariants remain intact.

@@ -11,8 +11,9 @@
   相对损失、rank-based forced queries 或旧 checkpoint compatibility。
 - 本任务也在当前 workspace 布局中删除
   `job_template/calc_cost.py:rawdata_importance_weights()`。后续协调任务再把精简后的 cost
-  policy 和 canonical parameters 移到 `submit/`；不得为了预适配新路径引入双位置 loader、
-  compatibility wrapper 或重复 hook removal。
+  policy 移到 `submit/`，但 canonical `parameters_constraints.py` 继续留在 worker-facing
+  `job_template/`；不得为了预适配新路径引入双位置 loader、compatibility wrapper 或重复
+  hook removal。
 - 本任务允许有意识地改变现有 surrogate/GPSAF 数值行为。当前 surrogate 在真实问题上的
   效果本身尚不理想；本次优先获得可解释、可调试的干净基线，而不是保持旧启发式的行为
   等价性。
@@ -40,6 +41,10 @@
   selection invariance，同时保留 ensemble、bootstrap 和 spread 输出本身。
 - 本任务只面向新的优化。旧仿真 history、旧 checkpoint 和旧 workspace 配置不属于迁移
   输入；开始新优化时使用空 workspace，或由用户显式执行 `history clear`。
+- 简化同时遵守 library-first 原则：标准 tensor/loss/optimizer/serialization 行为直接使用
+  PyTorch/NumPy 等成熟实现；yadof 只实现 field/slot sampling、rawData reconstruction、
+  campaign adaptation 和 checkpoint provenance 等自身契约。后续 modular toDo 再审计并
+  收缩 package 边界，本任务不能新建自有通用 trainer/surrogate framework。
 
 ## Goal
 
@@ -57,6 +62,8 @@
   policy。
 - 删除不再需要的配置、task hook、job-template API、checkpoint/state 字段、示例、测试
   和有效文档，不保留静默忽略的 compatibility wrapper。
+- 删除自写但可由当前受支持成熟 package 等价承担的通用数值 helper；保留的自写训练逻辑
+  必须能指向 yadof-specific field/slot/rawData/campaign 语义，而不是重复标准算法。
 - 建立职责清楚的 checkpoint schema 和真正的原子发布；不实现旧 checkpoint/history
   reader、转换器或 viewer compatibility。
 - 本次验收以数据流、可复现性和结构正确性为门槛，不以旧 surrogate 指标不退化为门槛。
@@ -67,6 +74,8 @@
 - 不在本任务中校准或重新启用 ensemble trust decision。
 - 不为追平旧结果重新引入 curve/window/rank-specific heuristic。
 - 不实现新的 surrogate 模型，不调整 GPSAF/GA/NSGA-III 的其他数值策略。
+- 不在本阶段选择新的 backend、升级依赖或完成 package adapter 重构；这些决策由后续协调
+  toDo 的 dependency-reuse audit 处理。本阶段仍不得新增可被成熟 primitive 替代的代码。
 - 不读取、迁移、显示或恢复旧仿真 history 和旧 checkpoint。
 
 ## Required Removals
@@ -103,7 +112,8 @@
   `SURROGATE_INR_RELATIVE_LOSS_EPS`，以及 normalized-target relative-loss 分支和相应
   history 字段。
 - 保留一个标准 pointwise loss，并在 method 内清楚命名。Smooth L1 及其通用数值参数
-  可以保留；不要再组合 value/relative/mixup 三种目标或暴露 task-specific loss knobs。
+  可以保留，并应直接调用 PyTorch 的成熟实现；不要复制 loss 数学，也不要再组合
+  value/relative/mixup 三种目标或暴露 task-specific loss knobs。
 - 每个被采样 field/slot 内先求 pointwise Smooth L1 平均值，再对 field/slot loss 做等权
   macro average。full-query 与 minibatch 路径必须使用相同的 field-balanced 聚合语义。
 - 不得从 current cost、objective threshold、field size、rawData rank 或 curve metadata
@@ -147,7 +157,8 @@
 - schema validation、non-finite sample isolation、constant-slot preservation、target scaling
   floor、finite filling；
 - field-balanced seeded cyclic query minibatching、sample batching、query chunking、device
-  selection、optimizer、gradient clipping 和 resource controls；
+  selection、optimizer、gradient clipping 和 resource controls；其中通用 tensor/optimizer/
+  clipping primitives 继续由 PyTorch 提供，yadof 只拥有 field-balanced policy 与边界 glue；
 - conditional INR 的 coordinate representation、Fourier features、network capacity 参数；
 - deep ensemble 与 bootstrap。bootstrap 只从真实 evaluation rows 有放回抽样，不构造
   synthetic coordinate/target，因此仍满足 real-only training；
@@ -253,6 +264,9 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
   不依赖 slot 展平后的 scalar 数量比例。
 - [ ] 精简 method config/state/train history；删除不再使用的函数、参数、imports 和
   defensive fallback，不增加新的调权抽象。
+- [ ] 审计本阶段触及的 numerical helpers：标准 loss/optimizer/tensor/serialization 直接
+  委托受支持 package；只为 field/slot/rawData/campaign-specific 语义保留自写代码并在完成
+  change record 中说明边界。
 - [ ] 验证 deep-ensemble 每个 member 只看到真实 rows 或其 bootstrap resample。
 
 ### Phase 2 - Remove Dead Uncalibrated GPSAF Trust Inputs
@@ -309,6 +323,8 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
   - 历史 `change_records/` 和 `obsolete/` 允许保留事实记录；
   - GPSAF active candidate-decision path 不读取 ensemble spread 或 in-sample fit error；
   - 没有 legacy checkpoint/history reader、转换器或 compatibility fixture。
+  - 没有 yadof-owned 标准 loss/optimizer/tensor/serialization 算法副本或新增通用 trainer
+    framework；保留 helper 都有 yadof-specific contract caller。
 - Focused behavior tests:
   - trainer inputs 只由真实 rows 或 bootstrap indices 构成；
   - field/slot-balanced sampler 可复现、无 rank/window bias，在有限 step 内覆盖所有 slot
@@ -335,6 +351,8 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
 - mixup、relative-loss、task-owned importance、floor/boost、weighted query sampling、
   rank-based forced queries 及其 config/API/state/checkpoint/test/doc surfaces 已从当前实现
   删除，没有 zero-default 死分支、silent compatibility alias 或重复实现。
+- 通用训练数值 primitives 委托成熟 package；yadof 的剩余实现只服务明确的 field/slot、
+  rawData、campaign 和 checkpoint/provenance 契约，并为后续 modular 收缩提供干净基线。
 - deep ensemble、真实-row bootstrap 和 member spread 输出保留；ensemble spread 与训练集内
   fit error 不影响 GPSAF candidate decision，未来 trust calibration 明确留给真实 benchmark。
 - 只有带明确 format/method/policy 的新 checkpoint 可恢复，发布真正原子；没有旧 history/

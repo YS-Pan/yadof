@@ -13,6 +13,8 @@
   init/check 与迁移；本文负责把 package 实现拆成可由 workspace 组合的组件。
 - 两份协调 toDo 不得独立落地临时中间态，也不得保留 package-owned 完整算法再由
   workspace 做一层表面包装。共享安装态验收全部通过后，两份文件一起归档。
+- 执行时必须先做成熟依赖复用审计，再决定保留、删除或新增 yadof 代码；“组件化”不等于
+  把第三方算法重新实现成更多 yadof 模块。
 
 ## Revised Context
 
@@ -34,14 +36,20 @@
   `variables -> cost` 或 predicted-history 路径。
 - 本次重构只建立当前真实调用面需要的组件边界，不建立第三方插件系统，也不实现第二套
   生产 search/surrogate/refinement 数值方法。
+- 当前安装态为 `pymoo 0.6.2`、`scipy 1.18.0`、`torch 2.10.0`。本地接口核对确认 pymoo
+  已提供 GA、NSGA-III 和单目标 PSO，但没有 GPSAF；SciPy 提供多种成熟的标量目标局部/
+  全局 solver，却不是 NSGA-III 或多目标 GPSAF 的直接替代。这个事实只描述当前受测依赖，
+  实现前仍要复核允许的版本、license、capability、restart/state 与数值语义。
 
 ## Goal
 
-- 把 conditional INR、GPSAF pressure 和 pymoo GA/NSGA-III mechanics 从 package 根层的
-  完整算法耦合中拆出，成为可直接导入、具有稳定 role/identity 的组件。
-- package 父层只保留跨组合稳定的 campaign、plan validation、history/evaluation、
-  rawData-first training data、scheduler lifecycle、checkpoint publication、metadata 和
-  公共 result contracts。
+- 把完整算法耦合拆开：GA/NSGA-III 直接委托 pymoo，conditional INR 尽量委托 PyTorch
+  primitives，yadof 只保留无法由成熟 package 表达的 GPSAF assistance、rawData/task
+  adaptation 和薄 backend adapter，并赋予这些边界稳定 role/identity。
+- `surrogate`、`optimize` 父层和子模块总量都应最小化，只保留跨组合确实稳定且由 yadof
+  拥有的 campaign、plan validation、history/evaluation、rawData-first adaptation、必要
+  scheduler/checkpoint/provenance 和公共 result contracts。不要为了理论上的扩展性搭建一套
+  自有优化或 surrogate framework。
 - 新 workspace starter 用这些组件定义当前默认：GPSAF +（单目标 GA / 多目标
   NSGA-III）+ simplified conditional INR。
 - 同一个 engine 能运行 multi-objective NSGA-III-only plan，并用 test components 证明
@@ -56,13 +64,17 @@
 - 不实现 production particle swarm、第二 surrogate 或 trust-region refinement；test double
   只验证 contract 和依赖方向，不证明数值有效性。
 - 不通过任意 Python import path 加载第三方插件。workspace 只组合安装版 yadof 暴露的公共
-  组件和自己的轻量 plan；新增真实组件仍先进入 yadof 并接受 package 测试。
+  组件和自己的轻量 plan；真实组件可以由 yadof 的薄 adapter 调用受支持的成熟依赖，但
+  adapter 与依赖版本仍需 package 测试和 provenance。
 - 不在重构中重新调参、改变 GPSAF 数值策略、恢复 ensemble/error trust、改变 simplified
   conditional-INR 网络或读取 legacy checkpoint/history。
 - 不支持一个 workspace 同时维护或切换多套 plan state。改变完整 plan 必须新 workspace
   或显式 clear，并遵守新 toDo 的 plan fingerprint/provenance 规则。
 - 不为了目录对称创建空壳 contract、通用 `utils.py` 或多层原样转发；只有至少两个真实
   组件共享且语义稳定的机制才进入父包。
+- 不复制 pymoo/SciPy/PyTorch 已有的数值循环、population operator、solver、loss、layer、
+  optimizer 或 serializer。除非复用审计给出具体 incompatibility 证据，否则“不方便适配”
+  不能成为自实现算法的理由。
 
 ## Component Roles
 
@@ -83,15 +95,21 @@
 
 ### Global-search components
 
-- 当前 single-objective GA 与 multi-objective NSGA-III 的 pymoo state、ask/tell、clone、
-  seed、reference directions、survival 和 diagnostics 从 GPSAF orchestration 中抽离。
+- 当前 single-objective GA 与 multi-objective NSGA-III 通过薄、lazy 的 pymoo adapter 从
+  GPSAF orchestration 中抽离。pymoo 继续拥有 algorithm、population、ask/tell、reference
+  directions、survival 和数值 operator；yadof 只转换 normalized problem/result、管理需要的
+  opaque state，并补充 yadof diagnostics/provenance。
 - workspace 默认通过 objective-count dispatch 选择 GA/NSGA-III；NSGA-III-only plan 在
   objective count 小于 2 时必须清楚失败，不能静默回退 GA。
 - search contract 使用 normalized arrays、objective rows、backend-neutral problem info 和
   opaque state。不得把 pymoo `Algorithm`、`Population`、`Individual` 或 reference-
   direction 类型提升到 plan/GPSAF/public engine contract。
-- future particle swarm 实现同一个 search role；GPSAF 不复制 particle-swarm-specific
-  参数或假设。
+- 每个 backend factory 用显式 keyword 构造成熟实现，使 effective defaults 可由 workspace
+  文件阅读、由 validation 检查、由 metadata 记录。不要把 backend signature 全量复制成
+  yadof config；只公开当前支持并经过测试的少量参数。
+- future particle swarm 优先包装 pymoo PSO 或另一个经过审计的成熟实现，并实现同一个
+  search role；当前 pymoo PSO 是单目标算法，不能冒充 NSGA-III 的多目标直接替代。GPSAF
+  不复制 particle-swarm-specific loop、参数或假设。
 
 ### GPSAF assistance component
 
@@ -103,6 +121,9 @@
   scheduler-specific callback 仍不能由 fast 伪造。
 - post-simplification member spread 和 training-fit diagnostics 保持可观察但不影响
   candidate decision，直到真实 benchmark 后另行设计 trust policy。
+- 当前安装的 pymoo 不提供 GPSAF，因此这一层暂时可能保留 yadof-specific orchestration；
+  实现前必须再次搜索受支持成熟依赖。任何保留代码都要逐项证明属于 yadof 的 rawData、
+  generation、real-validation 或 component coordination 契约，而不是可委托的通用算法。
 
 ### Surrogate-model component
 
@@ -119,6 +140,10 @@
   serialization 和 inspection adapter。
 - viewer 通过 artifact component ID 和 inspection adapter 工作；未知或无 inspection
   capability 的组件明确报错，不能默认按 INR 解释。
+- conditional-INR 数学与训练实现优先直接组合 PyTorch 的 layer、loss、optimizer、data 和
+  serialization primitives。yadof 只拥有 field/slot query schema、完整 rawData 重建、真实
+  campaign row adaptation、可复现 seed 派生和自身 checkpoint/provenance 接口；不得为了
+  “统一接口”再实现一个通用 tensor/trainer/model framework。
 
 ### Refinement components
 
@@ -128,56 +153,56 @@
   evaluator ownership；真正 trust-region surrogate refinement 由其现有 toDo 实现。
 - refinement 不是 GPSAF search backend，也不能绕过 rawData-first/current-cost/real-
   validation/session contracts。
+- 真实 refinement 实现时先匹配 SciPy/pymoo 等成熟 solver 的 objective、gradient、bounds、
+  constraints 和 state 能力。若匹配，yadof stage 只做 scalarization、capability validation、
+  proposal/result translation 与 real-validation feedback，不重写 solver 数值步骤。
+
+## Backend Adapter And Default Contract
+
+- 数值 factory 是短小的显式-default 接口，而不是 yadof 算法实现。例如 factory 可以把
+  `pop_size`、`sampling`、`selection`、`crossover`、`mutation`、`eliminate_duplicates` 等
+  经审查的 effective defaults 显式传给 pymoo；未支持的 backend 选项不自动通过任意
+  `**kwargs` 泄漏到稳定 workspace contract。
+- component identity 至少记录 yadof adapter ID/version、backend distribution/version、
+  backend algorithm 名称和影响数值语义的显式参数。对象地址、repr 默认值和 import path
+  不能作为稳定 identity。
+- adapter 只能做 lazy import、参数/capability 验证、yadof/backend 数据转换、seed/state
+  handoff、异常归一化和 compact diagnostics。若出现 selection、mutation、line search、
+  population update、gradient step 或 surrogate training loop，应先证明成熟 backend 无法
+  满足契约并在 change record 中记录原因。
+- yadof 直接 import 的 backend 必须在 `pyproject.toml` 声明为 direct core/optional
+  dependency 并限定受支持版本，不能依赖传递安装。当前 SciPy 由环境提供但不是 yadof 的
+  direct dependency；任何 SciPy adapter 必须先明确 dependency/extra 与缺失诊断策略。
+- backend 默认值随依赖升级可能改变。starter 的默认组合必须通过 yadof factory 的显式
+  参数固定，而不能隐式继承新版本默认；依赖升级时运行 seeded behavior、restart 和
+  provenance tests，再有意识地接受或覆盖变化。
 
 ## Proposed Source Responsibility Layout
 
-最终文件名可从实际调用面小幅调整；职责和依赖方向必须保持：
+先以最少文件表达真实边界，再仅因清楚的 cohesion、lazy dependency 或多个真实调用方拆分。
+下面是目标预算而不是要求机械匹配的目录图：
 
 ```text
 src/yadof/surrogate/
   __init__.py                  lightweight public component exports
-  contracts.py                shared surrogate component/result protocols
-  training_data.py            campaign/public rawData-first bundle adaptation
-  scheduler.py                selected component's staggered lifecycle
-  metadata.py                 component-neutral compact metadata
-  checkpoints.py              namespace/manifest/atomic discovery rules
-  conditional_inr/
-    __init__.py                public component constructor/identity
-    backend.py                 train/recover/predict implementation
-    data.py                    query table, reconstruct, scaler, off-grid
-    modeling.py                Torch conditional INR deep ensemble
-    checkpoints.py            component-specific artifacts
-    types.py                   INR-only config/schema/state
-    inspection.py              viewer/audit adapter
+  api.py                       minimal component contract + yadof rawData/lifecycle
+  conditional_inr.py           thin public factory + yadof-specific Torch adaptation
+  artifacts.py                 only if shared atomic publication/discovery is substantive
 
 src/yadof/optimize/
   __init__.py                  stable campaign and component exports
-  api.py                       campaign engine + workspace plan invocation
-  plan.py                      minimal immutable plan graph/validation
-  types.py                     common Population/Costs/History/Result
-  history.py                   session/current-history adapter if substantive
-  evaluation.py                common real-evaluation handoff if substantive
-  problem_info.py              parameter/objective shape
-  runner.py                    run identity/metadata/strict helpers
-  components/
-    dispatch.py                objective-count dispatch if substantive
-    gpsaf/
-      backend.py               GPSAF assistance role
-      phases.py                alpha/beta/exploration
-      types.py                 GPSAF-only records/context
-    search/
-      contracts.py             minimal search role
-      pymoo/
-        ga.py                  single-objective mechanics
-        nsga3.py               multi-objective/reference directions
-        common.py              only genuinely shared pymoo helpers
-    refinement/
-      contracts.py             appendable stage role if separately useful
+  api.py                       campaign engine, common types, plan invocation
+  plan.py                      immutable graph/validation, only if substantive
+  gpsaf.py                     irreducible yadof assistance/orchestration
+  pymoo_backend.py             thin lazy GA/NSGA-III factories/adapters
+  refinement.py                add only with a real consumer; delegate solver
 ```
 
-若某个 `history.py`、`evaluation.py`、`common.py` 或 contract 只有一个薄调用方，应
-合并回最近的领域文件。不得为了符合图形机械创建文件；Torch/pymoo/private artifact state
-也不能为了少文件而泄漏到父层。
+若 `api.py` 或 `conditional_inr.py` 已因实际职责过大，可以按调用面拆出 scheduler、training
+data、checkpoint、inspection 或 INR-private 子包；change record 必须解释每个新增文件为何
+不能合并。反过来，只有一个薄调用方的 history/evaluation/common/contracts 应合并回最近的
+领域文件。不得为了符合图形机械创建文件，也不得为了“组件化”把一个第三方 backend 分成
+每种算法一个 yadof 模块。Torch/pymoo private object 仍不能泄漏到公共 plan/engine contract。
 
 ## Current Coupling To Resolve
 
@@ -194,8 +219,9 @@ src/yadof/optimize/
 - `tools/history.py` 直接 reset current runtime/scheduler；新实现应走 workspace
   component lifecycle manager，处理该 workspace 已实例化的状态，而不是加载全部组件。
 - surrogate viewer 和测试散布 modeling/runtime/types 私有导入，需要集中到
-  `conditional_inr/inspection.py`。
-- package/source artifact 测试只扫描父目录 `*.py` 的位置必须递归覆盖子包。
+  conditional-INR component 的 inspection boundary；只有职责足够大时才为它单设文件。
+- package/source artifact 测试必须覆盖最终真实文件树；若没有子包，不为“递归扫描”制造
+  子包。
 
 ## Selection, Identity, And Lifecycle Decisions
 
@@ -205,8 +231,9 @@ src/yadof/optimize/
   可以拥有 stable ID/version，但这些字段用于 validation/provenance/checkpoint，不是另一个
   complete-plan selector。
 - generation/campaign metadata 记录 plan fingerprint、component roles/IDs 和适用
-  backend/model identity。checkpoint 使用 component namespace 和 final real-only policy；
-  目录重构不再做第二次格式迁移。
+  backend distribution/version、algorithm/model identity 和显式 effective defaults。
+  checkpoint 使用 component namespace 和 final real-only policy；目录重构不再做第二次
+  格式迁移。
 - workspace 第一次 generation 后 plan fingerprint/graph 固定。reload 发现变化必须在
   evaluation 前失败，要求新 workspace 或显式 clear；不支持 retained history 上 method
   switch。
@@ -214,7 +241,7 @@ src/yadof/optimize/
   state，再删除 checkpoint/history/jobs。它不实例化全部可用组件，也不能因用户已编辑
   plan 而遗留旧 workspace-keyed in-memory state。
 - parent package/lightweight CLI/config/help import 不加载 Torch、具体 pymoo algorithms、
-  Matplotlib、Tkinter 或 viewer UI。选择相应 component 时才 lazy import。
+  SciPy solvers、Matplotlib、Tkinter 或 viewer UI。选择相应 component 时才 lazy import。
 
 ## Migration Map
 
@@ -222,15 +249,15 @@ src/yadof/optimize/
 |---|---|
 | `optimize/api.py` hard-coded GPSAF | common engine loads/invokes workspace plan |
 | `OptimizationResult` in `gpsaf.py` | public optimize common type |
-| `gpsaf.py` complete generation | common engine + GPSAF assistance component |
-| `gpsaf_phases.py` | GPSAF phases using search/surrogate contracts |
-| `gpsaf_pymoo.py` | private GA/NSGA-III pymoo components/shared mechanics |
+| `gpsaf.py` complete generation | common engine + irreducible GPSAF assistance |
+| `gpsaf_phases.py` | GPSAF-specific coordination only; delegate generic mechanics |
+| `gpsaf_pymoo.py` | one thin lazy pymoo backend adapter; delete copied mechanics |
 | `gpsaf_misc.py` history/evaluate/types | common optimize boundaries where truly shared |
 | `gpsaf_misc.py` candidate helpers | GPSAF or search component owning semantics |
 | `surrogate/runtime.py` history/session bundle | common training-data boundary |
-| `surrogate/runtime.py` query/scaler/off-grid | conditional-INR data |
-| `surrogate/runtime.py` train/state/recover/predict | conditional-INR backend |
-| `surrogate/modeling.py` | conditional-INR modeling |
+| `surrogate/runtime.py` query/scaler/off-grid | yadof-specific conditional-INR adaptation |
+| `surrogate/runtime.py` train/state/recover/predict | minimal lifecycle around PyTorch backend |
+| `surrogate/modeling.py` | PyTorch composition only; no generic trainer/layer reimplementation |
 | `surrogate/types.py` | common contracts plus INR-private types |
 | `surrogate/checkpoints.py` | common atomic manifest plus INR payload |
 | viewer private imports | conditional-INR inspection adapter |
@@ -249,20 +276,24 @@ module。
   scheduling、field-balanced conditional INR、ensemble/bootstrap/spread、current-cost、
   checkpoint recovery 和 workspace isolation 行为测试。
 - [ ] 记录 import-time dependency，证明普通 CLI/config/optimize import 仍轻量。
+- [ ] 对每项 numerical responsibility 建立 reuse matrix：候选成熟 package、受支持版本/
+  license、objective/domain/constraint capability、显式 defaults、seed/state/restart、序列化、
+  adapter 工作和不能复用的具体证据。先做此审计，后定最终文件树。
 
 ### Phase 1 - Add Common Types And Component Contracts
 
 - [ ] 先移动 `OptimizationResult` 和真正公共的 problem/population/history/evaluation
   types，消除 engine 对 GPSAF 反向依赖。
 - [ ] 从当前调用点提取最小 plan、search、surrogate 和 refinement role；不预建第三方
-  plugin lifecycle 或 capability matrix。
+  plugin lifecycle 或通用 capability framework，只验证当前真实组合需要的 capability。
 - [ ] 用 test components 验证 role validation、diagnostics、failure 和 dependency
   direction，不声称新算法质量。
 
 ### Phase 2 - Extract Conditional INR
 
-- [ ] 拆分 common training bundle 与 INR query/schema/model/state，再逐步移动并运行
-  focused tests。
+- [ ] 先删除或委托 PyTorch 已有的通用 modeling/training/serialization mechanics，再把
+  yadof-owned training bundle 与 INR query/schema/rawData reconstruction/state 按实际调用面
+  合并或拆分，并逐步运行 focused tests。
 - [ ] scheduler 接收当前 plan 选择的 component，不再 import concrete runtime；保持 one-
   workspace/one-pending-training 和 lag policy。
 - [ ] 保持 final namespace、format/method/policy、manifest-last atomic publication、
@@ -271,10 +302,13 @@ module。
 
 ### Phase 3 - Extract Search And GPSAF Components
 
-- [ ] 将 pymoo GA、NSGA-III 和真实共享 mechanics 从 GPSAF 分离，保持 seed、ask/tell、
-  clone/continue、reference directions、survival 和 diagnostics。
+- [ ] 用一个薄 pymoo backend adapter 从 GPSAF 分离 GA/NSGA-III；显式传递受支持默认参数，
+  由 pymoo 保持 ask/tell、reference directions、survival 和 operators，yadof 只保持 seed/
+  state handoff、normalized translation 与 diagnostics/provenance。
 - [ ] 让 GPSAF 只通过 search/surrogate roles 工作，保留 alpha/beta/exploration、fallback、
   real validation 和 after-submit scheduling 顺序。
+- [ ] 对仍由 yadof 实现的每段 GPSAF 数值/coordination 代码逐项复核：若成熟依赖可满足
+  contract 则委托；若当前无兼容实现，则在 change record 记录证据并保持最小实现。
 - [ ] 对相同 post-simplification history/config/seed 比较默认 workspace plan 与迁移前的
   candidate population/source/core diagnostics；real evaluator 顺序和 objective width 不变。
 - [ ] 证明 NSGA-III-only plan 不复制 GPSAF/campaign/evaluation/history，并在单目标清楚
@@ -302,10 +336,11 @@ module。
 ## Verification Plan
 
 - Static/import:
-  - 两个子树递归无旧 internal import 或完整算法副本；
+  - 两个子树无旧 internal import、完整算法副本或第三方 numerical loop 副本；
   - parent API/help/config import 不提前加载数值/GUI backend；
   - 没有 complete-method selector/registry 与 workspace plan 并存；
-  - 没有 legacy checkpoint/workspace fallback 或无意义 compatibility facade。
+  - 没有 legacy checkpoint/workspace fallback、无意义 compatibility facade 或无真实共享
+    职责的模块。
 - Focused behavior:
   - 默认 objective-count GA/NSGA-III + GPSAF + simplified conditional INR；
   - NSGA-III-only multi-objective plan 和 invalid objective compatibility；
@@ -314,7 +349,10 @@ module。
   - scheduler/state/checkpoint/history clear/workspace isolation；
   - ensemble/bootstrap/spread 保留但不影响 GPSAF selection；
   - viewer conditional-INR inspection 与 unknown-component error；
-  - one-generation snapshot 与 plan provenance/freeze。
+  - one-generation snapshot 与 plan provenance/freeze；
+  - pymoo adapter 显式 defaults/capability/seed/state/result translation，backend version 纳入
+    provenance；unsupported multi-objective PSO 等组合明确失败；
+  - monkeypatch/spy 或等价测试证明 numerical update 由 backend 执行，而非 yadof 副本。
 - Installed acceptance:
   - compileall 两个子树；
   - build + force-reinstall wheel，验证 import origin；
@@ -323,17 +361,22 @@ module。
   - 不启动真实 simulator 或 HTCondor，除非用户另行授权。
 - Diff/artifact:
   - `git diff --check`；
-  - wheel 包含组件子包、新 template/docs，不含 workspace runtime/checkpoint/history；
-  - 不通过制造空壳文件满足目录图。
+  - wheel 只包含实际需要的 adapter/component 文件和新 template/docs，不含 workspace
+    runtime/checkpoint/history；
+  - 不通过制造空壳文件满足目录图，reuse matrix 中每项自实现例外都有证据。
 
 ## Completion Rule
 
 - 前置 real-only/field-balanced toDo 已完成并归档。
 - package 不再拥有或选择一套完整 GPSAF + GA/NSGA-III + conditional-INR algorithm；完整
   graph 只由 workspace `submit/optimization.py` 组合。
-- `yadof.optimize` 保留 campaign engine/common contracts，并暴露可组合 GPSAF、GA、
-  NSGA-III/refinement roles；`yadof.surrogate` 暴露 simplified conditional-INR component
-  和 method-neutral lifecycle/data/checkpoint mechanisms。
+- `yadof.optimize` 保留最小 campaign/common contract 和不可委托的 GPSAF coordination，
+  通过薄 adapter 暴露成熟 package 的 GA/NSGA-III（以及未来兼容 solver）；
+  `yadof.surrogate` 只保留 simplified conditional-INR 所需的 rawData/task adaptation 与
+  lifecycle/checkpoint 边界，并直接复用 PyTorch primitives。
+- 没有复制成熟 backend 的数值算法。所有 adapter 都有显式 effective defaults、backend
+  identity/version、capability validation 和 lazy import；所有 yadof-owned numerical code
+  都在 reuse matrix/change record 中说明为何不能由受支持成熟 package 替代。
 - 默认 workspace 行为与 post-simplification baseline 等价；NSGA-III-only 与 fake
   append/swap tests 证明边界，但不冒充未实现算法的有效性证明。
 - 一个 workspace 只有一套 frozen plan/component provenance/state；改变 plan 需要新

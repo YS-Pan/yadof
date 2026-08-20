@@ -19,6 +19,11 @@
 - Real out-of-sample benchmark evidence is an implementation prerequisite, not a
   later polish step. A production trust policy must not be enabled merely because
   local-refinement mechanics work on synthetic fixtures.
+- Follow the coordinated tasks' library-first policy. Before writing numerical
+  optimization code, audit supported SciPy/pymoo and other mature packages; yadof
+  should retain only workspace-plan adaptation, scalarization/domain translation,
+  outer model management, provenance, and real-validation glue that those solvers do
+  not provide.
 
 ## Updated Context
 
@@ -52,6 +57,12 @@
   internal search component and not a package-owned complete optimizer: a trust-
   region stage owns local proposals and model-management feedback while the common
   engine owns real validation/session/recording.
+- SciPy already provides mature bounded/constrained scalar solvers through
+  `scipy.optimize.minimize` and mature global scalar solvers such as differential
+  evolution, dual annealing, and SHGO. They do not supply yadof's multi-objective
+  scalarization, rawData/current-cost boundary, or outer real-evaluation trust loop,
+  but they should own compatible inner numerical steps instead of being rewritten in
+  yadof.
 
 ## Goal
 
@@ -60,6 +71,9 @@
 - Optimize an explicit multi-objective scalarization or reference-direction goal
   only inside a bounded local region and only through a deliberately chosen
   proposal strategy.
+- Prefer a thin adapter around a mature solver for that proposal strategy. Its
+  factory exposes explicit effective defaults and capabilities; it must not contain
+  a copied line-search, trust-region, gradient, population, or acceptance algorithm.
 - Treat every refined point as a proposal. Send selected points through yadof's
   normal real-evaluation/finalization path before accepting an improvement.
 - Compare predictions captured before evaluation with the resulting real current
@@ -91,7 +105,8 @@ Choose one primary proposal contract:
 - **Derivative-free local optimization of current predicted cost:** repeatedly use
   the normal rawData reconstruction/current-cost prediction inside a trust region.
   This preserves the existing task contract but is not surrogate-gradient
-  optimization and should be named accordingly.
+  optimization and should be named accordingly. Prefer an applicable mature SciPy/
+  pymoo solver behind a bounded adapter rather than implementing the search loop.
 - **Separate proposal-only local cost model:** fit a differentiable local model from
   real current costs. This adds a derived `variables -> cost` proposal path and must
   be justified carefully against yadof's rawData-first architecture; it can never
@@ -101,6 +116,27 @@ Do not expose a fake gradient by differentiating only the rawData network while
 ignoring a non-differentiable cost boundary. Do not make all surrogate methods
 implement gradients unless the selected optimizer contract genuinely requires that
 capability.
+
+### Resolved: library-first solver ownership
+
+- Create a reuse matrix before selecting the local method: backend/version/license,
+  scalar objective and derivative requirements, bounds/constraints, mixed-variable
+  support, callback/termination, seed, state/restart, explicit defaults, and how its
+  proposal is recovered for yadof real validation.
+- A compatible backend owns its inner numerical iterations. The yadof refinement
+  adapter owns only scalarization/reference-direction construction, normalized
+  domain and task-constraint translation, surrogate/current-cost calls, proposal
+  deduplication, diagnostics/provenance, and handoff to the common real evaluator.
+- Backend defaults must be passed explicitly by a short public factory and recorded
+  with backend distribution/version. Do not expose unrestricted `**kwargs` as a
+  stable workspace API or rely on dependency defaults that can change on upgrade.
+- If the chosen backend is imported directly, declare and constrain it as a direct
+  core or optional dependency with an actionable missing-extra diagnostic. Do not
+  rely on SciPy merely being installed transitively through pymoo.
+- If no mature solver satisfies the chosen differentiability or mixed-domain
+  contract, record the concrete mismatch and reconsider the contract/package before
+  authorizing a yadof numerical implementation. A custom algorithm is the last
+  option, not the default outcome of this research task.
 
 ### Resolved: refinement ownership
 
@@ -113,6 +149,8 @@ capability.
 - It is neither a GPSAF global-search replacement nor another package-selected
   complete optimizer. Do not add a complete-method registry/config selector or
   copy GPSAF/campaign infrastructure into it.
+- The component may be a thin SciPy/pymoo-backed adapter. Package placement does not
+  imply that yadof owns the solver algorithm.
 
 ### 2. Continuous, discrete, and mixed parameters
 
@@ -155,6 +193,10 @@ training-row reconstruction error are insufficient.
   objectives remain possible, but the chosen rule must preserve coverage across
   the Pareto front. Current task objectives are already dimensionless minimization
   costs in `[0, 1]`; do not renormalize them against observed history.
+- Keep the outer yadof trust/model-management radius distinct from any backend
+  solver's internal trust-region or termination state. Reuse the backend's inner
+  numerical mechanics where compatible, but do not pretend it performs yadof's
+  prediction-versus-real acceptance, campaign budgeting, or provenance duties.
 - Route selected proposals through the common evaluation API and current-cost
   finalizer. The campaign session owns accepted current rows and best-effort durable
   recording; local-refinement code must not write a parallel history or treat
@@ -182,8 +224,9 @@ training-row reconstruction error are insufficient.
    anchors.
 3. Assign scalarizations/reference directions and initialize bounded local regions
    in the valid continuous or mixed-variable subspaces.
-4. Generate local proposals using the explicitly selected derivative or derivative-
-   free strategy; retain prediction and provenance before real evaluation.
+4. Generate local proposals through the selected mature-solver adapter using the
+   explicit derivative or derivative-free contract; retain prediction, effective
+   backend defaults/version, and provenance before real evaluation.
 5. Filter proposals by parameter semantics, task constraints, bounds, duplicates,
    novelty, diversity, and the currently calibrated trust policy.
 6. Keep a bounded exploration allocation and send selected candidates through the
@@ -201,6 +244,11 @@ training-row reconstruction error are insufficient.
 - Test the selected differentiability contract end to end. If true autograd is
   chosen, compare it with finite differences for supported task costs and reject
   unsupported/non-differentiable task operations explicitly.
+- Test the backend adapter independently: explicit defaults, capability rejection,
+  normalized bounds/constraints, scalarization, seed/termination, exception/result
+  translation, backend identity/version, and lazy import. Use a spy or equivalent
+  evidence to prove inner numerical updates run in the mature backend rather than a
+  yadof copy.
 - Cover continuous, discrete, mixed-segment, boundary, constraint, and duplicate
   behavior under deterministic seeds.
 - Test single- and multi-objective scalarization, reference-direction coverage,
@@ -218,6 +266,8 @@ training-row reconstruction error are insufficient.
   implementation to pre-modular flat files or a package complete-method selector.
 - Update architecture, blueprints, terminology, user documentation, checkpoint/
   metadata contracts, and installed-wheel tests in proportion to the chosen design.
+- Include the completed dependency-reuse matrix and justification for every retained
+  yadof numerical routine in the implementation change record.
 
 ## Completion Rule
 
@@ -231,6 +281,10 @@ training-row reconstruction error are insufficient.
   end-to-end proposal contract. If the implementation is derivative-free, its name
   and documentation say so while preserving the conceptual link to trust-region
   surrogate-based or surrogate-assisted memetic optimization.
+- A mature solver owns compatible inner optimization mechanics through a thin lazy
+  adapter with explicit defaults and backend provenance. Any custom yadof numerical
+  routine has documented incompatibility evidence showing why supported mature
+  packages could not satisfy the chosen contract.
 - Production trust decisions use benchmarked out-of-sample evidence; ensemble
   spread and training-fit error are not silently restored as GPSAF noise or
   confidence.
