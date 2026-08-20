@@ -1,31 +1,39 @@
-# Trust-Region RawData-Surrogate Local Refinement
+# PARKED — Trust-Region RawData-Surrogate Local Refinement
 
 ## Status And Execution Dependencies
 
-- This is a manual, long-term research and implementation direction. Reading it
-  does not authorize execution.
+- This work is parked. Do not implement it until every other active toDo is complete
+  and the user explicitly reactivates it. Reading this file does not authorize
+  execution.
+- Current workspace/surrogate/optimize changes must not reserve a refinement role,
+  API, capability system, state schema, SciPy dependency, or fake refinement test.
+  Local refinement is not a current consumer of any abstraction.
+- Everything after this status section is a non-binding research notebook, not an
+  approved implementation plan. On reactivation, re-audit the then-current
+  architecture, mature packages, benchmarks, and user goals; discard obsolete
+  assumptions instead of preserving compatibility with this draft.
 - Before starting this work, complete and archive these active manual toDos in
   order:
   1. `20260819_144148_simplify-surrogate-real-only-training.md`;
   2. the coordinated
      `20260820_125457_workspace-submit-optimization-composition.md` and
      `20260818_173629_modular-surrogate-optimize-methods.md` work.
-- Use their final real-only, field/slot-balanced conditional-INR training contract,
-  component boundaries, component-namespaced checkpoint schema, snapshotted
-  `submit/optimization.py`, and one immutable plan per workspace/campaign as the
-  only baseline. Do not build this feature on the
+- Use their final real-only, rawData-field-balanced conditional-INR training
+  contract, retained-but-isolated state policy, snapshotted
+  `submit/optimization.py`, and one active strategy at a time as the only baseline.
+  Do not build this feature on the
   current mixup/importance/relative-loss paths, optimizer-facing training-fit error,
   ensemble-driven GPSAF noise, flat module layout, or legacy checkpoint behavior.
 - Real out-of-sample benchmark evidence is an implementation prerequisite, not a
   later polish step. A production trust policy must not be enabled merely because
   local-refinement mechanics work on synthetic fixtures.
-- Follow the coordinated tasks' library-first policy. Before writing numerical
+- After explicit reactivation, follow the then-current library-first policy. Before writing numerical
   optimization code, audit supported SciPy/pymoo and other mature packages; yadof
   should retain only workspace-plan adaptation, scalarization/domain translation,
   outer model management, provenance, and real-validation glue that those solvers do
   not provide.
 
-## Updated Context
+## Archived Research Context (Non-Binding)
 
 - Yadof treats the real simulator or workflow as an expensive black box. It must
   never claim to obtain gradients of the real workflow.
@@ -51,12 +59,9 @@
   calibrated confidence. Training-row fit error is in-sample evidence. Neither may
   drive trust-region acceptance, candidate comparison, noise, or radius changes
   unless a later real benchmark establishes an explicit out-of-sample calibration.
-- After the coordinated prerequisites, this feature is an appendable refinement
-  component selected by the workspace optimization plan. It consumes a surrogate
-  capability and package-owned real-evaluation handoff. It is not another GPSAF
-  internal search component and not a package-owned complete optimizer: a trust-
-  region stage owns local proposals and model-management feedback while the common
-  engine owns real validation/session/recording.
+- A previous draft assumed an appendable refinement component selected by the
+  workspace optimization strategy. That ownership model is intentionally unresolved
+  while this work is parked and must not drive current abstractions.
 - SciPy already provides mature bounded/constrained scalar solvers through
   `scipy.optimize.minimize` and mature global scalar solvers such as differential
   evolution, dual annealing, and SHGO. They do not supply yadof's multi-objective
@@ -138,11 +143,11 @@ capability.
   authorizing a yadof numerical implementation. A custom algorithm is the last
   option, not the default outcome of this research task.
 
-### Resolved: refinement ownership
+### Archived hypothesis: refinement ownership
 
-- Implement refinement as a reusable package component appended by
-  `submit/optimization.py` to a workspace plan, for example after the default GPSAF
-  proposal stage.
+- Do not implement this ownership now. A future re-audit may consider a reusable
+  package component appended by `submit/optimization.py`, but it may also choose a
+  different boundary based on the completed architecture.
 - The component may own trust-region proposal/radius/model-management state, but the
   package campaign engine owns snapshot selection, common real evaluation,
   finalization, session history, recording, and generation metadata.
@@ -211,10 +216,10 @@ training-row reconstruction error are insufficient.
 - Record compact method, anchor, scalarization, radius, predicted-improvement,
   actual-improvement, and acceptance diagnostics without storing predictions as
   source truth or duplicating rawData.
-- Respect the workspace-plan provenance rule. Adding/removing this refinement or
-  changing its search/surrogate component graph changes the optimization
-  fingerprint and requires a new workspace or the documented explicit clear
-  operation; it cannot hot-switch against retained plan state.
+- Respect the retained-state rule chosen by the active workspace strategy work.
+  Adding/removing a future refinement must stop pending work and activate a distinct
+  compatible state namespace; it must not delete recorded real evidence or inactive
+  component state, require a new workspace/clear, or cross-load incompatible state.
 
 ## Candidate Workflow
 
@@ -237,7 +242,7 @@ training-row reconstruction error are insufficient.
 8. Make the real results available to the campaign session and later surrogate
    training through the existing evaluation/recording flow.
 
-## Verification Plan
+## Possible Future Verification Questions (Non-Binding)
 
 - Prove that no path labels a surrogate/rawData derivative as a real-workflow
   gradient and that no predicted cost/rawData becomes authoritative history.
@@ -261,19 +266,23 @@ training-row reconstruction error are insufficient.
   that uncalibrated member spread or training-fit diagnostics cannot affect
   selection, then add any calibrated signal only with reliability/ranking evidence
   and an ablation test.
-- Verify component sequencing, capability validation, plan fingerprint freeze, and
-  workspace provenance through `submit/optimization.py`; do not couple the
-  implementation to pre-modular flat files or a package complete-method selector.
+- Re-evaluate strategy sequencing, semantic state compatibility, and workspace
+  provenance through `submit/optimization.py`; do not assume this draft's component
+  or capability model survives until reactivation.
 - Update architecture, blueprints, terminology, user documentation, checkpoint/
   metadata contracts, and installed-wheel tests in proportion to the chosen design.
 - Include the completed dependency-reuse matrix and justification for every retained
   yadof numerical routine in the implementation change record.
 
-## Completion Rule
+## Reactivation Gate
 
-- All three prerequisite toDos are complete and archived, the three remaining
-  decisions above are recorded with their rationale, and refinement ownership
-  follows the resolved workspace-plan component boundary.
+- All other active toDos are complete and archived, the user explicitly chooses to
+  resume local-refinement work, and the whole research notebook has been re-audited
+  against the then-current code and available benchmarks.
+- Before implementation, replace this parked notebook with a new approved plan that
+  resolves ownership, differentiability, mixed-domain behavior, state semantics,
+  benchmark suite/metrics/thresholds, and mature-package reuse. Do not treat any
+  remaining item below as already approved.
 - The project has a documented and tested local-refinement workflow with explicit
   multi-objective goals, parameter-domain handling, trust-region limits, bounded
   real-evaluation validation, and feedback-driven model management.

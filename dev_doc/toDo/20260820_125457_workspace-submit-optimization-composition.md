@@ -1,22 +1,22 @@
-# Workspace Submit-Side Code And Optimization Composition
+# Workspace Submit-Side Code And Optimization Strategy
 
 ## Status And Execution Order
 
 - This is a manual, one-shot, project-wide workspace-contract change. Reading it
   does not authorize implementation.
 - First complete and archive
-  `20260819_144148_simplify-surrogate-real-only-training.md` so the component work
-  starts from the final real-only, field/slot-balanced conditional-INR behavior and
-  fresh-only checkpoint format.
+  `20260819_144148_simplify-surrogate-real-only-training.md` so the strategy work
+  starts from the final real-only, rawData-field-balanced conditional-INR behavior and its
+  user-approved benchmark gate.
 - Then execute this toDo and
-  `20260818_173629_modular-surrogate-optimize-methods.md` as one coordinated change.
-  The latter owns the detailed package-component extraction; this document owns the
-  workspace layout, loading, composition, snapshot, provenance, migration, and
-  initialization contracts. Neither may land as a temporary compatibility layer
-  that leaves a complete algorithm selected inside yadof.
+  `20260818_173629_modular-surrogate-optimize-methods.md` as coordinated but staged
+  work. The latter owns the smallest package seams required by a workspace strategy;
+  this document owns layout, loading, snapshots, state retention, migration, and
+  initialization. Each stage must keep the accepted default runnable and testable.
 - Archive both coordinated toDos only after their shared installed-wheel acceptance
-  passes. The trust-region refinement toDo remains a later consumer of the resulting
-  composition boundary.
+  passes. Trust-region/local refinement is parked research and must not cause this
+  task to create a refinement role, capability system, state API, SciPy dependency,
+  or fake refinement.
 
 ## Verified Current Facts And Corrections
 
@@ -41,12 +41,11 @@
   implementation, while `yadof.surrogate` directly exposes one concrete conditional
   INR runtime. Workspace-defined composition therefore requires a real package
   boundary change, not only a new script or directory move.
-- The installed numerical baseline is `pymoo 0.6.2`, `scipy 1.18.0`, and
-  `torch 2.10.0`. That pymoo version already supplies GA, NSGA-III, and
-  single-objective PSO, but it does not expose a GPSAF implementation. SciPy supplies
-  mature local/global scalar-objective solvers, not a drop-in multi-objective
-  NSGA-III or GPSAF replacement. Reuse therefore needs a capability/semantics audit;
-  package removal cannot be inferred from an algorithm name alone.
+- The installed numerical baseline includes `pymoo 0.6.2` and `torch 2.10.0`.
+  Pymoo already supplies GA, NSGA-III, and single-objective PSO, but not GPSAF.
+  Reuse auditing in this task is therefore focused on the current GA/NSGA-III,
+  conditional-INR, and irreducible GPSAF behavior. Installed SciPy does not justify
+  adding a refinement abstraction or dependency while that work is parked.
 
 ## Goal
 
@@ -57,17 +56,21 @@
   out of `job_template/` into `submit/`. Keep canonical
   `parameters_constraints.py` under `job_template/` and preserve its generated
   assigned-file handoff.
-- Add `submit/optimization.py` as the authoritative definition of the one complete
-  optimization plan used by that workspace.
+- Add mandatory `submit/optimization.py` as the authoritative definition of the
+  active complete optimization strategy. There is no package-default fallback when
+  this file is absent.
 - Keep campaign/session ownership, generation boundaries, evaluation, failure
   isolation, recording, rawData-first interpretation, scheduler safety, checkpoint
-  publication, and metadata mechanisms in yadof. Expose reusable search,
-  surrogate-assistance, surrogate-model, and later refinement components that the
-  workspace plan composes; do not keep a second package-owned complete default
-  algorithm selected by config or a registry.
+  publication, and metadata mechanisms in yadof. The engine consumes one narrow
+  strategy/callable boundary. GPSAF exposes only its current real search and
+  rawData-surrogate seams; do not build a generic component graph, capability
+  matrix, registry, lifecycle manager, or second package-owned complete default.
 - Preserve the present default numerical behavior after the preceding real-only
   cleanup while making alternative compositions expressible without copying
   campaign, history, evaluator, recorder, or checkpoint infrastructure.
+- Allow sequential strategy changes in one workspace. Only one run is active at a
+  time; recorded evidence and inactive persistent optimizer/surrogate state are
+  retained rather than deleted.
 
 ## Workspace Standard
 
@@ -79,7 +82,7 @@ workspace/
   config.py
   submit/
     calc_cost.py                 rawData -> current objective tuple
-    optimization.py              complete optimization-plan composition
+    optimization.py              complete optimization-strategy composition
     optional submit-only helpers
   job_template/
     parameters_constraints.py   canonical worker parameter/constraint definition
@@ -130,97 +133,76 @@ def build_optimization():
     ...
 ```
 
-The callable returns one validated immutable optimization-plan object assembled
-from public yadof components. Importing the module and building the plan must not
-train a model, read history, create a checkpoint, submit/evaluate a candidate, open
-a GUI, or mutate workspace data. `yadof check` loads the module in the normal fresh,
-isolated workspace namespace and validates the returned component graph without
-executing a campaign.
+The callable returns one immutable strategy object or callable accepted by the
+campaign engine. Importing the module and building the strategy must not train a
+model, read history, create state/checkpoints, evaluate a candidate, open a GUI, or
+mutate workspace data. `yadof check` loads it through the normal isolated workspace
+loader and validates only the current concrete contract.
 
-Exact constructor names should be settled from the extracted call boundaries during
-implementation, but the stable roles are mandatory:
+Conceptually the engine owns one boundary:
 
-- a campaign engine owns sessions, generation reload/snapshot, metadata, strict
-  all-infinite behavior, and calls the workspace plan;
-- a global-search component proposes/advances normalized candidates and consumes
-  real objective rows;
-- an optional surrogate-model component trains on real rawData, predicts compatible
-  rawData, and leaves current-cost interpretation outside the model;
-- an optional GPSAF assistance component combines a global-search component and a
-  surrogate-model component while preserving exploration and real validation;
-- zero or more refinement components may add bounded proposal/validation stages;
-- the common real-evaluation handoff remains package-owned and is not replaceable by
-  workspace code that writes history or returns predicted values as truth.
+```text
+OptimizationStrategy.run_generation(context) -> OptimizationResult
+```
 
-Illustrative, non-final spelling of the intended compositions is:
+Exact spelling is settled from the current call sites. The engine owns sessions,
+generation snapshots, real evaluation, history/recording, failure isolation,
+progress, and metadata. A strategy proposes candidates and consumes real results
+through those provided boundaries; it cannot write a parallel history or accept a
+surrogate prediction as truth.
+
+Illustrative, non-final spelling of the mandatory starter is:
 
 ```python
 def build_optimization():
-    global_search = by_objective_count(
-        single=genetic_algorithm(),
-        multi=nsga3(),
+    search = by_objective_count(
+        single=pymoo_ga(),
+        multi=pymoo_nsga3(),
     )
-    return optimization_plan(
-        gpsaf(
-            search=global_search,
-            surrogate=conditional_inr(),
-        )
+    return gpsaf(
+        search=search,
+        surrogate=conditional_inr(),
     )
 ```
 
-The component contracts must also be able to express, in separate workspaces:
+The first production compositions required by this work are:
 
 1. the current GPSAF + (single-objective GA / multi-objective NSGA-III) +
    conditional-INR behavior;
-2. that same plan followed by a future trust-region surrogate local-refinement
-   component;
-3. a multi-objective NSGA-III-only plan with no GPSAF or surrogate training;
-4. GPSAF with a future particle-swarm search component instead of the present
-   evolutionary search component;
-5. GPSAF with another rawData-first surrogate component instead of conditional INR.
+2. a real multi-objective NSGA-III-only strategy with no GPSAF or surrogate.
 
-This task does not implement production particle swarm, another surrogate, or the
-trust-region algorithm. Focused test components must prove that each role can be
-replaced or appended without duplicating campaign/evaluation/history code. Numerical
-validity for a real added method remains its own implementation task.
+GPSAF may accept a narrow search and rawData-surrogate interface so a later real PSO
+or surrogate implementation can replace one seam without copying campaign code.
+Do not stabilize a general third-party plugin API or use speculative PSO/surrogate/
+refinement fakes as evidence that a future numerical method fits. Small test doubles
+may verify the engine boundary and current dependency direction only.
 
 ## Library-First Numerical Policy
 
-- Yadof should own orchestration and task-boundary semantics, not generic numerical
-  algorithms. Before extracting or writing any search, local solver, loss, sampler,
-  neural layer, or population operator, audit mature installed packages and their
-  supported versions, licenses, state/restart behavior, objective/domain support,
-  determinism, and serialization boundaries.
+- Yadof owns orchestration and task-boundary semantics, not generic numerical
+  algorithms. Audit only responsibilities touched by this change: GA, NSGA-III,
+  current GPSAF coordination, and conditional INR. Audit PSO/local solvers only when
+  a real implementation task starts.
 - A package imported directly by yadof must be declared as a direct core or optional
   dependency with a supported version range; do not rely on it only because another
-  dependency happens to install it transitively. In particular, direct SciPy-backed
-  code requires an explicit dependency decision during implementation.
-- Where a compatible implementation exists, expose a thin lazy adapter/factory that
-  constructs the library object with explicit keyword defaults. The few yadof-owned
-  lines should make the effective default parameters inspectable for workspace
-  composition and provenance, translate normalized arrays/results, and enforce
-  yadof invariants. They must not copy or subtly fork the library's numerical loop.
-- Prefer pymoo's GA, NSGA-III, and PSO implementations and SciPy's applicable
-  scalar-objective local/global solvers instead of reimplementing them. A pymoo PSO
-  is single-objective and therefore is not a semantic drop-in replacement for the
-  current multi-objective NSGA-III path; plan validation must reject incompatible
-  objective/constraint capabilities rather than silently scalarize or fall back.
+  dependency happens to install it transitively.
+- A thin lazy adapter performs yadof/backend data translation, supported-argument
+  validation, seed/state handoff, exception normalization, and compact provenance.
+  It must not copy or subtly fork the backend's numerical loop.
+- Pymoo continues to own GA/NSGA-III algorithms, populations, operators, and
+  survival. PyTorch owns compatible tensor, layer, loss, optimizer, and serialization
+  primitives.
 - The installed pymoo has no GPSAF component. Preserve only the yadof-specific GPSAF
   assistance/orchestration that cannot be delegated, and re-audit mature packages
   before implementation in case a compatible maintained dependency can replace
   more of it. Adopting or upgrading a dependency requires focused equivalence and
   recovery tests; this toDo does not assume an upgrade.
-- Conditional INR should use mature PyTorch primitives for modeling, optimization,
-  losses, batching, and serialization wherever their semantics fit. Yadof retains
-  only rawData schema/query reconstruction, task/campaign adaptation, component
-  lifecycle, provenance, and checkpoint integration that are specific to its
-  contract. If a maintained package can satisfy that complete capability later, it
-  should be preferred behind the same component boundary.
-- "Expose defaults" is an adapter concern, not permission to mirror an implementation.
-  Each public numerical factory must document and pass explicit effective defaults,
-  identify its backend/version for provenance, and leave unsupported backend options
-  available only through a deliberately reviewed narrow escape hatch, if one is
-  genuinely needed.
+- Expose only parameters yadof deliberately controls. Do not mirror full backend
+  constructors or forward unrestricted `**kwargs`; record backend name/version and
+  the effective yadof-controlled parameters.
+- Do not add SciPy for parked refinement work. The installed planning baseline has
+  no pymoo GPSAF, so retain only irreducible yadof GPSAF coordination and re-check
+  supported dependencies during implementation.
 
 ## Package Boundary
 
@@ -230,35 +212,32 @@ validity for a real added method remains its own implementation task.
   the package-owned campaign engine.
 - Move `OptimizationResult` and common population/history/evaluation contracts out
   of the current complete GPSAF implementation.
-- Load and validate the workspace plan through one public/internal plan boundary;
+- Load and validate the workspace strategy through one public/internal strategy boundary;
   the engine invokes it once per generation under the generation snapshot.
 - Expose GPSAF pressure and objective-count dispatch as small composable yadof
   boundaries. Expose GA and NSGA-III through thin pymoo-backed factories with
-  explicit effective defaults; do not extract or duplicate pymoo numerical
+  only the yadof-controlled parameters; do not extract or duplicate pymoo numerical
   mechanics into yadof. Pymoo types remain private to those adapters.
 - Do not add `OPTIMIZE_METHOD`, `SURROGATE_METHOD`, or
   `OPTIMIZE_GPSAF_SEARCH_BACKEND` selectors. Those choices belong in
   `submit/optimization.py`, and a package selector would create a second source of
   truth.
 - Do not keep a package registry entry representing the complete current algorithm.
-  Component-local IDs/factories needed for provenance, recovery, or viewer
-  inspection are allowed, but they cannot select a complete plan independently of
-  the workspace script.
+  Strategy/backend/state-schema identities needed for provenance and recovery cannot
+  select a complete strategy independently of the workspace script.
 
 ### `yadof.surrogate`
 
-- Keep only method-independent training-data/session adaptation, scheduling,
-  lifecycle, compact metadata, and checkpoint publication that yadof actually needs;
-  do not build generic surrogate-framework machinery already supplied by mature
-  dependencies. Separate those boundaries from the conditional-INR
-  model/data/artifact adapter.
-- Expose the simplified conditional INR as a rawData-first surrogate component with
-  explicit stable identity and capabilities. It must still reconstruct full rawData
-  before current cost and must never become an authoritative direct-cost model.
-- Scheduler and optimizer code depend on a selected component instance/contract,
-  not directly on `surrogate.runtime` or a global default method.
-- Viewer integration may use a component-specific inspection adapter or artifact
-  identity, but it must not silently assume every plan uses conditional INR.
+- Keep only the rawData training-data adaptation, conditional-INR scheduling/state,
+  compact metadata, and atomic checkpoint behavior needed by the current production
+  method. Do not build a generic surrogate framework before a second real method.
+- Expose one narrow rawData-first conditional-INR seam required by GPSAF. It predicts
+  complete rawData before current cost and never becomes an authoritative direct-cost
+  model.
+- Scheduler/checkpoint/viewer code may remain explicitly conditional-INR-specific,
+  but GPSAF must call the narrow seam rather than import concrete runtime internals.
+  A strategy with no surrogate produces no surrogate state and viewer discovery
+  reports that fact cleanly.
 
 The detailed source split, dependency direction, dependency-reuse audit, and
 component tests are maintained in the coordinated modularization toDo. Avoid
@@ -266,35 +245,40 @@ symmetric empty files, generic `utils.py`, speculative third-party plugin APIs,
 wrappers that only forward the old complete algorithm, and yadof-owned copies of
 backend algorithms.
 
-## Snapshot, Identity, And Campaign Policy
+## Snapshot, Provenance, And Retained State
 
-- A generation snapshot owns both `submit/` and `job_template/`. It rebases both
-  paths into one immutable temporary workspace and keeps jobs, history, checkpoints,
-  logs, and tool output pointed at the real workspace.
-- Interpretation fingerprints start from
-  `job_template/parameters_constraints.py` and `submit/calc_cost.py`, following each
-  root's dependency-aware local imports. Physical ownership does not remove the
-  canonical parameter source from submit-side interpretation provenance.
-- Evaluation fingerprints start from `job_template/workflow.py` and optional
-  `job_template/evaluation.py` plus evaluate-side dependencies and semantic config.
-- Add an optimization-definition fingerprint rooted at
-  `submit/optimization.py` plus its submit-local dependencies. Record the complete
-  task snapshot ID and the plan/component identities in generation and surrogate
-  metadata.
-- Cost/parameter/evaluator task corrections retain the documented generation-boundary
-  behavior. A complete optimization-plan change is structural state change: after
-  the first generation of a campaign, a changed optimization fingerprint or
-  incompatible component identity fails before evaluation and instructs the user to
-  use a new workspace or explicitly clear history/checkpoints.
-- Numeric source edits that alter a stateful component cannot bypass this rule by
-  reusing the same declared ID. Source fingerprint and declared component identity
-  are separate provenance fields.
-- Background surrogate work receives the same owned generation snapshot and exact
-  plan/component selection. No thread may reopen the live `submit/optimization.py`
-  while a generation is running.
-- One workspace owns one plan and one set of component state/checkpoints. The design
-  does not support switching plans against retained optimizer/surrogate state or
-  keeping several active plans in one workspace.
+- A generation snapshot owns complete copies of both `submit/` and `job_template/`.
+  It rebases both roots into one immutable temporary workspace while runtime output
+  continues to target the real workspace.
+- Hash both complete copied trees. Do not add a new AST/import dependency tracker for
+  submit helpers: dynamic imports and data-file dependencies make that precision
+  misleading. Interpretation/evaluation/optimization hashes are provenance and may
+  invalidate derived caches, not scientific compatibility decisions.
+- Record source hashes separately from a deterministic semantic state signature. The
+  state signature contains strategy/backend identity, state schema, parameter and
+  objective dimensions, backend versions, and effective yadof-controlled parameters
+  required to decide whether derived state can be resumed.
+- Source-hash inequality never rejects or deletes recorded variables/rawData. A
+  compatible state signature may continue using active derived state; an incompatible
+  signature activates a new optimization-run state namespace before evaluation.
+- Each run owns component/method-specific persistent namespaces. On a plan change,
+  yadof waits for or safely stops pending background work, releases in-memory state,
+  marks the old run inactive, and activates a new compatible or empty namespace.
+- Old optimizer and surrogate artifacts, including conditional-INR neural-network
+  weights, remain on disk. Discovery is scoped to the active run/component/signature
+  so a new surrogate cannot accidentally load them.
+- Returning to an old strategy may resume retained state only when its strategy,
+  backend, state schema, parameter/rawData schema, and training policy are supported
+  and compatible. Otherwise it cold-starts from retained real evidence while still
+  preserving the old files.
+- Retention does not promise every future yadof version can read every old artifact;
+  metadata must explain why recovery is accepted or refused. Automatic pruning is
+  out of scope and any future prune operation must be explicit and confirmed.
+- `history clear` remains a separate destructive user decision and is never required
+  merely to switch strategy. Only one run may be active at a time, but one workspace
+  may retain several inactive runs.
+- Background surrogate work receives the same owned generation snapshot. No worker
+  may reopen live `submit/optimization.py` while a generation is running.
 
 ## Initialization, Validation, And Migration
 
@@ -313,7 +297,8 @@ backend algorithms.
   default. It contains composition only, not copied GPSAF, pymoo, surrogate,
   scheduler, evaluator, or campaign implementations.
 - `yadof check` validates the marker, both source roots, canonical parameters,
-  current cost, optimization plan, misplaced reserved files, backend requirements,
+  current cost, side-effect-free strategy construction, misplaced reserved files,
+  objective/backend compatibility,
   and workflow syntax without importing/running the workflow or starting numerical
   work.
 - Update generic smoke assessment to compare every starter source that affects its
@@ -323,38 +308,38 @@ backend algorithms.
   `job_template/parameters_constraints.py`; update only cost/optimization consumers
   to the new submit root. Adapters and models copied for execution still target
   `job_template/`.
+- Parameterize and reuse the current isolated task-module loader for either source
+  root; do not create a second import-isolation implementation.
 - Migrate repository reference workspaces and tests to the new layout. Do not add a
   dual-path loader or silently accept legacy files in both locations.
 - Existing user workspaces are never rewritten by `init`. Bump template provenance
   and document an explicit fresh-workspace/copy-task migration. `check` should
   diagnose the old layout and explain the move; it must not move files, edit the
   marker, clear history, or guess whether an active campaign is safe to migrate.
-- Because plan identity and checkpoint layout are intentionally fresh-only in this
-  series of tasks, acceptance uses a newly initialized workspace or an explicit
-  user-authorized clear/new-workspace path. No legacy optimizer/checkpoint reader is
-  added.
+- Source-layout migration and strategy-internal refactoring are staged and tested
+  separately, although final acceptance requires both. Incompatible old artifacts
+  may remain retained and undiscoverable without adding a legacy reader; real
+  evidence is not cleared merely because the new code cannot recover old state.
 
 ## Implementation Plan
 
 ### Phase 0 - Freeze The Post-Simplification Baseline
 
-- [ ] Confirm the real-only surrogate toDo is archived and its final checkpoint and
-  trust-signal removals are the only baseline.
+- [ ] Confirm the real-only surrogate toDo is archived and its user-approved
+  benchmark gate passed.
 - [ ] Characterize the current seeded default for single-objective GA,
   multi-objective NSGA-III, GPSAF warmup/fallback/alpha/beta/exploration, staggered
   conditional-INR training, current-cost conversion, and real validation.
 - [ ] Inventory every loader/path/test/tool that consumes canonical parameters from
   `job_template/` or assumes `calc_cost.py` is beside them.
-- [ ] Produce a library-reuse matrix for every numerical responsibility: installed
-  backend/version, capabilities, explicit defaults, state/restart and determinism,
-  yadof adapter duties, and evidence for any algorithm code that must remain in
-  yadof. Confirm locally that pymoo GA/NSGA-III/PSO are available, installed pymoo
-  GPSAF is not, and SciPy candidates are evaluated only for compatible scalar goals.
+- [ ] Audit only GA, NSGA-III, GPSAF, and conditional INR: backend/version,
+  yadof-controlled parameters, state handoff, and the specific coordination code
+  that cannot be delegated.
 
 ### Phase 1 - Establish The Two-Root Workspace
 
-- [ ] Add the explicit submit path to workspace context/config validation and teach
-  the fresh loader to isolate submit-local modules independently of execute modules.
+- [ ] Add the explicit submit path to workspace context/config validation and
+  parameterize the existing isolated loader for either source root.
 - [ ] Move only cost and other exclusively submit-side sources in the template,
   examples, neutral test workspaces, tools, and task APIs; retain canonical
   parameters under `job_template/` without a duplicate submit copy.
@@ -363,52 +348,50 @@ backend algorithms.
   cost exclusion with actionable misplaced-file validation while preserving the
   intentional canonical-parameter materialization exception.
 
-### Phase 2 - Extend Generation Snapshots And Provenance
+### Phase 2 - Extend Snapshots And Add One Strategy Boundary
 
-- [ ] Capture/rebase both roots atomically and split interpretation, evaluation, and
-  optimization dependency fingerprints.
-- [ ] Preserve per-generation hot task semantics for cost/evaluation while freezing
-  the plan identity across a campaign.
-- [ ] Record plan/component/source provenance and prove asynchronous training uses
-  the owned snapshot.
+- [ ] Capture/rebase and hash both complete roots without a new AST dependency
+  tracker; preserve generation-boundary task semantics.
+- [ ] Move common result/context types out of GPSAF and make the engine invoke one
+  snapshotted strategy/callable.
+- [ ] Publish the mandatory starter with single-objective GA versus multi-objective
+  NSGA-III dispatch, plus a real multi-objective NSGA-III-only strategy.
 
 ### Phase 3 - Extract Composable Package Components
 
-- [ ] Execute the coordinated modularization toDo: separate campaign/common
-  contracts, irreducible GPSAF assistance, thin pymoo/SciPy adapters,
-  conditional-INR-specific adaptation, scheduling, checkpoints, and inspection along
-  actual call boundaries.
+- [ ] Execute the coordinated modularization toDo: thin pymoo adapter, irreducible
+  GPSAF coordination, one narrow conditional-INR rawData seam, and cohesion-based
+  runtime splitting.
 - [ ] Delete or avoid yadof numerical mechanics already supplied by an accepted
-  mature dependency. Factories expose explicit effective defaults and backend
-  identity; equivalence tests compare behavior through public yadof contracts rather
-  than copying backend implementation details.
+  mature dependency. Factories expose only yadof-controlled parameters plus backend
+  identity/version; equivalence tests compare behavior through public yadof contracts
+  rather than copying backend implementation details or full backend defaults.
 - [ ] Remove the package-owned complete-algorithm dispatch and any planned selector
   configs/registries that duplicate workspace composition.
-- [ ] Preserve current behavior through the new component graph and keep optional
-  dependencies lazy.
+- [ ] Preserve current behavior through the narrow strategy/search/surrogate seams;
+  add no refinement, generic plugin, capability, or lifecycle framework.
 
-### Phase 4 - Load And Run The Workspace Plan
+### Phase 4 - Retain And Isolate Strategy State
 
-- [ ] Define and validate the minimal `build_optimization()` return contract and
-  component identities/capabilities.
-- [ ] Make the campaign engine invoke the snapshotted plan while retaining common
-  real evaluation, session history, failure, progress, metadata, and recorder
-  behavior.
-- [ ] Add focused fake components proving a refinement step can be appended and a
-  search or surrogate component can be replaced without infrastructure copies.
-- [ ] Add a real NSGA-III-only neutral test plan; it performs no surrogate training
-  and remains multi-objective-only.
+- [ ] Define the deterministic semantic state signature and per-run/component
+  persistent namespaces separately from source hashes.
+- [ ] Implement strategy switching that waits/stops pending work and resets in-memory
+  ownership while preserving recorded evidence and all inactive persistent state.
+- [ ] Scope discovery/recovery to compatible active state and prove switching away
+  from and back to conditional INR never cross-loads another component's artifacts.
+- [ ] Keep common real evaluation, session, failure, progress, metadata, and recorder
+  behavior unchanged.
 
 ### Phase 5 - Init, Check, Tools, And Documentation
 
 - [ ] Publish the new default template and bump its provenance without adding
   automatic repair/upgrade.
 - [ ] Update `check`, smoke assessment, parameter extraction, adapter copying/path
-  guidance, history/cost/surrogate viewers, history clear, examples, and package
-  artifact expectations.
+  guidance, history/cost/surrogate viewers, state retention, explicit destructive
+  history clear, examples, and package artifact expectations.
 - [ ] Update architecture, terminology, project/module/file blueprints, user docs,
   prompt examples, template README, and the nested surrogate-viewer documentation
-  where component/plan discovery changes.
+  where strategy/state discovery changes.
 
 ### Phase 6 - Installed Acceptance
 
@@ -431,27 +414,27 @@ backend algorithms.
   and evaluate-side assets still do.
 - Snapshot tests edit cost, workflow/evaluation, and optimization sources at
   controlled boundaries. One generation remains coherent; cost/evaluation changes
-  follow current rules; a plan change after campaign start fails before candidate
-  evaluation until the workspace is new/cleared.
+  follow current rules; source hashes record provenance without rejecting evidence;
+  incompatible strategy state activates an isolated new run.
 - Loader tests cover submit-local relative/absolute helper imports, same-named
   helpers across roots/workspaces, exception cleanup, and no lasting `sys.path` or
   `sys.modules` pollution.
-- Default-plan tests cover single-objective GA and multi-objective NSGA-III, seeded
+- Starter-default tests cover single-objective GA and multi-objective NSGA-III, seeded
   GPSAF phases, real-only conditional INR, warm start, fallback, exploration,
   staggered training, rawData-first current cost, and real validation.
-- Composition tests cover multi-objective NSGA-III without GPSAF/surrogate, an
-  appended fake refinement, a replacement fake search component, and a replacement
-  fake rawData-first surrogate. These prove contracts and dependency direction, not
-  production quality of unimplemented methods.
-- Lifecycle tests cover plan-aware checkpoint paths/metadata, history clear,
-  workspace state isolation, viewer method handling, scheduler reset, recording-loss
-  isolation, and absence of a second config/registry selection source.
+- Strategy tests cover real multi-objective NSGA-III without GPSAF/surrogate and
+  small engine/current-seam doubles only; there is no fake refinement or claim about
+  unimplemented production methods.
+- State tests cover pending-training shutdown, active/inactive run isolation,
+  retained conditional-INR weights, no cross-component discovery, compatible
+  resume, incompatible cold start from retained evidence, viewer handling,
+  recording-loss isolation, and absence of a second selection source.
 - Static checks recursively reject old internal imports, duplicate complete
   algorithm implementations, backend numerical loops copied into yadof, task code
   copied into package fixtures, legacy workspace fallback paths, and package parent
-  imports that eagerly load Torch, pymoo method implementations, SciPy solvers,
-  Matplotlib, Tkinter, or viewer UI. Adapter tests assert explicit forwarded defaults,
-  capability rejection, backend identity, and deterministic state/restart behavior.
+  imports that eagerly load Torch, pymoo method implementations, Matplotlib, Tkinter,
+  or viewer UI. Adapter tests assert controlled parameters, backend identity, and
+  deterministic state handoff without mirroring full backend APIs.
 - Finish with `git diff --check`, UTF-8/link/path validation, installed-wheel focused
   tests, and the complete installed-package pytest suite.
 
@@ -464,23 +447,25 @@ backend algorithms.
   generated assigned parameter snapshot—not the canonical source—plus evaluate-side
   payload and package worker support.
 - The complete algorithm exists only as the workspace's snapshotted
-  `build_optimization()` composition. Yadof owns reusable components and invariant
-  campaign/evaluation/persistence mechanisms, with no competing complete-method
-  config selector or registry.
+  `build_optimization()` composition. Yadof owns the minimal current seams and
+  invariant campaign/evaluation/persistence mechanisms, with no competing complete-
+  method config selector, registry, or generic component framework.
 - The starter reproduces GPSAF + objective-count-dependent GA/NSGA-III + simplified
-  conditional INR. NSGA-III-only and fake append/swap plans prove the intended
-  composition roles without claiming unimplemented numerical methods are ready.
+  conditional INR. A real multi-objective NSGA-III-only strategy verifies the engine
+  boundary without speculative refinement or future-method APIs.
 - Yadof contains no copied implementation of an accepted backend algorithm. Mature
-  package implementations are reached through thin lazy adapters whose explicit
-  defaults and capabilities are inspectable; only yadof-specific orchestration,
-  rawData/task adaptation, real-validation, and persistence glue remain, with a
-  written justification wherever no compatible mature implementation exists.
-- Plan/component/source provenance is durable, one generation is coherent, one
-  campaign cannot silently change plans, and rawData-first plus real-validation
-  invariants remain intact.
+  package implementations are reached through thin lazy adapters; yadof-controlled
+  parameters, backend version, and current objective compatibility are inspectable.
+  Only yadof-specific orchestration, rawData/task adaptation, real-validation, and
+  persistence glue remain, with a written justification wherever no compatible
+  mature implementation exists.
+- Source provenance and semantic state compatibility are separate. One generation
+  is coherent; a strategy change activates isolated state while retaining old
+  optimizer/surrogate artifacts and recorded rawData. RawData-first and real-
+  validation invariants remain intact.
 - Init/check/migration diagnostics, examples, architecture, blueprints, terminology,
   user docs, nested viewer docs, artifacts, and tests all describe the new standard;
   installed full pytest passes from the force-reinstalled wheel.
-- This document and the coordinated modularization toDo are archived together. The
-  later trust-region toDo can then add a real refinement component through the
-  workspace plan rather than changing package-owned complete-algorithm dispatch.
+- This document and the coordinated modularization toDo are archived together.
+  Parked trust-region research is reconsidered only after all other active work and
+  does not constrain this completed strategy boundary.

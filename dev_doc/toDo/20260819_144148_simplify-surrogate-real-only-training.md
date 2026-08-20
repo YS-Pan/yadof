@@ -3,9 +3,10 @@
 ## Execution Order
 
 - 这是手工触发、一次性的第一阶段任务。
-- 必须先完整执行本 toDo，完成代码、测试、文档、安装态验收和归档，再执行
-  `dev_doc/toDo/20260820_125457_workspace-submit-optimization-composition.md` 与
-  `dev_doc/toDo/20260818_173629_modular-surrogate-optimize-methods.md` 的协调实现。
+- 本 toDo 可以分阶段实现；删除确定无效的 GPSAF trust surface、建立 atomic publication、
+  准备 benchmark 等安全工作不必等待全部 benchmark 就绪。但简化后的训练不得成为 production
+  baseline，本 toDo 也不得归档，直到用户确认真实 benchmark suite、metrics、thresholds 并
+  通过 gate。两份协调 toDo 只能在这个 production gate 之后完成最终迁移与验收。
 - 本任务直接在当前 `surrogate/`、`optimize/` 文件布局中建立最终训练语义。后续目录重构
   只能移动和解耦已经简化的实现，不得先迁移再删除 mixup、task-owned query weights、
   相对损失、rank-based forced queries 或旧 checkpoint compatibility。
@@ -39,23 +40,26 @@
   误导维护者。训练集内误差不是 out-of-sample trust evidence，ensemble spread 也尚未经过
   真实 benchmark 校准；本阶段应删除这些无效 decision surfaces 并用测试固定现有的
   selection invariance，同时保留 ensemble、bootstrap 和 spread 输出本身。
-- 本任务只面向新的优化。旧仿真 history、旧 checkpoint 和旧 workspace 配置不属于迁移
-  输入；开始新优化时使用空 workspace，或由用户显式执行 `history clear`。
+- recorded variables/rawData 是长期真实 evidence，算法切换或本次训练策略升级都不得自动
+  删除。旧 surrogate checkpoint/权重也保留在 inactive run/component namespace；只有语义
+  兼容的 active strategy 可恢复它们，否则从保留的真实 evidence cold retrain。无需空
+  workspace，也不要求 `history clear`。
 - 简化同时遵守 library-first 原则：标准 tensor/loss/optimizer/serialization 行为直接使用
-  PyTorch/NumPy 等成熟实现；yadof 只实现 field/slot sampling、rawData reconstruction、
+  PyTorch/NumPy 等成熟实现；yadof 只实现 field-level sampling、rawData reconstruction、
   campaign adaptation 和 checkpoint provenance 等自身契约。后续 modular toDo 再审计并
   收缩 package 边界，本任务不能新建自有通用 trainer/surrogate framework。
 
 ## Goal
 
 - conditional INR 的每个训练 `(X, Y)` 都来自 recorded/campaign-hot 的真实 evaluation
-  row 及其真实 rawData，不构造 synthetic parameter/target pairs。
-- rawData query 按 field/slot 分层均衡；在每个 field/slot 内对 coordinate 使用 seeded
-  cyclic sampling。不得按 task、curve shape、objective window、rawData rank 或 importance
-  mask 偏置抽样或 loss。
+  row 及其真实 rawData，不构造 synthetic parameter/target pairs。这是不可让步的设计原则；
+  benchmark 失败只能推动 real-only 方案继续迭代，不能恢复 synthetic target。
+- 每个 numeric rawData field 获得相同总 sampling/loss 权重。用户必须保证 objective-irrelevant
+  numeric data 不写入 rawData；yadof 不根据 task、curve shape、objective window、field size、
+  rawData rank 或 importance mask 猜测字段价值。
 - 训练 objective 收敛为一个直接、清楚的 pointwise loss。删除额外 relative-loss 与
-  mixup-loss 分支；每个 field/slot 先计算 pointwise loss 平均值，再做等权 macro average，
-  避免大 field 仅凭 scalar 数量淹没小 field。
+  mixup-loss 分支；每个 field 内对其全部被采样 scalar/slot 的 pointwise loss 求平均，再对
+  field loss 做等权 macro average。slot 只是 field 内坐标，不能各自获得一份 field 权重。
 - 保留 conditional-INR deep ensemble、真实 row bootstrap、member mean 和 member min/max
   spread 输出；保持并明确 ensemble spread 与训练集内 fit error 不影响 GPSAF candidate
   decision，删除暗示或试图实现这种影响的死路径，等真实 benchmark 后再单独设计 trust
@@ -63,11 +67,14 @@
 - 删除不再需要的配置、task hook、job-template API、checkpoint/state 字段、示例、测试
   和有效文档，不保留静默忽略的 compatibility wrapper。
 - 删除自写但可由当前受支持成熟 package 等价承担的通用数值 helper；保留的自写训练逻辑
-  必须能指向 yadof-specific field/slot/rawData/campaign 语义，而不是重复标准算法。
+  必须能指向 yadof-specific field/rawData/campaign 语义，而不是重复标准算法。
 - 建立职责清楚的 checkpoint schema 和真正的原子发布；不实现旧 checkpoint/history
   reader、转换器或 viewer compatibility。
-- 本次验收以数据流、可复现性和结构正确性为门槛，不以旧 surrogate 指标不退化为门槛。
-  `20260807 saw` 等快速真实仿真问题留作后续 benchmark 和 surrogate 调试，不阻塞本任务。
+- production 验收必须通过用户确认的真实 benchmark gate。现有 SAW/`test_com` 等问题可先
+  用于开发，但用户尚未准备好全部 benchmark，因此它们不是最终 suite 的默认替代。gate
+  至少覆盖 rawData/objective prediction error、必要时的 ranking、训练时间/资源，以及固定
+  real-evaluation budget 下的 optimization efficiency；metrics、thresholds 与可接受 tradeoff
+  必须由用户在实施时确认，不能由开发者事后挑选。
 
 ## Non-Goals
 
@@ -76,7 +83,8 @@
 - 不实现新的 surrogate 模型，不调整 GPSAF/GA/NSGA-III 的其他数值策略。
 - 不在本阶段选择新的 backend、升级依赖或完成 package adapter 重构；这些决策由后续协调
   toDo 的 dependency-reuse audit 处理。本阶段仍不得新增可被成熟 primitive 替代的代码。
-- 不读取、迁移、显示或恢复旧仿真 history 和旧 checkpoint。
+- 不为旧 checkpoint 实现格式兼容 reader/converter，也不保证未来版本能读取所有 inactive
+  artifacts；但不得自动删除旧 history、权重或 checkpoint。
 
 ## Required Removals
 
@@ -100,11 +108,10 @@
   `mark_axis_points()` 做直接调用检查，如果 importance 机制移除后没有独立 cost/rawData
   contract 调用方，也一起删除，不能仅为旧示例保留。
 - 删除 conditional-INR state/checkpoint 中的 `query_weights`，删除 weighted loss 和
-  importance-weighted query-sampling 代码。query minibatch 改为 field/slot-balanced
-  seeded cyclic sampling。
+  importance-weighted query-sampling 代码。query minibatch 改为 field-balanced sampling。
 - 删除基于 rawData rank 的 `_always_include_query_indices()` 或重构后的同类逻辑；scalar、
-  curve、surface 不再因为 shape 获得不同的强制采样待遇，而是按所属 field/slot 参与同一
-  分层采样 contract。
+  curve、surface 不再因为 shape 获得不同的强制采样待遇，而是按所属 field 参与同一
+  sampling contract。
 
 ### 3. Use one direct real-data loss
 
@@ -114,23 +121,25 @@
 - 保留一个标准 pointwise loss，并在 method 内清楚命名。Smooth L1 及其通用数值参数
   可以保留，并应直接调用 PyTorch 的成熟实现；不要复制 loss 数学，也不要再组合
   value/relative/mixup 三种目标或暴露 task-specific loss knobs。
-- 每个被采样 field/slot 内先求 pointwise Smooth L1 平均值，再对 field/slot loss 做等权
-  macro average。full-query 与 minibatch 路径必须使用相同的 field-balanced 聚合语义。
+- 每个被采样 field 内先对其全部被采样 scalar/slot 求 pointwise Smooth L1 平均值，再对
+  field loss 做等权 macro average。full-query 与 minibatch 路径必须使用相同语义；增加
+  field 内 slot 数不得增加该 field 的总权重。
 - 不得从 current cost、objective threshold、field size、rawData rank 或 curve metadata
   生成额外训练权重。
 
-### 4. Replace global query sampling with field-balanced cyclic sampling
+### 4. Replace global query sampling with field-balanced sampling
 
-- 每个 modeled rawData field/slot 是一个独立 sampling stratum；schema 中没有 numeric
-  query 的 slot 不参与。
-- 每个 training step 尽可能均匀分配 query budget。若 budget 小于 active slot 数，使用
-  seeded round-robin 跨 step 轮换 slot，保证没有 slot 永久缺席。
-- 每个 slot 内维护由 seed 决定的 coordinate permutation；按顺序取样，耗尽后使用确定性
-  派生 seed 重新洗牌并继续循环。不得每步独立有放回随机抽样后仅依赖概率意义上的覆盖。
-- sampler 的 seed 必须由现有优化 seed、generation、ensemble member 和明确的训练阶段
-  索引稳定派生；相同输入/config/seed 产生相同 query sequence。
-- 测试必须证明每个 slot 在有限、可计算的 step 数内得到覆盖，并覆盖 query budget 小于、
-  等于和大于 slot 数，以及 slot size 小于和大于分配 quota 的情况。
+- 每个 modeled numeric rawData field 是一个 sampling stratum；field 内的 scalar/slot/coordinate
+  共享该 field 的总预算。schema 中没有 numeric query 的 field 不参与。
+- 每个 training step 尽可能均匀分配 field budget。若 budget 小于 active field 数，使用由
+  seed 决定的 shuffled rotation 跨 step 轮换 field，保证没有 field 永久缺席。
+- field 内使用 NumPy/PyTorch 的标准、seeded、without-replacement sampling；需要继续覆盖时
+  再生成确定性 permutation。不要预建持久 per-slot cyclic scheduler 或自有随机算法；只有
+  真实 benchmark 证明简单方案不足时才增加状态。
+- sampler seed 由现有优化 seed、generation、ensemble member 和明确的训练阶段索引稳定
+  派生；相同输入/config/seed 产生相同 sequence。
+- 测试必须证明 field 总预算等权、field 内 slot 数不放大总权重、sampling 可复现且无
+  rank/window bias，并覆盖 budget 小于、等于和大于 active field 数的情况。
 
 ### 5. Remove dead uncalibrated GPSAF trust surfaces
 
@@ -156,7 +165,7 @@
 - rawData-first prediction、current-cost re-evaluation 和 real-evaluation validation；
 - schema validation、non-finite sample isolation、constant-slot preservation、target scaling
   floor、finite filling；
-- field-balanced seeded cyclic query minibatching、sample batching、query chunking、device
+- field-balanced seeded query minibatching、sample batching、query chunking、device
   selection、optimizer、gradient clipping 和 resource controls；其中通用 tensor/optimizer/
   clipping primitives 继续由 PyTorch 提供，yadof 只拥有 field-balanced policy 与边界 glue；
 - conditional INR 的 coordinate representation、Fourier features、network capacity 参数；
@@ -167,7 +176,9 @@
   training evidence。
 
 checkpoint 发布不是现有可直接“保留”的行为：当前 JSON/NPZ 直接写入并不原子。本任务
-必须实现临时 artifact/manifest 写入、完整验证和 manifest 最后原子 replace 的真实发布点。
+必须建立一个经 Windows interruption/failure injection 验证的 publication boundary。可以在
+实测后选择 manifest-last、commit marker 或同文件系统 temporary-directory rename；checksum
+只在实际 failure model 需要时增加，不能把某个未经验证的机制预先写死为正确答案。
 
 如果实现时发现上述保留项中也存在 task/curve-specific 特例，应先提供具体数据流证据，
 再决定是否纳入本任务；不要凭名称进行大范围删除。
@@ -179,8 +190,8 @@ completed real evaluations
   -> normalized variables + schema-valid real rawData
   -> generic filtering / constant handling / target scaling
   -> real rows or bootstrap resamples of real rows
-  -> field/slot-balanced seeded cyclic rawData queries
-  -> one pointwise loss, macro-averaged across fields/slots
+  -> equal field budgets + seeded within-field rawData queries
+  -> one pointwise loss, averaged within each field, then macro-averaged across fields
   -> conditional-INR ensemble + diagnostic member spread
   -> predicted full rawData
   -> current workspace cost
@@ -191,30 +202,37 @@ completed real evaluations
 
 - model training 没有接收两个真实 rows 的 convex combination 或任何 fabricated target；
 - 每个被训练的 target 都能追溯到一个真实 rawData scalar；
-- query subsampling 对 field/slot 均衡，并在每个 slot 内以 seeded cyclic 顺序有限覆盖；
-- field/slot 的训练贡献不随其 scalar 数量线性放大；
+- 所有 numeric rawData fields 以相同认真程度建模；objective-irrelevant numeric data 由用户
+  保证不进入 rawData；
+- query subsampling 对 field 均衡，并在 field 内使用可复现的无放回抽样；
+- field 的训练贡献不随其 scalar/slot 数量线性放大；
 - training code 不导入或调用 task cost-window/importance API；
 - objective semantics 只在 predicted rawData 转 current cost 时出现；
 - ensemble spread 与训练集内 fit error 不参与 GPSAF candidate comparison、noise 或排序。
 
-## Checkpoint And Fresh-Workspace Policy
+## Checkpoint, Retention, And Discovery Policy
 
 - 新 manifest 分开记录：
   - `format_version`：manifest/artifact schema 的显式格式号；
   - `surrogate_method = "conditional_inr"`；
-  - `training_policy = "real_field_balanced"`。
-- 新 checkpoint 直接写入最终 method namespace，例如
-  `SURROGATE_CHECKPOINT_DIR/conditional_inr/generation_*.json`；后续目录重构不得再次改变
-  该持久化布局或重新做格式迁移。
+  - `training_policy = "real_field_balanced"`；
+  - deterministic semantic state signature 与 run/component namespace。
+- 新 checkpoint 写入 active run/component namespace；具体目录布局由 workspace composition
+  toDo 的最终 state design 决定，本任务不写死一个会妨碍算法切换的 method-only path。
 - artifacts 不再写 `query_weights`、mixup/relative-loss config、旧 historical trust fields
   或对应 training-history 字段；继续写 bootstrap config 和 ensemble member artifacts。
-- writer 先在同一文件系统内写临时 artifact/auxiliary/manifest，验证所有引用、shape 和
-  checksum/size 后，以 manifest 最后 `os.replace()` 作为发布点。异常和进程中断不得留下
-  可被 discovery 当作完整 checkpoint 的半成品。
+- writer 使用经 Windows failure injection 选定的 atomic publication protocol。异常和进程
+  中断不得留下可被 discovery 当作完整 checkpoint 的半成品，也不得让 active generation
+  混合读取两个 publication。
 - 不实现旧 flat checkpoint、旧 synthetic/weighted checkpoint 或旧 history 的读取、转换、
-  自动重训和 viewer compatibility。测试不得保存 legacy fixture。
-- 新运行必须使用空 workspace，或由用户显式执行 `yadof history clear --yes` 后开始。
-  framework 不得为了迁移而自动删除用户文件。
+  viewer compatibility。测试无需保存 legacy fixture；这不授权删除磁盘上的旧 artifact。
+- algorithm/policy switch 会停止或等待 pending training、释放 active in-memory state，再激活
+  新 namespace。旧 conditional-INR weights/checkpoints 保留为 inactive；active discovery
+  只能读取匹配 semantic signature 的 state，绝不能因目录扫描加载不兼容旧权重。
+- compatible return 可以恢复 retained state；不兼容 return 必须用保留的真实 evaluation
+  evidence cold retrain，同时留下旧 artifact。系统不自动 prune；`history clear`/state prune
+  均为独立显式破坏性操作，不是开始新优化或切换算法的前置条件。
+- retention 不等于永久格式兼容承诺；未来版本可以拒绝读取旧 artifact，但仍不得自动删除。
 - workspace 中已删除的 config names 应按未知配置明确失败。task 中遗留的
   `rawdata_importance_weights()` 不再参与 surrogate，且 `yadof check` 应给出可操作诊断。
 
@@ -223,7 +241,7 @@ completed real evaluations
 本任务先在当前布局中实现最终训练语义，预计影响：
 
 - `src/yadof/surrogate/modeling.py`：删除 mixup、relative loss、weighted loss/sampling，
-  实现 field-balanced cyclic sampler 与 field macro loss；
+  实现 field-balanced sampler 与 field macro loss；
 - `src/yadof/surrogate/runtime.py`：删除 task importance 获取、rank-based forced queries、
   query-weight state 和 optimizer-facing in-sample historical error；
 - `src/yadof/surrogate/types.py`、`checkpoints.py`：精简 train config/state/artifact，保留
@@ -250,22 +268,27 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
 - [ ] 准备固定、可重复的 real-row fixture；不得通过 mixup 或其他插值扩充它。
 - [ ] 记录当前 synthetic target、importance weighting、rank-based query inclusion、
   ensemble/historical-error GPSAF noise path 和非原子 checkpoint 写入的准确调用面。
-- [ ] 可记录 rawData error、current-cost error、ranking 和训练时间作为调试证据，但不把
-  bitwise equality 或指标不退化设为完成门槛。
+- [ ] 与用户确认 production benchmark suite、metrics、thresholds 和 tradeoff。当前 SAW、
+  `test_com` 及其它已就绪问题只作为候选；用户尚未准备好全部 benchmark，不能擅自把现有
+  集合当作完整 gate。
+- [ ] benchmark 至少记录 rawData/objective prediction error、必要时的 ranking、训练时间/
+  资源，以及固定真实 evaluation budget 下的 optimization efficiency；bitwise equality 不是
+  目标，但用户确认的 thresholds 是完成门槛。
 - [ ] 用失败注入确认当前 checkpoint 哪些写入顺序会暴露半成品，为 atomic publication
   regression test 建立基线。
 
 ### Phase 1 - Simplify Conditional-INR Training
 
 - [ ] 先删除 mixup 和 relative-loss 分支，使训练只剩真实 target 的一个 loss。
-- [ ] 再删除 query weights、importance sampling 和 forced query indices，实现按 slot
-  均衡、slot 内 seeded cyclic 的 query sampler。
-- [ ] full-query 和 minibatch 都改为 per-slot pointwise mean + equal macro average；验证结果
-  不依赖 slot 展平后的 scalar 数量比例。
+- [ ] 再删除 query weights、importance sampling 和 forced query indices，实现 equal field
+  budget + seeded within-field without-replacement sampler；budget 小于 field 数时跨 step 做
+  deterministic shuffled rotation。
+- [ ] full-query 和 minibatch 都改为 per-field pointwise mean + equal macro average；验证
+  field 内增加 slot/scalar 数不放大该 field 的总权重。
 - [ ] 精简 method config/state/train history；删除不再使用的函数、参数、imports 和
   defensive fallback，不增加新的调权抽象。
 - [ ] 审计本阶段触及的 numerical helpers：标准 loss/optimizer/tensor/serialization 直接
-  委托受支持 package；只为 field/slot/rawData/campaign-specific 语义保留自写代码并在完成
+  委托受支持 package；只为 field/rawData/campaign-specific 语义保留自写代码并在完成
   change record 中说明边界。
 - [ ] 验证 deep-ensemble 每个 member 只看到真实 rows 或其 bootstrap resample。
 
@@ -289,18 +312,19 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
   不再定义 surrogate attention callback。
 - [ ] 对遗留 config/hook 提供清楚的 check/validation 诊断，不保留 silent no-op。
 
-### Phase 4 - Publish The Final Fresh-Only Checkpoint
+### Phase 4 - Publish And Isolate Retained State
 
 - [ ] 写入独立的 `format_version`、`conditional_inr` method ID 与
-  `real_field_balanced` training policy，并使用最终 method-namespaced path。
-- [ ] 实现临时文件/目录、完整验证和 manifest-last atomic replace；用失败注入证明半成品
-  不可发现，重试不会把两个 generation artifact 混合。
+  `real_field_balanced` training policy、semantic state signature 与 run/component namespace。
+- [ ] 在 Windows 上比较适用的 manifest-last、commit-marker、temporary-directory rename 等
+  方案，选取并实现一个经过 interruption/failure injection 验证的 publication boundary；
+  证明半成品不可发现，重试不会混合两个 generation artifact。
 - [ ] recovery 只接受当前 schema/method/policy；删除所有 legacy reader/fixture/compatibility
   分支，不访问或改写旧 rawData/history。
 - [ ] 更新 viewer discovery/summary/audit 只读取新 checkpoint，继续显示 ensemble member
   与 spread，但不把 spread 命名为 calibrated confidence interval。
-- [ ] 证明新 checkpoint recovery、workspace isolation 和 current-cost reinterpretation
-  仍然成立。
+- [ ] 证明算法切换保留旧 weights/artifacts 和真实 evidence；active discovery 不 cross-load；
+  compatible return 可恢复，不兼容 return 从 retained evidence cold retrain；无自动 prune。
 
 ### Phase 5 - Documentation And Verification
 
@@ -308,10 +332,12 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
   relative-loss 作为当前能力的说明；历史 change records 保持不改。
 - [ ] 更新 tests，删除只验证旧旋钮存在的断言，新增 real-only/field-balanced-training
   断言。
-- [ ] 把测试/文档中的 `uniform` 准确改为 field/slot-balanced seeded cyclic；记录 synthetic
+- [ ] 把测试/文档中的 `uniform` 准确改为 field-balanced seeded sampling；synthetic
   fixture 指标仅供调试，不因下降而恢复 task-specific heuristic。
-- [ ] 文档明确 `20260807 saw` 等真实快速仿真 benchmark 属于后续调试阶段；本任务不启动
-  真实 simulator，也不声称完成 ensemble trust calibration。
+- [ ] 在用户确认 suite/metrics/thresholds 后运行真实 benchmark gate；失败则保持本 toDo
+  active，并在 real-only 原则内调整 sampling/model/training。不得恢复 synthetic target、
+  task-specific importance 或用较容易的问题替换失败结果。
+- [ ] benchmark gate 不等于 ensemble trust calibration；后者仍不在本任务范围。
 - [ ] 按开发文档完成 wheel build、force-reinstall、import-origin check、focused tests 和
   完整 pytest，随后更新 change record 并归档本 toDo。
 
@@ -327,18 +353,20 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
     framework；保留 helper 都有 yadof-specific contract caller。
 - Focused behavior tests:
   - trainer inputs 只由真实 rows 或 bootstrap indices 构成；
-  - field/slot-balanced sampler 可复现、无 rank/window bias，在有限 step 内覆盖所有 slot
-    及其 coordinates；query budget 边界和 cyclic reshuffle 行为明确；
-  - per-slot macro loss 不因扩大另一个 slot 的 coordinate 数量而改变前一 slot 的权重；
+  - field-balanced sampler 可复现、无 rank/window bias，equal field budget 与 budget 小于
+    field 数时的 deterministic shuffled rotation 明确；
+  - per-field macro loss 不因扩大 field 内 slot/coordinate 数量而放大该 field 的总权重；
   - full rawData reconstruction、member intervals、current-cost conversion、scheduler、
     workspace isolation 和 failure handling 保持；
   - bootstrap 只重采样真实 rows；ensemble mean/spread 继续可恢复和查看；修改 spread 或
     training-fit audit 不改变 GPSAF candidate selection；
   - removed config/hook 给出明确诊断；
-  - 当前 checkpoint 可恢复；旧格式不可恢复且没有兼容分支；atomic failure injection
-    不产生可发现的半成品。
+  - 当前 compatible checkpoint 可恢复；旧格式/不兼容 state 不会被 active discovery
+    cross-load，且不自动删除；atomic failure injection 不产生可发现的半成品。
 - Acceptance:
-  - 可报告 fixture 的 rawData/cost/ranking metrics 与训练时间，但没有旧指标回归门槛；
+  - 用户确认的真实 benchmark suite/metrics/thresholds 全部通过；报告 rawData/objective
+    error、适用的 ranking、训练时间/资源和固定 real-evaluation budget optimization efficiency；
+  - benchmark 失败保持任务未完成，只允许在 real-only 原则内迭代；
   - 构建并 force-reinstall wheel，确认 import 来自 `.venv/Lib/site-packages/yadof`；
   - 运行相关 surrogate/job-template/config/viewer tests 和完整 pytest；
   - 不启动真实 simulator 或 HTCondor，除非用户另行明确授权。
@@ -346,17 +374,21 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
 ## Completion Rule
 
 - conditional INR 的生产训练只使用真实 evaluation rows/targets（bootstrap 仅重采样真实
-  rows），只使用一个 pointwise loss，并执行 field/slot-balanced、slot 内 seeded cyclic
-  query training 和 per-slot macro loss。
+  rows），只使用一个 pointwise loss，并执行 equal field budget、seeded within-field sampling、
+  per-field mean + equal field macro loss。每个 numeric rawData field 获得相同总权重；slot
+  数量不放大 field 权重。
 - mixup、relative-loss、task-owned importance、floor/boost、weighted query sampling、
   rank-based forced queries 及其 config/API/state/checkpoint/test/doc surfaces 已从当前实现
   删除，没有 zero-default 死分支、silent compatibility alias 或重复实现。
-- 通用训练数值 primitives 委托成熟 package；yadof 的剩余实现只服务明确的 field/slot、
+- 通用训练数值 primitives 委托成熟 package；yadof 的剩余实现只服务明确的 field、
   rawData、campaign 和 checkpoint/provenance 契约，并为后续 modular 收缩提供干净基线。
 - deep ensemble、真实-row bootstrap 和 member spread 输出保留；ensemble spread 与训练集内
   fit error 不影响 GPSAF candidate decision，未来 trust calibration 明确留给真实 benchmark。
-- 只有带明确 format/method/policy 的新 checkpoint 可恢复，发布真正原子；没有旧 history/
-  checkpoint compatibility，用户从空 workspace 或显式 clear 后开始新优化。
-- 结构/数据流验收、所有文档和 blueprints、安装态完整 pytest 均通过；真实问题指标不作为
-  本任务门槛。本 toDo 随完成变更记录移入 `dev_doc/obsolete/` 后，才开始 workspace
-  submit/composition 与 modular component 两份协调 toDo。
+- 只有带明确 format/method/policy/signature 的 compatible checkpoint 可恢复，发布真正
+  原子；旧 history、权重和 checkpoint 可保留为 inactive 但绝不 cross-load 或自动删除，
+  切换不要求空 workspace/clear。
+- 用户保证 objective-irrelevant numeric data 不进入 rawData；yadof 同等认真建模所有 numeric
+  rawData fields，不从 objective/window 猜测 importance。
+- 用户确认的真实 benchmark gate、结构/数据流验收、所有文档和 blueprints、安装态完整
+  pytest 均通过。本 toDo 随完成变更记录移入 `dev_doc/obsolete/` 后，两份协调 toDo 才能
+  完成最终迁移与验收。
