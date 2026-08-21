@@ -73,17 +73,23 @@ does not use them to judge scientific equivalence or automatically reject old
 evidence.
 
 New task objectives are independently normalized dimensionless minimization costs
-in `[0, 1]`. `soft_cost()` is the canonical tanh mapping from fixed task-owned
-physical `goal`/`worst` thresholds; registered task-cost calculators use that
-mapping, and custom rawData callbacks call it explicitly. Task fallback uses
+in `[0, 1]`. `soft_cost()` is the canonical fixed-`p=2` algebraic mapping from
+task-owned physical `goal`/`worst` thresholds; registered task-cost calculators use
+that mapping, and custom rawData callbacks call it explicitly. Task fallback uses
 `error_cost=1.0`. Physical units remain in rawData/extraction code, and observed
 history or population extrema never define the scale. Framework execution-failure
 rows may remain all-`inf` as a separate isolation sentinel.
 
 The default `edge_cost=0.1` makes `goal`/`worst` calibration anchors at `0.1`/`0.9`
-rather than clipping bounds at `0`/`1`. The outer tanh tails preserve ordering when
-conservative thresholds are exceeded; task code must not pre-clip physical values
-or linearly rescale away those tails.
+rather than clipping bounds at `0`/`1`. The slow outer algebraic tails preserve
+ordering when conservative thresholds are exceeded; task code must not pre-clip
+physical values or linearly rescale away those tails.
+
+For centered position `x = (value - goal) / (worst - goal) - 0.5`, calculate
+`0.5 * (1 + a*x / sqrt(1 + (a*x)**2))`. Derive the default scale as
+`a = (1 - 2*edge_cost) / sqrt(edge_cost * (1 - edge_cost))`, which gives `a=8/3`
+for the default anchors. Use a stable `p=2` denominator such as `hypot(1, a*x)` so
+very large finite physical values remain bounded instead of overflowing.
 
 ## Invariants
 

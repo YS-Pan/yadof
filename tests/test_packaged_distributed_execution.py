@@ -14,6 +14,7 @@ import numpy as np
 from yadof.config import load_config
 from yadof.evaluate_manager import evaluate_population, prepare_job, run_smoke_test
 from yadof.evaluate_manager.types import JobResult
+from yadof.job_template.cost_misc import soft_cost
 from yadof.recorded_data import list_records
 from yadof.workspace.init import init_workspace
 
@@ -128,7 +129,8 @@ def test_distributed_population_and_smoke_keep_shape_and_callback(
         mode="distributed",
         after_jobs_submitted=lambda: callbacks.append("submitted"),
     )
-    assert costs == ((0.25,), (0.25,))
+    expected_cost = soft_cost(0.25, goal=0.0, worst=1.0)
+    assert costs == ((expected_cost,), (expected_cost,))
     assert callbacks == ["submitted"]
     assert len(list_records(workspace)) == 2
 
@@ -138,7 +140,7 @@ def test_distributed_population_and_smoke_keep_shape_and_callback(
         return (_completed_result(jobs[0]),)
 
     monkeypatch.setattr(condor_runner, "run_condor_jobs", fake_smoke)
-    assert run_smoke_test(workspace, mode="distributed") == ((0.25,),)
+    assert run_smoke_test(workspace, mode="distributed") == ((expected_cost,),)
 
 
 def test_distributed_submit_failure_is_per_individual_and_diagnosable(

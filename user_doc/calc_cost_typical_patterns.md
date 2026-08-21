@@ -29,20 +29,27 @@ minimum and maximum from recorded history, the current population, or the curren
 batch: history-dependent scaling would change the cost of identical rawData over
 time and would also make real and surrogate paths depend on unrelated samples.
 
-The canonical scalar mapping is `soft_cost()`. It uses a tanh curve, handles either
-physical direction, and bounds every finite valid result to `[0, 1]`. With the
-default `edge_cost=0.1`, `goal` maps to `0.1`, `worst` maps to `0.9`, and values
-beyond those thresholds smoothly saturate toward `0` or `1`. Set
+The canonical scalar mapping is `soft_cost()`. It uses a fixed-`p=2` algebraic
+sigmoid, handles either physical direction, and bounds every finite valid result to
+`[0, 1]`. With the default `edge_cost=0.1`, `goal` maps to `0.1`, `worst` maps to
+`0.9`, and values beyond those thresholds slowly approach `0` or `1`. Set
 `error_cost=1.0`; do not use a value above one merely to distinguish failure. A
 framework execution failure can still produce an `inf` sentinel, which is separate
 from task-level cost calculation.
 
+For normalized centered position
+`x = (value - goal) / (worst - goal) - 0.5`, the mapping is
+`cost = 0.5 * (1 + a*x / sqrt(1 + (a*x)**2))`. The fixed power is `p=2`.
+Unless `algebraic_scale=a` is supplied explicitly, `soft_cost()` derives
+`a = (1 - 2*edge_cost) / sqrt(edge_cost * (1 - edge_cost))`; therefore the
+default `edge_cost=0.1` uses `a=8/3` and preserves the `0.1`/`0.9` anchors.
+
 The `0.1`/`0.9` anchor mapping is intentional. `goal` and `worst` express the
 expected useful physical range, but task authors may choose them conservatively or
 the simulator may produce values outside that range. Reserving `(0, 0.1)` and
-`(0.9, 1)` lets the tanh tails keep ordering unexpectedly good and unexpectedly bad
-finite results, so the optimizer still receives a direction of improvement. If the
-anchors were mapped to exact `0`/`1` by clipping or linear rescaling, every value
+`(0.9, 1)` lets the algebraic tails keep ordering unexpectedly good and unexpectedly
+bad finite results, so the optimizer still receives a direction of improvement. If
+the anchors were mapped to exact `0`/`1` by clipping or linear rescaling, every value
 beyond either anchor would collapse onto a flat plateau and could no longer guide
 selection. Therefore:
 
@@ -159,7 +166,7 @@ from yadof.job_template.rawdata_contract import (
 
 ERROR_COST = 1.0
 
-COST_CURVE = {"error_cost": ERROR_COST, "edge_cost": 0.1, "tanh_slope": None}
+COST_CURVE = {"error_cost": ERROR_COST, "edge_cost": 0.1, "algebraic_scale": None}
 CONSTRAINT_COST_CURVE = dict(COST_CURVE)
 
 COST_DEFINITIONS = (
@@ -288,7 +295,7 @@ field's macro influence.
   physical metric independently into `[0, 1]` with fixed task thresholds.
 - Do not normalize against observed history, a population, or a batch.
 - Do not clip physical metrics at `goal`/`worst` or remap the default `0.1`/`0.9`
-  anchors to hard `0`/`1` endpoints; preserve informative tanh tails.
+  anchors to hard `0`/`1` endpoints; preserve informative algebraic tails.
 - Do not hide missing rawData by returning a normal-looking good cost. Return the configured error cost on calculation failure.
 - Do not reimplement reusable yadof cost/rawData helpers or objective counting in
   the task module.

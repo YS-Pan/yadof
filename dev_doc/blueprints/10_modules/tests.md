@@ -30,7 +30,8 @@ license, machine identity, or credential.
   equivalence; and two-workspace worker/history isolation;
 - explicit `rawData.zip` output transfer, flat zip members, rejection of nested
   rawData, local validation, reusable cost/rawData helpers, dynamic cost, and
-  persistence atomicity, including bounded tanh costs and task fallback `1.0`;
+  persistence atomicity, including bounded slow-tail algebraic costs and task
+  fallback `1.0`;
 - backend-neutral finalization; immutable segments; exact unpublished count/byte
   budgets; float32/float64 large-candidate singleton publication; recording-loss,
   circuit-breaker, writer-death, and bounded-shutdown isolation; OS campaign-lock

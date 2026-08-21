@@ -31,7 +31,7 @@ ANGLE_TOL_DEG = 1.5
 FREQ_TOL_GHZ = 0.02
 GAIN_COVERAGE_RANGE_DEG = (-60.0, 60.0)
 
-COST_CURVE = {"error_cost": ERROR_COST, "edge_cost": 0.1, "tanh_slope": None}
+COST_CURVE = {"error_cost": ERROR_COST, "edge_cost": 0.1, "algebraic_scale": None}
 CONSTRAINT_COST_CURVE = dict(COST_CURVE)
 
 COST_DEFINITIONS = (

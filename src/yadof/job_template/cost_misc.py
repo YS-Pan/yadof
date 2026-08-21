@@ -42,15 +42,16 @@ def soft_cost(
     *,
     error_cost: float = 1.0,
     edge_cost: float = 0.1,
-    tanh_slope: float | None = None,
+    algebraic_scale: float | None = None,
 ) -> float:
-    """Map one physical minimization metric to a bounded tanh cost.
+    """Map one physical minimization metric to a bounded algebraic cost.
 
-    Finite valid inputs return a dimensionless value in ``[0, 1]``. With the
-    default slope, ``goal`` maps to ``edge_cost`` and ``worst`` maps to
-    ``1 - edge_cost``; values beyond those thresholds smoothly saturate toward
-    zero or one. The thresholds are calibration anchors, not clipping bounds, so
-    unexpectedly good or bad finite values retain ordering in the outer tails.
+    The centered physical position ``x`` is transformed with the fixed-power
+    algebraic sigmoid ``a*x / sqrt(1 + (a*x)**2)``, then scaled and biased into
+    ``[0, 1]``. With the default scale, ``goal`` maps to ``edge_cost`` and
+    ``worst`` maps to ``1 - edge_cost``; values beyond those thresholds approach
+    zero or one with slow algebraic tails. The thresholds are calibration anchors,
+    not clipping bounds, so unexpectedly good or bad finite values retain ordering.
     Set ``error_cost=1.0`` when task-level failures must preserve the normalized-
     cost contract.
     """
@@ -59,20 +60,27 @@ def soft_cost(
         return float(error_cost)
     value, goal, worst = float(value_for_cost), float(goal), float(worst)
     edge = float(edge_cost)
-    slope = (
-        2.0 * math.atanh(1.0 - 2.0 * edge)
-        if tanh_slope is None
-        else float(tanh_slope)
-    )
     if (
         not (math.isfinite(value) and math.isfinite(goal) and math.isfinite(worst))
         or goal == worst
         or not (0.0 < edge < 0.5)
-        or not (math.isfinite(slope) and slope > 0.0)
     ):
         return float(error_cost)
+    scale = (
+        (1.0 - 2.0 * edge) / math.sqrt(edge * (1.0 - edge))
+        if algebraic_scale is None
+        else float(algebraic_scale)
+    )
+    if not (math.isfinite(scale) and scale > 0.0):
+        return float(error_cost)
     position = (value - goal) / (worst - goal)
-    return float((math.tanh(slope * (position - 0.5)) + 1.0) / 2.0)
+    scaled_position = scale * (position - 0.5)
+    if math.isinf(scaled_position):
+        algebraic_value = math.copysign(1.0, scaled_position)
+    else:
+        # hypot(1, z) is the stable p=2 denominator sqrt(1 + abs(z)**2).
+        algebraic_value = scaled_position / math.hypot(1.0, scaled_position)
+    return float((algebraic_value + 1.0) / 2.0)
 
 
 def mean_cost(values: Sequence[float], *, error_cost: float = 1.0) -> float:

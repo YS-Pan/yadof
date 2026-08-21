@@ -189,16 +189,17 @@ defined-cost helper that uses it. Do not derive normalization bounds from the
 currently observed history; that would make an unchanged sample's cost depend on
 which other evaluations happen to exist.
 
-Treat `goal` and `worst` as tanh calibration anchors, not hard bounds. The default
-`edge_cost=0.1` maps them to costs `0.1` and `0.9`, deliberately reserving the outer
+Treat `goal` and `worst` as algebraic-sigmoid calibration anchors, not hard bounds.
+The default `edge_cost=0.1` maps them to costs `0.1` and `0.9`, deliberately
+reserving the outer
 intervals `(0, 0.1)` and `(0.9, 1)` for values outside the expected physical range.
 This matters when conservative thresholds underestimate what the simulator will
 produce: two results worse than `worst` still receive different costs and can guide
 the optimizer back toward the useful region. Likewise, unexpectedly strong results
 better than `goal` remain distinguishable. Do not clip a physical metric to
-`[goal, worst]`, and do not rescale the tanh result merely to force the two anchors
-to exact `0` and `1`; either operation would create flat plateaus precisely where
-the initial thresholds may be wrong. The normalized extrema are limits approached
+`[goal, worst]`, and do not rescale the algebraic result merely to force the two
+anchors to exact `0` and `1`; either operation would create flat plateaus precisely
+where the initial thresholds may be wrong. The normalized extrema are limits approached
 by the tails, while `0.1`/`0.9` are the default scientific anchor costs.
 
 Use `error_cost=1.0` for a task-level missing/invalid-data fallback so it remains at

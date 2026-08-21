@@ -90,13 +90,15 @@ or reimplement those fixed mechanisms in task files.
 
 Every newly authored `calc_cost.py` must convert physical metrics such as seconds,
 MHz, dB, or length into independent dimensionless minimization costs in `[0, 1]`:
-`0` is best and `1` is worst. Use the package's tanh-based `soft_cost()` directly,
+`0` is best and `1` is worst. Use the package's algebraic-sigmoid `soft_cost()`
+directly,
 or use `calculate_task_cost()`/registered calculators that call it. Keep physical
 units in rawData, extracted values, and fixed task-owned `goal`/`worst` thresholds;
 do not return physical values as objective costs or normalize against the changing
 observed history. With the default curve, `goal`/`worst` map to `0.1`/`0.9` rather
 than `0`/`1`; they are calibration anchors, not clipping bounds, so results outside
-conservative thresholds can still be ranked and optimized in the two tanh tails.
+conservative thresholds can still be ranked and optimized in the two slow
+algebraic tails.
 Use `error_cost=1.0` for task-level calculation fallback. The framework's `inf`
 result for an execution-level failed individual is a separate failure sentinel,
 not a normal task cost.

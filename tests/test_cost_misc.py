@@ -20,7 +20,7 @@ from yadof.job_template.cost_misc import (
 from yadof.job_template.rawdata_contract import RawDataContractError
 
 
-COST_CURVE = {"error_cost": 1.0, "edge_cost": 0.1, "tanh_slope": None}
+COST_CURVE = {"error_cost": 1.0, "edge_cost": 0.1, "algebraic_scale": None}
 
 
 def test_registered_simple_cost_uses_definition_goal_and_worst():
@@ -74,10 +74,27 @@ def test_2d_curve_cost_selection_modes(definition, curve, expected_value):
     )
 
 
-def test_soft_cost_uses_configurable_edge_cost():
-    assert soft_cost(-12.0, goal=-12.0, worst=-3.0, **COST_CURVE) == pytest.approx(0.1)
-    assert soft_cost(-3.0, goal=-12.0, worst=-3.0, **COST_CURVE) == pytest.approx(0.9)
-    assert soft_cost(-7.5, goal=-12.0, worst=-3.0, **COST_CURVE) == pytest.approx(0.5)
+@pytest.mark.parametrize("edge_cost", (0.1, 0.2))
+def test_soft_cost_uses_configurable_edge_cost(edge_cost):
+    curve = {**COST_CURVE, "edge_cost": edge_cost}
+
+    assert soft_cost(-12.0, goal=-12.0, worst=-3.0, **curve) == pytest.approx(
+        edge_cost
+    )
+    assert soft_cost(-3.0, goal=-12.0, worst=-3.0, **curve) == pytest.approx(
+        1.0 - edge_cost
+    )
+    assert soft_cost(-7.5, goal=-12.0, worst=-3.0, **curve) == pytest.approx(0.5)
+
+
+def test_soft_cost_uses_slow_p2_algebraic_tails():
+    expected_upper = (1.0 + 4.0 / np.sqrt(17.0)) / 2.0
+
+    assert soft_cost(-10.0, goal=0.0, worst=10.0) == pytest.approx(
+        1.0 - expected_upper
+    )
+    assert soft_cost(20.0, goal=0.0, worst=10.0) == pytest.approx(expected_upper)
+    assert 0.01 < 1.0 - expected_upper < 0.1
 
 
 def test_soft_cost_bounds_physical_values_and_normalizes_task_errors():

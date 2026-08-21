@@ -15,8 +15,8 @@ logic. It imports its assigned parameter snapshot and calls job-local
 `worker_misc.run_workflow()`, which owns lifecycle metadata, execute identity,
 standard paths, and flat `rawData.zip`. Replacing the task callback with a simulator
 workflow preserves those package-owned contracts. Its starter `calc_cost.py`
-demonstrates fixed-threshold tanh normalization into a dimensionless `[0, 1]`
-objective instead of returning the raw response value.
+demonstrates fixed-threshold algebraic-sigmoid normalization into a dimensionless
+`[0, 1]` objective instead of returning the raw response value.
 
 ## Agent-authored study
 
