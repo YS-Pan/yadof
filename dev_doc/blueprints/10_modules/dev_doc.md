@@ -8,6 +8,9 @@ installed code. `yadof docs list/show/bundle` addresses audience-relative paths,
 rejects traversal, and never requires callers to locate site-packages.
 The `user` audience is named for the role whose workflow it serves; its documents
 are written primarily for an AI coding agent acting under a human user's direction.
+Those documents own the portable execution-risk policy: agents may run understood,
+bounded low-cost workflows autonomously, while long or consequential runs require
+explicit user authorization and detached-run handling.
 
 The integrated cost and surrogate viewers retain relatively independent developer
 trees at `src/yadof/tools/cost_viewer/dev_doc/` and

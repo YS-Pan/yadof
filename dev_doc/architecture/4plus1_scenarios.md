@@ -4,8 +4,9 @@
 
 Install an AI coding agent and the wheel, open the intended workspace in the agent,
 give it the prompt starter and task, then let it follow installed user documents
-through `yadof init PATH`, task editing, and read-only `check`. After explicit
-authorization, run one local smoke, `run`, then inspect cost and integrated
+through `yadof init PATH`, task editing, and read-only `check`. Apply the documented
+execution-risk policy and obtain explicit authorization when the estimated run
+requires it; then run one local smoke, `run`, and inspect cost and integrated
 time/failure/error history individually or with `view all`. A run without
 `--generations` uses 50 generations. No repository path is required.
 
@@ -22,8 +23,11 @@ objective instead of returning the raw response value.
 The user prefixes a request with the repository prompt starter. The agent reads the
 installed `user` documentation entry, follows its targeted reading order, runs
 `init` when needed, edits only workspace-owned task inputs, and runs read-only
-`check`. A real smoke or optimization remains an explicitly authorized execution
-stage because it may launch expensive external software.
+`check`. Before a real smoke or optimization, the agent classifies the concrete
+runtime and external effects. It may autonomously run understood, bounded,
+low-cost work; long, unknown-cost, shared-resource, or otherwise consequential work
+requires explicit user authorization. An explicitly requested long run is detached
+from the agent task and is not polled unless the user later asks.
 
 The standalone smoke CLI flushes the selected workspace, backend, jobs directory,
 and no-timeout warning before blocking on the workflow, then reports success costs

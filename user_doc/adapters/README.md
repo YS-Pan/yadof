@@ -23,3 +23,8 @@ New framework adapters belong in package resources with matching user
 documentation written for the user's AI agent.
 Task-only project names, designs, objectives, and private credentials stay in the
 workspace rather than the reusable adapter.
+
+Before an agent launches a real adapter workflow, apply the centralized
+[execution authority and cost policy](../config_and_run.md#execution-authority-and-cost-based-agent-judgment).
+Adapter pages give typical risk profiles, but the concrete task's measured or
+estimated runtime and external effects take precedence.

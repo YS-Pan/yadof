@@ -5,6 +5,15 @@ one batch subprocess per workflow evaluation, so candidates do not share simulat
 state. The executable is selected by the `YADOF_NGSPICE_EXE` environment variable
 on the machine that executes the workflow.
 
+Ngspice batch evaluations are often fast and workspace-local. After checking the
+netlist, executable, output paths, and an estimated evaluation count, an agent may
+run a smoke test or an explicitly bounded optimization without separate
+confirmation when the expected total cost is modest. Use explicit generation and
+resource bounds; complex circuits, very long transients, shared remote execution,
+or uncertain runtime follow the central
+[execution policy](../config_and_run.md#execution-authority-and-cost-based-agent-judgment)
+and may still require authorization.
+
 Copy the packaged resource into the workspace before importing it:
 
 ```powershell

@@ -2,6 +2,17 @@
 
 Use this adapter for HFSS/PyAEDT workflows.
 
+## Agent execution profile
+
+HFSS uses a licensed, comparatively expensive external solver. After the workspace
+passes `yadof check`, an agent may normally run one understood smoke evaluation
+when it is expected to take only a few minutes. A full HFSS optimization commonly
+runs for hours or days and must not be started without an explicit user request.
+When it is requested as a long run, launch it detached and do not poll it, following
+the central [execution policy](../config_and_run.md#execution-authority-and-cost-based-agent-judgment).
+Project complexity, license contention, or an unknown runtime can make even a smoke
+require confirmation.
+
 The source/reference copy is a packaged adapter resource. The workflow uses the
 active copy at `<workspace>/job_template/hfss_com.py`, so copy the file with
 `yadof task copy-adapter hfss_com.py --workspace PATH` into

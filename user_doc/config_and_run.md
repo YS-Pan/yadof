@@ -95,6 +95,52 @@ empty. A cleanup failure is persisted as `scratch_cleanup_error`; inspect it rat
 than silently deleting evidence elsewhere. Fast subprocess environment overrides
 are applied only inside a worker evaluation and restored before worker reuse.
 
+## Execution authority and cost-based agent judgment
+
+A user may delegate routine execution decisions to the AI agent. Before starting a
+real smoke test or optimization, classify the concrete run rather than treating all
+simulators alike. Inspect the selected workspace and mode, expected time per
+evaluation, population and generation counts, concurrency, timeout behavior,
+license or paid-service use, shared-machine or cluster impact, filesystem effects,
+and whether the command can finish without interactive input. An explicit user
+instruction may always narrow or broaden this default authority for the task.
+
+The agent may proceed without another confirmation when the execution is understood
+and bounded, expected to consume modest local time and resources, and has no
+material external side effect beyond the selected workspace. Typical examples are:
+
+- one smoke evaluation expected to finish in seconds or minutes on a known working
+  local simulator;
+- a deliberately bounded optimization using `test_com`, ngspice, or a simple
+  Project Chrono model whose estimated evaluation count and total runtime are
+  modest;
+- focused integration checks whose simulator, license, output paths, and cleanup
+  behavior have already been inspected.
+
+Use explicit `--generations` and appropriate population/concurrency settings for an
+agent-initiated optimization; do not silently rely on the 50-generation CLI default
+when that would make the cost estimate unclear. A standalone smoke has no task
+timeout, so a single midpoint evaluation is not automatically safe when the
+workflow may hang.
+
+Obtain explicit user authorization before starting an optimization or other run
+that is expected to last many hours or days, has unknown or effectively unbounded
+cost, consumes a scarce/shared license or cluster materially, incurs paid external
+usage, changes external systems, or otherwise exceeds routine workspace-local work.
+An HFSS smoke that is understood to take only a few minutes may normally be run by
+the agent after `check`; a full HFSS optimization commonly takes days and therefore
+requires an explicit user request. Project-specific evidence overrides these
+examples: a complex ngspice or Project Chrono task can still require confirmation,
+and an unusually small known-safe task may be treated proportionally.
+
+When the user explicitly requests a long optimization, start it as a detached
+operating-system process so the agent task does not own its lifetime. On Windows, a
+separate hidden PowerShell process is an appropriate launcher. Redirect stdout and
+stderr to workspace-owned log files, preserve the one-campaign-per-workspace rule,
+and report the exact command, process ID when available, and log paths. After the
+launcher succeeds, disconnect and finish the agent task: do not poll, wait for, or
+periodically monitor the long run unless the user later asks for monitoring.
+
 ## Standalone smoke
 
 ```powershell

@@ -6,8 +6,10 @@ yadof is a task-agnostic installed framework. Stable code and read-only resource
 live under `src/yadof`; user-editable task inputs and runtime output live under an
 explicit workspace. The old source-runtime namespace is removed. Normal use is
 AI-agent-first: a human user directs an installed coding agent, which reads packaged
-user guidance and authors the workspace through the same public CLI/API available
-to direct users.
+user guidance, authors the workspace, and applies the user's execution limits plus
+the documented cost/risk policy through the same public CLI/API available to direct
+users. Bounded low-cost execution can be delegated; long or consequential runs
+need an explicit user request.
 
 Workspace task flexibility remains live during a campaign. A user may correct or
 redefine cost, parameters, configuration, and task execution code between
@@ -165,6 +167,6 @@ including lazy viewer registration and deterministic viewer backend/aggregate
 contracts plus schema-versioned text/JSON reporting when its optional dependencies
 are available. The packaged PyChrono adapter conformance suite uses fake child
 processes to lock protocol, diagnostics, environment, failure, timeout, and
-concurrency semantics without a PyChrono installation. Live pools/simulators and concrete
-physical assertions remain
-explicit integration tests outside the default package suite.
+concurrency semantics without a PyChrono installation. Live pools/simulators and
+concrete physical assertions remain integration tests outside the default package
+suite and follow the user workflow's cost- and risk-based execution policy.

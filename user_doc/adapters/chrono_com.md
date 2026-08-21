@@ -26,6 +26,15 @@ load. Restart the calling process after a machine-level environment change. For
 distributed execution, the same absolute path must exist and be executable on the
 selected execute host.
 
+Simple Project Chrono studies are often suitable for autonomous smoke tests and
+explicitly bounded optimizations. Before proceeding, the agent must inspect the
+model's stepping/contact complexity, per-evaluation timeout, evaluation count,
+concurrency, scratch usage, and selected hosts. Proceed without another
+confirmation only when the estimated total runtime and resource use are modest;
+large contact models, long simulated horizons, distributed resource use, or
+uncertain runtime follow the central
+[execution policy](../config_and_run.md#execution-authority-and-cost-based-agent-judgment).
+
 Copy the adapter into the selected workspace without overwriting task code:
 
 ```powershell
@@ -164,6 +173,6 @@ categories include `runtime_not_configured`, `runtime_invalid`, `worker_missing`
 `protocol_mismatch`, `output_path_invalid`, and `rawdata_invalid`.
 
 Treat every failure as an evaluation failure. Do not recover partial child files or
-convert them into a normal cost. Actual Project Chrono mechanics validation remains
-an explicitly authorized integration activity; the package's normal tests use fake
-external interpreters and require no global PyChrono installation.
+convert them into a normal cost. Actual Project Chrono mechanics validation follows
+the user workflow's cost- and risk-based execution policy; the package's normal
+tests use fake external interpreters and require no global PyChrono installation.

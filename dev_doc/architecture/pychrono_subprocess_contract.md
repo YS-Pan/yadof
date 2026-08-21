@@ -376,5 +376,5 @@ installation. It covers:
 - concurrent evaluations with isolated scratch and evidence.
 
 These cases are the protocol acceptance set for the adapter's public launch
-surface. Real mechanics validation remains a separate, explicitly authorized
-integration task.
+surface. Real mechanics validation remains a separate integration task governed by
+the user documentation's cost- and risk-based execution policy.

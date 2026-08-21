@@ -4,13 +4,17 @@
 
 `user_doc/` is the companion documentation home for the user's task-authoring and
 runtime workflow. Its primary reader and executor is an AI coding agent acting
-under a human user's direction. The user normally supplies goals, reviews
-assumptions and results, and authorizes real execution rather than personally
-following every documented command. The directory name identifies the role whose
-workflow and authority the documents serve, not the literal reader.
+under a human user's direction. The user normally supplies goals and execution
+limits, then reviews assumptions and results. Routine bounded execution may be
+delegated to the agent, while long, costly, or materially consequential work needs
+explicit authorization under the user runtime policy. The directory name
+identifies the role whose workflow and authority the documents serve, not the
+literal reader.
 
 Detailed task-authoring instructions belong under `user_doc/`; do not duplicate
-them in `dev_doc/`. The user package-foundation document owns the installed command
+them in `dev_doc/`. The detailed cost/risk classification and long-run launch
+policy likewise belong in the user runtime documentation rather than host-specific
+agent configuration. The user package-foundation document owns the installed command
 surface and the boundary between immutable package code and writable task
 workspaces. Its instructions are written directly for the user-directed AI agent.
 

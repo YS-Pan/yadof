@@ -81,5 +81,6 @@ rawData remain package fixtures.
 
 Build a wheel, force-reinstall without editable/PYTHONPATH shortcuts, verify
 `yadof.__file__` is under the venv site-packages, run focused tests during iteration,
-then the complete suite. Real simulator/HTCondor smoke is an explicitly authorized
-integration step, not part of generic pytest.
+then the complete suite. Real simulator/HTCondor smoke is an integration step, not
+part of generic pytest; whether an agent may start it autonomously follows the user
+documentation's concrete cost/risk policy.

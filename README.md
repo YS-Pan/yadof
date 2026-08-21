@@ -24,8 +24,10 @@ with this starter:
 
 The installed, version-matched user documents are written primarily for that
 user-directed AI agent: they tell it which files it may edit, what it must read, and
-which validation command to run. The human user normally directs and reviews this
-work rather than executing every documented step personally. A reserved blank
+which validation command to run. The human user normally directs, sets execution
+limits, and reviews this work rather than executing every documented step
+personally; the user documentation lets the agent run understood bounded work while
+reserving long or consequential runs for explicit authorization. A reserved blank
 prompt is available at
 [user_doc/example_prompts/01_task_setup.md](user_doc/example_prompts/01_task_setup.md);
 the surrounding [prompt examples directory](user_doc/example_prompts/README.md) is

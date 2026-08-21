@@ -14,10 +14,12 @@ Direct CLI/API use remains supported but is the lower-level surface.
 ## People and responsibilities
 
 - Users own workspace task-variable definitions, simulator/model inputs, objective
-  policy, campaign configuration, and decisions to launch expensive work.
+  policy, campaign configuration, and the authority limits for real execution.
 - AI agents are the primary task-authoring interface. They read version-matched
-  `user_doc` under a human user's direction, inspect documented package code, and
-  edit the selected workspace.
+  `user_doc` under a human user's direction, inspect documented package code, edit
+  the selected workspace, and apply the documented cost/risk policy: bounded
+  low-cost execution may be delegated, while long or consequential runs require an
+  explicit user request.
 - Administrators own Python/simulator installation, licenses, HTCondor deployment,
   execute-node permissions, resource advertisement, and Windows slot-user policy.
 - Package maintainers own every cross-task invariant, stable framework contracts,

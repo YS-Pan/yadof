@@ -2,10 +2,13 @@
 
 `user_doc/` is the installed documentation home for the yadof user's workflow. Its
 primary reader and executor is an AI coding agent acting under a human user's
-direction. The human user normally supplies the task, reviews assumptions and
-results, and authorizes real execution; they rarely need to read and carry out
-these pages command by command themselves. The `user_doc` name identifies whose
-workflow and authority the guidance serves, not who literally reads each step.
+direction. The human user normally supplies the task and any execution limits, then
+reviews assumptions and results. Routine bounded execution may be delegated to the
+agent, while long, costly, or materially consequential work still needs explicit
+authorization under the risk rules in `config_and_run.md`; users rarely need to
+read and carry out these pages command by command themselves. The `user_doc` name
+identifies whose workflow and authority the guidance serves, not who literally
+reads each step.
 
 This README is therefore addressed to that user-directed AI agent. Treat the
 installed package and these version-matched documents as read-only sources of
@@ -116,10 +119,13 @@ code.
   concurrently, create separate workspaces so their task snapshot, history,
   writer, checkpoints, and destructive operations cannot collide.
 - Run `yadof check --workspace PATH` after generating or modifying task files.
-- Do not run an edited task's smoke test or optimization unless the user explicitly
-  authorizes execution of the real workflow; it may launch expensive software.
-- Report created files, validation results, unresolved task assumptions, and the
-  exact command the user can approve to start the next execution stage.
+- Before running an edited task's real smoke test or optimization, apply the
+  cost- and risk-based execution policy in `config_and_run.md`. An agent may run
+  short, bounded work autonomously; long, high-cost, or consequential work requires
+  explicit user authorization.
+- Report created files, validation results, unresolved task assumptions, and any
+  real execution performed. When the risk policy requires explicit authorization,
+  report the exact command the user can approve for the next execution stage.
 
 The supported command surface is `yadof --help`, `version`, `docs`, `init`, `check`,
 `smoke-test`, `run`, `view`, `history`, and `task`. `view surrogate` explicitly
