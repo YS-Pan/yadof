@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import math
 import os
+import json
 from pathlib import Path
+
+import numpy as np
 
 import pytest
 import yadof
@@ -45,7 +48,6 @@ def _workspace(tmp_path: Path, name: str, *, surrogate: bool = False) -> Path:
                 "SURROGATE_INR_COORD_FOURIER_FEATURES = 4",
                 "SURROGATE_INR_HIDDEN_DIM = 16",
                 "SURROGATE_INR_HIDDEN_LAYERS = 1",
-                "SURROGATE_INR_MIXUP_WEIGHT = 0.0",
                 "SURROGATE_INR_BOOTSTRAP_MEMBERS = False",
             ]
         )
@@ -142,13 +144,31 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     assert runtime.has_trained_state(workspace_a)
     assert not runtime.has_trained_state(workspace_b)
     state = runtime._require_state(load_config(workspace_a))
-    assert state.train_history["mixup_weight"] == pytest.approx(0.0)
-    assert state.train_history["mixup"] == pytest.approx(0.0)
+    assert state.train_history["training_policy"] == "real_field_balanced"
+    assert "mixup" not in state.train_history
+    assert "relative" not in state.train_history
 
     checkpoint_dir_a = workspace_a / ".yadof" / "surrogate" / "checkpoints"
     checkpoint_dir_b = workspace_b / ".yadof" / "surrogate" / "checkpoints"
     assert checkpoint_dir_a.joinpath("generation_0000.json").is_file()
     assert not checkpoint_dir_b.exists()
+    manifest = json.loads(
+        checkpoint_dir_a.joinpath("generation_0000.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["format_version"] == 1
+    assert manifest["surrogate_method"] == "conditional_inr"
+    assert manifest["training_policy"] == "real_field_balanced"
+    assert len(manifest["state_signature"]) == 64
+    assert manifest["run_namespace"].startswith("semantic-")
+    assert manifest["component_namespace"] == "surrogate"
+    namespace_manifest = checkpoint_dir_a / manifest["namespace_manifest"]
+    artifact_dir = checkpoint_dir_a / manifest["artifact_dir"]
+    assert json.loads(namespace_manifest.read_text(encoding="utf-8")) == manifest
+    with np.load(artifact_dir / manifest["model_path"], allow_pickle=False) as auxiliary:
+        assert "query_weights" not in auxiliary.files
+        assert "training_flat_values" not in auxiliary.files
 
     before = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
     calc_cost = workspace_a / "job_template" / "calc_cost.py"
@@ -170,6 +190,110 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     recovered = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
     assert recovered == pytest.approx(after)
     assert not runtime.has_trained_state(workspace_b)
+
+    # Parameter normalization is semantic state: range edits reject the old model.
+    parameter_path = workspace_a / "job_template" / "parameters_constraints.py"
+    original_parameters = parameter_path.read_text(encoding="utf-8")
+    parameter_path.write_text(
+        original_parameters.replace("((-1.0, 1.0),)", "((-2.0, 2.0),)"),
+        encoding="utf-8",
+    )
+    runtime.reset_workspace_state(workspace_a)
+    assert not runtime.has_trained_state(workspace_a)
+    assert artifact_dir.is_dir()
+    parameter_path.write_text(original_parameters, encoding="utf-8")
+    runtime.reset_workspace_state(workspace_a)
+    assert runtime.has_trained_state(workspace_a)
+    assert runtime._require_state(load_config(workspace_a)).artifact_dir == artifact_dir
+
+    # A different train config may publish at the same generation without deleting A.
+    config_path = workspace_a / "config.py"
+    original_config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        original_config.replace(
+            "SURROGATE_INR_HIDDEN_DIM = 16",
+            "SURROGATE_INR_HIDDEN_DIM = 20",
+        ),
+        encoding="utf-8",
+    )
+    runtime.reset_workspace_state(workspace_a)
+    assert not runtime.has_trained_state(workspace_a)
+    state_b = runtime.train(workspace_a, generation_index=0)
+    assert state_b.state_signature != manifest["state_signature"]
+    assert state_b.artifact_dir != artifact_dir
+    assert artifact_dir.is_dir()
+    assert state_b.artifact_dir.is_dir()
+
+    # Returning to A recovers A's retained namespaced publication, not B's root pointer.
+    config_path.write_text(original_config, encoding="utf-8")
+    runtime.reset_workspace_state(workspace_a)
+    assert runtime.has_trained_state(workspace_a)
+    returned = runtime._require_state(load_config(workspace_a))
+    assert returned.state_signature == manifest["state_signature"]
+    assert returned.artifact_dir == artifact_dir
+
+    # Viewer validates B against B's persisted config even while current training config is A.
+    from yadof.tools.surrogate_viewer.backend.checkpoints import (
+        CheckpointPredictor,
+        discover_checkpoints,
+    )
+
+    visible = discover_checkpoints(checkpoint_dir_a)
+    assert len(visible) == 1
+    assert visible[0].payload["state_signature"] == state_b.state_signature
+    template_sample = runtime._load_training_data(
+        load_config(workspace_a).workspace
+    ).raw_data[0]
+    viewer_predictor = CheckpointPredictor(
+        workspace_a,
+        visible[0],
+        template_sample,
+    )
+    assert viewer_predictor.train_cfg.hidden_dim == 20
+    _samples, viewer_costs, _members = viewer_predictor.predict(((0.25,),))
+    assert len(viewer_costs) == 1
+
+
+@pytest.mark.parametrize(
+    "raw_rows",
+    [
+        ((0.0, np.asarray([1.0])),),
+        (
+            (0.0, np.asarray([1.0])),
+            (1.0, np.asarray([1.0])),
+        ),
+    ],
+    ids=("one-sample", "constant-rawdata"),
+)
+def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
+    tmp_path: Path,
+    raw_rows,
+) -> None:
+    from yadof.optimize.gpsaf_phases import surrogate_state_ready
+    from yadof.surrogate import runtime
+    from yadof.surrogate.types import TrainingData
+
+    workspace = _workspace(tmp_path, "not_trainable", surrogate=True)
+    data = TrainingData(
+        parameter_names=("input_value",),
+        normalized_variables=tuple((float(x),) for x, _values in raw_rows),
+        raw_data=tuple(
+            ({"data": values.copy()},)
+            for _x, values in raw_rows
+        ),
+    )
+    state = runtime.train_with_config(
+        load_config(workspace),
+        generation_index=0,
+        training_data=data,
+    )
+
+    assert state.train_history["skipped"] is True
+    assert state.model is None
+    assert not runtime.has_trained_state(workspace)
+    assert not surrogate_state_ready(load_config(workspace).workspace)
+    with pytest.raises(RuntimeError, match="not trained"):
+        runtime.predict_population(workspace, ((0.5,),))
 
 
 def test_packaged_optimize_and_surrogate_have_no_project_namespace_imports():

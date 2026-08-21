@@ -16,7 +16,6 @@ from ..workspace import WorkspaceContext
 
 Population = tuple[tuple[float, ...], ...]
 Costs = tuple[tuple[float, ...], ...]
-Intervals = tuple[tuple[float, float], ...]
 
 
 @dataclass(frozen=True)
@@ -32,7 +31,6 @@ class CandidateRecord:
     origin: str
     individual: object | None = None
     pred_costs: tuple[float, ...] = ()
-    intervals: Intervals = ()
 
 
 def call_first(module, names: Iterable[str], *args, **kwargs):

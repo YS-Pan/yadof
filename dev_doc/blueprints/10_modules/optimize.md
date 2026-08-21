@@ -22,9 +22,10 @@ reference directions are generated from objective count and configured partition
 Duplicate/archive keys use configured decimal precision and bounded refill attempts.
 
 GPSAF alpha/beta pools are ranked using surrogate-predicted mean current costs
-through pymoo survival. Member intervals and training-row historical error are
-carried or computed by current dead trust/noise surfaces but do not affect live
-selection. A configured exploration quota keeps some candidates outside surrogate
+through pymoo survival. Conditional-INR member min/max spread remains a diagnostic
+output at the surrogate/viewer boundary; GPSAF candidate records do not carry it,
+and it is not converted into optimizer noise, knockout probability, or a trust
+decision. A configured exploration quota keeps some candidates outside surrogate
 preference. Every selected row is validated by the real evaluator before becoming
 durable truth.
 

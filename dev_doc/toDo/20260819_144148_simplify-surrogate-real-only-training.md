@@ -1,5 +1,18 @@
 # 简化 Surrogate：真实仿真与 Field-Balanced 训练
 
+## Implementation Progress (2026-08-21)
+
+- 当前文件布局中的 real-only / field-balanced 实现、旧 trust surface 清理、显式语义
+  checkpoint、原子发布、viewer 新格式读取、任务校验、示例与有效文档迁移已经完成。
+- 独立 `gpt-5.6-sol` / `max` / no-context 复核发现并推动修正了参数归一化签名、
+  skipped readiness、有限步字段覆盖、retained namespace recovery、viewer 自描述配置、
+  atomic test validity 和 optimizer spread handoff 七项问题。
+- 最终安装态验收已完成：wheel build、force-reinstall、import origin、69 项聚焦测试和
+  258 项完整 pytest 均通过；完整测试仅出现 8 条预期的 recording-loss 警告。
+- 没有启动真实 simulator 或 HTCondor。用户尚未确认 production benchmark suite、
+  metrics、thresholds 与 tradeoff，因此本 toDo 按 gate 规则继续保持 active，不归档，
+  精简实现也尚不声明为 production baseline。
+
 ## Execution Order
 
 - 这是手工触发、一次性的第一阶段任务。
@@ -265,8 +278,8 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
 
 ### Phase 0 - Characterize The Data Flow
 
-- [ ] 准备固定、可重复的 real-row fixture；不得通过 mixup 或其他插值扩充它。
-- [ ] 记录当前 synthetic target、importance weighting、rank-based query inclusion、
+- [x] 准备固定、可重复的 real-row fixture；不得通过 mixup 或其他插值扩充它。
+- [x] 记录当前 synthetic target、importance weighting、rank-based query inclusion、
   ensemble/historical-error GPSAF noise path 和非原子 checkpoint 写入的准确调用面。
 - [ ] 与用户确认 production benchmark suite、metrics、thresholds 和 tradeoff。当前 SAW、
   `test_com` 及其它已就绪问题只作为候选；用户尚未准备好全部 benchmark，不能擅自把现有
@@ -274,70 +287,70 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
 - [ ] benchmark 至少记录 rawData/objective prediction error、必要时的 ranking、训练时间/
   资源，以及固定真实 evaluation budget 下的 optimization efficiency；bitwise equality 不是
   目标，但用户确认的 thresholds 是完成门槛。
-- [ ] 用失败注入确认当前 checkpoint 哪些写入顺序会暴露半成品，为 atomic publication
+- [x] 用失败注入确认当前 checkpoint 哪些写入顺序会暴露半成品，为 atomic publication
   regression test 建立基线。
 
 ### Phase 1 - Simplify Conditional-INR Training
 
-- [ ] 先删除 mixup 和 relative-loss 分支，使训练只剩真实 target 的一个 loss。
-- [ ] 再删除 query weights、importance sampling 和 forced query indices，实现 equal field
+- [x] 先删除 mixup 和 relative-loss 分支，使训练只剩真实 target 的一个 loss。
+- [x] 再删除 query weights、importance sampling 和 forced query indices，实现 equal field
   budget + seeded within-field without-replacement sampler；budget 小于 field 数时跨 step 做
   deterministic shuffled rotation。
-- [ ] full-query 和 minibatch 都改为 per-field pointwise mean + equal macro average；验证
+- [x] full-query 和 minibatch 都改为 per-field pointwise mean + equal macro average；验证
   field 内增加 slot/scalar 数不放大该 field 的总权重。
-- [ ] 精简 method config/state/train history；删除不再使用的函数、参数、imports 和
+- [x] 精简 method config/state/train history；删除不再使用的函数、参数、imports 和
   defensive fallback，不增加新的调权抽象。
-- [ ] 审计本阶段触及的 numerical helpers：标准 loss/optimizer/tensor/serialization 直接
+- [x] 审计本阶段触及的 numerical helpers：标准 loss/optimizer/tensor/serialization 直接
   委托受支持 package；只为 field/rawData/campaign-specific 语义保留自写代码并在完成
   change record 中说明边界。
-- [ ] 验证 deep-ensemble 每个 member 只看到真实 rows 或其 bootstrap resample。
+- [x] 验证 deep-ensemble 每个 member 只看到真实 rows 或其 bootstrap resample。
 
 ### Phase 2 - Remove Dead Uncalibrated GPSAF Trust Inputs
 
-- [ ] 保留 ensemble/bootstrap 训练、member prediction、mean 和 min/max spread 输出。
-- [ ] 删除没有 live caller 的 noise scale、probabilistic knockout 和 noisy-cost helper，以及
+- [x] 保留 ensemble/bootstrap 训练、member prediction、mean 和 min/max spread 输出。
+- [x] 删除没有 live caller 的 noise scale、probabilistic knockout 和 noisy-cost helper，以及
   interval half-width 与训练集内 historical error 的无效读取、传递和 diagnostics。
-- [ ] 对相同 predicted costs/seed，在人为改变 spread 和 training-fit audit 后断言 candidate
+- [x] 对相同 predicted costs/seed，在人为改变 spread 和 training-fit audit 后断言 candidate
   selection 不变。
-- [ ] 删除 optimizer-facing historical-error API；如 viewer 保留 training-fit audit，重命名
+- [x] 删除 optimizer-facing historical-error API；如 viewer 保留 training-fit audit，重命名
   并明确标注 in-sample、diagnostic-only。
 
 ### Phase 3 - Remove Framework And Task Surfaces
 
-- [ ] 删除五个不再支持的 workspace config names 和相应验证/tests/docs：一个 mixup、
+- [x] 删除五个不再支持的 workspace config names 和相应验证/tests/docs：一个 mixup、
   两个 importance、两个 relative-loss 参数；以 source 列表逐一核对，避免漏删。
-- [ ] 删除 job-template importance API、helper、exports 和 calc-cost hook；检查 axis-mark
+- [x] 删除 job-template importance API、helper、exports 和 calc-cost hook；检查 axis-mark
   helpers 是否还有独立职责后决定一并删除。
-- [ ] 更新 reference workspaces，使 cost extraction 继续只表达 objective semantics，
+- [x] 更新 reference workspaces，使 cost extraction 继续只表达 objective semantics，
   不再定义 surrogate attention callback。
-- [ ] 对遗留 config/hook 提供清楚的 check/validation 诊断，不保留 silent no-op。
+- [x] 对遗留 config/hook 提供清楚的 check/validation 诊断，不保留 silent no-op。
 
 ### Phase 4 - Publish And Isolate Retained State
 
-- [ ] 写入独立的 `format_version`、`conditional_inr` method ID 与
+- [x] 写入独立的 `format_version`、`conditional_inr` method ID 与
   `real_field_balanced` training policy、semantic state signature 与 run/component namespace。
-- [ ] 在 Windows 上比较适用的 manifest-last、commit-marker、temporary-directory rename 等
+- [x] 在 Windows 上比较适用的 manifest-last、commit-marker、temporary-directory rename 等
   方案，选取并实现一个经过 interruption/failure injection 验证的 publication boundary；
   证明半成品不可发现，重试不会混合两个 generation artifact。
-- [ ] recovery 只接受当前 schema/method/policy；删除所有 legacy reader/fixture/compatibility
+- [x] recovery 只接受当前 schema/method/policy；删除所有 legacy reader/fixture/compatibility
   分支，不访问或改写旧 rawData/history。
-- [ ] 更新 viewer discovery/summary/audit 只读取新 checkpoint，继续显示 ensemble member
+- [x] 更新 viewer discovery/summary/audit 只读取新 checkpoint，继续显示 ensemble member
   与 spread，但不把 spread 命名为 calibrated confidence interval。
-- [ ] 证明算法切换保留旧 weights/artifacts 和真实 evidence；active discovery 不 cross-load；
+- [x] 证明算法切换保留旧 weights/artifacts 和真实 evidence；active discovery 不 cross-load；
   compatible return 可恢复，不兼容 return 从 retained evidence cold retrain；无自动 prune。
 
 ### Phase 5 - Documentation And Verification
 
-- [ ] 从有效 architecture、terminology、blueprints 和 user docs 删除 mixup/importance/
+- [x] 从有效 architecture、terminology、blueprints 和 user docs 删除 mixup/importance/
   relative-loss 作为当前能力的说明；历史 change records 保持不改。
-- [ ] 更新 tests，删除只验证旧旋钮存在的断言，新增 real-only/field-balanced-training
+- [x] 更新 tests，删除只验证旧旋钮存在的断言，新增 real-only/field-balanced-training
   断言。
-- [ ] 把测试/文档中的 `uniform` 准确改为 field-balanced seeded sampling；synthetic
+- [x] 把测试/文档中的 `uniform` 准确改为 field-balanced seeded sampling；synthetic
   fixture 指标仅供调试，不因下降而恢复 task-specific heuristic。
 - [ ] 在用户确认 suite/metrics/thresholds 后运行真实 benchmark gate；失败则保持本 toDo
   active，并在 real-only 原则内调整 sampling/model/training。不得恢复 synthetic target、
   task-specific importance 或用较容易的问题替换失败结果。
-- [ ] benchmark gate 不等于 ensemble trust calibration；后者仍不在本任务范围。
+- [x] benchmark gate 不等于 ensemble trust calibration；后者仍不在本任务范围。
 - [ ] 按开发文档完成 wheel build、force-reinstall、import-origin check、focused tests 和
   完整 pytest，随后更新 change record 并归档本 toDo。
 

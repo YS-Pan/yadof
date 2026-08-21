@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import json
-import math
 from pathlib import Path
 import threading
 from typing import Mapping, Sequence
@@ -18,6 +17,12 @@ from yadof.job_template.rawdata_contract import RawDataView
 from yadof.surrogate.modeling import (
     load_inr_artifacts,
     predict_conditional_inr_members,
+)
+from yadof.surrogate.checkpoints import (
+    resolve_artifact_dir,
+    resolve_namespace_manifest_path,
+    semantic_state_signature,
+    validate_manifest_identity,
 )
 from yadof.surrogate.runtime import (
     _interpolate_regular_grid,
@@ -41,27 +46,42 @@ from .types import (
 )
 
 
+def _json_normalized_mapping(value: Mapping[str, object]) -> dict[str, object]:
+    return json.loads(json.dumps(dict(value), sort_keys=True))
+
+
 def discover_checkpoints(
     checkpoint_dir: Path,
+    *,
+    parameter_definition_signature: Mapping[str, object] | None = None,
 ) -> tuple[CheckpointInfo, ...]:
     """Return valid checkpoint descriptors in increasing generation order."""
 
-    checkpoints: list[CheckpointInfo] = []
-    for path in sorted(Path(checkpoint_dir).glob("generation_*.json")):
+    compatible_parameter_signature = (
+        None
+        if parameter_definition_signature is None
+        else _json_normalized_mapping(parameter_definition_signature)
+    )
+    checkpoints_by_generation: dict[int, CheckpointInfo] = {}
+    paths = Path(checkpoint_dir).glob(
+        "runs/*/components/surrogate/generation_*.json"
+    )
+    for path in sorted(paths):
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
-                continue
-            generation = int(payload["generation_index"])
-            sample_count = int(payload.get("sample_count", 0))
-            train_history = payload.get("train_history", {})
-            member_count = int(
-                payload.get(
-                    "member_count",
-                    dict(train_history).get("member_count", 1),
-                )
+            payload = validate_manifest_identity(
+                json.loads(path.read_text(encoding="utf-8"))
             )
-            schema = payload.get("schema", {})
+            generation = int(payload["generation_index"])
+            sample_count = int(payload["sample_count"])
+            if (
+                compatible_parameter_signature is not None
+                and payload["parameter_definition_signature"]
+                != compatible_parameter_signature
+            ):
+                continue
+            train_history = payload["train_history"]
+            member_count = int(payload["member_count"])
+            schema = payload["schema"]
             flat_dim = (
                 int(dict(schema).get("flat_dim", 0))
                 if isinstance(schema, Mapping)
@@ -74,25 +94,33 @@ def discover_checkpoints(
             )
             if member_count <= 0 or flat_dim <= 0 or skipped:
                 continue
-            raw_error = payload.get("mean_relative_error")
-            training_error = (
-                float(raw_error)
-                if raw_error is not None and math.isfinite(float(raw_error))
-                else None
+            namespace_manifest = resolve_namespace_manifest_path(
+                Path(checkpoint_dir), payload
             )
+            if namespace_manifest.resolve() != path.resolve():
+                continue
+            artifact_dir = resolve_artifact_dir(Path(checkpoint_dir), payload)
+            model_path = artifact_dir / Path(str(payload["model_path"])).name
+            if not model_path.is_file():
+                continue
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             continue
-        checkpoints.append(
-            CheckpointInfo(
-                generation=generation,
-                path=path.resolve(),
-                sample_count=sample_count,
-                member_count=member_count,
-                training_error=training_error,
-                payload=payload,
-            )
+        candidate = CheckpointInfo(
+            generation=generation,
+            path=path.resolve(),
+            sample_count=sample_count,
+            member_count=member_count,
+            payload=payload,
         )
-    return tuple(sorted(checkpoints, key=lambda item: item.generation))
+        previous = checkpoints_by_generation.get(generation)
+        if previous is None or str(payload["publication_id"]) > str(
+            previous.payload["publication_id"]
+        ):
+            checkpoints_by_generation[generation] = candidate
+    return tuple(
+        checkpoints_by_generation[generation]
+        for generation in sorted(checkpoints_by_generation)
+    )
 
 
 def _select_device(config) -> torch.device:
@@ -128,18 +156,13 @@ class CheckpointPredictor:
         self.checkpoint = checkpoint
         self._config = load_config(self.workspace)
         self.device = _select_device(self._config)
-        payload = checkpoint.payload
+        payload = validate_manifest_identity(checkpoint.payload)
 
-        artifact_name = Path(
-            str(
-                payload.get(
-                    "artifact_dir",
-                    f"generation_{checkpoint.generation:04d}_conditional_inr",
-                )
-            )
-        ).name
-        self.artifact_dir = checkpoint.path.parent / artifact_name
-        model_name = Path(str(payload.get("model_path", "model_aux.npz"))).name
+        self.artifact_dir = resolve_artifact_dir(
+            self._config.workspace.surrogate_checkpoint_dir,
+            payload,
+        )
+        model_name = Path(str(payload["model_path"])).name
         auxiliary_path = self.artifact_dir / model_name
         if not auxiliary_path.is_file():
             raise FileNotFoundError(auxiliary_path)
@@ -149,6 +172,13 @@ class CheckpointPredictor:
         if checkpoint_names != current_names:
             raise ValueError(
                 "checkpoint parameters do not match the current workspace task"
+            )
+        current_parameter_signature = _json_normalized_mapping(
+            job_template_api.get_parameter_definition_signature(self.workspace)
+        )
+        if payload["parameter_definition_signature"] != current_parameter_signature:
+            raise ValueError(
+                "checkpoint parameter normalization does not match the current workspace"
             )
         self.parameter_names = current_names
 
@@ -219,6 +249,26 @@ class CheckpointPredictor:
             raise ValueError("checkpoint model input width does not match parameters")
         if int(n_fields) != self.schema.n_fields:
             raise ValueError("checkpoint model fields do not match rawData schema")
+        manifest_train_cfg = payload["train_cfg"]
+        if not isinstance(manifest_train_cfg, Mapping) or dict(
+            manifest_train_cfg
+        ) != asdict(self.train_cfg):
+            raise ValueError(
+                "checkpoint model training config does not match its manifest"
+            )
+        expected_signature = semantic_state_signature(
+            parameter_names=self.parameter_names,
+            parameter_definition_signature=dict(
+                payload["parameter_definition_signature"]
+            ),
+            schema=self.schema,
+            train_cfg=self.train_cfg,
+            torch_version=str(payload["torch_version"]),
+        )
+        if str(payload["state_signature"]) != expected_signature:
+            raise ValueError(
+                "checkpoint semantic state does not match the current workspace"
+            )
 
     def _predict_member_flats(
         self,

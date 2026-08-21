@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import math
 import os
 import random
 from typing import Sequence
@@ -22,7 +21,6 @@ from .gpsaf_misc import (
     CandidateRecord,
     HistoryRecord,
     Population,
-    better_costs,
     history_keys,
 )
 
@@ -148,88 +146,16 @@ def predict_records(
     )
     predicted = []
     for record, item in zip(records, raw):
-        costs, intervals = item
+        costs, _member_spread = item
         predicted.append(
             CandidateRecord(
                 x=record.x,
                 origin=record.origin,
                 individual=record.individual,
                 pred_costs=tuple(float(value) for value in costs),
-                intervals=tuple((float(lo), float(hi)) for lo, hi in intervals),
             )
         )
     return predicted
-
-
-def historical_surrogate_errors(
-    workspace: WorkspaceContext,
-) -> tuple[tuple[float, ...], ...]:
-    try:
-        surrogate_api = importlib.import_module("yadof.surrogate.api")
-        return tuple(
-            tuple(float(value) for value in row)
-            for row in surrogate_api.evaluate_historical_errors(workspace)
-        )
-    except Exception:
-        return ()
-
-
-def noise_scales(record: CandidateRecord, historical_error: tuple[tuple[float, ...], ...]) -> tuple[float, ...]:
-    scales = []
-    for idx, value in enumerate(record.pred_costs):
-        interval_scale = 0.0
-        if idx < len(record.intervals):
-            lo, hi = record.intervals[idx]
-            interval_scale = max(0.0, 0.5 * abs(float(hi) - float(lo)))
-        historical_values = [
-            float(row[idx])
-            for row in historical_error
-            if idx < len(row) and math.isfinite(float(row[idx]))
-        ]
-        rel_error = sum(historical_values) / len(historical_values) if historical_values else 0.0
-        scales.append(max(interval_scale, abs(float(value)) * rel_error, rel_error))
-    return tuple(scales)
-
-
-def noisy_costs(
-    record: CandidateRecord,
-    historical_error: tuple[tuple[float, ...], ...],
-    rng: random.Random,
-) -> tuple[float, ...]:
-    scales = noise_scales(record, historical_error)
-    return tuple(float(value) + rng.gauss(0.0, scale) for value, scale in zip(record.pred_costs, scales))
-
-
-def pick_record(
-    left: CandidateRecord,
-    right: CandidateRecord,
-    rng: random.Random,
-    *,
-    noisy: bool = False,
-    historical_error: tuple[tuple[float, ...], ...] = (),
-) -> CandidateRecord:
-    left_costs = noisy_costs(left, historical_error, rng) if noisy else left.pred_costs
-    right_costs = noisy_costs(right, historical_error, rng) if noisy else right.pred_costs
-    return left if better_costs(left_costs, right_costs, rng) else right
-
-
-def probabilistic_knockout(
-    records: Sequence[CandidateRecord],
-    rng: random.Random,
-    historical_error: tuple[tuple[float, ...], ...],
-) -> CandidateRecord:
-    if not records:
-        raise ValueError("probabilistic knockout needs at least one candidate")
-    pool = list(records)
-    rng.shuffle(pool)
-    while len(pool) > 1:
-        if len(pool) % 2 == 1:
-            pool.append(pool[rng.randrange(len(pool))])
-        pool = [
-            pick_record(pool[idx], pool[idx + 1], rng, noisy=True, historical_error=historical_error)
-            for idx in range(0, len(pool), 2)
-        ]
-    return pool[0]
 
 
 def distance_sq(left: Sequence[float], right: Sequence[float]) -> float:
@@ -297,7 +223,6 @@ def run_beta_phase(
     batch_target: int,
     used_keys: set[tuple[float, ...]],
     rng: random.Random,
-    historical_error: tuple[tuple[float, ...], ...],
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
     beta = max(
         0, int(getattr(context.config, "OPTIMIZE_SURROGATE_BETA", 2))
@@ -440,7 +365,6 @@ def surrogate_population(
         if not anchors:
             return None, {**diagnostics, "surrogate_error": "no_alpha_candidates"}
 
-        historical_error = historical_surrogate_errors(context.config.workspace)
         final_records, beta_info = run_beta_phase(
             context,
             base_state,
@@ -448,10 +372,8 @@ def surrogate_population(
             surrogate_target,
             used_keys,
             rng,
-            historical_error,
         )
         diagnostics.update(beta_info)
-        diagnostics["historical_error_rows"] = len(historical_error)
         final_records = list(final_records) + list(exploration_records)
         if len(final_records) < int(population_size):
             final_records.extend(

@@ -5,8 +5,8 @@
 `yadof.surrogate` models workspace rawData as a function of normalized variables and
 rawData query coordinates. It trains a conditional implicit-neural-representation
 ensemble, reconstructs predicted rawData, calculates current costs through
-`job_template`, exposes per-objective member min/max intervals, audits historical
-error, and publishes recoverable checkpoints/metadata.
+`job_template`, exposes per-objective member min/max spread diagnostics, and
+publishes recoverable checkpoints/metadata.
 
 ## Training data and model
 
@@ -14,12 +14,15 @@ Training bundles come from the active campaign session when one exists, so final
 segments and accepted unpublished current rows share one validated view. Outside a
 campaign they come from tolerant public recorded-data queries. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
-constant or near-constant fields. Task-owned importance weights do not add or remove
-rawData: they emphasize objective-relevant positions already present in the modeled
-query table. They weight full-query loss or, when large fields use stochastic query
-minibatches, determine query-sampling probabilities without weighting the sampled
-loss a second time. A positive baseline weight retains attention outside the
-emphasized window. Public prediction reconstructs the full compatible field.
+constant or near-constant fields. Training targets are only recorded real rows or
+seeded bootstrap draws from them. Query minibatches are seeded, balanced across
+active fields, and sampled without replacement inside each field. Pointwise Smooth
+L1 is averaged within each field and then macro-averaged equally across fields.
+Task-owned weights and synthetic target paths do not exist. Public prediction
+reconstructs the full compatible field.
+When the configured finite training schedule is too short to give every active field
+the same number of appearances under a smaller query budget, the effective epoch
+count is extended only far enough to complete one deterministic rotation cycle.
 
 The conditional decoder may also be queried at arbitrary physical coordinates for
 one modeled rawData slot. Stored coordinate values use exactly the checkpoint's
@@ -31,14 +34,11 @@ scaler values. This query path is additive: training, checkpoint serialization,
 full-grid reconstruction, optimizer prediction, and audit behavior remain
 unchanged.
 
-Ensemble members may bootstrap samples and use configured latent, embedding,
-Fourier-feature, hidden-layer, batch, optimizer, non-finite, and mixup policies.
-Mixup is a configurable low-weight interpolation regularizer rather than a second
-source of truth: real evaluated rawData remains the dominant training loss, and a
-workspace may set its weight to zero for sharply nonlinear physical responses.
-Member spread is exposed as a diagnostic and is not durable truth. The live GPSAF
-survival path currently selects from mean predicted costs only; member intervals
-and training-row historical error do not affect its selected candidates.
+Ensemble members may bootstrap real rows and use configured latent, embedding,
+Fourier-feature, hidden-layer, batch, optimizer, and non-finite policies. Member
+spread is exposed as an uncalibrated diagnostic and is not durable truth. The live
+GPSAF survival path selects from mean predicted costs only; member min/max spread
+does not affect selected candidates.
 
 ## Scheduling and recovery
 
@@ -49,9 +49,15 @@ bounds stale models. An asynchronous trainer receives an owned task snapshot and
 training bundle rather than reopening mutable task files. Clearing one workspace
 waits/resets only that workspace.
 
-Checkpoints contain model artifacts, auxiliary arrays, parameter/rawData signatures,
-generation identity, config summary, and audit metadata. Recovery requires
-compatible current parameters/rawData schema. Current `calc_cost.py` is reapplied to
+Checkpoints use an explicit format version, `conditional_inr` method,
+`real_field_balanced` policy, semantic state signature, and run/component namespace.
+The signature includes parameter ranges/levels because they define normalized-input
+meaning. Publication renames the complete artifact tree, writes a root convenience
+pointer, then atomically writes the unique namespace manifest as the commit record.
+Readers recover committed publications from the matching semantic namespace; a
+failed root/commit write cannot expose a partial model, and switching away and back
+can recover the retained compatible publication. Incompatible and interrupted
+artifacts remain retained but inactive. Current `calc_cost.py` is reapplied to
 predicted rawData after recovery, so cost policy is never frozen in a checkpoint.
 
 ## Invariants

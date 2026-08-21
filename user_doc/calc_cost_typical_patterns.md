@@ -5,11 +5,10 @@ rawData has been recorded, and it is also used by the surrogate path. Keep it pu
 and repeatable: the same rawData and same code should produce the same cost.
 
 Keep only code that can change with the optimization task: rawData interpretation,
-objective definitions, physical thresholds, custom calculators, and importance
-regions. Reusable loading, axis reduction, definition dispatch, worst-curve
-aggregation, constraints, failure fallback, weight allocation, and objective
-counting belong in `yadof.job_template`; call those helpers instead of copying their
-implementations into `calc_cost.py`.
+objective definitions, physical thresholds, and custom calculators. Reusable
+loading, axis reduction, definition dispatch, worst-curve aggregation, constraints,
+failure fallback, and objective counting belong in `yadof.job_template`; call those
+helpers instead of copying their implementations into `calc_cost.py`.
 
 The reusable helpers are deliberately coarse-grained. A custom grouping whose
 members carry task-specific ranges, a simulator-specific array layout, or another
@@ -119,17 +118,10 @@ def get_objective_names() -> tuple[str, ...]:
 Do not define `get_objective_count()` merely as `len(get_objective_names())`; yadof
 derives and validates the count from objective names.
 
-If surrogate training should give extra attention to objective-relevant rawData
-positions, also provide the optional weighting hook:
-
-```python
-def rawdata_importance_weights(sample_rawdata, *, floor=0.25, boost=2.0):
-    ...
-```
-
-This hook does not decide which rawData is saved or included in the surrogate
-training bundle. It only assigns relative weights to already modeled numeric
-positions.
+Do not define `rawdata_importance_weights()`. That former hook has been removed:
+all varying numeric rawData fields use the package-owned real-only,
+field-balanced training policy. `yadof check` rejects a remaining hook with an
+actionable diagnostic.
 
 Installed workspace calls load these functions through `yadof.job_template`; the
 installed runtime uses the matching `yadof.job_template` gateway.
@@ -163,7 +155,6 @@ from yadof.job_template.cost_misc import (
 from yadof.job_template.rawdata_contract import (
     RawDataItem,
     RawDataView,
-    build_rawdata_importance_weights,
 )
 
 ERROR_COST = 1.0
@@ -274,124 +265,18 @@ When any constraint exists, `get_objective_names()` appends `cost_constraints`.
 If a constraint expression cannot be evaluated, the constraint cost becomes
 `ERROR_COST`.
 
-## RawData Importance Weights
+## Surrogate Training Ownership
 
-A “gain importance mask” is the numeric weight array returned for a gain rawData
-field by `rawdata_importance_weights()`. It has the same shape as that field's main
-numeric array. It is not an inclusion mask.
+`workflow.py` owns which rawData is produced and saved. Compatible recorded varying
+numeric slots enter surrogate modeling; constant slots remain in the reconstruction
+template. `calc_cost.py` owns only current rawData interpretation and objectives—it
+does not select, weight, rank, or mask surrogate training positions.
 
-| Question | Owning mechanism |
-|---|---|
-| Which far-field values are produced and saved? | `workflow.py` and its full rawData array |
-| Which saved evidence is available for surrogate modeling? | Compatible recorded rawData and the surrogate training bundle |
-| Which modeled positions receive more training attention? | `calc_cost.py:rawdata_importance_weights()` |
-
-The framework behavior is:
-
-- With no hook, modeled positions receive uniform weight.
-- `build_rawdata_importance_weights()` initializes every position to `floor` and
-  passes `floor + boost` to the task callback as `important`.
-- When a field is small enough to use every query in a training step, these values
-  weight the surrogate loss. When a large field uses stochastic query minibatches,
-  they are used as query-sampling probabilities instead of weighting the sampled
-  loss a second time.
-- A positive `floor` preserves attention outside the important window. Setting it
-  to zero can remove non-important positions from loss or stochastic sampling.
-- The surrogate still reconstructs the full compatible rawData field for public
-  prediction. Constant numeric slots are preserved from the rawData template rather
-  than learned.
-
-The important region should normally mirror the positions actually read by
-`calculate_cost()`. For example, if gain cost uses a frequency band only at one
-`Phi` and one `Theta`, mark the intersection of all three selectors:
-
-```python
-import numpy as np
-
-from yadof.job_template.rawdata_contract import (
-    angle_to_degrees,
-    build_rawdata_importance_weights,
-    frequency_to_ghz,
-)
-
-GAIN_RAWDATA_NAME = "far_field_gain"
-GAIN_FREQUENCY_RANGE_GHZ = (2.4, 2.5)
-TARGET_PHI_DEG = 0.0
-TARGET_THETA_DEG = 0.0
-ANGLE_TOLERANCE_DEG = 0.5
-
-
-def _mark_gain_cost_window(view, weights, important):
-    if view.name != GAIN_RAWDATA_NAME:
-        return
-    required_axes = ("Freq", "Phi", "Theta")
-    if not all(view.has_axis(name) for name in required_axes):
-        return
-
-    try:
-        selectors = [
-            np.arange(size, dtype=int)
-            for size in weights.shape
-        ]
-        selectors[view.axis_index("Freq")] = view.range_indices(
-            "Freq",
-            *GAIN_FREQUENCY_RANGE_GHZ,
-            converter=frequency_to_ghz,
-        )
-        selectors[view.axis_index("Phi")] = np.asarray(
-            [
-                view.nearest_index(
-                    "Phi",
-                    TARGET_PHI_DEG,
-                    ANGLE_TOLERANCE_DEG,
-                    period=360.0,
-                    converter=angle_to_degrees,
-                )
-            ],
-            dtype=int,
-        )
-        selectors[view.axis_index("Theta")] = np.asarray(
-            [
-                view.nearest_index(
-                    "Theta",
-                    TARGET_THETA_DEG,
-                    ANGLE_TOLERANCE_DEG,
-                    converter=angle_to_degrees,
-                )
-            ],
-            dtype=int,
-        )
-    except ValueError:
-        return
-    if all(indices.size for indices in selectors):
-        weights[np.ix_(*selectors)] = important
-
-
-def rawdata_importance_weights(sample_rawdata, *, floor=0.25, boost=2.0):
-    return build_rawdata_importance_weights(
-        sample_rawdata,
-        _mark_gain_cost_window,
-        floor=floor,
-        boost=boost,
-    )
-```
-
-Reuse the same target constants, unit converters, tolerances, and range semantics in
-cost extraction and importance selection. `np.ix_()` is important here because it
-forms the Cartesian intersection independently of rawData axis order.
-
-`mark_axis_range()` is appropriate only when every value along the other axes is
-also objective-relevant. It broadcasts across all remaining axes. For example,
-marking only a `Freq` range in a `Freq × Phi × Theta` gain array boosts every
-`Phi × Theta` point in that frequency range, not just the angle used by cost. The
-helper also marks the complete array when the named axis is absent, so guard it
-with `view.has_axis()` when that fallback is not intended.
-
-If the instruction is “make the surrogate model all saved far-field rawData,” save
-the full field in `workflow.py`; no importance hook is required for inclusion. Add
-the hook only when there is a known objective-relevant region that deserves extra
-attention. If no positions deserve more attention than others, omit the hook and
-use uniform weights.
+For large rawData, the package may sample a bounded number of queries per step.
+That sampler balances active fields and samples without replacement inside each
+field. The loss averages pointwise Smooth L1 within each field and then averages
+fields equally, so duplicating scalar positions in one field does not increase that
+field's macro influence.
 
 ## What Not To Do
 

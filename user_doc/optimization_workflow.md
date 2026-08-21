@@ -147,27 +147,26 @@ unreadable.
 
 Keep these three decisions separate:
 
-1. `workflow.py` decides what evidence is saved. To make every far-field value
-   available to the surrogate, save the complete compatible far-field grid in
-   rawData instead of reducing it to an objective trace.
+1. `workflow.py` decides what evidence is saved. Save a complete compatible
+   far-field grid only when the full grid belongs to the intended prediction
+   contract; exclude objective-irrelevant numeric fields or regions at this
+   boundary rather than expecting a later attention mask.
 2. The surrogate builds its training bundle from recorded rawData. Compatible
    varying numeric slots enter its query table; constant slots are preserved in the
    rawData template instead of being learned. Large fields may be sampled by query
    minibatches during individual training steps, but remain part of the full
    modeled field and full-grid prediction contract.
-3. `calc_cost.py:rawdata_importance_weights()` only changes relative training
-   attention among those modeled values. It neither saves data nor adds data to the
-   surrogate.
+3. Surrogate training treats every modeled rawData field equally at the field-loss
+   level. Within each field, every selected scalar position has equal pointwise
+   importance. Task code cannot override this policy.
 
 Therefore, “include all saved far-field rawData in surrogate training” is a
-workflow/rawData requirement, not an instruction to mark the entire far field as
-important. See [RawData Importance Weights](calc_cost_typical_patterns.md#rawdata-importance-weights)
-for the exact mask semantics and a multi-axis gain example.
+workflow/rawData requirement. The surrogate models every varying numeric slot in
+the evidence that the workflow deliberately saved under its field-balanced policy.
 
-Keep only task-varying rawData interpretation, objective definitions, thresholds,
-and importance-region selection in `calc_cost.py`. Reusable axis reduction,
-definition dispatch, worst-curve aggregation, constraint handling, error fallback,
-importance-weight allocation, and objective counting belong to
+Keep only task-varying rawData interpretation, objective definitions, and thresholds
+in `calc_cost.py`. Reusable axis reduction, definition dispatch, worst-curve
+aggregation, constraint handling, error fallback, and objective counting belong to
 `yadof.job_template` and must be called rather than copied into the task module.
 
 Real evaluation and the surrogate follow the same path:

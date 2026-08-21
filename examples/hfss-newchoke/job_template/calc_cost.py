@@ -18,10 +18,8 @@ from yadof.job_template.rawdata_contract import (
     RawDataItem,
     RawDataView,
     angle_to_degrees,
-    build_rawdata_importance_weights,
     curve_along_axis,
     frequency_to_ghz,
-    mark_axis_range,
 )
 
 
@@ -32,7 +30,6 @@ TARGET_FREQ_GHZ = 2.44
 ANGLE_TOL_DEG = 1.5
 FREQ_TOL_GHZ = 0.02
 GAIN_COVERAGE_RANGE_DEG = (-60.0, 60.0)
-BACK_LOBE_RANGES_DEG = ((-180.0, -150.0), (150.0, 180.0))
 
 COST_CURVE = {"error_cost": ERROR_COST, "edge_cost": 0.1, "tanh_slope": None}
 CONSTRAINT_COST_CURVE = dict(COST_CURVE)
@@ -191,41 +188,6 @@ def _pin_state(item: RawDataView) -> int | None:
     except (TypeError, ValueError):
         match = _PIN_STATE_RE.search(item.name)
         return int(match.group(1)) if match else None
-
-
-def rawdata_importance_weights(
-    sample_rawdata: Sequence[RawDataItem],
-    *,
-    floor: float = 0.25,
-    boost: float = 2.0,
-) -> tuple[dict[str, np.ndarray], ...]:
-    """Emphasize objective-relevant regions during full-field surrogate training."""
-
-    def mark_important(
-        loaded: RawDataView,
-        weights: np.ndarray,
-        important: float,
-    ) -> None:
-        if loaded.name.startswith("s11") or loaded.name.startswith("axial_ratio"):
-            weights[...] = important
-        elif loaded.name.startswith("gain_lhcp"):
-            mark_axis_range(
-                weights,
-                loaded,
-                "Theta",
-                *GAIN_COVERAGE_RANGE_DEG,
-                important,
-                converter=angle_to_degrees,
-            )
-            for low, high in BACK_LOBE_RANGES_DEG:
-                mark_axis_range(weights, loaded, "Theta", low, high, important, converter=angle_to_degrees)
-
-    return build_rawdata_importance_weights(
-        sample_rawdata,
-        mark_important,
-        floor=floor,
-        boost=boost,
-    )
 
 
 def calculate_cost(

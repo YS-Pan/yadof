@@ -66,24 +66,18 @@ class SurrogateState:
     generation_index: int
     sample_count: int
     checkpoint_path: Path
+    namespace_manifest_path: Path
     model_path: Path
     artifact_dir: Path
     model_name: str
+    state_signature: str
+    run_namespace: str
+    component_namespace: str
     parameter_names: tuple[str, ...]
-    normalized_variables: Population
-    raw_data: tuple[RawSample, ...]
+    parameter_definition_signature: Mapping[str, object]
     schema: RawDataSchema | None
     scaler: TargetScaler | None
     model: object | None
     train_cfg: INRTrainConfig | None
     device: torch.device | None
     train_history: dict[str, object]
-    training_flat_values: np.ndarray
-    query_weights: np.ndarray
-    mean_relative_error: float
-    historical_relative_error_p50: tuple[float, ...]
-    historical_relative_error_p90: tuple[float, ...]
-    historical_relative_error_p95: tuple[float, ...]
-    historical_absolute_error_p90: tuple[float, ...]
-    historical_true_costs: tuple[tuple[float, ...], ...]
-    historical_predicted_costs: tuple[tuple[float, ...], ...]

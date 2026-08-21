@@ -76,8 +76,11 @@ def build_workspace_summary(viewer: SurrogateWorkspace) -> ReportPayload:
                 "generation": int(checkpoint.generation),
                 "sample_count": int(checkpoint.sample_count),
                 "member_count": int(checkpoint.member_count),
-                "training_error": _finite_or_none(
-                    checkpoint.training_error
+                "training_policy": str(
+                    checkpoint.payload["training_policy"]
+                ),
+                "state_signature": str(
+                    checkpoint.payload["state_signature"]
                 ),
                 "path": str(Path(checkpoint.path).resolve()),
             }
@@ -258,8 +261,8 @@ def format_workspace_summary(
             f"{checkpoint['generation']}: "
             f"samples={checkpoint['sample_count']}, "
             f"members={checkpoint['member_count']}, "
-            "training_error="
-            f"{_format_number(checkpoint['training_error'])}"
+            f"policy={checkpoint['training_policy']}, "
+            f"state={checkpoint['state_signature'][:12]}"
         )
     lines.append(
         "optimization generations: "

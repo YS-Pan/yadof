@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("matplotlib")
-pytest.importorskip("torch")
+torch = pytest.importorskip("torch")
 
 from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
@@ -93,31 +93,64 @@ def _nd_raw_item(
     return item
 
 
-def test_discover_checkpoints_sorts_and_skips_bad_json(tmp_path: Path) -> None:
-    (tmp_path / "generation_0003.json").write_text(
-        json.dumps(
-            {
-                "generation_index": 3,
-                "sample_count": 20,
-                "member_count": 2,
-                "schema": {"flat_dim": 1},
-                "parameter_names": ["x"],
-            }
+def _write_checkpoint_manifest(
+    root: Path,
+    *,
+    generation: int,
+    sample_count: int,
+    member_count: int,
+    publication_sequence: int | None = None,
+    parameter_definition_signature: dict[str, object] | None = None,
+) -> None:
+    sequence = generation if publication_sequence is None else publication_sequence
+    signature = f"{generation * 1000 + sequence:064x}"
+    run_namespace = f"semantic-{signature[:16]}"
+    namespace_dir = root / "runs" / run_namespace / "components" / "surrogate"
+    publication_id = f"{sequence:020d}_{'a' * 32}"
+    stem = f"generation_{generation:04d}_{publication_id}"
+    artifact_dir = namespace_dir / stem
+    namespace_manifest = namespace_dir / f"{stem}.json"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "model_aux.npz").write_bytes(b"checkpoint")
+    payload = {
+        "format_version": 1,
+        "surrogate_method": "conditional_inr",
+        "training_policy": "real_field_balanced",
+        "state_signature": signature,
+        "run_namespace": run_namespace,
+        "component_namespace": "surrogate",
+        "publication_id": publication_id,
+        "torch_version": str(torch.__version__),
+        "generation_index": generation,
+        "sample_count": sample_count,
+        "member_count": member_count,
+        "model": "conditional_inr_rawdata_deep_ensemble",
+        "model_path": "model_aux.npz",
+        "artifact_dir": artifact_dir.relative_to(root).as_posix(),
+        "namespace_manifest": namespace_manifest.relative_to(root).as_posix(),
+        "schema": {"flat_dim": 1, "modeled_slots": []},
+        "parameter_names": ["x"],
+        "parameter_definition_signature": (
+            {"parameters": [], "constraints": []}
+            if parameter_definition_signature is None
+            else parameter_definition_signature
         ),
-        encoding="utf-8",
+        "train_cfg": {},
+        "train_history": {"member_count": member_count, "skipped": False},
+    }
+    text = json.dumps(payload)
+    namespace_manifest.write_text(text, encoding="utf-8")
+    (root / f"generation_{generation:04d}.json").write_text(
+        text, encoding="utf-8"
     )
-    (tmp_path / "generation_0001.json").write_text(
-        json.dumps(
-            {
-                "generation_index": 1,
-                "sample_count": 10,
-                "train_history": {"member_count": 4},
-                "mean_relative_error": 0.25,
-                "schema": {"flat_dim": 1},
-                "parameter_names": ["x"],
-            }
-        ),
-        encoding="utf-8",
+
+
+def test_discover_checkpoints_sorts_and_skips_bad_json(tmp_path: Path) -> None:
+    _write_checkpoint_manifest(
+        tmp_path, generation=3, sample_count=20, member_count=2
+    )
+    _write_checkpoint_manifest(
+        tmp_path, generation=1, sample_count=10, member_count=4
     )
     (tmp_path / "generation_broken.json").write_text("{", encoding="utf-8")
 
@@ -125,7 +158,46 @@ def test_discover_checkpoints_sorts_and_skips_bad_json(tmp_path: Path) -> None:
 
     assert [item.generation for item in checkpoints] == [1, 3]
     assert checkpoints[0].member_count == 4
-    assert checkpoints[0].training_error == 0.25
+    assert checkpoints[0].payload["training_policy"] == "real_field_balanced"
+
+
+def test_discovery_filters_parameter_semantics_before_generation_selection(
+    tmp_path: Path,
+) -> None:
+    compatible = {
+        "parameters": [{"name": "x", "type": "continuous", "range": [0.0, 1.0]}],
+        "constraints": [],
+    }
+    incompatible = {
+        "parameters": [{"name": "x", "type": "continuous", "range": [-1.0, 1.0]}],
+        "constraints": [],
+    }
+    _write_checkpoint_manifest(
+        tmp_path,
+        generation=2,
+        sample_count=10,
+        member_count=1,
+        publication_sequence=1,
+        parameter_definition_signature=compatible,
+    )
+    _write_checkpoint_manifest(
+        tmp_path,
+        generation=2,
+        sample_count=20,
+        member_count=1,
+        publication_sequence=2,
+        parameter_definition_signature=incompatible,
+    )
+
+    unfiltered = discover_checkpoints(tmp_path)
+    filtered = discover_checkpoints(
+        tmp_path,
+        parameter_definition_signature=compatible,
+    )
+
+    assert unfiltered[0].sample_count == 20
+    assert filtered[0].sample_count == 10
+    assert filtered[0].payload["parameter_definition_signature"] == compatible
 
 
 def test_workspace_summary_has_text_and_machine_readable_json(
@@ -148,8 +220,11 @@ def test_workspace_summary_has_text_and_machine_readable_json(
                 generation=2,
                 sample_count=20,
                 member_count=3,
-                training_error=0.125,
                 path=tmp_path / "generation_0002.json",
+                payload={
+                    "training_policy": "real_field_balanced",
+                    "state_signature": "a" * 64,
+                },
             ),
         ),
         generations=(0, 1),
@@ -174,6 +249,10 @@ def test_workspace_summary_has_text_and_machine_readable_json(
     encoded = json.loads(
         format_workspace_summary(payload, output_format="json")
     )
+
+    assert payload["checkpoints"][0]["training_policy"] == "real_field_balanced"
+    assert payload["checkpoints"][0]["state_signature"] == "a" * 64
+    assert "training_error" not in payload["checkpoints"][0]
 
     assert "generation 2: samples=20, members=3" in text
     assert "optimization generations: 0 (1 results), 1 (1 results)" in text

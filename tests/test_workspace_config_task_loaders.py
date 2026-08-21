@@ -156,8 +156,11 @@ def test_config_preserves_explicit_context_paths_until_file_override(tmp_path: P
             "must be 'fast', 'local', or 'distributed'",
         ),
         ("HTCONDOR_JOB_TIMEOUT_MODE = 'sometimes'\n", "must be 'auto' or 'fixed'"),
-        ("SURROGATE_RAWDATA_IMPORTANCE_FLOOR = -0.1\n", "must be >= 0"),
-        ("SURROGATE_INR_MIXUP_WEIGHT = -0.1\n", "must be >= 0"),
+        ("SURROGATE_RAWDATA_IMPORTANCE_FLOOR = 0.25\n", "unknown config setting"),
+        ("SURROGATE_RAWDATA_IMPORTANCE_BOOST = 2.0\n", "unknown config setting"),
+        ("SURROGATE_INR_MIXUP_WEIGHT = 0.1\n", "unknown config setting"),
+        ("SURROGATE_INR_RELATIVE_LOSS_WEIGHT = 0.1\n", "unknown config setting"),
+        ("SURROGATE_INR_RELATIVE_LOSS_EPS = 1e-6\n", "unknown config setting"),
     ],
 )
 def test_config_rejects_unknown_names_types_and_modes(
@@ -232,6 +235,22 @@ def test_two_workspaces_and_fresh_edits_are_module_and_cache_isolated(tmp_path: 
     assert sys.modules.get("local_values") is original_local_module
     assert not tuple(first.root.rglob("__pycache__"))
     assert not tuple(second.root.rglob("__pycache__"))
+
+
+def test_task_validation_rejects_removed_rawdata_importance_hook(
+    tmp_path: Path,
+) -> None:
+    context = _task_files(tmp_path / "workspace", limit=2, offset=1)
+    calc_cost = context.job_template_dir / "calc_cost.py"
+    calc_cost.write_text(
+        calc_cost.read_text(encoding="utf-8")
+        + "\ndef rawdata_importance_weights(sample_rawdata, **kwargs):\n"
+        + "    return ()\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(TypeError, match="delete that hook"):
+        validate_task(context)
 
 
 def test_cost_interpreter_keeps_one_task_definition_for_a_history_batch(

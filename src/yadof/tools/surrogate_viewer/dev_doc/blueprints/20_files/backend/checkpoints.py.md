@@ -7,11 +7,17 @@ selection, and both interactive and audit inference.
 
 ## Functionalities
 
-- Parse usable `generation_*.json` descriptors.
-- Resolve artifact/model filenames without accepting path traversal outside the
-  checkpoint artifact directory.
-- Validate current parameter names, rawData item count, modeled-slot shapes,
-  scaler width, query table, and field count.
+- Parse only current-format `generation_*.json` descriptors whose explicit
+  method/policy/semantic identity is valid and whose unique namespace manifest is
+  identical.
+- Resolve namespace/artifact/model paths below the declared run/component namespace
+  without legacy filename fallbacks or path traversal.
+- Validate the semantic state signature against the checkpoint artifact's persisted
+  train config/runtime version, plus current parameter normalization compatibility,
+  rawData item count, modeled-slot shapes, scaler width, query table, and field count.
+- Select the newest committed publication per generation across semantic namespaces,
+  so an older INR hyperparameter configuration remains auditable without being
+  eligible for runtime recovery under the current training strategy.
 - Load the conditional-INR ensemble through installed yadof.
 - Predict member flat arrays, reconstruct mean/member rawData, and calculate current
   costs.
@@ -44,6 +50,7 @@ sample batches. `predict_plot()` returns one mean plot plus member plots for a
 
 ## Mutability Profile
 
-Artifact fields and model APIs may change with yadof. Parameter/schema
-compatibility, current-cost calculation, per-item reduction, cancellation checks,
-and device fallback behavior should remain explicit.
+Checkpoint format/method/policy changes require an explicit coordinated reader
+change; they are not guessed. Parameter/schema compatibility, current-cost
+calculation, per-item reduction, cancellation checks, and device fallback behavior
+should remain explicit.

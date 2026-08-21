@@ -211,14 +211,16 @@ def _train_blocking(
             error=error,
         )
 
+    usable = runtime._is_usable_state(state)
     with _LOCK:
         schedule = _schedule_locked(key)
-        schedule.last_completed_generation = int(state.generation_index)
+        if usable:
+            schedule.last_completed_generation = int(state.generation_index)
         schedule.last_error = ""
     return _status(
         config,
         key,
-        "trained_blocking",
+        "trained_blocking" if usable else "skipped_not_trainable",
         generation_index=int(generation_index),
     )
 
@@ -270,9 +272,11 @@ def _training_done(
                 schedule.pending_generation = None
         return
 
+    usable = runtime._is_usable_state(state)
     with _LOCK:
         schedule = _schedule_locked(key)
-        schedule.last_completed_generation = int(state.generation_index)
+        if usable:
+            schedule.last_completed_generation = int(state.generation_index)
         schedule.last_error = ""
         if future is schedule.pending:
             schedule.pending = None

@@ -5,7 +5,7 @@
 - Expose both rawData-first model operations and staggered-training scheduler operations without requiring callers to import internal files.
 
 ## Functionalities
-- Re-export `train()`, `predict_population()`, `evaluate_historical_errors()`, `has_trained_state()`, and `latest_state_generation()` from `runtime.py`.
+- Re-export `train()`, `predict_population()`, `has_trained_state()`, and `latest_state_generation()` from `runtime.py`.
 - Re-export `start_training()`, `wait_for_pending_training()`, and `ensure_fresh_enough()` from `scheduler.py`.
 
 ## I/O Format

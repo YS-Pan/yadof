@@ -4,7 +4,7 @@
 
 `yadof.job_template` is stable framework support for task-owned workspace files. It
 defines parameter semantics, current task queries, assigned job snapshots, rawData
-schema/views/validation, reusable axis reduction and importance allocation,
+schema/views/validation, reusable axis reduction,
 definition-based cost dispatch, constraint/failure policy, and objective counting.
 It does not contain a concrete simulator or objective.
 
@@ -25,11 +25,10 @@ It does not contain a concrete simulator or objective.
   A normal `workflow.py` may call the same kernel and serialize those payloads so
   fast/local task algorithms do not drift.
 - `calc_cost.py` reports objective names and contains task-specific rawData
-  interpretation, objective definitions, thresholds, calculators, and importance
-  regions. Importance regions assign relative attention to already modeled rawData;
-  they do not select saved evidence or surrogate inclusion. The file calls package
-  helpers for reusable loading/reduction/dispatch, constraints, failure fallback,
-  weight allocation, and objective counting.
+  interpretation, objective definitions, thresholds, and calculators. It cannot
+  select or weight surrogate training positions; validation rejects the removed
+  `rawdata_importance_weights()` hook. The file calls package helpers for reusable
+  loading/reduction/dispatch, constraints, failure fallback, and objective counting.
 - adapters, models, lookup data, and task helpers are copied into prepared jobs when
   placed under `job_template/`.
 

@@ -8,11 +8,8 @@
 - Flatten numeric rawData slots into conditional-INR query tables and reconstruct predicted rawData.
 - Query one modeled rawData slot at arbitrary physical axis coordinates without
   mutating its checkpoint schema.
-- Apply task-owned rawData importance weights only after compatible numeric rawData
-  slots have entered the modeled query table; the weights alter full-query loss
-  attention or stochastic query-sampling probability, not data inclusion.
-- Forward the configured low-weight mixup regularizer to modeling while keeping
-  evaluated rawData as the dominant training target.
+- Pass only compatible recorded real rows and their query-table field identities to
+  modeling; runtime does not create synthetic targets or task-owned weights.
 - Train the INR ensemble through `modeling.py`.
 - Write checkpoints through `checkpoints.py` and training metadata through `metadata.py`.
 - Predict rawData/costs using the latest in-memory trained state.
@@ -20,13 +17,18 @@
 ## I/O Format
 - `train(generation_index, started_at=None)` returns a `SurrogateState`.
 - `predict_population(population)` returns `(costs, intervals)` for each normalized input row.
-- `evaluate_historical_errors()` returns relative historical error rows from the latest trained state.
 - `predict_rawdata_slot_members_at_coordinates(...)` returns physical member values
   shaped `[member, sample, *query_shape]` for one slot.
 
 ## Non-Obvious Techniques
 - Prediction must not auto-train. If `_STATE` is absent, prediction raises and optimizer fallback handles it.
 - Training metadata is recorded after checkpoint writing so metadata can point at completed artifacts.
+- Recovery scans only the current semantic run/component namespace and accepts a
+  committed unique manifest whose artifacts, signature, parameter normalization
+  definition, query table, and current training configuration all agree. Compatible
+  return can recover a retained publication even when the root convenience pointer
+  names another strategy. Incompatible artifacts are left untouched and cause
+  cold-train behavior.
 - Stored-grid queries reuse the exact legacy coordinate normalization and scaler
   entries. Off-grid queries linearly interpolate target mean/scale, clamp scaler
   extrapolation to endpoint values, and leave the decoder coordinate unclipped.

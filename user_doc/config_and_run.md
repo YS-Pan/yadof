@@ -19,12 +19,16 @@ Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
 shape stay in `job_template/`.
 
-`SURROGATE_INR_MIXUP_WEIGHT` controls the interpolation regularizer used while
-training the rawData INR.  Its default is `0.10`: real evaluated rawData remains
-the dominant loss, while mixup supplies a small smoothness prior.  Set it to `0.0`
-to disable mixup for strongly nonlinear responses such as moving resonances or
-sharp thresholds; increase it only when holdout evidence shows the task benefits
-from additional interpolation regularization.
+Surrogate training uses only recorded real rawData rows (or seeded bootstrap rows
+drawn from them). It does not synthesize mixup targets and does not accept task-owned
+rawData importance or relative-loss settings. `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT`
+bounds queries per step; when a field is larger than that budget, sampling is seeded,
+without replacement, and balanced across modeled fields. Every active field has equal
+macro loss importance regardless of its number of scalar positions. If the configured
+epoch/batch schedule would end before a budget-smaller-than-field-count rotation gives
+every field the same number of appearances, yadof extends that member's effective
+epoch count just enough to complete one full rotation cycle and records both
+configured and effective counts.
 
 Advanced history-recorder settings are
 `HISTORY_SEGMENT_MAX_CANDIDATES` (default 16),
@@ -338,7 +342,10 @@ remain untouched.
 `view surrogate` is a separate, explicitly launched read-only tool. With no mode,
 or with the explicit `gui` mode, it opens the selected workspace (or lets the user
 choose one), explores saved surrogate checkpoint predictions and recorded real
-evidence, and can calculate an in-memory cross-generation error audit. For each
+evidence, and can calculate an in-memory cross-generation error audit. It accepts
+committed checkpoints whose parameter ranges/levels still match the current task;
+older INR hyperparameter configurations remain viewable because the artifact's own
+persisted train config is used. For each
 rawData output it lists every dimension: select zero, one, or two as plot axes and
 enter coordinates for the remaining dimensions. Each fixed dimension has both a
 checkpoint-grid dropdown and an arbitrary finite-value entry. Stored values
@@ -352,8 +359,8 @@ task parameters remain independently queryable between recorded samples.
 The two terminal modes are intended for people and AI agents that need analysis
 without a window:
 
-- `summary` does not load a model. It prints checkpoint generations/training
-  metadata, completed-result counts by optimization generation, parameter ranges,
+- `summary` does not load a model. It prints checkpoint generations/member counts,
+  training policy and semantic signature, completed-result counts by optimization generation, parameter ranges,
   objective names, and rawData dimension spans. `--format json` emits a
   schema-versioned machine-readable object.
 - `audit` performs the same checkpoint inference and per-generation sampling as

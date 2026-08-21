@@ -22,9 +22,6 @@ class INRTrainConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-5
     loss_beta: float = 0.05
-    relative_loss_weight: float = 0.15
-    relative_loss_eps: float = 0.05
-    mixup_weight: float = 0.10
     x_latent_dim: int = 96
     field_emb_dim: int = 12
     coord_fourier_features: int = 24
@@ -49,13 +46,6 @@ def _positive_float(name: str, value: float) -> float:
     value = float(value)
     if value <= 0.0:
         raise ValueError(f"{name} must be positive but got {value}")
-    return value
-
-
-def _nonnegative_float(name: str, value: float) -> float:
-    value = float(value)
-    if value < 0.0:
-        raise ValueError(f"{name} must be non-negative but got {value}")
     return value
 
 
@@ -237,70 +227,117 @@ def _mean(values: list[float]) -> float:
     return float(np.mean(values)) if values else float("nan")
 
 
-def _weighted_smooth_l1(
+def _field_macro_smooth_l1(
     pred: torch.Tensor,
     target: torch.Tensor,
     *,
     beta: float,
-    query_weights: torch.Tensor | None,
+    field_ids: torch.Tensor,
 ) -> torch.Tensor:
-    loss = F.smooth_l1_loss(pred, target, beta=float(beta), reduction="none")
-    if query_weights is None:
-        return loss.mean()
-    weights = query_weights.to(dtype=loss.dtype, device=loss.device).reshape(1, -1)
-    return (loss * weights).mean() / weights.mean().clamp_min(1e-12)
+    """Average pointwise loss within fields, then equally across fields."""
+
+    if pred.shape != target.shape or pred.ndim != 2:
+        raise ValueError("field-macro loss expects matching [sample, query] tensors")
+    fields = field_ids.to(dtype=torch.long, device=pred.device).reshape(-1)
+    if fields.numel() != pred.shape[1]:
+        raise ValueError("field ids must align with the query dimension")
+    pointwise = F.smooth_l1_loss(
+        pred,
+        target,
+        beta=float(beta),
+        reduction="none",
+    )
+    field_losses = [
+        pointwise[:, fields == field_id].mean()
+        for field_id in torch.unique(fields, sorted=True)
+    ]
+    if not field_losses:
+        raise ValueError("field-macro loss needs at least one active field")
+    return torch.stack(field_losses).mean()
 
 
-def _normalized_query_indices(indices: np.ndarray | None, n_queries: int) -> np.ndarray:
-    if indices is None:
-        return np.zeros((0,), dtype=np.int64)
-    values = np.asarray(indices, dtype=np.int64).reshape(-1)
-    if values.size == 0:
-        return np.zeros((0,), dtype=np.int64)
-    values = values[(values >= 0) & (values < int(n_queries))]
-    if values.size == 0:
-        return np.zeros((0,), dtype=np.int64)
-    return np.unique(values).astype(np.int64, copy=False)
-
-
-def _query_subset_indices(
+def _field_balanced_query_indices(
     *,
-    n_queries: int,
+    field_ids: np.ndarray,
     sample_count: int,
-    rng: np.random.Generator,
-    sampling_probabilities: np.ndarray | None,
-    always_include_indices: np.ndarray | None = None,
+    seed: int,
+    step_index: int,
 ) -> np.ndarray | None:
-    n_queries = _positive_int("n_queries", n_queries)
+    """Select a seeded, field-balanced, without-replacement query subset."""
+
+    fields = np.asarray(field_ids, dtype=np.int64).reshape(-1)
+    n_queries = _positive_int("n_queries", fields.size)
     sample_count = _positive_int("train_query_sample_count", sample_count)
-    always = _normalized_query_indices(always_include_indices, n_queries)
-    if always.size == n_queries:
+    if np.any(fields < 0):
+        raise ValueError("field ids must be non-negative")
+    budget = min(n_queries, sample_count)
+    if budget >= n_queries:
         return None
 
-    if always.size:
-        sampleable_mask = np.ones((n_queries,), dtype=bool)
-        sampleable_mask[always] = False
-        sampleable = np.flatnonzero(sampleable_mask)
-    else:
-        sampleable = np.arange(n_queries, dtype=np.int64)
+    unique_fields = np.unique(fields)
+    field_count = int(unique_fields.size)
+    if field_count == 0:
+        raise ValueError("query sampling needs at least one active field")
+    base_order = np.random.default_rng(int(seed)).permutation(unique_fields)
+    groups = {
+        int(field_id): np.flatnonzero(fields == field_id).astype(np.int64, copy=False)
+        for field_id in unique_fields
+    }
+    counts = {int(field_id): 0 for field_id in unique_fields}
 
-    if sample_count >= sampleable.size:
-        return None
-
-    if sampling_probabilities is not None:
-        probabilities = np.asarray(sampling_probabilities, dtype=np.float64).reshape(-1)
-        if probabilities.size != n_queries:
-            raise ValueError("query sampling probabilities must align with query dimension")
-        pool_probabilities = probabilities[sampleable]
-        total = float(np.sum(pool_probabilities))
-        pool_probabilities = None if total <= 0.0 else pool_probabilities / total
-        choice = rng.choice(sampleable, size=sample_count, replace=False, p=pool_probabilities)
+    if budget < field_count:
+        start = (max(0, int(step_index)) * budget) % field_count
+        selected_fields = [
+            int(base_order[(start + offset) % field_count])
+            for offset in range(budget)
+        ]
+        for field_id in selected_fields:
+            counts[field_id] = 1
     else:
-        choice = rng.choice(sampleable, size=sample_count, replace=False)
-    choice = np.concatenate((always, np.asarray(choice, dtype=np.int64))) if always.size else np.asarray(choice, dtype=np.int64)
-    choice = np.unique(choice)
-    choice.sort()
-    return np.ascontiguousarray(choice, dtype=np.int64)
+        start = max(0, int(step_index)) % field_count
+        rotated = [
+            int(base_order[(start + offset) % field_count])
+            for offset in range(field_count)
+        ]
+        remaining = int(budget)
+        while remaining > 0:
+            available = [
+                field_id
+                for field_id in rotated
+                if counts[field_id] < int(groups[field_id].size)
+            ]
+            if not available:
+                break
+            share = max(1, remaining // len(available))
+            for field_id in available:
+                increment = min(
+                    share,
+                    remaining,
+                    int(groups[field_id].size) - counts[field_id],
+                )
+                counts[field_id] += increment
+                remaining -= increment
+                if remaining == 0:
+                    break
+
+    rng = np.random.default_rng(
+        int(seed) + (max(0, int(step_index)) + 1) * 1_000_003
+    )
+    selected: list[np.ndarray] = []
+    for field_id in base_order:
+        count = counts[int(field_id)]
+        if count <= 0:
+            continue
+        selected.append(rng.permutation(groups[int(field_id)])[:count])
+    if not selected:
+        raise ValueError("field-balanced query sampling produced no queries")
+    output = np.concatenate(selected).astype(np.int64, copy=False)
+    output.sort()
+    if output.size != budget:
+        raise ValueError(
+            f"field-balanced query sampling selected {output.size} queries; expected {budget}"
+        )
+    return np.ascontiguousarray(output, dtype=np.int64)
 
 def _slice_targets(
     matrix: np.ndarray,
@@ -312,18 +349,6 @@ def _slice_targets(
     return np.ascontiguousarray(matrix[np.ix_(row_indices, query_indices)], dtype=np.float32)
 
 
-def _sampling_probabilities_from_weights(weights_np: np.ndarray | None) -> np.ndarray | None:
-    if weights_np is None:
-        return None
-    probabilities = np.asarray(weights_np, dtype=np.float64).reshape(-1)
-    probabilities = np.where(np.isfinite(probabilities), probabilities, 0.0)
-    probabilities = np.maximum(probabilities, 0.0)
-    total = float(np.sum(probabilities))
-    if total <= 0.0:
-        return None
-    return np.ascontiguousarray(probabilities / total, dtype=np.float64)
-
-
 def _train_one_member(
     model: ConditionalRawDataINR,
     *,
@@ -331,19 +356,27 @@ def _train_one_member(
     Y_train: np.ndarray,
     coords_device: torch.Tensor,
     fields_device: torch.Tensor,
-    query_weights_device: torch.Tensor | None,
-    query_sampling_probabilities: np.ndarray | None,
-    always_include_query_indices: np.ndarray | None,
+    field_ids: np.ndarray,
     device: torch.device,
     cfg: INRTrainConfig,
     shuffle_seed: int,
 ) -> dict[str, float]:
-    epochs = _positive_int("epochs", cfg.epochs)
+    configured_epochs = _positive_int("epochs", cfg.epochs)
     batch_size = _positive_int("batch_size", cfg.batch_size)
     train_query_sample_count = _positive_int("train_query_sample_count", cfg.train_query_sample_count)
-    relative_weight = _nonnegative_float("relative_loss_weight", cfg.relative_loss_weight)
-    mixup_weight = _nonnegative_float("mixup_weight", cfg.mixup_weight)
     n_queries = _positive_int("query_count", Y_train.shape[1])
+
+    steps_per_epoch = max(1, math.ceil(X_train.shape[0] / batch_size))
+    active_field_count = int(np.unique(field_ids).size)
+    query_budget = min(n_queries, train_query_sample_count)
+    coverage_steps = (
+        active_field_count // math.gcd(active_field_count, query_budget)
+        if query_budget < active_field_count
+        else 1
+    )
+    configured_steps = configured_epochs * steps_per_epoch
+    effective_steps = math.ceil(configured_steps / coverage_steps) * coverage_steps
+    epochs = math.ceil(effective_steps / steps_per_epoch)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=float(cfg.lr), weight_decay=float(cfg.weight_decay))
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs))
@@ -353,31 +386,26 @@ def _train_one_member(
     for epoch in range(1, epochs + 1):
         model.train()
         order = np.random.default_rng(int(shuffle_seed) + epoch).permutation(X_train.shape[0])
-        terms = {"loss": [], "value": [], "relative": [], "mixup": []}
+        terms = {"loss": []}
 
         for start in range(0, X_train.shape[0], batch_size):
+            step_index = (epoch - 1) * steps_per_epoch + start // batch_size
+            if step_index >= effective_steps:
+                break
             idx = order[start : start + batch_size]
-            query_rng = np.random.default_rng(int(shuffle_seed) + epoch * 1000003 + start)
-            query_idx = _query_subset_indices(
-                n_queries=n_queries,
+            query_idx = _field_balanced_query_indices(
+                field_ids=field_ids,
                 sample_count=train_query_sample_count,
-                rng=query_rng,
-                sampling_probabilities=query_sampling_probabilities,
-                always_include_indices=always_include_query_indices,
+                seed=int(shuffle_seed),
+                step_index=step_index,
             )
             if query_idx is None:
                 coords_batch = coords_device
                 fields_batch = fields_device
-                weights_batch = query_weights_device
             else:
                 query_idx_device = torch.as_tensor(query_idx, dtype=torch.long, device=device)
                 coords_batch = coords_device.index_select(0, query_idx_device)
                 fields_batch = fields_device.index_select(0, query_idx_device)
-                weights_batch = (
-                    None
-                    if query_sampling_probabilities is not None or query_weights_device is None
-                    else query_weights_device.index_select(0, query_idx_device)
-                )
 
             x_batch = torch.from_numpy(np.ascontiguousarray(X_train[idx], dtype=np.float32)).to(device)
             y_batch = torch.from_numpy(_slice_targets(Y_train, idx, query_idx)).to(device)
@@ -389,53 +417,12 @@ def _train_one_member(
                 fields=fields_batch,
                 query_chunk=cfg.train_query_chunk,
             )
-            value_loss = _weighted_smooth_l1(
+            loss = _field_macro_smooth_l1(
                 pred,
                 y_batch,
                 beta=float(cfg.loss_beta),
-                query_weights=weights_batch,
+                field_ids=fields_batch,
             )
-            loss_terms = [value_loss]
-            coeff_sum = 1.0
-            rel_loss = torch.zeros((), dtype=value_loss.dtype, device=value_loss.device)
-            if relative_weight > 0.0:
-                denom = y_batch.abs().clamp_min(float(cfg.relative_loss_eps))
-                rel_loss = _weighted_smooth_l1(
-                    pred / denom,
-                    y_batch / denom,
-                    beta=float(cfg.loss_beta),
-                    query_weights=weights_batch,
-                )
-                loss_terms.append(relative_weight * rel_loss)
-                coeff_sum += relative_weight
-
-            mix_loss = torch.zeros((), dtype=value_loss.dtype, device=value_loss.device)
-            if mixup_weight > 0.0 and X_train.shape[0] >= 2:
-                rng = np.random.default_rng(int(shuffle_seed) + epoch * 104729 + start)
-                other_idx = rng.integers(0, X_train.shape[0], size=idx.size)
-                lam_np = rng.uniform(0.10, 0.90, size=(idx.size, 1)).astype(np.float32)
-                lam = torch.from_numpy(lam_np).to(device)
-                x_other = torch.from_numpy(np.ascontiguousarray(X_train[other_idx], dtype=np.float32)).to(device)
-                y_other = torch.from_numpy(_slice_targets(Y_train, other_idx, query_idx)).to(device)
-                x_mix = lam * x_batch + (1.0 - lam) * x_other
-                y_mix = lam * y_batch + (1.0 - lam) * y_other
-                pred_mix = _predict_train_batch(
-                    model=model,
-                    x_batch=x_mix,
-                    coords=coords_batch,
-                    fields=fields_batch,
-                    query_chunk=cfg.train_query_chunk,
-                )
-                mix_loss = _weighted_smooth_l1(
-                    pred_mix,
-                    y_mix,
-                    beta=float(cfg.loss_beta),
-                    query_weights=weights_batch,
-                )
-                loss_terms.append(mixup_weight * mix_loss)
-                coeff_sum += mixup_weight
-
-            loss = torch.stack(loss_terms).sum() / coeff_sum
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -443,16 +430,19 @@ def _train_one_member(
             optimizer.step()
 
             terms["loss"].append(float(loss.detach().cpu()))
-            terms["value"].append(float(value_loss.detach().cpu()))
-            terms["relative"].append(float(rel_loss.detach().cpu()))
-            terms["mixup"].append(float(mix_loss.detach().cpu()))
 
         scheduler.step()
         final_terms = terms
 
     if final_terms is None:
         raise ValueError("surrogate training produced no epochs")
-    return {name: _mean(values) for name, values in final_terms.items()}
+    return {
+        **{name: _mean(values) for name, values in final_terms.items()},
+        "configured_epochs": float(configured_epochs),
+        "effective_epochs": float(epochs),
+        "effective_training_steps": float(effective_steps),
+        "field_coverage_steps": float(coverage_steps),
+    }
 
 
 def fit_deep_ensemble_conditional_inr(
@@ -465,8 +455,6 @@ def fit_deep_ensemble_conditional_inr(
     field_ids: np.ndarray,
     device: torch.device,
     train_cfg: INRTrainConfig,
-    query_weights: np.ndarray | None = None,
-    always_include_query_indices: np.ndarray | None = None,
     artifact_dir: Path | None = None,
     seed: int = 0,
 ):
@@ -489,32 +477,11 @@ def fit_deep_ensemble_conditional_inr(
         raise ValueError("Y_train must be sampled on coord_table")
     if X_train.shape[0] == 0 or Y_train.shape[1] == 0:
         raise ValueError("surrogate training needs at least one sample and one query")
-    always_include_query_indices = _normalized_query_indices(always_include_query_indices, Y_train.shape[1])
-    sampleable_query_count = int(Y_train.shape[1] - always_include_query_indices.size)
-    sampled_query_count = int(min(sampleable_query_count, train_cfg.train_query_sample_count))
-    train_query_count_per_step = int(
-        Y_train.shape[1]
-        if sampled_query_count >= sampleable_query_count
-        else always_include_query_indices.size + sampled_query_count
-    )
-    query_weights_device = None
-    query_sampling_probabilities = None
-    query_weight_stats: dict[str, float] | None = None
-    if query_weights is not None:
-        weights_np = np.asarray(query_weights, dtype=np.float32).reshape(-1)
-        if weights_np.size != Y_train.shape[1]:
-            raise ValueError("query_weights must align with Y_train query dimension")
-        weights_np = np.where(np.isfinite(weights_np), weights_np, 0.0)
-        weights_np = np.maximum(weights_np, 0.0)
-        if float(np.max(weights_np, initial=0.0)) <= 0.0:
-            weights_np = np.ones_like(weights_np, dtype=np.float32)
-        query_weight_stats = {
-            "query_weight_min": float(np.min(weights_np)),
-            "query_weight_mean": float(np.mean(weights_np)),
-            "query_weight_max": float(np.max(weights_np)),
-        }
-        query_weights_device = torch.from_numpy(np.ascontiguousarray(weights_np, dtype=np.float32)).to(device)
-        query_sampling_probabilities = _sampling_probabilities_from_weights(weights_np)
+    if np.any(field_ids < 0) or int(np.max(field_ids, initial=-1)) >= n_fields:
+        raise ValueError("field_ids must refer to configured fields")
+    active_field_count = int(np.unique(field_ids).size)
+    sampled_query_count = int(min(Y_train.shape[1], train_cfg.train_query_sample_count))
+    train_query_count_per_step = sampled_query_count
 
     if hasattr(torch, "set_float32_matmul_precision"):
         torch.set_float32_matmul_precision("high")
@@ -553,9 +520,7 @@ def fit_deep_ensemble_conditional_inr(
             Y_train=visible_y,
             coords_device=coords_device,
             fields_device=fields_device,
-            query_weights_device=query_weights_device,
-            query_sampling_probabilities=query_sampling_probabilities,
-            always_include_query_indices=always_include_query_indices,
+            field_ids=field_ids,
             device=device,
             cfg=train_cfg,
             shuffle_seed=member_seed,
@@ -582,24 +547,24 @@ def fit_deep_ensemble_conditional_inr(
         "member_count": int(member_count),
         "member_seeds": [int(value) for value in member_seeds],
         "epochs": int(train_cfg.epochs),
+        "effective_epochs": int(
+            max(int(item["effective_epochs"]) for item in records)
+        ),
+        "effective_training_steps": int(
+            max(int(item["effective_training_steps"]) for item in records)
+        ),
         "batch_size": int(train_cfg.batch_size),
         "train_sample_count": int(X_train.shape[0]),
         "query_count": int(Y_train.shape[1]),
         "train_query_count_per_step": int(train_query_count_per_step),
-        "train_query_sampled_count_per_step": int(sampled_query_count),
-        "train_query_always_included_count": int(always_include_query_indices.size),
-        "train_query_sampleable_count": int(sampleable_query_count),
-        "train_query_subsampled": bool(sampled_query_count < sampleable_query_count),
+        "active_field_count": int(active_field_count),
+        "train_query_subsampled": bool(sampled_query_count < Y_train.shape[1]),
+        "field_rotation_required": bool(sampled_query_count < active_field_count),
+        "training_policy": "real_field_balanced",
         "device": str(device),
         "members": records,
         "loss": _mean([float(item["loss"]) for item in records]),
-        "value": _mean([float(item["value"]) for item in records]),
-        "relative": _mean([float(item["relative"]) for item in records]),
-        "mixup": _mean([float(item["mixup"]) for item in records]),
-        "mixup_weight": float(train_cfg.mixup_weight),
     }
-    if query_weight_stats is not None:
-        history.update(query_weight_stats)
     return model, history
 
 

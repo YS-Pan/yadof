@@ -98,7 +98,7 @@ def record_generation_metadata(
         "diagnostics": {
             key: value
             for key, value in result.diagnostics.items()
-            if key not in {"costs", "pred_costs", "cost_intervals"}
+            if key not in {"costs", "pred_costs"}
         },
     }
     if snapshot is not None:

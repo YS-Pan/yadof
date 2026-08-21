@@ -28,19 +28,13 @@ class CheckpointInfo:
     path: Path
     sample_count: int
     member_count: int
-    training_error: float | None
     payload: Mapping[str, object]
 
     @property
     def label(self) -> str:
-        error = (
-            ""
-            if self.training_error is None
-            else f" · training error {self.training_error:.4g}"
-        )
         return (
             f"Generation {self.generation} · {self.sample_count} samples · "
-            f"{self.member_count} members{error}"
+            f"{self.member_count} members"
         )
 
 

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict
 import json
-import math
 from pathlib import Path
 import threading
 from typing import Iterable, Mapping, Sequence
@@ -17,7 +16,16 @@ from ..recorded_data.session import CampaignSession
 from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
 
-from .checkpoints import write_checkpoint
+from .checkpoints import (
+    new_publication_paths,
+    resolve_artifact_dir,
+    resolve_namespace_manifest_path,
+    run_namespace_for_signature,
+    schema_payload,
+    semantic_state_signature,
+    validate_manifest_identity,
+    write_checkpoint,
+)
 from .metadata import monotonic_time, now_text, record_training_success
 from .types import (
     Population,
@@ -669,11 +677,6 @@ def _train_config_from_loaded_config(config: LoadedConfig) -> INRTrainConfig:
         lr=float(getattr(config, "SURROGATE_INR_LR", defaults.lr)),
         weight_decay=float(getattr(config, "SURROGATE_INR_WEIGHT_DECAY", defaults.weight_decay)),
         loss_beta=float(getattr(config, "SURROGATE_INR_LOSS_BETA", defaults.loss_beta)),
-        relative_loss_weight=float(
-            getattr(config, "SURROGATE_INR_RELATIVE_LOSS_WEIGHT", defaults.relative_loss_weight)
-        ),
-        relative_loss_eps=float(getattr(config, "SURROGATE_INR_RELATIVE_LOSS_EPS", defaults.relative_loss_eps)),
-        mixup_weight=float(getattr(config, "SURROGATE_INR_MIXUP_WEIGHT", defaults.mixup_weight)),
         x_latent_dim=int(getattr(config, "SURROGATE_INR_X_LATENT_DIM", defaults.x_latent_dim)),
         field_emb_dim=int(getattr(config, "SURROGATE_INR_FIELD_EMB_DIM", defaults.field_emb_dim)),
         coord_fourier_features=int(
@@ -721,122 +724,6 @@ def _predict_member_flats(state: SurrogateState, x: np.ndarray) -> np.ndarray:
     return state.scaler.inverse_members(scaled)
 
 
-def _relative_errors(
-    true_costs, pred_costs, *, epsilon: float = 1e-8
-) -> tuple[tuple[float, ...], ...]:
-    rows = []
-    for true_row, pred_row in zip(true_costs, pred_costs):
-        row = []
-        for true_value, pred_value in zip(true_row, pred_row):
-            denom = max(abs(float(true_value)), float(epsilon))
-            row.append(abs(float(pred_value) - float(true_value)) / denom)
-        rows.append(tuple(row))
-    return tuple(rows)
-
-
-def _absolute_errors(true_costs, pred_costs) -> tuple[tuple[float, ...], ...]:
-    rows = []
-    for true_row, pred_row in zip(true_costs, pred_costs):
-        row = []
-        for true_value, pred_value in zip(true_row, pred_row):
-            row.append(abs(float(pred_value) - float(true_value)))
-        rows.append(tuple(row))
-    return tuple(rows)
-
-
-def _mean_relative_error(
-    true_costs, pred_costs, *, epsilon: float = 1e-8
-) -> float:
-    values = [
-        value
-        for row in _relative_errors(true_costs, pred_costs, epsilon=epsilon)
-        for value in row
-        if math.isfinite(value)
-    ]
-    return float(sum(values) / len(values)) if values else 0.0
-
-
-def _quantile_by_objective(rows, quantile: float) -> tuple[float, ...]:
-    width = max((len(row) for row in rows), default=0)
-    out = []
-    for idx in range(width):
-        values = [float(row[idx]) for row in rows if idx < len(row) and math.isfinite(float(row[idx]))]
-        out.append(float(np.quantile(values, float(quantile))) if values else 0.0)
-    return tuple(out)
-
-
-def _flat_importance_weights(
-    workspace: WorkspaceContext,
-    config: LoadedConfig,
-    schema: RawDataSchema | None,
-    raw_sample: RawSample | None,
-) -> np.ndarray:
-    if schema is None or int(schema.flat_dim) == 0:
-        return np.zeros((0,), dtype=np.float32)
-    weights = np.ones((int(schema.flat_dim),), dtype=np.float32)
-    if raw_sample is None:
-        return weights
-
-    try:
-        func = getattr(job_template_api, "get_rawdata_importance_weights", None)
-        if not callable(func):
-            func = getattr(job_template_api, "calculate_rawdata_importance_weights", None)
-        if not callable(func):
-            return weights
-        try:
-            raw_weights = func(
-                workspace,
-                raw_sample,
-                floor=float(getattr(config, "SURROGATE_RAWDATA_IMPORTANCE_FLOOR", 0.25)),
-                boost=float(getattr(config, "SURROGATE_RAWDATA_IMPORTANCE_BOOST", 2.0)),
-            )
-        except TypeError:
-            raw_weights = func(workspace, raw_sample)
-    except Exception:
-        return weights
-
-    weight_items = tuple(dict(item) if isinstance(item, Mapping) else {} for item in raw_weights or ())
-    for slot in schema.modeled_slots:
-        if slot.item_index >= len(weight_items):
-            continue
-        raw_value = weight_items[slot.item_index].get(slot.key)
-        if raw_value is None:
-            continue
-        array = np.asarray(raw_value, dtype=np.float32)
-        if tuple(array.shape) != tuple(slot.shape):
-            continue
-        weights[slot.start : slot.end] = np.maximum(0.0, array.reshape(-1))
-    return np.ascontiguousarray(weights, dtype=np.float32)
-
-
-def _always_include_query_indices(schema: RawDataSchema | None) -> np.ndarray:
-    """Return rawData query indices that should bypass stochastic subsampling."""
-
-    if schema is None or int(schema.flat_dim) == 0:
-        return np.zeros((0,), dtype=np.int64)
-    chunks = [
-        np.arange(int(slot.start), int(slot.end), dtype=np.int64)
-        for slot in schema.modeled_slots
-        if len(tuple(slot.shape)) <= 1
-    ]
-    if not chunks:
-        return np.zeros((0,), dtype=np.int64)
-    return np.ascontiguousarray(np.concatenate(chunks), dtype=np.int64)
-
-def _predict_costs_for_error_audit(
-    workspace: WorkspaceContext,
-    state: SurrogateState,
-    x: np.ndarray,
-) -> tuple[tuple[float, ...], ...]:
-    if state.schema is None or state.schema.flat_dim == 0 or state.model is None or x.shape[0] == 0:
-        return ()
-    member_flats = _predict_member_flats(state, x)
-    mean_flat = np.mean(member_flats, axis=0)
-    return _costs_from_raw(
-        workspace, _raw_samples_from_flat(state.schema, mean_flat)
-    )
-
-
 def train(
     workspace: WorkspaceContext | str | Path,
     *,
@@ -874,29 +761,41 @@ def train_with_config(
     schema, y = _flatten_raw_samples(
         data.raw_data, constant_atol=float(config.SURROGATE_CONSTANT_ATOL)
     )
-    true_costs = (
-        _costs_from_raw(config.workspace, data.raw_data) if data.raw_data else ()
+    trainable = bool(
+        x.shape[0] >= 2
+        and y.shape[1] > 0
+        and schema is not None
+        and schema.n_fields > 0
     )
-    query_weights = _flat_importance_weights(
-        config.workspace,
-        config,
-        schema,
-        data.raw_data[0] if data.raw_data else None,
-    )
-
-    checkpoint_path = (
-        config.workspace.surrogate_checkpoint_dir
-        / f"generation_{int(generation_index):04d}.json"
-    )
-    artifact_dir = checkpoint_path.parent / f"generation_{int(generation_index):04d}_conditional_inr"
-    model_path = artifact_dir / "model_aux.npz"
-
     model = None
     scaler = None
-    train_cfg = None
+    train_cfg = _train_config_from_loaded_config(config) if trainable else None
     device = None
+    parameter_definition_signature = (
+        job_template_api.get_parameter_definition_signature(config.workspace)
+    )
+    state_signature = semantic_state_signature(
+        parameter_names=data.parameter_names,
+        parameter_definition_signature=parameter_definition_signature,
+        schema=schema,
+        train_cfg=train_cfg,
+    )
+    (
+        checkpoint_path,
+        namespace_manifest_path,
+        artifact_dir,
+        staged_artifact_dir,
+        run_namespace,
+        component_namespace,
+    ) = new_publication_paths(
+        config.workspace.surrogate_checkpoint_dir,
+        generation_index=int(generation_index),
+        state_signature=state_signature,
+    )
+    model_path = artifact_dir / "model_aux.npz"
     history: dict[str, object] = {
         "model": MODEL_NAME,
+        "training_policy": "real_field_balanced",
         "member_count": 0,
         "train_sample_count": int(x.shape[0]),
         "raw_sample_count_before_filter": int(raw_sample_count),
@@ -908,11 +807,10 @@ def train_with_config(
         "skip_reason": "no varying rawData slots or not enough samples",
     }
 
-    if x.shape[0] >= 2 and y.shape[1] > 0 and schema is not None and schema.n_fields > 0:
+    if trainable:
         scaler = _fit_scaler(
             y, scale_floor=float(config.SURROGATE_TARGET_SCALE_FLOOR)
         )
-        train_cfg = _train_config_from_loaded_config(config)
         device = _select_device(config)
         y_scaled = scaler.transform(y)
         model, history = fit_deep_ensemble_conditional_inr(
@@ -924,112 +822,37 @@ def train_with_config(
             field_ids=schema.field_ids,
             device=device,
             train_cfg=train_cfg,
-            query_weights=query_weights,
-            always_include_query_indices=_always_include_query_indices(schema),
-            artifact_dir=artifact_dir,
+            artifact_dir=staged_artifact_dir,
             seed=int(getattr(config, "OPTIMIZE_RANDOM_SEED", 20260510)) + int(generation_index) * 1009,
         )
         history["skipped"] = False
-        history["artifact_dir"] = str(artifact_dir)
         history["raw_sample_count_before_filter"] = int(raw_sample_count)
         history["dropped_nonfinite_samples"] = int(dropped_nonfinite_samples)
         history["nonfinite_drop_threshold"] = nonfinite_threshold
     else:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
+        staged_artifact_dir.mkdir(parents=True, exist_ok=True)
 
     state = SurrogateState(
         generation_index=int(generation_index),
         sample_count=len(data.normalized_variables),
         checkpoint_path=checkpoint_path,
+        namespace_manifest_path=namespace_manifest_path,
         model_path=model_path,
         artifact_dir=artifact_dir,
         model_name=MODEL_NAME,
+        state_signature=state_signature,
+        run_namespace=run_namespace,
+        component_namespace=component_namespace,
         parameter_names=data.parameter_names,
-        normalized_variables=data.normalized_variables,
-        raw_data=data.raw_data,
+        parameter_definition_signature=parameter_definition_signature,
         schema=schema,
         scaler=scaler,
         model=model,
         train_cfg=train_cfg,
         device=device,
         train_history=history,
-        training_flat_values=np.ascontiguousarray(y, dtype=np.float64),
-        query_weights=np.ascontiguousarray(query_weights, dtype=np.float32),
-        mean_relative_error=0.0,
-        historical_relative_error_p50=(),
-        historical_relative_error_p90=(),
-        historical_relative_error_p95=(),
-        historical_absolute_error_p90=(),
-        historical_true_costs=true_costs,
-        historical_predicted_costs=(),
     )
-
-    try:
-        pred_costs = _predict_costs_for_error_audit(config.workspace, state, x)
-    except Exception as exc:
-        pred_costs = ()
-        history = {**state.train_history, "error_audit_error": f"{exc.__class__.__name__}: {exc}"}
-        state = SurrogateState(
-            generation_index=state.generation_index,
-            sample_count=state.sample_count,
-            checkpoint_path=state.checkpoint_path,
-            model_path=state.model_path,
-            artifact_dir=state.artifact_dir,
-            model_name=state.model_name,
-            parameter_names=state.parameter_names,
-            normalized_variables=state.normalized_variables,
-            raw_data=state.raw_data,
-            schema=state.schema,
-            scaler=state.scaler,
-            model=state.model,
-            train_cfg=state.train_cfg,
-            device=state.device,
-            train_history=history,
-            training_flat_values=state.training_flat_values,
-            query_weights=state.query_weights,
-            mean_relative_error=state.mean_relative_error,
-            historical_relative_error_p50=state.historical_relative_error_p50,
-            historical_relative_error_p90=state.historical_relative_error_p90,
-            historical_relative_error_p95=state.historical_relative_error_p95,
-            historical_absolute_error_p90=state.historical_absolute_error_p90,
-            historical_true_costs=state.historical_true_costs,
-            historical_predicted_costs=state.historical_predicted_costs,
-        )
-    relative_error_epsilon = float(config.SURROGATE_RELATIVE_ERROR_EPS)
-    mean_error = _mean_relative_error(
-        true_costs, pred_costs, epsilon=relative_error_epsilon
-    )
-    rel_errors = _relative_errors(
-        true_costs, pred_costs, epsilon=relative_error_epsilon
-    )
-    abs_errors = _absolute_errors(true_costs, pred_costs)
-    state = SurrogateState(
-        generation_index=state.generation_index,
-        sample_count=state.sample_count,
-        checkpoint_path=state.checkpoint_path,
-        model_path=state.model_path,
-        artifact_dir=state.artifact_dir,
-        model_name=state.model_name,
-        parameter_names=state.parameter_names,
-        normalized_variables=state.normalized_variables,
-        raw_data=state.raw_data,
-        schema=state.schema,
-        scaler=state.scaler,
-        model=state.model,
-        train_cfg=state.train_cfg,
-        device=state.device,
-        train_history=state.train_history,
-        training_flat_values=state.training_flat_values,
-        query_weights=state.query_weights,
-        mean_relative_error=float(mean_error),
-        historical_relative_error_p50=_quantile_by_objective(rel_errors, 0.50),
-        historical_relative_error_p90=_quantile_by_objective(rel_errors, 0.90),
-        historical_relative_error_p95=_quantile_by_objective(rel_errors, 0.95),
-        historical_absolute_error_p90=_quantile_by_objective(abs_errors, 0.90),
-        historical_true_costs=true_costs,
-        historical_predicted_costs=pred_costs,
-    )
-    write_checkpoint(state)
+    write_checkpoint(state, staged_artifact_dir=staged_artifact_dir)
     ended_at = now_text()
     record_training_success(
         config.workspace,
@@ -1039,13 +862,30 @@ def train_with_config(
         duration_sec=monotonic_time() - started_monotonic,
     )
     with _STATE_LOCK:
-        _STATES[workspace_state_key(config)] = state
+        key = workspace_state_key(config)
+        if _is_usable_state(state):
+            _STATES[key] = state
+        else:
+            _STATES.pop(key, None)
     return state
+
+
+def _is_usable_state(state: SurrogateState | None) -> bool:
+    return bool(
+        state is not None
+        and state.model is not None
+        and state.schema is not None
+        and state.schema.flat_dim > 0
+        and state.schema.n_fields > 0
+        and state.scaler is not None
+        and state.train_cfg is not None
+        and not bool(state.train_history.get("skipped", False))
+    )
 
 
 def has_trained_state(workspace: WorkspaceContext | str | Path) -> bool:
     config = load_config(workspace)
-    return _state_for_config(config, recover=True) is not None
+    return _is_usable_state(_state_for_config(config, recover=True))
 
 
 def latest_state_generation(
@@ -1053,7 +893,7 @@ def latest_state_generation(
 ) -> int | None:
     config = load_config(workspace)
     state = _state_for_config(config, recover=True)
-    return None if state is None else int(state.generation_index)
+    return int(state.generation_index) if _is_usable_state(state) else None
 
 
 def reset_workspace_state(workspace: WorkspaceContext | str | Path) -> None:
@@ -1066,8 +906,9 @@ def reset_workspace_state(workspace: WorkspaceContext | str | Path) -> None:
 
 def _require_state(config: LoadedConfig) -> SurrogateState:
     state = _state_for_config(config, recover=True)
-    if state is None:
+    if not _is_usable_state(state):
         raise RuntimeError("surrogate model is not trained")
+    assert state is not None
     return state
 
 
@@ -1077,6 +918,29 @@ def _state_for_config(
     key = workspace_state_key(config)
     with _STATE_LOCK:
         state = _STATES.get(key)
+    if state is not None and not _is_usable_state(state):
+        with _STATE_LOCK:
+            _STATES.pop(key, None)
+        state = None
+    if state is not None:
+        current_parameter_definition_signature = (
+            job_template_api.get_parameter_definition_signature(config.workspace)
+        )
+        current_train_cfg = (
+            _train_config_from_loaded_config(config)
+            if state.train_cfg is not None
+            else None
+        )
+        expected_signature = semantic_state_signature(
+            parameter_names=state.parameter_names,
+            parameter_definition_signature=current_parameter_definition_signature,
+            schema=state.schema,
+            train_cfg=current_train_cfg,
+        )
+        if expected_signature != state.state_signature:
+            with _STATE_LOCK:
+                _STATES.pop(key, None)
+            state = None
     if state is not None or not recover:
         return state
     state = _recover_latest_state(config)
@@ -1090,177 +954,200 @@ def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
     checkpoint_dir = config.workspace.surrogate_checkpoint_dir
     if not checkpoint_dir.is_dir():
         return None
-    candidates = sorted(
-        checkpoint_dir.glob("generation_*.json"), reverse=True
+
+    data = _load_training_data(config.workspace)
+    if len(data.normalized_variables) != len(data.raw_data):
+        return None
+    data, _dropped = _filter_training_data_by_nonfinite_fraction(
+        data, threshold=float(config.SURROGATE_MAX_NONFINITE_FRACTION)
     )
+    x = _x_matrix(data.normalized_variables)
+    schema, current_flat = _flatten_raw_samples(
+        data.raw_data, constant_atol=float(config.SURROGATE_CONSTANT_ATOL)
+    )
+    trainable = bool(
+        x.shape[0] >= 2
+        and current_flat.shape[1] > 0
+        and schema is not None
+        and schema.n_fields > 0
+    )
+    if not trainable:
+        return None
+    train_cfg = _train_config_from_loaded_config(config) if trainable else None
+    parameter_definition_signature = (
+        job_template_api.get_parameter_definition_signature(config.workspace)
+    )
+    expected_signature = semantic_state_signature(
+        parameter_names=data.parameter_names,
+        parameter_definition_signature=parameter_definition_signature,
+        schema=schema,
+        train_cfg=train_cfg,
+    )
+    namespace_dir = (
+        checkpoint_dir
+        / "runs"
+        / run_namespace_for_signature(expected_signature)
+        / "components"
+        / "surrogate"
+    )
+    candidates = sorted(namespace_dir.glob("generation_*.json"), reverse=True)
     for checkpoint_path in candidates:
         try:
-            return _recover_state_from_checkpoint(config, checkpoint_path)
+            return _recover_state_from_checkpoint(
+                config,
+                checkpoint_path,
+                data=data,
+                x=x,
+                schema=schema,
+                current_flat=current_flat,
+                train_cfg=train_cfg,
+                parameter_definition_signature=parameter_definition_signature,
+                expected_signature=expected_signature,
+            )
         except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
             continue
     return None
 
 
 def _recover_state_from_checkpoint(
-    config: LoadedConfig, checkpoint_path: Path
+    config: LoadedConfig,
+    checkpoint_path: Path,
+    *,
+    data: TrainingData,
+    x: np.ndarray,
+    schema: RawDataSchema | None,
+    current_flat: np.ndarray,
+    train_cfg: INRTrainConfig | None,
+    parameter_definition_signature: Mapping[str, object],
+    expected_signature: str,
 ) -> SurrogateState:
-    payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError("surrogate checkpoint must be a JSON object")
+    payload = validate_manifest_identity(
+        json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    )
+    if str(payload["state_signature"]) != expected_signature:
+        raise ValueError("surrogate checkpoint state signature is not current")
+    if tuple(str(name) for name in payload["parameter_names"]) != data.parameter_names:
+        raise ValueError("current workspace parameters do not match checkpoint")
+    if dict(payload["schema"]) != schema_payload(schema):
+        raise ValueError("surrogate checkpoint schema manifest is not current")
+    if not isinstance(payload["train_cfg"], Mapping) or dict(
+        payload["train_cfg"]
+    ) != asdict(train_cfg):
+        raise ValueError("surrogate checkpoint train config manifest is not current")
+    manifest_signature = semantic_state_signature(
+        parameter_names=data.parameter_names,
+        parameter_definition_signature=dict(
+            payload["parameter_definition_signature"]
+        ),
+        schema=schema,
+        train_cfg=train_cfg,
+        torch_version=str(payload["torch_version"]),
+    )
+    if manifest_signature != str(payload["state_signature"]):
+        raise ValueError("surrogate checkpoint manifest signature is inconsistent")
     generation_index = int(payload["generation_index"])
-    artifact_name = Path(
-        str(
-            payload.get(
-                "artifact_dir",
-                f"generation_{generation_index:04d}_conditional_inr",
-            )
+    checkpoint_root = config.workspace.surrogate_checkpoint_dir
+    namespace_manifest_path = resolve_namespace_manifest_path(checkpoint_root, payload)
+    if namespace_manifest_path.resolve() != checkpoint_path.resolve():
+        raise ValueError(
+            "surrogate recovery candidate is not its declared namespace manifest"
         )
-    ).name
-    artifact_dir = checkpoint_path.parent / artifact_name
-    model_name = Path(str(payload.get("model_path", "model_aux.npz"))).name
+    artifact_dir = resolve_artifact_dir(checkpoint_root, payload)
+    model_name = Path(str(payload["model_path"])).name
     model_path = artifact_dir / model_name
     if not model_path.is_file():
         raise FileNotFoundError(model_path)
 
-    data = _load_training_data(config.workspace)
-    data, _dropped = _filter_training_data_by_nonfinite_fraction(
-        data, threshold=float(config.SURROGATE_MAX_NONFINITE_FRACTION)
-    )
-    x = _x_matrix(data.normalized_variables)
-    schema, _current_flat = _flatten_raw_samples(
-        data.raw_data, constant_atol=float(config.SURROGATE_CONSTANT_ATOL)
-    )
     with np.load(model_path, allow_pickle=False) as auxiliary:
-        training_flat_values = np.asarray(
-            auxiliary["training_flat_values"], dtype=np.float64
-        )
-        query_weights = np.asarray(auxiliary["query_weights"], dtype=np.float32)
+        required_arrays = {
+            "schema_flat_dim",
+            "training_sample_count",
+            "target_mean",
+            "target_scale",
+            "coord_table",
+            "field_ids",
+        }
+        missing_arrays = required_arrays.difference(auxiliary.files)
+        if missing_arrays:
+            raise ValueError(
+                "surrogate checkpoint is missing required arrays: "
+                + ", ".join(sorted(missing_arrays))
+            )
         flat_dim = int(np.asarray(auxiliary["schema_flat_dim"]).item())
-        target_mean = (
-            np.asarray(auxiliary["target_mean"], dtype=np.float32)
-            if "target_mean" in auxiliary.files
-            else None
+        artifact_sample_count = int(
+            np.asarray(auxiliary["training_sample_count"]).item()
         )
-        target_scale = (
-            np.asarray(auxiliary["target_scale"], dtype=np.float32)
-            if "target_scale" in auxiliary.files
-            else None
-        )
-        coord_table = (
-            np.asarray(auxiliary["coord_table"], dtype=np.float32)
-            if "coord_table" in auxiliary.files
-            else np.zeros((0, 3), dtype=np.float32)
-        )
-        field_ids = (
-            np.asarray(auxiliary["field_ids"], dtype=np.int64)
-            if "field_ids" in auxiliary.files
-            else np.zeros((0,), dtype=np.int64)
-        )
+        target_mean = np.asarray(auxiliary["target_mean"], dtype=np.float32)
+        target_scale = np.asarray(auxiliary["target_scale"], dtype=np.float32)
+        coord_table = np.asarray(auxiliary["coord_table"], dtype=np.float32)
+        field_ids = np.asarray(auxiliary["field_ids"], dtype=np.int64)
 
     if schema is None or int(schema.flat_dim) != flat_dim:
         raise ValueError("current workspace rawData schema does not match checkpoint")
-    if coord_table.shape != schema.coord_table.shape or field_ids.shape != schema.field_ids.shape:
+    if artifact_sample_count != int(payload["sample_count"]):
+        raise ValueError("surrogate checkpoint sample counts do not agree")
+    if target_mean.size != flat_dim or target_scale.size != flat_dim:
+        raise ValueError("surrogate checkpoint target scaler does not match schema")
+    if not np.array_equal(coord_table, schema.coord_table) or not np.array_equal(
+        field_ids, schema.field_ids
+    ):
         raise ValueError("current workspace rawData queries do not match checkpoint")
-    schema = RawDataSchema(
-        templates=schema.templates,
-        modeled_slots=schema.modeled_slots,
-        flat_dim=schema.flat_dim,
-        coord_table=np.ascontiguousarray(coord_table, dtype=np.float32),
-        field_ids=np.ascontiguousarray(field_ids, dtype=np.int64),
-    )
 
-    train_cfg = _train_config_from_loaded_config(config)
+    if train_cfg is None or current_flat.shape[1] == 0:
+        raise ValueError("checkpoint does not describe a trainable surrogate state")
     device = _select_device(config)
-    model = None
-    scaler = None
-    if target_mean is not None and target_scale is not None and flat_dim > 0:
-        scaler = TargetScaler(
-            mean=np.ascontiguousarray(target_mean, dtype=np.float32),
-            scale=np.ascontiguousarray(target_scale, dtype=np.float32),
-        )
-        meta_path = artifact_dir / "inr_meta.json"
-        if meta_path.is_file():
-            inr_meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            if int(inr_meta.get("input_dim", -1)) != int(x.shape[1]):
-                raise ValueError(
-                    "current workspace parameter width does not match checkpoint"
-                )
-            model, input_dim, n_fields, train_cfg = load_inr_artifacts(
-                artifact_dir, device
-            )
-            if int(input_dim) != int(x.shape[1]):
-                raise ValueError(
-                    "current workspace parameter width does not match checkpoint"
-                )
-            if int(n_fields) != int(schema.n_fields):
-                raise ValueError(
-                    "current workspace rawData fields do not match checkpoint"
-                )
-
-    true_costs = (
-        _costs_from_raw(config.workspace, data.raw_data) if data.raw_data else ()
+    scaler = TargetScaler(
+        mean=np.ascontiguousarray(target_mean, dtype=np.float32),
+        scale=np.ascontiguousarray(target_scale, dtype=np.float32),
     )
+    meta_path = artifact_dir / "inr_meta.json"
+    if not meta_path.is_file():
+        raise FileNotFoundError(meta_path)
+    model, input_dim, n_fields, loaded_train_cfg = load_inr_artifacts(
+        artifact_dir, device
+    )
+    if loaded_train_cfg != train_cfg:
+        raise ValueError("current surrogate train config does not match checkpoint")
+    if int(input_dim) != int(x.shape[1]):
+        raise ValueError("current workspace parameter width does not match checkpoint")
+    if int(n_fields) != int(schema.n_fields):
+        raise ValueError("current workspace rawData fields do not match checkpoint")
+
+    active_manifest_path = checkpoint_root / f"generation_{generation_index:04d}.json"
+    checkpoint_source = namespace_manifest_path
+    try:
+        active_payload = validate_manifest_identity(
+            json.loads(active_manifest_path.read_text(encoding="utf-8"))
+        )
+        if active_payload == payload:
+            checkpoint_source = active_manifest_path
+    except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
+        pass
+
     state = SurrogateState(
         generation_index=generation_index,
-        sample_count=int(payload.get("sample_count", len(data.normalized_variables))),
-        checkpoint_path=checkpoint_path,
+        sample_count=int(payload["sample_count"]),
+        checkpoint_path=checkpoint_source,
+        namespace_manifest_path=namespace_manifest_path,
         model_path=model_path,
         artifact_dir=artifact_dir,
-        model_name=str(payload.get("model", MODEL_NAME)),
+        model_name=str(payload["model"]),
+        state_signature=expected_signature,
+        run_namespace=str(payload["run_namespace"]),
+        component_namespace=str(payload["component_namespace"]),
         parameter_names=data.parameter_names,
-        normalized_variables=data.normalized_variables,
-        raw_data=data.raw_data,
+        parameter_definition_signature=parameter_definition_signature,
         schema=schema,
         scaler=scaler,
         model=model,
         train_cfg=train_cfg,
         device=device,
         train_history=dict(payload.get("train_history", {})),
-        training_flat_values=np.ascontiguousarray(
-            training_flat_values, dtype=np.float64
-        ),
-        query_weights=np.ascontiguousarray(query_weights, dtype=np.float32),
-        mean_relative_error=0.0,
-        historical_relative_error_p50=(),
-        historical_relative_error_p90=(),
-        historical_relative_error_p95=(),
-        historical_absolute_error_p90=(),
-        historical_true_costs=true_costs,
-        historical_predicted_costs=(),
     )
-    predicted_costs = (
-        _predict_costs_for_error_audit(config.workspace, state, x)
-        if model is not None and x.shape[0] > 0
-        else ()
-    )
-    epsilon = float(config.SURROGATE_RELATIVE_ERROR_EPS)
-    relative_errors = _relative_errors(
-        true_costs, predicted_costs, epsilon=epsilon
-    )
-    absolute_errors = _absolute_errors(true_costs, predicted_costs)
-    return replace(
-        state,
-        mean_relative_error=_mean_relative_error(
-            true_costs, predicted_costs, epsilon=epsilon
-        ),
-        historical_relative_error_p50=_quantile_by_objective(
-            relative_errors, 0.50
-        ),
-        historical_relative_error_p90=_quantile_by_objective(
-            relative_errors, 0.90
-        ),
-        historical_relative_error_p95=_quantile_by_objective(
-            relative_errors, 0.95
-        ),
-        historical_absolute_error_p90=_quantile_by_objective(
-            absolute_errors, 0.90
-        ),
-        historical_predicted_costs=predicted_costs,
-    )
+    return state
+
 
 def _state_input_dim(state: SurrogateState) -> int:
-    if state.normalized_variables:
-        return len(state.normalized_variables[0])
     return len(state.parameter_names)
 
 
@@ -1329,15 +1216,3 @@ def predict_population(
             intervals.append((min(lo, hi), max(lo, hi)))
         out.append((tuple(float(value) for value in cost_row), tuple(intervals)))
     return tuple(out)
-
-
-def evaluate_historical_errors(
-    workspace: WorkspaceContext | str | Path,
-) -> tuple[tuple[float, ...], ...]:
-    config = load_config(workspace)
-    state = _require_state(config)
-    return _relative_errors(
-        state.historical_true_costs,
-        state.historical_predicted_costs,
-        epsilon=float(config.SURROGATE_RELATIVE_ERROR_EPS),
-    )

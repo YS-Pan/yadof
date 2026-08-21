@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import Callable, Iterator, Sequence
 import uuid
 
-import numpy as np
-
 from ..task_loader import task_module
 from ..workspace import WorkspaceContext, resolve_workspace
 from .cost_misc import RawVariables, calculate_costs as _calculate_costs
@@ -20,7 +18,7 @@ from .parameters_constraints_class import (
     denormalize_values,
     normalize_values,
 )
-from .rawdata_contract import RawDataItem, RawDataView
+from .rawdata_contract import RawDataItem
 
 
 WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
@@ -395,45 +393,6 @@ def calculate_costs_from_raw_data(
     return calculate_cost(workspace, samples, raw_variables)
 
 
-def get_rawdata_importance_weights(
-    workspace: WorkspaceLike,
-    sample_rawdata: Sequence[RawDataItem],
-    *,
-    floor: float = 0.25,
-    boost: float = 2.0,
-) -> tuple[dict[str, object], ...]:
-    context = _workspace(workspace)
-    with task_module(context, "calc_cost") as module:
-        calculate_weights = getattr(module, "rawdata_importance_weights", None)
-        if callable(calculate_weights):
-            return tuple(
-                dict(item)
-                for item in calculate_weights(
-                    sample_rawdata, floor=float(floor), boost=float(boost)
-                )
-            )
-    return tuple(
-        {
-            view.data_key: np.ones(
-                np.asarray(view.data).shape, dtype=np.float32
-            )
-        }
-        for view in (RawDataView.from_item(item) for item in sample_rawdata)
-    )
-
-
-def calculate_rawdata_importance_weights(
-    workspace: WorkspaceLike,
-    sample_rawdata: Sequence[RawDataItem],
-    *,
-    floor: float = 0.25,
-    boost: float = 2.0,
-) -> tuple[dict[str, object], ...]:
-    return get_rawdata_importance_weights(
-        workspace, sample_rawdata, floor=floor, boost=boost
-    )
-
-
 def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
     """Load and validate current parameter and cost contracts without running workflow."""
 
@@ -443,6 +402,14 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
         raise FileNotFoundError(f"task workflow does not exist: {workflow_path}")
     parameters, constraints = _parameter_payload(context)
     objectives = get_objective_names(context)
+    source_path = context.job_template_dir / "calc_cost.py"
+    with task_module(context, "calc_cost") as module:
+        if callable(getattr(module, "rawdata_importance_weights", None)):
+            raise TypeError(
+                f"{source_path} defines removed rawdata_importance_weights(); "
+                "delete that hook because every numeric rawData field now trains "
+                "with equal field-level importance"
+            )
     return TaskDefinition(
         parameter_names=tuple(parameter.name for parameter in parameters),
         objective_names=objectives,
@@ -458,7 +425,6 @@ __all__ = [
     "assign_parameters",
     "calculate_cost",
     "calculate_costs_from_raw_data",
-    "calculate_rawdata_importance_weights",
     "denormalize_variables",
     "get_constraints",
     "get_objective_count",
@@ -467,7 +433,6 @@ __all__ = [
     "get_parameter_definitions",
     "get_parameter_metadata",
     "get_parameter_names",
-    "get_rawdata_importance_weights",
     "get_variable_count",
     "materialize_job_parameters",
     "normalize_variables",

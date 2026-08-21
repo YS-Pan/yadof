@@ -11,7 +11,10 @@
 - Dataclasses are in-memory structures. They are not persisted directly; checkpoint and metadata helpers serialize selected fields.
 
 ## Non-Obvious Techniques
-- `SurrogateState` intentionally includes both model artifacts and historical audit summaries because prediction and diagnostics use the same latest trained state.
+- `SurrogateState` holds active/namespace manifest paths, artifact/model paths,
+  semantic state/run/component identity, schema/scaler/model, train config, and
+  compact training history. It does not hold duplicated training evidence or
+  historical trust/error surfaces.
 
 ## Mutability Profile
 - Add fields only when multiple surrogate files need them or when state persistence/diagnostics require them.

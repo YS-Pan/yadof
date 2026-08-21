@@ -79,7 +79,10 @@ class SurrogateWorkspace:
         self.root = Path(workspace).expanduser().resolve()
         self.config = load_config(self.root)
         self.checkpoints = discover_checkpoints(
-            self.config.workspace.surrogate_checkpoint_dir
+            self.config.workspace.surrogate_checkpoint_dir,
+            parameter_definition_signature=(
+                job_template_api.get_parameter_definition_signature(self.root)
+            ),
         )
         if not self.checkpoints:
             raise FileNotFoundError(

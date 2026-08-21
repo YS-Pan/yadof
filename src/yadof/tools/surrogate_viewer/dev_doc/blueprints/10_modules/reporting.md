@@ -9,8 +9,10 @@ humans and AI agents without requiring a desktop window or image interpretation.
 
 - Build a schema-versioned workspace summary from the viewer backend without
   constructing a checkpoint predictor.
-- Include checkpoint generation/sample/member/training metadata, completed-result
-  counts, parameter ranges, objective names, and bounded rawData dimension spans.
+- Include checkpoint generation/sample/member counts, real-field-balanced policy,
+  semantic state signature, completed-result counts, parameter ranges, objective
+  names, and bounded rawData dimension spans. Do not present training-fit error as
+  trust evidence.
 - Resolve `all-costs`, `cost:NAME`, `all-rawdata`, and `rawdata:NAME` exactly
   against current task names before expensive inference.
 - Run exactly one complete backend error audit for a valid audit command.

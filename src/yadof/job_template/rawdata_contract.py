@@ -237,28 +237,6 @@ def curve_along_axis(
     return x_values[finite], y_values[finite]
 
 
-def build_rawdata_importance_weights(
-    items: Sequence[RawDataItem],
-    mark_important: Callable[[RawDataView, np.ndarray, float], None],
-    *,
-    floor: float = 0.25,
-    boost: float = 2.0,
-) -> tuple[dict[str, np.ndarray], ...]:
-    """Allocate standard weights and delegate only task-specific region marking."""
-
-    if not callable(mark_important):
-        raise TypeError("mark_important must be callable")
-    base = max(0.0, float(floor))
-    important = base + max(0.0, float(boost))
-    output: list[dict[str, np.ndarray]] = []
-    for raw_item in items:
-        item = RawDataView.from_item(raw_item)
-        weights = np.full(np.asarray(item.data).shape, base, dtype=np.float32)
-        mark_important(item, weights, important)
-        output.append({item.data_key: weights})
-    return tuple(output)
-
-
 def frequency_to_ghz(values: np.ndarray, unit: str) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     scale = {
@@ -292,71 +270,6 @@ def angle_to_degrees(values: np.ndarray, unit: str) -> np.ndarray:
     ):
         return np.degrees(values)
     return values
-
-
-def mark_axis_range(
-    weights: np.ndarray,
-    item: RawDataView,
-    axis_name: str,
-    low: float,
-    high: float,
-    value: float,
-    *,
-    converter: AxisConverter | None = None,
-) -> None:
-    if not item.has_axis(axis_name):
-        weights[...] = value
-        return
-    axis = item.axis_index(axis_name)
-    coordinates = item.axis_coordinates(axis_name, converter)
-    if coordinates.size != weights.shape[axis]:
-        weights[...] = value
-        return
-    lo, hi = sorted((float(low), float(high)))
-    mask = (coordinates >= lo) & (coordinates <= hi)
-    if np.any(mask):
-        index = [slice(None)] * weights.ndim
-        index[axis] = mask
-        weights[tuple(index)] = value
-
-
-def mark_axis_points(
-    weights: np.ndarray,
-    item: RawDataView,
-    axis_name: str,
-    targets: Sequence[float],
-    tolerance: float,
-    value: float,
-    *,
-    period: float | None = None,
-    converter: AxisConverter | None = None,
-) -> None:
-    if not item.has_axis(axis_name):
-        if weights.size == len(targets):
-            weights[...] = value
-        return
-    axis = item.axis_index(axis_name)
-    coordinates = item.axis_coordinates(axis_name, converter)
-    if coordinates.size != weights.shape[axis]:
-        return
-    indices = []
-    for target in targets:
-        try:
-            indices.append(
-                item.nearest_index(
-                    axis_name,
-                    float(target),
-                    tolerance,
-                    period=period,
-                    converter=converter,
-                )
-            )
-        except ValueError:
-            continue
-    if indices:
-        index = [slice(None)] * weights.ndim
-        index[axis] = np.asarray(sorted(set(indices)), dtype=int)
-        weights[tuple(index)] = value
 
 
 def load_rawdata_item(item: RawDataItem) -> dict[str, object]:
@@ -644,14 +557,11 @@ __all__ = [
     "RawDataItem",
     "RawDataView",
     "angle_to_degrees",
-    "build_rawdata_importance_weights",
     "combine_2d_curves",
     "curve_along_axis",
     "frequency_to_ghz",
     "load_rawdata_item",
     "load_rawdata_views",
-    "mark_axis_points",
-    "mark_axis_range",
     "metadata_from_item",
     "parse_metadata",
     "validate_rawdata_directory",

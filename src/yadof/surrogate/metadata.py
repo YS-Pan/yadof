@@ -39,18 +39,23 @@ def training_success_metadata(
         "dropped_nonfinite_samples": _safe_int(history.get("dropped_nonfinite_samples"), 0),
         "query_count": _safe_int(history.get("query_count"), 0),
         "train_query_count_per_step": _safe_int(history.get("train_query_count_per_step"), 0),
+        "configured_epochs": _safe_int(history.get("epochs"), 0),
+        "effective_epochs": _safe_int(history.get("effective_epochs"), 0),
+        "effective_training_steps": _safe_int(
+            history.get("effective_training_steps"), 0
+        ),
         "member_count": _safe_int(history.get("member_count"), 0),
         "device": str(history.get("device", "")),
         "skipped": bool(history.get("skipped", False)),
         "skip_reason": str(history.get("skip_reason", "")),
-        "mean_relative_error": float(state.mean_relative_error),
-        "historical_relative_error_p50": list(state.historical_relative_error_p50),
-        "historical_relative_error_p90": list(state.historical_relative_error_p90),
-        "historical_relative_error_p95": list(state.historical_relative_error_p95),
-        "historical_absolute_error_p90": list(state.historical_absolute_error_p90),
+        "training_policy": str(history.get("training_policy", "real_field_balanced")),
+        "state_signature": state.state_signature,
+        "run_namespace": state.run_namespace,
+        "component_namespace": state.component_namespace,
         "checkpoint_path": str(state.checkpoint_path),
         "checkpoint_file": state.checkpoint_path.name,
-        "artifact_dir": state.artifact_dir.name,
+        "namespace_manifest_path": str(state.namespace_manifest_path),
+        "artifact_dir": str(state.artifact_dir),
     }
 
 
