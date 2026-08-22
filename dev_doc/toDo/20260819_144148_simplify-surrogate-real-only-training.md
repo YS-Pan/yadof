@@ -1,6 +1,6 @@
 # 简化 Surrogate：真实仿真与 Field-Balanced 训练
 
-## Implementation Progress (2026-08-21)
+## Implementation Progress (2026-08-22)
 
 - 当前文件布局中的 real-only / field-balanced 实现、旧 trust surface 清理、显式语义
   checkpoint、原子发布、viewer 新格式读取、任务校验、示例与有效文档迁移已经完成。
@@ -9,9 +9,24 @@
   atomic test validity 和 optimizer spread handoff 七项问题。
 - 最终安装态验收已完成：wheel build、force-reinstall、import origin、69 项聚焦测试和
   258 项完整 pytest 均通过；完整测试仅出现 8 条预期的 recording-loss 警告。
-- 没有启动真实 simulator 或 HTCondor。用户尚未确认 production benchmark suite、
-  metrics、thresholds 与 tradeoff，因此本 toDo 按 gate 规则继续保持 active，不归档，
-  精简实现也尚不声明为 production baseline。
+- 没有启动真实 simulator 或 HTCondor。用户已确认下面三个 benchmark cases，但尚未确认
+  experimental protocol、metrics、thresholds、执行 budget 与 tradeoff，因此本 toDo 按
+  gate 规则继续保持 active，不归档，精简实现也尚不声明为 production baseline。
+
+## Confirmed Production Benchmark Suite (2026-08-22)
+
+- 用户确认三个 benchmark cases：`20260807 saw`、
+  `20260811 chrono trebuchet flexible`、`20260816 surrogate test_com`。
+- 三者都是问题维度不同的 benchmark case，不是预先指定的 control、surrogate-assisted
+  或其它 experimental arm。具体 arms、comparison protocol、是否需要 clean clones 以及
+  seed/population/generation/real-evaluation budget 的配对规则尚未由用户确认，不能从各目录
+  当前的 alpha/beta 默认值推断。
+- 原 workspace 中当前 alpha/beta 和既有 history 只描述当前工作目录状态，不赋予 benchmark
+  arm 角色，也不得直接解释成正式实验中的任一 arm。
+- 2026-08-22 的只读 readiness 盘点：三个 workspace 均通过 `yadof check`；SAW 有 20,002
+  条当前可解释记录，Chrono 有 1 条，`test_com` 有 2 条；三者均没有当前格式的 trained
+  surrogate checkpoint。既有记录可支持准备分析，但 Chrono/`test_com` 尚不足以直接完成
+  production gate；正式执行方式取决于待确认的实验协议。
 
 ## Execution Order
 
@@ -281,9 +296,11 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
 - [x] 准备固定、可重复的 real-row fixture；不得通过 mixup 或其他插值扩充它。
 - [x] 记录当前 synthetic target、importance weighting、rank-based query inclusion、
   ensemble/historical-error GPSAF noise path 和非原子 checkpoint 写入的准确调用面。
-- [ ] 与用户确认 production benchmark suite、metrics、thresholds 和 tradeoff。当前 SAW、
-  `test_com` 及其它已就绪问题只作为候选；用户尚未准备好全部 benchmark，不能擅自把现有
-  集合当作完整 gate。
+- [x] 与用户确认 production benchmark suite：`20260807 saw`、
+  `20260811 chrono trebuchet flexible`、`20260816 surrogate test_com`。它们是三个
+  benchmark cases，不预先承担 experimental-arm 角色。
+- [ ] 与用户确认 experimental arms/comparison protocol、metrics、thresholds、执行 budget
+  和可接受 tradeoff；不能从当前配置默认值推断，也不能由开发者在看到结果后补选。
 - [ ] benchmark 至少记录 rawData/objective prediction error、必要时的 ranking、训练时间/
   资源，以及固定真实 evaluation budget 下的 optimization efficiency；bitwise equality 不是
   目标，但用户确认的 thresholds 是完成门槛。
@@ -347,9 +364,10 @@ boundary；本任务不提前创建完整 method registry、workspace plan loade
   断言。
 - [x] 把测试/文档中的 `uniform` 准确改为 field-balanced seeded sampling；synthetic
   fixture 指标仅供调试，不因下降而恢复 task-specific heuristic。
-- [ ] 在用户确认 suite/metrics/thresholds 后运行真实 benchmark gate；失败则保持本 toDo
-  active，并在 real-only 原则内调整 sampling/model/training。不得恢复 synthetic target、
-  task-specific importance 或用较容易的问题替换失败结果。
+- [ ] 在用户确认 experimental protocol/metrics/thresholds/budget/tradeoff 后，按上述三个
+  cases 运行真实 benchmark gate；失败则保持本 toDo active，并在 real-only 原则内调整
+  sampling/model/training。不得恢复 synthetic target、task-specific importance 或用较容易
+  的问题替换失败结果。
 - [x] benchmark gate 不等于 ensemble trust calibration；后者仍不在本任务范围。
 - [ ] 按开发文档完成 wheel build、force-reinstall、import-origin check、focused tests 和
   完整 pytest，随后更新 change record 并归档本 toDo。
