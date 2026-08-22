@@ -3,10 +3,13 @@
 ## Execution Dependency
 
 - 这是手工触发、一次性的组件重构工作流；不能因读取本文而自动执行。
-- 必须先完整执行并归档
-  `20260819_144148_simplify-surrogate-real-only-training.md`，以最终 real-only、
-  rawData-field-balanced、ensemble-with-bootstrap 训练、保留但隔离旧状态的 atomic
-  checkpoint，以及用户确认的真实 benchmark gate 为唯一基线。
+- 前置简化工作已完成并归档在
+  `../obsolete/20260819_144148_simplify-surrogate-real-only-training.md`。本任务以其中最终
+  real-only、rawData-field-balanced、ensemble-with-bootstrap 训练和保留但隔离旧状态的
+  atomic checkpoint 契约为唯一行为基线。
+- 本任务与协调的 workspace composition 工作会改变 package/component/workspace 边界；
+  重构前的量化性能验收不是执行前置条件。任何此类验收必须在两份协调任务完成后按最终
+  架构重新设计和执行。
 - 随后必须把本 toDo 作为
   `20260820_125457_workspace-submit-optimization-composition.md` 的协调工作流执行。后者
   负责新 `submit/` workspace 标准、`optimization.py` 加载、snapshot、provenance、
@@ -121,7 +124,7 @@
 - after-submit staggered training、fast-mode fallback 和 lag gate 顺序保持当前行为；
   scheduler-specific callback 仍不能由 fast 伪造。
 - post-simplification member spread 和 training-fit diagnostics 保持可观察但不影响
-  candidate decision，直到真实 benchmark 后另行设计 trust policy。
+  candidate decision；只有后续独立任务在最终架构上建立充分证据后才能设计 trust policy。
 - 当前安装的 pymoo 不提供 GPSAF，因此这一层暂时可能保留 yadof-specific orchestration；
   实现前必须再次搜索受支持成熟依赖。任何保留代码都要逐项证明属于 yadof 的 rawData、
   generation、real-validation 或 component coordination 契约，而不是可委托的通用算法。
@@ -261,7 +264,7 @@ module。
 
 ### Phase 0 - Freeze The Simplified Behavior
 
-- [ ] 确认 real-only toDo 已归档，active code 不含 mixup/importance/relative/rank
+- [ ] 核对 archived real-only handoff，确认 active code 不含 mixup/importance/relative/rank
   heuristic、GPSAF spread/error noise 或 legacy checkpoint reader。
 - [ ] 固定 seeded GA/NSGA-III、warm start、fallback、alpha/beta/exploration、staggered
   scheduling、field-balanced conditional INR、ensemble/bootstrap/spread、current-cost、
@@ -362,7 +365,7 @@ module。
 
 ## Completion Rule
 
-- 前置 real-only/rawData-field-balanced toDo 已通过用户确认的真实 benchmark gate 并归档。
+- 前置 real-only/rawData-field-balanced handoff 已完成实现与安装态验证并归档。
 - package 不再拥有或选择一套完整 GPSAF + GA/NSGA-III + conditional-INR algorithm；完整
   strategy 只由 workspace `submit/optimization.py` 组合，engine 只看一个 strategy/callable。
 - `yadof.optimize` 保留最小 campaign/common contract 和不可委托的 GPSAF coordination，

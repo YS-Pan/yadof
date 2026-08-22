@@ -4,10 +4,13 @@
 
 - This is a manual, one-shot, project-wide workspace-contract change. Reading it
   does not authorize implementation.
-- First complete and archive
-  `20260819_144148_simplify-surrogate-real-only-training.md` so the strategy work
-  starts from the final real-only, rawData-field-balanced conditional-INR behavior and its
-  user-approved benchmark gate.
+- The prerequisite simplification is complete and archived at
+  `../obsolete/20260819_144148_simplify-surrogate-real-only-training.md`. Strategy
+  work starts from its final real-only, rawData-field-balanced conditional-INR
+  behavior and atomic retained-state contract.
+- This work and the coordinated modularization change package/component/workspace
+  boundaries. Pre-refactor quantitative performance acceptance is not a prerequisite;
+  any such acceptance must be redesigned and run against the final architecture.
 - Then execute this toDo and
   `20260818_173629_modular-surrogate-optimize-methods.md` as coordinated but staged
   work. The latter owns the smallest package seams required by a workspace strategy;
@@ -325,8 +328,8 @@ backend algorithms.
 
 ### Phase 0 - Freeze The Post-Simplification Baseline
 
-- [ ] Confirm the real-only surrogate toDo is archived and its user-approved
-  benchmark gate passed.
+- [ ] Confirm the archived real-only handoff remains the active implementation
+  baseline.
 - [ ] Characterize the current seeded default for single-objective GA,
   multi-objective NSGA-III, GPSAF warmup/fallback/alpha/beta/exploration, staggered
   conditional-INR training, current-cost conversion, and real validation.
