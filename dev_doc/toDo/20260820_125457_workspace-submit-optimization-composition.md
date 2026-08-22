@@ -20,6 +20,11 @@
   passes. Trust-region/local refinement is parked research and must not cause this
   task to create a refinement role, capability system, state API, SciPy dependency,
   or fake refinement.
+- After both coordinated toDos, workspace migration, and documentation updates are
+  complete—but before the final wheel build, installed acceptance, and archival—
+  bump the single public yadof package version from `0.3.0` to `0.4.0`. Do not bump
+  during a partial stage; update every current-version document, test, and artifact
+  expectation at that point while leaving historical change records unchanged.
 
 ## Verified Current Facts And Corrections
 
@@ -398,6 +403,9 @@ backend algorithms.
 
 ### Phase 6 - Installed Acceptance
 
+- [ ] After both coordinated implementations and migration are complete, bump the
+  single public package version from `0.3.0` to `0.4.0` and update every
+  current-version assertion; do not bump during a partial stage.
 - [ ] Build the wheel, force-reinstall it into the sibling `.venv`, verify imports
   come from site-packages with no `PYTHONPATH`, run focused tests, then full pytest.
 - [ ] Inspect wheel/sdist members and two freshly initialized workspaces. Do not run
@@ -469,6 +477,9 @@ backend algorithms.
 - Init/check/migration diagnostics, examples, architecture, blueprints, terminology,
   user docs, nested viewer docs, artifacts, and tests all describe the new standard;
   installed full pytest passes from the force-reinstalled wheel.
+- Final source, CLI, installed package, and wheel all report `0.4.0`; every
+  current-version acceptance expectation is synchronized, and historical change
+  records remain unchanged.
 - This document and the coordinated modularization toDo are archived together.
   Parked trust-region research is reconsidered only after all other active work and
   does not constrain this completed strategy boundary.

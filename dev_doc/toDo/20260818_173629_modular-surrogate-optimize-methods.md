@@ -16,6 +16,10 @@
   init/check 与迁移；本文负责把 package 实现拆成可由 workspace 组合的组件。
 - 两份协调 toDo 可以按清楚的兼容阶段落地，但不得保留 package-owned 完整算法再由
   workspace 做一层表面包装。共享安装态验收全部通过后，两份文件一起归档。
+- 两份协调 toDo 的实现、workspace 迁移和文档更新全部完成后，并在最终 wheel 构建、
+  安装态验收和归档前，把 yadof 的唯一公开 package 版本从 `0.3.0` 提升到 `0.4.0`。
+  中间阶段不得提前升版；升版时同步所有明确跟踪当前版本的文档、测试和 artifact
+  预期，历史 change record 保持不变。
 - 执行时必须先做成熟依赖复用审计，再决定保留、删除或新增 yadof 代码；“组件化”不等于
   把第三方算法重新实现成更多 yadof 模块。
 
@@ -324,6 +328,8 @@ module。
 
 - [ ] 更新 root architecture、module/file blueprints、terminology、user workflow/config、
   template、examples 和 surrogate-viewer nested dev_doc；历史 change records 不改。
+- [ ] 在两份协调任务的实现与迁移完成后，把唯一公开 package 版本从 `0.3.0` 提升到
+  `0.4.0`，并同步所有当前版本断言；不要在部分阶段提前升版。
 - [ ] 构建 wheel、force-reinstall 到 sibling `.venv`，确认 site-packages import，无
   `PYTHONPATH`，运行 focused tests 与完整 pytest。
 - [ ] 添加完成 change record；只有与 workspace composition toDo 全部 criteria 同时满足
@@ -385,5 +391,7 @@ module。
   trust-region 研究不约束本重构。
 - rawData-first、current submit cost、real validation、generation snapshot、staggered
   training、recording-loss isolation、checkpoint atomicity 和 viewer isolation 全部保持。
+- 最终源码、CLI、安装态 package 和 wheel 均报告 `0.4.0`，所有明确跟踪当前版本的验收
+  预期已同步，历史 change record 未被改写。
 - 所有相关 docs/blueprints/tests/wheel 内容已更新，安装态完整 pytest 通过；本文与
   workspace composition toDo 同时归档。
