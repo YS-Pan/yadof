@@ -157,7 +157,6 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
             encoding="utf-8"
         )
     )
-    assert manifest["format_version"] == 2
     assert manifest["surrogate_method"] == "conditional_inr"
     assert manifest["training_policy"] == "real_field_balanced"
     assert len(manifest["state_signature"]) == 64

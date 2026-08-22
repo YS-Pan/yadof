@@ -1,42 +1,60 @@
-# 持续移除偶遇的版本过渡标记
+# Continuously Remove Incidental Release Markers
 
-## 背景
+## Context
 
-- 数据格式或实现边界发生不兼容变化后，模块名、目录名、错误文本和文档容易带上
-  “第二版”一类过渡标签。这些标签只说明“曾经有过上一版”，却不能表达当前组件的职责，
-  还会让新 workspace 看起来必须理解一次历史迁移。
-- 真正的新能力、数据完整性校验和 package 的公开版本号不能因为清理过渡标签而丢失。
+- After an incompatible data-format or implementation-boundary change, module
+  names, directory names, errors, and documentation can accumulate transitional
+  labels such as “second edition.” Those labels communicate only that an earlier
+  edition once existed. They do not describe the current component's
+  responsibility, and they make a new workspace appear to require knowledge of a
+  historical migration.
+- Cleanup must not discard real capabilities, data-integrity validation, or the
+  package's public version.
 
-## 目标
+## Goal
 
-- 日常修改自然接触源码、测试、有效文档或用户明确指定的 workspace 时，移除其中仅为
-  表示“第二版”而存在的字样、路径层级、模块后缀、别名和兼容包装。
-- 让当前接口和布局直接按职责命名，看起来就是该功能的原生设计，同时完整保留实际
-  新特性、故障语义、数据完整性和可验证的格式边界。
+- When normal work naturally reaches source, tests, active documentation, or a
+  workspace explicitly selected by the user, remove wording, path layers, module
+  suffixes, aliases, and compatibility wrappers that exist only to denote a later
+  edition.
+- Name current interfaces and layouts directly by responsibility so they read as
+  native design, while preserving actual features, failure semantics, data
+  integrity, and verifiable format boundaries.
 
-## 指导
+## Guidance
 
-- 只检查正常任务已经进入范围的文件、直接调用方、测试、有效文档和当前 diff；除非
-  用户明确要求全量清理，否则不要仅为本 toDo 扫描无关目录。
-- 先判断命中是否确实表示 yadof 的版本过渡。第三方文件格式中的固定标记、普通变量
-  名、协议本身所需的版本字段，以及 package 的真实公开版本号不属于清理对象。
-- 对仅表示过渡的模块名、目录名和字段优先直接采用职责名称；不要留下旧名导入别名、
-  双路径读取或“新旧版”说明来继续体现过渡。
-- 仅为给当前 recorded-data 布局编号的格式/元数据版本层应直接移除，不能把旧编号重置
-  为 `1`。确属独立外部协议或数据类型自身契约的版本字段不在此列。
-- 迁移已有 workspace 数据前必须确认 campaign 未运行、解析精确源和目标路径、避免
-  覆盖冲突，并验证迁移前后记录数量、可读性和证据内容；没有用户授权时只报告需要
-  迁移，不擅自改写用户数据。
-- 行为或布局变化时同步更新直接相关测试、architecture、blueprint、terminology、
-  user documentation 和 change record，并按项目安装态流程验证。
+- Inspect only files already in scope for the normal task, their direct callers,
+  tests, active documentation, and the current diff. Do not scan unrelated parts
+  of the repository solely for this toDo unless the user explicitly requests a
+  complete cleanup.
+- First establish that a match really is a yadof release-transition marker. Fixed
+  markers in third-party formats, ordinary variable names, version fields required
+  by a protocol itself, and the package's real public version are not cleanup
+  targets.
+- Rename transitional modules, directories, and fields directly by responsibility.
+  Do not preserve old-name import aliases, dual-path readers, or old/new wording
+  that continues to expose the transition.
+- Remove a format or metadata version layer that exists only to number the current
+  recorded-data layout. Do not reset the old number to `1`. A field that belongs to
+  the contract of an independent external protocol or data type is outside this
+  rule.
+- Before migrating existing workspace data, confirm that no campaign is running,
+  resolve exact source and destination paths, avoid overwrite conflicts, and verify
+  record counts, readability, and evidence content before and after the migration.
+  Without user authorization, report the required migration instead of rewriting
+  user data.
+- When behavior or layout changes, update directly related tests, architecture,
+  blueprints, terminology, user documentation, and the change record, then follow
+  the installed-package verification workflow.
 
-## Completion Rule（完成规则）
+## Completion Rule
 
-- 对一次自然触发而言：范围内确认属于版本过渡的标记和设计已经移除，真实功能与数据
-  得到保留，并完成与风险相称的测试和数据验证。
-- 本 toDo 是持续性的；单次执行完成后仍保留在 `toDo/auto/`，供以后遇到同类标记时
-  继续检查。
+- For one natural trigger, all in-scope design and markers confirmed to be purely
+  transitional have been removed, real functionality and data remain intact, and
+  tests plus data checks proportional to the risk have passed.
+- This toDo is recurring. Keep it under `toDo/auto/` after one completed occurrence
+  so future matching work can trigger it again.
 
-## Obsolete Rule（过期规则）
+## Obsolete Rule
 
 persistent

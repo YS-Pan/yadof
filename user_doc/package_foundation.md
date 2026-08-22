@@ -66,7 +66,7 @@ yadof check --workspace D:\work\study-a
 
 Initialization publishes a generic pure-Python template and `.yadof/workspace.json`
 without overwriting existing destinations. Repeating init on the same complete,
-version-matched workspace is non-mutating. It does not repair user files or run a
+initialized workspace is non-mutating. It does not repair user files or run a
 workflow. `check` is read-only: it validates marker/config/task/rawData structure and
 discovers backend executables, but never installs or configures software.
 

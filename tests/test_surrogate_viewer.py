@@ -116,7 +116,6 @@ def _write_checkpoint_manifest(
     artifact_dir.mkdir(parents=True)
     (artifact_dir / "model_aux.npz").write_bytes(b"checkpoint")
     payload = {
-        "format_version": 2,
         "surrogate_method": "conditional_inr",
         "training_policy": "real_field_balanced",
         "strategy_signature": strategy_signature,

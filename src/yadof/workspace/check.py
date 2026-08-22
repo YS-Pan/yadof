@@ -134,21 +134,7 @@ def _check_marker(
     except (Exception, SystemExit) as exc:
         _finding(findings, "error", "workspace template", str(exc))
         return marker
-    if marker.template_version != template.version:
-        _finding(
-            findings,
-            "warning",
-            "workspace template",
-            f"workspace uses {marker.template_name} version {marker.template_version}; "
-            f"installed template version is {template.version}; no automatic upgrade was run",
-        )
-    else:
-        _finding(
-            findings,
-            "ok",
-            "workspace template",
-            f"{marker.template_name} version {marker.template_version}",
-        )
+    _finding(findings, "ok", "workspace template", template.name)
     for item in template.files:
         path = workspace.root.joinpath(*item.destination.parts)
         if not path.is_file():

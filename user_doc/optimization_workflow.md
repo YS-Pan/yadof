@@ -272,11 +272,6 @@ runs exactly one worker and has no timeout or durable job directory.
 `yadof check` constructs and validates the submit-side strategy, but does not train,
 predict, evaluate candidates, import the workflow, or write an active pointer.
 
-Template-version-1 workspaces are not rewritten. Create a fresh workspace, move
-the old `job_template/calc_cost.py` to `submit/calc_cost.py`, add
-`submit/optimization.py`, and copy the remaining task sources explicitly. `check`
-reports the legacy layout but never migrates files or clears history itself.
-
 ```powershell
 yadof run --workspace D:\work\study-a
 yadof run --workspace D:\work\study-a --generations 10

@@ -1,7 +1,6 @@
 {
   "schema_version": 1,
   "name": "default",
-  "template_version": 2,
   "rawdata_schema_version": 1,
   "description": "Minimal runnable, software-neutral pure-Python workspace.",
   "files": [

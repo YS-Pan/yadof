@@ -197,19 +197,21 @@ def test_config_validates_required_task_paths_before_batch_work(tmp_path: Path) 
         load_config(root)
 
 
-def test_config_reports_legacy_misplaced_and_overlapping_task_paths(
+def test_config_reports_missing_misplaced_and_overlapping_task_paths(
     tmp_path: Path,
 ) -> None:
-    legacy = tmp_path / "legacy"
-    legacy.mkdir()
-    (legacy / "config.py").write_text("EVALUATION_MODE = 'local'\n", encoding="utf-8")
-    legacy_task = legacy / "job_template"
-    legacy_task.mkdir()
+    missing_submit = tmp_path / "missing-submit"
+    missing_submit.mkdir()
+    (missing_submit / "config.py").write_text(
+        "EVALUATION_MODE = 'local'\n", encoding="utf-8"
+    )
+    task_dir = missing_submit / "job_template"
+    task_dir.mkdir()
     for name in ("parameters_constraints.py", "workflow.py", "calc_cost.py"):
-        (legacy_task / name).write_text("# legacy task source\n", encoding="utf-8")
+        (task_dir / name).write_text("# task source\n", encoding="utf-8")
 
-    with pytest.raises(ConfigError, match="legacy workspace layout detected"):
-        load_config(legacy)
+    with pytest.raises(ConfigError, match="workspace submit directory does not exist"):
+        load_config(missing_submit)
 
     misplaced = _task_files(tmp_path / "misplaced", limit=2, offset=1)
     (misplaced.job_template_dir / "optimization.py").write_text(

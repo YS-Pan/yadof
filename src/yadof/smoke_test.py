@@ -30,11 +30,6 @@ def assess_smoke_task(
         template = load_workspace_template(marker.template_name)
     except (WorkspaceMarkerError, WorkspaceInitError) as exc:
         return SmokeTaskAssessment(False, str(exc))
-    if marker.template_version != template.version:
-        return SmokeTaskAssessment(
-            False,
-            "workspace template version does not match the installed generic template",
-        )
 
     expected = {
         Path(*file.destination.parts): file.content

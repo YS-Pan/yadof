@@ -17,7 +17,6 @@ from .modeling import INRTrainConfig
 from .types import RawDataSchema, SurrogateState
 
 
-CHECKPOINT_FORMAT_VERSION = 2
 SURROGATE_METHOD = "conditional_inr"
 TRAINING_POLICY = "real_field_balanced"
 COMPONENT_NAMESPACE = "conditional-inr"
@@ -42,7 +41,6 @@ def semantic_state_signature(
     torch_version: str | None = None,
 ) -> str:
     payload = {
-        "format_version": CHECKPOINT_FORMAT_VERSION,
         "strategy_signature": str(strategy_signature),
         "surrogate_method": SURROGATE_METHOD,
         "training_policy": TRAINING_POLICY,
@@ -118,8 +116,6 @@ def new_publication_paths(
 def validate_manifest_identity(payload: object) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError("surrogate checkpoint manifest must be a JSON object")
-    if int(payload["format_version"]) != CHECKPOINT_FORMAT_VERSION:
-        raise ValueError("unsupported surrogate checkpoint format_version")
     if str(payload["surrogate_method"]) != SURROGATE_METHOD:
         raise ValueError("unsupported surrogate checkpoint method")
     if str(payload["training_policy"]) != TRAINING_POLICY:
@@ -313,7 +309,6 @@ def _checkpoint_payload(
         )
     publication_id = manifest_stem[len(prefix) :]
     return {
-        "format_version": CHECKPOINT_FORMAT_VERSION,
         "surrogate_method": SURROGATE_METHOD,
         "training_policy": TRAINING_POLICY,
         "strategy_signature": state.strategy_signature,
@@ -387,7 +382,6 @@ def write_checkpoint(
 
 
 __all__ = [
-    "CHECKPOINT_FORMAT_VERSION",
     "COMPONENT_NAMESPACE",
     "SURROGATE_METHOD",
     "TRAINING_POLICY",

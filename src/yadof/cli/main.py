@@ -31,7 +31,7 @@ def _init_workspace_command(args: argparse.Namespace) -> int:
     if result.created:
         write_text(
             f"Initialized yadof workspace at {result.workspace.root} "
-            f"(template {result.template_name} version {result.template_version})."
+            f"(template {result.template_name})."
         )
     else:
         write_text(

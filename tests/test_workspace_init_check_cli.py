@@ -65,7 +65,6 @@ def test_init_empty_directory_creates_generic_workspace_and_check_passes(
     assert marker == {
         "rawdata_schema_version": 1,
         "template_name": "default",
-        "template_version": 2,
         "workspace_schema_version": 1,
         "yadof_version": yadof.__version__,
     }
@@ -306,6 +305,20 @@ def test_check_reports_invalid_marker_config_and_static_rawdata(tmp_path: Path) 
     rawdata_report = check_workspace(init_workspace_root)
     assert not rawdata_report.ok
     assert "rawData directory must be flat" in rawdata_report.format()
+
+
+def test_workspace_marker_rejects_unrecognized_fields(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    init_workspace(root)
+    marker_path = root / ".yadof/workspace.json"
+    marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    marker["unexpected"] = True
+    marker_path.write_text(json.dumps(marker), encoding="utf-8")
+
+    report = check_workspace(root)
+
+    assert not report.ok
+    assert "contains unexpected field(s): unexpected" in report.format()
 
 
 def test_check_continues_static_checks_after_task_import_failure(tmp_path: Path) -> None:

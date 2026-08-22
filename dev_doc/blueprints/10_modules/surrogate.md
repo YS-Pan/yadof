@@ -53,8 +53,8 @@ training bundle rather than reopening mutable task files. Switching strategies
 waits and releases memory while retaining disk state; explicit history clearing
 removes all derived namespaces separately.
 
-Checkpoints use an explicit format version, `conditional_inr` method,
-`real_field_balanced` policy, semantic state signature, and run/component namespace.
+Checkpoints use the `conditional_inr` method, `real_field_balanced` policy,
+semantic state signature, and run/component namespace.
 The signature includes the strategy signature and parameter ranges/levels because they define normalized-input
 meaning. Publication renames the complete artifact tree, writes a root convenience
 pointer, then atomically writes the unique namespace manifest as the commit record.

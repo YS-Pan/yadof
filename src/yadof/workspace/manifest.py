@@ -24,16 +24,14 @@ class WorkspaceMarker:
     workspace_schema_version: int
     yadof_version: str
     template_name: str
-    template_version: int
     rawdata_schema_version: int
 
     @classmethod
-    def current(cls, *, template_name: str, template_version: int) -> "WorkspaceMarker":
+    def current(cls, *, template_name: str) -> "WorkspaceMarker":
         return cls(
             workspace_schema_version=WORKSPACE_SCHEMA_VERSION,
             yadof_version=__version__,
             template_name=template_name,
-            template_version=int(template_version),
             rawdata_schema_version=RAWDATA_SCHEMA_VERSION,
         )
 
@@ -45,7 +43,6 @@ class WorkspaceMarker:
             "workspace_schema_version",
             "yadof_version",
             "template_name",
-            "template_version",
             "rawdata_schema_version",
         }
         missing = sorted(required - set(payload))
@@ -53,9 +50,13 @@ class WorkspaceMarker:
             raise WorkspaceMarkerError(
                 f"{source} is missing field(s): {', '.join(missing)}"
             )
+        unexpected = sorted(set(payload) - required)
+        if unexpected:
+            raise WorkspaceMarkerError(
+                f"{source} contains unexpected field(s): {', '.join(unexpected)}"
+            )
         version_fields = (
             payload["workspace_schema_version"],
-            payload["template_version"],
             payload["rawdata_schema_version"],
         )
         if not all(
@@ -63,10 +64,9 @@ class WorkspaceMarker:
             for value in version_fields
         ):
             raise WorkspaceMarkerError(
-                f"{source} schema/template versions must be integers"
+                f"{source} schema versions must be integers"
             )
         workspace_schema_version = payload["workspace_schema_version"]
-        template_version = payload["template_version"]
         rawdata_schema_version = payload["rawdata_schema_version"]
         yadof_version = payload["yadof_version"]
         template_name = payload["template_name"]
@@ -74,9 +74,9 @@ class WorkspaceMarker:
             raise WorkspaceMarkerError(f"{source} yadof_version must be a string")
         if not isinstance(template_name, str) or not template_name:
             raise WorkspaceMarkerError(f"{source} template_name must be a string")
-        if workspace_schema_version <= 0 or template_version <= 0:
+        if workspace_schema_version <= 0:
             raise WorkspaceMarkerError(
-                f"{source} workspace/template versions must be positive"
+                f"{source} workspace_schema_version must be positive"
             )
         if rawdata_schema_version <= 0:
             raise WorkspaceMarkerError(
@@ -86,7 +86,6 @@ class WorkspaceMarker:
             workspace_schema_version=workspace_schema_version,
             yadof_version=yadof_version,
             template_name=template_name,
-            template_version=template_version,
             rawdata_schema_version=rawdata_schema_version,
         )
 
@@ -95,7 +94,6 @@ class WorkspaceMarker:
             "workspace_schema_version": self.workspace_schema_version,
             "yadof_version": self.yadof_version,
             "template_name": self.template_name,
-            "template_version": self.template_version,
             "rawdata_schema_version": self.rawdata_schema_version,
         }
 

@@ -42,7 +42,6 @@ class TemplateFile:
 @dataclass(frozen=True, slots=True)
 class WorkspaceTemplate:
     name: str
-    version: int
     rawdata_schema_version: int
     files: tuple[TemplateFile, ...]
 
@@ -51,7 +50,6 @@ class WorkspaceTemplate:
 class InitResult:
     workspace: WorkspaceContext
     template_name: str
-    template_version: int
     created: bool
 
 
@@ -94,7 +92,19 @@ def load_workspace_template(name: str = DEFAULT_TEMPLATE_NAME) -> WorkspaceTempl
         raise WorkspaceInitError(
             f"template manifest name {manifest_name!r} does not match requested {name!r}"
         )
-    version = _positive_int(manifest.get("template_version"), "template_version")
+    allowed_fields = {
+        "schema_version",
+        "name",
+        "rawdata_schema_version",
+        "description",
+        "files",
+    }
+    unexpected = sorted(set(manifest) - allowed_fields)
+    if unexpected:
+        raise WorkspaceInitError(
+            "template manifest contains unexpected field(s): "
+            + ", ".join(unexpected)
+        )
     rawdata_schema_version = _positive_int(
         manifest.get("rawdata_schema_version"), "rawdata_schema_version"
     )
@@ -140,7 +150,6 @@ def load_workspace_template(name: str = DEFAULT_TEMPLATE_NAME) -> WorkspaceTempl
         raise WorkspaceInitError("template manifest must define at least one file")
     return WorkspaceTemplate(
         name=name,
-        version=version,
         rawdata_schema_version=rawdata_schema_version,
         files=tuple(files),
     )
@@ -175,9 +184,9 @@ def _validate_existing_workspace(root: Path, template: WorkspaceTemplate) -> Ini
             f"workspace marker uses unsupported schema version "
             f"{marker.workspace_schema_version}: {root / WORKSPACE_MARKER_RELATIVE_PATH}"
         )
-    if marker.template_name != template.name or marker.template_version != template.version:
+    if marker.template_name != template.name:
         raise WorkspaceInitError(
-            "workspace uses a different template/version; automatic upgrade is not supported: "
+            "workspace uses a different template; init will not rewrite it: "
             f"{root / WORKSPACE_MARKER_RELATIVE_PATH}"
         )
     missing = [
@@ -194,7 +203,6 @@ def _validate_existing_workspace(root: Path, template: WorkspaceTemplate) -> Ini
     return InitResult(
         workspace=WorkspaceContext.from_path(root),
         template_name=marker.template_name,
-        template_version=marker.template_version,
         created=False,
     )
 
@@ -204,9 +212,7 @@ def _write_stage(stage: Path, template: WorkspaceTemplate) -> None:
         target = _target_path(stage, item.destination)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(item.content)
-    marker = WorkspaceMarker.current(
-        template_name=template.name, template_version=template.version
-    )
+    marker = WorkspaceMarker.current(template_name=template.name)
     if marker.rawdata_schema_version != template.rawdata_schema_version:
         raise WorkspaceInitError(
             "template rawData schema version does not match the installed framework"
@@ -218,7 +224,7 @@ def _write_stage(stage: Path, template: WorkspaceTemplate) -> None:
 
 def _validate_staged_workspace(stage: Path, template: WorkspaceTemplate) -> None:
     marker = read_workspace_marker(stage)
-    if marker.template_name != template.name or marker.template_version != template.version:
+    if marker.template_name != template.name:
         raise WorkspaceInitError("staged workspace marker does not match its template")
     config = load_config(stage)
     validate_task(config.workspace)
@@ -342,7 +348,6 @@ def init_workspace(
     return InitResult(
         workspace=WorkspaceContext.from_path(root),
         template_name=template.name,
-        template_version=template.version,
         created=True,
     )
 

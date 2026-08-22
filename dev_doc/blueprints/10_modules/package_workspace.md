@@ -20,8 +20,8 @@ they never find user state relative to package source or a process-global projec
 
 `init` stages and validates a generic local template, then publishes it without
 overwriting existing files. The portable `.yadof/workspace.json` marker is published
-last and records template/version provenance; it does not authorize repair or
-automatic upgrade. The template publishes `submit/calc_cost.py`, mandatory
+last and records the template name plus package/schema provenance; it does not
+authorize repair or file replacement. The template publishes `submit/calc_cost.py`, mandatory
 `submit/optimization.py`, and canonical parameter/workflow sources below
 `job_template/`. The generic workflow contains only its task-specific calculation
 and calls package worker support, which records execute-side machine identity and
@@ -50,7 +50,7 @@ Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 
 ## Invariants
 
-- Initialization never silently merges, repairs, or upgrades a workspace.
+- Initialization never silently merges, repairs, or rewrites a workspace.
 - Checking never launches the workflow, trains/evaluates, or mutates task/runtime state.
 - Configured framework paths never overlap fixed `submit/`, `job_template/`, or one another.
 - Package code remains functional when site-packages is read-only.

@@ -500,7 +500,13 @@ def test_package_metadata_and_source_resources() -> None:
     assert template_names() == ("default",)
     manifest = read_template_manifest("default")
     assert manifest["name"] == "default"
-    assert manifest["template_version"] == 2
+    assert set(manifest) == {
+        "description",
+        "files",
+        "name",
+        "rawdata_schema_version",
+        "schema_version",
+    }
 
     template_root = REPOSITORY_ROOT / "src" / "yadof" / "_resources" / "templates" / "default"
     template_text = "\n".join(

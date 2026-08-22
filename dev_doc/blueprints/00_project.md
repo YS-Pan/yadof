@@ -4,7 +4,7 @@
 
 yadof is a task-agnostic installed framework. Stable code and read-only resources
 live under `src/yadof`; user-editable task inputs and runtime output live under an
-explicit workspace. The old source-runtime namespace is removed. Normal use is
+explicit workspace. There is no source-runtime namespace. Normal use is
 AI-agent-first: a human user directs an installed coding agent, which reads packaged
 user guidance, authors the workspace, and applies the user's execution limits plus
 the documented cost/risk policy through the same public CLI/API available to direct

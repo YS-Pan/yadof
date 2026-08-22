@@ -359,13 +359,6 @@ def _validate_task_paths(workspace: WorkspaceContext) -> None:
     if not workspace.root.is_dir():
         raise ConfigError(f"workspace directory does not exist: {workspace.root}")
     if not workspace.submit_dir.is_dir():
-        legacy_cost = workspace.job_template_dir / "calc_cost.py"
-        if legacy_cost.is_file():
-            raise ConfigError(
-                "legacy workspace layout detected: move job_template/calc_cost.py "
-                "to submit/calc_cost.py and add submit/optimization.py, or create a "
-                "fresh workspace and copy the task sources explicitly"
-            )
         raise ConfigError(
             f"workspace submit directory does not exist: {workspace.submit_dir}"
         )

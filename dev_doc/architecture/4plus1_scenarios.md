@@ -88,7 +88,7 @@ rawData/current-cost meaning as local mode, but `jobs/` gains no candidate folde
 
 ## Change current cost policy
 
-Edit workspace `calc_cost.py`, run `check`, and query history again. Existing
+Edit workspace `submit/calc_cost.py`, run `check`, and query history again. Existing
 mechanically compatible rawData stays unchanged while objective names/values are
 recalculated. During a campaign, make the edit between generations; the next
 generation uses the new policy coherently. The full task tree was captured before
@@ -117,8 +117,8 @@ predicts rawData, lets the user select zero to two plotted dimensions and fixed
 coordinates for every remaining dimension through a checkpoint-grid dropdown or
 arbitrary finite-value entry, reapplies current cost logic, compares selected real
 individuals where recorded coordinates exist, and can calculate a cancellable
-in-memory cross-generation error audit. Stored-grid selections keep legacy
-prediction behavior; off-grid selections directly query the existing conditional
+in-memory cross-generation error audit. Stored-grid selections reproduce
+checkpoint-grid predictions; off-grid selections directly query the conditional
 INR and interpolate its target scaler without changing checkpoint artifacts. The
 resulting rawData view is a scalar, curve, or filled two-dimensional color contour.
 Closing or stopping the viewer leaves configuration, history, rawData, and
