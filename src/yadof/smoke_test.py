@@ -36,19 +36,28 @@ def assess_smoke_task(
             "workspace template version does not match the installed generic template",
         )
 
-    prefix = PurePosixPath("job_template")
     expected = {
-        Path(*file.destination.relative_to(prefix).parts): file.content
+        Path(*file.destination.parts): file.content
         for file in template.files
-        if file.destination.is_relative_to(prefix)
+        if file.destination.is_relative_to(PurePosixPath("job_template"))
+        or file.destination.is_relative_to(PurePosixPath("submit"))
     }
-    actual = {
-        path.relative_to(context.job_template_dir): path.read_bytes()
-        for path in context.job_template_dir.rglob("*")
-        if path.is_file()
-        and not any(part in _IGNORED_TASK_PARTS for part in path.relative_to(context.job_template_dir).parts)
-        and path.suffix.lower() not in {".pyc", ".pyo"}
-    }
+    actual: dict[Path, bytes] = {}
+    for label, root in (
+        ("job_template", context.job_template_dir),
+        ("submit", context.submit_dir),
+    ):
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(root)
+            if any(part in _IGNORED_TASK_PARTS for part in relative.parts):
+                continue
+            if path.suffix.lower() in {".pyc", ".pyo"}:
+                continue
+            actual[Path(label) / relative] = path.read_bytes()
     if set(actual) != set(expected):
         added = sorted(path.as_posix() for path in set(actual) - set(expected))
         missing = sorted(path.as_posix() for path in set(expected) - set(actual))
@@ -68,7 +77,7 @@ def assess_smoke_task(
         )
     return SmokeTaskAssessment(
         True,
-        "task files exactly match the installed generic starter",
+        "submit and evaluate task sources exactly match the installed generic starter",
     )
 
 

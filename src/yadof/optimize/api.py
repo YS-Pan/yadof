@@ -8,9 +8,15 @@ from ..config import LoadedConfig, load_config
 from ..recorded_data.session import CampaignSession
 from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
-from .gpsaf import OptimizationResult
-from . import gpsaf
 from .runner import new_run_id, next_optimization_index, now_text, record_generation_metadata
+from .state import read_active_strategy_state, write_active_strategy_state
+from .strategy import (
+    GenerationContext,
+    OptimizationResult,
+    history_records,
+    load_workspace_strategy,
+    resolve_problem_info,
+)
 
 
 WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
@@ -89,17 +95,76 @@ def _run_one_generation_with_config(
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
 ) -> OptimizationResult:
-    return gpsaf.run_one_generation(
-        config,
-        generation_index=int(generation_index),
-        population_size=population_size,
-        variable_count=variable_count,
-        random_seed=random_seed,
-        run_id=run_id,
-        optimization_index=int(optimization_index),
+    history = history_records(
+        config.workspace,
         session=session,
         snapshot=snapshot,
     )
+    problem = resolve_problem_info(config.workspace, variable_count, history)
+    definition = load_workspace_strategy(
+        config.workspace,
+        config=config,
+        problem=problem,
+    )
+
+    active = read_active_strategy_state(config.workspace)
+    if active is not None and active.strategy_signature != definition.signature:
+        # A strategy switch is a generation boundary. Finish any work belonging
+        # to the old namespace and release its in-memory model before publishing
+        # the new active pointer; disk evidence remains intact.
+        try:
+            from ..surrogate.api import deactivate_workspace
+
+            deactivate_workspace(config.workspace.root)
+        except ImportError:
+            # A selected non-surrogate strategy must remain usable in a core-only
+            # environment. If the optional backend cannot import, this process
+            # cannot own one of its in-memory training tasks; retained disk state
+            # still remains isolated by the old strategy signature.
+            pass
+    write_active_strategy_state(
+        config.workspace,
+        strategy_signature=definition.signature,
+        strategy_identity=definition.identity,
+        optimization_source_hash=snapshot.optimization_fingerprint,
+    )
+
+    selected_population_size = (
+        int(config.OPTIMIZE_POPULATION_SIZE)
+        if population_size is None
+        else int(population_size)
+    )
+    if selected_population_size <= 0:
+        raise ValueError("population_size must be positive")
+    selected_seed = (
+        int(config.OPTIMIZE_RANDOM_SEED)
+        if random_seed is None
+        else int(random_seed)
+    )
+    context = GenerationContext(
+        config=config,
+        generation_index=int(generation_index),
+        population_size=selected_population_size,
+        random_seed=selected_seed,
+        run_id=str(run_id),
+        optimization_index=int(optimization_index),
+        session=session,
+        snapshot=snapshot,
+        history=history,
+        problem=problem,
+        strategy_signature=definition.signature,
+        strategy_identity=definition.identity,
+    )
+    result = definition.strategy.run_generation(context)
+    diagnostics = dict(result.diagnostics)
+    diagnostics.update(
+        {
+            "strategy_signature": definition.signature,
+            "strategy_identity": dict(definition.identity),
+            "optimization_source_hash": snapshot.optimization_fingerprint,
+        }
+    )
+    return replace(result, diagnostics=diagnostics)
 
 
 def run_generations(
@@ -188,6 +253,7 @@ def _with_recording_diagnostics(
             "history_reinterpretation_sec": session.last_reinterpretation_sec,
             "interpretation_fingerprint": snapshot.interpretation_fingerprint,
             "evaluation_fingerprint": snapshot.evaluation_fingerprint,
+            "optimization_fingerprint": snapshot.optimization_fingerprint,
             "task_snapshot_id": snapshot.task_snapshot_id,
         }
     )

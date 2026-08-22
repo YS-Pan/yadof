@@ -1,6 +1,6 @@
 # Typical `calc_cost.py` Patterns
 
-`calc_cost.py` turns one sample's rawData into objective costs. It is used after
+Workspace `submit/calc_cost.py` turns one sample's rawData into objective costs. It is used after
 rawData has been recorded, and it is also used by the surrogate path. Keep it pure
 and repeatable: the same rawData and same code should produce the same cost.
 

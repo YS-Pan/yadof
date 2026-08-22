@@ -24,9 +24,9 @@
 
 ## Reporting Components
 
-- workspace-summary builder: checkpoint/training metadata, per-generation completed
-  counts, parameter ranges, objective names, and rawData dimension spans without
-  loading a model;
+- workspace-summary builder: active strategy/run/component identity,
+  checkpoint/training metadata, per-generation completed counts, parameter ranges,
+  objective names, and rawData dimension spans without loading a model;
 - audit-report builder: one backend audit plus exact named cost/rawData quantity
   selection and relative, absolute, or both derived matrices;
 - text/JSON formatters: TSV-like generation matrices for terminal reading and
@@ -95,3 +95,5 @@ the coordinator; the coordinator submits backend operations.
   lazily.
 - Terminal output carries complete immutable report payloads only; progress never
   contaminates stdout and report formatting never mutates an audit.
+- Checkpoint discovery and report identity use the active strategy plus declared
+  run/component namespace; retained inactive artifacts are never combined.

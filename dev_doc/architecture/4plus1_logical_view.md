@@ -31,9 +31,9 @@
   candidate-isolated scratch. No object identity or import namespace crosses it.
 
 The logical pipeline is `normalized variables -> assigned task parameters ->
-workflow rawData -> current calc_cost -> objective tuple`.
+job_template workflow rawData -> current submit calc_cost -> objective tuple`.
 
-`workflow.py` and `calc_cost.py` own only the task-variable parts of that pipeline.
+`job_template/workflow.py` and `submit/calc_cost.py` own only the task-variable parts of that pipeline.
 The package owns invariant execution lifecycle, paths, metadata, transport,
 rawData manipulation, cost dispatch, constraint/failure policy, and objective
 counting. Task files select and parameterize those package mechanisms.
@@ -53,7 +53,7 @@ execution diagnostics, and lightweight optimization metadata. Normalized variabl
 costs, surrogate predictions, and repeated variable payloads inside each rawData item
 are derived or scrubbed. A workflow-written `cost.json` is forbidden.
 
-Changing `calc_cost.py` intentionally changes interpretation of existing compatible
+Changing `submit/calc_cost.py` intentionally changes interpretation of existing compatible
 rawData. Changing parameter definitions changes normalization and job static hashes.
 If task semantics make old evidence invalid, users must remove or exclude it
 explicitly; the package does not guess a scientific migration.
@@ -61,7 +61,7 @@ explicitly; the package does not guess a scientific migration.
 This user-authoritative mutability also applies during an active campaign.
 Generation boundaries are the coherent reload point for current configuration,
 parameter ranges/levels, fixed-width objective/cost policy, evaluator/workflow task
-code, and task helpers. The complete source tree is copied once at the boundary;
+code, complete strategy composition, and helpers. Both complete source roots are copied once at the boundary;
 the next generation reconstructs its affected derived
 history view from current definitions. The current hot-change contract assumes
 stable parameter identity/count and objective count; structural parameter or
@@ -76,10 +76,11 @@ remains the user's decision.
 Optimizer and surrogate are consumers of the same evidence. The surrogate predicts
 rawData before cost, constructs its modeled query table from compatible recorded
 numeric rawData, reconstructs full public rawData, and calls current cost logic.
-Task-owned importance weights change full-query loss attention or stochastic query-sampling
-probability within that query table; they never select which rawData is saved or
-added to the surrogate. It never establishes a parallel `variables -> cost` truth
-path. Its schedules, state, and checkpoints are keyed by effective workspace paths.
+Every modeled rawData field receives equal macro loss weight and task code cannot
+change training weights. The surrogate never establishes a parallel
+`variables -> cost` truth path. Its schedule and checkpoints are keyed by effective
+workspace paths plus active strategy/component identities; source hashes remain
+separate provenance.
 
 ## Invariants
 

@@ -14,10 +14,17 @@ Install a built wheel into the Python environment used by submit and local worke
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.3.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.3.0-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.3.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.4.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[viewer]"
 ```
+
+The default template's `submit/optimization.py` composes conditional INR. Install
+the `surrogate` extra (or `viewer`, which includes Torch) before using the default
+`init`, `check`, or `run` workflow. The core-only wheel can operate an existing
+workspace whose complete strategy intentionally selects no surrogate component;
+strategy validation reports a missing selected backend without importing it
+eagerly from package parent modules.
 
 `yadof --version` and `yadof version` report the same package version. Distributed
 jobs do **not** carry the yadof package, wheel, source tree, or runtime archive.
@@ -40,7 +47,7 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-The current package version is `0.3.0`. Recorded history uses immutable
+The current package version is `0.4.0`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
@@ -69,11 +76,13 @@ discovers backend executables, but never installs or configures software.
 study-a/
   .yadof/workspace.json
   config.py
+  submit/                       fixed submit-side source root
+    calc_cost.py
+    optimization.py
   job_template/
     parameters_constraints.py
     workflow.py
     evaluation.py                optional; required by fast mode
-    calc_cost.py
     optional adapters and assets
   jobs/                         generated
   recorded_data/                generated recorded-data root
@@ -82,6 +91,7 @@ study-a/
   .yadof/campaign.lock          OS-backed active-campaign lock file
   .yadof/fast_scratch/          ephemeral fast candidate scratch; normally empty
   .yadof/surrogate/checkpoints/ generated
+  .yadof/optimization/active.json generated active strategy pointer
   .yadof/logs/                  generated
   .yadof/tool_output/           generated
   visualization_outputs/       optional task-owned scripts and exported artifacts
@@ -104,7 +114,7 @@ against an active campaign; `history clear` checks the same lock and refuses.
 The workspace is user-owned and may contain additional directories beyond this
 example layout. Use them for task-specific helper scripts, debugging evidence,
 experiment notes, exported animations, images, reports, or other outputs. Choose
-names that do not collide with `.yadof/`, `job_template/`, `jobs/`,
+names that do not collide with `.yadof/`, `submit/`, `job_template/`, `jobs/`,
 `recorded_data/`, or configured framework paths. Yadof ignores such extra
 directories unless task/config code explicitly references them. They are not
 automatically copied into prepared jobs; place execute-side assets below
@@ -118,8 +128,16 @@ the suffix rule does not inspect nested task directories. A distributed workflow
 must not import yadof; import only same-directory task files, the Python standard
 library, and dependencies deliberately installed on execute nodes.
 
-Workspace `workflow.py` and `calc_cost.py` contain only behavior that can change
-with the optimization task. They call copied `worker_misc` or installed
+`submit/` is fixed and is not configurable through `config.py`. Its complete tree
+is available only on the submit host and is never copied into a prepared job or an
+HTCondor transfer list. `calc_cost.py` owns current rawData interpretation;
+`optimization.py` must define `build_optimization()` and compose one complete
+strategy from installed yadof components. Canonical unassigned parameters remain
+only in `job_template/parameters_constraints.py`.
+
+Workspace `job_template/workflow.py` and `submit/calc_cost.py` contain only
+behavior that can change with the optimization task. They call copied `worker_misc`
+or installed
 `yadof.job_template` helpers for every cross-task invariant.
 
 Fast mode is the third explicit backend beside local and distributed. It requires

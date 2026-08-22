@@ -63,6 +63,8 @@ acceptance tests.
 The viewer is read-only with respect to a selected yadof workspace:
 
 - it reads configuration, completed records, rawData, and surrogate checkpoints;
+- it scopes checkpoint discovery to the workspace's active optimization strategy
+  and `conditional-inr` component namespace while retaining inactive artifacts;
 - it loads checkpoint artifacts and performs prediction/audit inference;
 - it calculates displayed costs through the selected workspace's current task;
 - it does not train models, launch a simulator, edit checkpoints, or write history.

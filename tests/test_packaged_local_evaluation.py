@@ -51,6 +51,9 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
     (resources / "metadata.json").write_text('{"task": true}\n', encoding="utf-8")
     (resources / "rawData").mkdir()
     (resources / "rawData" / "seed.bin").write_bytes(b"nested task resource")
+    (root / "submit" / "submit_helper.py").write_text(
+        "VALUE = 'submit-only'\n", encoding="utf-8"
+    )
 
     config = load_config(root)
     first = prepare_job(
@@ -84,6 +87,8 @@ def test_prepare_job_composes_package_support_and_full_task_payload(tmp_path: Pa
     assert (first.directory / "assets/nested/metadata.json").is_file()
     assert (first.directory / "assets/nested/rawData/seed.bin").read_bytes() == b"nested task resource"
     assert not (first.directory / "calc_cost.py").exists()
+    assert not (first.directory / "optimization.py").exists()
+    assert not (first.directory / "submit_helper.py").exists()
     assert not (first.directory / "cost.json").exists()
     assert not (first.directory / "config.py").exists()
     assert not (first.directory / "config").exists()

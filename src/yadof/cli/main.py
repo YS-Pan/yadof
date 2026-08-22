@@ -438,7 +438,8 @@ def _history_clear_command(args: argparse.Namespace) -> int:
     if not _confirm_destructive(
         confirmed=args.yes,
         prompt=(
-            f"Clear jobs, recorded history, and surrogate checkpoints for "
+            f"Clear jobs, recorded history, optimization state, and surrogate "
+            f"checkpoints for "
             f"workspace {Path(args.workspace).resolve()}?"
         ),
     ):
@@ -874,7 +875,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     history_clear = history_subparsers.add_parser(
         "clear",
-        help="clear jobs, records, and surrogate checkpoints",
+        help="clear jobs, records, optimization state, and surrogate checkpoints",
         description=(
             "Permanently clear runtime optimization history for one explicit "
             "workspace. This never runs from init or upgrade."

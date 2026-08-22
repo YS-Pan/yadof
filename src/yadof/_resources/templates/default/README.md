@@ -10,6 +10,12 @@ task-variable calculation and calls package worker support for invariant lifecyc
 metadata, execute identity, paths, and transport. It selects no simulator, vendor,
 model/input filename, adapter, or physical result.
 
+The template's fixed `submit/` root contains current cost interpretation and the
+complete optimization composition. Its `optimization.py` composes GPSAF with
+objective-count-selected pymoo GA/NSGA-III and conditional INR. The evaluate-side
+`job_template/` retains canonical parameters and workflow only; prepared jobs never
+receive submit sources.
+
 An unchanged initialized copy is the only task that `yadof smoke-test` runs without
 `--real-task`. Prepared jobs receive package worker support separately; the
 workspace template does not contain `worker_misc.py` or other framework runtime

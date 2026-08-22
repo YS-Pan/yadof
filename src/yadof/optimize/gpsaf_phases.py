@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import importlib
 import os
 import random
 from typing import Sequence
-
-from ..recorded_data.session import CampaignSession
-from ..task_snapshot import GenerationTaskSnapshot
-from ..workspace import WorkspaceContext
 
 from .gpsaf_pymoo import (
     PymooContext,
@@ -19,10 +14,9 @@ from .gpsaf_pymoo import (
 )
 from .gpsaf_misc import (
     CandidateRecord,
-    HistoryRecord,
-    Population,
     history_keys,
 )
+from .strategy import GenerationContext, HistoryRecord, Population
 
 
 def _progress(message: str) -> None:
@@ -30,44 +24,15 @@ def _progress(message: str) -> None:
         print(f"[yadof] {message}", flush=True)
 
 
-def try_train_surrogate(workspace: WorkspaceContext, generation_index: int):
-    _progress(f"surrogate: training generation {int(generation_index)} start")
-    try:
-        surrogate_api = importlib.import_module("yadof.surrogate.api")
-        state = surrogate_api.train(workspace, generation_index=int(generation_index))
-    except Exception as exc:
-        _progress(f"surrogate: training generation {int(generation_index)} failed: {exc.__class__.__name__}: {exc}")
-        return None, f"{exc.__class__.__name__}: {exc}"
-    history = getattr(state, "train_history", {}) or {}
-    sample_count = history.get("train_sample_count", "?")
-    query_count = history.get("query_count", "?")
-    member_count = history.get("member_count", "?")
-    _progress(
-        f"surrogate: training generation {int(generation_index)} finished; "
-        f"samples={sample_count}; queries={query_count}; members={member_count}"
-    )
-    return state, None
-
-
 def ensure_surrogate_fresh_enough(
-    workspace: WorkspaceContext,
-    generation_index: int,
-    *,
-    session: CampaignSession | None = None,
-    snapshot: GenerationTaskSnapshot | None = None,
+    surrogate,
+    context: GenerationContext,
 ) -> dict[str, object]:
     try:
-        surrogate_api = importlib.import_module("yadof.surrogate.api")
-        func = getattr(surrogate_api, "ensure_fresh_enough", None)
+        func = getattr(surrogate, "ensure_fresh_enough", None)
         if not callable(func):
             return {"surrogate_training_gate": "unavailable"}
-        training_data = _session_training_data(session, snapshot)
-        status = func(
-            workspace,
-            int(generation_index),
-            _config=None if snapshot is None else snapshot.config,
-            _training_data=training_data,
-        )
+        status = func(context)
     except Exception as exc:  # noqa: BLE001 - a stale model should fall back, not stop the generation.
         return {
             "surrogate_training_gate": "failed",
@@ -81,68 +46,42 @@ def ensure_surrogate_fresh_enough(
     }
 
 
-def surrogate_state_ready(workspace: WorkspaceContext) -> bool:
+def surrogate_state_ready(surrogate, context: GenerationContext) -> bool:
     try:
-        surrogate_api = importlib.import_module("yadof.surrogate.api")
-        func = getattr(surrogate_api, "has_trained_state", None)
-        return True if not callable(func) else bool(func(workspace))
+        func = getattr(surrogate, "has_trained_state", None)
+        return True if not callable(func) else bool(func(context))
     except Exception:
         return False
 
 
 def notify_surrogate_after_submission(
-    workspace: WorkspaceContext,
-    generation_index: int,
-    *,
-    session: CampaignSession | None = None,
-    snapshot: GenerationTaskSnapshot | None = None,
+    surrogate,
+    context: GenerationContext,
 ) -> None:
     try:
-        surrogate_api = importlib.import_module("yadof.surrogate.api")
-        func = getattr(surrogate_api, "start_training", None)
+        func = getattr(surrogate, "start_training", None)
         if callable(func):
-            training_data = _session_training_data(session, snapshot)
-            status = func(
-                workspace,
-                generation_index=int(generation_index),
-                block=False,
-                _config=None if snapshot is None else snapshot.config,
-                _training_data=training_data,
-            )
+            status = func(context)
             _progress(
-                f"surrogate: background training request generation {int(generation_index)}; "
+                "surrogate: background training request generation "
+                f"{context.generation_index}; "
                 f"action={getattr(status, 'action', 'unknown')}"
             )
-        else:
-            surrogate_api.train(workspace, generation_index=int(generation_index))
     except Exception as exc:  # noqa: BLE001 - submitted jobs should keep running if scheduling fails.
         _progress(f"surrogate: background training request failed: {exc.__class__.__name__}: {exc}")
 
 
-def notify_surrogate_after_evaluation(
-    workspace: WorkspaceContext, generation_index: int
-) -> None:
-    notify_surrogate_after_submission(workspace, generation_index)
-
-
-def _session_training_data(
-    session: CampaignSession | None,
-    snapshot: GenerationTaskSnapshot | None,
-):
-    if session is None or snapshot is None:
-        return None
-    surrogate_runtime = importlib.import_module("yadof.surrogate.runtime")
-    return surrogate_runtime.training_data_from_session(session, snapshot)
-
 def predict_records(
-    workspace: WorkspaceContext, records: Sequence[CandidateRecord]
+    surrogate,
+    context: GenerationContext,
+    records: Sequence[CandidateRecord],
 ) -> list[CandidateRecord]:
     if not records:
         return []
     _progress(f"surrogate: predicting {len(records)} candidates")
-    surrogate_api = importlib.import_module("yadof.surrogate.api")
-    raw = surrogate_api.predict_population(
-        workspace, tuple(record.x for record in records)
+    raw = surrogate.predict_population(
+        context,
+        tuple(record.x for record in records),
     )
     predicted = []
     for record, item in zip(records, raw):
@@ -182,6 +121,9 @@ def run_alpha_phase(
     batch_target: int,
     used_keys: set[tuple[float, ...]],
     rng: random.Random,
+    *,
+    surrogate,
+    generation_context: GenerationContext,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
     predicted_pool: list[CandidateRecord] = []
     alpha = max(
@@ -200,7 +142,7 @@ def run_alpha_phase(
         )
         if not pool:
             break
-        predicted_pool.extend(predict_records(context.config.workspace, pool))
+        predicted_pool.extend(predict_records(surrogate, generation_context, pool))
         batches_completed += 1
 
     if not predicted_pool:
@@ -223,6 +165,9 @@ def run_beta_phase(
     batch_target: int,
     used_keys: set[tuple[float, ...]],
     rng: random.Random,
+    *,
+    surrogate,
+    generation_context: GenerationContext,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
     beta = max(
         0, int(getattr(context.config, "OPTIMIZE_SURROGATE_BETA", 2))
@@ -252,7 +197,7 @@ def run_beta_phase(
         )
         if not pool:
             break
-        records = predict_records(context.config.workspace, pool)
+        records = predict_records(surrogate, generation_context, pool)
         iterations += 1
         candidate_count += len(records)
 
@@ -312,6 +257,8 @@ def surrogate_population(
     history: tuple[HistoryRecord, ...],
     *,
     context: PymooContext,
+    generation_context: GenerationContext,
+    surrogate,
     generation_index: int,
     population_size: int,
     seed: int,
@@ -320,7 +267,7 @@ def surrogate_population(
         f"surrogate: selecting population; history={len(history)}; "
         f"population_size={int(population_size)}"
     )
-    if not surrogate_state_ready(context.config.workspace):
+    if not surrogate_state_ready(surrogate, generation_context):
         return None, {
             "surrogate_error": "no_trained_surrogate",
             "surrogate_mode": "waiting_for_first_staggered_training",
@@ -360,7 +307,15 @@ def surrogate_population(
         if surrogate_target <= 0:
             return tuple(record.x for record in exploration_records[: int(population_size)]), diagnostics
 
-        anchors, alpha_info = run_alpha_phase(context, base_state, surrogate_target, used_keys, rng)
+        anchors, alpha_info = run_alpha_phase(
+            context,
+            base_state,
+            surrogate_target,
+            used_keys,
+            rng,
+            surrogate=surrogate,
+            generation_context=generation_context,
+        )
         diagnostics.update(alpha_info)
         if not anchors:
             return None, {**diagnostics, "surrogate_error": "no_alpha_candidates"}
@@ -372,6 +327,8 @@ def surrogate_population(
             surrogate_target,
             used_keys,
             rng,
+            surrogate=surrogate,
+            generation_context=generation_context,
         )
         diagnostics.update(beta_info)
         final_records = list(final_records) + list(exploration_records)

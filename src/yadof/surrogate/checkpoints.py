@@ -17,10 +17,10 @@ from .modeling import INRTrainConfig
 from .types import RawDataSchema, SurrogateState
 
 
-CHECKPOINT_FORMAT_VERSION = 1
+CHECKPOINT_FORMAT_VERSION = 2
 SURROGATE_METHOD = "conditional_inr"
 TRAINING_POLICY = "real_field_balanced"
-COMPONENT_NAMESPACE = "surrogate"
+COMPONENT_NAMESPACE = "conditional-inr"
 
 
 def _array_signature(values: np.ndarray) -> dict[str, object]:
@@ -34,6 +34,7 @@ def _array_signature(values: np.ndarray) -> dict[str, object]:
 
 def semantic_state_signature(
     *,
+    strategy_signature: str,
     parameter_names: tuple[str, ...],
     parameter_definition_signature: Mapping[str, object],
     schema: RawDataSchema | None,
@@ -42,6 +43,7 @@ def semantic_state_signature(
 ) -> str:
     payload = {
         "format_version": CHECKPOINT_FORMAT_VERSION,
+        "strategy_signature": str(strategy_signature),
         "surrogate_method": SURROGATE_METHOD,
         "training_policy": TRAINING_POLICY,
         "parameter_names": list(parameter_names),
@@ -74,25 +76,25 @@ def semantic_state_signature(
     return hashlib.sha256(encoded).hexdigest()
 
 
-def run_namespace_for_signature(state_signature: str) -> str:
-    signature = str(state_signature).lower()
+def run_namespace_for_signature(strategy_signature: str) -> str:
+    signature = str(strategy_signature).lower()
     if len(signature) != 64 or any(
         char not in "0123456789abcdef" for char in signature
     ):
         raise ValueError(
-            "surrogate state signature must be 64 lowercase hexadecimal characters"
+            "strategy signature must be 64 lowercase hexadecimal characters"
         )
-    return f"semantic-{signature[:16]}"
+    return f"strategy-{signature[:16]}"
 
 
 def new_publication_paths(
     checkpoint_dir: Path,
     *,
     generation_index: int,
-    state_signature: str,
+    strategy_signature: str,
 ) -> tuple[Path, Path, Path, Path, str, str]:
     root = Path(checkpoint_dir)
-    run_namespace = run_namespace_for_signature(state_signature)
+    run_namespace = run_namespace_for_signature(strategy_signature)
     component_namespace = COMPONENT_NAMESPACE
     namespace_dir = (
         root
@@ -123,7 +125,16 @@ def validate_manifest_identity(payload: object) -> dict[str, object]:
     if str(payload["training_policy"]) != TRAINING_POLICY:
         raise ValueError("unsupported surrogate checkpoint training policy")
     signature = str(payload["state_signature"])
-    if str(payload["run_namespace"]) != run_namespace_for_signature(signature):
+    if len(signature) != 64 or any(
+        char not in "0123456789abcdef" for char in signature
+    ):
+        raise ValueError(
+            "surrogate state signature must be 64 lowercase hexadecimal characters"
+        )
+    strategy_signature = str(payload["strategy_signature"])
+    if str(payload["run_namespace"]) != run_namespace_for_signature(
+        strategy_signature
+    ):
         raise ValueError(
             "surrogate checkpoint run namespace does not match its signature"
         )
@@ -305,6 +316,7 @@ def _checkpoint_payload(
         "format_version": CHECKPOINT_FORMAT_VERSION,
         "surrogate_method": SURROGATE_METHOD,
         "training_policy": TRAINING_POLICY,
+        "strategy_signature": state.strategy_signature,
         "state_signature": state.state_signature,
         "run_namespace": state.run_namespace,
         "component_namespace": state.component_namespace,
@@ -328,7 +340,7 @@ def _checkpoint_payload(
         "train_history": state.train_history,
         "note": (
             "The real-field-balanced conditional INR predicts full rawData; "
-            "current costs are derived through job_template.calc_cost. "
+            "current costs are derived through submit/calc_cost.py. "
             "Ensemble spread is diagnostic, not calibrated confidence."
         ),
     }

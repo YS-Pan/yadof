@@ -11,7 +11,7 @@ sequenceDiagram
     participant S as worker_misc.py
     participant F as common finalizer
     participant R as bounded segment writer
-    participant C as calc_cost.py
+    participant C as submit/calc_cost.py
     O->>E: normalized population + workspace
     loop each candidate
         E->>J: copy task + assign self-contained parameters
@@ -183,8 +183,9 @@ stay distinct and converge on normal per-individual failure isolation.
 - One OS byte-range lock permits one campaign per workspace. One bounded daemon
   writer publishes new standard-ZIP segments by atomic rename and never opens an
   older segment in the hot write path.
-- Surrogate training scheduling permits at most one background trainer per
-  workspace and bounds model lag.
+- Surrogate training scheduling permits at most one background trainer for the one
+  active workspace strategy. A strategy switch waits for it, releases memory, and
+  retains its `runs/<strategy>/components/conditional-inr/` artifacts.
 - Population results are reassembled in original input order, independent of worker
   completion order.
 - Fast workers never write recorded data. The parent is the only finalizer and the

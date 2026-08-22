@@ -47,9 +47,10 @@ stores user state below site-packages.
 
 ## Workspace
 
-Each workspace owns root `config.py`, `job_template/`, prepared jobs, recorded
-evidence, checkpoints, logs, and tool output. `parameters_constraints.py`,
-`workflow.py`, `calc_cost.py`, copied adapters, models, and assets are task-owned.
+Each workspace owns root `config.py`, fixed submit-only `submit/`, evaluate-side
+`job_template/`, prepared jobs, recorded evidence, checkpoints, logs, and tool
+output. `submit/calc_cost.py`, `submit/optimization.py`, canonical parameters,
+workflow, copied adapters, models, and assets are task-owned.
 Their executable logic is limited to behavior that changes with the optimization
 task; they call package support for invariant behavior. Relative configured paths
 are resolved from this explicit root.
@@ -60,7 +61,7 @@ A job is the execution boundary. It contains the copied task payload, one assign
 self-contained parameter snapshot, package-provided `worker_misc.py` owning the
 fixed worker lifecycle, preparation metadata, an initially empty `rawData/`, and
 later runtime artifacts. It contains no
-copied framework config tree, `calc_cost.py`, yadof wheel/archive/package, or
+copied framework config tree, any `submit/` source, yadof wheel/archive/package, or
 authoritative `cost.json`.
 
 ## Execution and persistence

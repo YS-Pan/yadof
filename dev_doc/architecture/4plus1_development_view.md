@@ -13,20 +13,20 @@ workspaces are user-owned and normally live outside package source.
 src/yadof/                 installed framework
   cli/                     command routing
   workspace/               context/init/check/marker
-  job_template/            parameter, rawData, cost contracts
+  job_template/            parameter, rawData, and submit-cost gateways
   evaluate_manager/        fast/job/local/HTCondor execution
     finalizer.py           common current-cost and recorder-offer boundary
     fast_runner.py         reusable isolated no-job-folder fast workers
     fast_resources.py      fast-specific host-capacity planning
     process_control.py     shared exact process-tree termination
-  task_snapshot.py         immutable generation task capture/fingerprints
+  task_snapshot.py         immutable two-root generation capture/fingerprints
   recorded_data/           campaign session and immutable segments
     session.py             hot history, bounded writer, counters, lock lifetime
     segment_store.py       standard-ZIP publication/tolerant discovery
     records.py             owned envelopes and immutable event files
     query.py               partial/corruption-tolerant history
-  optimize/                candidate mechanics and campaign loop
-  surrogate/               rawData-first model and scheduling
+  optimize/                campaign engine + composable strategy components/state
+  surrogate/               lazy conditional-INR component/model/scheduling
   tools/                   optional user-launched utilities
     cost_viewer/           reusable cost analysis/rendering and dev_doc
     surrogate_viewer/      optional read-only GUI/text inspection and dev_doc
@@ -54,7 +54,8 @@ No module calculates mutable user paths relative to package `__file__`.
 
 Code placement follows variability: behavior invariant across optimization tasks
 belongs in yadof; behavior that changes with simulator, model, rawData meaning, or
-objective policy belongs in workspace `workflow.py`/`calc_cost.py`. Execute-side
+objective policy belongs in workspace `job_template/workflow.py` and
+`submit/calc_cost.py`; complete composition belongs in `submit/optimization.py`. Execute-side
 fixed behavior is shipped through the package-owned `worker_misc.py`, while
 submit-side reusable cost/rawData behavior is exposed through
 `yadof.job_template`. Task modules call these surfaces and do not copy them.

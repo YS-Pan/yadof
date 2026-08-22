@@ -17,9 +17,10 @@ from yadof.workspace.init import WorkspaceInitError, init_workspace
 EXPECTED_WORKSPACE_FILES = {
     ".yadof/workspace.json",
     "config.py",
-    "job_template/calc_cost.py",
     "job_template/parameters_constraints.py",
     "job_template/workflow.py",
+    "submit/calc_cost.py",
+    "submit/optimization.py",
 }
 
 FORBIDDEN_FRAMEWORK_PATHS = {
@@ -64,7 +65,7 @@ def test_init_empty_directory_creates_generic_workspace_and_check_passes(
     assert marker == {
         "rawdata_schema_version": 1,
         "template_name": "default",
-        "template_version": 1,
+        "template_version": 2,
         "workspace_schema_version": 1,
         "yadof_version": yadof.__version__,
     }
@@ -92,7 +93,7 @@ def test_generic_starter_task_logic_is_inert_during_module_load(tmp_path: Path) 
     workflow_source = (root / "job_template/workflow.py").read_text(
         encoding="utf-8"
     )
-    cost_source = (root / "job_template/calc_cost.py").read_text(encoding="utf-8")
+    cost_source = (root / "submit/calc_cost.py").read_text(encoding="utf-8")
     assert "run_workflow(_evaluate)" in workflow_source
     assert "_execute_machine_name" not in workflow_source
     assert "write_rawdata_transfer_zip" not in workflow_source
@@ -102,7 +103,11 @@ def test_generic_starter_task_logic_is_inert_during_module_load(tmp_path: Path) 
 def test_generic_starter_cost_normalizes_physical_values(tmp_path: Path) -> None:
     root = tmp_path / "workspace"
     init_workspace(root)
-    cost_module = load_task_module(root, "calc_cost")
+    cost_module = load_task_module(
+        root,
+        "calc_cost",
+        source_root=root / "submit",
+    )
 
     def sample(value: float):
         array = np.asarray(value, dtype=float)

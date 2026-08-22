@@ -12,6 +12,7 @@ from typing import Mapping, Sequence
 
 from ..config import load_config
 from ..job_template import validate_task
+from ..optimize.strategy import load_workspace_strategy
 from ..resources import ResourceNotFoundError, read_template_manifest, template_root
 from .context import WorkspaceContext
 from .manifest import (
@@ -221,6 +222,7 @@ def _validate_staged_workspace(stage: Path, template: WorkspaceTemplate) -> None
         raise WorkspaceInitError("staged workspace marker does not match its template")
     config = load_config(stage)
     validate_task(config.workspace)
+    load_workspace_strategy(config.workspace, config=config)
     workflow_path = config.workspace.job_template_dir / "workflow.py"
     ast.parse(workflow_path.read_text(encoding="utf-8"), filename=str(workflow_path))
 

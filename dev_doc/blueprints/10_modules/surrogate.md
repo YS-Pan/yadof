@@ -6,7 +6,9 @@
 rawData query coordinates. It trains a conditional implicit-neural-representation
 ensemble, reconstructs predicted rawData, calculates current costs through
 `job_template`, exposes per-objective member min/max spread diagnostics, and
-publishes recoverable checkpoints/metadata.
+publishes recoverable checkpoints/metadata. Its lightweight public factory is a
+narrow rawData-surrogate component injected by workspace-owned GPSAF composition;
+non-surrogate strategies do not load or create this state.
 
 ## Training data and model
 
@@ -43,21 +45,24 @@ does not affect selected candidates.
 ## Scheduling and recovery
 
 Runtime state and training schedules are keyed by effective workspace/checkpoint
-paths. At most one background training task runs per workspace. Real jobs are
+paths plus active strategy and `conditional-inr` component identities. At most one
+background training task runs for the active workspace strategy. Real jobs are
 submitted first, then training may use the waiting interval; maximum generation lag
 bounds stale models. An asynchronous trainer receives an owned task snapshot and
-training bundle rather than reopening mutable task files. Clearing one workspace
-waits/resets only that workspace.
+training bundle rather than reopening mutable task files. Switching strategies
+waits and releases memory while retaining disk state; explicit history clearing
+removes all derived namespaces separately.
 
 Checkpoints use an explicit format version, `conditional_inr` method,
 `real_field_balanced` policy, semantic state signature, and run/component namespace.
-The signature includes parameter ranges/levels because they define normalized-input
+The signature includes the strategy signature and parameter ranges/levels because they define normalized-input
 meaning. Publication renames the complete artifact tree, writes a root convenience
 pointer, then atomically writes the unique namespace manifest as the commit record.
-Readers recover committed publications from the matching semantic namespace; a
+Readers recover committed publications only from
+`runs/<strategy>/components/conditional-inr/`; a
 failed root/commit write cannot expose a partial model, and switching away and back
 can recover the retained compatible publication. Incompatible and interrupted
-artifacts remain retained but inactive. Current `calc_cost.py` is reapplied to
+artifacts remain retained but inactive. Current `submit/calc_cost.py` is reapplied to
 predicted rawData after recovery, so cost policy is never frozen in a checkpoint.
 
 ## Invariants

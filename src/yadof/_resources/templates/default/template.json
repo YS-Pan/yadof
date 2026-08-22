@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "default",
-  "template_version": 1,
+  "template_version": 2,
   "rawdata_schema_version": 1,
   "description": "Minimal runnable, software-neutral pure-Python workspace.",
   "files": [
@@ -18,8 +18,12 @@
       "destination": "job_template/workflow.py"
     },
     {
-      "source": "workspace/job_template/calc_cost.py",
-      "destination": "job_template/calc_cost.py"
+      "source": "workspace/submit/calc_cost.py",
+      "destination": "submit/calc_cost.py"
+    },
+    {
+      "source": "workspace/submit/optimization.py",
+      "destination": "submit/optimization.py"
     }
   ]
 }

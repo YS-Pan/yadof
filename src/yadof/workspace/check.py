@@ -18,6 +18,7 @@ from ..job_template import (
     validate_fast_task,
     validate_task,
 )
+from ..optimize.strategy import load_workspace_strategy
 from .context import WorkspaceContext, resolve_workspace
 from .init import load_workspace_template
 from .manifest import (
@@ -173,6 +174,7 @@ def _check_config(
 
 
 def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
+    task = None
     try:
         task = validate_task(config.workspace)
     except (Exception, SystemExit) as exc:
@@ -184,6 +186,20 @@ def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
             "task modules",
             f"{task.variable_count} parameter(s), {task.objective_count} objective(s)",
         )
+
+    if task is not None:
+        try:
+            definition = load_workspace_strategy(config.workspace, config=config)
+        except (Exception, SystemExit) as exc:
+            _finding(findings, "error", "optimization strategy", str(exc))
+        else:
+            _finding(
+                findings,
+                "ok",
+                "optimization strategy",
+                f"constructed {definition.source_path}; semantic signature "
+                f"{definition.signature[:16]}",
+            )
 
     if str(config.EVALUATION_MODE) == "fast":
         try:

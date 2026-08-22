@@ -67,6 +67,9 @@ def test_packaged_submit_file_runs_workflow_directly_with_minimal_payload(
 
     workspace = _workspace(tmp_path, "submit")
     (workspace / "job_template" / "model with spaces.aedt").write_bytes(b"model")
+    (workspace / "submit" / "submit_helper.py").write_text(
+        "VALUE = 'submit-only'\n", encoding="utf-8"
+    )
     config = load_config(workspace)
     job = prepare_job(
         workspace,
@@ -98,6 +101,9 @@ def test_packaged_submit_file_runs_workflow_directly_with_minimal_payload(
     assert "sitecustomize.py" not in transfer
     assert "yadof_worker_package.zip" not in transfer
     assert "yadof_worker_config.json" not in transfer
+    assert "calc_cost.py" not in transfer
+    assert "optimization.py" not in transfer
+    assert "submit_helper.py" not in transfer
     assert "model with spaces.aedt" in transfer
     assert '"model with spaces.aedt"' not in transfer
     assigned = (job.directory / "parameters_constraints.py").read_text(
@@ -105,6 +111,8 @@ def test_packaged_submit_file_runs_workflow_directly_with_minimal_payload(
     )
     assert "class Parameter:" in assigned
     assert "import yadof" not in assigned
+    assert not (job.directory / "optimization.py").exists()
+    assert not (job.directory / "submit_helper.py").exists()
     assert not any(path.name.startswith("yadof_worker") for path in job.directory.iterdir())
 
 

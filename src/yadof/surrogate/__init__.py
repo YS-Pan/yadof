@@ -1,4 +1,7 @@
 from .api import (
+    ConditionalINRComponent,
+    conditional_inr,
+    deactivate_workspace,
     ensure_fresh_enough,
     has_trained_state,
     latest_state_generation,
@@ -9,6 +12,9 @@ from .api import (
 )
 
 __all__ = [
+    "ConditionalINRComponent",
+    "conditional_inr",
+    "deactivate_workspace",
     "ensure_fresh_enough",
     "has_trained_state",
     "latest_state_generation",

@@ -23,11 +23,14 @@
 ## Non-Obvious Techniques
 - Prediction must not auto-train. If `_STATE` is absent, prediction raises and optimizer fallback handles it.
 - Training metadata is recorded after checkpoint writing so metadata can point at completed artifacts.
-- Recovery scans only the current semantic run/component namespace and accepts a
+- State keys include effective workspace paths, active strategy signature, and
+  `conditional-inr`; direct API calls without an active strategy use one stable
+  standalone namespace.
+- Recovery scans only the active strategy/component namespace and accepts a
   committed unique manifest whose artifacts, signature, parameter normalization
   definition, query table, and current training configuration all agree. Compatible
   return can recover a retained publication even when the root convenience pointer
-  names another strategy. Incompatible artifacts are left untouched and cause
+  names another strategy. Incompatible/inactive artifacts are left untouched and cause
   cold-train behavior.
 - Stored-grid queries reuse the exact legacy coordinate normalization and scaler
   entries. Off-grid queries linearly interpolate target mean/scale, clamp scaler

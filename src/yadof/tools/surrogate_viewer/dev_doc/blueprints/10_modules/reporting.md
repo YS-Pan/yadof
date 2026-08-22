@@ -9,10 +9,11 @@ humans and AI agents without requiring a desktop window or image interpretation.
 
 - Build a schema-versioned workspace summary from the viewer backend without
   constructing a checkpoint predictor.
-- Include checkpoint generation/sample/member counts, real-field-balanced policy,
-  semantic state signature, completed-result counts, parameter ranges, objective
-  names, and bounded rawData dimension spans. Do not present training-fit error as
-  trust evidence.
+- Include active strategy/run/component identity, checkpoint
+  generation/sample/member counts, real-field-balanced policy, semantic state
+  signature, completed-result counts, parameter ranges, objective names, and
+  bounded rawData dimension spans. Do not present training-fit error as trust
+  evidence.
 - Resolve `all-costs`, `cost:NAME`, `all-rawdata`, and `rawdata:NAME` exactly
   against current task names before expensive inference.
 - Run exactly one complete backend error audit for a valid audit command.
@@ -23,8 +24,9 @@ humans and AI agents without requiring a desktop window or image interpretation.
 
 ## I/O Format
 
-Both payloads contain `schema_version`, `analysis`, and the resolved absolute
-workspace. Summary payloads contain metadata lists. Audit payloads contain sample
+Both payloads contain `schema_version`, `analysis`, the resolved absolute
+workspace, and strategy/run/component scope. Summary payloads contain metadata
+lists. Audit payloads contain sample
 fraction/seed, axis generations, per-row sample counts, resolved quantity, and one
 or two matrices. Stdout contains only the final report; optional audit progress is
 a separate stderr concern owned by CLI routing.

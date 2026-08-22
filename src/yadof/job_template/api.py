@@ -24,6 +24,7 @@ from .rawdata_contract import RawDataItem
 WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
 PARAMETERS_FILE_NAME = "parameters_constraints.py"
 FAST_EVALUATION_MODULE_NAME = "evaluation"
+CALC_COST_MODULE_NAME = "calc_cost"
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,8 +175,12 @@ def _objective_names_from_module(module: object, source_path: Path) -> tuple[str
 
 def get_objective_names(workspace: WorkspaceLike) -> tuple[str, ...]:
     context = _workspace(workspace)
-    source_path = context.job_template_dir / "calc_cost.py"
-    with task_module(context, "calc_cost") as module:
+    source_path = context.submit_dir / "calc_cost.py"
+    with task_module(
+        context,
+        CALC_COST_MODULE_NAME,
+        source_root=context.submit_dir,
+    ) as module:
         return _objective_names_from_module(module, source_path)
 
 
@@ -343,8 +348,12 @@ def calculate_cost(
     """Derive costs from rawData with the workspace's freshly loaded task code."""
 
     context = _workspace(workspace)
-    source_path = context.job_template_dir / "calc_cost.py"
-    with task_module(context, "calc_cost") as module:
+    source_path = context.submit_dir / "calc_cost.py"
+    with task_module(
+        context,
+        CALC_COST_MODULE_NAME,
+        source_root=context.submit_dir,
+    ) as module:
         names = _objective_names_from_module(module, source_path)
         calculate_sample = getattr(module, "calculate_cost", None)
         if not callable(calculate_sample):
@@ -371,8 +380,12 @@ def task_cost_interpreter(
 
     context = _workspace(workspace)
     parameters, _constraints = _parameter_payload(context)
-    source_path = context.job_template_dir / "calc_cost.py"
-    with task_module(context, "calc_cost") as module:
+    source_path = context.submit_dir / "calc_cost.py"
+    with task_module(
+        context,
+        CALC_COST_MODULE_NAME,
+        source_root=context.submit_dir,
+    ) as module:
         names = _objective_names_from_module(module, source_path)
         calculate_sample = getattr(module, "calculate_cost", None)
         if not callable(calculate_sample):
@@ -402,8 +415,12 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
         raise FileNotFoundError(f"task workflow does not exist: {workflow_path}")
     parameters, constraints = _parameter_payload(context)
     objectives = get_objective_names(context)
-    source_path = context.job_template_dir / "calc_cost.py"
-    with task_module(context, "calc_cost") as module:
+    source_path = context.submit_dir / "calc_cost.py"
+    with task_module(
+        context,
+        CALC_COST_MODULE_NAME,
+        source_root=context.submit_dir,
+    ) as module:
         if callable(getattr(module, "rawdata_importance_weights", None)):
             raise TypeError(
                 f"{source_path} defines removed rawdata_importance_weights(); "
@@ -419,6 +436,7 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
 
 __all__ = [
     "CostInterpreter",
+    "CALC_COST_MODULE_NAME",
     "FAST_EVALUATION_MODULE_NAME",
     "PARAMETERS_FILE_NAME",
     "TaskDefinition",

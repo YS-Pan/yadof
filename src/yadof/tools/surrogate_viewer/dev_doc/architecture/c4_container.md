@@ -13,7 +13,8 @@ flowchart LR
     Backend --> Yadof["Enclosing yadof package"]
     Backend --> Workspace["Selected yadof workspace"]
     Workspace --> Records["Completed records + rawData"]
-    Workspace --> Checkpoints["Checkpoint JSON + model artifacts"]
+    Workspace --> Strategy["Active strategy pointer"]
+    Strategy --> Checkpoints["Scoped checkpoint JSON + model artifacts"]
     Yadof --> Torch["PyTorch device inference"]
     Backend --> App
 ```
@@ -45,8 +46,9 @@ behavior rather than application logic.
 
 `backend/` is the read-only adapter from the viewer to its enclosing yadof package:
 
-- `workspace.py` loads records and task definitions, caches one interactive
-  predictor, samples history, and orchestrates audit aggregation.
+- `workspace.py` loads records, task definitions, and the active strategy scope,
+  caches one interactive predictor, samples history, and orchestrates audit
+  aggregation.
 - `checkpoints.py` discovers checkpoint metadata, validates compatibility, loads
   artifacts, and performs batched inference.
 - `rawdata.py` copies templates, flattens true samples against checkpoint slots,
@@ -58,9 +60,10 @@ behavior rather than application logic.
 
 ## Data Ownership
 
-Workspace records and rawData are external durable evidence. Checkpoint artifacts
-are external read-only model state. Predicted samples, member samples, objective
-values, and error aggregates are derived session memory.
+Workspace records and rawData are external durable evidence. Strategy-scoped
+checkpoint artifacts are external read-only model state; inactive namespaces stay
+retained but undiscovered. Predicted samples, member samples, objective values,
+and error aggregates are derived session memory.
 
 The interactive path caches at most one loaded predictor. The heatmap path releases
 each audit predictor after its checkpoint column and retains only aggregate

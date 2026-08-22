@@ -19,8 +19,10 @@ from yadof.surrogate.modeling import (
     predict_conditional_inr_members,
 )
 from yadof.surrogate.checkpoints import (
+    COMPONENT_NAMESPACE,
     resolve_artifact_dir,
     resolve_namespace_manifest_path,
+    run_namespace_for_signature,
     semantic_state_signature,
     validate_manifest_identity,
 )
@@ -54,6 +56,7 @@ def discover_checkpoints(
     checkpoint_dir: Path,
     *,
     parameter_definition_signature: Mapping[str, object] | None = None,
+    strategy_signature: str | None = None,
 ) -> tuple[CheckpointInfo, ...]:
     """Return valid checkpoint descriptors in increasing generation order."""
 
@@ -62,15 +65,24 @@ def discover_checkpoints(
         if parameter_definition_signature is None
         else _json_normalized_mapping(parameter_definition_signature)
     )
-    checkpoints_by_generation: dict[int, CheckpointInfo] = {}
+    checkpoints_by_generation: dict[tuple[str, int], CheckpointInfo] = {}
+    run_pattern = (
+        "*"
+        if strategy_signature is None
+        else run_namespace_for_signature(strategy_signature)
+    )
     paths = Path(checkpoint_dir).glob(
-        "runs/*/components/surrogate/generation_*.json"
+        f"runs/{run_pattern}/components/{COMPONENT_NAMESPACE}/generation_*.json"
     )
     for path in sorted(paths):
         try:
             payload = validate_manifest_identity(
                 json.loads(path.read_text(encoding="utf-8"))
             )
+            if strategy_signature is not None and str(
+                payload["strategy_signature"]
+            ) != str(strategy_signature):
+                continue
             generation = int(payload["generation_index"])
             sample_count = int(payload["sample_count"])
             if (
@@ -112,14 +124,18 @@ def discover_checkpoints(
             member_count=member_count,
             payload=payload,
         )
-        previous = checkpoints_by_generation.get(generation)
+        key = (str(payload["run_namespace"]), generation)
+        previous = checkpoints_by_generation.get(key)
         if previous is None or str(payload["publication_id"]) > str(
             previous.payload["publication_id"]
         ):
-            checkpoints_by_generation[generation] = candidate
+            checkpoints_by_generation[key] = candidate
     return tuple(
-        checkpoints_by_generation[generation]
-        for generation in sorted(checkpoints_by_generation)
+        checkpoints_by_generation[key]
+        for key in sorted(
+            checkpoints_by_generation,
+            key=lambda item: (item[1], item[0]),
+        )
     )
 
 
@@ -257,6 +273,7 @@ class CheckpointPredictor:
                 "checkpoint model training config does not match its manifest"
             )
         expected_signature = semantic_state_signature(
+            strategy_signature=str(payload["strategy_signature"]),
             parameter_names=self.parameter_names,
             parameter_definition_signature=dict(
                 payload["parameter_definition_signature"]

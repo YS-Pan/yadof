@@ -17,7 +17,8 @@ Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 `FAST_EVALUATION_SCRATCH_DIR`, `OPTIMIZE_POPULATION_SIZE`,
 `OPTIMIZE_SMOKE_TEST_ENABLED`, HTCondor request/calibration/timeout settings, GPSAF
 alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
-shape stay in `job_template/`.
+shape stay in fixed `submit/` and evaluate-side `job_template/` roots. Complete
+strategy selection stays only in `submit/optimization.py`, never in config.
 
 Surrogate training uses only recorded real rawData rows (or seeded bootstrap rows
 drawn from them). It does not synthesize mixup targets and does not accept task-owned
@@ -93,8 +94,8 @@ worker tree and the next queued individual uses a replacement worker. A smoke st
 disables the timeout and caps fast at one worker.
 
 `FAST_EVALUATION_SCRATCH_DIR` defaults to `.yadof/fast_scratch`. It may be absolute
-or workspace-relative but must not overlap `job_template`, `jobs`, or
-`recorded_data`. Candidate subdirectories are temporary and normally leave the root
+or workspace-relative but must not overlap `submit`, `job_template`, `jobs`,
+`recorded_data`, checkpoints, logs, or tool output. Candidate subdirectories are temporary and normally leave the root
 empty. A cleanup failure is persisted as `scratch_cleanup_error`; inspect it rather
 than silently deleting evidence elsewhere. Fast subprocess environment overrides
 are applied only inside a worker evaluation and restored before worker reuse.
@@ -204,8 +205,9 @@ HTCondor but never installs or repairs it.
 
 Task mutability is intentional. Between generations, the user may change:
 
-- `job_template/calc_cost.py`, including objective names, meanings, and thresholds,
+- `submit/calc_cost.py`, including objective names, meanings, and thresholds,
   while preserving the objective count;
+- `submit/optimization.py` and its submit-local helpers;
 - `job_template/parameters_constraints.py`, including ranges and levels, while
   preserving parameter names, order, and count;
 - `config.py`;
@@ -226,7 +228,8 @@ that are not yet supported by this workflow. Use a new workspace/campaign for su
 a structural change until that separate feature is implemented.
 
 Use a generation boundary as the coherence point. Yadof takes one immutable task
-snapshot before the first candidate in each generation. An edit made while that
+snapshot of both complete source roots before the first candidate in each
+generation. An edit made while that
 generation runs cannot affect any of its candidates and is picked up at the next
 boundary. You may still split commands when you want an explicit manual inspection
 point:
@@ -240,7 +243,11 @@ yadof run --workspace PATH --start-generation 10 --generations 10
 
 The run/resume APIs load current configuration and task definitions once per
 subsequent generation. A complete task snapshot identity plus separate
-interpretation/evaluation fingerprints is attached to every result. Fingerprints
+interpretation/evaluation/optimization fingerprints is attached to every result.
+The strategy signature and source fingerprint are separate: a comment-only edit
+need not invalidate compatible state, while a changed backend, algorithm,
+controlled parameter, parameter/objective shape, or surrogate policy activates an
+isolated namespace. Fingerprints
 provide provenance and cache invalidation; they never decide scientific
 compatibility or reject a record by themselves.
 
@@ -248,7 +255,7 @@ Before continuing, the user should decide:
 
 - Keep history when old raw variables and rawData are still meaningful under the
   correction.
-- Run `yadof history clear --workspace PATH --yes` when no old evidence should
+- Run `yadof history clear --workspace PATH --yes` only when no old evidence should
   influence the corrected problem.
 - Use a new workspace when both versions should remain independently reproducible
   or run concurrently.
@@ -256,6 +263,12 @@ Before continuing, the user should decide:
 This is a scientific/user decision rather than a framework inference. Run only one
 active optimization campaign per workspace. Separate concurrent campaigns into
 different workspaces.
+
+Changing `submit/optimization.py` does not by itself require clearing history.
+At the next generation boundary yadof waits for the old strategy's pending
+surrogate work, releases its memory state, retains namespaced artifacts, and
+activates the new semantic strategy. A non-surrogate strategy produces no
+surrogate state; the viewer reports that no compatible active checkpoints exist.
 
 The Windows distributed submit contract runs `workflow.py` directly with
 `transfer_executable=True`, `load_profile=True`, and `run_as_owner=False`. Input
@@ -335,8 +348,9 @@ written below `.yadof/tool_output/`. `view all` runs cost and time together, pri
 both summaries, and creates both timestamped images. Use `--summary-only` to print
 without creating PNGs. Destructive history clear requires interactive confirmation
 or `--yes`, validates its exact workspace targets, refuses while the campaign lock
-is held, clears only generated segment/event history, checkpoints, and jobs in that
-workspace, and recreates the jobs directory. Other entries below `recorded_data/`
+is held, clears only generated segment/event history, the active optimization-state
+pointer, surrogate checkpoints, and jobs in that workspace, and recreates the jobs
+directory. Other entries below `recorded_data/`
 remain untouched.
 
 `view surrogate` is a separate, explicitly launched read-only tool. With no mode,

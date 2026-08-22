@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import hashlib
 import json
 from pathlib import Path
 import threading
@@ -15,8 +16,10 @@ from ..recorded_data import api as recorded_api
 from ..recorded_data.session import CampaignSession
 from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
+from ..optimize.state import active_strategy_signature
 
 from .checkpoints import (
+    COMPONENT_NAMESPACE,
     new_publication_paths,
     resolve_artifact_dir,
     resolve_namespace_manifest_path,
@@ -49,10 +52,20 @@ from .modeling import (
 MODEL_NAME = "conditional_inr_rawdata_deep_ensemble"
 
 
-StateKey = tuple[str, str, str, str]
+StateKey = tuple[str, str, str, str, str, str]
 
 _STATE_LOCK = threading.RLock()
 _STATES: dict[StateKey, SurrogateState] = {}
+
+_STANDALONE_STRATEGY_SIGNATURE = hashlib.sha256(
+    b"yadof:standalone-surrogate-state:v1"
+).hexdigest()
+
+
+def strategy_signature_for_workspace(workspace: WorkspaceContext) -> str:
+    """Return the active strategy, or a stable namespace for direct API use."""
+
+    return active_strategy_signature(workspace) or _STANDALONE_STRATEGY_SIGNATURE
 
 
 def workspace_state_key(config: LoadedConfig) -> StateKey:
@@ -62,6 +75,8 @@ def workspace_state_key(config: LoadedConfig) -> StateKey:
         str(workspace.config_file),
         str(workspace.recorded_data_dir),
         str(workspace.surrogate_checkpoint_dir),
+        strategy_signature_for_workspace(workspace),
+        COMPONENT_NAMESPACE,
     )
 
 def _call_first(module, names: Iterable[str], *args, **kwargs):
@@ -774,7 +789,9 @@ def train_with_config(
     parameter_definition_signature = (
         job_template_api.get_parameter_definition_signature(config.workspace)
     )
+    strategy_signature = strategy_signature_for_workspace(config.workspace)
     state_signature = semantic_state_signature(
+        strategy_signature=strategy_signature,
         parameter_names=data.parameter_names,
         parameter_definition_signature=parameter_definition_signature,
         schema=schema,
@@ -790,7 +807,7 @@ def train_with_config(
     ) = new_publication_paths(
         config.workspace.surrogate_checkpoint_dir,
         generation_index=int(generation_index),
-        state_signature=state_signature,
+        strategy_signature=strategy_signature,
     )
     model_path = artifact_dir / "model_aux.npz"
     history: dict[str, object] = {
@@ -840,6 +857,7 @@ def train_with_config(
         model_path=model_path,
         artifact_dir=artifact_dir,
         model_name=MODEL_NAME,
+        strategy_signature=strategy_signature,
         state_signature=state_signature,
         run_namespace=run_namespace,
         component_namespace=component_namespace,
@@ -932,6 +950,7 @@ def _state_for_config(
             else None
         )
         expected_signature = semantic_state_signature(
+            strategy_signature=strategy_signature_for_workspace(config.workspace),
             parameter_names=state.parameter_names,
             parameter_definition_signature=current_parameter_definition_signature,
             schema=state.schema,
@@ -977,7 +996,9 @@ def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
     parameter_definition_signature = (
         job_template_api.get_parameter_definition_signature(config.workspace)
     )
+    strategy_signature = strategy_signature_for_workspace(config.workspace)
     expected_signature = semantic_state_signature(
+        strategy_signature=strategy_signature,
         parameter_names=data.parameter_names,
         parameter_definition_signature=parameter_definition_signature,
         schema=schema,
@@ -986,9 +1007,9 @@ def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
     namespace_dir = (
         checkpoint_dir
         / "runs"
-        / run_namespace_for_signature(expected_signature)
+        / run_namespace_for_signature(strategy_signature)
         / "components"
-        / "surrogate"
+        / COMPONENT_NAMESPACE
     )
     candidates = sorted(namespace_dir.glob("generation_*.json"), reverse=True)
     for checkpoint_path in candidates:
@@ -1026,6 +1047,9 @@ def _recover_state_from_checkpoint(
     )
     if str(payload["state_signature"]) != expected_signature:
         raise ValueError("surrogate checkpoint state signature is not current")
+    strategy_signature = strategy_signature_for_workspace(config.workspace)
+    if str(payload["strategy_signature"]) != strategy_signature:
+        raise ValueError("surrogate checkpoint strategy signature is not active")
     if tuple(str(name) for name in payload["parameter_names"]) != data.parameter_names:
         raise ValueError("current workspace parameters do not match checkpoint")
     if dict(payload["schema"]) != schema_payload(schema):
@@ -1035,6 +1059,7 @@ def _recover_state_from_checkpoint(
     ) != asdict(train_cfg):
         raise ValueError("surrogate checkpoint train config manifest is not current")
     manifest_signature = semantic_state_signature(
+        strategy_signature=strategy_signature,
         parameter_names=data.parameter_names,
         parameter_definition_signature=dict(
             payload["parameter_definition_signature"]
@@ -1132,6 +1157,7 @@ def _recover_state_from_checkpoint(
         model_path=model_path,
         artifact_dir=artifact_dir,
         model_name=str(payload["model"]),
+        strategy_signature=strategy_signature,
         state_signature=expected_signature,
         run_namespace=str(payload["run_namespace"]),
         component_namespace=str(payload["component_namespace"]),

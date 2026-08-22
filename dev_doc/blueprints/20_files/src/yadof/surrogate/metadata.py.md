@@ -11,7 +11,7 @@
 ## I/O Format
 - Metadata rows use `record_type = "surrogate_training"`.
 - Rows include generation index, status, timing, sample/query/member counts, training
-  policy, semantic state/run/component identity, checkpoint manifests, and artifact
+  policy, strategy/state/run/component identity, checkpoint manifests, and artifact
   directory. Training-fit error is not a trust metric and is not recorded.
 
 ## Non-Obvious Techniques

@@ -103,7 +103,7 @@ large intermediate files.
 
 Each flat `.npz` item carries schema-versioned metadata and numerical arrays. The
 framework records raw evidence and derives cost through the current
-`job_template/calc_cost.py`. Changing a cost policy therefore reinterprets history
+`submit/calc_cost.py`. Changing a cost policy therefore reinterprets history
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
 
@@ -131,11 +131,13 @@ and task execution code may change at the boundary. Structural parameter or
 objective-width changes need separate optimizer-state support; use a new workspace
 and campaign for them for now.
 
-At each generation boundary yadof copies the complete task source tree into one
-immutable snapshot. Every candidate in that generation—including fast worker task
+At each generation boundary yadof copies the complete `submit/` and `job_template/`
+source trees below one immutable snapshot root. Every candidate in that
+generation—including fast worker task
 imports—uses that same snapshot. Changes made while a generation is running are
 therefore visible at the next boundary and cannot split the current generation.
-Interpretation and evaluation fingerprints are recorded separately: only a changed
+Interpretation, evaluation, and optimization fingerprints are recorded separately:
+only a changed
 interpretation fingerprint invalidates cached normalization/current-cost values;
 an evaluation-only edit records new provenance without forcing old cost work.
 
@@ -165,7 +167,7 @@ workflow/rawData requirement. The surrogate models every varying numeric slot in
 the evidence that the workflow deliberately saved under its field-balanced policy.
 
 Keep only task-varying rawData interpretation, objective definitions, and thresholds
-in `calc_cost.py`. Reusable axis reduction, definition dispatch, worst-curve
+in `submit/calc_cost.py`. Reusable axis reduction, definition dispatch, worst-curve
 aggregation, constraint handling, error fallback, and objective counting belong to
 `yadof.job_template` and must be called rather than copied into the task module.
 
@@ -208,7 +210,49 @@ all-`inf` row to preserve failure isolation; that sentinel is outside the normal
 `calc_cost.py` objective scale. Depart from the `[0, 1]` task-cost contract only
 when the user explicitly requests it and the workspace documents the reason.
 
-## 4. Validate and smoke
+## 4. Compose the optimization strategy
+
+`submit/optimization.py` is the only complete-strategy selection source. It must
+define a side-effect-free `build_optimization()` function. The starter composes
+GPSAF, objective-count dispatch, pymoo GA or NSGA-III, and conditional INR:
+
+```python
+from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3
+from yadof.surrogate import conditional_inr
+
+
+def build_optimization():
+    return gpsaf(
+        search=by_objective_count(
+            single=pymoo_ga(),
+            multi=pymoo_nsga3(),
+        ),
+        surrogate=conditional_inr(),
+    )
+```
+
+For a real multi-objective NSGA-III-only campaign with no GPSAF or surrogate:
+
+```python
+from yadof.optimize import pymoo_nsga3, real_search
+
+
+def build_optimization():
+    return real_search(search=pymoo_nsga3())
+```
+
+That composition requires at least two objectives and never silently falls back to
+GA. There are no `OPTIMIZE_METHOD`, `SURROGATE_METHOD`, or search-backend selector
+settings and no complete-method registry. Source hashes are provenance; a
+deterministic semantic strategy signature governs derived-state compatibility.
+
+Only one strategy is active per workspace. A semantic change waits for pending
+component work, releases active in-memory state, and activates a retained
+strategy/component namespace. Recorded real evidence and inactive checkpoints stay
+on disk. Returning to a compatible old strategy may recover its state; switching
+strategies never requires `history clear`.
+
+## 5. Validate and smoke
 
 ```powershell
 yadof check --workspace D:\work\study-a
@@ -223,7 +267,15 @@ configuration remain administrator responsibilities.
 Use `--mode fast` only after `check` confirms the explicit kernel. Fast smoke still
 runs exactly one worker and has no timeout or durable job directory.
 
-## 5. Optimize and inspect
+## 6. Optimize and inspect
+
+`yadof check` constructs and validates the submit-side strategy, but does not train,
+predict, evaluate candidates, import the workflow, or write an active pointer.
+
+Template-version-1 workspaces are not rewritten. Create a fresh workspace, move
+the old `job_template/calc_cost.py` to `submit/calc_cost.py`, add
+`submit/optimization.py`, and copy the remaining task sources explicitly. `check`
+reports the legacy layout but never migrates files or clears history itself.
 
 ```powershell
 yadof run --workspace D:\work\study-a

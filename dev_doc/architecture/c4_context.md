@@ -14,7 +14,8 @@ Direct CLI/API use remains supported but is the lower-level surface.
 ## People and responsibilities
 
 - Users own workspace task-variable definitions, simulator/model inputs, objective
-  policy, campaign configuration, and the authority limits for real execution.
+  policy, the complete `submit/optimization.py` composition, campaign configuration,
+  and the authority limits for real execution.
 - AI agents are the primary task-authoring interface. They read version-matched
   `user_doc` under a human user's direction, inspect documented package code, edit
   the selected workspace, and apply the documented cost/risk policy: bounded
@@ -69,7 +70,7 @@ checkpoints, logs, caches, credentials, and secrets.
   objective row with diagnostics.
 - Historical rawData can be reinterpreted by the current cost definition.
 - Users may correct parameter ranges/levels, fixed-width objective/cost policy,
-  configuration, and task execution code between generations. Parameter
+  optimization composition, configuration, and task execution code between generations. Parameter
   identity/count and objective count remain stable until separate structural-change
   support exists. An immutable task tree is captured once at each boundary, so the
   next generation uses one coherent current definition; yadof
@@ -77,3 +78,6 @@ checkpoints, logs, caches, credentials, and secrets.
   retain or clear old history to the user.
 - Cross-task invariant code is implemented in yadof and called by task files;
   task-varying workflow/objective code is not hard-coded into yadof.
+- Exactly one snapshotted workspace strategy is active. Semantic switches isolate
+  component state while retaining inactive artifacts and recorded real evidence;
+  package config never selects a second complete method.

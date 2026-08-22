@@ -15,6 +15,11 @@ import torch
 from yadof.config import load_config
 from yadof.job_template import api as job_template_api
 from yadof.recorded_data import get_rawdata_samples, list_records
+from yadof.surrogate.checkpoints import (
+    COMPONENT_NAMESPACE,
+    run_namespace_for_signature,
+)
+from yadof.surrogate.runtime import strategy_signature_for_workspace
 
 from .checkpoints import CheckpointPredictor, discover_checkpoints
 from .rawdata import (
@@ -78,16 +83,24 @@ class SurrogateWorkspace:
     def __init__(self, workspace: str | Path) -> None:
         self.root = Path(workspace).expanduser().resolve()
         self.config = load_config(self.root)
+        self.strategy_signature = strategy_signature_for_workspace(
+            self.config.workspace
+        )
+        self.run_namespace = run_namespace_for_signature(self.strategy_signature)
+        self.component_namespace = COMPONENT_NAMESPACE
         self.checkpoints = discover_checkpoints(
             self.config.workspace.surrogate_checkpoint_dir,
             parameter_definition_signature=(
                 job_template_api.get_parameter_definition_signature(self.root)
             ),
+            strategy_signature=self.strategy_signature,
         )
         if not self.checkpoints:
             raise FileNotFoundError(
-                "no trained surrogate checkpoints found below "
-                f"{self.config.workspace.surrogate_checkpoint_dir}"
+                "no trained conditional-INR checkpoints are compatible with the "
+                f"active strategy {self.strategy_signature[:16]} below "
+                f"{self.config.workspace.surrogate_checkpoint_dir}; the selected "
+                "strategy may not use a surrogate"
             )
 
         definitions = job_template_api.get_parameter_definitions(self.root)

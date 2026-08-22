@@ -77,15 +77,20 @@ def wait_for_pending_training(workspace: WorkspaceLike) -> TrainingScheduleStatu
             generation_index=pending_generation,
             error=f"{exc.__class__.__name__}: {exc}",
         )
+    usable = runtime._is_usable_state(state)
     with _LOCK:
         schedule = _schedule_locked(key)
-        schedule.last_completed_generation = int(state.generation_index)
+        if usable:
+            schedule.last_completed_generation = int(state.generation_index)
         schedule.last_error = ""
         if future is schedule.pending:
             schedule.pending = None
             schedule.pending_generation = None
     return _status(
-        config, key, "completed", generation_index=pending_generation
+        config,
+        key,
+        "completed" if usable else "skipped_not_trainable",
+        generation_index=pending_generation,
     )
 
 
@@ -178,6 +183,28 @@ def reset_workspace_schedule(workspace: WorkspaceLike) -> None:
         _SCHEDULES.pop(key, None)
 
 
+def deactivate_workspace(workspace: WorkspaceLike) -> TrainingScheduleStatus:
+    """Finish and release one active strategy's in-memory surrogate state.
+
+    Published checkpoint artifacts are deliberately retained so that selecting
+    the same semantic strategy later can recover its component state.
+    """
+
+    config = load_config(workspace)
+    key = runtime.workspace_state_key(config)
+    status = wait_for_pending_training(config.workspace)
+    with _LOCK:
+        _SCHEDULES.pop(key, None)
+    runtime.reset_workspace_state(config.workspace)
+    return TrainingScheduleStatus(
+        action="deactivated",
+        generation_index=status.generation_index,
+        pending_generation_index=None,
+        latest_completed_generation_index=status.latest_completed_generation_index,
+        error=status.error,
+    )
+
+
 def _train_blocking(
     config: LoadedConfig,
     key: runtime.StateKey,
@@ -199,6 +226,9 @@ def _train_blocking(
             generation_index=int(generation_index),
             exc=exc,
             started_at=started_at,
+            strategy_signature=runtime.strategy_signature_for_workspace(
+                config.workspace
+            ),
         )
         error = f"{exc.__class__.__name__}: {exc}"
         with _LOCK:
@@ -262,10 +292,15 @@ def _training_done(
             config.workspace,
             generation_index=int(generation_index),
             exc=exc,
+            strategy_signature=runtime.strategy_signature_for_workspace(
+                config.workspace
+            ),
         )
         error = f"{exc.__class__.__name__}: {exc}"
         with _LOCK:
-            schedule = _schedule_locked(key)
+            schedule = _SCHEDULES.get(key)
+            if schedule is None:
+                return
             schedule.last_error = error
             if future is schedule.pending:
                 schedule.pending = None
@@ -274,7 +309,9 @@ def _training_done(
 
     usable = runtime._is_usable_state(state)
     with _LOCK:
-        schedule = _schedule_locked(key)
+        schedule = _SCHEDULES.get(key)
+        if schedule is None:
+            return
         if usable:
             schedule.last_completed_generation = int(state.generation_index)
         schedule.last_error = ""

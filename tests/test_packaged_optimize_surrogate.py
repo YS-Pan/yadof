@@ -157,12 +157,13 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
             encoding="utf-8"
         )
     )
-    assert manifest["format_version"] == 1
+    assert manifest["format_version"] == 2
     assert manifest["surrogate_method"] == "conditional_inr"
     assert manifest["training_policy"] == "real_field_balanced"
     assert len(manifest["state_signature"]) == 64
-    assert manifest["run_namespace"].startswith("semantic-")
-    assert manifest["component_namespace"] == "surrogate"
+    assert len(manifest["strategy_signature"]) == 64
+    assert manifest["run_namespace"].startswith("strategy-")
+    assert manifest["component_namespace"] == "conditional-inr"
     namespace_manifest = checkpoint_dir_a / manifest["namespace_manifest"]
     artifact_dir = checkpoint_dir_a / manifest["artifact_dir"]
     assert json.loads(namespace_manifest.read_text(encoding="utf-8")) == manifest
@@ -171,7 +172,7 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
         assert "training_flat_values" not in auxiliary.files
 
     before = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
-    calc_cost = workspace_a / "job_template" / "calc_cost.py"
+    calc_cost = workspace_a / "submit" / "calc_cost.py"
     calc_cost.write_text(
         calc_cost.read_text(encoding="utf-8").replace(
             "RESPONSE_WORST = 1.0",
@@ -254,6 +255,51 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     assert len(viewer_costs) == 1
 
 
+def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
+    tmp_path: Path,
+) -> None:
+    from yadof.optimize import run_one_generation
+    from yadof.optimize.state import read_active_strategy_state
+    from yadof.surrogate import runtime, wait_for_pending_training
+    from yadof.tools.surrogate_viewer.backend.workspace import SurrogateWorkspace
+
+    workspace = _workspace(tmp_path, "strategy_state", surrogate=True)
+    optimization_path = workspace / "submit/optimization.py"
+    default_source = optimization_path.read_text(encoding="utf-8")
+
+    run_one_generation(workspace, generation_index=0, random_seed=43)
+    wait_for_pending_training(workspace)
+    first_active = read_active_strategy_state(workspace)
+    assert first_active is not None
+    first_model = runtime._require_state(load_config(workspace)).artifact_dir
+    assert first_model.is_dir()
+
+    optimization_path.write_text(
+        "from yadof.optimize import pymoo_ga, real_search\n"
+        "def build_optimization():\n"
+        "    return real_search(search=pymoo_ga())\n",
+        encoding="utf-8",
+    )
+    run_one_generation(workspace, generation_index=1, random_seed=43)
+    second_active = read_active_strategy_state(workspace)
+    assert second_active is not None
+    assert second_active.strategy_signature != first_active.strategy_signature
+    assert not runtime.has_trained_state(workspace)
+    assert first_model.is_dir()
+    with pytest.raises(FileNotFoundError, match="selected strategy may not use"):
+        SurrogateWorkspace(workspace)
+
+    optimization_path.write_text(default_source, encoding="utf-8")
+    returned = run_one_generation(workspace, generation_index=2, random_seed=43)
+    third_active = read_active_strategy_state(workspace)
+    assert third_active is not None
+    assert third_active.strategy_signature == first_active.strategy_signature
+    assert returned.surrogate_used is True
+    assert runtime.has_trained_state(workspace)
+    assert first_model.is_dir()
+    wait_for_pending_training(workspace)
+
+
 @pytest.mark.parametrize(
     "raw_rows",
     [
@@ -270,6 +316,7 @@ def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
     raw_rows,
 ) -> None:
     from yadof.optimize.gpsaf_phases import surrogate_state_ready
+    from yadof.surrogate import conditional_inr
     from yadof.surrogate import runtime
     from yadof.surrogate.types import TrainingData
 
@@ -291,7 +338,12 @@ def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
     assert state.train_history["skipped"] is True
     assert state.model is None
     assert not runtime.has_trained_state(workspace)
-    assert not surrogate_state_ready(load_config(workspace).workspace)
+    component_context = type(
+        "ComponentContext",
+        (),
+        {"config": load_config(workspace)},
+    )()
+    assert not surrogate_state_ready(conditional_inr(), component_context)
     with pytest.raises(RuntimeError, match="not trained"):
         runtime.predict_population(workspace, ((0.5,),))
 

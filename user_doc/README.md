@@ -74,7 +74,8 @@ package resources and must not be assumed to exist in a pip-only environment.
 
 ## Task/framework code boundary
 
-Put code in `workflow.py` or `calc_cost.py` only when it can change because the
+Put code in `job_template/workflow.py`, `submit/calc_cost.py`, or
+`submit/optimization.py` only when it can change because the
 optimization task changes. Examples include simulator/project/design selection,
 task parameters, measurements to export, rawData interpretation, objective
 definitions, thresholds, and objective-relevant regions.
@@ -112,7 +113,8 @@ code.
 ## Operating rules
 
 - Run `yadof init PATH` rather than inventing the workspace marker or starter files.
-- Edit only the selected workspace, normally `config.py`, `job_template/`, and
+- Edit only the selected workspace, normally `config.py`, `submit/`,
+  `job_template/`, and
   task-owned assets. You may create additional workspace directories for task
   scripts, debugging material, exported animations/images/reports, and other
   outputs; avoid the reserved framework paths documented in

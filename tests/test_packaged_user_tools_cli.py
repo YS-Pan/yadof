@@ -296,6 +296,13 @@ def test_history_clear_requires_confirmation_and_clears_only_selected_workspace(
     workspace_b = _workspace(tmp_path, "clear_b")
     evaluate_population(workspace_a, ((0.25,),))
     evaluate_population(workspace_b, ((0.75,),))
+    for workspace in (workspace_a, workspace_b):
+        optimization_state = workspace / ".yadof/optimization/active.json"
+        optimization_state.parent.mkdir(parents=True)
+        optimization_state.write_text("{}\n", encoding="utf-8")
+        checkpoint = workspace / ".yadof/surrogate/checkpoints/retained.txt"
+        checkpoint.parent.mkdir(parents=True)
+        checkpoint.write_text("retained\n", encoding="utf-8")
 
     try:
         clear_history(workspace_a)
@@ -322,6 +329,10 @@ def test_history_clear_requires_confirmation_and_clears_only_selected_workspace(
     assert list_records(workspace_a) == ()
     assert len(list_records(workspace_b)) == 1
     assert not any((workspace_a / "jobs").iterdir())
+    assert not (workspace_a / ".yadof/optimization").exists()
+    assert not (workspace_a / ".yadof/surrogate/checkpoints").exists()
+    assert (workspace_b / ".yadof/optimization/active.json").is_file()
+    assert (workspace_b / ".yadof/surrogate/checkpoints/retained.txt").is_file()
 
 
 def test_hfss_extract_parameters_uses_workspace_paths_and_confirmation(capsys, tmp_path):

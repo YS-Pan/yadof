@@ -105,23 +105,39 @@ def _local_top_level_names(root: Path) -> set[str]:
     return names
 
 
+def _source_root(
+    context: WorkspaceContext,
+    source_root: str | os.PathLike[str] | None,
+) -> Path:
+    if source_root is None:
+        return context.job_template_dir.resolve()
+    selected = Path(source_root).expanduser()
+    if not selected.is_absolute():
+        selected = context.root / selected
+    return selected.resolve()
+
+
 @contextmanager
 def task_module(
     workspace: WorkspaceContext | str | os.PathLike[str],
     module_name: str,
+    *,
+    source_root: str | os.PathLike[str] | None = None,
 ) -> Iterator[ModuleType]:
     """Yield one freshly compiled task module in a temporary import namespace.
 
-    Sibling absolute and relative imports are resolved from the same task directory.
+    Sibling absolute and relative imports are resolved from the selected source
+    root. By default that root is ``job_template``; submit-side callers pass the
+    workspace's fixed ``submit`` root.
     The workspace is never added to ``sys.path``. All temporary module-cache entries
     are removed, and any pre-existing same-named modules are restored, on exit.
     """
 
     context = resolve_workspace(workspace)
-    root = context.job_template_dir.resolve()
+    root = _source_root(context, source_root)
     parts = _module_parts(module_name)
     if not root.is_dir():
-        raise TaskModuleError(f"workspace job_template directory does not exist: {root}")
+        raise TaskModuleError(f"workspace task source directory does not exist: {root}")
     located = _source_for(root, parts)
     if located is None:
         expected = root.joinpath(*parts).with_suffix(".py")
@@ -176,10 +192,12 @@ def task_module(
 def load_task_module(
     workspace: WorkspaceContext | str | os.PathLike[str],
     module_name: str,
+    *,
+    source_root: str | os.PathLike[str] | None = None,
 ) -> ModuleType:
     """Load and return a fresh task module snapshot."""
 
-    with task_module(workspace, module_name) as loaded:
+    with task_module(workspace, module_name, source_root=source_root) as loaded:
         return loaded
 
 

@@ -7,7 +7,8 @@ read-only values and use-case methods suitable for a desktop viewer.
 
 ## Functionalities
 
-- Discover valid saved checkpoints in generation order.
+- Resolve the active strategy and discover valid saved checkpoints from its
+  declared `conditional-inr` run/component namespace in generation order.
 - Load effective workspace configuration, parameters, objectives, records, and one
   rawData template.
 - Validate a checkpoint against current parameter names and rawData schema.
@@ -29,7 +30,8 @@ read-only values and use-case methods suitable for a desktop viewer.
 
 ## I/O Format
 
-Public inputs are a workspace path, checkpoint generation, normalized vector,
+Public inputs are a workspace path (whose active strategy determines checkpoint
+scope), checkpoint generation, normalized vector,
 optional real job name, audit sample fraction, optional seed/cancel event, and
 progress callback. Interactive slicing additionally accepts a rawData item index,
 an ordered tuple of zero to two dimension indices, and fixed coordinate values for
@@ -57,6 +59,8 @@ Non-finite error elements add neither sum nor count.
 
 - Checkpoint JSON may exist for skipped/empty generations; discovery requires a
   usable flat schema and positive member count.
+- Retained inactive strategy/component namespaces are deliberately excluded from
+  discovery; report metadata exposes the selected scope.
 - True rawData is flattened separately for each distinct checkpoint schema and may
   be cached across identical schemas during one audit.
 - rawData item aggregates use modeled-slot ranges, so multiple modeled fields in

@@ -8,27 +8,29 @@ schema/views/validation, reusable axis reduction,
 definition-based cost dispatch, constraint/failure policy, and objective counting.
 It does not contain a concrete simulator or objective.
 
-## Task-owned files
+## Task-owned files and roots
 
-- `parameters_constraints.py` defines canonical unassigned `PARAMETERS` and textual
+- `job_template/parameters_constraints.py` defines canonical unassigned `PARAMETERS` and textual
   constraints using packaged `Parameter` on the submit side.
-- `workflow.py` consumes assigned values, controls task-specific simulators/custom
+- `job_template/workflow.py` consumes assigned values, controls task-specific simulators/custom
   software, and writes task-specific direct `rawData/*.npz` inside
   `worker_misc.run_workflow()`. Package worker support owns standard paths,
   lifecycle/error metadata, execute-side `execute_machine`, rawData preparation,
   and flat `rawData.zip`. The task file must not duplicate these mechanisms or
   write cost.
-- Optional `evaluation.py` declares fast compatibility through callable
+- Optional `job_template/evaluation.py` declares fast compatibility through callable
   `evaluate_rawdata(parameters, context)`. It receives a read-only named-value
   mapping and a context without job paths, then returns unique direct `.npz`
   basenames mapped to schema-valid memory payloads plus optional JSON diagnostics.
   A normal `workflow.py` may call the same kernel and serialize those payloads so
   fast/local task algorithms do not drift.
-- `calc_cost.py` reports objective names and contains task-specific rawData
+- `submit/calc_cost.py` reports objective names and contains task-specific rawData
   interpretation, objective definitions, thresholds, and calculators. It cannot
   select or weight surrogate training positions; validation rejects the removed
   `rawdata_importance_weights()` hook. The file calls package helpers for reusable
   loading/reduction/dispatch, constraints, failure fallback, and objective counting.
+- `submit/optimization.py` defines mandatory side-effect-free
+  `build_optimization()` composition. Submit helpers stay submit-side.
 - adapters, models, lookup data, and task helpers are copied into prepared jobs when
   placed under `job_template/`.
 
@@ -52,7 +54,7 @@ axis mismatches, and invalid item structures.
 
 ## Cost contract
 
-Costs are recomputed through freshly loaded current `calc_cost.py`. A long-running
+Costs are recomputed through freshly loaded current `submit/calc_cost.py`. A long-running
 cost-history view instead opens one explicit package-owned interpreter context,
 freezing parameter definitions and `calc_cost.py` for all of its batches. Returned rows
 must match reported objective width. The same path is used for completed simulation
@@ -106,7 +108,9 @@ very large finite physical values remain bounded instead of overflowing.
 - Fast task kernels return rawData rather than cost and are rejected explicitly when
   missing or malformed; there is no fallback to local workflow emulation.
 - Code invariant across optimization tasks lives in yadof; code that changes with
-  the task lives in `workflow.py`/`calc_cost.py`.
+  the task lives in `job_template/workflow.py` or `submit/calc_cost.py`.
+- Prepared jobs never contain `submit/` sources and receive a generated assigned
+  parameter snapshot instead of the canonical source.
 - A yadof helper must be a stable contract or a mechanism reasonably reusable
   across different task families. One-off array layouts, specialized grouping, and
   narrow objective rules remain task-owned rather than becoming package APIs.

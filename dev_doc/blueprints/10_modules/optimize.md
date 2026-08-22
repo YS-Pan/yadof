@@ -2,11 +2,12 @@
 
 ## Responsibility
 
-`yadof.optimize` owns workspace-explicit campaign/generation APIs. It creates
-candidates through pymoo GA/NSGA-III mechanics, combines real history and
-surrogate-assisted GPSAF selection, invokes real evaluation, and records lightweight
-generation/campaign metadata. It does not execute simulators or persist rawData
-itself.
+`yadof.optimize` owns workspace-explicit campaign/generation APIs, common
+result/context/history/real-evaluation contracts, strategy invocation, and compact
+metadata. The snapshotted workspace owns the complete method through
+`submit/optimization.py:build_optimization()`. Package components expose thin lazy
+pymoo GA/NSGA-III search, objective-count dispatch, real search, and irreducible
+GPSAF assistance; there is no complete-method registry or config selector.
 
 One `CampaignSession` spans a complete `run_generations` campaign. It owns the
 workspace lock, bounded recorder, startup catalog, and in-memory current-campaign
@@ -16,7 +17,8 @@ contracts.
 ## Candidate and objective handling
 
 Variable count comes from current workspace parameters; objective count/names come
-from current `calc_cost.py`. Genetic operators act in normalized space and use
+from current `submit/calc_cost.py`. Pymoo owns algorithms, operators, ask/tell, and
+survival. Its thin adapter acts in normalized space and uses
 configured crossover/mutation probabilities and distribution indices. NSGA-III
 reference directions are generated from objective count and configured partitions.
 Duplicate/archive keys use configured decimal precision and bounded refill attempts.
@@ -46,10 +48,12 @@ applies to its work; recorder capacities and storage path remain frozen at campa
 start.
 
 Task flexibility is generation-scoped. At each generation boundary, optimization
-creates an immutable task snapshot and uses its shape-preserving parameter and
+creates an immutable complete two-root task snapshot, loads exactly one strategy,
+and uses its shape-preserving parameter and
 fixed-width objective definitions. An interpretation-fingerprint change
 reinterprets mechanically usable history before selection; an evaluation-only
-change reuses the existing derived view. Changes to workflow/evaluation code affect
+change reuses the existing derived view. Changes to optimization composition or
+workflow/evaluation code affect
 the next generation's real evaluations.
 Parameter identity/count and objective count remain stable during a campaign;
 rebuilding pymoo problem/reference-direction state for structural dimension changes
@@ -73,4 +77,7 @@ recent per-job diagnostics. A smoke failure prevents generation submission.
   generation result.
 - Surrogate predictions never bypass real-evaluation validation.
 - Resume reuses compatible evidence/checkpoints but does not copy another workspace.
+- A semantic strategy switch waits for pending component work, releases old memory,
+  and activates `strategy-<signature>` while retaining inactive artifacts.
+- Source fingerprints remain separate from deterministic semantic signatures.
 - Stored optimization metadata stays lightweight; rawData remains in recorded_data.

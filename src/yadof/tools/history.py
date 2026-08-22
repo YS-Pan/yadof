@@ -71,6 +71,11 @@ def clear_history(
     checkpoints_dir = _validate_runtime_directory(
         context.surrogate_checkpoint_dir, context.root, "surrogate checkpoint"
     )
+    optimization_state_dir = _validate_runtime_directory(
+        context.root / ".yadof" / "optimization",
+        context.root,
+        "optimization state",
+    )
     segments_dir = _validate_runtime_directory(
         storage.segments_directory, context.root, "recorded-data segments"
     )
@@ -80,17 +85,15 @@ def clear_history(
 
     # Finish any workspace-local background writer before removing its outputs.
     try:
-        from ..surrogate import runtime as surrogate_runtime
-        from ..surrogate import scheduler as surrogate_scheduler
+        from ..surrogate import deactivate_workspace
 
-        surrogate_scheduler.wait_for_pending_training(context)
-        surrogate_scheduler.reset_workspace_schedule(context)
-        surrogate_runtime.reset_workspace_state(context)
+        deactivate_workspace(context)
     except ImportError:
         pass
 
     jobs_deleted = _clear_directory(jobs_dir)
     checkpoints_deleted = _remove_path(checkpoints_dir)
+    optimization_state_deleted = _remove_path(optimization_state_dir)
     removed_record_targets: list[str] = []
     for record_target in (segments_dir, metadata_dir):
         if _remove_path(record_target):
@@ -101,6 +104,7 @@ def clear_history(
         "workspace": str(context.root),
         "jobs_entries_deleted": jobs_deleted,
         "surrogate_checkpoints_deleted": checkpoints_deleted,
+        "optimization_state_deleted": optimization_state_deleted,
         "record_targets_deleted": tuple(removed_record_targets),
     }
 

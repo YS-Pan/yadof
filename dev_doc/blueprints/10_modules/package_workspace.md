@@ -7,12 +7,13 @@ explicitly selected user workspaces. Distribution metadata has one version sourc
 and one console entry point. Wheel/sdist membership is allowlisted around package
 code, generic templates/adapters, and version-matched documentation.
 
-The current package version is 0.3.0. Recorded history uses immutable standard-ZIP
+The current package version is 0.4.0. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Workspace contract
 
-`WorkspaceContext` is an immutable absolute value containing root, config, task,
+`WorkspaceContext` is an immutable absolute value containing root, config, fixed
+submit, evaluate-side task,
 jobs, recorded-data, checkpoint, log, tool-output, and fast scratch paths. Relative configuration
 paths resolve from its root. Stateful public APIs accept a context or workspace path;
 they never find user state relative to package source or a process-global project.
@@ -20,12 +21,14 @@ they never find user state relative to package source or a process-global projec
 `init` stages and validates a generic local template, then publishes it without
 overwriting existing files. The portable `.yadof/workspace.json` marker is published
 last and records template/version provenance; it does not authorize repair or
-automatic upgrade. The generic workflow contains only its task-specific calculation
+automatic upgrade. The template publishes `submit/calc_cost.py`, mandatory
+`submit/optimization.py`, and canonical parameter/workflow sources below
+`job_template/`. The generic workflow contains only its task-specific calculation
 and calls package worker support, which records execute-side machine identity and
 the fixed lifecycle metadata. The generic cost module demonstrates package
 `soft_cost()` normalization from fixed physical thresholds into a dimensionless
 `[0, 1]` minimization objective with task error cost `1.0`. `check` is read-only and reports marker, required
-files, task contract, path, and optional static rawData diagnostics.
+files, task and strategy-construction contracts, disjoint paths, and optional static rawData diagnostics.
 When fast is selected, check also requires callable task-owned
 `evaluation.py:evaluate_rawdata()` and a scratch path disjoint from task/jobs/history.
 Additional user-created directories for task helpers, debugging evidence, and
@@ -35,7 +38,8 @@ content deliberately selected by preparation becomes job payload.
 
 ## Task loading and resources
 
-Task loading compiles fresh workspace source in temporary namespaces and supports
+Task loading compiles fresh workspace source from an explicitly selected `submit/`
+or `job_template/` root in temporary namespaces and supports
 same-directory helpers/packages without lasting `sys.path` or module-cache
 pollution. Two workspaces may use identical helper module names safely. Package
 resources are read-only and accessed through `importlib.resources`; repository
@@ -47,7 +51,8 @@ Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 ## Invariants
 
 - Initialization never silently merges, repairs, or upgrades a workspace.
-- Checking never launches the workflow or mutates task/runtime state.
+- Checking never launches the workflow, trains/evaluates, or mutates task/runtime state.
+- Configured framework paths never overlap fixed `submit/`, `job_template/`, or one another.
 - Package code remains functional when site-packages is read-only.
 - Wheel/sdist exclude concrete models, workspaces, jobs, records, caches, logs,
   checkpoints, credentials, and examples.

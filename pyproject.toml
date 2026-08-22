@@ -27,11 +27,11 @@ classifiers = [
 keywords = ["optimization", "simulation", "surrogate-model", "workflow"]
 
 [project.optional-dependencies]
-surrogate = ["torch>=2.2"]
+surrogate = ["torch>=2.2,<3"]
 plot = ["matplotlib>=3.8"]
 viewer = [
     "matplotlib>=3.8",
-    "torch>=2.2",
+    "torch>=2.2,<3",
 ]
 hfss = ["ansys-aedt-core>=0.18"]
 dev = [

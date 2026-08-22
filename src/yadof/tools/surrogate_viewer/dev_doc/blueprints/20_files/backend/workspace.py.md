@@ -7,8 +7,9 @@ the complete cross-generation audit.
 
 ## Functionalities
 
-- Load checkpoints, task parameter/objective definitions, completed records, and a
-  rawData template.
+- Resolve the active strategy pointer and load only that strategy's
+  `conditional-inr` checkpoints, plus task parameter/objective definitions,
+  completed records, and a rawData template.
 - Normalize record metadata into sorted `RealResult` values.
 - Retrieve true rawData and calculate current true costs.
 - Cache one interactive `CheckpointPredictor`.
@@ -38,6 +39,8 @@ callback, outer batch size, and CUDA sample batch. It returns arrays shaped:
 ## Non-Obvious Techniques
 
 - Sampling uses `ceil(generation size × fraction)` with a minimum of one.
+- The facade exposes the active strategy signature and checkpoint
+  run/component scope so reports remain auditable.
 - The same ordered sampled rows feed every checkpoint in an audit.
 - True flat matrices are cached by a schema key only for the current audit.
 - Relative error uses the workspace's `SURROGATE_RELATIVE_ERROR_EPS`.

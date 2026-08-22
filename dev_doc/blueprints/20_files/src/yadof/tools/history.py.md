@@ -14,8 +14,9 @@
   workspace config and reject workspace-root or filesystem-anchor targets.
 - Refuse to traverse directory symlinks or Windows junctions as real runtime
   directories.
-- Wait for pending workspace-local surrogate training, then reset only that
-  workspace's scheduler and in-memory surrogate state.
+- Deactivate the active strategy's surrogate component, waiting for pending work
+  and releasing memory before deleting all retained derived checkpoint and active
+  optimization-state namespaces.
 - Acquire a non-active campaign check before mutation.
 - Clear job entries, remove the checkpoint tree and the framework-owned
   `segments/` and `metadata/` directories, and finally recreate an empty jobs
@@ -26,7 +27,7 @@
 - Input: a workspace-like value and explicit confirmation.
 - Output: a dictionary containing the resolved workspace, count of deleted job
   entries, whether checkpoints were deleted, and exact removed record targets.
-- The workspace marker, `config.py`, `job_template/`, and general tool-output files
+- The workspace marker, `config.py`, `submit/`, `job_template/`, and general tool-output files
   are not deletion targets.
 
 ## Non-Obvious Techniques

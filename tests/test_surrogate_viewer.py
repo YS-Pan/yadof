@@ -101,11 +101,14 @@ def _write_checkpoint_manifest(
     member_count: int,
     publication_sequence: int | None = None,
     parameter_definition_signature: dict[str, object] | None = None,
+    strategy_signature: str = "f" * 64,
 ) -> None:
     sequence = generation if publication_sequence is None else publication_sequence
     signature = f"{generation * 1000 + sequence:064x}"
-    run_namespace = f"semantic-{signature[:16]}"
-    namespace_dir = root / "runs" / run_namespace / "components" / "surrogate"
+    run_namespace = f"strategy-{strategy_signature[:16]}"
+    namespace_dir = (
+        root / "runs" / run_namespace / "components" / "conditional-inr"
+    )
     publication_id = f"{sequence:020d}_{'a' * 32}"
     stem = f"generation_{generation:04d}_{publication_id}"
     artifact_dir = namespace_dir / stem
@@ -113,12 +116,13 @@ def _write_checkpoint_manifest(
     artifact_dir.mkdir(parents=True)
     (artifact_dir / "model_aux.npz").write_bytes(b"checkpoint")
     payload = {
-        "format_version": 1,
+        "format_version": 2,
         "surrogate_method": "conditional_inr",
         "training_policy": "real_field_balanced",
+        "strategy_signature": strategy_signature,
         "state_signature": signature,
         "run_namespace": run_namespace,
-        "component_namespace": "surrogate",
+        "component_namespace": "conditional-inr",
         "publication_id": publication_id,
         "torch_version": str(torch.__version__),
         "generation_index": generation,
@@ -152,11 +156,22 @@ def test_discover_checkpoints_sorts_and_skips_bad_json(tmp_path: Path) -> None:
     _write_checkpoint_manifest(
         tmp_path, generation=1, sample_count=10, member_count=4
     )
+    _write_checkpoint_manifest(
+        tmp_path,
+        generation=2,
+        sample_count=30,
+        member_count=3,
+        strategy_signature="e" * 64,
+    )
     (tmp_path / "generation_broken.json").write_text("{", encoding="utf-8")
 
     checkpoints = discover_checkpoints(tmp_path)
 
-    assert [item.generation for item in checkpoints] == [1, 3]
+    scoped = discover_checkpoints(tmp_path, strategy_signature="f" * 64)
+
+    assert [item.generation for item in checkpoints] == [1, 2, 3]
+    assert [item.generation for item in scoped] == [1, 3]
+    assert all(item.payload["strategy_signature"] == "f" * 64 for item in scoped)
     assert checkpoints[0].member_count == 4
     assert checkpoints[0].payload["training_policy"] == "real_field_balanced"
 
@@ -215,6 +230,9 @@ def test_workspace_summary_has_text_and_machine_readable_json(
     )
     viewer = SimpleNamespace(
         root=tmp_path,
+        strategy_signature="f" * 64,
+        run_namespace="strategy-" + "f" * 16,
+        component_namespace="conditional-inr",
         checkpoints=(
             SimpleNamespace(
                 generation=2,
@@ -224,6 +242,9 @@ def test_workspace_summary_has_text_and_machine_readable_json(
                 payload={
                     "training_policy": "real_field_balanced",
                     "state_signature": "a" * 64,
+                    "strategy_signature": "f" * 64,
+                    "run_namespace": "strategy-" + "f" * 16,
+                    "component_namespace": "conditional-inr",
                 },
             ),
         ),
@@ -252,6 +273,8 @@ def test_workspace_summary_has_text_and_machine_readable_json(
 
     assert payload["checkpoints"][0]["training_policy"] == "real_field_balanced"
     assert payload["checkpoints"][0]["state_signature"] == "a" * 64
+    assert payload["schema_version"] == 2
+    assert payload["component_namespace"] == "conditional-inr"
     assert "training_error" not in payload["checkpoints"][0]
 
     assert "generation 2: samples=20, members=3" in text
@@ -288,6 +311,9 @@ def test_error_audit_report_selects_quantity_and_formats_matrices(
 
     viewer = SimpleNamespace(
         root=tmp_path,
+        strategy_signature="f" * 64,
+        run_namespace="strategy-" + "f" * 16,
+        component_namespace="conditional-inr",
         objective_names=audit.objective_names,
         rawdata_names=audit.rawdata_names,
         calculate_error_audit=calculate_error_audit,
@@ -315,6 +341,8 @@ def test_error_audit_report_selects_quantity_and_formats_matrices(
         "relative",
         "absolute",
     ]
+    assert payload["schema_version"] == 2
+    assert payload["strategy_signature"] == "f" * 64
     assert payload["matrices"][0]["values"] == [[3.0, None]]
     assert "optimization_generation\tsamples\tcheckpoint_2\tcheckpoint_4" in text
     assert "\n1\t3\t3\tn/a" in text

@@ -44,8 +44,9 @@ one complete cross-generation audit
 ## End-To-End Responsibilities
 
 1. Load one explicit compatible yadof workspace.
-2. Discover usable checkpoint generations while excluding broken/skipped
-   placeholders.
+2. Resolve the workspace's active strategy pointer and discover usable
+   `conditional-inr` checkpoint generations only within that scope while excluding
+   broken/skipped placeholders.
 3. Present normalized parameter controls while displaying denormalized physical
    values.
 4. List every dimension of the selected rawData output; accept zero to two plot
@@ -97,6 +98,8 @@ no persistence recovery because the viewer writes no audit cache.
 ## Invariants
 
 - All workspace access is explicit and read-only.
+- Reports identify the active strategy/run/component scope and never mix retained
+  inactive namespaces.
 - Relative error uses
   `abs(prediction - truth) / max(abs(truth), configured epsilon)`.
 - Cost errors aggregate by objective; rawData errors aggregate by named rawData

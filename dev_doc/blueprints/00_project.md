@@ -12,7 +12,7 @@ users. Bounded low-cost execution can be delegated; long or consequential runs
 need an explicit user request.
 
 Workspace task flexibility remains live during a campaign. A user may correct or
-redefine cost, parameters, configuration, and task execution code between
+redefine cost, complete optimization composition, parameters, configuration, and task execution code between
 generations. The next generation uses one coherent current snapshot and rebuilds
 affected derived state. The framework detects changes for cache invalidation and
 provenance but does not decide whether two task versions are scientifically
@@ -31,8 +31,9 @@ local/distributed remain file-backed prepared-job transports.
 ## End-to-end responsibilities
 
 1. Resolve one explicit workspace and immutable effective configuration.
-2. Fresh-load current parameter/objective definitions without global module leakage.
-3. Generate normalized candidates and materialize a self-contained assigned
+2. Snapshot both complete source roots, fresh-load parameter/objective definitions,
+   and construct the one workspace-owned strategy without global module leakage.
+3. Generate normalized candidates through that strategy and materialize a self-contained assigned
    parameter snapshot per job.
 4. Execute task-owned `evaluation.py` in reusable isolated fast workers, or
    `workflow.py` locally/directly through HTCondor; prepared workflows' fixed
@@ -63,7 +64,7 @@ hot-change contract; structural dimension changes are future work.
 
 - Package: framework APIs, CLI, defaults, job/worker support, templates, adapters,
   tools, embedded docs, and all behavior invariant across optimization tasks.
-- Workspace: `config.py`, task modules/assets, jobs, records, checkpoints, logs,
+- Workspace: `config.py`, fixed `submit/`, evaluate-side `job_template/`, jobs, records, checkpoints, logs,
   tool output, and optional user-created task/debug/export directories;
   workflow/cost code contains only behavior that changes with the task. Extra
   directories are not implicit prepared-job inputs.
@@ -79,8 +80,9 @@ hot-change contract; structural dimension changes are future work.
 - `evaluate_manager` owns preparation, local/HTCondor transport, result shape,
   retries/timeouts, and recording handoff.
 - `recorded_data` owns durable evidence and current-history queries.
-- `optimize` owns campaign/generation candidate mechanics and GPSAF pressure.
-- `surrogate` owns conditional INR training, rawData prediction, uncertainty
+- `optimize` owns the campaign engine and narrow composable GPSAF/pymoo/real-search
+  mechanisms; the workspace owns complete strategy composition.
+- `surrogate` owns the lazy conditional-INR component, rawData prediction, uncertainty
   intervals, audits, scheduling, and checkpoints.
 - `tools` and `cli` are optional user-facing orchestration/inspection layers.
   `tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf

@@ -7,7 +7,8 @@ selection, and both interactive and audit inference.
 
 ## Functionalities
 
-- Parse only current-format `generation_*.json` descriptors whose explicit
+- Parse only current-format `generation_*.json` descriptors below the active
+  strategy's declared run/component namespace whose explicit
   method/policy/semantic identity is valid and whose unique namespace manifest is
   identical.
 - Resolve namespace/artifact/model paths below the declared run/component namespace
@@ -15,9 +16,9 @@ selection, and both interactive and audit inference.
 - Validate the semantic state signature against the checkpoint artifact's persisted
   train config/runtime version, plus current parameter normalization compatibility,
   rawData item count, modeled-slot shapes, scaler width, query table, and field count.
-- Select the newest committed publication per generation across semantic namespaces,
-  so an older INR hyperparameter configuration remains auditable without being
-  eligible for runtime recovery under the current training strategy.
+- Select the newest committed publication per generation within the active
+  strategy/component scope, so an older compatible INR hyperparameter publication
+  remains auditable without mixing retained inactive strategies.
 - Load the conditional-INR ensemble through installed yadof.
 - Predict member flat arrays, reconstruct mean/member rawData, and calculate current
   costs.

@@ -1,81 +1,42 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import random
-
-from ..config import LoadedConfig
-from ..recorded_data.session import CampaignSession
-from ..task_snapshot import GenerationTaskSnapshot
 
 from .gpsaf_pymoo import (
     baseline_records,
     diagnostics as pymoo_diagnostics,
     make_context,
     population_from_records,
-    resolve_problem_info,
 )
-from .gpsaf_misc import (
-    Population,
-    Costs,
-    evaluate,
-    history_records,
-)
+from .strategy import GenerationContext, OptimizationResult, evaluate_population
 from .gpsaf_phases import ensure_surrogate_fresh_enough, notify_surrogate_after_submission, surrogate_population
 
 
-@dataclass(frozen=True)
-class OptimizationResult:
-    generation_index: int
-    population: Population
-    costs: Costs
-    history_count: int
-    source: str
-    surrogate_used: bool = False
-    diagnostics: dict[str, object] = field(default_factory=dict)
-
-
-def _config_population_size(
-    config: LoadedConfig, population_size: int | None
-) -> int:
-    return int(population_size or config.OPTIMIZE_POPULATION_SIZE)
-
-
-def _config_seed(config: LoadedConfig, random_seed: int | None) -> int:
-    return int(config.OPTIMIZE_RANDOM_SEED if random_seed is None else random_seed)
-
-
-def _surrogate_requested(config: LoadedConfig) -> bool:
+def _surrogate_requested(config) -> bool:
     alpha = int(getattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1))
     beta = int(getattr(config, "OPTIMIZE_SURROGATE_BETA", 0))
     return alpha > 1 or beta > 0
 
 
-def run_one_generation(
-    config: LoadedConfig,
+def run_generation(
+    generation: GenerationContext,
     *,
-    generation_index: int = 0,
-    population_size: int | None = None,
-    variable_count: int | None = None,
-    random_seed: int | None = None,
-    run_id: str | None = None,
-    optimization_index: int | None = None,
-    session: CampaignSession | None = None,
-    snapshot: GenerationTaskSnapshot | None = None,
+    search,
+    surrogate,
 ) -> OptimizationResult:
-    size = _config_population_size(config, population_size)
-    seed = _config_seed(config, random_seed)
-    history = history_records(
-        config.workspace,
-        session=session,
-        snapshot=snapshot,
-    )
-    problem = resolve_problem_info(config.workspace, variable_count, history)
+    config = generation.config
+    size = generation.population_size
+    seed = generation.random_seed
+    history = generation.history
     context = make_context(
         config,
-        problem,
+        generation.problem,
         population_size=size,
         seed=seed,
-        generation_index=int(generation_index),
+        generation_index=generation.generation_index,
+        search_algorithm=search.resolve_algorithm(
+            generation.problem.objective_count
+        ),
     )
     diagnostics: dict[str, object] = pymoo_diagnostics(context)
     diagnostics.update(
@@ -86,22 +47,22 @@ def run_one_generation(
         }
     )
     surrogate_used = False
-    rng = random.Random(seed + int(generation_index) * 1009)
+    rng = random.Random(seed + generation.generation_index * 1009)
     source = "gpsaf_random"
 
     if history and _surrogate_requested(config):
         diagnostics.update(
             ensure_surrogate_fresh_enough(
-                config.workspace,
-                int(generation_index),
-                session=session,
-                snapshot=snapshot,
+                surrogate,
+                generation,
             )
         )
         population, surrogate_info = surrogate_population(
             history,
             context=context,
-            generation_index=int(generation_index),
+            generation_context=generation,
+            surrogate=surrogate,
+            generation_index=generation.generation_index,
             population_size=size,
             seed=seed,
         )
@@ -111,7 +72,7 @@ def run_one_generation(
                 context=context,
                 history=history,
                 size=size,
-                generation_index=int(generation_index),
+                generation_index=generation.generation_index,
                 rng=rng,
             )
             population = population_from_records(records)
@@ -127,7 +88,7 @@ def run_one_generation(
             context=context,
             history=history,
             size=size,
-            generation_index=int(generation_index),
+            generation_index=generation.generation_index,
             rng=rng,
         )
         population = population_from_records(records)
@@ -135,27 +96,20 @@ def run_one_generation(
     after_jobs_submitted = (
         (
             lambda: notify_surrogate_after_submission(
-                config.workspace,
-                int(generation_index),
-                session=session,
-                snapshot=snapshot,
+                surrogate,
+                generation,
             )
         )
         if _surrogate_requested(config)
         else None
     )
-    costs = evaluate(
-        config,
+    costs = evaluate_population(
+        generation,
         population,
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=int(generation_index),
         after_jobs_submitted=after_jobs_submitted,
-        session=session,
-        snapshot=snapshot,
     )
     return OptimizationResult(
-        generation_index=int(generation_index),
+        generation_index=generation.generation_index,
         population=population,
         costs=costs,
         history_count=len(history),
@@ -163,3 +117,6 @@ def run_one_generation(
         surrogate_used=surrogate_used,
         diagnostics=diagnostics,
     )
+
+
+__all__ = ["run_generation"]

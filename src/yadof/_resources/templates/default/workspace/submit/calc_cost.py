@@ -6,10 +6,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from yadof.job_template.cost_misc import (
-    calculate_rawdata_cost,
-    soft_cost,
-)
+from yadof.job_template.cost_misc import calculate_rawdata_cost, soft_cost
 from yadof.job_template.rawdata_contract import RawDataItem, RawDataView
 
 

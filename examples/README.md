@@ -11,8 +11,8 @@ artifacts, and should not be edited or used in place as campaign workspaces.
 conversion. It demonstrates:
 
 - a versioned `.yadof/workspace.json` marker and task-level `config.py`;
-- parameter definitions, workflow orchestration, and cost calculation under
-  `job_template/`;
+- parameter definitions and workflow orchestration under `job_template/`, with
+  cost and optimization composition under fixed `submit/`;
 - task-variable HFSS/objective code calling yadof worker/cost helpers for invariant
   lifecycle, transport, rawData, and cost mechanics;
 - an active task-local `hfss_com.py` copied from the packaged adapter resources;

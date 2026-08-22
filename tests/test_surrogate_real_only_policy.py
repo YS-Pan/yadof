@@ -201,24 +201,27 @@ def test_bootstrap_members_only_receive_rows_from_real_training_evidence(
         )
 
 
-def test_optimizer_records_discard_member_spread(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_optimizer_records_discard_member_spread() -> None:
     import yadof.surrogate.api as surrogate_api
 
+    class StubSurrogate:
+        def __init__(self, interval) -> None:
+            self.interval = interval
+
+        def predict_population(self, _context, _rows):
+            return (((0.2,), (self.interval,)),)
+
     source = [CandidateRecord(x=(0.25,), origin="test")]
-    monkeypatch.setattr(
-        surrogate_api,
-        "predict_population",
-        lambda _workspace, _rows: (((0.2,), ((-1000.0, 1000.0),)),),
+    wide = predict_records(
+        StubSurrogate((-1000.0, 1000.0)),
+        object(),
+        source,
     )
-    wide = predict_records(Path("unused"), source)
-    monkeypatch.setattr(
-        surrogate_api,
-        "predict_population",
-        lambda _workspace, _rows: (((0.2,), ((0.19, 0.21),)),),
+    narrow = predict_records(
+        StubSurrogate((0.19, 0.21)),
+        object(),
+        source,
     )
-    narrow = predict_records(Path("unused"), source)
 
     assert wide == narrow
     assert not hasattr(wide[0], "intervals")
@@ -230,6 +233,7 @@ def _dummy_publication(
     *,
     generation: int,
 ) -> tuple[SurrogateState, Path]:
+    strategy_signature = "1" * 64
     schema = RawDataSchema(
         templates=({"data": np.zeros((1,), dtype=np.float32)},),
         modeled_slots=(
@@ -248,6 +252,7 @@ def _dummy_publication(
         coord_fourier_features=2,
     )
     signature = checkpoints.semantic_state_signature(
+        strategy_signature=strategy_signature,
         parameter_names=("x",),
         parameter_definition_signature={"parameters": (), "constraints": ()},
         schema=schema,
@@ -263,7 +268,7 @@ def _dummy_publication(
     ) = checkpoints.new_publication_paths(
         root,
         generation_index=generation,
-        state_signature=signature,
+        strategy_signature=strategy_signature,
     )
     staged_artifact_dir.mkdir(parents=True)
     model = modeling.build_inr_model(1, 1, train_cfg)
@@ -282,6 +287,7 @@ def _dummy_publication(
         model_path=artifact_dir / "model_aux.npz",
         artifact_dir=artifact_dir,
         model_name="conditional_inr_rawdata_deep_ensemble",
+        strategy_signature=strategy_signature,
         state_signature=signature,
         run_namespace=run_namespace,
         component_namespace=component_namespace,

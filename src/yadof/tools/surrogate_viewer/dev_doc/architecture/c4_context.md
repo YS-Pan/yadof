@@ -13,7 +13,8 @@
 ## External Systems
 
 - The selected **yadof workspace** supplies effective configuration, parameter and
-  objective definitions, completed records, rawData, and checkpoint artifacts.
+  objective definitions, completed records, rawData, the active optimization
+  strategy pointer, and retained checkpoint artifacts.
 - The enclosing **yadof package** supplies configuration/task loading, record
   access, rawData contracts, checkpoint model loading, prediction, reconstruction,
   denormalization, current cost calculation, and CLI routing.
@@ -46,6 +47,8 @@ read many workspace files. It must not:
 - edit configuration, records, rawData, or checkpoints;
 - persist an audit cache into the workspace;
 - silently switch to a different workspace.
+- combine checkpoint artifacts from inactive strategy/component namespaces with
+  the active strategy's report.
 
 ## Package-Internal Compatibility Boundary
 

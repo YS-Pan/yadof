@@ -1,7 +1,7 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.3.0**. Evaluation
+or HTCondor workflows. The current packaged release is **0.4.0**. Evaluation
 history uses immutable standard-ZIP segments plus immutable metadata events.
 
 Its durable modeling contract is:
@@ -38,9 +38,14 @@ ready for additional examples.
 Install the wheel into the Python environment used on the submit machine:
 
 ```powershell
-python -m pip install .\dist\yadof-0.3.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.3.0-py3-none-any.whl[viewer]"
+python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[surrogate]"
+python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[viewer]"
 ```
+
+The default workspace composes conditional INR, so `init`, `check`, and `run`
+require the `surrogate` extra (the `viewer` extra includes the same Torch runtime).
+A core-only installation remains valid for an existing workspace whose
+`submit/optimization.py` selects no surrogate component.
 
 Ask the AI agent to initialize and author the task, or use the underlying commands
 directly:
@@ -105,10 +110,13 @@ detection details, and the package's declared compatibility boundary.
 ## Package and workspace boundary
 
 The package owns framework code, defaults, worker support, templates, adapters,
-tools, and documentation. A workspace owns `config.py`, `job_template/`, jobs,
+tools, and documentation. A workspace owns `config.py`, fixed `submit/`,
+`job_template/`, jobs,
 recorded raw evidence, surrogate checkpoints, logs, and tool output. Package files
 are treated as read-only and there is no `project.*` compatibility namespace.
-Cross-task invariant code belongs in yadof; workspace `workflow.py`/`calc_cost.py`
+Cross-task invariant code belongs in yadof; workspace
+`job_template/workflow.py`, `submit/calc_cost.py`, and
+`submit/optimization.py`
 contain only behavior that can change with the optimization task and call package
 helpers for everything else.
 

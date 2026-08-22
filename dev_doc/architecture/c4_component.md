@@ -7,7 +7,7 @@
   writes.
 - `config`: immutable effective values with package < workspace < temporary override
   precedence and validation.
-- `task_loader`: fresh compile/execute in temporary module namespaces, including
+- `task_loader`: fresh compile/execute from either selected source root in temporary module namespaces, including
   workspace-local helper packages without lasting `sys.path` or `sys.modules`
   pollution.
 - `_resources`: generic workspace template, reusable adapter references, invariant
@@ -15,12 +15,12 @@
 
 ## Task interpretation
 
-- `job_template.api`: current parameter/objective queries, assignment
-  materialization, normalization, dynamic cost, importance weights, and task
+- `job_template.api`: canonical parameter queries, submit-side objective/cost
+  loading, assignment materialization, normalization, dynamic cost, and task
   validation.
 - `parameters_constraints_class`: canonical submit-side `Parameter` semantics.
-- `rawdata_contract`: schema-versioned `.npz` validation, rawData views, reusable
-  axis-curve reduction, and importance-weight allocation.
+- `rawdata_contract`: schema-versioned `.npz` validation, rawData views, and reusable
+  axis-curve reduction.
 - `cost_misc`: neutral multi-sample/defined/custom-callback cost calculation,
   slow-tail algebraic physical-to-`[0, 1]` objective mapping, result-width
   validation,
@@ -58,8 +58,8 @@
   explicit file-backed or memory-backed rawData and an optional real job path.
 - `finalizer`: the single backend-neutral rawData ownership, current-cost,
   `JobResult` finalization, and non-blocking recorder-offer boundary.
-- `task_snapshot`: generation-scoped task-tree capture, separate
-  interpretation/evaluation fingerprints, full snapshot identity, and stable
+- `task_snapshot`: generation-scoped complete `submit/` plus `job_template/`
+  capture, separate interpretation/evaluation/optimization fingerprints, full snapshot identity, and stable
   parameter/objective-shape validation.
 
 ## Durable evidence and optimization
@@ -72,10 +72,14 @@
   and unrelated files are outside its surface. Its cost-view snapshot freezes names
   once and streams every segment through one open ZIP for structural checks, NPZ
   decode/schema validation, and candidate diagnostics.
-- `optimize`: pymoo GA/NSGA-III mechanics, GPSAF pressure, warm start, generation
-  metadata, start/resume, and optional strict all-infinite failure.
-- `surrogate`: workspace-keyed schedules/state, conditional INR deep ensemble,
-  rawData prediction, dynamic cost conversion, audits, and recoverable checkpoints.
+- `optimize.strategy`, `components`, `state`: common campaign result/context and
+  real-evaluation boundary, snapshotted workspace-strategy loading, thin lazy pymoo
+  GA/NSGA-III components, irreducible GPSAF assistance, and one active semantic
+  strategy pointer with retained namespaces. The package has no complete-method
+  selector or registry.
+- `surrogate`: lazy conditional-INR component, strategy/component-keyed schedule and
+  state, rawData prediction, dynamic cost conversion, and atomic recoverable
+  checkpoints scoped to the active strategy.
 - `tools`, `_resources`: reusable `tools.cost_viewer` package with left-axis
   objective/average costs and a right-axis all-individual versus
   current-generation hypervolume interval, shaded and bounded by thin translucent
@@ -108,7 +112,9 @@
 
 ## Dependency direction
 
-`optimize` consumes public evaluation, history, task, and surrogate APIs.
+The campaign engine consumes public evaluation/history/task contracts and invokes
+one workspace-owned strategy. GPSAF consumes only the narrow injected search and
+surrogate seams; concrete pymoo algorithms and Torch runtime load on selection.
 `evaluate_manager` consumes task and recorded-data APIs. `recorded_data` and
 `surrogate` may ask `job_template` to reinterpret evidence. Core runtime modules
 never import `tools`. Workspace workflows may import files copied beside them and

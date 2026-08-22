@@ -27,7 +27,6 @@ RESERVED_WORKER_FILE_NAMES = frozenset(PACKAGE_WORKER_FILES)
 
 EXCLUDED_TASK_NAMES = {
     "__pycache__",
-    "calc_cost.py",
     "cost.json",
     "rawData.zip",
     "metadata.json",
@@ -89,7 +88,7 @@ def new_job_name(prefix: str = "job") -> str:
 
 
 def validate_task_payload(config: LoadedConfig) -> None:
-    """Reject task files that would overwrite package-owned job support."""
+    """Reject reserved or submit-only files in the evaluate-side payload."""
 
     reserved = {name.casefold(): name for name in RESERVED_WORKER_FILE_NAMES}
     collisions = []
@@ -107,6 +106,17 @@ def validate_task_payload(config: LoadedConfig) -> None:
         raise JobPreparationError(
             "workspace task payload collides with package worker support: "
             f"{details}. Rename or remove the task file; yadof never overwrites it."
+        )
+    misplaced = [
+        path
+        for path in config.workspace.job_template_dir.iterdir()
+        if path.name.casefold() in {"calc_cost.py", "optimization.py"}
+    ]
+    if misplaced:
+        details = ", ".join(str(path) for path in misplaced)
+        raise JobPreparationError(
+            "submit-only source is misplaced in job_template and would enter an "
+            f"execute payload: {details}. Move it below workspace submit/."
         )
 
 

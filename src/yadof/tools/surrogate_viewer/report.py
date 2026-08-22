@@ -67,9 +67,12 @@ def build_workspace_summary(viewer: SurrogateWorkspace) -> ReportPayload:
         for index, name in enumerate(viewer.rawdata_names)
     ]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "analysis": "surrogate_workspace_summary",
         "workspace": str(Path(viewer.root).resolve()),
+        "strategy_signature": str(viewer.strategy_signature),
+        "run_namespace": str(viewer.run_namespace),
+        "component_namespace": str(viewer.component_namespace),
         "checkpoint_count": len(viewer.checkpoints),
         "checkpoints": [
             {
@@ -81,6 +84,15 @@ def build_workspace_summary(viewer: SurrogateWorkspace) -> ReportPayload:
                 ),
                 "state_signature": str(
                     checkpoint.payload["state_signature"]
+                ),
+                "strategy_signature": str(
+                    checkpoint.payload.get("strategy_signature", "")
+                ),
+                "run_namespace": str(
+                    checkpoint.payload.get("run_namespace", "")
+                ),
+                "component_namespace": str(
+                    checkpoint.payload.get("component_namespace", "")
                 ),
                 "path": str(Path(checkpoint.path).resolve()),
             }
@@ -198,9 +210,12 @@ def build_error_audit_report(
             }
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "analysis": "surrogate_cross_generation_error_audit",
         "workspace": str(Path(viewer.root).resolve()),
+        "strategy_signature": str(viewer.strategy_signature),
+        "run_namespace": str(viewer.run_namespace),
+        "component_namespace": str(viewer.component_namespace),
         "sample_fraction": float(audit.sample_fraction),
         "random_seed": random_seed,
         "quantity": {
@@ -253,6 +268,9 @@ def format_workspace_summary(
     lines = [
         "surrogate workspace summary",
         f"workspace: {payload['workspace']}",
+        "scope: "
+        f"{payload['run_namespace']}/components/{payload['component_namespace']} "
+        f"(strategy {payload['strategy_signature'][:12]})",
         f"checkpoints: {payload['checkpoint_count']}",
     ]
     for checkpoint in payload["checkpoints"]:
@@ -262,6 +280,7 @@ def format_workspace_summary(
             f"samples={checkpoint['sample_count']}, "
             f"members={checkpoint['member_count']}, "
             f"policy={checkpoint['training_policy']}, "
+            f"strategy={checkpoint['strategy_signature'][:12] or 'unknown'}, "
             f"state={checkpoint['state_signature'][:12]}"
         )
     lines.append(
@@ -320,6 +339,9 @@ def format_error_audit_report(
     lines = [
         "surrogate cross-generation error audit",
         f"workspace: {payload['workspace']}",
+        "scope: "
+        f"{payload['run_namespace']}/components/{payload['component_namespace']} "
+        f"(strategy {payload['strategy_signature'][:12]})",
         f"sample fraction: {_format_number(payload['sample_fraction'])}",
         f"random seed: {payload['random_seed']}",
         f"quantity: {payload['quantity']['selector']}",

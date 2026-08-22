@@ -7,7 +7,7 @@ from ..recorded_data import api as recorded_api
 from ..recorded_data.session import CampaignSession
 from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
-from .gpsaf import OptimizationResult
+from .strategy import OptimizationResult
 
 
 def now_text() -> str:
@@ -101,11 +101,21 @@ def record_generation_metadata(
             if key not in {"costs", "pred_costs"}
         },
     }
+    for name in (
+        "strategy_signature",
+        "strategy_identity",
+        "backend_distribution",
+        "backend_version",
+        "backend_algorithm",
+    ):
+        if name in result.diagnostics:
+            data[name] = result.diagnostics[name]
     if snapshot is not None:
         data.update(
             {
                 "interpretation_fingerprint": snapshot.interpretation_fingerprint,
                 "evaluation_fingerprint": snapshot.evaluation_fingerprint,
+                "optimization_fingerprint": snapshot.optimization_fingerprint,
                 "task_snapshot_id": snapshot.task_snapshot_id,
             }
         )

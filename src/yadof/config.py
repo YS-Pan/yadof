@@ -358,17 +358,79 @@ def _merge_layer(
 def _validate_task_paths(workspace: WorkspaceContext) -> None:
     if not workspace.root.is_dir():
         raise ConfigError(f"workspace directory does not exist: {workspace.root}")
+    if not workspace.submit_dir.is_dir():
+        legacy_cost = workspace.job_template_dir / "calc_cost.py"
+        if legacy_cost.is_file():
+            raise ConfigError(
+                "legacy workspace layout detected: move job_template/calc_cost.py "
+                "to submit/calc_cost.py and add submit/optimization.py, or create a "
+                "fresh workspace and copy the task sources explicitly"
+            )
+        raise ConfigError(
+            f"workspace submit directory does not exist: {workspace.submit_dir}"
+        )
     if not workspace.job_template_dir.is_dir():
         raise ConfigError(
             f"workspace job_template directory does not exist: {workspace.job_template_dir}"
         )
-    required = ("parameters_constraints.py", "workflow.py", "calc_cost.py")
-    missing = [name for name in required if not (workspace.job_template_dir / name).is_file()]
-    if missing:
+    misplaced = [
+        name
+        for name in ("calc_cost.py", "optimization.py")
+        if (workspace.job_template_dir / name).exists()
+    ]
+    if misplaced:
+        raise ConfigError(
+            "submit-only source must not be placed in job_template: "
+            + ", ".join(misplaced)
+            + "; move it below the fixed workspace submit/ directory"
+        )
+    job_required = ("parameters_constraints.py", "workflow.py")
+    job_missing = [
+        name
+        for name in job_required
+        if not (workspace.job_template_dir / name).is_file()
+    ]
+    if job_missing:
         raise ConfigError(
             "workspace job_template is missing required task file(s): "
-            + ", ".join(missing)
+            + ", ".join(job_missing)
         )
+    submit_required = ("calc_cost.py", "optimization.py")
+    submit_missing = [
+        name for name in submit_required if not (workspace.submit_dir / name).is_file()
+    ]
+    if submit_missing:
+        raise ConfigError(
+            "workspace submit is missing required submit-side file(s): "
+            + ", ".join(submit_missing)
+        )
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    return left == right or left in right.parents or right in left.parents
+
+
+def _validate_workspace_path_boundaries(workspace: WorkspaceContext) -> None:
+    paths = {
+        "submit": workspace.submit_dir,
+        "job_template": workspace.job_template_dir,
+        "jobs": workspace.jobs_dir,
+        "recorded_data": workspace.recorded_data_dir,
+        "surrogate checkpoints": workspace.surrogate_checkpoint_dir,
+        "logs": workspace.logs_dir,
+        "tool output": workspace.tool_output_dir,
+        "fast scratch": workspace.fast_evaluation_scratch_dir,
+    }
+    names = tuple(paths)
+    for index, left_name in enumerate(names):
+        for right_name in names[index + 1 :]:
+            left = paths[left_name]
+            right = paths[right_name]
+            if _paths_overlap(left, right):
+                raise ConfigError(
+                    f"workspace paths must not overlap: {left_name}={left} and "
+                    f"{right_name}={right}"
+                )
 
 
 def load_config(
@@ -417,6 +479,7 @@ def load_config(
     effective_workspace = base_workspace.with_path_settings(path_values)  # type: ignore[arg-type]
     for name, path in effective_workspace.path_settings().items():
         values[name] = path
+    _validate_workspace_path_boundaries(effective_workspace)
     if validate_task_paths:
         _validate_task_paths(effective_workspace)
     return LoadedConfig(

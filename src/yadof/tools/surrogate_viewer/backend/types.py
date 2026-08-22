@@ -31,10 +31,19 @@ class CheckpointInfo:
     payload: Mapping[str, object]
 
     @property
+    def strategy_signature(self) -> str:
+        return str(self.payload.get("strategy_signature", ""))
+
+    @property
+    def run_namespace(self) -> str:
+        return str(self.payload.get("run_namespace", ""))
+
+    @property
     def label(self) -> str:
         return (
             f"Generation {self.generation} · {self.sample_count} samples · "
-            f"{self.member_count} members"
+            f"{self.member_count} members · strategy "
+            f"{self.strategy_signature[:8]}"
         )
 
 

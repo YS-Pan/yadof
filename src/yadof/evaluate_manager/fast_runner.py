@@ -717,7 +717,7 @@ def _fast_task_signature(config: LoadedConfig) -> str:
         relative = path.relative_to(root)
         if any(part in {"__pycache__", ".pytest_cache", "rawData"} for part in relative.parts):
             continue
-        if relative.as_posix() in {"calc_cost.py", "parameters_constraints.py"}:
+        if relative.as_posix() == "parameters_constraints.py":
             continue
         digest.update(relative.as_posix().encode("utf-8"))
         digest.update(hashlib.sha256(path.read_bytes()).digest())

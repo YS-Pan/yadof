@@ -141,10 +141,12 @@ def _verify_clean_external_install(wheel_path: Path) -> None:
                         "from yadof import WorkspaceContext, load_config; "
                         "from yadof.task_loader import load_task_module; "
                         "root=Path('workspace').resolve(); root.mkdir(); "
-                        "task=root/'job_template'; task.mkdir(); "
+                        "task=root/'job_template'; task.mkdir(); submit=root/'submit'; submit.mkdir(); "
                         "(root/'config.py').write_text(\"JOBS_DIR='state/jobs'\\n\", encoding='utf-8'); "
                         "[(task/name).write_text('# task\\n', encoding='utf-8') for name in "
-                        "('parameters_constraints.py','workflow.py','calc_cost.py')]; "
+                        "('parameters_constraints.py','workflow.py')]; "
+                        "[(submit/name).write_text('# submit task\\n', encoding='utf-8') for name in "
+                        "('calc_cost.py','optimization.py')]; "
                         "(task/'helper.py').write_text('VALUE=17\\n', encoding='utf-8'); "
                         "(task/'probe.py').write_text('from helper import VALUE\\n', encoding='utf-8'); "
                         "before=tuple(sys.path); cfg=load_config(root); "
@@ -435,9 +437,10 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             assert {
                 ".yadof/workspace.json",
                 "config.py",
-                "job_template/calc_cost.py",
                 "job_template/parameters_constraints.py",
                 "job_template/workflow.py",
+                "submit/calc_cost.py",
+                "submit/optimization.py",
                 "recorded_data/segments",
             } <= workspace_paths
             assert any(path.endswith(".zip") for path in workspace_paths)
@@ -473,8 +476,9 @@ def test_package_metadata_and_source_resources() -> None:
     assert project["scripts"] == {"yadof": "yadof.cli:main"}
     assert "psutil>=5.9,<8" in project["dependencies"]
     assert {"surrogate", "plot", "hfss", "dev"} <= set(project["optional-dependencies"])
+    assert project["optional-dependencies"]["surrogate"] == ["torch>=2.2,<3"]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.3.0"
+    assert yadof.__version__ == "0.4.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(
@@ -496,7 +500,7 @@ def test_package_metadata_and_source_resources() -> None:
     assert template_names() == ("default",)
     manifest = read_template_manifest("default")
     assert manifest["name"] == "default"
-    assert manifest["template_version"] == 1
+    assert manifest["template_version"] == 2
 
     template_root = REPOSITORY_ROOT / "src" / "yadof" / "_resources" / "templates" / "default"
     template_text = "\n".join(
@@ -666,7 +670,11 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/job_template/rawdata_contract.py" in wheel_names
         assert "yadof/job_template/cost_misc.py" in wheel_names
         assert "yadof/optimize/api.py" in wheel_names
-        assert "yadof/optimize/gpsaf.py" in wheel_names
+        assert "yadof/optimize/components.py" in wheel_names
+        assert "yadof/optimize/gpsaf_assistance.py" in wheel_names
+        assert "yadof/optimize/state.py" in wheel_names
+        assert "yadof/optimize/strategy.py" in wheel_names
+        assert "yadof/optimize/gpsaf.py" not in wheel_names
         assert "yadof/surrogate/runtime.py" in wheel_names
         assert "yadof/surrogate/scheduler.py" in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
@@ -706,8 +714,14 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
             "yadof/_resources/templates/default/workspace/job_template/workflow.py"
         ) in wheel_names
         assert (
-            "yadof/_resources/templates/default/workspace/job_template/calc_cost.py"
+            "yadof/_resources/templates/default/workspace/submit/calc_cost.py"
         ) in wheel_names
+        assert (
+            "yadof/_resources/templates/default/workspace/submit/optimization.py"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/templates/default/workspace/job_template/calc_cost.py"
+        ) not in wheel_names
         assert "yadof/_resources/docs/dev_doc/README.md" in wheel_names
         assert "yadof/_resources/docs/user_doc/README.md" in wheel_names
         for source in (REPOSITORY_ROOT / "user_doc").rglob("*"):

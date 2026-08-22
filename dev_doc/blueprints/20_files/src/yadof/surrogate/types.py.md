@@ -12,7 +12,7 @@
 
 ## Non-Obvious Techniques
 - `SurrogateState` holds active/namespace manifest paths, artifact/model paths,
-  semantic state/run/component identity, schema/scaler/model, train config, and
+  active strategy plus semantic state/run/component identity, schema/scaler/model, train config, and
   compact training history. It does not hold duplicated training evidence or
   historical trust/error surfaces.
 

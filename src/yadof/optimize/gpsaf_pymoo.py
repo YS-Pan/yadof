@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from importlib import metadata
 from math import comb
 import random
 from typing import Sequence
@@ -22,16 +23,13 @@ from ..workspace import WorkspaceContext
 
 from .gpsaf_misc import (
     CandidateRecord,
-    HistoryRecord,
-    Population as OptimizerPopulation,
     clip01,
     history_keys,
-    history_variable_count,
     key,
-    resolve_variable_count,
     total_cost,
 )
-from .problem_info import ProblemInfo, from_job_template
+from .problem_info import ProblemInfo
+from .strategy import HistoryRecord, Population as OptimizerPopulation
 
 
 @dataclass(frozen=True)
@@ -48,6 +46,7 @@ class PymooContext:
     population_size: int
     seed: int
     generation_index: int
+    search_algorithm: str
     baseline_optimizer: str
     problem_adapter: Problem
     reference_directions: ReferenceDirectionInfo | None = None
@@ -147,7 +146,9 @@ def _make_algorithm(context: PymooContext):
         eta=float(getattr(config, "OPTIMIZE_MUTATION_ETA", 20.0)),
         at_least_once=True,
     )
-    if int(context.problem.objective_count) <= 1:
+    if context.search_algorithm == "ga":
+        if int(context.problem.objective_count) != 1:
+            raise ValueError("pymoo GA requires exactly one objective")
         return GA(
             pop_size=int(context.population_size),
             n_offsprings=int(context.population_size),
@@ -156,6 +157,10 @@ def _make_algorithm(context: PymooContext):
             mutation=mutation,
             eliminate_duplicates=True,
         )
+    if context.search_algorithm != "nsga3":
+        raise ValueError(f"unsupported pymoo algorithm: {context.search_algorithm!r}")
+    if int(context.problem.objective_count) < 2:
+        raise ValueError("pymoo NSGA-III requires at least two objectives")
     if context.reference_directions is None:
         raise ValueError("NSGA-III requires reference directions for multi-objective optimization")
     return NSGA3(
@@ -176,9 +181,13 @@ def make_context(
     population_size: int,
     seed: int,
     generation_index: int,
+    search_algorithm: str,
 ) -> PymooContext:
-    reference_directions = _reference_directions(
-        config, problem.objective_count, population_size
+    selected_algorithm = str(search_algorithm).strip().lower()
+    reference_directions = (
+        _reference_directions(config, problem.objective_count, population_size)
+        if selected_algorithm == "nsga3"
+        else None
     )
     return PymooContext(
         config=config,
@@ -186,7 +195,10 @@ def make_context(
         population_size=int(population_size),
         seed=int(seed),
         generation_index=int(generation_index),
-        baseline_optimizer="pymoo.GA" if int(problem.objective_count) <= 1 else "pymoo.NSGA3",
+        search_algorithm=selected_algorithm,
+        baseline_optimizer=(
+            "pymoo.GA" if selected_algorithm == "ga" else "pymoo.NSGA3"
+        ),
         problem_adapter=UnitBoxProblem(problem),
         reference_directions=reference_directions,
     )
@@ -412,35 +424,13 @@ def baseline_records(
     )
 
 
-def _history_objective_count(history: Sequence[HistoryRecord]) -> int:
-    for record in history:
-        if record.costs:
-            return len(record.costs)
-    return 1
-
-
-def resolve_problem_info(
-    workspace: WorkspaceContext,
-    variable_count: int | None,
-    history: Sequence[HistoryRecord],
-) -> ProblemInfo:
-    count_hint = history_variable_count(history) if variable_count is None else int(variable_count)
-    try:
-        return from_job_template(workspace, count_hint)
-    except Exception:
-        if count_hint is None:
-            count_hint = resolve_variable_count(workspace, variable_count, history)
-        objective_count = _history_objective_count(history)
-        return ProblemInfo(
-            variable_count=int(count_hint),
-            objective_count=int(objective_count),
-            objective_names=tuple(f"cost_{idx}" for idx in range(int(objective_count))),
-        )
-
-
 def diagnostics(context: PymooContext) -> dict[str, object]:
     out: dict[str, object] = {
         "optimizer": "gpsaf",
+        "search_adapter": "pymoo-search-v1",
+        "backend_distribution": "pymoo",
+        "backend_version": metadata.version("pymoo"),
+        "backend_algorithm": context.search_algorithm,
         "baseline_optimizer": context.baseline_optimizer,
         "objective_count": int(context.problem.objective_count),
         "objective_names": tuple(context.problem.objective_names),

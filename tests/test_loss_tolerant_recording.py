@@ -226,7 +226,7 @@ def test_hot_reload_reinterprets_cost_and_parameter_range(tmp_path: Path) -> Non
         old_row = session.historical_results(first)[-1]
         assert old_row[2] == finalized.costs
 
-        calc = root / "job_template/calc_cost.py"
+        calc = root / "submit/calc_cost.py"
         calc.write_text(
             calc.read_text(encoding="utf-8").replace(
                 "RESPONSE_WORST = 1.0", "RESPONSE_WORST = 10.0"

@@ -42,6 +42,7 @@ class WorkspaceContext:
 
     root: Path
     config_file: Path
+    submit_dir: Path
     job_template_dir: Path
     jobs_dir: Path
     recorded_data_dir: Path
@@ -67,6 +68,7 @@ class WorkspaceContext:
         return cls(
             root=workspace_root,
             config_file=workspace_root / "config.py",
+            submit_dir=workspace_root / "submit",
             job_template_dir=_workspace_path(workspace_root, job_template_dir),
             jobs_dir=_workspace_path(workspace_root, jobs_dir),
             recorded_data_dir=_workspace_path(workspace_root, recorded_data_dir),

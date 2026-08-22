@@ -25,6 +25,8 @@ def _task_files(root: Path, *, limit: int, offset: int) -> WorkspaceContext:
     root.mkdir()
     task_dir = root / "job_template"
     task_dir.mkdir()
+    submit_dir = root / "submit"
+    submit_dir.mkdir()
     (root / "config.py").write_text(
         "EVALUATION_MODE = 'local'\n"
         "OPTIMIZE_POPULATION_SIZE = 21\n"
@@ -32,7 +34,7 @@ def _task_files(root: Path, *, limit: int, offset: int) -> WorkspaceContext:
         encoding="utf-8",
     )
     (task_dir / "local_values.py").write_text(
-        f"LIMIT = {limit}\nOFFSET = {offset}\n", encoding="utf-8"
+        f"LIMIT = {limit}\n", encoding="utf-8"
     )
     (task_dir / "parameters_constraints.py").write_text(
         "from yadof.job_template import Parameter\n"
@@ -43,8 +45,10 @@ def _task_files(root: Path, *, limit: int, offset: int) -> WorkspaceContext:
         "    return tuple(PARAMETERS)\n",
         encoding="utf-8",
     )
-    (task_dir / "calc_cost.py").write_text(
-        "from . import parameters_constraints\n"
+    (submit_dir / "local_values.py").write_text(
+        f"OFFSET = {offset}\n", encoding="utf-8"
+    )
+    (submit_dir / "calc_cost.py").write_text(
         "from local_values import OFFSET\n"
         "def calculate_cost(sample_rawdata, raw_variables=None):\n"
         "    return (float(sample_rawdata[0]['value']) + OFFSET,)\n"
@@ -52,6 +56,12 @@ def _task_files(root: Path, *, limit: int, offset: int) -> WorkspaceContext:
         "    return (f'objective_{OFFSET}',)\n"
         "def get_objective_count():\n"
         "    return len(get_objective_names())\n",
+        encoding="utf-8",
+    )
+    (submit_dir / "optimization.py").write_text(
+        "from yadof.optimize import pymoo_ga, real_search\n"
+        "def build_optimization():\n"
+        "    return real_search(search=pymoo_ga())\n",
         encoding="utf-8",
     )
     (task_dir / "workflow.py").write_text(
@@ -67,6 +77,7 @@ def test_workspace_paths_are_explicit_absolute_and_read_only_to_construct(tmp_pa
 
     assert context.root == root.resolve()
     assert context.config_file == root.resolve() / "config.py"
+    assert context.submit_dir == root.resolve() / "submit"
     assert context.job_template_dir == root.resolve() / "job_template"
     assert context.jobs_dir == root.resolve() / "jobs"
     assert context.recorded_data_dir == root.resolve() / "recorded_data"
@@ -117,7 +128,7 @@ def test_config_accepts_explicit_absolute_task_path(tmp_path: Path) -> None:
     context = _task_files(tmp_path / "workspace", limit=2, offset=1)
     external = tmp_path / "external_task"
     external.mkdir()
-    for name in ("parameters_constraints.py", "workflow.py", "calc_cost.py"):
+    for name in ("parameters_constraints.py", "workflow.py"):
         (external / name).write_text("# explicit task path\n", encoding="utf-8")
     context.config_file.write_text(
         f"JOB_TEMPLATE_DIR = {str(external)!r}\n", encoding="utf-8"
@@ -182,8 +193,39 @@ def test_config_validates_required_task_paths_before_batch_work(tmp_path: Path) 
     task_dir.mkdir()
     (task_dir / "parameters_constraints.py").write_text("PARAMETERS = ()\n", encoding="utf-8")
 
-    with pytest.raises(ConfigError, match="workflow.py, calc_cost.py"):
+    with pytest.raises(ConfigError, match="submit directory does not exist"):
         load_config(root)
+
+
+def test_config_reports_legacy_misplaced_and_overlapping_task_paths(
+    tmp_path: Path,
+) -> None:
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "config.py").write_text("EVALUATION_MODE = 'local'\n", encoding="utf-8")
+    legacy_task = legacy / "job_template"
+    legacy_task.mkdir()
+    for name in ("parameters_constraints.py", "workflow.py", "calc_cost.py"):
+        (legacy_task / name).write_text("# legacy task source\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="legacy workspace layout detected"):
+        load_config(legacy)
+
+    misplaced = _task_files(tmp_path / "misplaced", limit=2, offset=1)
+    (misplaced.job_template_dir / "optimization.py").write_text(
+        "# submit-only source\n", encoding="utf-8"
+    )
+    with pytest.raises(ConfigError, match="submit-only source"):
+        load_config(misplaced)
+
+    overlapping = _task_files(tmp_path / "overlapping", limit=2, offset=1)
+    overlapping.config_file.write_text(
+        overlapping.config_file.read_text(encoding="utf-8")
+        + "JOBS_DIR = 'submit/runtime'\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="paths must not overlap"):
+        load_config(overlapping)
 
 
 def test_config_and_task_loader_report_system_exit_as_validation_errors(tmp_path: Path) -> None:
@@ -218,7 +260,10 @@ def test_two_workspaces_and_fresh_edits_are_module_and_cache_isolated(tmp_path: 
 
     # Same-length content changes must be visible without relying on mtime/pyc rules.
     (first.job_template_dir / "local_values.py").write_text(
-        "LIMIT = 4\nOFFSET = 5\n", encoding="utf-8"
+        "LIMIT = 4\n", encoding="utf-8"
+    )
+    (first.submit_dir / "local_values.py").write_text(
+        "OFFSET = 5\n", encoding="utf-8"
     )
     first.config_file.write_text(
         "EVALUATION_MODE = 'local'\n"
@@ -237,11 +282,47 @@ def test_two_workspaces_and_fresh_edits_are_module_and_cache_isolated(tmp_path: 
     assert not tuple(second.root.rglob("__pycache__"))
 
 
+def test_submit_loader_supports_relative_import_and_cleans_up_after_failure(
+    tmp_path: Path,
+) -> None:
+    context = _task_files(tmp_path / "workspace", limit=2, offset=1)
+    original_sys_path = tuple(sys.path)
+    original_local_module = sys.modules.get("local_values")
+    (context.submit_dir / "relative_helper.py").write_text(
+        "VALUE = 11\n", encoding="utf-8"
+    )
+    (context.submit_dir / "relative_probe.py").write_text(
+        "from .relative_helper import VALUE\n", encoding="utf-8"
+    )
+    (context.submit_dir / "failing_probe.py").write_text(
+        "from local_values import OFFSET\nraise RuntimeError(f'failure-{OFFSET}')\n",
+        encoding="utf-8",
+    )
+
+    loaded = load_task_module(
+        context,
+        "relative_probe",
+        source_root=context.submit_dir,
+    )
+    assert loaded.VALUE == 11
+    with pytest.raises(ImportError, match="failure-1"):
+        load_task_module(
+            context,
+            "failing_probe",
+            source_root=context.submit_dir,
+        )
+
+    assert tuple(sys.path) == original_sys_path
+    assert sys.modules.get("local_values") is original_local_module
+    assert "relative_helper" not in sys.modules
+    assert "failing_probe" not in sys.modules
+
+
 def test_task_validation_rejects_removed_rawdata_importance_hook(
     tmp_path: Path,
 ) -> None:
     context = _task_files(tmp_path / "workspace", limit=2, offset=1)
-    calc_cost = context.job_template_dir / "calc_cost.py"
+    calc_cost = context.submit_dir / "calc_cost.py"
     calc_cost.write_text(
         calc_cost.read_text(encoding="utf-8")
         + "\ndef rawdata_importance_weights(sample_rawdata, **kwargs):\n"
@@ -265,7 +346,10 @@ def test_cost_interpreter_keeps_one_task_definition_for_a_history_batch(
         assert interpreter.calculate_costs((({"value": 3.0},),)) == ((4.0,),)
 
         (context.job_template_dir / "local_values.py").write_text(
-            "LIMIT = 8\nOFFSET = 7\n", encoding="utf-8"
+            "LIMIT = 8\n", encoding="utf-8"
+        )
+        (context.submit_dir / "local_values.py").write_text(
+            "OFFSET = 7\n", encoding="utf-8"
         )
         assert interpreter.objective_names == ("objective_1",)
         assert interpreter.normalize_variables((1.0,)) == pytest.approx((0.5,))

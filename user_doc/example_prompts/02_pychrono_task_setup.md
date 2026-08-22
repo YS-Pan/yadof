@@ -10,7 +10,7 @@ the task-authoring documents it references. Copy the packaged `chrono_com.py`
 adapter with `yadof task copy-adapter`; do not reimplement its subprocess
 protocol. Add a task-owned `chrono_worker.py` that imports PyChrono only inside the
 validated worker callback, builds the model described below, and writes only the
-schema-compatible rawData needed by current `calc_cost.py`. Keep objective policy
+schema-compatible rawData needed by current `submit/calc_cost.py`. Keep objective policy
 out of the worker. Make local/prepared and fast paths use the same child mechanics,
 with isolated candidate scratch, an explicit timeout, and diagnostic propagation.
 Do not install yadof or any package into the PyChrono environment, activate Conda,
@@ -20,5 +20,6 @@ Model and task requirements:
 - [describe bodies, joints, contact, loads, solver, and stepping]
 - [list assigned parameters and units]
 - [list measured raw evidence, arrays, axes, and units]
-- [define objective interpretation separately for calc_cost.py]
+- [define objective interpretation separately for submit/calc_cost.py]
+- [choose or retain the complete composition in submit/optimization.py]
 ```

@@ -70,6 +70,7 @@ class SurrogateState:
     model_path: Path
     artifact_dir: Path
     model_name: str
+    strategy_signature: str
     state_signature: str
     run_namespace: str
     component_namespace: str

@@ -7,7 +7,6 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from . import parameters_constraints as parameter_config
 from yadof.job_template.cost_misc import (
     ALL,
     RawVariables,
@@ -201,7 +200,6 @@ def calculate_cost(
         raw_variables,
         definitions=COST_DEFINITIONS,
         extract_value_for_cost=_extract_value_for_cost,
-        parameter_config=parameter_config,
         cost_curve=COST_CURVE,
         constraint_curve=CONSTRAINT_COST_CURVE,
     )
@@ -210,5 +208,4 @@ def calculate_cost(
 def get_objective_names() -> tuple[str, ...]:
     return objective_names_from_definitions(
         COST_DEFINITIONS,
-        parameter_config,
     )

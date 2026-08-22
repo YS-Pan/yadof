@@ -12,12 +12,11 @@
   approved implementation plan. On reactivation, re-audit the then-current
   architecture, mature packages, benchmarks, and user goals; discard obsolete
   assumptions instead of preserving compatibility with this draft.
-- Before starting this work, complete and archive these active manual toDos in
-  order:
-  1. `20260819_144148_simplify-surrogate-real-only-training.md`;
-  2. the coordinated
-     `20260820_125457_workspace-submit-optimization-composition.md` and
-     `20260818_173629_modular-surrogate-optimize-methods.md` work.
+- Its prerequisite manual toDos are now complete and archived under
+  `dev_doc/obsolete/`: real-only surrogate simplification, workspace submit-side
+  optimization composition, and coordinated optimize/surrogate modularization.
+  This does not reactivate the present research task; every other active toDo must
+  still be complete and the user must explicitly reactivate it.
 - Use their final real-only, rawData-field-balanced conditional-INR training
   contract, retained-but-isolated state policy, snapshotted
   `submit/optimization.py`, and one active strategy at a time as the only baseline.

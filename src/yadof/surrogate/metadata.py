@@ -49,6 +49,7 @@ def training_success_metadata(
         "skipped": bool(history.get("skipped", False)),
         "skip_reason": str(history.get("skip_reason", "")),
         "training_policy": str(history.get("training_policy", "real_field_balanced")),
+        "strategy_signature": state.strategy_signature,
         "state_signature": state.state_signature,
         "run_namespace": state.run_namespace,
         "component_namespace": state.component_namespace,
@@ -65,6 +66,7 @@ def training_failure_metadata(
     exc: BaseException,
     started_at: str | None = None,
     ended_at: str | None = None,
+    strategy_signature: str = "",
 ) -> dict[str, object]:
     ended = now_text() if ended_at is None else str(ended_at)
     return {
@@ -75,6 +77,7 @@ def training_failure_metadata(
         "ended_at": ended,
         "error_type": type(exc).__name__,
         "error_message": str(exc),
+        "strategy_signature": str(strategy_signature),
     }
 
 
@@ -113,6 +116,7 @@ def record_training_failure(
     exc: BaseException,
     started_at: str | None = None,
     ended_at: str | None = None,
+    strategy_signature: str = "",
 ) -> dict[str, object] | None:
     return record_surrogate_metadata(
         workspace,
@@ -121,6 +125,7 @@ def record_training_failure(
             exc=exc,
             started_at=started_at,
             ended_at=ended_at,
+            strategy_signature=strategy_signature,
         )
     )
 
