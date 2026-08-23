@@ -15,8 +15,13 @@ import benchmark_core as core
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("benchmark.toml")
 
 
-def _print_json(value: Any) -> None:
-    print(json.dumps(core._json_safe(value), ensure_ascii=False, indent=2, allow_nan=False))
+def _print_json(value: Any, *, pretty: bool = False) -> None:
+    options: dict[str, Any] = {"ensure_ascii": False, "allow_nan": False}
+    if pretty:
+        options["indent"] = 2
+    else:
+        options["separators"] = (",", ":")
+    print(json.dumps(core._json_safe(value), **options))
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -40,13 +45,29 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--arm", dest="arm_ids", action="append")
         command.add_argument("--seed", dest="seeds", action="append", type=int)
 
-    plan = commands.add_parser("plan", help="print a deterministic plan; writes nothing")
+    def add_full_json(command: argparse.ArgumentParser) -> None:
+        command.add_argument(
+            "--full-json",
+            action="store_true",
+            help="print the complete expanded JSON instead of the bounded agent summary",
+        )
+
+    def add_stream_output(command: argparse.ArgumentParser) -> None:
+        command.add_argument(
+            "--stream-output",
+            action="store_true",
+            help="also stream child stdout/stderr; logs are always preserved without this flag",
+        )
+
+    plan = commands.add_parser("plan", help="print a bounded deterministic plan; writes nothing")
     add_selection(plan)
+    add_full_json(plan)
 
     preflight = commands.add_parser(
         "preflight", help="validate baselines, strategies, resources, disk, and yadof checks"
     )
     add_selection(preflight)
+    add_full_json(preflight)
 
     run = commands.add_parser("run", help="create and execute a new immutable run")
     add_selection(run, suite_required=False)
@@ -63,6 +84,7 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help="override the suite failure policy",
     )
+    add_stream_output(run)
     resume = commands.add_parser(
         "resume", help="seal any interrupted attempt and create linked replacement attempts"
     )
@@ -73,11 +95,19 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help="override the immutable suite failure policy for this resume invocation",
     )
+    add_stream_output(resume)
     collect = commands.add_parser("collect", help="capture a new append-only public-API snapshot")
     collect.add_argument("--run-id", required=True)
 
-    report = commands.add_parser("report", help="render a new append-only report from latest collection")
+    report = commands.add_parser("report", help="render a new report and print its bounded agent summary")
     report.add_argument("--run-id", required=True)
+    add_full_json(report)
+
+    inspect = commands.add_parser(
+        "inspect",
+        help="print the bounded first-read summary for an existing run without changing it",
+    )
+    inspect.add_argument("--run-id", required=True)
     return parser
 
 
@@ -86,15 +116,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         config, paths = core.load_config(args.config)
         if args.command == "plan":
+            result = core.build_plan(
+                config,
+                paths,
+                args.suite,
+                case_ids=args.case_ids,
+                arm_ids=args.arm_ids,
+                seeds=args.seeds,
+            )
             _print_json(
-                core.build_plan(
-                    config,
-                    paths,
-                    args.suite,
-                    case_ids=args.case_ids,
-                    arm_ids=args.arm_ids,
-                    seeds=args.seeds,
-                )
+                result if args.full_json else core.summarize_plan(result),
+                pretty=args.full_json,
             )
             return 0
         if args.command == "preflight":
@@ -106,7 +138,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arm_ids=args.arm_ids,
                 seeds=args.seeds,
             )
-            _print_json(result)
+            _print_json(
+                result if args.full_json else core.summarize_preflight(result),
+                pretty=args.full_json,
+            )
             return 0 if result["ok"] else 2
         if args.command == "run":
             if args.resume:
@@ -125,7 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     seeds=selection["seeds"],
                 )
                 if not resume_preflight["ok"]:
-                    _print_json(resume_preflight)
+                    _print_json(core.summarize_preflight(resume_preflight))
                     return 2
                 core.verify_run_inputs(paths, spec)
                 state = core.execute_run(
@@ -133,8 +168,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     paths,
                     args.resume,
                     fail_fast_override=args.fail_fast,
+                    stream_subprocess_output=args.stream_output,
                 )
-                _print_json({"run_id": args.resume, "execution_state": state["status"]})
+                _print_json(core.summarize_run_state(_run_root, args.resume, state))
                 return 0 if state["status"] == "completed" else 1
             if not args.suite:
                 raise core.BenchmarkError("run requires --suite or --resume")
@@ -147,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seeds=args.seeds,
             )
             if not preflight_result["ok"]:
-                _print_json(preflight_result)
+                _print_json(core.summarize_preflight(preflight_result))
                 return 2
             spec = core.build_run_spec(
                 config,
@@ -156,14 +192,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 preflight_result,
                 label=args.label,
             )
-            run_id, _run_root = core.create_run(paths, spec, run_id=args.run_id)
+            run_id, run_root = core.create_run(paths, spec, run_id=args.run_id)
             state = core.execute_run(
                 config,
                 paths,
                 run_id,
                 fail_fast_override=args.fail_fast,
+                stream_subprocess_output=args.stream_output,
             )
-            _print_json({"run_id": run_id, "execution_state": state["status"]})
+            _print_json(core.summarize_run_state(run_root, run_id, state))
             return 0 if state["status"] == "completed" else 1
         if args.command == "resume":
             _run_root, spec, _state = core.load_run(paths, args.run_id)
@@ -177,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seeds=selection["seeds"],
             )
             if not resume_preflight["ok"]:
-                _print_json(resume_preflight)
+                _print_json(core.summarize_preflight(resume_preflight))
                 return 2
             core.verify_run_inputs(paths, spec)
             state = core.execute_run(
@@ -185,29 +222,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                 paths,
                 args.run_id,
                 fail_fast_override=args.fail_fast,
+                stream_subprocess_output=args.stream_output,
             )
-            _print_json({"run_id": args.run_id, "execution_state": state["status"]})
+            _print_json(core.summarize_run_state(_run_root, args.run_id, state))
             return 0 if state["status"] == "completed" else 1
         if args.command == "collect":
             path, collection = core.collect_run(paths, args.run_id)
             _print_json(
                 {
+                    "schema_version": core.SCHEMA_VERSION,
+                    "view": "collection-summary",
                     "run_id": args.run_id,
                     "collection": str(path),
                     "execution_state": collection["execution_state"],
+                    "metrics": str(paths.runs / args.run_id / "metrics.json"),
+                    "read_policy": "Do not read collection or metrics whole; run report next.",
+                    "next_command": ["report", "--run-id", args.run_id],
                 }
             )
             return 0
         if args.command == "report":
             json_path, markdown_path, report = core.report_run(paths, args.run_id)
             _print_json(
-                {
-                    "run_id": args.run_id,
-                    "report_json": str(json_path),
-                    "report_markdown": str(markdown_path),
-                    "purpose": report["purpose"],
-                }
+                report if args.full_json else core.inspect_run(paths, args.run_id),
+                pretty=args.full_json,
             )
+            return 0
+        if args.command == "inspect":
+            _print_json(core.inspect_run(paths, args.run_id))
             return 0
         raise AssertionError(f"unhandled command {args.command}")
     except core.BenchmarkError as exc:

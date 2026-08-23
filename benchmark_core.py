@@ -1078,7 +1078,7 @@ def _materialize_attempt_inputs(
     )
 
 
-def _stream_pipe(pipe: Any, output: Path, console: Any, prefix: str) -> None:
+def _stream_pipe(pipe: Any, output: Path, console: Any | None, prefix: str) -> None:
     with output.open("x", encoding="utf-8", errors="replace", newline="\n") as target:
         while True:
             raw = pipe.readline()
@@ -1087,8 +1087,9 @@ def _stream_pipe(pipe: Any, output: Path, console: Any, prefix: str) -> None:
             line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
             target.write(line)
             target.flush()
-            console.write(f"{prefix}{line}")
-            console.flush()
+            if console is not None:
+                console.write(f"{prefix}{line}")
+                console.flush()
 
 
 def _execute_logged(
@@ -1099,6 +1100,7 @@ def _execute_logged(
     attempt: dict[str, Any],
     timeout_sec: int,
     label: str,
+    stream_output: bool = False,
 ) -> dict[str, Any]:
     sequence = len(attempt["commands"]) + 1
     command_root = attempt_root / "commands" / f"{sequence:04d}-{_safe_id(label)}"
@@ -1124,7 +1126,14 @@ def _execute_logged(
         "stderr_sha256": None,
     }
     write_new_json(started_path, metadata)
-    print(f"[{label}] {' '.join(str(part) for part in command)}", flush=True)
+    if stream_output:
+        print(f"[{label}] {' '.join(str(part) for part in command)}", flush=True)
+    else:
+        print(
+            f"[{label}] started; log_dir={command_root.relative_to(attempt_root)}",
+            file=sys.stderr,
+            flush=True,
+        )
     started = time.perf_counter()
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
     process = subprocess.Popen(
@@ -1137,12 +1146,22 @@ def _execute_logged(
     assert process.stdout is not None and process.stderr is not None
     out_thread = threading.Thread(
         target=_stream_pipe,
-        args=(process.stdout, stdout_path, sys.stdout, f"[{label}:out] "),
+        args=(
+            process.stdout,
+            stdout_path,
+            sys.stdout if stream_output else None,
+            f"[{label}:out] ",
+        ),
         daemon=True,
     )
     err_thread = threading.Thread(
         target=_stream_pipe,
-        args=(process.stderr, stderr_path, sys.stderr, f"[{label}:err] "),
+        args=(
+            process.stderr,
+            stderr_path,
+            sys.stderr if stream_output else None,
+            f"[{label}:err] ",
+        ),
         daemon=True,
     )
     out_thread.start()
@@ -1166,6 +1185,13 @@ def _execute_logged(
     )
     write_new_json(finished_path, metadata)
     attempt["commands"].append(str(finished_path))
+    if not stream_output and (returncode != 0 or metadata["timed_out"]):
+        print(
+            f"[{label}] failed; returncode={returncode}; timed_out={metadata['timed_out']}; "
+            f"metadata={finished_path}",
+            file=sys.stderr,
+            flush=True,
+        )
     return metadata
 
 
@@ -1274,6 +1300,8 @@ def _run_one_cell(
     spec: Mapping[str, Any],
     state: dict[str, Any],
     cell_plan: Mapping[str, Any],
+    *,
+    stream_subprocess_output: bool = False,
 ) -> bool:
     cell_state = state["cells"][cell_plan["cell_id"]]
     if cell_state["status"] == "completed":
@@ -1311,6 +1339,7 @@ def _run_one_cell(
             attempt=attempt,
             timeout_sec=min(timeout, 300),
             label="init",
+            stream_output=stream_subprocess_output,
         )
         _save_state(run_root, state)
         if initialize["returncode"] != 0 or initialize["timed_out"]:
@@ -1340,6 +1369,7 @@ def _run_one_cell(
             attempt=attempt,
             timeout_sec=min(timeout, 300),
             label="check",
+            stream_output=stream_subprocess_output,
         )
         _save_state(run_root, state)
         if check["returncode"] != 0 or check["timed_out"]:
@@ -1361,6 +1391,7 @@ def _run_one_cell(
             attempt=attempt,
             timeout_sec=timeout,
             label="smoke" if cell_plan["kind"] == "smoke" else "optimize",
+            stream_output=stream_subprocess_output,
         )
         _save_state(run_root, state)
         if result["returncode"] != 0 or result["timed_out"]:
@@ -1427,6 +1458,7 @@ def _run_one_cell(
                     attempt=attempt,
                     timeout_sec=timeout,
                     label="optional-checkpoint-extension",
+                    stream_output=stream_subprocess_output,
                 )
                 _save_state(run_root, state)
                 if extension_result["returncode"] != 0 or extension_result["timed_out"]:
@@ -1482,6 +1514,7 @@ def execute_run(
     run_id: str,
     *,
     fail_fast_override: bool | None = None,
+    stream_subprocess_output: bool = False,
 ) -> dict[str, Any]:
     run_root, spec, state = load_run(paths, run_id)
     fail_fast = bool(spec["runner"]["fail_fast"]) if fail_fast_override is None else fail_fast_override
@@ -1497,7 +1530,21 @@ def execute_run(
             cell_state["status"] = "skipped"
             _save_state(run_root, state, event="cell-skipped-fail-fast", cell_id=cell_plan["cell_id"])
             continue
-        ok = _run_one_cell(config, paths, run_root, spec, state, cell_plan)
+        print(f"[cell] {cell_plan['cell_id']} started", file=sys.stderr, flush=True)
+        ok = _run_one_cell(
+            config,
+            paths,
+            run_root,
+            spec,
+            state,
+            cell_plan,
+            stream_subprocess_output=stream_subprocess_output,
+        )
+        print(
+            f"[cell] {cell_plan['cell_id']} {state['cells'][cell_plan['cell_id']]['status']}",
+            file=sys.stderr,
+            flush=True,
+        )
         success = success and ok
         if not ok and fail_fast:
             stop = True
@@ -2610,3 +2657,386 @@ def report_run(paths: Paths, run_id: str) -> tuple[Path, Path, dict[str, Any]]:
         },
     )
     return json_path, markdown_path, report
+
+
+def summarize_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a bounded planning view that omits expanded command lines."""
+    by_case: dict[str, dict[str, int]] = {}
+    smoke_count = 0
+    measured_count = 0
+    attempted_total = 0
+    for cell in plan.get("cells", []):
+        case_id = str(cell.get("case"))
+        bucket = by_case.setdefault(
+            case_id,
+            {"cells": 0, "smoke_cells": 0, "measured_cells": 0, "planned_attempted_evaluations": 0},
+        )
+        attempted = int(cell.get("planned_attempted_evaluations", 0))
+        kind = str(cell.get("kind"))
+        bucket["cells"] += 1
+        bucket["planned_attempted_evaluations"] += attempted
+        attempted_total += attempted
+        if kind == "smoke":
+            smoke_count += 1
+            bucket["smoke_cells"] += 1
+        else:
+            measured_count += 1
+            bucket["measured_cells"] += 1
+    return _json_safe(
+        {
+            "schema_version": plan.get("schema_version", SCHEMA_VERSION),
+            "view": "plan-summary",
+            "suite": plan.get("suite"),
+            "purpose": plan.get("purpose"),
+            "selection": plan.get("selection", {}),
+            "fail_fast": plan.get("fail_fast"),
+            "cells": {
+                "total": int(plan.get("cell_count", smoke_count + measured_count)),
+                "smoke": smoke_count,
+                "measured": measured_count,
+                "planned_attempted_evaluations": attempted_total,
+                "by_case": by_case,
+            },
+            "estimates": plan.get("estimates", {}),
+            "prerequisites": plan.get("prerequisites", {}),
+            "detail": {
+                "available_with": "plan --full-json",
+                "omitted": ["expanded cell objects", "planned command lines"],
+            },
+        }
+    )
+
+
+def _tail_text(value: Any, limit: int = 600) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if len(text) <= limit:
+        return text
+    return f"...{text[-limit:]}"
+
+
+def summarize_preflight(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Return check outcomes without embedding commands, stdout, or stderr."""
+    checks: list[dict[str, Any]] = []
+    for check in result.get("checks", []):
+        compact: dict[str, Any] = {
+            "name": check.get("name"),
+            "ok": bool(check.get("ok")),
+        }
+        if check.get("error"):
+            compact["error"] = check.get("error")
+        details = check.get("details")
+        if isinstance(details, Mapping):
+            selected = {
+                key: details.get(key)
+                for key in (
+                    "kind",
+                    "variable",
+                    "exists",
+                    "available",
+                    "device",
+                    "returncode",
+                    "timed_out",
+                    "free_mib",
+                    "required_mib",
+                )
+                if key in details
+            }
+            if selected:
+                compact["details"] = selected
+            if not compact["ok"]:
+                diagnostic = _tail_text(details.get("stderr")) or _tail_text(details.get("stdout"))
+                if diagnostic:
+                    compact["diagnostic_tail"] = diagnostic
+        checks.append(compact)
+    package = result.get("package", {})
+    plan = summarize_plan(result.get("plan", {}))
+    plan.pop("detail", None)
+    passed = sum(1 for check in checks if check["ok"])
+    return _json_safe(
+        {
+            "schema_version": result.get("schema_version", SCHEMA_VERSION),
+            "view": "preflight-summary",
+            "suite": result.get("suite"),
+            "ok": bool(result.get("ok")),
+            "checked_utc": result.get("checked_utc"),
+            "checks": {
+                "total": len(checks),
+                "passed": passed,
+                "failed": len(checks) - passed,
+                "items": checks,
+            },
+            "package": {
+                "version": package.get("version"),
+                "origin": package.get("origin"),
+                "python": package.get("python"),
+                "python_version": str(package.get("python_version", "")).splitlines()[0],
+            },
+            "plan": plan,
+            "detail": {
+                "available_with": "preflight --full-json",
+                "omitted": ["command stdout/stderr", "full package fingerprints", "expanded plan cells"],
+            },
+        }
+    )
+
+
+def summarize_run_state(run_root: Path, run_id: str, state: Mapping[str, Any]) -> dict[str, Any]:
+    """Return current cell status and only actionable attempt failures."""
+    by_status: dict[str, int] = defaultdict(int)
+    attention: list[dict[str, Any]] = []
+    cells = state.get("cells", {})
+    for cell_id, cell in cells.items():
+        status = str(cell.get("status", "unknown"))
+        by_status[status] += 1
+        if status == "completed":
+            continue
+        attempts = cell.get("attempts") or []
+        latest = attempts[-1] if attempts else {}
+        item: dict[str, Any] = {
+            "cell_id": cell_id,
+            "status": status,
+            "error": latest.get("error"),
+            "attempt": latest.get("attempt"),
+        }
+        commands = latest.get("commands") or []
+        if commands:
+            item["latest_command_metadata"] = commands[-1]
+        attention.append(item)
+    state_status = str(state.get("status", "unknown"))
+    next_command = (
+        ["collect", "--run-id", run_id]
+        if state_status == "completed"
+        else ["resume", "--run-id", run_id]
+    )
+    return _json_safe(
+        {
+            "schema_version": state.get("schema_version", SCHEMA_VERSION),
+            "view": "run-summary",
+            "run_id": run_id,
+            "execution_state": state_status,
+            "updated_utc": state.get("updated_utc"),
+            "cells": {"total": len(cells), "by_status": dict(sorted(by_status.items()))},
+            "attention": attention,
+            "run_state": str(run_root / "run_state.json"),
+            "next_command": next_command,
+        }
+    )
+
+
+def summarize_report(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Return bounded validity and result evidence without fingerprints or raw rows."""
+    status_counts: dict[str, int] = defaultdict(int)
+    evaluation_totals = {
+        "planned": 0,
+        "attempted": 0,
+        "completed": 0,
+        "failed": 0,
+        "timeouts": 0,
+        "all_infinite_generations": 0,
+    }
+    attention: list[dict[str, Any]] = []
+    validity_keys = {
+        "planned": "planned_real_evaluations",
+        "attempted": "attempted_real_evaluations",
+        "completed": "completed_candidate_evaluations",
+        "failed": "failed_candidate_evaluations",
+        "timeouts": "timeout_candidate_evaluations",
+        "all_infinite_generations": "all_infinite_generation_count",
+    }
+    for cell_id, cell in report.get("validity_by_cell", {}).items():
+        status = str(cell.get("execution_status", "unknown"))
+        status_counts[status] += 1
+        validity = cell.get("validity") or {}
+        for summary_key, source_key in validity_keys.items():
+            value = validity.get(source_key)
+            if isinstance(value, (int, float)):
+                evaluation_totals[summary_key] += int(value)
+        issues = list(cell.get("public_api_issues") or [])
+        concerns: list[str] = []
+        if status != "completed":
+            concerns.append(f"execution_status={status}")
+        for source_key, label in (
+            ("failed_candidate_evaluations", "failed candidates"),
+            ("timeout_candidate_evaluations", "candidate timeouts"),
+            ("all_infinite_generation_count", "all-infinite generations"),
+        ):
+            count = int(validity.get(source_key, 0) or 0)
+            if count:
+                concerns.append(f"{count} {label}")
+        warnings = list(validity.get("yadof_check_warnings") or [])
+        if warnings:
+            concerns.append(f"{len(warnings)} yadof check warnings")
+        if issues:
+            concerns.append(f"{len(issues)} public API issues")
+        if concerns:
+            attention.append(
+                {
+                    "cell_id": cell_id,
+                    "concerns": concerns,
+                    "exclusion_reason": cell.get("exclusion_reason"),
+                    "public_api_issues": issues,
+                }
+            )
+    summary: dict[str, Any] = {
+        "schema_version": report.get("schema_version", SCHEMA_VERSION),
+        "view": "report-summary",
+        "run_id": report.get("run_id"),
+        "suite": report.get("suite"),
+        "purpose": report.get("purpose"),
+        "generated_utc": report.get("generated_utc"),
+        "validity": {
+            "cells_by_execution_status": dict(sorted(status_counts.items())),
+            "evaluation_totals": evaluation_totals,
+            "attention": attention,
+        },
+        "tool_gaps": report.get("tool_gaps", {}),
+    }
+    if report.get("purpose") == "structural":
+        structural = report.get("structural", {})
+        failed_checks = [
+            {"check": item.get("check"), "cell_id": item.get("cell_id")}
+            for item in structural.get("checks", [])
+            if not item.get("ok")
+        ]
+        summary["structural"] = {
+            "contract_satisfied": bool(structural.get("contract_satisfied")),
+            "check_count": len(structural.get("checks", [])),
+            "failed_checks": failed_checks,
+        }
+    else:
+        performance = report.get("performance", {})
+        real_arm = performance.get("arm_roles", {}).get("real")
+        surrogate_arm = performance.get("arm_roles", {}).get("surrogate")
+        difference_key = f"{surrogate_arm}_minus_{real_arm}"
+        pairs: list[dict[str, Any]] = []
+        for row in performance.get("included_pairs", []):
+            raw = row.get("raw", {})
+            differences = row.get("differences", {}).get(difference_key, {})
+            metrics: dict[str, Any] = {}
+            for metric in (
+                "final_cumulative_hypervolume",
+                "evaluator_elapsed_sec_sum",
+            ):
+                if metric in raw:
+                    metrics[metric] = {
+                        "by_arm": raw.get(metric),
+                        "surrogate_minus_real": differences.get(metric),
+                    }
+            metrics["surrogate_training_duration_sec"] = raw.get(
+                "surrogate_training_duration_sec"
+            )
+            pairs.append(
+                {
+                    "case": row.get("case"),
+                    "seed": row.get("seed"),
+                    "attempted_real_evaluations": row.get("attempted_real_evaluations"),
+                    "metrics": metrics,
+                }
+            )
+        aggregate = {
+            case_id: {
+                name: values
+                for name, values in metrics.items()
+                if name.endswith(".final_cumulative_hypervolume")
+                or name.endswith(".evaluator_elapsed_sec_sum")
+            }
+            for case_id, metrics in performance.get(
+                "descriptive_aggregate_by_case", {}
+            ).items()
+        }
+        summary["performance"] = {
+            "interpretation_policy": performance.get("interpretation_policy"),
+            "arm_roles": performance.get("arm_roles", {}),
+            "included_pair_count": len(pairs),
+            "excluded_pair_count": len(performance.get("excluded_pairs_retained", [])),
+            "pairs": pairs,
+            "excluded_pairs": performance.get("excluded_pairs_retained", []),
+            "descriptive_aggregate_by_case": aggregate,
+        }
+    return _json_safe(summary)
+
+
+def _artifact_entry(path: Path, role: str, read_policy: str) -> dict[str, Any]:
+    exists = path.is_file()
+    return {
+        "role": role,
+        "path": str(path),
+        "exists": exists,
+        "size_bytes": path.stat().st_size if exists else None,
+        "read_policy": read_policy,
+    }
+
+
+def inspect_run(paths: Paths, run_id: str) -> dict[str, Any]:
+    """Build the bounded first-read view for an existing run."""
+    run_root, spec, state = load_run(paths, run_id)
+    report_markdown = run_root / "report.md"
+    report_json = run_root / "report.json"
+    metrics_json = run_root / "metrics.json"
+    run_summary = summarize_run_state(run_root, run_id, state)
+    run_summary.pop("schema_version", None)
+    run_summary.pop("view", None)
+    results = summarize_report(read_json(report_json)) if report_json.is_file() else None
+    artifacts = [
+        _artifact_entry(
+            report_markdown,
+            "concise human/agent report",
+            "read first when the structured summary needs narrative context",
+        ),
+        _artifact_entry(
+            report_json,
+            "complete stable report",
+            "query targeted fields only; do not repeatedly read the whole file",
+        ),
+        _artifact_entry(
+            metrics_json,
+            "large collected public-API evidence",
+            "never read whole; query one cell and field only after the report is insufficient",
+        ),
+        _artifact_entry(
+            run_root / "run_state.json",
+            "execution state and attempt index",
+            "query a specific non-completed cell during diagnosis",
+        ),
+        _artifact_entry(
+            run_root / "run_spec.json",
+            "immutable provenance",
+            "read only when verifying identity or reproducing a run",
+        ),
+        _artifact_entry(
+            run_root / "matrix.json",
+            "expanded immutable cell matrix",
+            "read only when one planned cell or command must be verified",
+        ),
+    ]
+    if results is not None:
+        next_commands: list[list[str]] = []
+    elif metrics_json.is_file():
+        next_commands = [["report", "--run-id", run_id]]
+    elif state.get("status") == "completed":
+        next_commands = [["collect", "--run-id", run_id]]
+    else:
+        next_commands = [
+            ["collect", "--run-id", run_id],
+            ["resume", "--run-id", run_id],
+        ]
+    return _json_safe(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "view": "agent-summary",
+            "run": {
+                **run_summary,
+                "suite": spec.get("suite"),
+                "purpose": spec.get("purpose"),
+            },
+            "results": results,
+            "artifacts": artifacts,
+            "next_commands": next_commands,
+            "progressive_disclosure": (
+                "Use this summary first, then report.md, then targeted report.json fields. "
+                "Read one cell/log only for diagnosis; never load metrics.json wholesale."
+            ),
+        }
+    )

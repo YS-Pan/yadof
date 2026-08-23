@@ -38,6 +38,9 @@ benchmark.toml + frozen baselines + strategy templates
                          |
                          v
           append-only evidence and reports
+                         |
+                         v
+       bounded CLI/inspect summary (default view)
 ```
 
 `benchmark.py` parses CLI arguments and maps failures to process exit codes.
@@ -51,6 +54,7 @@ Keeping the CLI thin makes core behavior directly testable.
 |---|---|
 | `benchmark.py` | Thin command-line entry point. |
 | `benchmark_core.py` | Runner implementation and stable data transformations. |
+| `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
 | `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, and resource requirements. |
 | `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements. |
 | `baselines/` | Immutable task inputs plus provenance selected by exact identity. |
@@ -82,6 +86,8 @@ Keeping the CLI thin makes core behavior directly testable.
   mutating the failed attempt.
 - Commands execute sequentially by default to avoid contention for external
   simulators, CUDA, disk, and shared host resources.
+- Child stdout/stderr is always preserved in command logs. It is not forwarded to
+  the terminal unless `--stream-output` is explicitly selected.
 
 ### Evidence and interpretation
 
@@ -94,6 +100,9 @@ Keeping the CLI thin makes core behavior directly testable.
   than silently removed.
 - Reports are descriptive. Operational failures and durations are validity or
   diagnostic facts, not algorithm-performance conclusions.
+- Default CLI summaries omit expanded commands, fingerprints, raw rows, and full
+  diagnostics. Full plan/preflight/report JSON remains explicitly available, and
+  `inspect` points from bounded evidence to progressively deeper artifacts.
 
 ## Change map
 
@@ -107,7 +116,8 @@ Keeping the CLI thin makes core behavior directly testable.
 - New arm: add a complete strategy template, TOML declaration, equal-budget
   coverage, and structural validation.
 - New public output field: define its stable JSON meaning, validity behavior, and
-  derivation; update tests and operator documentation.
+  derivation; decide which disclosure layer owns it, then update tests, agent
+  routing, and operator documentation.
 - Missing reusable single-workspace observation: record the gap in `tool_gaps/`
   and implement the reusable capability in yadof rather than adding private-state
   scraping here.

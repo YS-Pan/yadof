@@ -63,6 +63,8 @@ Do not edit `.venv/Lib/site-packages`, inject the yadof source checkout through
 
 6. Run the no-write `plan` command for configuration or matrix changes. Run
    `preflight` when baseline, strategy, resource, or yadof integration changes.
+   For output changes, test both the bounded default and the explicit detailed
+   flag; assert that large command streams/fingerprints are absent from summaries.
 7. Do not start smoke tests, optimization cells, collection-time model inference,
    or performance campaigns solely as a development check. Apply the cost/risk
    rules in the root README and obtain authorization when required.
@@ -79,3 +81,22 @@ Text files are UTF-8. Preserve non-ASCII paths and content, and use explicit UTF
 when a PowerShell command reads text for editing. Resolve inputs from
 `benchmark.toml` and the benchmark root rather than the caller's current directory.
 Keep subprocess commands as argument lists; do not build shell command strings.
+
+## Agent-facing output contract
+
+Default CLI output is a bounded JSON view that carries the facts needed for the
+next decision and points to deeper artifacts. Expanded plan/preflight/report JSON
+requires `--full-json`. Child process stdout/stderr is logged but not forwarded by
+default; `--stream-output` is an explicit opt-in.
+
+Maintain these disclosure layers when adding fields:
+
+1. bounded CLI summary and `inspect`;
+2. concise `report.md`;
+3. stable `report.json`;
+4. one-cell state, command metadata, and log tails;
+5. large `metrics.json`/collection evidence.
+
+Do not put raw rows, full command output, fingerprints, or multi-cell diagnostic
+payloads into the default summary. Update `AGENTS.md` whenever the safe reading
+route changes.

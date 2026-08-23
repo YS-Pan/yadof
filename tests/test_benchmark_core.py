@@ -249,7 +249,17 @@ def test_suite_failure_policy_controls_independent_cells(
     spec["spec_sha256"] = core.object_sha256({key: value for key, value in spec.items() if key != "spec_sha256"})
     run_id, _run_root = core.create_run(paths, spec, run_id=f"policy-{fail_fast}")
 
-    def fake_run_one(_config, _paths, run_root, _spec, state, cell_plan):
+    def fake_run_one(
+        _config,
+        _paths,
+        run_root,
+        _spec,
+        state,
+        cell_plan,
+        *,
+        stream_subprocess_output=False,
+    ):
+        assert stream_subprocess_output is False
         cell_state = state["cells"][cell_plan["cell_id"]]
         if cell_plan["cell_id"] == "first":
             cell_state["status"] = "failed"

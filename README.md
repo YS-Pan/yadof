@@ -68,9 +68,10 @@ history identity, strategy hashes, and fully expanded commands are frozen in eac
 
 ## Commands
 
-`plan` is the only no-write planning interface. It resolves the selected matrix,
-explicit commands, real-evaluation counts, prerequisites, and rough lower-bound
-evaluation/storage estimates:
+`plan` is the only no-write planning interface. Its default JSON is a bounded
+agent summary: selection, cell/evaluation counts by case, prerequisites, and rough
+lower-bound evaluation/storage estimates. Add `--full-json` only when expanded
+cells and exact planned command lines are required:
 
 ```powershell
 & ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" plan `
@@ -78,7 +79,9 @@ evaluation/storage estimates:
 ```
 
 Preflight performs static validation and `yadof check`, but never launches the
-task workflow:
+task workflow. Its default JSON lists every check outcome but omits captured
+command stdout/stderr and expanded identities; `--full-json` restores the complete
+evidence:
 
 ```powershell
 & ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" preflight `
@@ -93,6 +96,10 @@ Create and execute a new run:
   --label local-check
 ```
 
+Child stdout/stderr is always written to the append-only command logs. The default
+terminal output contains only short lifecycle events and a final JSON summary. Add
+`--stream-output` only for deliberate live raw output; it can be large.
+
 Select a precise subset without editing TOML. Repeat a selector to include more
 than one value:
 
@@ -106,7 +113,9 @@ than one value:
 ```
 
 Collection is intentionally separate because surrogate audit performs model
-inference. Reporting is a pure transformation of the latest collected snapshot:
+inference. Collection prints only artifact paths and an instruction to report; do
+not read `metrics.json` or `collection.json` wholesale. Reporting is a pure
+transformation of the latest collected snapshot and prints a bounded agent summary:
 
 ```powershell
 & ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" collect `
@@ -115,6 +124,19 @@ inference. Reporting is a pure transformation of the latest collected snapshot:
 & ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" report `
   --run-id <existing-id>
 ```
+
+Inspect an existing run without changing it. This is the normal first command for
+an agent asked to interpret or diagnose a run:
+
+```powershell
+& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" inspect `
+  --run-id <existing-id>
+```
+
+`inspect` combines execution status, validity totals, structural failures or
+paired performance evidence, artifact sizes/read policies, and the next applicable
+commands. `report --full-json` remains available for consumers that explicitly
+need the complete stable report.
 
 Resume the exact immutable spec after a completed-boundary interruption:
 
@@ -184,6 +206,22 @@ modify measured workspaces, histories, or checkpoints.
 
 Smoke workspaces are separate disposable cells. Their records never enter a
 measured real-search or GPSAF arm.
+
+## Agent reading order
+
+The repository [`AGENTS.md`](AGENTS.md) defines the complete progressive-
+disclosure policy. In short:
+
+1. Start with `inspect --run-id ...` or the default `plan`/`preflight` summary.
+2. Read `report.md` only when narrative context is useful.
+3. Query targeted `report.json` fields when the summary omits a required detail.
+4. Diagnose one failed cell through `run_state.json`, command metadata, and one log
+   tail.
+5. Query one cell/field from `metrics.json` only as the final evidence layer.
+
+Do not recursively scan `runs/` and do not load multi-megabyte collection files
+into an agent context. Full evidence remains on disk even when the CLI suppresses
+it from stdout.
 
 ## Measurements and interpretation
 
