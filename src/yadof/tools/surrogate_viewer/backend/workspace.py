@@ -132,14 +132,20 @@ class SurrogateWorkspace:
 
     def _load_real_results(self) -> tuple[RealResult, ...]:
         output: list[RealResult] = []
+        parameter_names = tuple(parameter.name for parameter in self.parameters)
         for record in list_records(self.root):
             if str(record.get("status")) != "completed":
                 continue
             generation_raw = record.get("generation_index")
             if generation_raw is None:
                 continue
-            raw_values = tuple(float(value) for value in record["raw_variables"])
+            raw_variables = record.get("raw_variables")
+            if not isinstance(raw_variables, Mapping):
+                continue
             try:
+                raw_values = tuple(
+                    float(raw_variables[name]) for name in parameter_names
+                )
                 normalized = job_template_api.normalize_variables(
                     self.root,
                     raw_values,

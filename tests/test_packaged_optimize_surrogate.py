@@ -4,6 +4,9 @@ import math
 import os
 import json
 from pathlib import Path
+import subprocess
+import sys
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -11,7 +14,11 @@ import pytest
 import yadof
 
 from yadof.config import load_config
-from yadof.recorded_data import get_historical_results, list_optimization_metadata
+from yadof.recorded_data import (
+    get_historical_results,
+    list_optimization_metadata,
+    list_records,
+)
 from yadof.workspace.init import init_workspace
 
 
@@ -60,6 +67,163 @@ def _workspace(tmp_path: Path, name: str, *, surrogate: bool = False) -> Path:
         )
     (root / "config.py").write_text("\n".join(settings) + "\n", encoding="utf-8")
     return root
+
+
+def _viewer_json(workspace: Path, *arguments: str) -> dict[str, object]:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "yadof",
+            "view",
+            "surrogate",
+            *arguments,
+            "--workspace",
+            str(workspace),
+            "--format",
+            "json",
+        ],
+        cwd=workspace,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    json.dumps(payload, allow_nan=False)
+    return payload
+
+
+def _assert_finite_audit_matrices(payload: dict[str, object]) -> None:
+    matrices = payload["matrices"]
+    assert isinstance(matrices, list)
+    assert matrices
+    for matrix in matrices:
+        assert isinstance(matrix, dict)
+        values = matrix["values"]
+        assert isinstance(values, list)
+        assert values
+        for row in values:
+            assert isinstance(row, list)
+            assert row
+            assert all(
+                value is not None and math.isfinite(float(value))
+                for value in row
+            )
+
+
+def test_surrogate_viewer_orders_mapped_history_by_parameter_declaration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yadof.tools.surrogate_viewer.backend import SurrogateWorkspace
+    from yadof.tools.surrogate_viewer.backend import workspace as viewer_workspace
+
+    viewer = object.__new__(SurrogateWorkspace)
+    viewer.root = tmp_path
+    viewer.parameters = tuple(
+        SimpleNamespace(name=name) for name in ("x0", "x1", "x2")
+    )
+    monkeypatch.setattr(
+        viewer_workspace,
+        "list_records",
+        lambda _workspace: (
+            {
+                "status": "completed",
+                "generation_index": 3,
+                "population_index": 4,
+                "job_name": "mapped-order",
+                "raw_variables": {"x2": 30.0, "x0": 10.0, "x1": 20.0},
+            },
+            {
+                "status": "completed",
+                "generation_index": 3,
+                "population_index": 5,
+                "job_name": "undocumented-sequence",
+                "raw_variables": (10.0, 20.0, 30.0),
+            },
+        ),
+    )
+    normalized_inputs: list[tuple[float, ...]] = []
+
+    def normalize_variables(
+        _workspace: Path,
+        raw_values: tuple[float, ...],
+    ) -> tuple[float, ...]:
+        normalized_inputs.append(raw_values)
+        return tuple(value / 100.0 for value in raw_values)
+
+    monkeypatch.setattr(
+        viewer_workspace.job_template_api,
+        "normalize_variables",
+        normalize_variables,
+    )
+
+    results = viewer._load_real_results()
+
+    assert normalized_inputs == [(10.0, 20.0, 30.0)]
+    assert len(results) == 1
+    assert results[0].job_name == "mapped-order"
+    assert results[0].raw_values == (10.0, 20.0, 30.0)
+    assert results[0].normalized_values == (0.1, 0.2, 0.3)
+
+
+def test_surrogate_viewer_cli_reports_mapped_history_as_finite_json(
+    tmp_path: Path,
+) -> None:
+    from yadof.optimize import run_one_generation
+    from yadof.surrogate import wait_for_pending_training
+
+    workspace = _workspace(tmp_path, "viewer_mapped_history", surrogate=True)
+    run_one_generation(
+        workspace,
+        generation_index=0,
+        population_size=2,
+        random_seed=47,
+    )
+    wait_for_pending_training(workspace)
+    records = list_records(workspace)
+    assert records
+    assert all(isinstance(record.get("raw_variables"), dict) for record in records)
+
+    summary = _viewer_json(workspace, "summary")
+    cost_audit = _viewer_json(
+        workspace,
+        "audit",
+        "--sample-percent",
+        "100",
+        "--random-seed",
+        "47",
+        "--metric",
+        "both",
+        "--quantity",
+        "all-costs",
+    )
+    rawdata_audit = _viewer_json(
+        workspace,
+        "audit",
+        "--sample-percent",
+        "100",
+        "--random-seed",
+        "47",
+        "--metric",
+        "both",
+        "--quantity",
+        "all-rawdata",
+    )
+
+    assert summary["schema_version"] == 2
+    assert summary["analysis"] == "surrogate_workspace_summary"
+    assert summary["optimization_generations"] == [
+        {"generation": 0, "completed_results": 2}
+    ]
+    assert summary["checkpoints"]
+    assert cost_audit["schema_version"] == 2
+    assert cost_audit["quantity"]["selector"] == "all-costs"
+    assert rawdata_audit["schema_version"] == 2
+    assert rawdata_audit["quantity"]["selector"] == "all-rawdata"
+    _assert_finite_audit_matrices(cost_audit)
+    _assert_finite_audit_matrices(rawdata_audit)
 
 
 def test_packaged_optimizer_recovers_history_without_crossing_workspaces(tmp_path):

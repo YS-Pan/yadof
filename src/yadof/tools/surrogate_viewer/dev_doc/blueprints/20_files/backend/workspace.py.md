@@ -41,6 +41,9 @@ callback, outer batch size, and CUDA sample batch. It returns arrays shaped:
 - Sampling uses `ceil(generation size × fraction)` with a minimum of one.
 - The facade exposes the active strategy signature and checkpoint
   run/component scope so reports remain auditable.
+- Persisted `raw_variables` name/value mappings are reconstructed in the current
+  task's declared parameter order before normalization; malformed, incomplete, or
+  undocumented non-mapping rows are isolated from viewer history.
 - The same ordered sampled rows feed every checkpoint in an audit.
 - True flat matrices are cached by a schema key only for the current audit.
 - Relative error uses the workspace's `SURROGATE_RELATIVE_ERROR_EPS`.
