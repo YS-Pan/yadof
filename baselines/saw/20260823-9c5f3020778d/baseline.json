@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "baseline_id": "20260823-9c5f3020778d",
+  "case_id": "saw",
+  "created_utc": "2026-08-23T04:46:17.941Z",
+  "created_by": "desktop-derg5ld\\yspan",
+  "yadof_version": "0.4.0",
+  "task_fingerprint": "9c5f3020778d9ed67cf9571745b8119c381a116559e5dcd8dd8b1792c4de9372",
+  "include_paths": ["config.py", "submit", "job_template"],
+  "source": "20260807 saw",
+  "validation": {
+    "check_errors": 0,
+    "check_warnings": 0,
+    "smoke_costs": [0.23614886445544214, 0.876200337969137, 0.7422218562855797, 0.9478822312139636, 0.4898880600135683],
+    "objective_count": 5,
+    "rawdata_shapes": {"s21_db": [1201], "s11_db": [1201]},
+    "baseline_record_rows": 0,
+    "baseline_checkpoint_files": 0
+  }
+}

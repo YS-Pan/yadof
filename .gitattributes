@@ -1,0 +1,15 @@
+* text=auto
+
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.cir text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Frozen inputs and established strategies are byte-identity-sensitive.
+baselines/** whitespace=-blank-at-eof
+strategy_templates/** whitespace=-blank-at-eof
