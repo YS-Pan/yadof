@@ -9,6 +9,10 @@ command_timeout_sec = 7200
 audit_sample_percent = 10
 audit_random_seed = 20260823
 
+[runner.measured_config_overrides]
+HISTORY_SEGMENT_MAX_CANDIDATES = 100
+HISTORY_UNPUBLISHED_MAX_CANDIDATES = 128
+
 [arms.real-search]
 strategy_template = "real_search.py"
 surrogate = false
@@ -198,31 +202,31 @@ generations = 3
 max_generations = 3
 
 [budgets.performance.saw.real-search]
-population = 24
-generations = 3
-max_generations = 3
+population = 100
+generations = 20
+max_generations = 20
 
 [budgets.performance.saw.gpsaf-conditional-inr]
-population = 24
-generations = 3
-max_generations = 3
+population = 100
+generations = 20
+max_generations = 20
 
 [budgets.performance.chrono.real-search]
-population = 12
-generations = 3
-max_generations = 3
+population = 100
+generations = 20
+max_generations = 20
 
 [budgets.performance.chrono.gpsaf-conditional-inr]
-population = 12
-generations = 3
-max_generations = 3
+population = 100
+generations = 20
+max_generations = 20
 
 [budgets.performance.test-com.real-search]
-population = 24
-generations = 3
-max_generations = 3
+population = 100
+generations = 20
+max_generations = 20
 
 [budgets.performance.test-com.gpsaf-conditional-inr]
-population = 24
-generations = 3
-max_generations = 3
+population = 100
+generations = 20
+max_generations = 20

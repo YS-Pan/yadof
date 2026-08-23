@@ -260,6 +260,22 @@ def test_performance_config_requires_equal_planned_attempted_budget(tmp_path: Pa
         core.validate_config(config, paths)
 
 
+def test_repository_performance_suite_uses_substantial_budget() -> None:
+    benchmark_root = Path(__file__).resolve().parents[1]
+    config, paths = core.load_config(benchmark_root / "benchmark.toml")
+    plan = core.build_plan(config, paths, "performance")
+    measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
+    assert len(measured) == 18
+    assert all(cell["population"] >= 100 for cell in measured)
+    assert all(cell["generations"] >= 20 for cell in measured)
+    assert all(cell["max_generations"] == cell["generations"] for cell in measured)
+    assert sum(cell["planned_attempted_evaluations"] for cell in measured) == 36_000
+    assert config["runner"]["measured_config_overrides"] == {
+        "HISTORY_SEGMENT_MAX_CANDIDATES": 100,
+        "HISTORY_UNPUBLISHED_MAX_CANDIDATES": 128,
+    }
+
+
 def _minimal_spec(tmp_path: Path) -> dict:
     spec = {
         "schema_version": 1,
@@ -545,6 +561,12 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
     strategy.write_text("ARM = 'surrogate'\n", encoding="utf-8")
     include = ["config.py", "submit", "job_template"]
     spec = {
+        "runner": {
+            "measured_config_overrides": {
+                "HISTORY_SEGMENT_MAX_CANDIDATES": 100,
+                "HISTORY_UNPUBLISHED_MAX_CANDIDATES": 128,
+            }
+        },
         "cases": {
             "case": {
                 "baseline": {
@@ -574,6 +596,8 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
     core._materialize_attempt_inputs(paths, spec, cell, attempt_root, attempt)
     assert (workspace / "submit" / "optimization.py").read_text(encoding="utf-8") == "ARM = 'surrogate'\n"
     config_text = (workspace / "config.py").read_text(encoding="utf-8")
+    assert "HISTORY_SEGMENT_MAX_CANDIDATES = 100" in config_text
+    assert "HISTORY_UNPUBLISHED_MAX_CANDIDATES = 128" in config_text
     assert "OPTIMIZE_SURROGATE_ALPHA = 3" in config_text
     manifest = core.read_json(attempt_root / "input_manifest.json")
     assert manifest["starting_evidence_fingerprint"] == "empty"

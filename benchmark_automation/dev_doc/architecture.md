@@ -56,7 +56,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `benchmark.py` | Thin command-line entry point. |
 | `benchmark_core.py` | Runner implementation and stable data transformations. |
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
-| `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, and resource requirements. |
+| `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell config overrides, and resource requirements. |
 | `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements. |
 | `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
@@ -84,6 +84,10 @@ Keeping the CLI thin makes core behavior directly testable.
   checkpoint namespace; measured cells never share a smoke workspace.
 - Performance arms for a paired case use equal planned attempted-real-evaluation
   budgets.
+- The formal performance tier uses 100 individuals for 20 generations in every
+  measured cell. Its runner-owned measured-cell overrides provide recorder
+  candidate headroom for at least one complete generation without editing frozen
+  baselines; the pilot remains a separate small cost-discovery tier.
 
 ### Execution and recovery
 

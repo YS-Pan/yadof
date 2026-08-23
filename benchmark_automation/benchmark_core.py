@@ -346,14 +346,20 @@ def load_config(
 
 
 def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
+    runner = config.get("runner", {})
     cases = config.get("cases")
     arms = config.get("arms")
     suites = config.get("suites")
     budgets = config.get("budgets")
     if not all(isinstance(item, dict) for item in (cases, arms, suites, budgets)):
         raise BenchmarkError("config requires [cases], [arms], [suites], and [budgets]")
+    assert isinstance(runner, dict)
     assert isinstance(cases, dict) and isinstance(arms, dict)
     assert isinstance(suites, dict) and isinstance(budgets, dict)
+    _config_overrides(
+        runner.get("measured_config_overrides", {}),
+        label="runner measured_config_overrides",
+    )
     if paths.runs.exists() and not paths.runs.is_dir():
         raise BenchmarkError(f"runs_dir is not a directory: {paths.runs}")
     if paths.runs == paths.root or _is_within(paths.root, paths.runs):
@@ -389,6 +395,10 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
         template = resolve_inside(paths.strategies, str(arm.get("strategy_template", "")), label=f"arm {arm_id} template")
         if not template.is_file():
             raise BenchmarkError(f"strategy template does not exist: {template}")
+        _config_overrides(
+            arm.get("config_overrides", {}),
+            label=f"arm {arm_id} config_overrides",
+        )
     for suite_id, suite in suites.items():
         if not isinstance(suite, dict):
             raise BenchmarkError(f"suite {suite_id!r} must be a table")
@@ -439,6 +449,16 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
 def _safe_id(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip()).strip("-._")
     return cleaned or "run"
+
+
+def _config_overrides(value: Any, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise BenchmarkError(f"{label} must be a table")
+    overrides = dict(value)
+    for key in overrides:
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+            raise BenchmarkError(f"unsafe config override name in {label}: {key!r}")
+    return overrides
 
 
 def _cell_id(case_id: str, arm_id: str | None, seed: int, *, kind: str) -> str:
@@ -705,7 +725,10 @@ def _strategy_details(config: Mapping[str, Any], paths: Paths, arm_id: str) -> d
         "sha256": file_sha256(template),
         "constructed_type": f"{type(strategy).__module__}.{type(strategy).__qualname__}",
         "surrogate": bool(arm.get("surrogate", False)),
-        "config_overrides": dict(arm.get("config_overrides", {})),
+        "config_overrides": _config_overrides(
+            arm.get("config_overrides", {}),
+            label=f"arm {arm_id} config_overrides",
+        ),
     }
 
 
@@ -961,6 +984,10 @@ def build_run_spec(
             "audit_sample_percent": int(config["runner"].get("audit_sample_percent", 10)),
             "audit_random_seed": int(config["runner"].get("audit_random_seed", 0)),
             "fail_fast": bool(plan["fail_fast"]),
+            "measured_config_overrides": _config_overrides(
+                config["runner"].get("measured_config_overrides", {}),
+                label="runner measured_config_overrides",
+            ),
         },
         "cases": cases,
         "arms": arms,
@@ -1098,11 +1125,10 @@ def _apply_config_overrides(config_path: Path, overrides: Mapping[str, Any]) -> 
     current = config_path.read_text(encoding="utf-8")
     if CONFIG_BLOCK_START in current or CONFIG_BLOCK_END in current:
         raise BenchmarkError(f"managed config override block already exists in {config_path}")
+    checked = _config_overrides(overrides, label="managed config overrides")
     lines = ["", CONFIG_BLOCK_START]
-    for key in sorted(overrides):
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
-            raise BenchmarkError(f"unsafe config override name: {key!r}")
-        lines.append(f"{key} = {overrides[key]!r}")
+    for key in sorted(checked):
+        lines.append(f"{key} = {checked[key]!r}")
     lines.extend([CONFIG_BLOCK_END, ""])
     with config_path.open("a", encoding="utf-8", newline="\n") as stream:
         stream.write("\n".join(lines))
@@ -1174,10 +1200,13 @@ def _materialize_attempt_inputs(
         if directory_fingerprint(snapshot) != case_spec["starting_evidence"]["fingerprint"]:
             raise BenchmarkError(f"history snapshot fingerprint drift for {case_id}")
         _copy_history_snapshot(snapshot, workspace)
-    overrides: dict[str, Any] = {
+    overrides: dict[str, Any] = {}
+    if cell_plan["kind"] == "measured":
+        overrides.update(spec.get("runner", {}).get("measured_config_overrides", {}))
+    overrides.update({
         "FAST_EVALUATION_MAX_WORKERS": int(case_spec["max_workers"]),
         "OPTIMIZE_SMOKE_TEST_ENABLED": False,
-    }
+    })
     if cell_plan["kind"] == "measured":
         arm_id = str(cell_plan["arm"])
         arm_spec = spec["arms"][arm_id]

@@ -35,7 +35,7 @@ The frozen baselines and the runner were created on 2026-08-23 with installed
 | post-fix `structural-canary` run `20260823T060003Z-post-viewer-fix-9e43d5c3327b` | Structural contract satisfied, including finite public summary and both audits |
 | post-fix `structural-full` run `20260823T060119Z-post-viewer-fix-ba5ad9cc3103` | All three cases and both arms satisfied every structural check |
 | `performance-pilot` run `20260823T060351Z-post-viewer-fix-5a583e492089` | 192/192 evaluations completed; three paired rows included and none excluded |
-| final `performance` run `pfull-0823` | 18/18 cells completed; 1080 attempted, 1062 publicly recorded completions, 18 recorder-budget losses, zero timeouts/all-infinite generations, and 9/9 paired rows included |
+| historical three-generation `performance` run `pfull-0823` | 18/18 cells completed; 1080 attempted, 1062 publicly recorded completions, 18 recorder-budget losses, zero timeouts/all-infinite generations, and 9/9 paired rows included |
 
 The resolved viewer gap and its historical failure evidence are documented in
 [`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).
@@ -170,7 +170,7 @@ contention.
 | `adapter-smoke` | one disposable SAW smoke and one disposable Chrono smoke | Fail fast; no measured arm |
 | `structural-full` | full structural path for all three cases | Fail fast; manual/release tier |
 | `performance-pilot` | one paired seed, three generations per arm and case | Continue independent cells; bounded cost discovery |
-| `performance` | three paired seeds, three generations per arm and case | Continue independent cells; potentially expensive |
+| `performance` | three paired seeds, 100 individuals × 20 generations per arm and case | Continue independent cells; long-running |
 
 `plan` estimates task-evaluation time from prior observations and declared worker
 caps. It excludes optimizer and surrogate training overhead. The pilot must be run
@@ -181,6 +181,25 @@ The current performance matrix uses cold starts, equal planned attempted
 real-evaluation budgets across arms for each case, and the seeds `104729`, `130363`,
 and `155921`. Failed candidates consume attempted budget but do not contribute a
 Pareto or hypervolume point.
+
+The formal `performance` suite plans 36,000 attempted real evaluations: 2,000 per
+cell across 18 cells. `performance-pilot` deliberately remains a three-generation
+cost-discovery tier and must not be reported as the full benchmark. Measured cells
+also raise recorder batching/headroom to 100 candidates per segment and 128
+unpublished candidates so one full 100-individual generation can be admitted
+without the default 32-candidate queue becoming the experiment's evidence limit.
+
+### Visible detached Windows launch
+
+`run` is a foreground, resumable command whose cell lifecycle is flushed to the
+terminal and whose child command output is always retained in per-command logs.
+For a user-authorized long run on Windows, launch that same foreground command in a
+separate normal PowerShell window with `Start-Process -PassThru`, then let the
+calling agent disconnect without `-Wait`. Use an explicit short `--run-id` and the
+same explicit `--runs-dir` for later `inspect`, `collect`, and `report` commands.
+The separate window remains visible while the benchmark process is alive and
+closes when it exits; the returned process object supplies its PID. Do not add
+`-WindowStyle Hidden` for this deliberately user-visible launch.
 
 ## Output and immutability
 
