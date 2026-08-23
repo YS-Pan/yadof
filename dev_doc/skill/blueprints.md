@@ -58,8 +58,9 @@ Keep blueprints module-level until the project stabilizes. Add a file-level
 blueprint only when one file has a complex contract that cannot be captured by its
 module blueprint. File-level blueprints under `blueprints/20_files/` mirror the
 source path as folders, for example
-`blueprints/20_files/src/yadof/surrogate/runtime.py.md`; never encode a source path
-into one flattened filename such as `project_surrogate_runtime.py.md`.
+`blueprints/20_files/src/yadof/surrogate/conditional_inr/runtime.py.md`; never
+encode a source path into one flattened filename such as
+`project_surrogate_runtime.py.md`.
 
 Historical reference ancestry belongs in the relevant project or module blueprint
 as natural-language context. Do not maintain a separate path map to old reference

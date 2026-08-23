@@ -52,7 +52,7 @@ read many workspace files. It must not:
 
 ## Package-Internal Compatibility Boundary
 
-The backend uses package-internal yadof functions for conditional-INR inference,
-finite filling, and rawData reconstruction. Those dependencies are isolated in the
-viewer backend and are not a public external API. UI modules must not spread or
-depend on them.
+The backend uses package-internal functions from
+`yadof.surrogate.conditional_inr` for inference, finite filling, and rawData
+reconstruction. Those dependencies are isolated in the viewer backend and are not
+a public external API. UI modules must not spread or depend on them.

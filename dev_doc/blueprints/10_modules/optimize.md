@@ -14,6 +14,17 @@ workspace lock, bounded recorder, startup catalog, and in-memory current-campaig
 rows. Standalone `run_one_generation` owns a shorter session with the same
 contracts.
 
+## Source structure
+
+- Parent files own campaign/session execution, strategy loading/state, problem
+  shape, metadata helpers, and the lightweight public component/factory surface.
+- `gpsaf/` owns only GPSAF assistance, alpha/beta/exploration phases, and its
+  private candidate records.
+- `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
+  strategies. Pymoo objects do not cross into the public strategy contract.
+- The public `gpsaf()` factory remains at `yadof.optimize`; loading private
+  `optimize.gpsaf.*` modules must not replace that callable with the subpackage.
+
 ## Candidate and objective handling
 
 Variable count comes from current workspace parameters; objective count/names come

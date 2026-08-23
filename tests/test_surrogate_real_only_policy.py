@@ -8,10 +8,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from yadof.surrogate import checkpoints, modeling
-from yadof.optimize.gpsaf_misc import CandidateRecord
-from yadof.optimize.gpsaf_phases import predict_records
-from yadof.surrogate.types import (
+from yadof.surrogate.conditional_inr import checkpoints, modeling
+from yadof.optimize.gpsaf.records import CandidateRecord
+from yadof.optimize.gpsaf.phases import predict_records
+from yadof.surrogate.conditional_inr.types import (
     RawArraySlot,
     RawDataSchema,
     SurrogateState,

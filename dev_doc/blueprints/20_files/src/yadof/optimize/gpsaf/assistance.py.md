@@ -1,4 +1,4 @@
-﻿# File blueprint: src/yadof/optimize/gpsaf_assistance.py
+﻿# File blueprint: src/yadof/optimize/gpsaf/assistance.py
 
 ## Intent
 - Orchestrate one GPSAF generation from injected search and rawData-surrogate

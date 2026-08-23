@@ -1,3 +1,5 @@
+from . import gpsaf as _gpsaf_package
+from . import pymoo as _pymoo_package
 from .api import (
     AllInfiniteGenerationError,
     run_generations,
@@ -15,6 +17,10 @@ from .components import (
     real_search,
 )
 from .strategy import OptimizationResult, OptimizationStrategy
+
+# The private ``gpsaf`` package is loaded above before this public factory name is
+# rebound. Later private-module imports therefore cannot replace the public callable
+# on ``yadof.optimize``.
 
 __all__ = [
     "AllInfiniteGenerationError",

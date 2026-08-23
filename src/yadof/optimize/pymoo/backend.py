@@ -18,18 +18,18 @@ from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.util.ref_dirs import get_reference_directions
 
-from ..config import LoadedConfig
-from ..workspace import WorkspaceContext
+from ...config import LoadedConfig
+from ...workspace import WorkspaceContext
 
-from .gpsaf_misc import (
+from ..gpsaf.records import (
     CandidateRecord,
     clip01,
     history_keys,
     key,
     total_cost,
 )
-from .problem_info import ProblemInfo
-from .strategy import HistoryRecord, Population as OptimizerPopulation
+from ..problem_info import ProblemInfo
+from ..strategy import HistoryRecord, Population as OptimizerPopulation
 
 
 @dataclass(frozen=True)

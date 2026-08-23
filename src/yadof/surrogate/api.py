@@ -55,7 +55,7 @@ class ConditionalINRComponent:
         }
 
     def ensure_fresh_enough(self, context):
-        from . import runtime, scheduler
+        from .conditional_inr import runtime, scheduler
 
         return scheduler.ensure_fresh_enough(
             context.config.workspace,
@@ -68,12 +68,12 @@ class ConditionalINRComponent:
         )
 
     def has_trained_state(self, context) -> bool:
-        from . import runtime
+        from .conditional_inr import runtime
 
         return bool(runtime.has_trained_state(context.config.workspace))
 
     def start_training(self, context):
-        from . import runtime, scheduler
+        from .conditional_inr import runtime, scheduler
 
         return scheduler.start_training(
             context.config.workspace,
@@ -87,7 +87,7 @@ class ConditionalINRComponent:
         )
 
     def predict_population(self, context, population):
-        from . import runtime
+        from .conditional_inr import runtime
 
         return runtime.predict_population(context.config.workspace, population)
 
@@ -97,49 +97,49 @@ def conditional_inr() -> ConditionalINRComponent:
 
 
 def train(*args, **kwargs):
-    from .runtime import train as implementation
+    from .conditional_inr.runtime import train as implementation
 
     return implementation(*args, **kwargs)
 
 
 def predict_population(*args, **kwargs):
-    from .runtime import predict_population as implementation
+    from .conditional_inr.runtime import predict_population as implementation
 
     return implementation(*args, **kwargs)
 
 
 def has_trained_state(*args, **kwargs):
-    from .runtime import has_trained_state as implementation
+    from .conditional_inr.runtime import has_trained_state as implementation
 
     return implementation(*args, **kwargs)
 
 
 def latest_state_generation(*args, **kwargs):
-    from .runtime import latest_state_generation as implementation
+    from .conditional_inr.runtime import latest_state_generation as implementation
 
     return implementation(*args, **kwargs)
 
 
 def ensure_fresh_enough(*args, **kwargs):
-    from .scheduler import ensure_fresh_enough as implementation
+    from .conditional_inr.scheduler import ensure_fresh_enough as implementation
 
     return implementation(*args, **kwargs)
 
 
 def start_training(*args, **kwargs):
-    from .scheduler import start_training as implementation
+    from .conditional_inr.scheduler import start_training as implementation
 
     return implementation(*args, **kwargs)
 
 
 def wait_for_pending_training(*args, **kwargs):
-    from .scheduler import wait_for_pending_training as implementation
+    from .conditional_inr.scheduler import wait_for_pending_training as implementation
 
     return implementation(*args, **kwargs)
 
 
 def deactivate_workspace(*args, **kwargs):
-    from .scheduler import deactivate_workspace as implementation
+    from .conditional_inr.scheduler import deactivate_workspace as implementation
 
     return implementation(*args, **kwargs)
 

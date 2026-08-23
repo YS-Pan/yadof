@@ -19,7 +19,8 @@ selection, and both interactive and audit inference.
 - Select the newest committed publication per generation within the active
   strategy/component scope, so an older compatible INR hyperparameter publication
   remains auditable without mixing retained inactive strategies.
-- Load the conditional-INR ensemble through installed yadof.
+- Load the conditional-INR ensemble through the installed package's private
+  `yadof.surrogate.conditional_inr` implementation boundary.
 - Predict member flat arrays, reconstruct mean/member rawData, and calculate current
   costs.
 - Query a modeled slot at arbitrary physical coordinates and build mean/member

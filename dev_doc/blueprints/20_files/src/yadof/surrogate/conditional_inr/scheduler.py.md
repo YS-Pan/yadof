@@ -1,4 +1,4 @@
-﻿# File blueprint: src/yadof/surrogate/scheduler.py
+﻿# File blueprint: src/yadof/surrogate/conditional_inr/scheduler.py
 
 ## Intent
 - Coordinate staggered surrogate training so real simulation jobs can run while submit-side training happens.

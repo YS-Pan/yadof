@@ -446,9 +446,9 @@ def test_off_grid_query_keeps_stored_grid_predictions_unchanged(
 ) -> None:
     import torch
 
-    from yadof.surrogate import runtime
-    from yadof.surrogate.modeling import INRTrainConfig
-    from yadof.surrogate.types import (
+    from yadof.surrogate.conditional_inr import runtime
+    from yadof.surrogate.conditional_inr.modeling import INRTrainConfig
+    from yadof.surrogate.conditional_inr.types import (
         RawArraySlot,
         RawDataSchema,
         TargetScaler,

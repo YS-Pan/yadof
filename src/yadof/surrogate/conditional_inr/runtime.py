@@ -10,13 +10,13 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 import torch
 
-from ..config import LoadedConfig, load_config
-from ..job_template import api as job_template_api
-from ..recorded_data import api as recorded_api
-from ..recorded_data.session import CampaignSession
-from ..task_snapshot import GenerationTaskSnapshot
-from ..workspace import WorkspaceContext
-from ..optimize.state import active_strategy_signature
+from ...config import LoadedConfig, load_config
+from ...job_template import api as job_template_api
+from ...recorded_data import api as recorded_api
+from ...recorded_data.session import CampaignSession
+from ...task_snapshot import GenerationTaskSnapshot
+from ...workspace import WorkspaceContext
+from ...optimize.state import active_strategy_signature
 
 from .checkpoints import (
     COMPONENT_NAMESPACE,
@@ -646,7 +646,7 @@ def _raw_samples_from_flat(schema: RawDataSchema | None, y_flat: np.ndarray) -> 
                 continue
             metadata = _metadata_dict(item["metadata"])
             if metadata:
-                metadata["source"] = "yadof.surrogate.runtime"
+                metadata["source"] = "yadof.surrogate.conditional_inr.runtime"
                 metadata["surrogate_prediction"] = True
                 metadata["surrogate_model"] = MODEL_NAME
                 metadata.pop("variables", None)

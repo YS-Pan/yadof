@@ -6,7 +6,7 @@
   防御性判断和辅助函数来完成新要求，却较少主动删除已经失去价值的实现，因而代码量
   可能只增不减。
 - 本次抽样浏览了 `evaluate_manager/condor_runner.py`、
-  `evaluate_manager/api.py`、`surrogate/runtime.py`、`job_template/` 以及
+  `evaluate_manager/api.py`、`surrogate/conditional_inr/runtime.py`、`job_template/` 以及
   `tools/view_cost.py`、`tools/view_time.py` 和相应测试。样本中既存在可能合并的重复
   元数据整理和绘图配置，也存在看似重复、实为公共 API 或故障隔离契约的代码。
 - 因此，清理不能只追求行数减少；必须先证明某段代码没有独立职责，再进行小而可验证

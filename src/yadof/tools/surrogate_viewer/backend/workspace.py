@@ -15,11 +15,11 @@ import torch
 from yadof.config import load_config
 from yadof.job_template import api as job_template_api
 from yadof.recorded_data import get_rawdata_samples, list_records
-from yadof.surrogate.checkpoints import (
+from yadof.surrogate.conditional_inr.checkpoints import (
     COMPONENT_NAMESPACE,
     run_namespace_for_signature,
 )
-from yadof.surrogate.runtime import strategy_signature_for_workspace
+from yadof.surrogate.conditional_inr.runtime import strategy_signature_for_workspace
 
 from .checkpoints import CheckpointPredictor, discover_checkpoints
 from .rawdata import (

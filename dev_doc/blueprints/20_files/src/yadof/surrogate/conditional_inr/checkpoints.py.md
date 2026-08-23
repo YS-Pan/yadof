@@ -1,4 +1,4 @@
-﻿# File blueprint: src/yadof/surrogate/checkpoints.py
+﻿# File blueprint: src/yadof/surrogate/conditional_inr/checkpoints.py
 
 ## Intent
 - Own surrogate checkpoint and auxiliary artifact serialization.

@@ -10,6 +10,17 @@ publishes recoverable checkpoints/metadata. Its lightweight public factory is a
 narrow rawData-surrogate component injected by workspace-owned GPSAF composition;
 non-surrogate strategies do not load or create this state.
 
+## Source structure
+
+- Parent `__init__.py` and `api.py` own only the lightweight public component and
+  lazy forwarding surface.
+- `conditional_inr/` owns model construction/training, rawData adaptation,
+  runtime state, staggered scheduling, checkpoint publication, metadata, and
+  private in-memory types.
+- Importing the parent package must not load Torch. The public
+  `conditional_inr()` factory remains callable even after private
+  `surrogate.conditional_inr.*` modules are loaded.
+
 ## Training data and model
 
 Training bundles come from the active campaign session when one exists, so finalized

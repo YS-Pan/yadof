@@ -25,8 +25,11 @@ src/yadof/                 installed framework
     segment_store.py       standard-ZIP publication/tolerant discovery
     records.py             owned envelopes and immutable event files
     query.py               partial/corruption-tolerant history
-  optimize/                campaign engine + composable strategy components/state
-  surrogate/               lazy conditional-INR component/model/scheduling
+  optimize/                campaign engine + public strategy components/state
+    gpsaf/                 GPSAF assistance, phases, and private records
+    pymoo/                 lazy GA/NSGA-III backend adapter
+  surrogate/               lightweight public rawData-surrogate API
+    conditional_inr/       model, runtime, scheduling, checkpoint implementation
   tools/                   optional user-launched utilities
     cost_viewer/           reusable cost analysis/rendering and dev_doc
     surrogate_viewer/      optional read-only GUI/text inspection and dev_doc

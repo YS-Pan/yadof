@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import threading
 
-from ..config import LoadedConfig, load_config
-from ..task_snapshot import create_generation_snapshot
-from ..workspace import WorkspaceContext
+from ...config import LoadedConfig, load_config
+from ...task_snapshot import create_generation_snapshot
+from ...workspace import WorkspaceContext
 from . import metadata as surrogate_metadata
 from . import runtime
 

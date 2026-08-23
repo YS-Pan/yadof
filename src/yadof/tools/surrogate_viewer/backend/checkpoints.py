@@ -14,11 +14,11 @@ import torch
 from yadof.config import load_config
 from yadof.job_template import api as job_template_api
 from yadof.job_template.rawdata_contract import RawDataView
-from yadof.surrogate.modeling import (
+from yadof.surrogate.conditional_inr.modeling import (
     load_inr_artifacts,
     predict_conditional_inr_members,
 )
-from yadof.surrogate.checkpoints import (
+from yadof.surrogate.conditional_inr.checkpoints import (
     COMPONENT_NAMESPACE,
     resolve_artifact_dir,
     resolve_namespace_manifest_path,
@@ -26,12 +26,16 @@ from yadof.surrogate.checkpoints import (
     semantic_state_signature,
     validate_manifest_identity,
 )
-from yadof.surrogate.runtime import (
+from yadof.surrogate.conditional_inr.runtime import (
     _interpolate_regular_grid,
     _raw_samples_from_flat,
     predict_rawdata_slot_members_at_coordinates,
 )
-from yadof.surrogate.types import RawArraySlot, RawDataSchema, TargetScaler
+from yadof.surrogate.conditional_inr.types import (
+    RawArraySlot,
+    RawDataSchema,
+    TargetScaler,
+)
 
 from .rawdata import (
     copy_template,

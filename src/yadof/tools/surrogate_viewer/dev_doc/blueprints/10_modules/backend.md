@@ -86,6 +86,6 @@ evolve. Workspace read-only behavior, schema validation, array axis meaning,
 current-cost interpretation, cancellation semantics, and no-partial-audit
 publication should remain stable.
 
-Package-internal yadof imports are an intentional adapter boundary. They may change
-with the owning surrogate/rawData implementation, but must not leak into UI modules
-or become an external viewer API.
+Package-internal imports from `yadof.surrogate.conditional_inr` are an intentional
+adapter boundary. They may change with the owning surrogate/rawData implementation,
+but must not leak into UI modules or become an external viewer API.

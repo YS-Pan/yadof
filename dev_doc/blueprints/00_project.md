@@ -80,10 +80,12 @@ hot-change contract; structural dimension changes are future work.
 - `evaluate_manager` owns preparation, local/HTCondor transport, result shape,
   retries/timeouts, and recording handoff.
 - `recorded_data` owns durable evidence and current-history queries.
-- `optimize` owns the campaign engine and narrow composable GPSAF/pymoo/real-search
-  mechanisms; the workspace owns complete strategy composition.
-- `surrogate` owns the lazy conditional-INR component, rawData prediction, uncertainty
-  intervals, audits, scheduling, and checkpoints.
+- `optimize` owns the campaign engine and public composition seam; its `gpsaf/` and
+  `pymoo/` subpackages physically isolate GPSAF coordination and the mature-backend
+  adapter. The workspace owns complete strategy composition.
+- `surrogate` owns a lightweight public component API; its `conditional_inr/`
+  subpackage physically isolates rawData prediction, uncertainty intervals,
+  modeling, scheduling, metadata, and checkpoints.
 - `tools` and `cli` are optional user-facing orchestration/inspection layers.
   `tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf
   with its own nested developer documentation and a compatibility facade.

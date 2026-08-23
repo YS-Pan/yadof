@@ -73,13 +73,15 @@
   once and streams every segment through one open ZIP for structural checks, NPZ
   decode/schema validation, and candidate diagnostics.
 - `optimize.strategy`, `components`, `state`: common campaign result/context and
-  real-evaluation boundary, snapshotted workspace-strategy loading, thin lazy pymoo
-  GA/NSGA-III components, irreducible GPSAF assistance, and one active semantic
-  strategy pointer with retained namespaces. The package has no complete-method
-  selector or registry.
-- `surrogate`: lazy conditional-INR component, strategy/component-keyed schedule and
-  state, rawData prediction, dynamic cost conversion, and atomic recoverable
-  checkpoints scoped to the active strategy.
+  real-evaluation boundary, snapshotted workspace-strategy loading, public
+  composition factories, and one active semantic strategy pointer with retained
+  namespaces. Private `optimize.gpsaf` owns GPSAF assistance/phases/records and
+  private `optimize.pymoo` owns the thin lazy GA/NSGA-III backend adapter. The
+  package has no complete-method selector or registry.
+- `surrogate`: lightweight public component/API over the private
+  `surrogate.conditional_inr` model, strategy/component-keyed schedule and state,
+  rawData prediction, dynamic cost conversion, and atomic recoverable checkpoints
+  scoped to the active strategy.
 - `tools`, `_resources`: reusable `tools.cost_viewer` package with left-axis
   objective/average costs and a right-axis all-individual versus
   current-generation hypervolume interval, shaded and bounded by thin translucent
@@ -114,7 +116,9 @@
 
 The campaign engine consumes public evaluation/history/task contracts and invokes
 one workspace-owned strategy. GPSAF consumes only the narrow injected search and
-surrogate seams; concrete pymoo algorithms and Torch runtime load on selection.
+surrogate seams; its private package and the private pymoo/conditional-INR packages
+keep concrete implementation imports below the public component layer. Pymoo
+algorithms and the Torch runtime load only on selection.
 `evaluate_manager` consumes task and recorded-data APIs. `recorded_data` and
 `surrogate` may ask `job_template` to reinterpret evidence. Core runtime modules
 never import `tools`. Workspace workflows may import files copied beside them and

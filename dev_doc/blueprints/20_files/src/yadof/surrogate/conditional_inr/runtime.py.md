@@ -1,4 +1,4 @@
-﻿# File blueprint: src/yadof/surrogate/runtime.py
+﻿# File blueprint: src/yadof/surrogate/conditional_inr/runtime.py
 
 ## Intent
 - Own surrogate training and prediction data flow while preserving `normalized variables -> rawData -> cost`.

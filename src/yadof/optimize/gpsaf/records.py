@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import math
 from typing import Sequence
 
-from .strategy import HistoryRecord
+from ..strategy import HistoryRecord
 
 
 @dataclass(frozen=True)

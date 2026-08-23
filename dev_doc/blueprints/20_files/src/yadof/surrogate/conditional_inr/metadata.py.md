@@ -1,4 +1,4 @@
-﻿# File blueprint: src/yadof/surrogate/metadata.py
+﻿# File blueprint: src/yadof/surrogate/conditional_inr/metadata.py
 
 ## Intent
 - Convert surrogate training outcomes into compact recorded-data metadata rows.

@@ -1,4 +1,4 @@
-﻿# File blueprint: src/yadof/surrogate/types.py
+﻿# File blueprint: src/yadof/surrogate/conditional_inr/types.py
 
 ## Intent
 - Hold shared surrogate type aliases and dataclasses so runtime, scheduler, and checkpoint helpers do not duplicate structural definitions.

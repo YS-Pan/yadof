@@ -150,7 +150,7 @@ class GPSAFStrategy:
         }
 
     def run_generation(self, context: GenerationContext) -> OptimizationResult:
-        from .gpsaf_assistance import run_generation
+        from .gpsaf.assistance import run_generation
 
         return run_generation(
             context,
@@ -180,7 +180,7 @@ class RealSearchStrategy:
     def run_generation(self, context: GenerationContext) -> OptimizationResult:
         import random
 
-        from .gpsaf_pymoo import (
+        from .pymoo.backend import (
             baseline_records,
             diagnostics,
             make_context,

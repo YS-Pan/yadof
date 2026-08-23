@@ -677,12 +677,28 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/job_template/cost_misc.py" in wheel_names
         assert "yadof/optimize/api.py" in wheel_names
         assert "yadof/optimize/components.py" in wheel_names
-        assert "yadof/optimize/gpsaf_assistance.py" in wheel_names
+        assert "yadof/optimize/gpsaf/__init__.py" in wheel_names
+        assert "yadof/optimize/gpsaf/assistance.py" in wheel_names
+        assert "yadof/optimize/gpsaf/phases.py" in wheel_names
+        assert "yadof/optimize/gpsaf/records.py" in wheel_names
+        assert "yadof/optimize/pymoo/__init__.py" in wheel_names
+        assert "yadof/optimize/pymoo/backend.py" in wheel_names
         assert "yadof/optimize/state.py" in wheel_names
         assert "yadof/optimize/strategy.py" in wheel_names
         assert "yadof/optimize/gpsaf.py" not in wheel_names
-        assert "yadof/surrogate/runtime.py" in wheel_names
-        assert "yadof/surrogate/scheduler.py" in wheel_names
+        assert "yadof/optimize/gpsaf_assistance.py" not in wheel_names
+        assert "yadof/optimize/gpsaf_phases.py" not in wheel_names
+        assert "yadof/optimize/gpsaf_pymoo.py" not in wheel_names
+        assert "yadof/optimize/gpsaf_misc.py" not in wheel_names
+        assert "yadof/surrogate/conditional_inr/__init__.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/runtime.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/modeling.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/checkpoints.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/scheduler.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/metadata.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/types.py" in wheel_names
+        assert "yadof/surrogate/runtime.py" not in wheel_names
+        assert "yadof/surrogate/scheduler.py" not in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
         assert "yadof/tools/cost_viewer/__init__.py" in wheel_names
         assert "yadof/tools/cost_viewer/api.py" in wheel_names

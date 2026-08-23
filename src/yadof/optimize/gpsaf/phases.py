@@ -4,7 +4,7 @@ import os
 import random
 from typing import Sequence
 
-from .gpsaf_pymoo import (
+from ..pymoo.backend import (
     PymooContext,
     advance_population_with_records,
     clone_algorithm,
@@ -12,11 +12,11 @@ from .gpsaf_pymoo import (
     select_records_by_survival,
     survivor_state_from_history,
 )
-from .gpsaf_misc import (
+from .records import (
     CandidateRecord,
     history_keys,
 )
-from .strategy import GenerationContext, HistoryRecord, Population
+from ..strategy import GenerationContext, HistoryRecord, Population
 
 
 def _progress(message: str) -> None:

@@ -7,8 +7,8 @@ from typing import Iterable, Mapping, Sequence
 import numpy as np
 
 from yadof.job_template.rawdata_contract import RawDataView
-from yadof.surrogate.runtime import _finite_fill_matrix
-from yadof.surrogate.types import RawDataSchema
+from yadof.surrogate.conditional_inr.runtime import _finite_fill_matrix
+from yadof.surrogate.conditional_inr.types import RawDataSchema
 
 from .types import CurveData, DimensionSpec, PlotData
 

@@ -69,12 +69,16 @@ backend/workspace.py
 backend/checkpoints.py
   -> backend/rawdata.py
   -> backend/types.py
-  -> installed yadof model/runtime APIs
+  -> installed yadof conditional-INR model/runtime APIs
 ```
 
 The backend must never import UI modules. Plotting code must not parse checkpoints,
 read records, or call private yadof model functions. The UI passes user intent to
 the coordinator; the coordinator submits backend operations.
+
+Package-internal model/runtime imports are isolated to
+`yadof.surrogate.conditional_inr`; the public `yadof.surrogate` namespace remains
+the lazy factory and scheduling facade.
 
 ## Interface Invariants
 

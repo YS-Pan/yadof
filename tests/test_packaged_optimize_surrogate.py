@@ -293,7 +293,7 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     pytest.importorskip("torch")
 
     from yadof.optimize import run_one_generation
-    from yadof.surrogate import runtime
+    from yadof.surrogate.conditional_inr import runtime
 
     workspace_a = _workspace(tmp_path, "surrogate_a", surrogate=True)
     workspace_b = _workspace(tmp_path, "surrogate_b", surrogate=True)
@@ -423,7 +423,8 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
 ) -> None:
     from yadof.optimize import run_one_generation
     from yadof.optimize.state import read_active_strategy_state
-    from yadof.surrogate import runtime, wait_for_pending_training
+    from yadof.surrogate import wait_for_pending_training
+    from yadof.surrogate.conditional_inr import runtime
     from yadof.tools.surrogate_viewer.backend.workspace import SurrogateWorkspace
 
     workspace = _workspace(tmp_path, "strategy_state", surrogate=True)
@@ -478,10 +479,10 @@ def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
     tmp_path: Path,
     raw_rows,
 ) -> None:
-    from yadof.optimize.gpsaf_phases import surrogate_state_ready
+    from yadof.optimize.gpsaf.phases import surrogate_state_ready
     from yadof.surrogate import conditional_inr
-    from yadof.surrogate import runtime
-    from yadof.surrogate.types import TrainingData
+    from yadof.surrogate.conditional_inr import runtime
+    from yadof.surrogate.conditional_inr.types import TrainingData
 
     workspace = _workspace(tmp_path, "not_trainable", surrogate=True)
     data = TrainingData(
@@ -516,6 +517,6 @@ def test_packaged_optimize_and_surrogate_have_no_project_namespace_imports():
     for module_dir in (package_root / "optimize", package_root / "surrogate"):
         source = "\n".join(
             path.read_text(encoding="utf-8")
-            for path in module_dir.glob("*.py")
+            for path in module_dir.rglob("*.py")
         )
         assert "project." not in source

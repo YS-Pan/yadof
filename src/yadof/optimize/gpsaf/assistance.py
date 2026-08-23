@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import random
 
-from .gpsaf_pymoo import (
+from ..pymoo.backend import (
     baseline_records,
     diagnostics as pymoo_diagnostics,
     make_context,
     population_from_records,
 )
-from .strategy import GenerationContext, OptimizationResult, evaluate_population
-from .gpsaf_phases import ensure_surrogate_fresh_enough, notify_surrogate_after_submission, surrogate_population
+from ..strategy import GenerationContext, OptimizationResult, evaluate_population
+from .phases import (
+    ensure_surrogate_fresh_enough,
+    notify_surrogate_after_submission,
+    surrogate_population,
+)
 
 
 def _surrogate_requested(config) -> bool:
