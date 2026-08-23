@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "baseline_id": "20260823-9c5f3020778d",
+  "baseline_id": "saw-ladder-9c5f3020778d",
   "case_id": "saw",
+  "provider_id": "ngspice",
+  "task_id": "saw-ladder",
   "created_utc": "2026-08-23T04:46:17.941Z",
   "created_by": "yadof benchmark maintainers",
   "yadof_version": "0.4.0",

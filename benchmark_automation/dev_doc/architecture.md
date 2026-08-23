@@ -58,7 +58,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
 | `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, and resource requirements. |
 | `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements. |
-| `baselines/` | Immutable task inputs plus provenance selected by exact identity. |
+| `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
 | configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default `runs/`, Git-ignored. |
@@ -76,6 +76,10 @@ Keeping the CLI thin makes core behavior directly testable.
   invocation directory, and suggested follow-up commands preserve the resolved
   root.
 - A baseline ID and its contents are immutable. Refreshing creates a new directory.
+- Baseline provider directories identify the simulator or adapter. Their child
+  directory identifies the optimization task and task-fingerprint prefix; manifest
+  `provider_id`, `task_id`, `baseline_id`, and full fingerprint must agree with the
+  path.
 - Each case/arm/seed cell receives its own initialized workspace, state, logs, and
   checkpoint namespace; measured cells never share a smoke workspace.
 - Performance arms for a paired case use equal planned attempted-real-evaluation

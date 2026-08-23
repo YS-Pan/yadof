@@ -73,8 +73,11 @@ hot-change contract; structural dimension changes are future work.
 - Source-checkout benchmark: Git-tracked runner, frozen baselines, strategy
   templates, bounded reports, and focused tests under `benchmark_automation/`;
   downloadable with the repository, outside `src/yadof`, and never a wheel/sdist
-  member. Generated runs use its ignored default or an explicit disjoint output
-  root; agents use `temp/benchmark/<task-id>`.
+  member. Baselines are addressed as
+  `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>`, separating the
+  simulator/adapter identity from the optimization-task identity. Generated runs
+  use its ignored default or an explicit disjoint output root; agents use
+  `temp/benchmark/<task-id>`.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 

@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "baseline_id": "20260823-025b5ea5fca1",
+  "baseline_id": "trebuchet-025b5ea5fca1",
   "case_id": "chrono",
+  "provider_id": "chrono",
+  "task_id": "trebuchet",
   "created_utc": "2026-08-23T04:46:17.941Z",
   "created_by": "yadof benchmark maintainers",
   "yadof_version": "0.4.0",

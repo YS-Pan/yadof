@@ -13,6 +13,9 @@ separate purposes:
 The runner never reads the mutable original task directories. Every cell starts
 with `yadof init`, receives only declared inputs from one frozen baseline, and has
 its own workspace, history, optimizer state, checkpoint namespace, logs, and lock.
+Baselines use `baselines/<provider>/<task>-<fingerprint-prefix>`: the provider is
+the simulator or adapter, and the task is the optimization problem rather than the
+benchmark case label or creation date.
 
 This is a source-checkout tool. It is tracked beside yadof so a user who clones or
 downloads the yadof repository can run the frozen benchmark, but it is deliberately
@@ -336,12 +339,14 @@ continue independent cells and exit nonzero when any cell is incomplete.
 
 To add a case:
 
-1. Create a new immutable `baselines/<case>/<date>-<fingerprint>/workspace` with
+1. Create a new immutable
+   `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>/workspace` with
    current `yadof init`, deliberate task-input transfer, zero runtime evidence,
    `yadof check`, and one disposable smoke.
-2. Add `baseline.json` provenance and explicit `include_paths`, objective count,
-   rawData shapes, resource prerequisite, history policy, and budgets to
-   `benchmark.toml`.
+2. Add matching `provider_id`, `task_id`, `baseline_id`, and full task fingerprint
+   to `baseline.json`, then declare the exact baseline path, `include_paths`,
+   objective count, rawData shapes, resource prerequisite, history policy, and
+   budgets in `benchmark.toml`.
 3. Run `plan`, `preflight`, and the smallest structural tier before performance.
 
 To add an arm, add a complete strategy module under `strategy_templates/` with a

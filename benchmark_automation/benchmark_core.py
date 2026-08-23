@@ -43,6 +43,10 @@ RUNTIME_PATHS = (
 TERMINAL_CELL_STATES = {"completed", "failed", "skipped"}
 CONFIG_BLOCK_START = "# >>> benchmark_automation managed overrides >>>"
 CONFIG_BLOCK_END = "# <<< benchmark_automation managed overrides <<<"
+BASELINE_PROVIDER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
+BASELINE_ID_PATTERN = re.compile(
+    r"(?P<task>[a-z][a-z0-9]*(?:-[a-z0-9]+)*)-(?P<fingerprint>[0-9a-f]{12})\Z"
+)
 
 
 class BenchmarkError(RuntimeError):
@@ -126,6 +130,54 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise BenchmarkError(f"expected a JSON object in {path}")
     return value
+
+
+def _baseline_identity(
+    paths: Paths,
+    baseline: Path,
+    manifest: Mapping[str, Any],
+    case_id: str,
+) -> dict[str, str]:
+    layout = "baselines/<provider>/<task>-<12-hex-fingerprint-prefix>"
+    try:
+        relative = baseline.resolve().relative_to((paths.root / "baselines").resolve())
+    except ValueError as exc:
+        raise BenchmarkError(f"case {case_id!r} baseline must use {layout}") from exc
+    if len(relative.parts) != 2:
+        raise BenchmarkError(f"case {case_id!r} baseline must use {layout}")
+    provider_id, baseline_id = relative.parts
+    match = BASELINE_ID_PATTERN.fullmatch(baseline_id)
+    if BASELINE_PROVIDER_PATTERN.fullmatch(provider_id) is None or match is None:
+        raise BenchmarkError(f"case {case_id!r} baseline must use {layout}")
+
+    task_id = match.group("task")
+    fingerprint_prefix = match.group("fingerprint")
+    task_fingerprint = manifest.get("task_fingerprint")
+    if (
+        not isinstance(task_fingerprint, str)
+        or re.fullmatch(r"[0-9a-f]{64}", task_fingerprint) is None
+    ):
+        raise BenchmarkError(f"case {case_id!r} baseline has an invalid task_fingerprint")
+    expected = {
+        "baseline_id": baseline_id,
+        "case_id": case_id,
+        "provider_id": provider_id,
+        "task_id": task_id,
+    }
+    for field, value in expected.items():
+        if manifest.get(field) != value:
+            raise BenchmarkError(
+                f"case {case_id!r} baseline metadata {field} must be {value!r}"
+            )
+    if not task_fingerprint.startswith(fingerprint_prefix):
+        raise BenchmarkError(
+            f"case {case_id!r} baseline directory fingerprint prefix does not match task_fingerprint"
+        )
+    return {
+        "provider_id": provider_id,
+        "task_id": task_id,
+        "fingerprint_prefix": fingerprint_prefix,
+    }
 
 
 def resolve_inside(root: Path, value: str | Path, *, label: str) -> Path:
@@ -320,6 +372,7 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
             raise BenchmarkError(f"runs_dir overlaps case {case_id!r} baseline: {baseline}")
         if not (baseline / "baseline.json").is_file() or not (baseline / "workspace").is_dir():
             raise BenchmarkError(f"case {case_id!r} baseline is incomplete: {baseline}")
+        _baseline_identity(paths, baseline, read_json(baseline / "baseline.json"), case_id)
         include = case.get("include_paths")
         if not isinstance(include, list) or not include or not all(isinstance(x, str) for x in include):
             raise BenchmarkError(f"case {case_id!r} include_paths must be a non-empty string list")
@@ -617,6 +670,7 @@ def _baseline_details(config: Mapping[str, Any], paths: Paths, case_id: str) -> 
     workspace = root / "workspace"
     actual = task_fingerprint(workspace, case["include_paths"])
     runtime_paths = [relative for relative in RUNTIME_PATHS if (workspace / relative).exists()]
+    identity = _baseline_identity(paths, root, manifest, case_id)
     return {
         "root": str(root),
         "workspace": str(workspace),
@@ -629,6 +683,7 @@ def _baseline_details(config: Mapping[str, Any], paths: Paths, case_id: str) -> 
         "runtime_paths_present": runtime_paths,
         "runtime_clean": not runtime_paths,
         "include_paths": list(case["include_paths"]),
+        **identity,
     }
 
 

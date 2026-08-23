@@ -9,6 +9,39 @@ import pytest
 import benchmark_core as core
 
 
+TASK_FINGERPRINT = "1" * 64
+
+
+def _write_baseline(
+    root: Path,
+    *,
+    case_id: str = "case",
+    provider_id: str = "adapter",
+    task_id: str = "task",
+    baseline_id: str | None = None,
+) -> Path:
+    identity = baseline_id or f"{task_id}-{TASK_FINGERPRINT[:12]}"
+    baseline = root / "baselines" / provider_id / identity
+    workspace = baseline / "workspace"
+    (workspace / "submit").mkdir(parents=True)
+    (workspace / "job_template").mkdir()
+    (workspace / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (baseline / "baseline.json").write_text(
+        json.dumps(
+            {
+                "baseline_id": identity,
+                "case_id": case_id,
+                "provider_id": provider_id,
+                "task_id": task_id,
+                "task_fingerprint": TASK_FINGERPRINT,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return baseline
+
+
 def test_task_fingerprint_matches_path_tab_hash_manifest(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     (workspace / "submit").mkdir(parents=True)
@@ -28,11 +61,7 @@ def test_resolve_inside_rejects_escape(tmp_path: Path) -> None:
 
 
 def _write_loadable_config(root: Path) -> Path:
-    workspace = root / "baseline" / "workspace"
-    (workspace / "submit").mkdir(parents=True)
-    (workspace / "job_template").mkdir()
-    (workspace / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
-    (root / "baseline" / "baseline.json").write_text("{}\n", encoding="utf-8")
+    baseline = _write_baseline(root)
     (root / "strategies").mkdir()
     (root / "strategies" / "real.py").write_text(
         "def build_optimization(): return object()\n", encoding="utf-8"
@@ -48,7 +77,7 @@ strategy_template_dir = "strategies"
 history_snapshot_dir = "history"
 
 [cases.case]
-baseline = "baseline"
+baseline = "{baseline}"
 include_paths = ["config.py", "submit", "job_template"]
 history_policy = "empty"
 
@@ -64,7 +93,7 @@ seeds = [1]
 [budgets.structural.case.real]
 population = 1
 generations = 1
-""",
+""".format(baseline=baseline.relative_to(root).as_posix()),
         encoding="utf-8",
     )
     return config
@@ -98,7 +127,45 @@ def test_runs_dir_override_resolves_from_invocation_directory(tmp_path: Path) ->
 def test_runs_dir_rejects_protected_input_overlap(tmp_path: Path) -> None:
     config_path = _write_loadable_config(tmp_path)
     with pytest.raises(core.BenchmarkError, match="overlaps case 'case' baseline"):
-        core.load_config(config_path, runs_dir_override=tmp_path / "baseline")
+        core.load_config(config_path, runs_dir_override=tmp_path / "baselines")
+
+
+def test_load_config_rejects_legacy_date_baseline_identity(tmp_path: Path) -> None:
+    root = tmp_path / "benchmark"
+    config_path = _write_loadable_config(root)
+    valid_baseline = next((root / "baselines").glob("*/*"))
+    baseline = valid_baseline.with_name(f"20260823-{TASK_FINGERPRINT[:12]}")
+    valid_baseline.rename(baseline)
+    text = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        text.replace(
+            valid_baseline.relative_to(root).as_posix(),
+            baseline.relative_to(root).as_posix(),
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(core.BenchmarkError, match="must use baselines"):
+        core.load_config(config_path)
+
+
+def test_load_config_rejects_baseline_provider_metadata_mismatch(tmp_path: Path) -> None:
+    config_path = _write_loadable_config(tmp_path)
+    manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["provider_id"] = "different-adapter"
+    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+    with pytest.raises(core.BenchmarkError, match="metadata provider_id"):
+        core.load_config(config_path)
+
+
+def test_load_config_rejects_baseline_fingerprint_prefix_mismatch(tmp_path: Path) -> None:
+    config_path = _write_loadable_config(tmp_path)
+    manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["task_fingerprint"] = "2" * 64
+    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+    with pytest.raises(core.BenchmarkError, match="fingerprint prefix"):
+        core.load_config(config_path)
 
 
 def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
@@ -154,11 +221,7 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
 
 
 def test_performance_config_requires_equal_planned_attempted_budget(tmp_path: Path) -> None:
-    workspace = tmp_path / "baseline" / "workspace"
-    (workspace / "submit").mkdir(parents=True)
-    (workspace / "job_template").mkdir()
-    (workspace / "config.py").write_text("X=1\n", encoding="utf-8")
-    (tmp_path / "baseline" / "baseline.json").write_text("{}", encoding="utf-8")
+    baseline = _write_baseline(tmp_path)
     strategies = tmp_path / "strategies"
     strategies.mkdir()
     for name in ("real.py", "surrogate.py"):
@@ -166,7 +229,7 @@ def test_performance_config_requires_equal_planned_attempted_budget(tmp_path: Pa
     config = {
         "cases": {
             "case": {
-                "baseline": "baseline",
+                "baseline": baseline.relative_to(tmp_path).as_posix(),
                 "include_paths": ["config.py", "submit", "job_template"],
                 "history_policy": "empty",
             }

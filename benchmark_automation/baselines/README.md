@@ -3,11 +3,24 @@
 These are current-format, runtime-clean task inputs selected explicitly by
 `benchmark.toml`:
 
-| Case | Baseline ID | Task fingerprint | Files | Objectives |
-|---|---|---|---:|---:|
-| SAW | `20260823-9c5f3020778d` | `9c5f3020778d9ed67cf9571745b8119c381a116559e5dcd8dd8b1792c4de9372` | 8 | 5 |
-| Chrono | `20260823-025b5ea5fca1` | `025b5ea5fca1468bbb2acc4a1e4aeffb7554e244181d6d6f309c25518ec991a1` | 10 | 4 |
-| test_com | `20260823-aa89d46f3d9a` | `aa89d46f3d9adb27d72208e022775bc1ef1d43bea51a67269621a91e966ef162` | 7 | 4 |
+| Case | Provider | Task | Baseline ID | Task fingerprint | Files | Objectives |
+|---|---|---|---|---|---:|---:|
+| SAW | `ngspice` | `saw-ladder` | `saw-ladder-9c5f3020778d` | `9c5f3020778d9ed67cf9571745b8119c381a116559e5dcd8dd8b1792c4de9372` | 8 | 5 |
+| Chrono | `chrono` | `trebuchet` | `trebuchet-025b5ea5fca1` | `025b5ea5fca1468bbb2acc4a1e4aeffb7554e244181d6d6f309c25518ec991a1` | 10 | 4 |
+| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-aa89d46f3d9a` | `aa89d46f3d9adb27d72208e022775bc1ef1d43bea51a67269621a91e966ef162` | 7 | 4 |
+
+The directory contract is:
+
+```text
+baselines/<provider>/<task>-<12-hex-task-fingerprint-prefix>/
+  baseline.json
+  workspace/
+```
+
+`provider` names the simulator or copied adapter used to execute the task, while
+`task` names the optimization problem. Both are lowercase kebab-case identifiers
+that start with a letter.
+The benchmark case ID is a separate matrix label and need not equal either name.
 
 Each baseline was initialized by installed yadof 0.4.0, checked with zero warnings,
 and smoke-tested in a separate assembly workspace. The final baseline itself has
@@ -19,9 +32,9 @@ private-workspace names in the provenance display fields were redacted once. The
 workspace inputs, baseline IDs, task fingerprints, validation evidence, and
 scientific content did not change. The public forms below are immutable.
 
-Never overwrite a baseline ID. Refreshing a task means creating a new date plus
-fingerprint-prefix directory, validating it, and changing the explicit TOML
-selection.
+Never overwrite a baseline ID. Refreshing a task means creating a new task plus
+fingerprint-prefix directory under the applicable provider, validating it, and
+changing the explicit TOML selection.
 
 The hidden `.staging/` and `.assembled/` directories at the benchmark root are
 Phase-0 reconstruction/validation evidence, not runner inputs. In particular,
