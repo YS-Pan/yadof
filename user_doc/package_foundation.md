@@ -57,6 +57,29 @@ resource planning measures the workflow and simulator process tree. This is a
 reproducibility snapshot rather than a minimum-version contract; the wheel metadata
 remains authoritative for Python and dependency requirements.
 
+## Source-checkout benchmark
+
+A Git clone or repository download includes `benchmark_automation/`, a
+user-runnable comparison of frozen tasks and strategy arms. It is deliberately not
+installed by `pip install yadof` and is absent from wheel/sdist; it uses the
+matching yadof distribution already installed in the selected Python environment.
+A wheel-only installation therefore does not include this repository tool.
+
+From the source-checkout root, start with the bounded no-write plan:
+
+```powershell
+python ".\benchmark_automation\benchmark.py" plan --suite structural-canary
+```
+
+`preflight` validates selected resources without launching a simulator. Before a
+smoke, optimization, resume, or collection command, read
+`benchmark_automation/README.md` for external prerequisites and the applicable
+cost/risk authorization. Human users may retain the documented default output;
+agents pass `--runs-dir ".\temp\benchmark\<task-id>"` before the subcommand and
+reuse the same directory for later `inspect`, `resume`, `collect`, and `report`
+commands. Start result interpretation with bounded `inspect` output and expand one
+artifact or failed cell at a time.
+
 ## Initialize and inspect
 
 ```powershell

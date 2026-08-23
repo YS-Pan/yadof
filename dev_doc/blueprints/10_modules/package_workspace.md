@@ -5,7 +5,9 @@
 The foundation separates immutable installed framework resources from mutable,
 explicitly selected user workspaces. Distribution metadata has one version source
 and one console entry point. Wheel/sdist membership is allowlisted around package
-code, generic templates/adapters, and version-matched documentation.
+code, generic templates/adapters, and version-matched documentation. The top-level
+`benchmark_automation/` directory is a source-checkout tool, not an installed
+package resource, console entry point, or implicit workspace.
 
 The current package version is 0.4.0. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
@@ -43,7 +45,10 @@ or `job_template/` root in temporary namespaces and supports
 same-directory helpers/packages without lasting `sys.path` or module-cache
 pollution. Two workspaces may use identical helper module names safely. Package
 resources are read-only and accessed through `importlib.resources`; repository
-examples are tracked references, not packaged resources or runtime write locations.
+examples and benchmark automation are tracked source-checkout resources, not
+packaged resources or package runtime write locations. Benchmark output resolves
+only from its explicit/default runs-root contract and must remain disjoint from
+frozen inputs and package source.
 
 Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 `init`, and `check` separate the public path value from creation and diagnostics.
@@ -55,7 +60,7 @@ Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 - Configured framework paths never overlap fixed `submit/`, `job_template/`, or one another.
 - Package code remains functional when site-packages is read-only.
 - Wheel/sdist exclude concrete models, workspaces, jobs, records, caches, logs,
-  checkpoints, credentials, and examples.
+  checkpoints, credentials, examples, and source-checkout benchmark automation.
 - Loaded workspace modules and helper names are removed after use.
 - Unreserved user-created workspace directories remain user-owned and are not
   inferred as framework state or prepared-job input.

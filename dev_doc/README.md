@@ -73,6 +73,13 @@ subtree. Its developer entry point remains
 read that tree before changing the viewer backend, GUI, audit contracts, or its
 package integration.
 
+The repository also carries source-checkout-only benchmark automation outside the
+installed package. Its developer entry point is
+[benchmark_automation/dev_doc/README.md](../benchmark_automation/dev_doc/README.md).
+Read the nested [agent instructions](../benchmark_automation/AGENTS.md) first when
+changing its runner, schemas, frozen inputs, tests, or evidence policy. The
+directory is downloadable with the repository but excluded from wheel and sdist.
+
 ## Installed Development Environment
 
 The canonical local development/runtime environment for this checkout is the

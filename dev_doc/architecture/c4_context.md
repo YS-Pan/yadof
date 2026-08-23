@@ -54,8 +54,11 @@ workspace.
 Package artifacts are immutable framework inputs. Workspace directories are the
 only mutable task/runtime boundary. Wheel and sdist contain package code, generic
 templates, adapter resources, documentation, and the optional viewer source, but
-exclude repository examples, workspaces, concrete models, jobs, history,
-checkpoints, logs, caches, credentials, and secrets.
+exclude repository examples, source-checkout benchmark automation, workspaces,
+concrete models, jobs, history, checkpoints, logs, caches, credentials, and
+secrets. A Git clone or repository download may additionally carry
+`benchmark_automation/`: it invokes the matching installed distribution, owns
+frozen benchmark inputs, and writes only to an explicitly selected output root.
 
 ## System guarantees
 

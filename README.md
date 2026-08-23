@@ -107,6 +107,25 @@ minimum requirement. See
 [dev_doc/development_environment.md](dev_doc/development_environment.md) for paths,
 detection details, and the package's declared compatibility boundary.
 
+## Source-checkout benchmark
+
+The repository includes a downloadable, user-runnable comparison tool under
+[benchmark_automation](benchmark_automation/README.md). It is deliberately outside
+`src/yadof`: a Git clone or repository download contains the runner, frozen inputs,
+and its focused tests, while `pip install yadof`, wheel, and sdist do not.
+
+Use a Python environment containing the matching installed yadof distribution and
+start with the no-write plan:
+
+```powershell
+python ".\benchmark_automation\benchmark.py" plan --suite structural-canary
+```
+
+Read the suite's prerequisite and cost/risk policy before starting real work.
+Agents should keep generated evidence in an ignored task-specific directory by
+passing `--runs-dir ".\temp\benchmark\<task-id>"` before the subcommand; human-run
+durable campaigns may retain the documented default or choose another directory.
+
 ## Package and workspace boundary
 
 The package owns framework code, defaults, worker support, templates, adapters,
@@ -132,4 +151,5 @@ primarily by the user's AI agent, and [dev_doc/README.md](dev_doc/README.md) for
 architecture and contribution rules. The checked-in
 [examples](examples/README.md) preserve complete reference workspaces, including
 the former HFSS task; examples are tracked in Git but excluded from wheel and sdist
-artifacts.
+artifacts. The top-level benchmark automation follows the same distribution
+exclusion but remains runnable directly from a source checkout.

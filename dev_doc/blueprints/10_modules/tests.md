@@ -7,6 +7,11 @@ import the wheel force-installed into the sibling `.venv`. Tests create neutral
 temporary workspaces. Default tests require no live pool, simulator, concrete model,
 license, machine identity, or credential.
 
+The source-checkout benchmark is a separate repository tool and owns focused
+runner tests under `benchmark_automation/tests/`. Those tests may name its frozen
+cases and schemas but still consume a regular installed yadof distribution. They
+are not part of the package's generic test namespace or wheel/sdist contents.
+
 ## Required coverage
 
 - package metadata, wheel/sdist members, console entry point, clean external install,
@@ -75,8 +80,9 @@ license, machine identity, or credential.
 
 Task-specific tests that assert a concrete model/design, physical objective,
 frequency band, exact active parameter set, or expected simulator result stay with a
-reference/disposable workspace. Neutral fake adapters and synthetic 0D/1D/2D/3D
-rawData remain package fixtures.
+reference/disposable workspace or, when they verify the declared frozen comparison
+contract, below `benchmark_automation/`. Neutral fake adapters and synthetic
+0D/1D/2D/3D rawData remain package fixtures.
 
 ## Acceptance
 
@@ -85,3 +91,8 @@ Build a wheel, force-reinstall without editable/PYTHONPATH shortcuts, verify
 then the complete suite. Real simulator/HTCondor smoke is an integration step, not
 part of generic pytest; whether an agent may start it autonomously follows the user
 documentation's concrete cost/risk policy.
+
+For benchmark-runner changes, run its focused unit suite with a fresh absolute
+`--basetemp` and disabled pytest cache, then exercise bounded `plan` and `preflight`
+from the repository root with an explicit temporary runs directory. Do not launch
+a measured suite as generic acceptance.

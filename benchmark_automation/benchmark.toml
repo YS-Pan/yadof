@@ -1,0 +1,228 @@
+schema_version = 1
+
+[runner]
+runs_dir = "runs"
+strategy_template_dir = "strategy_templates"
+history_snapshot_dir = "history_snapshots"
+minimum_free_disk_mib = 2048
+command_timeout_sec = 7200
+audit_sample_percent = 10
+audit_random_seed = 20260823
+
+[arms.real-search]
+strategy_template = "real_search.py"
+surrogate = false
+
+[arms.gpsaf-conditional-inr]
+strategy_template = "gpsaf_conditional_inr.py"
+surrogate = true
+
+[arms.gpsaf-conditional-inr.config_overrides]
+OPTIMIZE_SURROGATE_ALPHA = 3
+OPTIMIZE_SURROGATE_BETA = 3
+OPTIMIZE_SURROGATE_EXPLORATION_FRACTION = 0.15
+
+[cases.saw]
+baseline = "baselines/saw/20260823-9c5f3020778d"
+include_paths = ["config.py", "submit", "job_template"]
+mode = "fast"
+history_policy = "empty"
+expected_objectives = 5
+observed_eval_sec = 0.70
+estimated_record_mib = 0.08
+max_workers = 8
+representative_expensive_generation_sec = 3600
+
+[cases.saw.resource]
+kind = "environment_executable"
+variable = "YADOF_NGSPICE_EXE"
+
+[cases.saw.rawdata_shapes]
+s21_db = [1201]
+s11_db = [1201]
+
+[cases.chrono]
+baseline = "baselines/chrono/20260823-025b5ea5fca1"
+include_paths = ["config.py", "submit", "job_template"]
+mode = "fast"
+history_policy = "empty"
+expected_objectives = 4
+observed_eval_sec = 3.90
+estimated_record_mib = 0.12
+max_workers = 4
+representative_expensive_generation_sec = 7200
+
+[cases.chrono.resource]
+kind = "environment_executable"
+variable = "YADOF_PYCHRONO_PYTHON"
+
+[cases.chrono.rawdata_shapes]
+trebuchet_release_kinematics = [513, 4]
+trebuchet_release_summary = [5]
+trebuchet_stress_history = [513, 3]
+trebuchet_total_time = []
+
+[cases.test-com]
+baseline = "baselines/test-com/20260823-aa89d46f3d9a"
+include_paths = ["config.py", "submit", "job_template"]
+mode = "fast"
+history_policy = "empty"
+expected_objectives = 4
+observed_eval_sec = 0.60
+estimated_record_mib = 0.50
+max_workers = 8
+
+[cases.test-com.resource]
+kind = "cuda"
+
+[cases.test-com.rawdata_shapes]
+s11_pinState1 = [5]
+s11_pinState2 = [5]
+s11_pinState3 = [5]
+gain_lhcp_pinState1 = [1, 73, 73]
+gain_lhcp_pinState2 = [1, 73, 73]
+gain_lhcp_pinState3 = [1, 73, 73]
+axial_ratio_pinState1 = [5, 73, 73]
+axial_ratio_pinState2 = [5, 73, 73]
+axial_ratio_pinState3 = [5, 73, 73]
+
+[suites.structural-canary]
+purpose = "structural"
+cases = ["test-com"]
+arms = ["real-search", "gpsaf-conditional-inr"]
+seeds = [20260816]
+smoke = true
+fail_fast = true
+
+[suites.adapter-smoke]
+purpose = "structural"
+cases = ["saw", "chrono"]
+arms = []
+seeds = [20260823]
+smoke = true
+smoke_only = true
+fail_fast = true
+
+[suites.structural-full]
+purpose = "structural"
+cases = ["saw", "chrono", "test-com"]
+arms = ["real-search", "gpsaf-conditional-inr"]
+seeds = [20260823]
+smoke = true
+fail_fast = true
+
+[suites.performance-pilot]
+purpose = "performance"
+cases = ["saw", "chrono", "test-com"]
+arms = ["real-search", "gpsaf-conditional-inr"]
+seeds = [104729]
+smoke = false
+fail_fast = false
+
+[suites.performance]
+purpose = "performance"
+cases = ["saw", "chrono", "test-com"]
+arms = ["real-search", "gpsaf-conditional-inr"]
+seeds = [104729, 130363, 155921]
+smoke = false
+fail_fast = false
+
+[budgets.structural-canary.test-com.real-search]
+population = 12
+generations = 1
+max_generations = 1
+
+[budgets.structural-canary.test-com.gpsaf-conditional-inr]
+population = 12
+generations = 2
+max_generations = 3
+
+[budgets.structural-full.saw.real-search]
+population = 12
+generations = 1
+max_generations = 1
+
+[budgets.structural-full.saw.gpsaf-conditional-inr]
+population = 12
+generations = 2
+max_generations = 3
+
+[budgets.structural-full.chrono.real-search]
+population = 8
+generations = 1
+max_generations = 1
+
+[budgets.structural-full.chrono.gpsaf-conditional-inr]
+population = 8
+generations = 2
+max_generations = 3
+
+[budgets.structural-full.test-com.real-search]
+population = 12
+generations = 1
+max_generations = 1
+
+[budgets.structural-full.test-com.gpsaf-conditional-inr]
+population = 12
+generations = 2
+max_generations = 3
+
+[budgets.performance-pilot.saw.real-search]
+population = 12
+generations = 3
+max_generations = 3
+
+[budgets.performance-pilot.saw.gpsaf-conditional-inr]
+population = 12
+generations = 3
+max_generations = 3
+
+[budgets.performance-pilot.chrono.real-search]
+population = 8
+generations = 3
+max_generations = 3
+
+[budgets.performance-pilot.chrono.gpsaf-conditional-inr]
+population = 8
+generations = 3
+max_generations = 3
+
+[budgets.performance-pilot.test-com.real-search]
+population = 12
+generations = 3
+max_generations = 3
+
+[budgets.performance-pilot.test-com.gpsaf-conditional-inr]
+population = 12
+generations = 3
+max_generations = 3
+
+[budgets.performance.saw.real-search]
+population = 24
+generations = 3
+max_generations = 3
+
+[budgets.performance.saw.gpsaf-conditional-inr]
+population = 24
+generations = 3
+max_generations = 3
+
+[budgets.performance.chrono.real-search]
+population = 12
+generations = 3
+max_generations = 3
+
+[budgets.performance.chrono.gpsaf-conditional-inr]
+population = 12
+generations = 3
+max_generations = 3
+
+[budgets.performance.test-com.real-search]
+population = 24
+generations = 3
+max_generations = 3
+
+[budgets.performance.test-com.gpsaf-conditional-inr]
+population = 24
+generations = 3
+max_generations = 3

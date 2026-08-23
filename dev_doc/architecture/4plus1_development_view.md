@@ -6,8 +6,10 @@ Framework source lives only under `src/yadof/`; maintained generic tests live un
 `tests/`. Root `dev_doc/` and `user_doc/` are authoritative editable sources and
 are mapped into the wheel as read-only resources. `admin_tool/` owns system/pool
 operations outside package runtime. Complete reference workspaces may be tracked
-under `examples/`, but build inclusion excludes them from wheel/sdist. Runtime
-workspaces are user-owned and normally live outside package source.
+under `examples/`. `benchmark_automation/` owns the repository-downloadable frozen
+comparison runner and its focused tests. Build inclusion excludes both examples
+and benchmark automation from wheel/sdist. Runtime workspaces are user-owned and
+normally live outside package source.
 
 ```text
 src/yadof/                 installed framework
@@ -45,6 +47,9 @@ user_doc/                  user-workflow documentation, primarily for the user's
                             explicitly outside yadof runtime behavior
   example_prompts/         expandable prompt-example collection
 admin_tool/                administrator-only operations
+benchmark_automation/      source-checkout runner, frozen inputs, reports, and tests
+  runs/                    default ignored human-operated runtime evidence
+temp/benchmark/            ignored task-specific agent runtime evidence
 ```
 
 ## Dependency discipline
@@ -68,6 +73,12 @@ simulator or live HTCondor pool; scheduler commands and adapters are mocked. Art
 tests build the distributions, inspect members, install a wheel outside the
 repository, make package files read-only, and exercise the CLI and two-workspace
 contracts.
+
+Benchmark tests remain below `benchmark_automation/tests/` and exercise the
+source-checkout runner against an installed yadof distribution. They may describe
+the frozen benchmark cases, but their default unit/preflight path does not start a
+simulator or a measured campaign. Generated benchmark output belongs only in the
+selected ignored runs root, never in package source or frozen inputs.
 
 Mocked distributed tests cover event-log execute segments and preserve provenance
 priority: worker-reported `execute_machine` wins, timed-out active/held segments may

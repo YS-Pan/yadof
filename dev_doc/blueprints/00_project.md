@@ -70,6 +70,11 @@ hot-change contract; structural dimension changes are future work.
   directories are not implicit prepared-job inputs.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
+- Source-checkout benchmark: Git-tracked runner, frozen baselines, strategy
+  templates, bounded reports, and focused tests under `benchmark_automation/`;
+  downloadable with the repository, outside `src/yadof`, and never a wheel/sdist
+  member. Generated runs use its ignored default or an explicit disjoint output
+  root; agents use `temp/benchmark/<task-id>`.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 
@@ -174,3 +179,10 @@ processes to lock protocol, diagnostics, environment, failure, timeout, and
 concurrency semantics without a PyChrono installation. Live pools/simulators and
 concrete physical assertions remain integration tests outside the default package
 suite and follow the user workflow's cost- and risk-based execution policy.
+
+The source-checkout benchmark has a separate focused unit suite below
+`benchmark_automation/tests/`. Its planning and preflight acceptance paths are
+bounded and do not start a simulator; measured suites require the benchmark's
+explicit prerequisite and cost/risk authorization. The package artifact allowlist
+keeps the benchmark absent from wheel and sdist even though it is tracked in the
+repository.
