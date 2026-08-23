@@ -10,7 +10,8 @@ The project compares frozen yadof tasks and optimization strategies through
 isolated, identity-stable cells. It owns experiment assembly, cross-case/arm/seed
 alignment, validity handling, and descriptive reporting. It does not own yadof's
 optimizer, task execution lifecycle, recorded-data API, or single-workspace viewer
-logic.
+logic. It is a source-checkout tool below the yadof repository root, not an
+installed `src/yadof` module or runtime resource.
 
 The benchmark has two evidence modes:
 
@@ -60,7 +61,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `baselines/` | Immutable task inputs plus provenance selected by exact identity. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
-| `runs/` | Generated immutable specs/attempts/evidence plus atomically updated latest state; Git-ignored. |
+| configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default `runs/`, Git-ignored. |
 | `.staging/`, `.assembled/` | Local baseline construction evidence; Git-ignored and never runner inputs. |
 | `verification/`, `tool_gaps/` | Human-readable historical verification and reusable-yadof issue records. |
 
@@ -70,6 +71,10 @@ Keeping the CLI thin makes core behavior directly testable.
 
 - Every selected baseline, strategy, configuration, package installation, and
   runner module is fingerprinted before execution.
+- Immutable input paths remain contained below the benchmark root. Mutable run
+  output may use an explicit external root; relative CLI overrides resolve from the
+  invocation directory, and suggested follow-up commands preserve the resolved
+  root.
 - A baseline ID and its contents are immutable. Refreshing creates a new directory.
 - Each case/arm/seed cell receives its own initialized workspace, state, logs, and
   checkpoint namespace; measured cells never share a smoke workspace.
@@ -88,6 +93,9 @@ Keeping the CLI thin makes core behavior directly testable.
   simulators, CUDA, disk, and shared host resources.
 - Child stdout/stderr is always preserved in command logs. It is not forwarded to
   the terminal unless `--stream-output` is explicitly selected.
+- The Python environment check verifies a matching installed distribution and its
+  fingerprintable `RECORD`; it does not depend on a virtual-environment directory
+  name.
 
 ### Evidence and interpretation
 

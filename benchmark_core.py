@@ -138,6 +138,47 @@ def resolve_inside(root: Path, value: str | Path, *, label: str) -> Path:
     return candidate
 
 
+def resolve_runs_dir(
+    benchmark_root: Path,
+    configured_value: str | Path,
+    *,
+    override: str | Path | None = None,
+    invocation_cwd: Path | None = None,
+) -> Path:
+    """Resolve mutable run output without weakening immutable-input containment."""
+
+    if override is None:
+        base = benchmark_root.resolve()
+        value = Path(configured_value)
+    else:
+        base = (invocation_cwd or Path.cwd()).resolve()
+        value = Path(override)
+    value = value.expanduser()
+    return value.resolve() if value.is_absolute() else (base / value).resolve()
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    return _is_within(left, right) or _is_within(right, left)
+
+
+def _existing_disk_root(path: Path) -> Path:
+    candidate = path.resolve()
+    while not candidate.exists():
+        parent = candidate.parent
+        if parent == candidate:
+            raise BenchmarkError(f"cannot find an existing parent for runs_dir: {path}")
+        candidate = parent
+    return candidate
+
+
 def _declared_files(workspace: Path, include_paths: Sequence[str]) -> list[Path]:
     workspace = workspace.resolve()
     files: list[Path] = []
@@ -211,7 +252,12 @@ def _load_toml(path: Path) -> dict[str, Any]:
     return value
 
 
-def load_config(config_path: Path) -> tuple[dict[str, Any], Paths]:
+def load_config(
+    config_path: Path,
+    *,
+    runs_dir_override: str | Path | None = None,
+    invocation_cwd: Path | None = None,
+) -> tuple[dict[str, Any], Paths]:
     config_path = config_path.resolve()
     root = config_path.parent
     config = _load_toml(config_path)
@@ -226,7 +272,12 @@ def load_config(config_path: Path) -> tuple[dict[str, Any], Paths]:
     paths = Paths(
         root=root,
         config=config_path,
-        runs=resolve_inside(root, str(runner.get("runs_dir", "runs")), label="runs_dir"),
+        runs=resolve_runs_dir(
+            root,
+            str(runner.get("runs_dir", "runs")),
+            override=runs_dir_override,
+            invocation_cwd=invocation_cwd,
+        ),
         strategies=resolve_inside(
             root,
             str(runner.get("strategy_template_dir", "strategy_templates")),
@@ -251,10 +302,22 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
         raise BenchmarkError("config requires [cases], [arms], [suites], and [budgets]")
     assert isinstance(cases, dict) and isinstance(arms, dict)
     assert isinstance(suites, dict) and isinstance(budgets, dict)
+    if paths.runs.exists() and not paths.runs.is_dir():
+        raise BenchmarkError(f"runs_dir is not a directory: {paths.runs}")
+    if paths.runs == paths.root or _is_within(paths.root, paths.runs):
+        raise BenchmarkError("runs_dir must not be the benchmark root or contain it")
+    for label, protected in (
+        ("strategy_template_dir", paths.strategies),
+        ("history_snapshot_dir", paths.histories),
+    ):
+        if _paths_overlap(paths.runs, protected):
+            raise BenchmarkError(f"runs_dir overlaps {label}: {protected}")
     for case_id, case in cases.items():
         if not isinstance(case, dict):
             raise BenchmarkError(f"case {case_id!r} must be a table")
         baseline = resolve_inside(paths.root, str(case.get("baseline", "")), label=f"case {case_id} baseline")
+        if _paths_overlap(paths.runs, baseline):
+            raise BenchmarkError(f"runs_dir overlaps case {case_id!r} baseline: {baseline}")
         if not (baseline / "baseline.json").is_file() or not (baseline / "workspace").is_dir():
             raise BenchmarkError(f"case {case_id!r} baseline is incomplete: {baseline}")
         include = case.get("include_paths")
@@ -717,7 +780,7 @@ def preflight(
         except Exception as exc:
             checks.append({"name": f"strategy:{arm_id}", "ok": False, "error": str(exc)})
     runner = config["runner"]
-    disk_root = paths.runs if paths.runs.exists() else paths.root
+    disk_root = _existing_disk_root(paths.runs)
     free_mib = shutil.disk_usage(disk_root).free / (1024 * 1024)
     required_mib = max(
         float(runner.get("minimum_free_disk_mib", 0)),
@@ -730,11 +793,19 @@ def preflight(
             "details": {"free_mib": free_mib, "required_mib": required_mib, "path": str(disk_root)},
         }
     )
+    installed_distribution_ok = bool(identity.get("distribution_record_sha256")) and (
+        identity.get("distribution_version") == identity.get("version")
+    )
     checks.append(
         {
             "name": "python-environment",
-            "ok": ".venv" in Path(identity["python"]).parts,
+            "ok": installed_distribution_ok,
             "details": identity,
+            "error": (
+                None
+                if installed_distribution_ok
+                else "yadof must be an installed distribution with matching metadata and RECORD"
+            ),
         }
     )
     return {
@@ -2805,16 +2876,19 @@ def summarize_run_state(run_root: Path, run_id: str, state: Mapping[str, Any]) -
             item["latest_command_metadata"] = commands[-1]
         attention.append(item)
     state_status = str(state.get("status", "unknown"))
+    runs_dir = run_root.resolve().parent
     next_command = (
-        ["collect", "--run-id", run_id]
+        ["--runs-dir", str(runs_dir), "collect", "--run-id", run_id]
         if state_status == "completed"
-        else ["resume", "--run-id", run_id]
+        else ["--runs-dir", str(runs_dir), "resume", "--run-id", run_id]
     )
     return _json_safe(
         {
             "schema_version": state.get("schema_version", SCHEMA_VERSION),
             "view": "run-summary",
             "run_id": run_id,
+            "runs_dir": str(runs_dir),
+            "run_root": str(run_root.resolve()),
             "execution_state": state_status,
             "updated_utc": state.get("updated_utc"),
             "cells": {"total": len(cells), "by_status": dict(sorted(by_status.items()))},
@@ -3014,13 +3088,13 @@ def inspect_run(paths: Paths, run_id: str) -> dict[str, Any]:
     if results is not None:
         next_commands: list[list[str]] = []
     elif metrics_json.is_file():
-        next_commands = [["report", "--run-id", run_id]]
+        next_commands = [["--runs-dir", str(paths.runs), "report", "--run-id", run_id]]
     elif state.get("status") == "completed":
-        next_commands = [["collect", "--run-id", run_id]]
+        next_commands = [["--runs-dir", str(paths.runs), "collect", "--run-id", run_id]]
     else:
         next_commands = [
-            ["collect", "--run-id", run_id],
-            ["resume", "--run-id", run_id],
+            ["--runs-dir", str(paths.runs), "collect", "--run-id", run_id],
+            ["--runs-dir", str(paths.runs), "resume", "--run-id", run_id],
         ]
     return _json_safe(
         {

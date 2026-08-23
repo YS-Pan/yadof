@@ -14,6 +14,11 @@ The runner never reads the mutable original task directories. Every cell starts
 with `yadof init`, receives only declared inputs from one frozen baseline, and has
 its own workspace, history, optimizer state, checkpoint namespace, logs, and lock.
 
+This is a source-checkout tool. It is tracked beside yadof so a user who clones or
+downloads the yadof repository can run the frozen benchmark, but it is deliberately
+outside `src/yadof` and is not installed by `pip install yadof`. The runner consumes
+a regular installed yadof distribution from the selected Python environment.
+
 ## Current execution status
 
 The frozen baselines and the runner were created on 2026-08-23 with installed
@@ -31,11 +36,9 @@ The frozen baselines and the runner were created on 2026-08-23 with installed
 
 The resolved viewer gap and its historical failure evidence are documented in
 [`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).
-No benchmark-only checkpoint scraping or monkey patch was used. The final raw and
-descriptive reports are
-[`runs/pfull-0823/reports/report-0001/report.json`](runs/pfull-0823/reports/report-0001/report.json)
-and
-[`runs/pfull-0823/reports/report-0001/report.md`](runs/pfull-0823/reports/report-0001/report.md).
+No benchmark-only checkpoint scraping or monkey patch was used. Generated runs are
+local and Git-ignored; the tracked, portable descriptive result is
+[`verification/20260823-pfull-0823-summary.md`](verification/20260823-pfull-0823-summary.md).
 
 An earlier authorized full run,
 `20260823T062344Z-approved-full-campaign-55651e90c9ef`, is retained as incomplete
@@ -47,10 +50,11 @@ IDs for Windows cases whose task adapters create nested subprocess scratch paths
 
 ## Prerequisites
 
-Run commands from the outer workspace directory with its fixed interpreter:
+Run commands from the yadof source-checkout root with the Python environment in
+which the matching yadof distribution is installed:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" --help
+python ".\benchmark_automation\benchmark.py" --help
 ```
 
 The runner preflights all selected resources without starting a simulator:
@@ -74,7 +78,7 @@ lower-bound evaluation/storage estimates. Add `--full-json` only when expanded
 cells and exact planned command lines are required:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" plan `
+python ".\benchmark_automation\benchmark.py" plan `
   --suite structural-canary
 ```
 
@@ -84,14 +88,14 @@ command stdout/stderr and expanded identities; `--full-json` restores the comple
 evidence:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" preflight `
+python ".\benchmark_automation\benchmark.py" preflight `
   --suite structural-canary
 ```
 
 Create and execute a new run:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" run `
+python ".\benchmark_automation\benchmark.py" run `
   --suite structural-canary `
   --label local-check
 ```
@@ -104,7 +108,7 @@ Select a precise subset without editing TOML. Repeat a selector to include more
 than one value:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" run `
+python ".\benchmark_automation\benchmark.py" run `
   --suite performance `
   --case saw `
   --arm real-search `
@@ -118,10 +122,10 @@ not read `metrics.json` or `collection.json` wholesale. Reporting is a pure
 transformation of the latest collected snapshot and prints a bounded agent summary:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" collect `
+python ".\benchmark_automation\benchmark.py" collect `
   --run-id <existing-id>
 
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" report `
+python ".\benchmark_automation\benchmark.py" report `
   --run-id <existing-id>
 ```
 
@@ -129,7 +133,7 @@ Inspect an existing run without changing it. This is the normal first command fo
 an agent asked to interpret or diagnose a run:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" inspect `
+python ".\benchmark_automation\benchmark.py" inspect `
   --run-id <existing-id>
 ```
 
@@ -141,7 +145,7 @@ need the complete stable report.
 Resume the exact immutable spec after a completed-boundary interruption:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" run `
+python ".\benchmark_automation\benchmark.py" run `
   --resume <existing-id>
 ```
 
@@ -176,6 +180,26 @@ and `155921`. Failed candidates consume attempted budget but do not contribute a
 Pareto or hypervolume point.
 
 ## Output and immutability
+
+The default output root is `benchmark_automation/runs`. Override it with the
+global `--runs-dir PATH` option before the subcommand. An absolute path is used as
+given; a relative override resolves from the invocation directory. The TOML
+default remains relative to `benchmark.toml`.
+
+Agents must run from the yadof checkout root and use a unique ignored directory,
+for example:
+
+```powershell
+python ".\benchmark_automation\benchmark.py" `
+  --runs-dir ".\temp\benchmark\<task-id>" `
+  inspect --run-id <existing-id>
+```
+
+Use the same `--runs-dir` for `run`, `resume`, `collect`, `report`, and `inspect`.
+Bounded output includes the resolved run root and carries the option into suggested
+next commands. A temporary output root is not deleted automatically; retain it
+until the result has been handed off. Human-operated durable runs may omit the
+override or select another persistent output root explicitly.
 
 Each run is identity-stable:
 
@@ -219,9 +243,9 @@ disclosure policy. In short:
    tail.
 5. Query one cell/field from `metrics.json` only as the final evidence layer.
 
-Do not recursively scan `runs/` and do not load multi-megabyte collection files
-into an agent context. Full evidence remains on disk even when the CLI suppresses
-it from stdout.
+Do not recursively scan the selected output root and do not load multi-megabyte
+collection files into an agent context. Full evidence remains on disk even when
+the CLI suppresses it from stdout.
 
 ## Measurements and interpretation
 

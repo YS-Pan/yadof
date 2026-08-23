@@ -4,7 +4,7 @@
 
 Resolved on 2026-08-23 by yadof commit
 `0665541155009787c938cbf15df177e8c9488fb8`, which was built into the 0.4.0 wheel,
-force-reinstalled into the outer `.venv`, fully tested (`274 passed`), and pushed
+force-reinstalled into the development environment, fully tested (`274 passed`), and pushed
 to `origin/main`.
 
 `SurrogateWorkspace._load_real_results()` now accepts the persisted name-to-value
@@ -30,10 +30,10 @@ training metadata reports completed conditional-INR checkpoints. Nevertheless,
 both supported JSON inspection commands exit 1:
 
 ```powershell
-& ".\.venv\Scripts\python.exe" -m yadof view surrogate summary `
+python -m yadof view surrogate summary `
   --workspace <gpsaf-workspace> --format json
 
-& ".\.venv\Scripts\python.exe" -m yadof view surrogate audit `
+python -m yadof view surrogate audit `
   --workspace <gpsaf-workspace> --sample-percent 10 --random-seed 20260823 `
   --metric both --quantity all-costs --format json
 ```

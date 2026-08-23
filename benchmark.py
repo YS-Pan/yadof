@@ -24,6 +24,12 @@ def _print_json(value: Any, *, pretty: bool = False) -> None:
     print(json.dumps(core._json_safe(value), **options))
 
 
+def _with_runs_dir(value: dict[str, Any], paths: core.Paths) -> dict[str, Any]:
+    output = dict(value)
+    output["runs_dir"] = str(paths.runs)
+    return output
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -36,6 +42,14 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_CONFIG,
         help=f"benchmark TOML (default: {DEFAULT_CONFIG})",
+    )
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        help=(
+            "run output root; a relative override resolves from the invocation "
+            "directory and overrides [runner].runs_dir"
+        ),
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -114,7 +128,11 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        config, paths = core.load_config(args.config)
+        config, paths = core.load_config(
+            args.config,
+            runs_dir_override=args.runs_dir,
+            invocation_cwd=Path.cwd(),
+        )
         if args.command == "plan":
             result = core.build_plan(
                 config,
@@ -124,10 +142,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arm_ids=args.arm_ids,
                 seeds=args.seeds,
             )
-            _print_json(
-                result if args.full_json else core.summarize_plan(result),
-                pretty=args.full_json,
+            output = _with_runs_dir(
+                result if args.full_json else core.summarize_plan(result), paths
             )
+            _print_json(output, pretty=args.full_json)
             return 0
         if args.command == "preflight":
             result = core.preflight(
@@ -138,10 +156,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arm_ids=args.arm_ids,
                 seeds=args.seeds,
             )
-            _print_json(
-                result if args.full_json else core.summarize_preflight(result),
-                pretty=args.full_json,
+            output = _with_runs_dir(
+                result if args.full_json else core.summarize_preflight(result), paths
             )
+            _print_json(output, pretty=args.full_json)
             return 0 if result["ok"] else 2
         if args.command == "run":
             if args.resume:
@@ -160,7 +178,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                     seeds=selection["seeds"],
                 )
                 if not resume_preflight["ok"]:
-                    _print_json(core.summarize_preflight(resume_preflight))
+                    _print_json(
+                        _with_runs_dir(core.summarize_preflight(resume_preflight), paths)
+                    )
                     return 2
                 core.verify_run_inputs(paths, spec)
                 state = core.execute_run(
@@ -183,7 +203,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seeds=args.seeds,
             )
             if not preflight_result["ok"]:
-                _print_json(core.summarize_preflight(preflight_result))
+                _print_json(
+                    _with_runs_dir(core.summarize_preflight(preflight_result), paths)
+                )
                 return 2
             spec = core.build_run_spec(
                 config,
@@ -214,7 +236,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seeds=selection["seeds"],
             )
             if not resume_preflight["ok"]:
-                _print_json(core.summarize_preflight(resume_preflight))
+                _print_json(
+                    _with_runs_dir(core.summarize_preflight(resume_preflight), paths)
+                )
                 return 2
             core.verify_run_inputs(paths, spec)
             state = core.execute_run(
@@ -233,11 +257,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "schema_version": core.SCHEMA_VERSION,
                     "view": "collection-summary",
                     "run_id": args.run_id,
+                    "runs_dir": str(paths.runs),
+                    "run_root": str(paths.runs / args.run_id),
                     "collection": str(path),
                     "execution_state": collection["execution_state"],
                     "metrics": str(paths.runs / args.run_id / "metrics.json"),
                     "read_policy": "Do not read collection or metrics whole; run report next.",
-                    "next_command": ["report", "--run-id", args.run_id],
+                    "next_command": [
+                        "--runs-dir",
+                        str(paths.runs),
+                        "report",
+                        "--run-id",
+                        args.run_id,
+                    ],
                 }
             )
             return 0

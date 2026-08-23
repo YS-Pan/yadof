@@ -10,11 +10,13 @@ command surface, evidence semantics, and execution-risk policy. Read
 `architecture.md` before changing runner behavior, configuration structure,
 baseline handling, execution state, collection, or reporting.
 
-## Repository boundary
+## Source-checkout boundary
 
-The repository tracks the runner, configuration, tests, strategy templates,
+The yadof repository tracks this runner, configuration, tests, strategy templates,
 developer/user documentation, frozen baseline metadata, and frozen baseline task
-inputs. A baseline is part of the reproducibility contract: never edit a baseline
+inputs below top-level `benchmark_automation/`. This tree is downloadable with a
+yadof source checkout but is not an installed `yadof` package or runtime resource.
+A baseline is part of the reproducibility contract: never edit a baseline
 in place; create a new identity and update `benchmark.toml` explicitly.
 
 The following directories are local generated state and are intentionally ignored
@@ -30,17 +32,19 @@ snapshot is a benchmark input and must carry provenance like a baseline.
 
 ## Development environment
 
-Use the outer workspace's fixed interpreter and run commands from the outer
-workspace directory:
+Run commands from the yadof source-checkout root with a Python environment holding
+the matching regularly installed yadof distribution. Machine-specific agent
+instructions may name that interpreter explicitly; public documentation does not
+depend on a virtual-environment directory name.
 
 ```powershell
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" --help
-& ".\.venv\Scripts\python.exe" ".\benchmark_automation\benchmark.py" plan `
+python ".\benchmark_automation\benchmark.py" --help
+python ".\benchmark_automation\benchmark.py" plan `
   --suite structural-canary
 ```
 
 The runner consumes the regularly installed yadof package from that environment.
-Do not edit `.venv/Lib/site-packages`, inject the yadof source checkout through
+Do not edit site-packages, inject the yadof source checkout through
 `PYTHONPATH`, or create a second copy of runner modules for testing.
 
 ## Change and verification workflow
@@ -56,7 +60,7 @@ Do not edit `.venv/Lib/site-packages`, inject the yadof source checkout through
    directory outside the repository:
 
    ```powershell
-   & ".\.venv\Scripts\python.exe" -m pytest -q `
+   python -m pytest -q `
      ".\benchmark_automation\tests" `
      --basetemp "<fresh-temp>" -p no:cacheprovider
    ```
@@ -78,9 +82,11 @@ benchmark. Small prose corrections need only targeted link/path checks.
 ## Encoding and paths
 
 Text files are UTF-8. Preserve non-ASCII paths and content, and use explicit UTF-8
-when a PowerShell command reads text for editing. Resolve inputs from
-`benchmark.toml` and the benchmark root rather than the caller's current directory.
-Keep subprocess commands as argument lists; do not build shell command strings.
+when a PowerShell command reads text for editing. Immutable inputs resolve from
+`benchmark.toml` and the benchmark root. A command-line `--runs-dir` override is
+the deliberate exception: relative overrides resolve from the invocation
+directory, while the TOML default remains benchmark-root-relative. Keep subprocess
+commands as argument lists; do not build shell command strings.
 
 ## Agent-facing output contract
 

@@ -1,19 +1,27 @@
 # benchmark_automation agent instructions
 
-These instructions apply when this Git repository is opened as the project. Keep
-the first read small: route to the narrowest artifact that can answer the task.
+These instructions apply to work below `benchmark_automation/`. Run benchmark
+commands from the yadof source-checkout root. Keep the first read small: route to
+the narrowest artifact that can answer the task.
+
+Agents must put generated runs below a unique ignored task directory such as
+`temp/benchmark/<task-id>` by passing `--runs-dir` before the subcommand. Reuse that
+exact option for every later command addressing the run. Do not infer agent mode in
+the runner and do not delete temporary evidence before handoff.
 
 ## Progressive disclosure
 
 For an existing run, start with:
 
 ```powershell
-& "..\.venv\Scripts\python.exe" ".\benchmark.py" inspect --run-id <run-id>
+python ".\benchmark_automation\benchmark.py" `
+  --runs-dir ".\temp\benchmark\<task-id>" `
+  inspect --run-id <run-id>
 ```
 
 Then expand only if the summary leaves a specific question unanswered:
 
-1. Read `runs/<run-id>/report.md` for concise narrative and paired values.
+1. Read `<runs-dir>/<run-id>/report.md` for concise narrative and paired values.
 2. Query only the needed top-level field or pair from `report.json`.
 3. For a failed/incomplete cell, query that cell in `run_state.json`, then its
    latest `command.finished.json`, then the tail of the relevant stdout/stderr log.
@@ -21,9 +29,9 @@ Then expand only if the summary leaves a specific question unanswered:
    `collection.json` only when the report cannot answer the question.
 
 Never read `metrics.json` or `collection.json` wholesale. Never recursively list
-or search all of `runs/`, attempt workspaces, baselines, or the outer workspace to
-learn one run's status. Do not read successful-cell logs during ordinary result
-interpretation.
+or search all of the selected runs directory, attempt workspaces, baselines, or the
+repository to learn one run's status. Do not read successful-cell logs during
+ordinary result interpretation.
 
 ## CLI output policy
 
@@ -50,6 +58,7 @@ a new baseline identity or linked replacement attempt through the runner.
 ## Development changes
 
 Before changing runner code or output schemas, read `dev_doc/README.md` and
-`dev_doc/architecture.md`. Use the outer workspace interpreter explicitly, add
-focused tests, and run the unit suite with a fresh absolute pytest `--basetemp` and
-`-p no:cacheprovider`. Preserve existing user/runtime evidence.
+`dev_doc/architecture.md`. Use the selected Python containing the installed yadof
+distribution, add focused tests, and run the unit suite with a fresh absolute
+pytest `--basetemp` and `-p no:cacheprovider`. Preserve existing user/runtime
+evidence.

@@ -27,6 +27,80 @@ def test_resolve_inside_rejects_escape(tmp_path: Path) -> None:
         core.resolve_inside(tmp_path, "../outside", label="fixture")
 
 
+def _write_loadable_config(root: Path) -> Path:
+    workspace = root / "baseline" / "workspace"
+    (workspace / "submit").mkdir(parents=True)
+    (workspace / "job_template").mkdir()
+    (workspace / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (root / "baseline" / "baseline.json").write_text("{}\n", encoding="utf-8")
+    (root / "strategies").mkdir()
+    (root / "strategies" / "real.py").write_text(
+        "def build_optimization(): return object()\n", encoding="utf-8"
+    )
+    (root / "history").mkdir()
+    config = root / "benchmark.toml"
+    config.write_text(
+        """schema_version = 1
+
+[runner]
+runs_dir = "runs"
+strategy_template_dir = "strategies"
+history_snapshot_dir = "history"
+
+[cases.case]
+baseline = "baseline"
+include_paths = ["config.py", "submit", "job_template"]
+history_policy = "empty"
+
+[arms.real]
+strategy_template = "real.py"
+
+[suites.structural]
+purpose = "structural"
+cases = ["case"]
+arms = ["real"]
+seeds = [1]
+
+[budgets.structural.case.real]
+population = 1
+generations = 1
+""",
+        encoding="utf-8",
+    )
+    return config
+
+
+def test_runs_dir_override_resolves_from_invocation_directory(tmp_path: Path) -> None:
+    benchmark_root = tmp_path / "benchmark source"
+    config_path = _write_loadable_config(benchmark_root)
+    invocation_cwd = tmp_path / "调用 目录"
+    invocation_cwd.mkdir()
+
+    _config, default_paths = core.load_config(config_path)
+    assert default_paths.runs == benchmark_root / "runs"
+
+    _config, override_paths = core.load_config(
+        config_path,
+        runs_dir_override=Path("temp") / "结果",
+        invocation_cwd=invocation_cwd,
+    )
+    assert override_paths.runs == invocation_cwd / "temp" / "结果"
+
+    absolute = tmp_path / "absolute outputs"
+    _config, absolute_paths = core.load_config(
+        config_path,
+        runs_dir_override=absolute,
+        invocation_cwd=invocation_cwd,
+    )
+    assert absolute_paths.runs == absolute
+
+
+def test_runs_dir_rejects_protected_input_overlap(tmp_path: Path) -> None:
+    config_path = _write_loadable_config(tmp_path)
+    with pytest.raises(core.BenchmarkError, match="overlaps case 'case' baseline"):
+        core.load_config(config_path, runs_dir_override=tmp_path / "baseline")
+
+
 def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
     config = {
         "cases": {
@@ -166,6 +240,36 @@ def test_run_spec_is_immutable_and_state_is_separate(tmp_path: Path) -> None:
     (run_root / "run_spec.json").write_text(json.dumps(tampered), encoding="utf-8")
     with pytest.raises(core.BenchmarkError, match="fingerprint mismatch"):
         core.load_run(paths, run_id)
+
+
+def test_same_run_id_is_isolated_by_runs_dir(tmp_path: Path) -> None:
+    spec = _minimal_spec(tmp_path)
+    roots = [tmp_path / "first outputs", tmp_path / "第二 输出"]
+    created = []
+    for runs in roots:
+        paths = core.Paths(
+            tmp_path,
+            tmp_path / "benchmark.toml",
+            runs,
+            tmp_path / "strategies",
+            tmp_path / "history",
+        )
+        _run_id, run_root = core.create_run(paths, spec, run_id="same-id")
+        created.append(run_root)
+    assert created == [roots[0] / "same-id", roots[1] / "same-id"]
+    assert all(path.is_dir() for path in created)
+
+
+def test_load_run_rejects_run_id_escape(tmp_path: Path) -> None:
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    with pytest.raises(core.BenchmarkError, match="escapes benchmark root"):
+        core.load_run(paths, "../outside")
 
 
 def test_sequence_directories_are_append_only(tmp_path: Path) -> None:

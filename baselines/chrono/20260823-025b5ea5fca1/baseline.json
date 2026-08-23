@@ -3,12 +3,12 @@
   "baseline_id": "20260823-025b5ea5fca1",
   "case_id": "chrono",
   "created_utc": "2026-08-23T04:46:17.941Z",
-  "created_by": "desktop-derg5ld\\yspan",
+  "created_by": "yadof benchmark maintainers",
   "yadof_version": "0.4.0",
   "task_fingerprint": "025b5ea5fca1468bbb2acc4a1e4aeffb7554e244181d6d6f309c25518ec991a1",
   "include_paths": ["config.py", "submit", "job_template"],
   "source": {
-    "current_workspace": "20260811 chrono trebuchet flexible",
+    "public_provenance": "Frozen Project Chrono trebuchet benchmark workspace.",
     "reconstruction": "Readable 0.2-era predecessor plus the exact previously validated event-phase, exact-moving-mass, and 0.4 submit-loader patches; current packaged chrono_com.py."
   },
   "validation": {

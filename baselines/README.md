@@ -14,6 +14,11 @@ and smoke-tested in a separate assembly workspace. The final baseline itself has
 zero measured records and zero compatible checkpoints. Its `baseline.json` stores
 provenance, smoke costs, objective count, and rawData shape evidence.
 
+Immediately before the benchmark's first public repository import, machine- and
+private-workspace names in the provenance display fields were redacted once. The
+workspace inputs, baseline IDs, task fingerprints, validation evidence, and
+scientific content did not change. The public forms below are immutable.
+
 Never overwrite a baseline ID. Refreshing a task means creating a new date plus
 fingerprint-prefix directory, validating it, and changing the explicit TOML
 selection.

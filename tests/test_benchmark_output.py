@@ -198,3 +198,28 @@ def test_cli_defaults_to_bounded_output_and_quiet_children() -> None:
     assert parser.parse_args(
         ["run", "--suite", "performance-pilot", "--stream-output"]
     ).stream_output
+    runs_dir = Path("temp") / "benchmark" / "task-id"
+    parsed = parser.parse_args(
+        ["--runs-dir", str(runs_dir), "inspect", "--run-id", "fixture"]
+    )
+    assert parsed.runs_dir == runs_dir
+
+
+def test_run_summary_propagates_runs_dir_to_next_command(tmp_path: Path) -> None:
+    run_root = tmp_path / "agent outputs" / "fixture"
+    state = {
+        "schema_version": 1,
+        "status": "completed",
+        "updated_utc": "2026-08-23T00:00:00Z",
+        "cells": {},
+    }
+    summary = core.summarize_run_state(run_root, "fixture", state)
+    assert summary["runs_dir"] == str(run_root.parent.resolve())
+    assert summary["run_root"] == str(run_root.resolve())
+    assert summary["next_command"] == [
+        "--runs-dir",
+        str(run_root.parent.resolve()),
+        "collect",
+        "--run-id",
+        "fixture",
+    ]
