@@ -70,7 +70,7 @@ trebuchet_stress_history = [513, 3]
 trebuchet_total_time = []
 
 [cases.test-com]
-baseline = "baselines/test-com/synthetic-antenna-aa89d46f3d9a"
+baseline = "baselines/test-com/synthetic-antenna-c7b0133b3a4e"
 include_paths = ["config.py", "submit", "job_template"]
 mode = "fast"
 history_policy = "empty"

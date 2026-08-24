@@ -24,8 +24,10 @@ a regular installed yadof distribution from the selected Python environment.
 
 ## Current execution status
 
-The frozen baselines and the runner were created on 2026-08-23 with installed
-`yadof 0.4.0`.
+The SAW and Chrono baselines and the runner were created on 2026-08-23 with
+installed `yadof 0.4.0`. The selected synthetic `test_com` baseline was replaced
+on 2026-08-24 after the first 100-by-20 performance run exposed degenerate
+objective scaling; the old immutable baseline remains tracked but unselected.
 
 | Evidence | Result |
 |---|---|
@@ -36,6 +38,8 @@ The frozen baselines and the runner were created on 2026-08-23 with installed
 | post-fix `structural-full` run `20260823T060119Z-post-viewer-fix-ba5ad9cc3103` | All three cases and both arms satisfied every structural check |
 | `performance-pilot` run `20260823T060351Z-post-viewer-fix-5a583e492089` | 192/192 evaluations completed; three paired rows included and none excluded |
 | historical three-generation `performance` run `pfull-0823` | 18/18 cells completed; 1080 attempted, 1062 publicly recorded completions, 18 recorder-budget losses, zero timeouts/all-infinite generations, and 9/9 paired rows included |
+| historical 100-by-20 `performance` run `p20x100-0823` | 18/18 cells completed; its `test-com` rows use the superseded `synthetic-antenna-aa89d46f3d9a` objectives and must not be compared with new-baseline runs |
+| replacement `test-com` baseline `synthetic-antenna-c7b0133b3a4e` | Check passed with zero warnings; disposable smoke passed; three real-only NSGA-III validations each recorded 2,000/2,000 rows and reached final HV 0.8833, 0.8597, and 0.8681 |
 
 The resolved viewer gap and its historical failure evidence are documented in
 [`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).

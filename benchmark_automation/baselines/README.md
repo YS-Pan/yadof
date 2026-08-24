@@ -7,7 +7,7 @@ These are current-format, runtime-clean task inputs selected explicitly by
 |---|---|---|---|---|---:|---:|
 | SAW | `ngspice` | `saw-ladder` | `saw-ladder-9c5f3020778d` | `9c5f3020778d9ed67cf9571745b8119c381a116559e5dcd8dd8b1792c4de9372` | 8 | 5 |
 | Chrono | `chrono` | `trebuchet` | `trebuchet-025b5ea5fca1` | `025b5ea5fca1468bbb2acc4a1e4aeffb7554e244181d6d6f309c25518ec991a1` | 10 | 4 |
-| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-aa89d46f3d9a` | `aa89d46f3d9adb27d72208e022775bc1ef1d43bea51a67269621a91e966ef162` | 7 | 4 |
+| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-c7b0133b3a4e` | `c7b0133b3a4edb71055474119291a03a2b9e99ecff2f02cacd38cc385e448e47` | 7 | 4 |
 
 The directory contract is:
 
@@ -35,6 +35,13 @@ scientific content did not change. The public forms below are immutable.
 Never overwrite a baseline ID. Refreshing a task means creating a new task plus
 fingerprint-prefix directory under the applicable provider, validating it, and
 changing the explicit TOML selection.
+
+The superseded `synthetic-antenna-aa89d46f3d9a` input remains tracked as immutable
+historical provenance but is no longer selected. Its objective extraction windows
+and physical anchors compressed three costs near a soft-cost tail and produced
+degenerate cost/HV histories. The selected replacement keeps the same parameters,
+rawData, and adapter while using state-aligned antenna measurements and fixed
+anchors calibrated to the synthetic model's useful physical range.
 
 The hidden `.staging/` and `.assembled/` directories at the benchmark root are
 Phase-0 reconstruction/validation evidence, not runner inputs. In particular,
