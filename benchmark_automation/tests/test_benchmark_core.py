@@ -361,6 +361,37 @@ def _minimal_spec(tmp_path: Path) -> dict:
     return spec
 
 
+def test_default_run_id_starts_with_numeric_utc_date_and_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_datetime = core.dt.datetime
+
+    class FixedDateTime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz is core.dt.UTC
+            return cls(2026, 8, 24, 12, 34, 56, tzinfo=tz)
+
+    monkeypatch.setattr(core.dt, "datetime", FixedDateTime)
+    spec = _minimal_spec(tmp_path)
+    suffix = spec["spec_sha256"][:12]
+    expected = f"20260824_123456-{suffix}"
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+
+    run_id, run_root = core.create_run(paths, spec)
+    assert run_id == expected
+    assert run_root.name == expected
+    assert core.make_run_id(spec, "full benchmark") == (
+        f"20260824_123456-full-benchmark-{suffix}"
+    )
+
+
 def test_run_spec_is_immutable_and_state_is_separate(tmp_path: Path) -> None:
     paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path / "strategies", tmp_path / "history")
     spec = _minimal_spec(tmp_path)

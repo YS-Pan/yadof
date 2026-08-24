@@ -242,6 +242,11 @@ global `--runs-dir PATH` option before the subcommand. An absolute path is used 
 given; a relative override resolves from the invocation directory. The TOML
 default remains relative to `benchmark.toml`.
 
+When `run` does not receive an explicit `--run-id`, its output directory name
+starts with the UTC timestamp `YYYYMMDD_HHMMSS`: both the date and time components
+contain digits only. A sanitized optional label and the 12-hex run-spec suffix
+follow that prefix, for example `20260824_123456-full-benchmark-a1b2c3d4e5f6`.
+
 Agents must run from the yadof checkout root and use a unique ignored directory,
 for example:
 

@@ -75,6 +75,9 @@ Keeping the CLI thin makes core behavior directly testable.
 
 - Every selected baseline, strategy, configuration, package installation, and
   runner module is fingerprinted before execution.
+- An automatically chosen run/output-directory name begins with a UTC
+  `YYYYMMDD_HHMMSS` timestamp whose date and time components are digits only;
+  optional sanitized label and run-spec fingerprint fields follow the prefix.
 - Immutable input paths remain contained below the benchmark root. Mutable run
   output may use an explicit external root; relative CLI overrides resolve from the
   invocation directory, and suggested follow-up commands preserve the resolved

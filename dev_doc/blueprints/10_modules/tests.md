@@ -10,7 +10,9 @@ license, machine identity, or credential.
 The source-checkout benchmark is a separate repository tool and owns focused
 runner tests under `benchmark_automation/tests/`. Those tests may name its frozen
 cases and schemas but still consume a regular installed yadof distribution. They
-are not part of the package's generic test namespace or wheel/sdist contents.
+are not part of the package's generic test namespace or wheel/sdist contents. They
+lock automatically generated run-directory names to a digits-only UTC
+`YYYYMMDD_HHMMSS` prefix while preserving explicit run IDs.
 
 ## Required coverage
 

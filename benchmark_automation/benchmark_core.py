@@ -1173,7 +1173,7 @@ def build_run_spec(
 
 
 def make_run_id(spec: Mapping[str, Any], label: str | None = None) -> str:
-    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%d_%H%M%S")
     suffix = str(spec["spec_sha256"])[:12]
     middle = f"-{_safe_id(label)}" if label else ""
     return f"{stamp}{middle}-{suffix}"

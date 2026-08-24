@@ -78,13 +78,14 @@ hot-change contract; structural dimension changes are future work.
   `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>`, separating the
   simulator/adapter identity from the optimization-task identity. Generated runs
   use its ignored default or an explicit disjoint output root; agents use
-  `temp/benchmark/<task-id>`. The current non-surrogate arm is named for its
-  concrete NSGA-III algorithm. Measured cells deliberately permit 32-way fast
-  oversubscription, run the baseline's common `postprocess.py` and one cost view
-  after optimization, keep every cell's prefixed visualization artifacts directly
-  in one flat run-level directory, retain a bottom cell-progress bar in interactive
-  terminals, and expose final cumulative HV as a compact algorithm-labeled table
-  without mixing it into JSON stdout.
+  `temp/benchmark/<task-id>`, and automatically named run directories begin with
+  a digits-only UTC `YYYYMMDD_HHMMSS` date/time prefix. The current non-surrogate
+  arm is named for its concrete NSGA-III algorithm. Measured cells deliberately
+  permit 32-way fast oversubscription, run the baseline's common `postprocess.py`
+  and one cost view after optimization, keep every cell's prefixed visualization
+  artifacts directly in one flat run-level directory, retain a bottom cell-progress
+  bar in interactive terminals, and expose final cumulative HV as a compact
+  algorithm-labeled table without mixing it into JSON stdout.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 
