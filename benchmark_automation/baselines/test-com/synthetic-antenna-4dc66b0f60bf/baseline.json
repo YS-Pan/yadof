@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "baseline_id": "synthetic-antenna-4dc66b0f60bf",
+  "case_id": "test-com",
+  "provider_id": "test-com",
+  "task_id": "synthetic-antenna",
+  "created_utc": "2026-08-24T04:18:02.960Z",
+  "created_by": "yadof benchmark maintainers",
+  "yadof_version": "0.4.0",
+  "task_fingerprint": "4dc66b0f60bf018472f992a07fa33e6815a2bf6eb7d295e2bccc848820da226d",
+  "include_paths": ["config.py", "submit", "job_template"],
+  "source": "Frozen synthetic test_com benchmark workspace with state-aligned antenna objectives and a non-separable multimodal 20-variable design landscape.",
+  "validation": {
+    "check_errors": 0,
+    "check_warnings": 0,
+    "smoke_costs": [0.25742364157735514, 0.2574236415773551, 0.46674049473811335, 0.7645994776503036],
+    "objective_count": 4,
+    "rawdata_shapes": {
+      "s11_pinState1": [5],
+      "s11_pinState2": [5],
+      "s11_pinState3": [5],
+      "gain_lhcp_pinState1": [1, 73, 73],
+      "gain_lhcp_pinState2": [1, 73, 73],
+      "gain_lhcp_pinState3": [1, 73, 73],
+      "axial_ratio_pinState1": [5, 73, 73],
+      "axial_ratio_pinState2": [5, 73, 73],
+      "axial_ratio_pinState3": [5, 73, 73]
+    },
+    "baseline_record_rows": 0,
+    "baseline_checkpoint_files": 0
+  }
+}
