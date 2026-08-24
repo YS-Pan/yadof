@@ -26,6 +26,9 @@ def _write_baseline(
     (workspace / "submit").mkdir(parents=True)
     (workspace / "job_template").mkdir()
     (workspace / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (workspace / "postprocess.py").write_text(
+        "raise SystemExit(0)\n", encoding="utf-8"
+    )
     (baseline / "baseline.json").write_text(
         json.dumps(
             {
@@ -78,7 +81,7 @@ history_snapshot_dir = "history"
 
 [cases.case]
 baseline = "{baseline}"
-include_paths = ["config.py", "submit", "job_template"]
+include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
 history_policy = "empty"
 
 [arms.real]
@@ -128,6 +131,28 @@ def test_runs_dir_rejects_protected_input_overlap(tmp_path: Path) -> None:
     config_path = _write_loadable_config(tmp_path)
     with pytest.raises(core.BenchmarkError, match="overlaps case 'case' baseline"):
         core.load_config(config_path, runs_dir_override=tmp_path / "baselines")
+
+
+def test_load_config_requires_declared_postprocess(tmp_path: Path) -> None:
+    config_path = _write_loadable_config(tmp_path)
+    text = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        text.replace(
+            ', "postprocess.py"',
+            "",
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(core.BenchmarkError, match="must declare 'postprocess.py'"):
+        core.load_config(config_path)
+
+
+def test_load_config_requires_baseline_postprocess_script(tmp_path: Path) -> None:
+    config_path = _write_loadable_config(tmp_path)
+    postprocess = next((tmp_path / "baselines").glob("*/*/workspace/postprocess.py"))
+    postprocess.unlink()
+    with pytest.raises(core.BenchmarkError, match="baseline has no postprocess.py"):
+        core.load_config(config_path)
 
 
 def test_load_config_rejects_legacy_date_baseline_identity(tmp_path: Path) -> None:
@@ -210,7 +235,8 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
     }
     assert all(cell["planned_commands"][0][3] == "init" for cell in plan["cells"])
     measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
-    assert all(cell["planned_commands"][-1][3:5] == ["view", "cost"] for cell in measured)
+    assert all(cell["planned_commands"][-2][3:5] == ["view", "cost"] for cell in measured)
+    assert all(cell["planned_commands"][-1][1].endswith("postprocess.py") for cell in measured)
     filtered = core.build_plan(
         config,
         paths,
@@ -232,7 +258,12 @@ def test_performance_config_requires_equal_planned_attempted_budget(tmp_path: Pa
         "cases": {
             "case": {
                 "baseline": baseline.relative_to(tmp_path).as_posix(),
-                "include_paths": ["config.py", "submit", "job_template"],
+                "include_paths": [
+                    "config.py",
+                    "submit",
+                    "job_template",
+                    "postprocess.py",
+                ],
                 "history_policy": "empty",
             }
         },
@@ -464,7 +495,7 @@ def test_suite_failure_policy_controls_independent_cells(
     assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
 
 
-def test_measured_cell_runs_cost_view_after_optimization(
+def test_measured_cell_runs_cost_view_and_postprocess_after_optimization(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     run_root = tmp_path / "run"
@@ -520,7 +551,7 @@ def test_measured_cell_runs_cost_view_after_optimization(
     monkeypatch.setattr(core, "_materialize_attempt_inputs", fake_materialize)
     monkeypatch.setattr(core, "_has_completed_generation_prefix", lambda *_args: (True, [0]))
     assert core._run_one_cell({}, paths, run_root, spec, state, cell)
-    assert labels == ["init", "check", "optimize", "view-cost"]
+    assert labels == ["init", "check", "optimize", "view-cost", "postprocess"]
     assert state["cells"][cell["cell_id"]]["status"] == "completed"
 
 

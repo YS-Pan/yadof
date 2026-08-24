@@ -118,6 +118,11 @@ bar redrawn at the bottom of an interactive terminal, followed by a final JSON
 summary. Add `--stream-output` only for deliberate live raw output; it can be large.
 Every measured optimization also runs `yadof view cost` after its final generation
 and writes `.yadof/tool_output/benchmark-cost.png` inside that cell's workspace.
+It then calls the selected baseline's root `postprocess.py` with the completed cell
+workspace and a unique output directory. SAW writes S-parameter plots/data,
+Chrono writes a trebuchet MP4/poster/manifest, and test_com writes a compact antenna
+response plot. A postprocessing failure fails that attempt so missing human-review
+artifacts are explicit.
 
 Select a precise subset without editing TOML. Repeat a selector to include more
 than one value:
@@ -265,6 +270,9 @@ runs/<run-id>/
       command.finished.json
       stdout.log
       stderr.log
+  postprocess/<cell-id>/attempt-<NNNN>/
+    postprocess_manifest.json
+    task-specific plots, videos, and supporting evidence
   evidence/collect-<NNNN>/   append-only collection and public tool outputs
   reports/report-<NNNN>/     append-only report snapshots
 ```
@@ -386,7 +394,8 @@ To add a case:
 1. Create a new immutable
    `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>/workspace` with
    current `yadof init`, deliberate task-input transfer, zero runtime evidence,
-   `yadof check`, and one disposable smoke.
+   a root `postprocess.py` implementing the common `--workspace` / `--output-dir`
+   interface, `yadof check`, and one disposable smoke.
 2. Add matching `provider_id`, `task_id`, `baseline_id`, and full task fingerprint
    to `baseline.json`, then declare the exact baseline path, `include_paths`,
    objective count, rawData shapes, resource prerequisite, history policy, and

@@ -43,6 +43,7 @@ RUNTIME_PATHS = (
 TERMINAL_CELL_STATES = {"completed", "failed", "skipped"}
 CONFIG_BLOCK_START = "# >>> benchmark_automation managed overrides >>>"
 CONFIG_BLOCK_END = "# <<< benchmark_automation managed overrides <<<"
+POSTPROCESS_SCRIPT_NAME = "postprocess.py"
 BASELINE_PROVIDER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 BASELINE_ID_PATTERN = re.compile(
     r"(?P<task>[a-z][a-z0-9]*(?:-[a-z0-9]+)*)-(?P<fingerprint>[0-9a-f]{12})\Z"
@@ -483,6 +484,14 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
         include = case.get("include_paths")
         if not isinstance(include, list) or not include or not all(isinstance(x, str) for x in include):
             raise BenchmarkError(f"case {case_id!r} include_paths must be a non-empty string list")
+        if POSTPROCESS_SCRIPT_NAME not in include:
+            raise BenchmarkError(
+                f"case {case_id!r} include_paths must declare {POSTPROCESS_SCRIPT_NAME!r}"
+            )
+        if not (baseline / "workspace" / POSTPROCESS_SCRIPT_NAME).is_file():
+            raise BenchmarkError(
+                f"case {case_id!r} baseline has no {POSTPROCESS_SCRIPT_NAME}: {baseline}"
+            )
         policy = case.get("history_policy")
         if policy not in {"empty", "snapshot"}:
             raise BenchmarkError(f"case {case_id!r} history_policy must be empty or snapshot")
@@ -602,6 +611,22 @@ def _cost_view_command(python: str, workspace: str | Path) -> list[str]:
     ]
 
 
+def _postprocess_command(
+    python: str,
+    workspace: str | Path,
+    output_dir: str | Path,
+) -> list[str]:
+    workspace_path = Path(workspace)
+    return [
+        python,
+        str(workspace_path / POSTPROCESS_SCRIPT_NAME),
+        "--workspace",
+        str(workspace_path),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+
 def _planned_commands(
     config: Mapping[str, Any], cell: Mapping[str, Any]
 ) -> list[list[str]]:
@@ -673,6 +698,13 @@ def _planned_commands(
             ]
         )
     commands.append(_cost_view_command(python, workspace))
+    commands.append(
+        _postprocess_command(
+            python,
+            workspace,
+            f"<run-root>/postprocess/{cell['cell_id']}/attempt-<attempt>",
+        )
+    )
     return commands
 
 
@@ -1290,6 +1322,12 @@ def _prepare_attempt(
         "input_fingerprint": None,
         "post_input_fingerprint": None,
         "input_manifest": str(attempt_root / "input_manifest.json"),
+        "postprocess_output_dir": str(
+            run_root
+            / "postprocess"
+            / str(cell_plan["cell_id"])
+            / f"attempt-{attempt_number:04d}"
+        ),
         "commands": [],
         "sealed_utc": None,
         "error": None,
@@ -1429,12 +1467,18 @@ def _execute_logged(
             progress.write_above(message)
     started = time.perf_counter()
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+    child_environment = os.environ.copy()
+    # Declared task inputs are sealed before commands run.  Imports by yadof or a
+    # baseline postprocessor must not create __pycache__ files inside that sealed
+    # tree and make an otherwise read-only attempt fail its final fingerprint.
+    child_environment["PYTHONDONTWRITEBYTECODE"] = "1"
     process = subprocess.Popen(
         list(command),
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         creationflags=creationflags,
+        env=child_environment,
     )
     assert process.stdout is not None and process.stderr is not None
     out_thread = threading.Thread(
@@ -1813,6 +1857,32 @@ def _run_one_cell(
                     status="failed",
                     include_paths=include_paths,
                     error="yadof view cost failed",
+                )
+                return False
+            postprocess = _execute_logged(
+                _postprocess_command(
+                    spec["package"]["python"],
+                    workspace,
+                    attempt["postprocess_output_dir"],
+                ),
+                cwd=paths.root,
+                attempt_root=attempt_root,
+                attempt=attempt,
+                timeout_sec=timeout,
+                label="postprocess",
+                stream_output=stream_subprocess_output,
+                progress=progress,
+            )
+            _save_state(run_root, state)
+            if postprocess["returncode"] != 0 or postprocess["timed_out"]:
+                _seal_attempt(
+                    run_root,
+                    state,
+                    cell_plan,
+                    attempt,
+                    status="failed",
+                    include_paths=include_paths,
+                    error="baseline postprocess failed",
                 )
                 return False
         _seal_attempt(

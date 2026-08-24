@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "baseline_id": "saw-ladder-b736a99a7dc1",
+  "case_id": "saw",
+  "provider_id": "ngspice",
+  "task_id": "saw-ladder",
+  "created_utc": "2026-08-24T07:56:13.890Z",
+  "created_by": "yadof benchmark maintainers",
+  "yadof_version": "0.4.0",
+  "task_fingerprint": "b736a99a7dc188cae5f74bceb772ef06005f2baead13864fc0be194db2c21948",
+  "include_paths": ["config.py", "submit", "job_template", "postprocess.py"],
+  "source": "Frozen ngspice SAW ladder benchmark workspace derived from saw-ladder-9c5f3020778d, with a common-interface response plot postprocessor based on the 20260807 SAW visualization.",
+  "validation": {
+    "check_errors": 0,
+    "check_warnings": 0,
+    "smoke_costs": [0.23614886445544214, 0.876200337969137, 0.7422218562855797, 0.9478822312139636, 0.4898880600135683],
+    "objective_count": 5,
+    "rawdata_shapes": {"s21_db": [1201], "s11_db": [1201]},
+    "baseline_record_rows": 0,
+    "baseline_checkpoint_files": 0
+  }
+}

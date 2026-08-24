@@ -27,6 +27,9 @@ Then expand only if the summary leaves a specific question unanswered:
    latest `command.finished.json`, then the tail of the relevant stdout/stderr log.
 4. Read one cell and one field from `metrics.json` or an append-only
    `collection.json` only when the report cannot answer the question.
+5. When visual inspection is relevant, open only that cell attempt's declared
+   `postprocess/<cell-id>/attempt-####/` manifest and named image/video; do not scan
+   every postprocess directory.
 
 Never read `metrics.json` or `collection.json` wholesale. Never recursively list
 or search all of the selected runs directory, attempt workspaces, baselines, or the

@@ -34,6 +34,9 @@ benchmark.toml + frozen baselines + strategy templates
                          v
        isolated cell attempt workspaces and logs
                          |
+                         +--> baseline postprocess.py
+                         |      -> run-level plots/videos
+                         |
                          v
           public yadof collection surfaces
                          |
@@ -58,7 +61,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
 | `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell config overrides, and resource requirements. |
 | `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements; the non-surrogate arm is explicitly identified as NSGA-III. |
-| `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`. |
+| `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`; every selected workspace exposes root `postprocess.py`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
 | configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default `runs/`, Git-ignored. |
@@ -113,6 +116,13 @@ Keeping the CLI thin makes core behavior directly testable.
   `yadof view cost` once and retains its summary/log plus
   `.yadof/tool_output/benchmark-cost.png`. A failed cost view fails the immutable
   attempt instead of silently omitting the required artifact.
+- After the cost view, the runner invokes the baseline workspace's common
+  `postprocess.py --workspace ... --output-dir ...` interface exactly once. Its
+  unique output is outside the fingerprinted cell inputs at
+  `<run-root>/postprocess/<cell-id>/attempt-####/`; a failed postprocessor fails the
+  immutable attempt. Task-specific visualization logic remains baseline-owned.
+- Runner child processes set `PYTHONDONTWRITEBYTECODE=1`, so importing task or
+  postprocessor modules cannot add `__pycache__` files to sealed declared inputs.
 - Once run/resume reaches its final state, an interactive stdin waits for Enter so
   a separately launched console remains visible; non-interactive callers return
   immediately with the normal exit code.

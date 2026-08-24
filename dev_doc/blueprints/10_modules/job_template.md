@@ -52,6 +52,12 @@ directory is flat and contains only direct `.npz` files. Validation rejects nest
 directories, unsupported files, missing/legacy metadata, nonnumeric arrays, shape or
 axis mismatches, and invalid item structures.
 
+One rawData field represents one coherent semantic quantity. Independent scalars or
+curves remain independent fields even when they share a coordinate grid; task code
+does not concatenate unrelated 1-D curves behind an invented channel dimension.
+A multidimensional field is appropriate only when its axes jointly define one
+physical grid/tensor that the prediction contract intends to model as such.
+
 ## Cost contract
 
 Costs are recomputed through freshly loaded current `submit/calc_cost.py`. A long-running

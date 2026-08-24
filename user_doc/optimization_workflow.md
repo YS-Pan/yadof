@@ -107,6 +107,16 @@ framework records raw evidence and derives cost through the current
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
 
+Store quantities with different physical or semantic meanings as independent
+rawData fields. A scalar should be its own scalar field, and independent sampled
+curves should each be their own 1-D field with their shared physical coordinate
+axis. Do not concatenate several unrelated 1-D curves into a 2-D `sample × channel`
+array merely to reduce the number of files; that invents a channel axis, obscures
+field identity, and makes the field-balanced surrogate learn one artificial joined
+target. Use a multidimensional field only when its dimensions form one coherent
+physical grid or tensor whose joint meaning is part of the intended prediction
+contract.
+
 Fast, local, and distributed backends all return `JobResult` to one finalizer,
 which owns and validates rawData once, calculates the current objective tuple, and
 hands the owned evidence to the campaign recorder. The recorder keeps bounded

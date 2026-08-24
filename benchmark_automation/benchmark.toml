@@ -30,8 +30,8 @@ OPTIMIZE_SURROGATE_BETA = 3
 OPTIMIZE_SURROGATE_EXPLORATION_FRACTION = 0.15
 
 [cases.saw]
-baseline = "baselines/ngspice/saw-ladder-9c5f3020778d"
-include_paths = ["config.py", "submit", "job_template"]
+baseline = "baselines/ngspice/saw-ladder-b736a99a7dc1"
+include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
 mode = "fast"
 history_policy = "empty"
 expected_objectives = 5
@@ -49,8 +49,8 @@ s21_db = [1201]
 s11_db = [1201]
 
 [cases.chrono]
-baseline = "baselines/chrono/trebuchet-025b5ea5fca1"
-include_paths = ["config.py", "submit", "job_template"]
+baseline = "baselines/chrono/trebuchet-ac34a09c5fb9"
+include_paths = ["config.py", "submit", "job_template", "postprocess.py", "visualization"]
 mode = "fast"
 history_policy = "empty"
 expected_objectives = 4
@@ -64,14 +64,26 @@ kind = "environment_executable"
 variable = "YADOF_PYCHRONO_PYTHON"
 
 [cases.chrono.rawdata_shapes]
-trebuchet_release_kinematics = [513, 4]
-trebuchet_release_summary = [5]
-trebuchet_stress_history = [513, 3]
 trebuchet_total_time = []
+trebuchet_loaded_max_height = []
+trebuchet_minimum_ball_center_z = []
+trebuchet_trigger_time = []
+trebuchet_released_flag = []
+trebuchet_release_sling_arm_rotation = []
+trebuchet_minimum_arm_ground_clearance = []
+trebuchet_minimum_hanger_ground_clearance = []
+trebuchet_minimum_counterweight_ground_clearance = []
+trebuchet_ball_x = [513]
+trebuchet_ball_z = [513]
+trebuchet_ball_vx = [513]
+trebuchet_ball_vz = [513]
+trebuchet_arm_combined_normal_stress = [513]
+trebuchet_hanger_combined_normal_stress = [513]
+trebuchet_peak_strength_utilization = [513]
 
 [cases.test-com]
-baseline = "baselines/test-com/synthetic-antenna-4dc66b0f60bf"
-include_paths = ["config.py", "submit", "job_template"]
+baseline = "baselines/test-com/synthetic-antenna-29b314e9304e"
+include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
 mode = "fast"
 history_policy = "empty"
 expected_objectives = 4

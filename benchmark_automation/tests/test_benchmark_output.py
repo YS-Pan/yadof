@@ -144,6 +144,22 @@ def test_execute_logged_preserves_large_child_output_without_streaming(
     assert Path(metadata["stdout"]).read_text(encoding="utf-8").strip() == payload
 
 
+def test_execute_logged_keeps_imports_from_writing_bytecode(tmp_path: Path) -> None:
+    (tmp_path / "declared_input.py").write_text("VALUE = 1\n", encoding="utf-8")
+    attempt_root = tmp_path / "attempt"
+    attempt_root.mkdir()
+    metadata = core._execute_logged(
+        [sys.executable, "-c", "import declared_input"],
+        cwd=tmp_path,
+        attempt_root=attempt_root,
+        attempt={"commands": []},
+        timeout_sec=30,
+        label="bytecode-fixture",
+    )
+    assert metadata["returncode"] == 0
+    assert not (tmp_path / "__pycache__").exists()
+
+
 def test_report_summary_keeps_decision_evidence_without_fingerprints() -> None:
     report = {
         "schema_version": 1,

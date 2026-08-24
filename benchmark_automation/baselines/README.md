@@ -5,9 +5,9 @@ These are current-format, runtime-clean task inputs selected explicitly by
 
 | Case | Provider | Task | Baseline ID | Task fingerprint | Files | Objectives |
 |---|---|---|---|---|---:|---:|
-| SAW | `ngspice` | `saw-ladder` | `saw-ladder-9c5f3020778d` | `9c5f3020778d9ed67cf9571745b8119c381a116559e5dcd8dd8b1792c4de9372` | 8 | 5 |
-| Chrono | `chrono` | `trebuchet` | `trebuchet-025b5ea5fca1` | `025b5ea5fca1468bbb2acc4a1e4aeffb7554e244181d6d6f309c25518ec991a1` | 10 | 4 |
-| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-4dc66b0f60bf` | `4dc66b0f60bf018472f992a07fa33e6815a2bf6eb7d295e2bccc848820da226d` | 7 | 4 |
+| SAW | `ngspice` | `saw-ladder` | `saw-ladder-b736a99a7dc1` | `b736a99a7dc188cae5f74bceb772ef06005f2baead13864fc0be194db2c21948` | 9 | 5 |
+| Chrono | `chrono` | `trebuchet` | `trebuchet-ac34a09c5fb9` | `ac34a09c5fb964ceb86edfc4735d2ff9cb4d2ad312c24321c0be764a749dc9ed` | 14 | 4 |
+| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-29b314e9304e` | `29b314e9304e8ed8b976ac10299a2da9421fe255fa3c60e4e90346e8eb3545ff` | 8 | 4 |
 
 The directory contract is:
 
@@ -35,6 +35,21 @@ scientific content did not change. The public forms below are immutable.
 Never overwrite a baseline ID. Refreshing a task means creating a new task plus
 fingerprint-prefix directory under the applicable provider, validating it, and
 changing the explicit TOML selection.
+
+The selected SAW and test_com refreshes preserve their predecessor task and
+rawData contracts while adding the common `postprocess.py` interface. The SAW
+plot follows the response visualization used by the 20260807 SAW task; the
+test_com plot summarizes the three switch states, gain, axial ratio, and design
+variables. Their predecessors, `saw-ladder-9c5f3020778d` and
+`synthetic-antenna-4dc66b0f60bf`, remain immutable.
+
+The selected Chrono refresh supersedes `trebuchet-025b5ea5fca1` without changing
+its parameter or objective counts. It adds Bullet NSC contact between the ground
+and the arm, hanger/counterweight assembly, and ball; initially intersecting
+mechanisms are rejected. The former bundled release and stress arrays are now 16
+semantic rawData fields: nine scalars and seven independent 513-sample curves.
+Its workspace also carries the renderer and a common `postprocess.py` entry point
+that writes the selected replay video, poster, trajectory, and diagnostics.
 
 The superseded `synthetic-antenna-aa89d46f3d9a` input remains tracked as immutable
 historical provenance. Its objective extraction windows and physical anchors
