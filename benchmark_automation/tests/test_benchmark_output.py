@@ -99,6 +99,27 @@ def test_stream_pipe_can_log_without_forwarding_to_console(tmp_path: Path) -> No
     assert output.read_text(encoding="utf-8") == "first\n第二行\n"
 
 
+def test_interactive_progress_redraws_below_lifecycle_text() -> None:
+    class TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    terminal = TtyBuffer()
+    progress = core.CellProgress(2, stream=terminal, width=10)
+    progress.start()
+    progress.write_above("[cell] first started\n")
+    progress.set_current("first")
+    progress.advance("completed")
+    progress.finish()
+    output = terminal.getvalue()
+    assert "\r" in output
+    assert "\x1b" not in output
+    assert "[cell] first started\n" in output
+    assert output.endswith(
+        "[benchmark] [#####-----] 1/2 cells | completed=1 failed=0 skipped=0\n"
+    )
+
+
 def test_execute_logged_preserves_large_child_output_without_streaming(
     tmp_path: Path, capsys
 ) -> None:
@@ -149,6 +170,7 @@ def test_report_summary_keeps_decision_evidence_without_fingerprints() -> None:
         "performance": {
             "interpretation_policy": "descriptive only",
             "arm_roles": {"real": "real", "surrogate": "surrogate"},
+            "arm_labels": {"real": "NSGA-III", "surrogate": "GPSAF + conditional-INR"},
             "included_pairs": [
                 {
                     "case": "case-a",
@@ -182,6 +204,11 @@ def test_report_summary_keeps_decision_evidence_without_fingerprints() -> None:
     pair = summary["performance"]["pairs"][0]
     assert pair["metrics"]["final_cumulative_hypervolume"]["surrogate_minus_real"] == 0.1
     assert summary["validity"]["evaluation_totals"]["attempted"] == 8
+    assert summary["performance"]["arm_labels"]["real"] == "NSGA-III"
+    table = core.format_hypervolume_table(report)
+    assert table is not None
+    assert "| Case | Seed | NSGA-III | GPSAF + conditional-INR |" in table
+    assert "| case-a | 1 | 0.2 | 0.3 |" in table
     assert "secretly-long-fingerprint" not in encoded
     assert len(encoded) < 7000
 
@@ -203,6 +230,20 @@ def test_cli_defaults_to_bounded_output_and_quiet_children() -> None:
         ["--runs-dir", str(runs_dir), "inspect", "--run-id", "fixture"]
     )
     assert parsed.runs_dir == runs_dir
+
+
+def test_interactive_run_pause_waits_for_enter(monkeypatch) -> None:
+    class TtyInput(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    stdin = TtyInput("\n")
+    stderr = io.StringIO()
+    monkeypatch.setattr(benchmark.sys, "stdin", stdin)
+    monkeypatch.setattr(benchmark.sys, "stderr", stderr)
+    benchmark._pause_after_run()
+    assert stdin.tell() == 1
+    assert "Press Enter" in stderr.getvalue()
 
 
 def test_run_summary_propagates_runs_dir_to_next_command(tmp_path: Path) -> None:

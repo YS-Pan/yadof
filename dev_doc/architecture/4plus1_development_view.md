@@ -81,6 +81,10 @@ source-checkout runner against an installed yadof distribution. They may describ
 the frozen benchmark cases, but their default unit/preflight path does not start a
 simulator or a measured campaign. Generated benchmark output belongs only in the
 selected ignored runs root, never in package source or frozen inputs.
+The current comparison names its concrete non-surrogate NSGA-III arm, uses a
+runner-owned 32-worker oversubscribed fast setting for measured cells, runs one
+cost-view render after each measured optimization, and keeps bounded JSON stdout
+separate from terminal progress and the final algorithm-labeled HV table.
 
 Mocked distributed tests cover event-log execute segments and preserve provenance
 priority: worker-reported `execute_machine` wins, timed-out active/held segments may

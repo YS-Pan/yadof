@@ -209,6 +209,8 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
         "case-a__surrogate__seed-17",
     }
     assert all(cell["planned_commands"][0][3] == "init" for cell in plan["cells"])
+    measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
+    assert all(cell["planned_commands"][-1][3:5] == ["view", "cost"] for cell in measured)
     filtered = core.build_plan(
         config,
         paths,
@@ -270,9 +272,12 @@ def test_repository_performance_suite_uses_substantial_budget() -> None:
     assert all(cell["generations"] >= 20 for cell in measured)
     assert all(cell["max_generations"] == cell["generations"] for cell in measured)
     assert sum(cell["planned_attempted_evaluations"] for cell in measured) == 36_000
+    assert plan["selection"]["arms"] == ["nsga3", "gpsaf-conditional-inr"]
+    assert all(config["cases"][case_id]["max_workers"] == 32 for case_id in config["cases"])
     assert config["runner"]["measured_config_overrides"] == {
         "HISTORY_SEGMENT_MAX_CANDIDATES": 100,
         "HISTORY_UNPUBLISHED_MAX_CANDIDATES": 128,
+        "FAST_RESOURCE_AUTODETECT_ENABLED": False,
     }
 
 
@@ -441,8 +446,10 @@ def test_suite_failure_policy_controls_independent_cells(
         cell_plan,
         *,
         stream_subprocess_output=False,
+        progress=None,
     ):
         assert stream_subprocess_output is False
+        assert isinstance(progress, core.CellProgress)
         cell_state = state["cells"][cell_plan["cell_id"]]
         if cell_plan["cell_id"] == "first":
             cell_state["status"] = "failed"
@@ -455,6 +462,66 @@ def test_suite_failure_policy_controls_independent_cells(
     monkeypatch.setattr(core, "_run_one_cell", fake_run_one)
     state = core.execute_run({}, paths, run_id)
     assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
+
+
+def test_measured_cell_runs_cost_view_after_optimization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    cell = {
+        "cell_id": "case__nsga3__seed-1",
+        "kind": "measured",
+        "case": "case",
+        "arm": "nsga3",
+        "seed": 1,
+        "population": 4,
+        "generations": 1,
+        "max_generations": 1,
+    }
+    spec = {
+        "package": {"python": "python"},
+        "runner": {"command_timeout_sec": 30},
+        "cases": {
+            "case": {
+                "baseline": {"include_paths": ["config.py"]},
+                "mode": "fast",
+            }
+        },
+        "arms": {"nsga3": {"surrogate": False}},
+    }
+    state = {
+        "schema_version": 1,
+        "updated_utc": "",
+        "events": [],
+        "cells": {cell["cell_id"]: {"status": "pending", "attempts": []}},
+    }
+    labels: list[str] = []
+
+    def fake_execute(_command, **kwargs):
+        labels.append(kwargs["label"])
+        return {"returncode": 0, "timed_out": False}
+
+    def fake_materialize(_paths, _spec, _cell, _attempt_root, attempt):
+        Path(attempt["workspace"]).mkdir(parents=True)
+        (Path(attempt["workspace"]) / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
+        attempt["input_fingerprint"] = core.task_fingerprint(
+            Path(attempt["workspace"]), ["config.py"]
+        )
+
+    monkeypatch.setattr(core, "_execute_logged", fake_execute)
+    monkeypatch.setattr(core, "_materialize_attempt_inputs", fake_materialize)
+    monkeypatch.setattr(core, "_has_completed_generation_prefix", lambda *_args: (True, [0]))
+    assert core._run_one_cell({}, paths, run_root, spec, state, cell)
+    assert labels == ["init", "check", "optimize", "view-cost"]
+    assert state["cells"][cell["cell_id"]]["status"] == "completed"
 
 
 def _cell(

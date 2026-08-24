@@ -12,13 +12,16 @@ audit_random_seed = 20260823
 [runner.measured_config_overrides]
 HISTORY_SEGMENT_MAX_CANDIDATES = 100
 HISTORY_UNPUBLISHED_MAX_CANDIDATES = 128
+FAST_RESOURCE_AUTODETECT_ENABLED = false
 
-[arms.real-search]
-strategy_template = "real_search.py"
+[arms.nsga3]
+strategy_template = "nsga3.py"
+display_name = "NSGA-III"
 surrogate = false
 
 [arms.gpsaf-conditional-inr]
 strategy_template = "gpsaf_conditional_inr.py"
+display_name = "GPSAF + conditional-INR"
 surrogate = true
 
 [arms.gpsaf-conditional-inr.config_overrides]
@@ -34,7 +37,7 @@ history_policy = "empty"
 expected_objectives = 5
 observed_eval_sec = 0.70
 estimated_record_mib = 0.08
-max_workers = 8
+max_workers = 32
 representative_expensive_generation_sec = 3600
 
 [cases.saw.resource]
@@ -53,7 +56,7 @@ history_policy = "empty"
 expected_objectives = 4
 observed_eval_sec = 3.90
 estimated_record_mib = 0.12
-max_workers = 4
+max_workers = 32
 representative_expensive_generation_sec = 7200
 
 [cases.chrono.resource]
@@ -74,7 +77,7 @@ history_policy = "empty"
 expected_objectives = 4
 observed_eval_sec = 0.60
 estimated_record_mib = 0.50
-max_workers = 8
+max_workers = 32
 
 [cases.test-com.resource]
 kind = "cuda"
@@ -93,7 +96,7 @@ axial_ratio_pinState3 = [5, 73, 73]
 [suites.structural-canary]
 purpose = "structural"
 cases = ["test-com"]
-arms = ["real-search", "gpsaf-conditional-inr"]
+arms = ["nsga3", "gpsaf-conditional-inr"]
 seeds = [20260816]
 smoke = true
 fail_fast = true
@@ -110,7 +113,7 @@ fail_fast = true
 [suites.structural-full]
 purpose = "structural"
 cases = ["saw", "chrono", "test-com"]
-arms = ["real-search", "gpsaf-conditional-inr"]
+arms = ["nsga3", "gpsaf-conditional-inr"]
 seeds = [20260823]
 smoke = true
 fail_fast = true
@@ -118,7 +121,7 @@ fail_fast = true
 [suites.performance-pilot]
 purpose = "performance"
 cases = ["saw", "chrono", "test-com"]
-arms = ["real-search", "gpsaf-conditional-inr"]
+arms = ["nsga3", "gpsaf-conditional-inr"]
 seeds = [104729]
 smoke = false
 fail_fast = false
@@ -126,12 +129,12 @@ fail_fast = false
 [suites.performance]
 purpose = "performance"
 cases = ["saw", "chrono", "test-com"]
-arms = ["real-search", "gpsaf-conditional-inr"]
+arms = ["nsga3", "gpsaf-conditional-inr"]
 seeds = [104729, 130363, 155921]
 smoke = false
 fail_fast = false
 
-[budgets.structural-canary.test-com.real-search]
+[budgets.structural-canary.test-com.nsga3]
 population = 12
 generations = 1
 max_generations = 1
@@ -141,7 +144,7 @@ population = 12
 generations = 2
 max_generations = 3
 
-[budgets.structural-full.saw.real-search]
+[budgets.structural-full.saw.nsga3]
 population = 12
 generations = 1
 max_generations = 1
@@ -151,7 +154,7 @@ population = 12
 generations = 2
 max_generations = 3
 
-[budgets.structural-full.chrono.real-search]
+[budgets.structural-full.chrono.nsga3]
 population = 8
 generations = 1
 max_generations = 1
@@ -161,7 +164,7 @@ population = 8
 generations = 2
 max_generations = 3
 
-[budgets.structural-full.test-com.real-search]
+[budgets.structural-full.test-com.nsga3]
 population = 12
 generations = 1
 max_generations = 1
@@ -171,7 +174,7 @@ population = 12
 generations = 2
 max_generations = 3
 
-[budgets.performance-pilot.saw.real-search]
+[budgets.performance-pilot.saw.nsga3]
 population = 12
 generations = 3
 max_generations = 3
@@ -181,7 +184,7 @@ population = 12
 generations = 3
 max_generations = 3
 
-[budgets.performance-pilot.chrono.real-search]
+[budgets.performance-pilot.chrono.nsga3]
 population = 8
 generations = 3
 max_generations = 3
@@ -191,7 +194,7 @@ population = 8
 generations = 3
 max_generations = 3
 
-[budgets.performance-pilot.test-com.real-search]
+[budgets.performance-pilot.test-com.nsga3]
 population = 12
 generations = 3
 max_generations = 3
@@ -201,7 +204,7 @@ population = 12
 generations = 3
 max_generations = 3
 
-[budgets.performance.saw.real-search]
+[budgets.performance.saw.nsga3]
 population = 100
 generations = 20
 max_generations = 20
@@ -211,7 +214,7 @@ population = 100
 generations = 20
 max_generations = 20
 
-[budgets.performance.chrono.real-search]
+[budgets.performance.chrono.nsga3]
 population = 100
 generations = 20
 max_generations = 20
@@ -221,7 +224,7 @@ population = 100
 generations = 20
 max_generations = 20
 
-[budgets.performance.test-com.real-search]
+[budgets.performance.test-com.nsga3]
 population = 100
 generations = 20
 max_generations = 20

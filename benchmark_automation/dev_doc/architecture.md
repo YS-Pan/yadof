@@ -57,7 +57,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `benchmark_core.py` | Runner implementation and stable data transformations. |
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
 | `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell config overrides, and resource requirements. |
-| `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements. |
+| `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements; the non-surrogate arm is explicitly identified as NSGA-III. |
 | `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
@@ -88,6 +88,10 @@ Keeping the CLI thin makes core behavior directly testable.
   measured cell. Its runner-owned measured-cell overrides provide recorder
   candidate headroom for at least one complete generation without editing frozen
   baselines; the pilot remains a separate small cost-discovery tier.
+- Measured cells deliberately use a 32-worker fast cap with fast resource
+  autodetection disabled, allowing CPU oversubscription beyond the physical-core
+  count. This is a benchmark experiment setting; preflight/pilot review still owns
+  host memory, simulator, license, and external-runtime suitability.
 
 ### Execution and recovery
 
@@ -97,10 +101,21 @@ Keeping the CLI thin makes core behavior directly testable.
 - Resume skips completed cells and refuses input drift. An interrupted in-generation
   workspace is sealed; retry uses a linked replacement attempt rather than
   mutating the failed attempt.
-- Commands execute sequentially by default to avoid contention for external
-  simulators, CUDA, disk, and shared host resources.
+- Cells execute sequentially by default to isolate comparison state and external
+  resource ownership. Candidate simulation within a measured cell uses the declared
+  32-way fast concurrency.
 - Child stdout/stderr is always preserved in command logs. It is not forwarded to
   the terminal unless `--stream-output` is explicitly selected.
+- The run/resume CLI owns one cell-level progress display on stderr. On an
+  interactive terminal it clears and redraws that bar below every unchanged
+  lifecycle or streamed child line; redirected streams receive complete snapshots.
+- After every measured optimization and any declared extension, the cell runs
+  `yadof view cost` once and retains its summary/log plus
+  `.yadof/tool_output/benchmark-cost.png`. A failed cost view fails the immutable
+  attempt instead of silently omitting the required artifact.
+- Once run/resume reaches its final state, an interactive stdin waits for Enter so
+  a separately launched console remains visible; non-interactive callers return
+  immediately with the normal exit code.
 - The Python environment check verifies a matching installed distribution and its
   fingerprintable `RECORD`; it does not depend on a virtual-environment directory
   name.
@@ -119,6 +134,10 @@ Keeping the CLI thin makes core behavior directly testable.
 - Default CLI summaries omit expanded commands, fingerprints, raw rows, and full
   diagnostics. Full plan/preflight/report JSON remains explicitly available, and
   `inspect` points from bounded evidence to progressively deeper artifacts.
+- Default report and completed inspect keep the bounded JSON surface on stdout and
+  render a compact final cumulative-hypervolume Markdown table on stderr. Table
+  columns use the configured concrete arm display names rather than generic
+  experimental roles.
 
 ## Change map
 

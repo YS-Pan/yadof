@@ -93,7 +93,11 @@ commands as argument lists; do not build shell command strings.
 Default CLI output is a bounded JSON view that carries the facts needed for the
 next decision and points to deeper artifacts. Expanded plan/preflight/report JSON
 requires `--full-json`. Child process stdout/stderr is logged but not forwarded by
-default; `--stream-output` is an explicit opt-in.
+default; `--stream-output` is an explicit opt-in. Run/resume add a cell-level
+terminal progress bar without replacing lifecycle messages, and interactive
+execution waits for Enter after its final summary. Default report/inspect preserve
+JSON stdout and add a bounded final cumulative-hypervolume Markdown table on
+stderr.
 
 Maintain these disclosure layers when adding fields:
 

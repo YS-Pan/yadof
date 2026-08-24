@@ -41,7 +41,12 @@ ordinary result interpretation.
 - `run` and `resume` always preserve child stdout/stderr in per-command logs. Do
   not pass `--stream-output` unless the user requests live raw output or a specific
   failure requires it.
+- In an interactive terminal, `run` and `resume` keep one cell-level progress bar
+  below the unchanged lifecycle messages and wait for Enter after the final JSON
+  summary. Non-interactive agent execution exits normally.
 - After `collect`, run `report`; do not open the generated collection directly.
+- Default `report` and completed `inspect` keep JSON on stdout and print the
+  bounded final cumulative-HV Markdown table on stderr.
 - Treat performance output as descriptive evidence. Do not invent rankings,
   significance claims, thresholds, or scientific acceptance decisions.
 

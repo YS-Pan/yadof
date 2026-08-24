@@ -21,7 +21,31 @@ def _print_json(value: Any, *, pretty: bool = False) -> None:
         options["indent"] = 2
     else:
         options["separators"] = (",", ":")
-    print(json.dumps(core._json_safe(value), **options))
+    print(json.dumps(core._json_safe(value), **options), flush=True)
+
+
+def _pause_after_run() -> None:
+    """Keep an interactively launched benchmark window open after execution."""
+
+    if not bool(getattr(sys.stdin, "isatty", lambda: False)()):
+        return
+    print("Benchmark finished. Press Enter to return to the shell...", file=sys.stderr, flush=True)
+    try:
+        sys.stdin.readline()
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
+def _finish_run_command(run_root: Path, run_id: str, state: dict[str, Any]) -> int:
+    _print_json(core.summarize_run_state(run_root, run_id, state))
+    _pause_after_run()
+    return 0 if state["status"] == "completed" else 1
+
+
+def _print_hypervolume_table(report: dict[str, Any]) -> None:
+    table = core.format_hypervolume_table(report)
+    if table:
+        print(table, file=sys.stderr, flush=True)
 
 
 def _with_runs_dir(value: dict[str, Any], paths: core.Paths) -> dict[str, Any]:
@@ -34,7 +58,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Plan, preflight, execute, resume, collect, and report the frozen "
-            "real-search versus GPSAF+conditional-INR benchmark."
+            "NSGA-III versus GPSAF+conditional-INR benchmark."
         )
     )
     parser.add_argument(
@@ -190,8 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     fail_fast_override=args.fail_fast,
                     stream_subprocess_output=args.stream_output,
                 )
-                _print_json(core.summarize_run_state(_run_root, args.resume, state))
-                return 0 if state["status"] == "completed" else 1
+                return _finish_run_command(_run_root, args.resume, state)
             if not args.suite:
                 raise core.BenchmarkError("run requires --suite or --resume")
             preflight_result = core.preflight(
@@ -222,8 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 fail_fast_override=args.fail_fast,
                 stream_subprocess_output=args.stream_output,
             )
-            _print_json(core.summarize_run_state(run_root, run_id, state))
-            return 0 if state["status"] == "completed" else 1
+            return _finish_run_command(run_root, run_id, state)
         if args.command == "resume":
             _run_root, spec, _state = core.load_run(paths, args.run_id)
             selection = spec["plan"]["selection"]
@@ -248,8 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 fail_fast_override=args.fail_fast,
                 stream_subprocess_output=args.stream_output,
             )
-            _print_json(core.summarize_run_state(_run_root, args.run_id, state))
-            return 0 if state["status"] == "completed" else 1
+            return _finish_run_command(_run_root, args.run_id, state)
         if args.command == "collect":
             path, collection = core.collect_run(paths, args.run_id)
             _print_json(
@@ -279,9 +300,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 report if args.full_json else core.inspect_run(paths, args.run_id),
                 pretty=args.full_json,
             )
+            if not args.full_json:
+                _print_hypervolume_table(report)
             return 0
         if args.command == "inspect":
-            _print_json(core.inspect_run(paths, args.run_id))
+            result = core.inspect_run(paths, args.run_id)
+            _print_json(result)
+            report_path = paths.runs / args.run_id / "report.json"
+            if report_path.is_file():
+                _print_hypervolume_table(core.read_json(report_path))
             return 0
         raise AssertionError(f"unhandled command {args.command}")
     except core.BenchmarkError as exc:

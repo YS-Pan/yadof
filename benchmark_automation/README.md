@@ -4,7 +4,7 @@ This directory owns a reproducible, resumable comparison of the frozen SAW,
 PyChrono trebuchet, and synthetic `test_com` tasks. It has two deliberately
 separate purposes:
 
-- **Structural suites** verify task wiring, real-only search, GPSAF,
+- **Structural suites** verify task wiring, real-evaluation-only NSGA-III, GPSAF,
   conditional-INR training/use, checkpoint publication, and public inspection.
 - **Performance suites** publish raw per-seed values and paired descriptive
   differences. They do not rank arms, apply significance tests, or decide which
@@ -104,8 +104,11 @@ python ".\benchmark_automation\benchmark.py" run `
 ```
 
 Child stdout/stderr is always written to the append-only command logs. The default
-terminal output contains only short lifecycle events and a final JSON summary. Add
-`--stream-output` only for deliberate live raw output; it can be large.
+terminal output contains the same short lifecycle events, with a cell-level progress
+bar redrawn at the bottom of an interactive terminal, followed by a final JSON
+summary. Add `--stream-output` only for deliberate live raw output; it can be large.
+Every measured optimization also runs `yadof view cost` after its final generation
+and writes `.yadof/tool_output/benchmark-cost.png` inside that cell's workspace.
 
 Select a precise subset without editing TOML. Repeat a selector to include more
 than one value:
@@ -114,7 +117,7 @@ than one value:
 python ".\benchmark_automation\benchmark.py" run `
   --suite performance `
   --case saw `
-  --arm real-search `
+  --arm nsga3 `
   --arm gpsaf-conditional-inr `
   --seed 104729
 ```
@@ -122,7 +125,9 @@ python ".\benchmark_automation\benchmark.py" run `
 Collection is intentionally separate because surrogate audit performs model
 inference. Collection prints only artifact paths and an instruction to report; do
 not read `metrics.json` or `collection.json` wholesale. Reporting is a pure
-transformation of the latest collected snapshot and prints a bounded agent summary:
+transformation of the latest collected snapshot. Its stdout is still one bounded
+JSON agent summary, while the terminal also receives a compact Markdown table of
+final cumulative hypervolume by case, seed, and concrete algorithm name:
 
 ```powershell
 python ".\benchmark_automation\benchmark.py" collect `
@@ -177,6 +182,14 @@ caps. It excludes optimizer and surrogate training overhead. The pilot must be r
 and reviewed before the full matrix. If the resulting full real-evaluation or
 training cost is material, obtain explicit user approval before starting it.
 
+Every measured cell deliberately sets `FAST_EVALUATION_MAX_WORKERS = 32` and
+`FAST_RESOURCE_AUTODETECT_ENABLED = False`. This permits CPU oversubscription—for
+example, 32 simulator processes on an 8-core host—when workflows spend substantial
+time waiting on external software or I/O. The value is an experiment setting, not a
+hardware safety guarantee: memory, simulator licensing, and external-runtime limits
+must still be checked during preflight and pilot review. Smoke cells retain the
+baseline's normal one-individual safety behavior.
+
 The current performance matrix uses cold starts, equal planned attempted
 real-evaluation budgets across arms for each case, and the seeds `104729`, `130363`,
 and `155921`. Failed candidates consume attempted budget but do not contribute a
@@ -197,9 +210,11 @@ For a user-authorized long run on Windows, launch that same foreground command i
 separate normal PowerShell window with `Start-Process -PassThru`, then let the
 calling agent disconnect without `-Wait`. Use an explicit short `--run-id` and the
 same explicit `--runs-dir` for later `inspect`, `collect`, and `report` commands.
-The separate window remains visible while the benchmark process is alive and
-closes when it exits; the returned process object supplies its PID. Do not add
-`-WindowStyle Hidden` for this deliberately user-visible launch.
+The returned process object supplies its PID. After run/resume reaches a final
+state, an interactive CLI waits for Enter instead of exiting automatically, so the
+separate window and its final summary remain visible. Piped/non-interactive
+invocations do not pause. Do not add `-WindowStyle Hidden` for this deliberately
+user-visible launch.
 
 ## Output and immutability
 
@@ -251,7 +266,7 @@ snapshots are never overwritten. `run_state.json` and the root-level latest
 modify measured workspaces, histories, or checkpoints.
 
 Smoke workspaces are separate disposable cells. Their records never enter a
-measured real-search or GPSAF arm.
+measured NSGA-III or GPSAF arm.
 
 ## Agent reading order
 
@@ -304,7 +319,7 @@ A no-write canary plan resolves to three isolated cells:
 ```text
 smoke__test-com__seed-20260816
   smoke: 1 disposable midpoint evaluation
-test-com__real-search__seed-20260816
+test-com__nsga3__seed-20260816
   population 12 × 1 generation = 12 planned attempted evaluations
 test-com__gpsaf-conditional-inr__seed-20260816
   population 12 × 2 base generations = 24 planned attempted evaluations
@@ -331,8 +346,9 @@ performance report contains all nine predeclared case/seed pairs and zero exclud
 pairs. It remains descriptive only: raw hypervolume values and paired differences
 are not an algorithm ranking or acceptance verdict.
 
-The three final `test-com` real-search cells each emitted six best-effort recorder
-budget losses. Optimization still completed all planned attempted evaluations, but
+The three historical `test-com` cells whose arm ID was then `real-search` each
+emitted six best-effort recorder budget losses. Optimization still completed all
+planned attempted evaluations, but
 the public evidence contains 66 rather than 72 completed rows in each affected
 cell. The stable JSON report exposes the resulting totals (1080 attempted, 1062
 completed, 18 failed/missing); consumers must retain that validity context when

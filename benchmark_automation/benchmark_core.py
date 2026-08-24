@@ -62,6 +62,107 @@ class Paths:
     histories: Path
 
 
+class CellProgress:
+    """Keep one cell-level progress bar below benchmark lifecycle messages."""
+
+    def __init__(
+        self,
+        total: int,
+        *,
+        completed: int = 0,
+        stream: Any | None = None,
+        width: int = 28,
+    ) -> None:
+        self.total = max(0, int(total))
+        self.finished = max(0, int(completed))
+        self.completed = max(0, int(completed))
+        self.failed = 0
+        self.skipped = 0
+        self.current: str | None = None
+        self.stream = sys.stderr if stream is None else stream
+        self.width = max(10, int(width))
+        self.interactive = bool(getattr(self.stream, "isatty", lambda: False)())
+        self._active = False
+        self._rendered_width = 0
+        self._lock = threading.RLock()
+
+    def _line(self) -> str:
+        ratio = 1.0 if self.total == 0 else min(1.0, self.finished / self.total)
+        filled = int(self.width * ratio)
+        bar = "#" * filled + "-" * (self.width - filled)
+        current = f" | current={self.current}" if self.current else ""
+        return (
+            f"[benchmark] [{bar}] {self.finished}/{self.total} cells "
+            f"| completed={self.completed} failed={self.failed} skipped={self.skipped}"
+            f"{current}"
+        )
+
+    def _clear_locked(self) -> None:
+        if self.interactive and self._active:
+            self.stream.write(f"\r{' ' * self._rendered_width}\r")
+            self._rendered_width = 0
+
+    def _draw_locked(self) -> None:
+        if self.interactive and self._active:
+            line = self._line()
+            self.stream.write(f"\r{line}")
+            self._rendered_width = len(line)
+            self.stream.flush()
+
+    def start(self) -> None:
+        with self._lock:
+            self._active = True
+            if self.interactive:
+                self._draw_locked()
+            else:
+                self.stream.write(f"{self._line()}\n")
+                self.stream.flush()
+
+    def set_current(self, cell_id: str | None) -> None:
+        with self._lock:
+            self.current = cell_id
+            if self.interactive:
+                self._clear_locked()
+                self._draw_locked()
+
+    def write_above(self, text: str, *, console: Any | None = None) -> None:
+        target = self.stream if console is None else console
+        with self._lock:
+            self._clear_locked()
+            target.write(text)
+            if self.interactive and text and not text.endswith(("\n", "\r")):
+                target.write("\n")
+            target.flush()
+            self._draw_locked()
+
+    def advance(self, status: str) -> None:
+        with self._lock:
+            self.finished = min(self.total, self.finished + 1)
+            if status == "completed":
+                self.completed += 1
+            elif status == "failed":
+                self.failed += 1
+            elif status == "skipped":
+                self.skipped += 1
+            self.current = None
+            if self.interactive:
+                self._clear_locked()
+                self._draw_locked()
+            else:
+                self.stream.write(f"{self._line()}\n")
+                self.stream.flush()
+
+    def finish(self) -> None:
+        with self._lock:
+            if not self._active:
+                return
+            if self.interactive:
+                self._clear_locked()
+                self.stream.write(f"{self._line()}\n")
+                self.stream.flush()
+            self._active = False
+
+
 def utc_now() -> str:
     return dt.datetime.now(dt.UTC).isoformat(timespec="milliseconds").replace(
         "+00:00", "Z"
@@ -392,6 +493,9 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
     for arm_id, arm in arms.items():
         if not isinstance(arm, dict):
             raise BenchmarkError(f"arm {arm_id!r} must be a table")
+        display_name = arm.get("display_name", arm_id)
+        if not isinstance(display_name, str) or not display_name.strip():
+            raise BenchmarkError(f"arm {arm_id!r} display_name must be a non-empty string")
         template = resolve_inside(paths.strategies, str(arm.get("strategy_template", "")), label=f"arm {arm_id} template")
         if not template.is_file():
             raise BenchmarkError(f"strategy template does not exist: {template}")
@@ -484,6 +588,20 @@ def _select_values(
     return selected
 
 
+def _cost_view_command(python: str, workspace: str | Path) -> list[str]:
+    return [
+        python,
+        "-m",
+        "yadof",
+        "view",
+        "cost",
+        "--workspace",
+        str(workspace),
+        "--output",
+        "benchmark-cost.png",
+    ]
+
+
 def _planned_commands(
     config: Mapping[str, Any], cell: Mapping[str, Any]
 ) -> list[list[str]]:
@@ -554,6 +672,7 @@ def _planned_commands(
                 "--fail-on-all-infinite",
             ]
         )
+    commands.append(_cost_view_command(python, workspace))
     return commands
 
 
@@ -724,6 +843,7 @@ def _strategy_details(config: Mapping[str, Any], paths: Paths, arm_id: str) -> d
         "template": str(template),
         "sha256": file_sha256(template),
         "constructed_type": f"{type(strategy).__module__}.{type(strategy).__qualname__}",
+        "display_name": str(arm.get("display_name", arm_id)),
         "surrogate": bool(arm.get("surrogate", False)),
         "config_overrides": _config_overrides(
             arm.get("config_overrides", {}),
@@ -1233,7 +1353,13 @@ def _materialize_attempt_inputs(
     )
 
 
-def _stream_pipe(pipe: Any, output: Path, console: Any | None, prefix: str) -> None:
+def _stream_pipe(
+    pipe: Any,
+    output: Path,
+    console: Any | None,
+    prefix: str,
+    progress: CellProgress | None = None,
+) -> None:
     with output.open("x", encoding="utf-8", errors="replace", newline="\n") as target:
         while True:
             raw = pipe.readline()
@@ -1243,8 +1369,11 @@ def _stream_pipe(pipe: Any, output: Path, console: Any | None, prefix: str) -> N
             target.write(line)
             target.flush()
             if console is not None:
-                console.write(f"{prefix}{line}")
-                console.flush()
+                if progress is None:
+                    console.write(f"{prefix}{line}")
+                    console.flush()
+                else:
+                    progress.write_above(f"{prefix}{line}", console=console)
 
 
 def _execute_logged(
@@ -1256,6 +1385,7 @@ def _execute_logged(
     timeout_sec: int,
     label: str,
     stream_output: bool = False,
+    progress: CellProgress | None = None,
 ) -> dict[str, Any]:
     sequence = len(attempt["commands"]) + 1
     command_root = attempt_root / "commands" / f"{sequence:04d}-{_safe_id(label)}"
@@ -1282,13 +1412,21 @@ def _execute_logged(
     }
     write_new_json(started_path, metadata)
     if stream_output:
-        print(f"[{label}] {' '.join(str(part) for part in command)}", flush=True)
+        message = f"[{label}] {' '.join(str(part) for part in command)}\n"
+        if progress is None:
+            sys.stdout.write(message)
+            sys.stdout.flush()
+        else:
+            progress.write_above(message, console=sys.stdout)
     else:
-        print(
-            f"[{label}] started; log_dir={command_root.relative_to(attempt_root)}",
-            file=sys.stderr,
-            flush=True,
+        message = (
+            f"[{label}] started; log_dir={command_root.relative_to(attempt_root)}\n"
         )
+        if progress is None:
+            sys.stderr.write(message)
+            sys.stderr.flush()
+        else:
+            progress.write_above(message)
     started = time.perf_counter()
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
     process = subprocess.Popen(
@@ -1306,6 +1444,7 @@ def _execute_logged(
             stdout_path,
             sys.stdout if stream_output else None,
             f"[{label}:out] ",
+            progress,
         ),
         daemon=True,
     )
@@ -1316,6 +1455,7 @@ def _execute_logged(
             stderr_path,
             sys.stderr if stream_output else None,
             f"[{label}:err] ",
+            progress,
         ),
         daemon=True,
     )
@@ -1341,12 +1481,15 @@ def _execute_logged(
     write_new_json(finished_path, metadata)
     attempt["commands"].append(str(finished_path))
     if not stream_output and (returncode != 0 or metadata["timed_out"]):
-        print(
+        message = (
             f"[{label}] failed; returncode={returncode}; timed_out={metadata['timed_out']}; "
-            f"metadata={finished_path}",
-            file=sys.stderr,
-            flush=True,
+            f"metadata={finished_path}\n"
         )
+        if progress is None:
+            sys.stderr.write(message)
+            sys.stderr.flush()
+        else:
+            progress.write_above(message)
     return metadata
 
 
@@ -1457,6 +1600,7 @@ def _run_one_cell(
     cell_plan: Mapping[str, Any],
     *,
     stream_subprocess_output: bool = False,
+    progress: CellProgress | None = None,
 ) -> bool:
     cell_state = state["cells"][cell_plan["cell_id"]]
     if cell_state["status"] == "completed":
@@ -1495,6 +1639,7 @@ def _run_one_cell(
             timeout_sec=min(timeout, 300),
             label="init",
             stream_output=stream_subprocess_output,
+            progress=progress,
         )
         _save_state(run_root, state)
         if initialize["returncode"] != 0 or initialize["timed_out"]:
@@ -1525,6 +1670,7 @@ def _run_one_cell(
             timeout_sec=min(timeout, 300),
             label="check",
             stream_output=stream_subprocess_output,
+            progress=progress,
         )
         _save_state(run_root, state)
         if check["returncode"] != 0 or check["timed_out"]:
@@ -1547,6 +1693,7 @@ def _run_one_cell(
             timeout_sec=timeout,
             label="smoke" if cell_plan["kind"] == "smoke" else "optimize",
             stream_output=stream_subprocess_output,
+            progress=progress,
         )
         _save_state(run_root, state)
         if result["returncode"] != 0 or result["timed_out"]:
@@ -1614,6 +1761,7 @@ def _run_one_cell(
                     timeout_sec=timeout,
                     label="optional-checkpoint-extension",
                     stream_output=stream_subprocess_output,
+                    progress=progress,
                 )
                 _save_state(run_root, state)
                 if extension_result["returncode"] != 0 or extension_result["timed_out"]:
@@ -1644,6 +1792,29 @@ def _run_one_cell(
                         ),
                     )
                     return False
+        if cell_plan["kind"] == "measured":
+            cost_view = _execute_logged(
+                _cost_view_command(spec["package"]["python"], workspace),
+                cwd=paths.root,
+                attempt_root=attempt_root,
+                attempt=attempt,
+                timeout_sec=min(timeout, 600),
+                label="view-cost",
+                stream_output=stream_subprocess_output,
+                progress=progress,
+            )
+            _save_state(run_root, state)
+            if cost_view["returncode"] != 0 or cost_view["timed_out"]:
+                _seal_attempt(
+                    run_root,
+                    state,
+                    cell_plan,
+                    attempt,
+                    status="failed",
+                    include_paths=include_paths,
+                    error="yadof view cost failed",
+                )
+                return False
         _seal_attempt(
             run_root,
             state,
@@ -1663,6 +1834,8 @@ def _run_one_cell(
         cell_state["status"] = "failed"
         _save_state(run_root, state, event="cell-exception", cell_id=cell_plan["cell_id"], error=str(exc))
         return False
+
+
 def execute_run(
     config: Mapping[str, Any],
     paths: Paths,
@@ -1675,34 +1848,47 @@ def execute_run(
     fail_fast = bool(spec["runner"]["fail_fast"]) if fail_fast_override is None else fail_fast_override
     state["status"] = "running"
     _save_state(run_root, state, event="run-started-or-resumed", fail_fast=fail_fast)
-    success = True
     stop = False
-    for cell_plan in spec["plan"]["cells"]:
-        cell_state = state["cells"][cell_plan["cell_id"]]
-        if cell_state["status"] == "completed":
-            continue
-        if stop:
-            cell_state["status"] = "skipped"
-            _save_state(run_root, state, event="cell-skipped-fail-fast", cell_id=cell_plan["cell_id"])
-            continue
-        print(f"[cell] {cell_plan['cell_id']} started", file=sys.stderr, flush=True)
-        ok = _run_one_cell(
-            config,
-            paths,
-            run_root,
-            spec,
-            state,
-            cell_plan,
-            stream_subprocess_output=stream_subprocess_output,
-        )
-        print(
-            f"[cell] {cell_plan['cell_id']} {state['cells'][cell_plan['cell_id']]['status']}",
-            file=sys.stderr,
-            flush=True,
-        )
-        success = success and ok
-        if not ok and fail_fast:
-            stop = True
+    cells = spec["plan"]["cells"]
+    completed_at_start = sum(
+        state["cells"][cell["cell_id"]]["status"] == "completed" for cell in cells
+    )
+    progress = CellProgress(len(cells), completed=completed_at_start)
+    progress.start()
+    try:
+        for cell_plan in cells:
+            cell_state = state["cells"][cell_plan["cell_id"]]
+            if cell_state["status"] == "completed":
+                continue
+            if stop:
+                cell_state["status"] = "skipped"
+                _save_state(
+                    run_root,
+                    state,
+                    event="cell-skipped-fail-fast",
+                    cell_id=cell_plan["cell_id"],
+                )
+                progress.advance("skipped")
+                continue
+            progress.write_above(f"[cell] {cell_plan['cell_id']} started\n")
+            progress.set_current(str(cell_plan["cell_id"]))
+            ok = _run_one_cell(
+                config,
+                paths,
+                run_root,
+                spec,
+                state,
+                cell_plan,
+                stream_subprocess_output=stream_subprocess_output,
+                progress=progress,
+            )
+            status = str(state["cells"][cell_plan["cell_id"]]["status"])
+            progress.write_above(f"[cell] {cell_plan['cell_id']} {status}\n")
+            progress.advance(status)
+            if not ok and fail_fast:
+                stop = True
+    finally:
+        progress.finish()
     statuses = [cell["status"] for cell in state["cells"].values()]
     if all(status == "completed" for status in statuses):
         state["status"] = "completed"
@@ -2582,7 +2768,9 @@ def _performance_report(spec: Mapping[str, Any], collection: Mapping[str, Any]) 
     surrogate_arms = [arm for arm, details in spec["arms"].items() if details.get("surrogate")]
     real_arms = [arm for arm, details in spec["arms"].items() if not details.get("surrogate")]
     if len(surrogate_arms) != 1 or len(real_arms) != 1:
-        raise BenchmarkError("descriptive paired report requires exactly one surrogate and one real-search arm")
+        raise BenchmarkError(
+            "descriptive paired report requires exactly one surrogate and one non-surrogate arm"
+        )
     surrogate_arm = surrogate_arms[0]
     real_arm = real_arms[0]
     measured = [cell for cell in collection["cells"].values() if cell.get("kind") == "measured"]
@@ -2681,6 +2869,12 @@ def _performance_report(spec: Mapping[str, Any], collection: Mapping[str, Any]) 
             "decision threshold, or scientific acceptance claim is produced."
         ),
         "arm_roles": {"real": real_arm, "surrogate": surrogate_arm},
+        "arm_labels": {
+            real_arm: str(spec["arms"][real_arm].get("display_name", real_arm)),
+            surrogate_arm: str(
+                spec["arms"][surrogate_arm].get("display_name", surrogate_arm)
+            ),
+        },
         "included_pairs": pair_rows,
         "excluded_pairs_retained": excluded,
         "descriptive_aggregate_by_case": aggregate,
@@ -2694,6 +2888,38 @@ def _format_value(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.8g}"
     return str(value)
+
+
+def _markdown_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
+def format_hypervolume_table(report: Mapping[str, Any]) -> str | None:
+    """Return the compact final cumulative-HV table used by CLI and Markdown."""
+
+    if report.get("purpose") != "performance":
+        return None
+    performance = report.get("performance", {})
+    real_arm = performance.get("arm_roles", {}).get("real")
+    surrogate_arm = performance.get("arm_roles", {}).get("surrogate")
+    if not real_arm or not surrogate_arm:
+        return None
+    labels = performance.get("arm_labels", {})
+    real_label = _markdown_cell(labels.get(real_arm, real_arm))
+    surrogate_label = _markdown_cell(labels.get(surrogate_arm, surrogate_arm))
+    lines = [
+        "Final cumulative hypervolume:",
+        "",
+        f"| Case | Seed | {real_label} | {surrogate_label} |",
+        "|---|---:|---:|---:|",
+    ]
+    for row in performance.get("included_pairs", []):
+        raw = row.get("raw", {}).get("final_cumulative_hypervolume", {})
+        lines.append(
+            f"| {_markdown_cell(row.get('case'))} | {_markdown_cell(row.get('seed'))} | "
+            f"{_format_value(raw.get(real_arm))} | {_format_value(raw.get(surrogate_arm))} |"
+        )
+    return "\n".join(lines)
 
 
 def _report_markdown(report: Mapping[str, Any]) -> str:
@@ -2731,20 +2957,11 @@ def _report_markdown(report: Mapping[str, Any]) -> str:
                 "",
                 performance["interpretation_policy"],
                 "",
-                "| Case | Seed | Real attempted | Surrogate attempted | Final HV (real) | Final HV (surrogate) |",
-                "|---|---:|---:|---:|---:|---:|",
             ]
         )
-        real_arm = performance["arm_roles"]["real"]
-        surrogate_arm = performance["arm_roles"]["surrogate"]
-        for row in performance["included_pairs"]:
-            raw = row["raw"]["final_cumulative_hypervolume"]
-            attempted = row["attempted_real_evaluations"]
-            lines.append(
-                f"| {row['case']} | {row['seed']} | {attempted[real_arm]} | "
-                f"{attempted[surrogate_arm]} | {_format_value(raw[real_arm])} | "
-                f"{_format_value(raw[surrogate_arm])} |"
-            )
+        table = format_hypervolume_table(report)
+        if table is not None:
+            lines.extend(table.splitlines())
         lines.extend(
             [
                 "",
@@ -3107,6 +3324,7 @@ def summarize_report(report: Mapping[str, Any]) -> dict[str, Any]:
         summary["performance"] = {
             "interpretation_policy": performance.get("interpretation_policy"),
             "arm_roles": performance.get("arm_roles", {}),
+            "arm_labels": performance.get("arm_labels", {}),
             "included_pair_count": len(pairs),
             "excluded_pair_count": len(performance.get("excluded_pairs_retained", [])),
             "pairs": pairs,
