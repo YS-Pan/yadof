@@ -244,16 +244,17 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
         for cell in measured
     )
     assert all(
+        cell["planned_commands"][-2][-3] == "<run-root>/visualizations"
+        for cell in measured
+    )
+    assert all(
         cell["planned_commands"][-2][-1]
-        == f"<run-root>/visualizations/{cell['cell_id']}/attempt-<attempt>"
+        == f"{cell['cell_id']}__attempt-<attempt>__"
         for cell in measured
     )
     assert all(
         cell["planned_commands"][-1][-1]
-        == (
-            f"<run-root>/visualizations/{cell['cell_id']}/"
-            "attempt-<attempt>/benchmark-cost.png"
-        )
+        == f"<run-root>/visualizations/{cell['cell_id']}__attempt-<attempt>__benchmark-cost.png"
         for cell in measured
     )
     filtered = core.build_plan(
@@ -519,6 +520,9 @@ def test_measured_cell_collects_postprocess_and_cost_view_in_one_directory(
 ) -> None:
     run_root = tmp_path / "run"
     run_root.mkdir()
+    visualization_dir = run_root / "visualizations"
+    visualization_dir.mkdir()
+    (visualization_dir / "prior-cell.png").write_bytes(b"prior")
     paths = core.Paths(
         tmp_path,
         tmp_path / "benchmark.toml",
@@ -578,16 +582,16 @@ def test_measured_cell_collects_postprocess_and_cost_view_in_one_directory(
         "view-cost",
     ]
     attempt = state["cells"][cell["cell_id"]]["attempts"][0]
-    visualization_dir = (
-        run_root
-        / "visualizations"
-        / cell["cell_id"]
-        / "attempt-0001"
-    )
+    visualization_prefix = f"{cell['cell_id']}__attempt-0001__"
     assert Path(attempt["visualization_output_dir"]) == visualization_dir
+    assert attempt["visualization_file_prefix"] == visualization_prefix
     assert visualization_dir.is_dir()
-    assert commands[-2][1][-1] == str(visualization_dir)
-    assert commands[-1][1][-1] == str(visualization_dir / "benchmark-cost.png")
+    assert (visualization_dir / "prior-cell.png").read_bytes() == b"prior"
+    assert commands[-2][1][-3] == str(visualization_dir)
+    assert commands[-2][1][-1] == visualization_prefix
+    assert commands[-1][1][-1] == str(
+        visualization_dir / f"{visualization_prefix}benchmark-cost.png"
+    )
     assert state["cells"][cell["cell_id"]]["status"] == "completed"
 
 

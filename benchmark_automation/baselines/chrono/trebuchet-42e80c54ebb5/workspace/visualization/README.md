@@ -9,11 +9,13 @@ The renderer starts one visualization-only PyChrono continuation through the sam
 external interpreter configured by `YADOF_PYCHRONO_PYTHON`. It does not add a yadof
 evaluation or alter optimization history. It produces:
 
-- `trebuchet_best.mp4`, an H.264 replay;
-- `trebuchet_best_poster.png`, a representative still image;
-- `postprocess_manifest.json`, the selection and provenance record;
-- `selected_job/` and `_animation_work/`, the reproducible snapshot and scratch
-  evidence.
+- `<prefix>trebuchet_best.mp4`, an H.264 replay;
+- `<prefix>trebuchet_best_poster.png`, a representative still image;
+- `<prefix>trebuchet_selected_job.zip`, the reproducible selected-job snapshot;
+- prefixed continuation diagnostics, trajectory, and postprocess manifest files.
+
+Animation scratch data is created in a temporary directory and removed after the
+flat result files have been copied or archived successfully.
 
 Run the common postprocessor from any directory:
 
@@ -21,13 +23,17 @@ Run the common postprocessor from any directory:
 & ".\.venv\Scripts\python.exe" `
   ".\path\to\trebuchet-workspace\postprocess.py" `
   --workspace ".\path\to\trebuchet-workspace" `
-  --output-dir ".\temp\benchmark-visualizations\trebuchet-example"
+  --output-dir ".\temp\benchmark-visualizations" `
+  --output-prefix "trebuchet-example__"
 ```
 
-The output directory must be empty or absent. Benchmark automation supplies a
-unique run-level `visualizations/<cell-id>/attempt-####/` directory automatically.
-The task-specific video, poster, manifest, and reproducibility evidence are stored
-there together with the automation-generated `benchmark-cost.png`. The video
+Without `--output-prefix`, the output directory must be empty or absent. With a
+safe prefix, the directory may already contain other results, but none of this
+invocation's prefixed filenames may exist. Benchmark automation supplies one flat
+run-level `visualizations/` directory and a unique
+`<cell-id>__attempt-####__` prefix automatically. The task-specific video, poster,
+manifest, diagnostics, trajectory, snapshot archive, and prefixed
+`benchmark-cost.png` are all stored directly in that one directory. The video
 requires `ffmpeg` and the continuation requires the configured Project Chrono 10
 environment.
 

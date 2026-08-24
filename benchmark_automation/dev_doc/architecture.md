@@ -36,7 +36,7 @@ benchmark.toml + frozen baselines + strategy templates
                          |
                          +--> baseline postprocess.py
                          |    then yadof view cost
-                         |      -> one run-level visualization directory
+                         |      -> one flat run-level visualization directory
                          |
                          v
           public yadof collection surfaces
@@ -117,14 +117,15 @@ Keeping the CLI thin makes core behavior directly testable.
   interactive terminal it clears and redraws that bar below every unchanged
   lifecycle or streamed child line; redirected streams receive complete snapshots.
 - After every measured optimization and any declared extension, the runner invokes
-  the baseline workspace's common `postprocess.py --workspace ... --output-dir ...`
-  interface exactly once with a new empty directory. Task-specific visualization
+  the baseline workspace's common `postprocess.py` interface exactly once with
+  `--workspace`, `--output-dir`, and `--output-prefix`. Task-specific visualization
   logic remains baseline-owned.
-- The cell then runs `yadof view cost` once and writes `benchmark-cost.png` into
-  that same directory. The unified output is outside fingerprinted cell inputs at
-  `<run-root>/visualizations/<cell-id>/attempt-####/`; either command failing fails
-  the immutable attempt instead of silently omitting required human-review
-  artifacts.
+- Every cell shares `<run-root>/visualizations/`. Each attempt gets the collision-
+  safe prefix `<cell-id>__attempt-####__`; postprocessors write only prefixed files
+  directly in that directory and keep scratch elsewhere. The cell then runs
+  `yadof view cost` once as `<prefix>benchmark-cost.png`. No cell/attempt result
+  subdirectory is created. Either command failing fails the immutable attempt
+  instead of silently omitting required human-review artifacts.
 - Runner child processes set `PYTHONDONTWRITEBYTECODE=1`, so importing task or
   postprocessor modules cannot add `__pycache__` files to sealed declared inputs.
 - Once run/resume reaches its final state, an interactive stdin waits for Enter so

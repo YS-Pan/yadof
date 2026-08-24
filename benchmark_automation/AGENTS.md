@@ -27,10 +27,10 @@ Then expand only if the summary leaves a specific question unanswered:
    latest `command.finished.json`, then the tail of the relevant stdout/stderr log.
 4. Read one cell and one field from `metrics.json` or an append-only
    `collection.json` only when the report cannot answer the question.
-5. When visual inspection is relevant, open only that cell attempt's declared
-   `visualizations/<cell-id>/attempt-####/` manifest and named image/video; the
-   same directory also contains `benchmark-cost.png`. Do not scan every
-   visualization directory.
+5. When visual inspection is relevant, use the attempt's declared filename prefix
+   to open only the matching manifest and named image/video directly in the run's
+   flat `visualizations/` directory; the same prefix identifies its cost plot. Do
+   not load every visualization artifact.
 
 Never read `metrics.json` or `collection.json` wholesale. Never recursively list
 or search all of the selected runs directory, attempt workspaces, baselines, or the

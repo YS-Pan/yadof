@@ -621,6 +621,7 @@ def _postprocess_command(
     python: str,
     workspace: str | Path,
     output_dir: str | Path,
+    output_prefix: str,
 ) -> list[str]:
     workspace_path = Path(workspace)
     return [
@@ -630,7 +631,13 @@ def _postprocess_command(
         str(workspace_path),
         "--output-dir",
         str(output_dir),
+        "--output-prefix",
+        output_prefix,
     ]
+
+
+def _visualization_file_prefix(cell_id: str, attempt_number: int) -> str:
+    return f"{cell_id}__attempt-{attempt_number:04d}__"
 
 
 def _planned_commands(
@@ -707,10 +714,8 @@ def _planned_commands(
         _postprocess_command(
             python,
             workspace,
-            (
-                f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
-                f"{cell['cell_id']}/attempt-<attempt>"
-            ),
+            f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}",
+            f"{cell['cell_id']}__attempt-<attempt>__",
         )
     )
     commands.append(
@@ -719,7 +724,7 @@ def _planned_commands(
             workspace,
             (
                 f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
-                f"{cell['cell_id']}/attempt-<attempt>/{COST_PLOT_NAME}"
+                f"{cell['cell_id']}__attempt-<attempt>__{COST_PLOT_NAME}"
             ),
         )
     )
@@ -1340,11 +1345,9 @@ def _prepare_attempt(
         "input_fingerprint": None,
         "post_input_fingerprint": None,
         "input_manifest": str(attempt_root / "input_manifest.json"),
-        "visualization_output_dir": str(
-            run_root
-            / VISUALIZATION_DIRECTORY_NAME
-            / str(cell_plan["cell_id"])
-            / f"attempt-{attempt_number:04d}"
+        "visualization_output_dir": str(run_root / VISUALIZATION_DIRECTORY_NAME),
+        "visualization_file_prefix": _visualization_file_prefix(
+            str(cell_plan["cell_id"]), attempt_number
         ),
         "commands": [],
         "sealed_utc": None,
@@ -1856,12 +1859,14 @@ def _run_one_cell(
                     return False
         if cell_plan["kind"] == "measured":
             visualization_output_dir = Path(attempt["visualization_output_dir"])
-            visualization_output_dir.mkdir(parents=True, exist_ok=False)
+            visualization_output_dir.mkdir(parents=True, exist_ok=True)
+            visualization_file_prefix = str(attempt["visualization_file_prefix"])
             postprocess = _execute_logged(
                 _postprocess_command(
                     spec["package"]["python"],
                     workspace,
                     visualization_output_dir,
+                    visualization_file_prefix,
                 ),
                 cwd=paths.root,
                 attempt_root=attempt_root,
@@ -1883,11 +1888,25 @@ def _run_one_cell(
                     error="baseline postprocess failed",
                 )
                 return False
+            cost_output = visualization_output_dir / (
+                f"{visualization_file_prefix}{COST_PLOT_NAME}"
+            )
+            if cost_output.exists():
+                _seal_attempt(
+                    run_root,
+                    state,
+                    cell_plan,
+                    attempt,
+                    status="failed",
+                    include_paths=include_paths,
+                    error=f"visualization output already exists: {cost_output.name}",
+                )
+                return False
             cost_view = _execute_logged(
                 _cost_view_command(
                     spec["package"]["python"],
                     workspace,
-                    visualization_output_dir / COST_PLOT_NAME,
+                    cost_output,
                 ),
                 cwd=paths.root,
                 attempt_root=attempt_root,

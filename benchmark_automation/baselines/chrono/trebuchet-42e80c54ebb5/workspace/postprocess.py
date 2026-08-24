@@ -7,9 +7,12 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import runpy
+import shutil
 import subprocess
 import sys
+import tempfile
 
 import numpy as np
 
@@ -38,6 +41,11 @@ def _parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=Path.cwd() / "temp" / "postprocess" / "trebuchet",
+    )
+    parser.add_argument(
+        "--output-prefix",
+        default="",
+        help="Safe filename prefix used when several results share one output directory.",
     )
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--dpi", type=int, default=120)
@@ -148,6 +156,12 @@ def _write_manifest(path: Path, payload: dict[str, object]) -> None:
     os.replace(partial, path)
 
 
+def _copy_file_atomic(source: Path, destination: Path) -> None:
+    partial = destination.with_name(destination.name + ".part")
+    shutil.copy2(source, partial)
+    os.replace(partial, destination)
+
+
 def main() -> int:
     args = _parse_args()
     if (
@@ -159,68 +173,102 @@ def main() -> int:
         raise ValueError("fps, dpi, and continuation timeout must be positive")
     workspace = args.workspace.resolve()
     output_dir = args.output_dir.resolve()
+    output_prefix = str(args.output_prefix)
     if not workspace.is_dir():
         raise FileNotFoundError(f"workspace does not exist: {workspace}")
-    if output_dir.exists() and any(output_dir.iterdir()):
+    if output_prefix and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", output_prefix) is None:
+        raise ValueError(
+            "output prefix must contain only letters, digits, dot, underscore, or hyphen"
+        )
+    if not output_prefix and output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"refusing to overwrite nonempty output: {output_dir}")
+    video = output_dir / f"{output_prefix}trebuchet_best.mp4"
+    poster = output_dir / f"{output_prefix}trebuchet_best_poster.png"
+    snapshot_archive = output_dir / f"{output_prefix}trebuchet_selected_job.zip"
+    diagnostics = output_dir / f"{output_prefix}trebuchet_continuation_diagnostics.json"
+    trajectory = output_dir / f"{output_prefix}trebuchet_animation_trajectory.npz"
+    manifest_path = output_dir / f"{output_prefix}postprocess_manifest.json"
+    for path in (
+        video,
+        poster,
+        snapshot_archive,
+        diagnostics,
+        trajectory,
+        manifest_path,
+    ):
+        if path.exists():
+            raise FileExistsError(f"refusing to overwrite output: {path}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     selection = _select_best(workspace)
-    snapshot = _stage_snapshot(workspace, output_dir, selection)
-    video = output_dir / "trebuchet_best.mp4"
-    poster = output_dir / "trebuchet_best_poster.png"
-    work_dir = output_dir / "_animation_work"
     title = (
         "King Arthur trebuchet — minimum average cost "
         f"{float(selection['average_cost']):.6f}"
     )
-    subprocess.run(
-        [
-            sys.executable,
-            str(RENDERER),
-            "--workspace",
-            str(workspace),
-            "--job",
-            str(snapshot),
-            "--output",
-            str(video),
-            "--poster",
-            str(poster),
-            "--work-dir",
-            str(work_dir),
-            "--title",
-            title,
-            "--fps",
-            str(args.fps),
-            "--dpi",
-            str(args.dpi),
-            "--continuation-timeout",
-            str(args.continuation_timeout),
-        ],
-        cwd=str(workspace),
-        check=True,
-    )
+    with tempfile.TemporaryDirectory(prefix="yadof-trebuchet-visualization-") as temporary:
+        scratch_root = Path(temporary)
+        snapshot = _stage_snapshot(workspace, scratch_root, selection)
+        work_dir = scratch_root / "animation_work"
+        subprocess.run(
+            [
+                sys.executable,
+                str(RENDERER),
+                "--workspace",
+                str(workspace),
+                "--job",
+                str(snapshot),
+                "--output",
+                str(video),
+                "--poster",
+                str(poster),
+                "--work-dir",
+                str(work_dir),
+                "--title",
+                title,
+                "--fps",
+                str(args.fps),
+                "--dpi",
+                str(args.dpi),
+                "--continuation-timeout",
+                str(args.continuation_timeout),
+            ],
+            cwd=str(workspace),
+            check=True,
+        )
+        diagnostics_source = work_dir / "continuation_diagnostics.json"
+        trajectory_source = work_dir / "trebuchet_animation_trajectory.npz"
+        for path in (video, poster, diagnostics_source, trajectory_source):
+            if not path.is_file():
+                raise FileNotFoundError(f"renderer did not create expected output: {path}")
+        archive_source = Path(
+            shutil.make_archive(
+                str(scratch_root / "trebuchet_selected_job"),
+                "zip",
+                root_dir=snapshot.parent,
+                base_dir=snapshot.name,
+            )
+        )
+        _copy_file_atomic(archive_source, snapshot_archive)
+        _copy_file_atomic(diagnostics_source, diagnostics)
+        _copy_file_atomic(trajectory_source, trajectory)
     manifest = {
         "schema_version": 1,
         "workspace": str(workspace),
+        "output_prefix": output_prefix,
         "selection_rule": (
             "minimum arithmetic mean of all finite objective costs among "
             "completed optimization individuals"
         ),
         "selection": selection,
-        "snapshot": str(snapshot),
+        "snapshot_archive": str(snapshot_archive),
         "video": str(video),
         "poster": str(poster),
-        "continuation_diagnostics": str(
-            work_dir / "continuation_diagnostics.json"
-        ),
-        "animation_trajectory": str(
-            work_dir / "trebuchet_animation_trajectory.npz"
-        ),
+        "continuation_diagnostics": str(diagnostics),
+        "animation_trajectory": str(trajectory),
         "visualization_only": True,
         "optimization_evaluations_added": 0,
     }
-    _write_manifest(output_dir / "postprocess_manifest.json", manifest)
+    _write_manifest(manifest_path, manifest)
     print(f"selected: {selection['source_job_name']}")
     print(f"average cost: {float(selection['average_cost']):.9f}")
     print(f"video: {video}")

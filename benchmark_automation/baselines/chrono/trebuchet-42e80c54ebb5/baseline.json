@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "baseline_id": "trebuchet-20167c28925b",
+  "baseline_id": "trebuchet-42e80c54ebb5",
   "case_id": "chrono",
   "provider_id": "chrono",
   "task_id": "trebuchet",
-  "created_utc": "2026-08-24T11:50:16.236Z",
+  "created_utc": "2026-08-24T12:11:58.186Z",
   "created_by": "yadof benchmark maintainers",
   "yadof_version": "0.4.0",
-  "task_fingerprint": "20167c28925bd9ff0e0476cb305e1f258a57dfd9098ea6e5afc44b61cee0b306",
+  "task_fingerprint": "42e80c54ebb54872b62961babe4095b6c2601eae9b2393ddc39d3950ed9b7cc9",
   "include_paths": [
     "config.py",
     "submit",
@@ -16,8 +16,8 @@
     "visualization"
   ],
   "source": {
-    "public_provenance": "Frozen Project Chrono trebuchet benchmark workspace derived from trebuchet-ac34a09c5fb9.",
-    "reconstruction": "Preserves the contact-aware mechanics, independent semantic rawData curves, and deterministic animation postprocessor while documenting the unified run-level visualization output contract."
+    "public_provenance": "Frozen Project Chrono trebuchet benchmark workspace derived from trebuchet-20167c28925b.",
+    "reconstruction": "Preserves the contact-aware mechanics and independent semantic rawData curves while making every animation artifact a collision-safe prefixed file in one flat run visualization directory; the selected job is retained as a ZIP and animation scratch is temporary."
   },
   "validation": {
     "check_errors": 0,

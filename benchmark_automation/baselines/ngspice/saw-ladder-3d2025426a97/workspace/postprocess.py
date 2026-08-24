@@ -8,6 +8,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 
 import matplotlib
 
@@ -36,6 +37,11 @@ def _parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=Path.cwd() / "temp" / "postprocess" / "saw",
+    )
+    parser.add_argument(
+        "--output-prefix",
+        default="",
+        help="Safe filename prefix used when several results share one output directory.",
     )
     return parser.parse_args()
 
@@ -120,10 +126,22 @@ def main() -> int:
     args = _parse_args()
     workspace = args.workspace.resolve()
     output_dir = args.output_dir.resolve()
+    output_prefix = str(args.output_prefix)
     if not workspace.is_dir():
         raise FileNotFoundError(f"workspace does not exist: {workspace}")
-    if output_dir.exists() and any(output_dir.iterdir()):
+    if output_prefix and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", output_prefix) is None:
+        raise ValueError(
+            "output prefix must contain only letters, digits, dot, underscore, or hyphen"
+        )
+    if not output_prefix and output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"refusing to overwrite nonempty output: {output_dir}")
+    png = output_dir / f"{output_prefix}saw_best_response.png"
+    svg = output_dir / f"{output_prefix}saw_best_response.svg"
+    csv_path = output_dir / f"{output_prefix}saw_best_response.csv"
+    manifest_path = output_dir / f"{output_prefix}postprocess_manifest.json"
+    for path in (png, svg, csv_path, manifest_path):
+        if path.exists():
+            raise FileExistsError(f"refusing to overwrite output: {path}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     selection = _select_best(workspace)
@@ -153,13 +171,10 @@ def main() -> int:
     s11_axis.legend(loc="best")
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
 
-    png = output_dir / "saw_best_response.png"
-    svg = output_dir / "saw_best_response.svg"
     fig.savefig(png, dpi=160, bbox_inches="tight")
     fig.savefig(svg, bbox_inches="tight")
     plt.close(fig)
 
-    csv_path = output_dir / "saw_best_response.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(("frequency_hz", "s21_db", "s11_db"))
@@ -168,6 +183,7 @@ def main() -> int:
     manifest = {
         "schema_version": 1,
         "workspace": str(workspace),
+        "output_prefix": output_prefix,
         "selection_rule": (
             "minimum arithmetic mean of all finite objective costs among "
             "completed optimization individuals"
@@ -179,7 +195,7 @@ def main() -> int:
             "csv": str(csv_path),
         },
     }
-    _write_json(output_dir / "postprocess_manifest.json", manifest)
+    _write_json(manifest_path, manifest)
     print(f"selected: {selection['source_job_name']}")
     print(f"plot: {png}")
     return 0

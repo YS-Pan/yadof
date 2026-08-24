@@ -5,9 +5,9 @@ These are current-format, runtime-clean task inputs selected explicitly by
 
 | Case | Provider | Task | Baseline ID | Task fingerprint | Files | Objectives |
 |---|---|---|---|---|---:|---:|
-| SAW | `ngspice` | `saw-ladder` | `saw-ladder-b736a99a7dc1` | `b736a99a7dc188cae5f74bceb772ef06005f2baead13864fc0be194db2c21948` | 9 | 5 |
-| Chrono | `chrono` | `trebuchet` | `trebuchet-20167c28925b` | `20167c28925bd9ff0e0476cb305e1f258a57dfd9098ea6e5afc44b61cee0b306` | 14 | 4 |
-| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-29b314e9304e` | `29b314e9304e8ed8b976ac10299a2da9421fe255fa3c60e4e90346e8eb3545ff` | 8 | 4 |
+| SAW | `ngspice` | `saw-ladder` | `saw-ladder-3d2025426a97` | `3d2025426a976aa03cf720757bd37314004db8d29b5a922dcfc36c2d0d753c10` | 9 | 5 |
+| Chrono | `chrono` | `trebuchet` | `trebuchet-42e80c54ebb5` | `42e80c54ebb54872b62961babe4095b6c2601eae9b2393ddc39d3950ed9b7cc9` | 14 | 4 |
+| test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-0b64f13b9f0b` | `0b64f13b9f0b209f5dd23ce4d7f841119580f47885536db2184cb661d6c088f8` | 8 | 4 |
 
 The directory contract is:
 
@@ -40,7 +40,8 @@ The selected SAW and test_com refreshes preserve their predecessor task and
 rawData contracts while adding the common `postprocess.py` interface. The SAW
 plot follows the response visualization used by the 20260807 SAW task; the
 test_com plot summarizes the three switch states, gain, axial ratio, and design
-variables.
+variables. Their current postprocessors add the runner-supplied prefix to every
+artifact so multiple cells can share one flat output directory safely.
 
 The selected Chrono task preserves the parameter and objective counts while adding
 Bullet NSC contact between the ground and the arm, hanger/counterweight assembly,
@@ -48,15 +49,12 @@ and ball; initially intersecting mechanisms are rejected. The former bundled
 release and stress arrays are now 16 semantic rawData fields: nine scalars and
 seven independent 513-sample curves. Its workspace also carries the renderer and
 a common `postprocess.py` entry point that writes the selected replay video,
-poster, trajectory, and diagnostics into the same per-attempt directory as
-`benchmark-cost.png`.
+poster, trajectory, diagnostics, selected-job ZIP, manifest, and cost image as
+prefixed files directly in the same run directory. Animation scratch is temporary
+and does not create a result subdirectory.
 
-`trebuchet-20167c28925b` derives from `trebuchet-ac34a09c5fb9` and changes only
-the frozen usage documentation for this unified output contract. At explicit
-maintainer request, both that predecessor and the earlier
-`trebuchet-025b5ea5fca1` directory were removed so the checkout retains only the
-current Trebuchet workspace. Historical run specifications still identify those
-baselines, but they cannot be resumed or reconstructed from this checkout.
+`trebuchet-42e80c54ebb5` derives from `trebuchet-20167c28925b`; its scientific
+task is unchanged, while its visualization output is now entirely flat.
 
 The superseded `synthetic-antenna-aa89d46f3d9a` input's objective extraction
 windows and physical anchors compressed three costs near a soft-cost tail and
@@ -71,13 +69,11 @@ runs continued making material progress through 10,000 evaluations; the detailed
 acceptance evidence is in
 [`../verification/20260824-test-com-difficulty-recalibration.md`](../verification/20260824-test-com-difficulty-recalibration.md).
 
-At explicit maintainer request, the superseded SAW baseline
-`saw-ladder-9c5f3020778d` and test_com baselines
-`synthetic-antenna-aa89d46f3d9a`, `synthetic-antenna-c7b0133b3a4e`, and
-`synthetic-antenna-4dc66b0f60bf` were removed. Together with the Chrono cleanup
-above, every provider now retains only its selected workspace. Historical run
-specifications and verification documents still identify removed baselines, but
-such runs cannot be resumed or reconstructed from this checkout.
+At explicit maintainer request, every superseded SAW, Chrono, and test_com baseline
+directory is removed after its replacement passes validation. Each provider keeps
+only its selected workspace. Historical run specifications and verification
+documents still identify removed baselines, but such runs cannot be resumed or
+reconstructed from this checkout without restoring the relevant Git history.
 
 The hidden `.staging/` and `.assembled/` directories at the benchmark root are
 Phase-0 reconstruction/validation evidence, not runner inputs. In particular,
