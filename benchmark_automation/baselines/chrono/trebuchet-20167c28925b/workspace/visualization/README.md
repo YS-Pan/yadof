@@ -21,13 +21,15 @@ Run the common postprocessor from any directory:
 & ".\.venv\Scripts\python.exe" `
   ".\path\to\trebuchet-workspace\postprocess.py" `
   --workspace ".\path\to\trebuchet-workspace" `
-  --output-dir ".\temp\benchmark-postprocess\trebuchet-example"
+  --output-dir ".\temp\benchmark-visualizations\trebuchet-example"
 ```
 
 The output directory must be empty or absent. Benchmark automation supplies a
-unique run-level `postprocess/<cell-id>/attempt-####/` directory automatically.
-The video requires `ffmpeg` and the continuation requires the configured Project
-Chrono 10 environment.
+unique run-level `visualizations/<cell-id>/attempt-####/` directory automatically.
+The task-specific video, poster, manifest, and reproducibility evidence are stored
+there together with the automation-generated `benchmark-cost.png`. The video
+requires `ffmpeg` and the continuation requires the configured Project Chrono 10
+environment.
 
 For a manually staged completed job, `render_trebuchet_animation.py` may also be
 called directly with `--job`, `--output`, `--poster`, and `--work-dir`. Keep its

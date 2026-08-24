@@ -35,7 +35,8 @@ benchmark.toml + frozen baselines + strategy templates
        isolated cell attempt workspaces and logs
                          |
                          +--> baseline postprocess.py
-                         |      -> run-level plots/videos
+                         |    then yadof view cost
+                         |      -> one run-level visualization directory
                          |
                          v
           public yadof collection surfaces
@@ -79,6 +80,9 @@ Keeping the CLI thin makes core behavior directly testable.
   invocation directory, and suggested follow-up commands preserve the resolved
   root.
 - A baseline ID and its contents are immutable. Refreshing creates a new directory.
+  Removing a historical identity is exceptional, requires explicit maintainer
+  direction, and makes checkout-based resume/reproduction of runs using it
+  unavailable.
 - Baseline provider directories identify the simulator or adapter. Their child
   directory identifies the optimization task and task-fingerprint prefix; manifest
   `provider_id`, `task_id`, `baseline_id`, and full fingerprint must agree with the
@@ -112,15 +116,15 @@ Keeping the CLI thin makes core behavior directly testable.
 - The run/resume CLI owns one cell-level progress display on stderr. On an
   interactive terminal it clears and redraws that bar below every unchanged
   lifecycle or streamed child line; redirected streams receive complete snapshots.
-- After every measured optimization and any declared extension, the cell runs
-  `yadof view cost` once and retains its summary/log plus
-  `.yadof/tool_output/benchmark-cost.png`. A failed cost view fails the immutable
-  attempt instead of silently omitting the required artifact.
-- After the cost view, the runner invokes the baseline workspace's common
-  `postprocess.py --workspace ... --output-dir ...` interface exactly once. Its
-  unique output is outside the fingerprinted cell inputs at
-  `<run-root>/postprocess/<cell-id>/attempt-####/`; a failed postprocessor fails the
-  immutable attempt. Task-specific visualization logic remains baseline-owned.
+- After every measured optimization and any declared extension, the runner invokes
+  the baseline workspace's common `postprocess.py --workspace ... --output-dir ...`
+  interface exactly once with a new empty directory. Task-specific visualization
+  logic remains baseline-owned.
+- The cell then runs `yadof view cost` once and writes `benchmark-cost.png` into
+  that same directory. The unified output is outside fingerprinted cell inputs at
+  `<run-root>/visualizations/<cell-id>/attempt-####/`; either command failing fails
+  the immutable attempt instead of silently omitting required human-review
+  artifacts.
 - Runner child processes set `PYTHONDONTWRITEBYTECODE=1`, so importing task or
   postprocessor modules cannot add `__pycache__` files to sealed declared inputs.
 - Once run/resume reaches its final state, an interactive stdin waits for Enter so

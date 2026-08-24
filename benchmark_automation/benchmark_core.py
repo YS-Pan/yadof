@@ -44,6 +44,8 @@ TERMINAL_CELL_STATES = {"completed", "failed", "skipped"}
 CONFIG_BLOCK_START = "# >>> benchmark_automation managed overrides >>>"
 CONFIG_BLOCK_END = "# <<< benchmark_automation managed overrides <<<"
 POSTPROCESS_SCRIPT_NAME = "postprocess.py"
+VISUALIZATION_DIRECTORY_NAME = "visualizations"
+COST_PLOT_NAME = "benchmark-cost.png"
 BASELINE_PROVIDER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 BASELINE_ID_PATTERN = re.compile(
     r"(?P<task>[a-z][a-z0-9]*(?:-[a-z0-9]+)*)-(?P<fingerprint>[0-9a-f]{12})\Z"
@@ -597,7 +599,11 @@ def _select_values(
     return selected
 
 
-def _cost_view_command(python: str, workspace: str | Path) -> list[str]:
+def _cost_view_command(
+    python: str,
+    workspace: str | Path,
+    output_path: str | Path,
+) -> list[str]:
     return [
         python,
         "-m",
@@ -607,7 +613,7 @@ def _cost_view_command(python: str, workspace: str | Path) -> list[str]:
         "--workspace",
         str(workspace),
         "--output",
-        "benchmark-cost.png",
+        str(output_path),
     ]
 
 
@@ -697,12 +703,24 @@ def _planned_commands(
                 "--fail-on-all-infinite",
             ]
         )
-    commands.append(_cost_view_command(python, workspace))
     commands.append(
         _postprocess_command(
             python,
             workspace,
-            f"<run-root>/postprocess/{cell['cell_id']}/attempt-<attempt>",
+            (
+                f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
+                f"{cell['cell_id']}/attempt-<attempt>"
+            ),
+        )
+    )
+    commands.append(
+        _cost_view_command(
+            python,
+            workspace,
+            (
+                f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
+                f"{cell['cell_id']}/attempt-<attempt>/{COST_PLOT_NAME}"
+            ),
         )
     )
     return commands
@@ -1322,9 +1340,9 @@ def _prepare_attempt(
         "input_fingerprint": None,
         "post_input_fingerprint": None,
         "input_manifest": str(attempt_root / "input_manifest.json"),
-        "postprocess_output_dir": str(
+        "visualization_output_dir": str(
             run_root
-            / "postprocess"
+            / VISUALIZATION_DIRECTORY_NAME
             / str(cell_plan["cell_id"])
             / f"attempt-{attempt_number:04d}"
         ),
@@ -1837,33 +1855,13 @@ def _run_one_cell(
                     )
                     return False
         if cell_plan["kind"] == "measured":
-            cost_view = _execute_logged(
-                _cost_view_command(spec["package"]["python"], workspace),
-                cwd=paths.root,
-                attempt_root=attempt_root,
-                attempt=attempt,
-                timeout_sec=min(timeout, 600),
-                label="view-cost",
-                stream_output=stream_subprocess_output,
-                progress=progress,
-            )
-            _save_state(run_root, state)
-            if cost_view["returncode"] != 0 or cost_view["timed_out"]:
-                _seal_attempt(
-                    run_root,
-                    state,
-                    cell_plan,
-                    attempt,
-                    status="failed",
-                    include_paths=include_paths,
-                    error="yadof view cost failed",
-                )
-                return False
+            visualization_output_dir = Path(attempt["visualization_output_dir"])
+            visualization_output_dir.mkdir(parents=True, exist_ok=False)
             postprocess = _execute_logged(
                 _postprocess_command(
                     spec["package"]["python"],
                     workspace,
-                    attempt["postprocess_output_dir"],
+                    visualization_output_dir,
                 ),
                 cwd=paths.root,
                 attempt_root=attempt_root,
@@ -1883,6 +1881,32 @@ def _run_one_cell(
                     status="failed",
                     include_paths=include_paths,
                     error="baseline postprocess failed",
+                )
+                return False
+            cost_view = _execute_logged(
+                _cost_view_command(
+                    spec["package"]["python"],
+                    workspace,
+                    visualization_output_dir / COST_PLOT_NAME,
+                ),
+                cwd=paths.root,
+                attempt_root=attempt_root,
+                attempt=attempt,
+                timeout_sec=min(timeout, 600),
+                label="view-cost",
+                stream_output=stream_subprocess_output,
+                progress=progress,
+            )
+            _save_state(run_root, state)
+            if cost_view["returncode"] != 0 or cost_view["timed_out"]:
+                _seal_attempt(
+                    run_root,
+                    state,
+                    cell_plan,
+                    attempt,
+                    status="failed",
+                    include_paths=include_paths,
+                    error="yadof view cost failed",
                 )
                 return False
         _seal_attempt(

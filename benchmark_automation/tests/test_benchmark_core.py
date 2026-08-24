@@ -235,8 +235,27 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
     }
     assert all(cell["planned_commands"][0][3] == "init" for cell in plan["cells"])
     measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
-    assert all(cell["planned_commands"][-2][3:5] == ["view", "cost"] for cell in measured)
-    assert all(cell["planned_commands"][-1][1].endswith("postprocess.py") for cell in measured)
+    assert all(
+        cell["planned_commands"][-2][1].endswith("postprocess.py")
+        for cell in measured
+    )
+    assert all(
+        cell["planned_commands"][-1][3:5] == ["view", "cost"]
+        for cell in measured
+    )
+    assert all(
+        cell["planned_commands"][-2][-1]
+        == f"<run-root>/visualizations/{cell['cell_id']}/attempt-<attempt>"
+        for cell in measured
+    )
+    assert all(
+        cell["planned_commands"][-1][-1]
+        == (
+            f"<run-root>/visualizations/{cell['cell_id']}/"
+            "attempt-<attempt>/benchmark-cost.png"
+        )
+        for cell in measured
+    )
     filtered = core.build_plan(
         config,
         paths,
@@ -495,7 +514,7 @@ def test_suite_failure_policy_controls_independent_cells(
     assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
 
 
-def test_measured_cell_runs_cost_view_and_postprocess_after_optimization(
+def test_measured_cell_collects_postprocess_and_cost_view_in_one_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     run_root = tmp_path / "run"
@@ -534,10 +553,10 @@ def test_measured_cell_runs_cost_view_and_postprocess_after_optimization(
         "events": [],
         "cells": {cell["cell_id"]: {"status": "pending", "attempts": []}},
     }
-    labels: list[str] = []
+    commands: list[tuple[str, list[str]]] = []
 
-    def fake_execute(_command, **kwargs):
-        labels.append(kwargs["label"])
+    def fake_execute(command, **kwargs):
+        commands.append((kwargs["label"], list(command)))
         return {"returncode": 0, "timed_out": False}
 
     def fake_materialize(_paths, _spec, _cell, _attempt_root, attempt):
@@ -551,7 +570,24 @@ def test_measured_cell_runs_cost_view_and_postprocess_after_optimization(
     monkeypatch.setattr(core, "_materialize_attempt_inputs", fake_materialize)
     monkeypatch.setattr(core, "_has_completed_generation_prefix", lambda *_args: (True, [0]))
     assert core._run_one_cell({}, paths, run_root, spec, state, cell)
-    assert labels == ["init", "check", "optimize", "view-cost", "postprocess"]
+    assert [label for label, _command in commands] == [
+        "init",
+        "check",
+        "optimize",
+        "postprocess",
+        "view-cost",
+    ]
+    attempt = state["cells"][cell["cell_id"]]["attempts"][0]
+    visualization_dir = (
+        run_root
+        / "visualizations"
+        / cell["cell_id"]
+        / "attempt-0001"
+    )
+    assert Path(attempt["visualization_output_dir"]) == visualization_dir
+    assert visualization_dir.is_dir()
+    assert commands[-2][1][-1] == str(visualization_dir)
+    assert commands[-1][1][-1] == str(visualization_dir / "benchmark-cost.png")
     assert state["cells"][cell["cell_id"]]["status"] == "completed"
 
 

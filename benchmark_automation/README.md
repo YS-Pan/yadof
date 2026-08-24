@@ -24,12 +24,17 @@ a regular installed yadof distribution from the selected Python environment.
 
 ## Current execution status
 
-The SAW and Chrono baselines and the runner were created on 2026-08-23 with
-installed `yadof 0.4.0`. The selected synthetic `test_com` baseline was replaced
-twice on 2026-08-24: the first replacement corrected degenerate objective scaling
-but proved too easy at 2,000 evaluations, and the current replacement adds a
-20-variable non-separable multimodal landscape. Both old identities remain
-tracked but unselected.
+The initial SAW and Chrono baselines and the runner were created on 2026-08-23
+with installed `yadof 0.4.0`. The selected Chrono baseline was refreshed on
+2026-08-24 with ground contact, semantic rawData curves, Trebuchet visualization,
+and the unified visualization-output contract. Its predecessor directories were
+then removed by explicit maintainer request. The selected synthetic `test_com`
+baseline was replaced twice on 2026-08-24: the first replacement corrected
+degenerate objective scaling but proved too easy at 2,000 evaluations, and the
+current replacement adds a 20-variable non-separable multimodal landscape. At
+explicit maintainer request, all superseded SAW, Chrono, and `test_com` baseline
+directories were removed after selection was updated; each provider now retains
+only its current workspace.
 
 | Evidence | Result |
 |---|---|
@@ -41,8 +46,8 @@ tracked but unselected.
 | `performance-pilot` run `20260823T060351Z-post-viewer-fix-5a583e492089` | 192/192 evaluations completed; three paired rows included and none excluded |
 | historical three-generation `performance` run `pfull-0823` | 18/18 cells completed; 1080 attempted, 1062 publicly recorded completions, 18 recorder-budget losses, zero timeouts/all-infinite generations, and 9/9 paired rows included |
 | historical 100-by-20 `performance` run `p20x100-0823` | 18/18 cells completed; its `test-com` rows use the superseded `synthetic-antenna-aa89d46f3d9a` objectives and must not be compared with new-baseline runs |
-| historical first replacement `synthetic-antenna-c7b0133b3a4e` | Corrected objective scaling, but three real-only NSGA-III runs reached HV 0.8597-0.8833 after only 2,000 evaluations; retained unselected |
-| selected hard `test-com` baseline `synthetic-antenna-4dc66b0f60bf` | Check and smoke passed; three real-only NSGA-III validations each recorded 10,000/10,000 rows, reached HV 0.4347-0.4409, and still gained 5.13%-5.94% over their final ten generations |
+| historical first replacement `synthetic-antenna-c7b0133b3a4e` | Corrected objective scaling, but three real-only NSGA-III runs reached HV 0.8597-0.8833 after only 2,000 evaluations; its superseded baseline directory was later removed |
+| selected hard `test-com` baseline `synthetic-antenna-29b314e9304e` | Preserves the accepted `synthetic-antenna-4dc66b0f60bf` scientific task and adds the common postprocessor; the underlying three real-only NSGA-III validations each recorded 10,000/10,000 rows, reached HV 0.4347-0.4409, and still gained 5.13%-5.94% over their final ten generations |
 
 The resolved viewer gap and its historical failure evidence are documented in
 [`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).
@@ -116,13 +121,14 @@ Child stdout/stderr is always written to the append-only command logs. The defau
 terminal output contains the same short lifecycle events, with a cell-level progress
 bar redrawn at the bottom of an interactive terminal, followed by a final JSON
 summary. Add `--stream-output` only for deliberate live raw output; it can be large.
-Every measured optimization also runs `yadof view cost` after its final generation
-and writes `.yadof/tool_output/benchmark-cost.png` inside that cell's workspace.
-It then calls the selected baseline's root `postprocess.py` with the completed cell
-workspace and a unique output directory. SAW writes S-parameter plots/data,
-Chrono writes a trebuchet MP4/poster/manifest, and test_com writes a compact antenna
-response plot. A postprocessing failure fails that attempt so missing human-review
-artifacts are explicit.
+Every measured optimization calls the selected baseline's root `postprocess.py`
+after its final generation. SAW writes S-parameter plots/data, Chrono writes a
+trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.
+The runner then invokes `yadof view cost` and writes `benchmark-cost.png` beside
+those task-specific artifacts. All visualization output for one immutable attempt
+therefore lives in the single unique directory
+`visualizations/<cell-id>/attempt-<NNNN>/`. Either postprocessing or cost-view
+failure fails the attempt so missing human-review artifacts are explicit.
 
 Select a precise subset without editing TOML. Repeat a selector to include more
 than one value:
@@ -270,7 +276,8 @@ runs/<run-id>/
       command.finished.json
       stdout.log
       stderr.log
-  postprocess/<cell-id>/attempt-<NNNN>/
+  visualizations/<cell-id>/attempt-<NNNN>/
+    benchmark-cost.png
     postprocess_manifest.json
     task-specific plots, videos, and supporting evidence
   evidence/collect-<NNNN>/   append-only collection and public tool outputs
@@ -395,7 +402,9 @@ To add a case:
    `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>/workspace` with
    current `yadof init`, deliberate task-input transfer, zero runtime evidence,
    a root `postprocess.py` implementing the common `--workspace` / `--output-dir`
-   interface, `yadof check`, and one disposable smoke.
+   interface, `yadof check`, and one disposable smoke. The postprocessor receives
+   an empty per-attempt visualization directory and must not reserve the runner's
+   `benchmark-cost.png` filename.
 2. Add matching `provider_id`, `task_id`, `baseline_id`, and full task fingerprint
    to `baseline.json`, then declare the exact baseline path, `include_paths`,
    objective count, rawData shapes, resource prerequisite, history policy, and

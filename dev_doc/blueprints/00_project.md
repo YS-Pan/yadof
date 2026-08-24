@@ -80,11 +80,11 @@ hot-change contract; structural dimension changes are future work.
   use its ignored default or an explicit disjoint output root; agents use
   `temp/benchmark/<task-id>`. The current non-surrogate arm is named for its
   concrete NSGA-III algorithm. Measured cells deliberately permit 32-way fast
-  oversubscription, run one cost view and the baseline's common `postprocess.py`
-  after optimization, keep postprocess plots/videos in one run-level directory,
-  retain a bottom cell-progress bar in interactive terminals, and expose final
-  cumulative HV as a compact algorithm-labeled table without mixing it into JSON
-  stdout.
+  oversubscription, run the baseline's common `postprocess.py` and one cost view
+  after optimization, keep all of an attempt's visualization artifacts in one
+  run-level directory, retain a bottom cell-progress bar in interactive terminals,
+  and expose final cumulative HV as a compact algorithm-labeled table without
+  mixing it into JSON stdout.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 

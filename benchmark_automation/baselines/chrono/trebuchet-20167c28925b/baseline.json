@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "baseline_id": "trebuchet-ac34a09c5fb9",
+  "baseline_id": "trebuchet-20167c28925b",
   "case_id": "chrono",
   "provider_id": "chrono",
   "task_id": "trebuchet",
-  "created_utc": "2026-08-24T07:56:13.890Z",
+  "created_utc": "2026-08-24T11:50:16.236Z",
   "created_by": "yadof benchmark maintainers",
   "yadof_version": "0.4.0",
-  "task_fingerprint": "ac34a09c5fb964ceb86edfc4735d2ff9cb4d2ad312c24321c0be764a749dc9ed",
+  "task_fingerprint": "20167c28925bd9ff0e0476cb305e1f258a57dfd9098ea6e5afc44b61cee0b306",
   "include_paths": [
     "config.py",
     "submit",
@@ -16,8 +16,8 @@
     "visualization"
   ],
   "source": {
-    "public_provenance": "Frozen Project Chrono trebuchet benchmark workspace derived from trebuchet-025b5ea5fca1.",
-    "reconstruction": "Adds Bullet NSC ground contact for all moving bodies, rejects initially intersecting mechanisms, stores each semantic release or stress curve as an independent one-dimensional rawData field, and integrates the deterministic animation postprocessor."
+    "public_provenance": "Frozen Project Chrono trebuchet benchmark workspace derived from trebuchet-ac34a09c5fb9.",
+    "reconstruction": "Preserves the contact-aware mechanics, independent semantic rawData curves, and deterministic animation postprocessor while documenting the unified run-level visualization output contract."
   },
   "validation": {
     "check_errors": 0,
