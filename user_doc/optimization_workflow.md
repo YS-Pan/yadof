@@ -107,12 +107,16 @@ framework records raw evidence and derives cost through the current
 without rerunning simulation. Clear history when task semantics or rawData meaning
 become incompatible.
 
-Current cost is an execution result, not a persistence result. Fast, local, and
-distributed backends all return `JobResult` to one finalizer, which owns and
-validates rawData once, calculates the current objective tuple, releases the worker,
-and makes a non-blocking best-effort recording offer. A full history queue,
-oversized record, permission error, disk-full error, or dead recorder may lose that
-record but cannot turn its valid cost into `inf`.
+Fast, local, and distributed backends all return `JobResult` to one finalizer,
+which owns and validates rawData once, calculates the current objective tuple, and
+hands the owned evidence to the campaign recorder. The recorder keeps bounded
+asynchronous micro-batching, but its limits now apply backpressure: a full
+unpublished budget waits for publication instead of dropping the new result. The
+population boundary waits until every result has been atomically published before
+the next generation can start. An oversized record or a writer that cannot publish
+after its configured attempts raises a recording error and stops the campaign; it
+does not continue with incomplete history or convert the scientific result to an
+`inf` candidate.
 
 A campaign is not required to keep its original task definition forever. If the
 user discovers a mistake, they may correct `calc_cost.py`, parameter definitions,
@@ -297,6 +301,7 @@ worker metadata could not return, while a job that never executed remains
 read-only display fallback; history is not rewritten.
 
 Individual prepare/run/timeout/rawData/current-cost failures become diagnostic rows
-and correct-width `inf` costs. History-recording loss is independent and preserves
-the valid current cost. `--fail-on-all-infinite` stops after the first generation
-with no finite objective.
+and correct-width `inf` costs, and those failure rows are recorded like successful
+rows. A history publication failure stops the campaign before another generation;
+it is not reported as an ordinary candidate `inf`. `--fail-on-all-infinite` stops
+after the first generation with no finite objective.

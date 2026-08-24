@@ -24,12 +24,13 @@ from .api import (
     record_surrogate_metadata,
 )
 from .campaign_lock import CampaignActiveError
-from .session import CampaignSession
+from .session import CampaignSession, RecordingError
 
 __all__ = [
     "VALID_RECORD_STATUSES",
     "CampaignActiveError",
     "CampaignSession",
+    "RecordingError",
     "calculate_costs",
     "get_historical_results",
     "get_job_names",

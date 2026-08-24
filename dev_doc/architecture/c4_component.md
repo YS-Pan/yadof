@@ -57,14 +57,15 @@
 - `job_result`, `types`: common result shape and metadata utilities, including
   explicit file-backed or memory-backed rawData and an optional real job path.
 - `finalizer`: the single backend-neutral rawData ownership, current-cost,
-  `JobResult` finalization, and non-blocking recorder-offer boundary.
+  `JobResult` finalization, and reliable recorder-handoff boundary.
 - `task_snapshot`: generation-scoped complete `submit/` plus `job_template/`
   capture, separate interpretation/evaluation/optimization fingerprints, full snapshot identity, and stable
   parameter/objective-shape validation.
 
 ## Durable evidence and optimization
-- `recorded_data.session`: one explicit campaign-owned hot catalog, bounded daemon
-  writer, current derived history, recorder counters, and OS campaign-lock lifetime.
+- `recorded_data.session`: one explicit campaign-owned hot catalog, bounded
+  backpressured writer, current derived history, recorder counters, and OS
+  campaign-lock lifetime.
 - `recorded_data.rawdata`, `records`, `segment_store`: owned no-pickle NPZ
   conversion, immutable standard-ZIP micro-batch segments, candidate-scoped
   metadata/evidence, atomic same-directory publication, and tolerant discovery.

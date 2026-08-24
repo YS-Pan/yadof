@@ -238,7 +238,7 @@ def get_rawdata_diagnostics(
 
 
 def open_campaign_session(workspace: WorkspaceLike) -> CampaignSession:
-    """Open the one active best-effort recorder/history session for a workspace."""
+    """Open the one active reliable recorder/history session for a workspace."""
 
     from ..config import load_config
 

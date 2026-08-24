@@ -83,9 +83,8 @@ recent per-job diagnostics. A smoke failure prevents generation submission.
 - No workspace-global optimizer singleton or implicit history path.
 - One workspace has one active optimization campaign; concurrent campaigns use
   different workspaces.
-- Current accepted rows are available to later generations even before segment
-  publication; recording loss never removes a valid current cost from its own
-  generation result.
+- Current accepted rows are available within the generation while publication is
+  pending; the next generation starts only after every row is durable.
 - Surrogate predictions never bypass real-evaluation validation.
 - Resume reuses compatible evidence/checkpoints but does not copy another workspace.
 - A semantic strategy switch waits for pending component work, releases old memory,

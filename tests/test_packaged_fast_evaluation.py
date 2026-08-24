@@ -12,7 +12,7 @@ import pytest
 
 from yadof import cli
 from yadof.evaluate_manager import evaluate_population
-from yadof.recorded_data import api as recorded_api
+from yadof.recorded_data import RecordingError, api as recorded_api
 from yadof.workspace.check import check_workspace
 from yadof.workspace.init import init_workspace
 
@@ -144,7 +144,7 @@ def test_fast_parallel_results_are_ordered_recorded_and_jobless(tmp_path: Path) 
     assert len(tuple(root.glob("recorded_data/segments/*/*/segment_*.zip"))) == 1
 
 
-def test_fast_record_failure_is_isolated_for_jobless_result(
+def test_fast_record_failure_stops_campaign_for_jobless_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from yadof.recorded_data import session as session_module
@@ -160,16 +160,14 @@ def test_fast_record_failure_is_isolated_for_jobless_result(
         raise OSError("simulated fast record failure")
 
     monkeypatch.setattr(session_module, "publish_segment", fail_publication)
-    costs = evaluate_population(
-        root,
-        ((0.0,), (1.0,)),
-        mode="fast",
-        timeout_sec=5.0,
-        fast_max_workers=1,
-    )
-
-    assert math.isfinite(costs[0][0])
-    assert costs[1] == pytest.approx((0.9,))
+    with pytest.raises(RecordingError, match="before all evidence could be published"):
+        evaluate_population(
+            root,
+            ((0.0,), (1.0,)),
+            mode="fast",
+            timeout_sec=5.0,
+            fast_max_workers=1,
+        )
     assert _scratch_is_clean(root)
     assert recorded_api.list_records(root) == ()
 

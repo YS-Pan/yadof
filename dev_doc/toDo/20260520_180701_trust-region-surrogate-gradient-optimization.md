@@ -202,9 +202,9 @@ training-row reconstruction error are insufficient.
   numerical mechanics where compatible, but do not pretend it performs yadof's
   prediction-versus-real acceptance, campaign budgeting, or provenance duties.
 - Route selected proposals through the common evaluation API and current-cost
-  finalizer. The campaign session owns accepted current rows and best-effort durable
-  recording; local-refinement code must not write a parallel history or treat
-  recording loss as evaluation failure.
+  finalizer. The campaign session owns accepted current rows and reliable durable
+  recording; local-refinement code must not write a parallel history or bypass
+  recorder backpressure and population-boundary durability.
 - Keep ensemble spread and any training-fit audit observable for diagnostics, but
   keep them out of decisions until the benchmark gate explicitly calibrates and
   approves their use. Prefer evaluation-before/after out-of-sample residuals for
@@ -259,8 +259,8 @@ training-row reconstruction error are insufficient.
   exploration quota, bounded evaluation budget, radius expansion/shrinkage, and
   failed validation.
 - Prove that local candidates use the same generation snapshot and common real-
-  evaluation/finalization path, and that recording loss cannot change a valid
-  current cost.
+  evaluation/finalization path, and that their evidence is durable before later
+  evaluation proceeds.
 - Build trust tests from held-out or online pre-evaluation predictions. Demonstrate
   that uncalibrated member spread or training-fit diagnostics cannot affect
   selection, then add any calibrated signal only with reliability/ranking evidence

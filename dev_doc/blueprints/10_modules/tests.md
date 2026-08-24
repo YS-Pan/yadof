@@ -38,8 +38,9 @@ are not part of the package's generic test namespace or wheel/sdist contents.
   persistence atomicity, including bounded slow-tail algebraic costs and task
   fallback `1.0`;
 - backend-neutral finalization; immutable segments; exact unpublished count/byte
-  budgets; float32/float64 large-candidate singleton publication; recording-loss,
-  circuit-breaker, writer-death, and bounded-shutdown isolation; OS campaign-lock
+  budgets; float32/float64 large-candidate singleton publication; full-budget
+  backpressure, same-batch retry, fatal writer propagation, and shutdown durability;
+  OS campaign-lock
   exclusivity; corrupt candidate/segment tolerance; task-snapshot hot reload and
   fingerprint invalidation; no old-segment reopen; 5,000-row hot-finalizer and
   synthetic 100,000-row catalog scale;

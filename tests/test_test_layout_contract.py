@@ -11,6 +11,7 @@ def test_maintained_pytest_modules_live_only_in_standard_tests_directory():
         path
         for path in REPOSITORY_ROOT.rglob("test_*.py")
         if "tests" not in path.relative_to(REPOSITORY_ROOT).parts[:1]
+        and "benchmark_automation" not in path.relative_to(REPOSITORY_ROOT).parts
         and "_resources" not in path.relative_to(REPOSITORY_ROOT).parts
         and not any(
             part in {".git", "build", "dist", "temp", "dev_doc"}

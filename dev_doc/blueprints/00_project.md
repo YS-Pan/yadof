@@ -47,7 +47,8 @@ local/distributed remain file-backed prepared-job transports.
    one smoke/preceding-generation calibration for scheduler requests or local
    worker-count planning.
 8. Atomically record raw variables, rawData, lifecycle/provenance metadata, and
-   lightweight campaign metadata.
+   lightweight campaign metadata, applying bounded backpressure and waiting for a
+   population's evidence before later evaluation.
 9. Recalculate normalized variables and fixed-threshold `[0, 1]` objective costs
    through the current workspace task definition.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions

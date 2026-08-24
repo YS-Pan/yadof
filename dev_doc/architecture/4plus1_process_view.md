@@ -22,9 +22,10 @@ sequenceDiagram
     end
     E->>F: each terminal JobResult
     F->>C: validate owned rawData and calculate current cost
-    C-->>O: ordered objective row independent of persistence
-    F-->>R: non-blocking owned-envelope offer
+    C-->>O: ordered objective row ready for recording
+    F->>R: backpressured owned-envelope handoff
     R-->>R: immutable standard-ZIP micro-batch publication
+    R-->>F: capacity available / boundary fully durable
 ```
 
 Local mode uses bounded process concurrency and per-individual timeouts. It runs the
@@ -39,8 +40,9 @@ worker fresh-loads `evaluation.py`, may invoke external local software, and retu
 named rawData mappings and JSON diagnostics through one bounded pipe. The parent
 finalizes each completed item immediately, so at most one result per worker waits
 in transport and completion order does not change population order. Current cost
-and worker release complete before the finalizer's non-blocking best-effort
-recorder offer.
+is calculated before recorder admission. If unpublished capacity is full, the
+completion path waits while the writer publishes; the worker is not reused for
+later simulation until capacity becomes available.
 Timeout, native/Python worker exit, or task failure terminates the observed process
 tree, cleans scratch, replaces the worker, records the isolated failure, and
 continues queued candidates. No scheduler-submitted callback is fabricated.
@@ -50,8 +52,8 @@ bar starts at zero and advances on each terminal individual outcome, regardless 
 completion order. It reports finished/total plus successful, error, and remaining
 counts. Preparation, execution, collection, rawData, and current-cost failures stay
 visible as completed error outcomes instead of leaving an apparently stalled
-generation. Best-effort recording loss does not alter progress success. Non-
-interactive streams receive complete snapshot lines; interactive
+generation. Progress reaches the population boundary only after its result rows are
+durable. Non-interactive streams receive complete snapshot lines; interactive
 terminals update the active bar in place. `--no-progress` disables both the bar and
 the existing detailed backend messages for that invocation. Fast worker-plan detail
 is retained in evaluation diagnostics rather than repeated as a generation line.
@@ -103,13 +105,14 @@ model state maps are workspace-keyed and protected by locks. Clearing one worksp
 waits/resets only its schedule/state. Training consumes a captured campaign-hot
 history bundle, so pending or same-generation evidence need not wait for durability.
 
-One daemon writer belongs to one campaign, not to a backend or generation. Its
-candidate and byte reservations include queued and in-flight envelopes. It flushes
-at evaluation/population/generation boundaries into count/byte-bounded immutable
-segments. Queue refusal, oversized input, writer failure, or writer death increments
-loss counters and never changes a current objective row. A bounded shutdown may
-report an unknown in-flight outcome; such a writer retains the OS campaign lock
-until its filesystem call returns.
+One writer belongs to one campaign, not to a backend or generation. Its candidate
+and byte reservations include queued and in-flight envelopes. It flushes at
+evaluation/population/generation boundaries into count/byte-bounded immutable
+segments. Full budgets apply producer backpressure instead of refusing a row.
+Transient publication failures retry the same retained batch; exhaustion or writer
+death wakes blocked callers with `RecordingError` and stops the campaign. Shutdown
+waits for queued and in-flight publication and retains the OS campaign lock until
+the writer exits.
 
 ## Generation-boundary task changes
 
@@ -159,8 +162,9 @@ stay distinct and converge on normal per-individual failure isolation.
 ## Failure and retry semantics
 
 - Preparation, task loading, submit, workflow, timeout, hold, archive restoration,
-  rawData validation, and cost calculation failures are per individual. Recording
-  loss is a separate best-effort outcome and cannot convert a successful result.
+  rawData validation, and cost calculation failures are per individual and produce
+  durable diagnostic rows. Recorder failure is campaign-fatal because later
+  evaluation must not proceed with incomplete history.
 - Standard HTCondor memory/disk holds may create a fresh bounded submission with
   only the exhausted request doubled. The old cluster is removed and stale runtime
   outputs are cleared first. Workflow and timeout failures are never resource
@@ -180,7 +184,7 @@ stay distinct and converge on normal per-individual failure isolation.
 
 - Job directory creation is collision-safe.
 - Task modules are fresh-loaded and removed from global module state after use.
-- One OS byte-range lock permits one campaign per workspace. One bounded daemon
+- One OS byte-range lock permits one campaign per workspace. One bounded
   writer publishes new standard-ZIP segments by atomic rename and never opens an
   older segment in the hot write path.
 - Surrogate training scheduling permits at most one background trainer for the one

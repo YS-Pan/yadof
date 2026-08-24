@@ -3,7 +3,7 @@
 ## Intent
 
 - Give fast, local, and distributed evaluations one candidate-finalization path
-  whose valid cost return is independent of evidence persistence.
+  whose evidence must enter the reliable campaign recorder.
 
 ## Functionalities
 
@@ -13,12 +13,13 @@
   current cost from the generation snapshot, and record validation/admission timing.
 - Convert rawData/current-cost failures into candidate errors with stable objective
   width.
-- Offer the owned envelope to `CampaignSession` only after the current cost is
-  finalized; recorder refusal or failure is non-fatal.
+- Hand the owned envelope to `CampaignSession` only after the current cost is
+  finalized; capacity backpressures and recorder failure propagates.
 
 ## Invariants
 
-- The finalizer never waits for segment I/O.
-- A valid current cost is returned unchanged whether the envelope is admitted,
-  refused, later published, or later lost.
+- The finalizer may wait for recorder capacity but not for a specific segment write;
+  the dispatch boundary performs the complete durability wait.
+- A finalized result is never allowed to advance the campaign without its durable
+  evidence; envelope-construction/admission failure is a recording error.
 - Backends do not contain independent persistence branches.

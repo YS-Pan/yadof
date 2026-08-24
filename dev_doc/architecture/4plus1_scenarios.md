@@ -148,9 +148,10 @@ optimizer before evaluation. Destructive history clearing checks the same lock.
 
 Prepare, workflow, timeout, submit, resource exhaustion, invalid/nested rawData,
 missing or malformed `rawData.zip`, collection, and current-cost errors are isolated
-per individual. Queue exhaustion, oversized evidence, segment corruption, and
-writer/storage failure are best-effort history loss and preserve a valid returned
-cost. Strict CLI mode stops after an all-infinite generation and prints recent
+per individual and recorded as diagnostic rows. A full unpublished queue applies
+backpressure; the population waits for all rows to publish. An oversized envelope
+or exhausted writer/storage retries stops the campaign before later evaluation.
+Strict CLI mode stops after an all-infinite generation and prints recent
 diagnostic summaries. Pending unmatched Condor jobs receive one read-only match
 analysis rather than being incorrectly marked failed. A missing, failed, or hung
 `condor_rm` cannot keep a yadof-timed-out individual pending. If timeout prevents

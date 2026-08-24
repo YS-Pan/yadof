@@ -5,9 +5,11 @@
 `yadof.evaluate_manager` turns normalized candidates into fast logical evaluations
 or prepared jobs, executes them in reusable local workers, prepared local
 subprocesses, or HTCondor, normalizes every outcome into ordered `JobResult` rows,
-derives current cost through one common finalizer, and offers owned evidence to the
+derives current cost through one common finalizer, and hands owned evidence to the
 campaign recorder. A preparation, execution, collection, rawData, or cost failure
-affects only its candidate. Recording loss never changes a valid result.
+affects only its candidate and produces a durable diagnostic row. Recorder
+backpressure may delay worker reuse or population completion; recorder failure
+stops the campaign before later evaluation.
 
 `resource_calibration.py` is the shared automation boundary. It reads backend-neutral
 resource keys with legacy backend-key fallback, selects compatible smoke or
@@ -80,7 +82,7 @@ When CLI progress is active, the manager owns one backend-neutral population bar
 Fast reports after current-cost finalization; local reports each completed future;
 distributed receives terminal results through the Condor runner's result callback.
 Preparation failures count immediately. Each population index is idempotent, and
-recorder refusal/publication failure cannot revise progress success.
+the population does not return until its recorder flush has completed.
 
 Distributed support preserves concrete CPU/memory/disk requests, workspace-local
 calibration, bounded yadof memory/disk resubmission, automatic/fixed scheduler
@@ -104,10 +106,10 @@ the same calibration module; only backend-specific enforcement remains separate.
 ## Recording and cost return
 
 `finalizer.py` converts file-backed or memory-backed evidence to one owned validated
-envelope, calculates cost with the generation snapshot, returns the finalized
-`JobResult`, and only then makes a non-blocking session offer. Failed candidates
-return `inf` with current objective width. Result order always matches candidate
-order.
+envelope, calculates cost with the generation snapshot, and hands the finalized
+`JobResult` to the backpressured session recorder. Failed candidates return `inf`
+with current objective width and are recorded too. Result order always matches
+candidate order, and every dispatch waits for durable population publication.
 
 ## Invariants
 

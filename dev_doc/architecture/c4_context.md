@@ -67,10 +67,12 @@ frozen benchmark inputs, and writes only to an explicitly selected output root.
   neither writes authoritative costs.
 - Fast, local, and distributed backends converge on backend-neutral results and the
   same finalizer. Fast results carry named memory rawData and no fake job path;
-  local/distributed results carry file-backed rawData. Current cost is complete
-  before best-effort segment admission and cannot be invalidated by recording loss.
-- A failed candidate keeps population order and yields a correctly sized infinite
-  objective row with diagnostics.
+  local/distributed results carry file-backed rawData. Current cost is calculated
+  before recorder admission, bounded recorder capacity applies backpressure, and a
+  population cannot complete until all of its evidence is durably published.
+- A failed candidate keeps population order, yields a correctly sized infinite
+  objective row with diagnostics, and is durably recorded before the population
+  boundary completes.
 - Historical rawData can be reinterpreted by the current cost definition.
 - Users may correct parameter ranges/levels, fixed-width objective/cost policy,
   optimization composition, configuration, and task execution code between generations. Parameter

@@ -33,10 +33,12 @@ path settings and must not overlap task, jobs, or recorded-data paths. Fast poli
 does not reuse HTCondor request fields.
 
 Recorder policy defines the segment candidate cap/byte target, maximum one-candidate
-size, complete unpublished candidate/byte budgets, consecutive-write-failure circuit
-breaker, and bounded shutdown timeout. Validation enforces positive finite values
-and cross-field bounds. A campaign freezes these storage policy values and the
+size, complete unpublished candidate/byte backpressure budgets, and the maximum
+attempts for one failing segment. Validation enforces positive finite values and
+cross-field bounds. A campaign freezes these storage policy values and the
 recorded-data path at session creation; generation task semantics may still reload.
+There is no lossy shutdown timeout: campaign close waits for queued and in-flight
+publication.
 
 ## Dependencies and consumers
 

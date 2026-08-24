@@ -20,9 +20,10 @@
 - Recorded data is durable evidence and compact provenance. It is not an optimizer
   cache of permanently authoritative cost values.
 - A record envelope is candidate-owned validated rawData plus bounded provenance
-  offered only after current cost is known. A campaign session owns the hot derived
-  row even while the envelope is pending; a deliberately dropped row remains usable
-  only until changed interpretation requires evidence it no longer has.
+  handed to the recorder only after current cost is known. A campaign session owns
+  the hot derived row while the envelope is pending, applies backpressure when the
+  unpublished budget is full, and does not cross the population boundary until the
+  envelope is durably published.
 - A segment is an immutable standard ZIP containing a bounded micro-batch. Candidate
   member loss and whole-segment loss are distinct recovery units.
 - An external simulator Python runtime is a separately provisioned interpreter and
@@ -85,8 +86,8 @@ separate provenance.
 ## Invariants
 
 - Fast/local/distributed evaluators differ in execution transport and intermediate
-  evidence backing, but converge on one finalizer. Current cost precedes and is
-  independent of best-effort durable recording.
+  evidence backing, but converge on one finalizer. Current cost precedes recorder
+  admission, and later evaluation depends on reliable durable publication.
 - Fast uses bounded reusable local processes. A crash or timeout discards and
   replaces only that worker, cleans its configured scratch, and preserves ordering.
 - Local concurrency is bounded by population size, an explicit cap, physical CPU,
@@ -99,10 +100,11 @@ separate provenance.
   between definitions.
 - All population-return paths preserve input order and objective width.
 - Individual execution/rawData/current-cost failures yield diagnostic rows and
-  infinite costs without deleting successful evidence. Recording loss never turns
-  a valid result into a failure.
-- One campaign lock and one bounded daemon writer exist per active workspace. Count
-  and conservative peak-resident byte credits cover queued and in-flight envelopes;
+  infinite costs without deleting successful evidence; the diagnostic rows are
+  themselves published before the population completes.
+- One campaign lock and one bounded writer exist per active workspace. Count and
+  conservative peak-resident byte credits cover queued and in-flight envelopes;
+  full budgets block producers, publication failure stops the campaign, and
   published segments and legacy files are never rewritten.
 - Stored rawData stays rich enough for later cost changes and surrogate learning;
   task cost code may select smaller windows when calculating objectives.

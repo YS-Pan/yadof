@@ -37,10 +37,15 @@ Advanced history-recorder settings are
 `HISTORY_MAX_CANDIDATE_BYTES` (64 MiB),
 `HISTORY_UNPUBLISHED_MAX_CANDIDATES` (default 32),
 `HISTORY_UNPUBLISHED_MAX_BYTES` (512 MiB),
-`HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES` (3), and
-`HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC` (5 seconds). Count and byte budgets are
-independent. They are frozen when a campaign starts even though task-semantic
-configuration remains hot-reloadable at generation boundaries.
+and `HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES` (3 attempts for the same pending
+segment). Count and byte budgets are independent backpressure limits, not loss
+allowances. When either unpublished budget is full, evaluation finalization waits
+for the writer to publish enough evidence. Every evaluation/generation boundary
+waits until all admitted evidence is durably published. A record above the explicit
+single-candidate safety limit or a writer that exhausts its retry count stops the
+campaign before a later evaluation can begin. Recorder settings are frozen when a
+campaign starts even though task-semantic configuration remains hot-reloadable at
+generation boundaries.
 
 ## Local concurrency and resource calibration
 

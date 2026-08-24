@@ -169,9 +169,12 @@ processes on the submit machine, and creates no durable `jobs/<candidate>/`
 directory. A simulator may use the configured fast scratch root, but each candidate
 scratch is temporary, isolated, and cleaned; it is not evidence or a recovery point.
 The parent validates returned memory rawData and calculates current cost in the same
-backend-neutral finalizer used by local and distributed execution. It then offers an
-owned evidence envelope to a bounded best-effort recorder. Recording refusal or a
-later disk error never changes an already valid returned cost.
+backend-neutral finalizer used by local and distributed execution. It then hands an
+owned evidence envelope to the bounded campaign recorder. When publication cannot
+keep up, recorder admission waits for capacity; the population boundary waits for
+all evidence to become durable before later evaluation begins. A hard record-limit
+or storage failure stops the campaign visibly instead of continuing with missing
+history.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

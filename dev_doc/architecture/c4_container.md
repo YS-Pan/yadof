@@ -21,7 +21,7 @@ flowchart LR
     Schedd --> Result
     Result --> Finalizer["Common current-cost finalizer"]
     Finalizer --> Optimizer["Optimizer and surrogate"]
-    Finalizer -. non-blocking owned envelope .-> Records["Bounded segment recorder"]
+    Finalizer -->|backpressured owned envelope| Records["Reliable segment recorder"]
 ```
 
 ## Agent interaction
@@ -80,9 +80,11 @@ Prepared jobs merge a current workspace task payload with package worker resourc
 Fast results instead carry validated named memory payloads and explicitly set
 `job_dir=None`. All three backends converge on one `JobResult` finalizer for rawData
 ownership, current-cost derivation, worker release, failure isolation, and
-tuple-shape contracts. Only afterward does a non-blocking offer enter the
-campaign's bounded best-effort segment writer; recording loss cannot change a
-valid result.
+tuple-shape contracts. Only afterward does the owned envelope enter the campaign's
+bounded segment writer. Admission waits when the unpublished budget is full, and
+the population boundary waits until every admitted envelope is atomically
+published. Exhausted write retries stop the campaign before later evaluation can
+proceed.
 
 The listed `chrono_com.py` resource implements the PyChrono subprocess protocol.
 Its task-side parent/child pair remains inside the local, fast, or execute-node

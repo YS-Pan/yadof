@@ -2,7 +2,7 @@
 
 ## Intent
 
-- Own the complete in-memory and asynchronous persistence lifetime of one campaign.
+- Own the complete in-memory and backpressured persistence lifetime of one campaign.
 
 ## Functionalities
 
@@ -11,17 +11,17 @@
 - Create one immutable generation task snapshot per boundary, validate stable
   parameter/objective shapes, and reinterpret history only when its interpretation
   fingerprint changes.
-- Admit owned envelopes without blocking against exact candidate and conservative
-  byte budgets; one daemon writer batches by run/generation and selected limits.
-- Flush generation boundaries, continue after isolated write failures, open a
-  circuit breaker after repeated failures, contain writer death, and perform bounded
-  shutdown with explicit queued/in-flight accounting.
+- Admit owned envelopes against exact candidate and conservative byte budgets;
+  producers wait when capacity is full while one writer batches by run/generation
+  and selected limits.
+- Wait for durable generation boundaries, retry the same retained batch after
+  transient write failures, propagate exhausted retries or writer death as
+  `RecordingError`, and wait for queued/in-flight work during shutdown.
 
 ## Invariants
 
 - Exactly one writer exists per campaign and no per-candidate thread is created.
 - Recorder path/capacities remain frozen from campaign start.
-- A dropped row remains usable only under its already-derived interpretation; it
-  disappears when later task reinterpretation would require missing evidence.
-- Every refusal/loss/death/shutdown condition is reflected in monotonic counters and
-  bounded warnings, never in current evaluation cost.
+- Every finalized row is durably published before later evaluation or the campaign
+  stops visibly; no queue-full, failure, or shutdown path silently drops it.
+- Backpressure and retry activity is reflected in monotonic counters.

@@ -26,7 +26,7 @@ _DEFAULT_ITEMS: tuple[tuple[str, object], ...] = (
     ("LOGS_DIR", ".yadof/logs"),
     ("TOOL_OUTPUT_DIR", ".yadof/tool_output"),
     ("FAST_EVALUATION_SCRATCH_DIR", ".yadof/fast_scratch"),
-    # Best-effort immutable-segment history recorder. These values are frozen for
+    # Reliable immutable-segment history recorder. These values are frozen for
     # one active campaign even when other workspace config is hot-reloaded.
     ("HISTORY_SEGMENT_MAX_CANDIDATES", 16),
     ("HISTORY_SEGMENT_TARGET_BYTES", 16 * 1024 * 1024),
@@ -34,7 +34,6 @@ _DEFAULT_ITEMS: tuple[tuple[str, object], ...] = (
     ("HISTORY_UNPUBLISHED_MAX_CANDIDATES", 32),
     ("HISTORY_UNPUBLISHED_MAX_BYTES", 512 * 1024 * 1024),
     ("HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES", 3),
-    ("HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC", 5.0),
     # Evaluation backend.
     ("EVALUATION_MODE", "local"),
     ("EVALUATION_TIMEOUT_SEC", 6 * 60 * 60),
@@ -184,7 +183,6 @@ _POSITIVE_REAL_NAMES = {
     "SURROGATE_TARGET_SCALE_FLOOR",
     "SURROGATE_INR_LR",
     "SURROGATE_INR_BOOTSTRAP_FRACTION",
-    "HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC",
 }
 _NONNEGATIVE_REAL_NAMES = {
     "SURROGATE_CONSTANT_ATOL",

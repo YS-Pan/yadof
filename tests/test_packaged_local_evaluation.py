@@ -9,7 +9,7 @@ import pytest
 
 import yadof
 from yadof.config import load_config
-from yadof.recorded_data import api as recorded_api
+from yadof.recorded_data import RecordingError, api as recorded_api
 from yadof.evaluate_manager import (
     JobPreparationError,
     evaluate_population,
@@ -331,7 +331,7 @@ def test_packaged_local_timeout_is_per_individual_failure(tmp_path: Path) -> Non
     assert recorded_api.list_records(root)[0]["status"] == "timeout"
 
 
-def test_packaged_record_failure_is_isolated_per_individual(
+def test_packaged_record_failure_stops_campaign(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from yadof.recorded_data import session as session_module
@@ -342,16 +342,14 @@ def test_packaged_record_failure_is_isolated_per_individual(
         raise OSError("simulated segment publication failure")
 
     monkeypatch.setattr(session_module, "publish_segment", fail_publication)
-    costs = evaluate_population(
-        root,
-        ((0.0,), (1.0,)),
-        mode="local",
-        timeout_sec=5.0,
-        env=_source_environment(),
-    )
-
-    assert math.isfinite(costs[0][0])
-    assert costs[1] == pytest.approx((0.9,))
+    with pytest.raises(RecordingError, match="before all evidence could be published"):
+        evaluate_population(
+            root,
+            ((0.0,), (1.0,)),
+            mode="local",
+            timeout_sec=5.0,
+            env=_source_environment(),
+        )
     assert recorded_api.list_records(root) == ()
 
 

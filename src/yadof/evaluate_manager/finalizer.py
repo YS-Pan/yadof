@@ -1,4 +1,4 @@
-"""Backend-neutral result validation, current cost, and recorder admission."""
+"""Backend-neutral result validation, current cost, and reliable recording."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import time
 from ..job_template import api as job_template_api
 from ..recorded_data.rawdata import own_rawdata_source
 from ..recorded_data.records import build_owned_envelope
-from ..recorded_data.session import CampaignSession
+from ..recorded_data.session import CampaignSession, RecordingError
 from ..task_snapshot import GenerationTaskSnapshot
 from .types import JobResult
 
@@ -20,7 +20,7 @@ def finalize_result(
     snapshot: GenerationTaskSnapshot,
     result: JobResult,
 ) -> JobResult:
-    """Return current cost before and independently of best-effort persistence."""
+    """Finalize current cost and hand the result to the reliable recorder."""
 
     started = time.monotonic()
     metadata = dict(result.metadata)
@@ -34,7 +34,7 @@ def finalize_result(
     )
     if result.status != "done":
         failed = replace(result, metadata=metadata, costs=None)
-        _offer_nonfatal(session, snapshot, failed, (), None)
+        _record_result(session, snapshot, failed, (), None)
         return failed
 
     try:
@@ -76,7 +76,7 @@ def finalize_result(
             metadata=metadata,
             costs=None,
         )
-        _offer_nonfatal(session, snapshot, failed, (), None)
+        _record_result(session, snapshot, failed, (), None)
         return failed
 
     metadata["rawdata_validation_cost_sec"] = max(0.0, time.monotonic() - started)
@@ -88,7 +88,7 @@ def finalize_result(
         costs=tuple(float(value) for value in costs),
     )
     admission_started = time.monotonic()
-    _offer_nonfatal(session, snapshot, finalized, owned, finalized.costs)
+    _record_result(session, snapshot, finalized, owned, finalized.costs)
     finalized_metadata = dict(finalized.metadata)
     finalized_metadata["recorder_admission_sec"] = max(
         0.0, time.monotonic() - admission_started
@@ -96,7 +96,7 @@ def finalize_result(
     return replace(finalized, metadata=finalized_metadata)
 
 
-def _offer_nonfatal(
+def _record_result(
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
     result: JobResult,
@@ -112,18 +112,18 @@ def _offer_nonfatal(
             result.metadata,
             status="completed" if result.status == "done" else result.status,
         )
-        session.add_finalized(
-            envelope,
-            normalized=(
-                result.normalized_variables if result.status == "done" else None
-            ),
-            costs=costs,
-            interpretation_fingerprint=snapshot.interpretation_fingerprint,
-        )
-    except Exception:
-        # A valid cost is already final at this boundary. Even envelope construction
-        # and logging failures are best-effort recording loss.
-        return
+    except Exception as exc:
+        raise RecordingError(
+            f"failed to construct durable evidence for {result.job_name}"
+        ) from exc
+    session.add_finalized(
+        envelope,
+        normalized=(
+            result.normalized_variables if result.status == "done" else None
+        ),
+        costs=costs,
+        interpretation_fingerprint=snapshot.interpretation_fingerprint,
+    )
 
 
 def _now_text() -> str:

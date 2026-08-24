@@ -6,7 +6,6 @@ from pathlib import Path
 import struct
 import threading
 import time
-import warnings
 import zipfile
 
 import numpy as np
@@ -27,7 +26,7 @@ from yadof.recorded_data.segment_store import (
     open_historical_rawdata_snapshot,
     publish_segment,
 )
-from yadof.recorded_data.session import CampaignSession
+from yadof.recorded_data.session import CampaignSession, RecordingError
 from yadof.tools.history import clear_history
 from yadof.workspace.init import init_workspace
 
@@ -92,7 +91,7 @@ def _session(
     return session, session.begin_generation(config)
 
 
-def test_common_finalizer_returns_cost_when_recording_drops(tmp_path: Path) -> None:
+def test_oversized_recording_aborts_before_later_evaluation(tmp_path: Path) -> None:
     root = _workspace(tmp_path / "workspace")
     session, snapshot = _session(
         root,
@@ -100,11 +99,9 @@ def test_common_finalizer_returns_cost_when_recording_drops(tmp_path: Path) -> N
         HISTORY_UNPUBLISHED_MAX_BYTES=8192,
     )
     try:
-        finalized = finalize_result(session, snapshot, _result(0, 0.25))
-        assert finalized.status == "done"
-        assert finalized.costs is not None
-        assert session.counters()["oversized_dropped"] == 1
-        assert session.historical_results(snapshot)[-1][2] == finalized.costs
+        with pytest.raises(RecordingError, match="HISTORY_MAX_CANDIDATE_BYTES"):
+            finalize_result(session, snapshot, _result(0, 0.25))
+        assert session.counters()["admitted"] == 0
     finally:
         session.close()
     assert discover_catalog(recorded_data_paths(root)).references == ()
@@ -131,6 +128,19 @@ def test_file_and_memory_evidence_finalize_to_equal_costs(tmp_path: Path) -> Non
         assert file_backed.costs == pytest.approx(memory.costs)
     finally:
         session.close()
+
+
+def test_duplicate_campaign_candidate_identity_is_fatal(tmp_path: Path) -> None:
+    root = _workspace(tmp_path / "workspace")
+    session, snapshot = _session(root)
+    try:
+        assert finalize_result(session, snapshot, _result(0, 0.35)).costs is not None
+        with pytest.raises(RecordingError, match="duplicate campaign candidate identity"):
+            finalize_result(session, snapshot, _result(0, 0.45))
+        session.flush_boundary()
+    finally:
+        session.close()
+    assert len(discover_catalog(recorded_data_paths(root)).references) == 1
 
 
 def test_segment_count_limit_and_immutable_zip_layout(tmp_path: Path) -> None:
@@ -360,7 +370,7 @@ def test_bad_candidate_member_does_not_hide_readable_sibling(tmp_path: Path) -> 
     assert rows[0][0] == "candidate_0_1"
 
 
-def test_writer_failure_drops_one_segment_then_recovers(
+def test_writer_failure_retries_same_segment_without_loss(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from yadof.recorded_data import session as session_module
@@ -393,10 +403,10 @@ def test_writer_failure_drops_one_segment_then_recovers(
     finally:
         counters = session.close()
     assert counters["write_failed"] == 1
-    assert counters["published_candidates"] == 1
+    assert counters["published_candidates"] == 2
 
 
-def test_consecutive_writer_failures_open_circuit_without_cost_loss(
+def test_consecutive_writer_failures_abort_before_next_generation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from yadof.recorded_data import session as session_module
@@ -413,22 +423,13 @@ def test_consecutive_writer_failures_open_circuit_without_cost_loss(
         HISTORY_UNPUBLISHED_MAX_CANDIDATES=4,
         HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES=2,
     )
-    costs = []
-    try:
-        for index in range(2):
-            costs.append(finalize_result(session, snapshot, _result(index, 0.1)).costs)
-            deadline = time.monotonic() + 5.0
-            while (
-                session.counters()["write_failed"] < index + 1
-                and time.monotonic() < deadline
-            ):
-                time.sleep(0.01)
-        costs.append(finalize_result(session, snapshot, _result(2, 0.1)).costs)
-        counters = session.counters()
-        assert counters["write_failed"] == 2
-        assert counters["disabled_dropped"] == 1
-        assert all(cost is not None for cost in costs)
-    finally:
+    assert finalize_result(session, snapshot, _result(0, 0.1)).costs is not None
+    with pytest.raises(RecordingError, match="no later evaluation may proceed"):
+        session.flush_boundary()
+    counters = session.counters()
+    assert counters["write_failed"] == 2
+    assert counters["fatal_errors"] == 1
+    with pytest.raises(RecordingError, match="before all evidence could be published"):
         session.close()
 
 
@@ -448,14 +449,70 @@ def test_unexpected_writer_death_keeps_campaign_exclusive_until_close(
     while session._writer._thread.is_alive() and time.monotonic() < deadline:
         time.sleep(0.01)
     assert not session._writer._thread.is_alive()
-    finalized = finalize_result(session, snapshot, _result(0, 0.1))
-    assert finalized.costs is not None
-    assert session.counters()["disabled_dropped"] == 1
+    with pytest.raises(RecordingError, match="writer failed"):
+        finalize_result(session, snapshot, _result(0, 0.1))
+    assert session.counters()["fatal_errors"] == 1
     with pytest.raises(CampaignActiveError):
         CampaignSession(load_config(root))
-    session.close()
+    with pytest.raises(RecordingError, match="before all evidence could be published"):
+        session.close()
+    monkeypatch.undo()
     followup = CampaignSession(load_config(root))
     followup.close()
+
+
+def test_full_unpublished_budget_backpressures_instead_of_dropping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from yadof.recorded_data import session as session_module
+
+    root = _workspace(tmp_path / "workspace")
+    entered = threading.Event()
+    release = threading.Event()
+    real_publish = session_module.publish_segment
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        release.wait()
+        return real_publish(*args, **kwargs)
+
+    monkeypatch.setattr(session_module, "publish_segment", blocked)
+    session, snapshot = _session(
+        root,
+        HISTORY_SEGMENT_MAX_CANDIDATES=1,
+        HISTORY_UNPUBLISHED_MAX_CANDIDATES=1,
+    )
+    first = finalize_result(session, snapshot, _result(0, 0.1))
+    assert first.costs is not None
+    assert entered.wait(2.0)
+    outcome: list[JobResult] = []
+    errors: list[BaseException] = []
+
+    def finalize_second() -> None:
+        try:
+            outcome.append(finalize_result(session, snapshot, _result(1, 0.2)))
+        except BaseException as exc:
+            errors.append(exc)
+
+    producer = threading.Thread(target=finalize_second)
+    producer.start()
+    deadline = time.monotonic() + 2.0
+    while (
+        session.counters()["backpressure_waits"] < 1
+        and time.monotonic() < deadline
+    ):
+        time.sleep(0.01)
+    assert producer.is_alive()
+    assert session.counters()["backpressure_waits"] == 1
+    release.set()
+    producer.join(5.0)
+    assert not producer.is_alive()
+    assert errors == []
+    assert outcome[0].costs is not None
+    session.flush_boundary()
+    counters = session.close()
+    assert counters["published_candidates"] == 2
+    assert counters["backpressure_wait_sec"] > 0.0
 
 
 def test_campaign_locks_are_independent_between_workspaces(tmp_path: Path) -> None:
@@ -555,7 +612,7 @@ def test_publication_never_opens_an_older_segment(
     publish_segment(storage, (second_envelope,), sequence=1)
 
 
-def test_bounded_shutdown_reports_unknown_and_retains_lock(
+def test_shutdown_waits_for_in_flight_publication_and_retains_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from yadof.recorded_data import session as session_module
@@ -574,28 +631,31 @@ def test_bounded_shutdown_reports_unknown_and_retains_lock(
     session, snapshot = _session(
         root,
         HISTORY_SEGMENT_MAX_CANDIDATES=1,
-        HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC=0.05,
     )
     finalize_result(session, snapshot, _result(0, 0.1))
     assert entered.wait(2.0)
-    started = time.monotonic()
-    counters = session.close()
-    assert time.monotonic() - started < 0.5
-    assert counters["in_flight_shutdown_unknown"] is True
+    closed: list[dict[str, object]] = []
+    errors: list[BaseException] = []
+
+    def close_session() -> None:
+        try:
+            closed.append(session.close())
+        except BaseException as exc:
+            errors.append(exc)
+
+    closer = threading.Thread(target=close_session)
+    closer.start()
+    time.sleep(0.1)
+    assert closer.is_alive()
     with pytest.raises(CampaignActiveError):
         CampaignSession(load_config(root))
     release.set()
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        try:
-            followup = CampaignSession(load_config(root))
-        except CampaignActiveError:
-            time.sleep(0.01)
-            continue
-        followup.close()
-        break
-    else:
-        pytest.fail("writer did not release the campaign lock after unblocking")
+    closer.join(5.0)
+    assert not closer.is_alive()
+    assert errors == []
+    assert closed[0]["published_candidates"] == 1
+    followup = CampaignSession(load_config(root))
+    followup.close()
 
 
 def test_catalog_scale_near_100000_is_linear_and_tolerant(
@@ -666,17 +726,13 @@ def test_5000_row_startup_does_not_make_finalizer_scan_history(
     )
     session, snapshot = _session(
         root,
-        HISTORY_MAX_CANDIDATE_BYTES=4096,
-        HISTORY_UNPUBLISHED_MAX_BYTES=8192,
     )
     try:
         started = time.monotonic()
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            costs = [
-                finalize_result(session, snapshot, _result(index, 0.1)).costs
-                for index in range(100)
-            ]
+        costs = [
+            finalize_result(session, snapshot, _result(index, 0.1)).costs
+            for index in range(100)
+        ]
         elapsed = time.monotonic() - started
         assert all(cost is not None for cost in costs)
         assert len(session.records()) == 5100

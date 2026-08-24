@@ -1,4 +1,4 @@
-"""Campaign-owned hot history and bounded asynchronous segment recorder."""
+"""Campaign-owned hot history and backpressured segment recorder."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from dataclasses import asdict, dataclass, replace
 import threading
 import time
 from types import MappingProxyType
-import warnings
 from typing import Mapping, Sequence
 import uuid
 
@@ -31,21 +30,25 @@ from .segment_store import (
 )
 
 
+class RecordingError(RuntimeError):
+    """Raised when durable campaign evidence cannot be published."""
+
+
 @dataclass(slots=True)
 class RecorderCounters:
     offered: int = 0
     admitted: int = 0
     published_candidates: int = 0
     published_segments: int = 0
-    queue_dropped: int = 0
-    oversized_dropped: int = 0
     write_failed: int = 0
     write_failed_segments: int = 0
-    disabled_dropped: int = 0
-    shutdown_dropped: int = 0
+    fatal_errors: int = 0
+    backpressure_waits: int = 0
+    backpressure_wait_sec: float = 0.0
+    flush_waits: int = 0
+    flush_wait_sec: float = 0.0
     peak_unpublished_candidates: int = 0
     peak_unpublished_bytes: int = 0
-    in_flight_shutdown_unknown: bool = False
 
 
 @dataclass(slots=True)
@@ -66,7 +69,7 @@ class _BoundedSegmentWriter:
         config: LoadedConfig,
         *,
         on_published,
-        on_dropped,
+        on_failed,
         on_exit,
     ) -> None:
         self.storage = storage
@@ -78,7 +81,6 @@ class _BoundedSegmentWriter:
         )
         self.max_unpublished_bytes = int(config.HISTORY_UNPUBLISHED_MAX_BYTES)
         self.max_failures = int(config.HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES)
-        self.shutdown_timeout = float(config.HISTORY_WRITER_SHUTDOWN_TIMEOUT_SEC)
         if self.max_segment_count > self.max_unpublished_count:
             raise ValueError(
                 "HISTORY_SEGMENT_MAX_CANDIDATES must not exceed "
@@ -90,71 +92,117 @@ class _BoundedSegmentWriter:
                 "HISTORY_UNPUBLISHED_MAX_BYTES"
             )
         self._on_published = on_published
-        self._on_dropped = on_dropped
+        self._on_failed = on_failed
         self._on_exit = on_exit
         self._condition = threading.Condition()
         self._queue: deque[RecordEnvelope] = deque()
         self._flush_requested = False
         self._shutdown = False
-        self._disabled = False
-        self._publishing = False
+        self._active_batch: tuple[RecordEnvelope, ...] = ()
         self._unpublished_count = 0
         self._unpublished_bytes = 0
         self._consecutive_failures = 0
-        self._warned_drops = 0
+        self._fatal_error: BaseException | None = None
         self._counters = RecorderCounters()
         self._sequences = next_sequence_by_directory(storage)
         self._thread = threading.Thread(
             target=self._run_guarded,
             name="yadof-history-writer",
-            daemon=True,
+            daemon=False,
         )
         self._thread.start()
 
     def offer(self, envelope: RecordEnvelope) -> bool:
-        dropped: tuple[RecordEnvelope, ...] = ()
-        reason = ""
+        wait_started: float | None = None
         with self._condition:
             self._counters.offered += 1
-            if not self._thread.is_alive() or self._disabled or self._shutdown:
-                self._counters.disabled_dropped += 1
-                dropped = (envelope,)
-                reason = "disabled"
-            elif envelope.reservation_bytes > self.max_candidate_bytes:
-                self._counters.oversized_dropped += 1
-                dropped = (envelope,)
-                reason = "oversized"
-            elif (
-                self._unpublished_count + 1 > self.max_unpublished_count
-                or self._unpublished_bytes + envelope.reservation_bytes
-                > self.max_unpublished_bytes
-            ):
-                self._counters.queue_dropped += 1
-                dropped = (envelope,)
-                reason = "budget"
-            else:
-                self._queue.append(envelope)
-                self._unpublished_count += 1
-                self._unpublished_bytes += envelope.reservation_bytes
-                self._counters.admitted += 1
-                self._counters.peak_unpublished_candidates = max(
-                    self._counters.peak_unpublished_candidates,
-                    self._unpublished_count,
+            self._raise_if_unavailable_unlocked()
+            if envelope.reservation_bytes > self.max_candidate_bytes:
+                raise RecordingError(
+                    "record envelope reservation exceeds "
+                    "HISTORY_MAX_CANDIDATE_BYTES: "
+                    f"{envelope.reservation_bytes} > {self.max_candidate_bytes}"
                 )
-                self._counters.peak_unpublished_bytes = max(
-                    self._counters.peak_unpublished_bytes,
-                    self._unpublished_bytes,
-                )
-                self._condition.notify_all()
-                return True
-        self._warn_drop(reason)
-        self._on_dropped(dropped, reason)
-        return False
+            try:
+                while not self._has_capacity_unlocked(envelope):
+                    self._raise_if_unavailable_unlocked()
+                    if wait_started is None:
+                        wait_started = time.monotonic()
+                        self._counters.backpressure_waits += 1
+                    self._flush_requested = True
+                    self._condition.notify_all()
+                    self._condition.wait()
+                self._raise_if_unavailable_unlocked()
+            finally:
+                if wait_started is not None:
+                    self._counters.backpressure_wait_sec += max(
+                        0.0, time.monotonic() - wait_started
+                    )
+            self._queue.append(envelope)
+            self._unpublished_count += 1
+            self._unpublished_bytes += envelope.reservation_bytes
+            self._counters.admitted += 1
+            self._counters.peak_unpublished_candidates = max(
+                self._counters.peak_unpublished_candidates,
+                self._unpublished_count,
+            )
+            self._counters.peak_unpublished_bytes = max(
+                self._counters.peak_unpublished_bytes,
+                self._unpublished_bytes,
+            )
+            self._condition.notify_all()
+            return True
 
     def flush_boundary(self) -> None:
+        wait_started: float | None = None
         with self._condition:
+            self._raise_if_unavailable_unlocked()
             self._flush_requested = True
             self._condition.notify_all()
+            try:
+                while self._unpublished_count:
+                    self._raise_if_unavailable_unlocked()
+                    if wait_started is None:
+                        wait_started = time.monotonic()
+                        self._counters.flush_waits += 1
+                    self._condition.wait()
+                self._raise_if_unavailable_unlocked()
+            finally:
+                if wait_started is not None:
+                    self._counters.flush_wait_sec += max(
+                        0.0, time.monotonic() - wait_started
+                    )
+
+    def _has_capacity_unlocked(self, envelope: RecordEnvelope) -> bool:
+        return (
+            self._unpublished_count + 1 <= self.max_unpublished_count
+            and self._unpublished_bytes + envelope.reservation_bytes
+            <= self.max_unpublished_bytes
+        )
+
+    def _raise_if_unavailable_unlocked(self) -> None:
+        if self._fatal_error is not None:
+            raise RecordingError(
+                "campaign evidence writer failed; no later evaluation may proceed"
+            ) from self._fatal_error
+        if self._shutdown:
+            raise RecordingError("campaign evidence writer is shutting down")
+        if not self._thread.is_alive():
+            raise RecordingError("campaign evidence writer stopped unexpectedly")
+
+    def _set_fatal_unlocked(self, exc: BaseException) -> None:
+        if self._fatal_error is None:
+            self._fatal_error = exc
+            self._counters.fatal_errors += 1
+        self._condition.notify_all()
+
+    def _fail_pending_unlocked(self) -> tuple[RecordEnvelope, ...]:
+        failed = self._active_batch + tuple(self._queue)
+        self._active_batch = ()
+        self._queue.clear()
+        self._release_budget_unlocked(failed)
+        self._condition.notify_all()
+        return failed
 
     def counters(self) -> dict[str, object]:
         with self._condition:
@@ -165,40 +213,28 @@ class _BoundedSegmentWriter:
             self._shutdown = True
             self._flush_requested = True
             self._condition.notify_all()
-        self._thread.join(timeout=self.shutdown_timeout)
-        if not self._thread.is_alive():
-            return True
+        self._thread.join()
         with self._condition:
-            dropped = tuple(self._queue)
-            self._queue.clear()
-            self._release_budget_unlocked(dropped)
-            self._counters.shutdown_dropped += len(dropped)
-            if self._publishing:
-                self._counters.in_flight_shutdown_unknown = True
-            self._condition.notify_all()
-        if dropped:
-            self._on_dropped(dropped, "shutdown")
-        return False
+            if self._fatal_error is not None:
+                raise RecordingError(
+                    "campaign closed before all evidence could be published"
+                ) from self._fatal_error
+        return True
 
     def _run_guarded(self) -> None:
         try:
             self._run()
-        except BaseException as exc:  # noqa: BLE001 - writer death is non-fatal.
+        except BaseException as exc:  # noqa: BLE001 - wake blocked producers.
             with self._condition:
-                self._disabled = True
-                dropped = tuple(self._queue)
-                self._queue.clear()
-                self._release_budget_unlocked(dropped)
-                self._counters.disabled_dropped += len(dropped)
-            if dropped:
-                self._on_dropped(dropped, "writer_death")
-            self._warn_drop(f"writer_death:{type(exc).__name__}")
+                self._set_fatal_unlocked(exc)
+                failed = self._fail_pending_unlocked()
+            if failed:
+                self._on_failed(failed, "writer_death")
         finally:
             # An unexpectedly dead recorder must not release the campaign's
             # exclusivity while optimization continues. CampaignSession.close()
-            # releases it after joining the already-dead thread. A writer that
-            # exits after shutdown (including a previously blocked call) releases
-            # the retained lock here so a timed-out close eventually recovers.
+            # releases it after joining the already-dead thread. A normal shutdown
+            # releases the retained lock here after every publication completes.
             with self._condition:
                 release_on_exit = self._shutdown
             if release_on_exit:
@@ -213,49 +249,46 @@ class _BoundedSegmentWriter:
                 batch = self._take_batch_unlocked()
                 if not batch:
                     continue
-                self._publishing = True
+                self._active_batch = batch
             first = batch[0]
             key = segment_counter_key(first.run_id, first.generation_index)
             sequence = self._sequences.get(key, 0)
-            try:
-                _path, references = publish_segment(
-                    self.storage, batch, sequence=sequence
-                )
-            except Exception as exc:  # noqa: BLE001 - storage loss is contained.
-                with self._condition:
-                    self._publishing = False
-                    self._release_budget_unlocked(batch)
-                    self._counters.write_failed += len(batch)
-                    self._counters.write_failed_segments += 1
-                    self._consecutive_failures += 1
-                    disable = self._consecutive_failures >= self.max_failures
-                    disabled = ()
-                    if disable:
-                        self._disabled = True
-                        disabled = tuple(self._queue)
-                        self._queue.clear()
-                        self._release_budget_unlocked(disabled)
-                        self._counters.disabled_dropped += len(disabled)
-                    self._condition.notify_all()
-                self._on_dropped(batch, "write_failed")
-                if disabled:
-                    self._on_dropped(disabled, "disabled")
-                self._warn_drop(f"write_failed:{type(exc).__name__}")
-                continue
+            while True:
+                try:
+                    _path, references = publish_segment(
+                        self.storage, batch, sequence=sequence
+                    )
+                except Exception as exc:  # noqa: BLE001 - retry the same evidence.
+                    with self._condition:
+                        self._counters.write_failed += len(batch)
+                        self._counters.write_failed_segments += 1
+                        self._consecutive_failures += 1
+                        exhausted = self._consecutive_failures >= self.max_failures
+                        if exhausted:
+                            self._set_fatal_unlocked(exc)
+                            failed = self._fail_pending_unlocked()
+                        else:
+                            failed = ()
+                    if exhausted:
+                        if failed:
+                            self._on_failed(failed, "write_failed")
+                        return
+                    continue
+                break
+            self._on_published(batch, references)
             with self._condition:
-                self._publishing = False
+                self._active_batch = ()
                 self._release_budget_unlocked(batch)
                 self._consecutive_failures = 0
                 self._sequences[key] = sequence + 1
                 self._counters.published_candidates += len(batch)
                 self._counters.published_segments += 1
                 self._condition.notify_all()
-            self._on_published(batch, references)
 
     def _ready_unlocked(self) -> bool:
         if self._shutdown:
             return True
-        if not self._queue or self._disabled:
+        if not self._queue:
             return False
         if self._flush_requested:
             return True
@@ -306,20 +339,6 @@ class _BoundedSegmentWriter:
             - sum(envelope.reservation_bytes for envelope in envelopes),
         )
 
-    def _warn_drop(self, reason: str) -> None:
-        self._warned_drops += 1
-        count = self._warned_drops
-        if count == 1 or count & (count - 1) == 0:
-            try:
-                warnings.warn(
-                    f"yadof best-effort history recording loss ({reason}); "
-                    f"loss warnings so far={count}",
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
-            except Exception:
-                pass
-
 
 class CampaignSession:
     """Private per-campaign recorder, catalog, and derived history view."""
@@ -351,7 +370,7 @@ class CampaignSession:
                 self.storage,
                 config,
                 on_published=self._on_published,
-                on_dropped=self._on_dropped,
+                on_failed=self._on_failed,
                 on_exit=self._release_campaign_lock,
             )
         except Exception:
@@ -421,10 +440,22 @@ class CampaignSession:
         )
         with self._state_lock:
             if envelope.candidate_id in self._rows:
-                row.evidence_state = "dropped"
-                row.envelope = None
+                raise RecordingError(
+                    "duplicate campaign candidate identity cannot be recorded: "
+                    f"{envelope.candidate_id}"
+                )
             self._rows[envelope.candidate_id] = row
-        return self._writer.offer(envelope)
+        try:
+            return self._writer.offer(envelope)
+        except Exception as exc:
+            with self._state_lock:
+                row.envelope = None
+                row.reference = None
+                row.evidence_state = "recording_failed"
+                metadata = dict(row.record.get("job_metadata") or {})
+                metadata["recording_error"] = str(exc)
+                row.record["job_metadata"] = metadata
+            raise
 
     def flush_boundary(self) -> None:
         self._writer.flush_boundary()
@@ -515,11 +546,17 @@ class CampaignSession:
         if self._closed:
             return self.counters()
         self._closed = True
-        finished = self._writer.shutdown()
-        if finished:
+        error: BaseException | None = None
+        try:
+            self._writer.shutdown()
+        except BaseException as exc:  # Preserve cleanup before propagating failure.
+            error = exc
+        finally:
             self._release_campaign_lock()
-        for snapshot in self._snapshots:
-            snapshot.close()
+            for snapshot in self._snapshots:
+                snapshot.close()
+        if error is not None:
+            raise error
         return self.counters()
 
     def _evidence(self, row: _SessionRow):
@@ -527,7 +564,7 @@ class CampaignSession:
             return row.envelope.rawdata_items
         if row.reference is not None:
             return load_reference_rawdata(row.reference)
-        raise FileNotFoundError("recorded evidence was dropped before publication")
+        raise FileNotFoundError("recorded evidence is unavailable after publication failure")
 
     def _on_published(
         self,
@@ -543,7 +580,7 @@ class CampaignSession:
                 row.envelope = None
                 row.evidence_state = "published"
 
-    def _on_dropped(
+    def _on_failed(
         self, envelopes: Sequence[RecordEnvelope], reason: str
     ) -> None:
         with self._state_lock:
@@ -553,9 +590,9 @@ class CampaignSession:
                     continue
                 row.envelope = None
                 row.reference = None
-                row.evidence_state = "dropped"
+                row.evidence_state = "recording_failed"
                 metadata = dict(row.record.get("job_metadata") or {})
-                metadata["recording_loss"] = str(reason)
+                metadata["recording_error"] = str(reason)
                 row.record["job_metadata"] = metadata
 
     def _release_campaign_lock(self) -> None:
@@ -577,4 +614,4 @@ def _raw_variables_tuple(
     return tuple(float(value[name]) for name in snapshot.parameter_names)
 
 
-__all__ = ["CampaignSession", "RecorderCounters"]
+__all__ = ["CampaignSession", "RecorderCounters", "RecordingError"]
