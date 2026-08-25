@@ -99,7 +99,36 @@ def test_stream_pipe_can_log_without_forwarding_to_console(tmp_path: Path) -> No
     assert output.read_text(encoding="utf-8") == "first\n第二行\n"
 
 
-def test_interactive_progress_redraws_below_lifecycle_text() -> None:
+def test_stream_pipe_converts_child_progress_without_forwarding_it(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "stderr.log"
+    forwarded = io.StringIO()
+    progress_output = io.StringIO()
+    progress = core.CellProgress(1, stream=progress_output, width=10)
+    progress.start()
+    progress.start_cell(
+        {"cell_id": "first", "planned_attempted_evaluations": 2}
+    )
+    child_progress = (
+        "[yadof] generation 0 (fast) [############################] "
+        "2/2 successful=2 errors=0 remaining=0\n"
+    )
+    core._stream_pipe(
+        io.BytesIO((child_progress + "ordinary\n").encode()),
+        output,
+        forwarded,
+        "[err] ",
+        progress,
+    )
+    progress.advance("completed")
+    progress.finish()
+    assert output.read_text(encoding="utf-8") == child_progress + "ordinary\n"
+    assert forwarded.getvalue() == "[err] ordinary\n"
+    assert "2/2 evaluations" in progress_output.getvalue()
+
+
+def test_interactive_rich_progress_keeps_cell_above_global_below_lifecycle() -> None:
     class TtyBuffer(io.StringIO):
         def isatty(self) -> bool:
             return True
@@ -107,17 +136,77 @@ def test_interactive_progress_redraws_below_lifecycle_text() -> None:
     terminal = TtyBuffer()
     progress = core.CellProgress(2, stream=terminal, width=10)
     progress.start()
+    progress.start_cell(
+        {"cell_id": "first", "planned_attempted_evaluations": 2}
+    )
     progress.write_above("[cell] first started\n")
-    progress.set_current("first")
+    assert progress.observe_yadof_line(
+        "[yadof] generation 0 (fast) [##############..............] "
+        "1/2 successful=1 errors=0 remaining=1"
+    )
     progress.advance("completed")
     progress.finish()
     output = terminal.getvalue()
-    assert "\r" in output
-    assert "\x1b" not in output
-    assert "[cell] first started\n" in output
-    assert output.endswith(
-        "[benchmark] [#####-----] 1/2 cells | completed=1 failed=0 skipped=0\n"
+    assert output.count("[cell] first started\n") == 1
+    lifecycle_end = output.index("[cell] first started\n") + len(
+        "[cell] first started\n"
     )
+    first_frame = output.index("[cell]", lifecycle_end)
+    global_frame = output.index("[benchmark]", first_frame)
+    assert "[----------] 0/2 evaluations" in output[first_frame:global_frame]
+    assert first_frame < global_frame
+
+
+def test_noninteractive_cell_progress_converts_yadof_snapshots() -> None:
+    terminal = io.StringIO()
+    progress = core.CellProgress(2, stream=terminal, width=10)
+    progress.start()
+    progress.start_cell(
+        {"cell_id": "first", "planned_attempted_evaluations": 3}
+    )
+    assert progress.observe_yadof_line(
+        "[yadof] generation 0 (fast) [############################] "
+        "3/3 successful=3 errors=0 remaining=0"
+    )
+    progress.extend_current(3)
+    assert progress.observe_yadof_line(
+        "[yadof] generation 1 (fast) [############################] "
+        "3/3 successful=2 errors=1 remaining=0"
+    )
+    assert not progress.observe_yadof_line("ordinary child output\n")
+    progress.advance("completed")
+    progress.finish()
+    output = terminal.getvalue()
+    assert "6/6 evaluations | phase=generation 1 successful=2 errors=1" in output
+    assert output.rfind("[cell] first") < output.rfind("[benchmark]")
+
+
+def test_interactive_progress_is_safe_on_windows_gbk_stream() -> None:
+    class GbkTty:
+        encoding = "gbk"
+
+        def isatty(self) -> bool:
+            return True
+
+        def write(self, value: str) -> int:
+            value.encode(self.encoding)
+            return len(value)
+
+        def flush(self) -> None:
+            pass
+
+    progress = core.CellProgress(1, stream=GbkTty(), width=10)
+    progress.start()
+    progress.start_cell(
+        {"cell_id": "first", "planned_attempted_evaluations": 2}
+    )
+    progress.observe_yadof_line(
+        "[yadof] generation 0 (fast) [##############..............] "
+        "1/2 successful=1 errors=0 remaining=1"
+    )
+    progress.write_above("result\n")
+    progress.advance("completed")
+    progress.finish()
 
 
 def test_execute_logged_preserves_large_child_output_without_streaming(

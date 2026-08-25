@@ -41,7 +41,8 @@ rawData contracts while adding the common `postprocess.py` interface. The SAW
 plot follows the response visualization used by the 20260807 SAW task; the
 test_com plot summarizes the three switch states, gain, axial ratio, and design
 variables. Their current postprocessors add the runner-supplied prefix to every
-artifact so multiple cells can share one flat output directory safely.
+artifact when requested. The current runner instead supplies an empty prefix and a
+fresh attempt-specific result directory, so each benchmark result is isolated.
 
 The selected Chrono task preserves the parameter and objective counts while adding
 Bullet NSC contact between the ground and the arm, hanger/counterweight assembly,
@@ -49,9 +50,11 @@ and ball; initially intersecting mechanisms are rejected. The former bundled
 release and stress arrays are now 16 semantic rawData fields: nine scalars and
 seven independent 513-sample curves. Its workspace also carries the renderer and
 a common `postprocess.py` entry point that writes the selected replay video,
-poster, trajectory, diagnostics, selected-job ZIP, manifest, and cost image as
-prefixed files directly in the same run directory. Animation scratch is temporary
-and does not create a result subdirectory.
+poster, trajectory, diagnostics, selected-job ZIP, and manifest as direct files in
+the supplied result directory. The current runner gives that
+postprocessor a separate attempt directory and writes cost views to the shared
+`visualizations/viewcost/` directory. Animation scratch is temporary and does not
+create a nested result directory.
 
 `trebuchet-42e80c54ebb5` derives from `trebuchet-20167c28925b`; its scientific
 task is unchanged, while its visualization output is now entirely flat.

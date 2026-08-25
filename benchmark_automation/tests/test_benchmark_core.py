@@ -244,19 +244,23 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
         for cell in measured
     )
     assert all(
-        cell["planned_commands"][-2][-3] == "<run-root>/visualizations"
+        cell["planned_commands"][-2][-3]
+        == f"<run-root>/visualizations/{cell['cell_id']}__attempt-<attempt>"
         for cell in measured
     )
     assert all(
-        cell["planned_commands"][-2][-1]
-        == f"{cell['cell_id']}__attempt-<attempt>__"
+        cell["planned_commands"][-2][-1] == ""
         for cell in measured
     )
     assert all(
         cell["planned_commands"][-1][-1]
-        == f"<run-root>/visualizations/{cell['cell_id']}__attempt-<attempt>__benchmark-cost.png"
+        == (
+            f"<run-root>/visualizations/viewcost/"
+            f"{cell['cell_id']}__attempt-<attempt>__benchmark-cost.png"
+        )
         for cell in measured
     )
+    assert all("--progress" in cell["planned_commands"][2] for cell in measured)
     filtered = core.build_plan(
         config,
         paths,
@@ -546,7 +550,7 @@ def test_suite_failure_policy_controls_independent_cells(
     assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
 
 
-def test_measured_cell_collects_postprocess_and_cost_view_in_one_directory(
+def test_measured_cell_separates_postprocess_results_from_shared_viewcost(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     run_root = tmp_path / "run"
@@ -614,14 +618,21 @@ def test_measured_cell_collects_postprocess_and_cost_view_in_one_directory(
     ]
     attempt = state["cells"][cell["cell_id"]]["attempts"][0]
     visualization_prefix = f"{cell['cell_id']}__attempt-0001__"
-    assert Path(attempt["visualization_output_dir"]) == visualization_dir
-    assert attempt["visualization_file_prefix"] == visualization_prefix
+    result_dir = visualization_dir / f"{cell['cell_id']}__attempt-0001"
+    viewcost_dir = visualization_dir / "viewcost"
+    assert Path(attempt["visualization_output_dir"]) == result_dir
+    assert attempt["visualization_file_prefix"] == ""
+    assert Path(attempt["cost_visualization_output"]) == (
+        viewcost_dir / f"{visualization_prefix}benchmark-cost.png"
+    )
     assert visualization_dir.is_dir()
+    assert result_dir.is_dir()
+    assert viewcost_dir.is_dir()
     assert (visualization_dir / "prior-cell.png").read_bytes() == b"prior"
-    assert commands[-2][1][-3] == str(visualization_dir)
-    assert commands[-2][1][-1] == visualization_prefix
+    assert commands[-2][1][-3] == str(result_dir)
+    assert commands[-2][1][-1] == ""
     assert commands[-1][1][-1] == str(
-        visualization_dir / f"{visualization_prefix}benchmark-cost.png"
+        viewcost_dir / f"{visualization_prefix}benchmark-cost.png"
     )
     assert state["cells"][cell["cell_id"]]["status"] == "completed"
 

@@ -27,10 +27,9 @@ Then expand only if the summary leaves a specific question unanswered:
    latest `command.finished.json`, then the tail of the relevant stdout/stderr log.
 4. Read one cell and one field from `metrics.json` or an append-only
    `collection.json` only when the report cannot answer the question.
-5. When visual inspection is relevant, use the attempt's declared filename prefix
-   to open only the matching manifest and named image/video directly in the run's
-   flat `visualizations/` directory; the same prefix identifies its cost plot. Do
-   not load every visualization artifact.
+5. When visual inspection is relevant, open only the attempt's declared result
+   directory below `visualizations/` and its one matching prefixed cost plot below
+   `visualizations/viewcost/`. Do not load every visualization artifact.
 
 Never read `metrics.json` or `collection.json` wholesale. Never recursively list
 or search all of the selected runs directory, attempt workspaces, baselines, or the
@@ -45,9 +44,12 @@ ordinary result interpretation.
 - `run` and `resume` always preserve child stdout/stderr in per-command logs. Do
   not pass `--stream-output` unless the user requests live raw output or a specific
   failure requires it.
-- In an interactive terminal, `run` and `resume` keep one cell-level progress bar
-  below the unchanged lifecycle messages and wait for Enter after the final JSON
-  summary. Non-interactive agent execution exits normally.
+- In an interactive terminal, `run` and `resume` use Rich to keep the active
+  cell's individual-evaluation bar immediately above the global cell bar. Both
+  bars remain below unchanged lifecycle/streamed messages and disappear cleanly
+  after execution. The CLI waits for Enter after the final JSON summary.
+  Non-interactive agent execution emits throttled complete snapshots and exits
+  normally.
 - After `collect`, run `report`; do not open the generated collection directly.
 - Default `report` and completed `inspect` keep JSON on stdout and print the
   bounded final cumulative-HV Markdown table on stderr.

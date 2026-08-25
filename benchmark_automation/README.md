@@ -27,13 +27,14 @@ a regular installed yadof distribution from the selected Python environment.
 The initial SAW and Chrono baselines and the runner were created on 2026-08-23
 with installed `yadof 0.4.0`. The selected Chrono baseline was refreshed on
 2026-08-24 with ground contact, semantic rawData curves, Trebuchet visualization,
-and flat visualization output, then refreshed on 2026-08-25 with the generic
-Windows short-launch-junction Chrono adapter fix. The selected synthetic `test_com`
-task retains its 20-variable non-separable multimodal landscape. All three current
-baselines accept unique filename prefixes so every plot, video, manifest, archive,
-and cost image for one benchmark run lives directly in one `visualizations/`
-directory. Superseded baseline identities remain immutable inputs by default;
-removal is exceptional and requires explicit maintainer direction.
+and prefix-capable visualization output, then refreshed on 2026-08-25 with the
+generic Windows short-launch-junction Chrono adapter fix. The selected synthetic
+`test_com` task retains its 20-variable non-separable multimodal landscape. All
+three current baselines accept the runner's output directory and filename-prefix
+interface. The runner now gives each measured attempt its own result directory and
+groups all cost views in one sibling directory. Superseded baseline identities
+remain immutable inputs by default; removal is exceptional and requires explicit
+maintainer direction.
 
 | Evidence | Result |
 |---|---|
@@ -71,9 +72,11 @@ shortening. Historical run specifications remain immutable.
 ## Prerequisites
 
 Run commands from the yadof source-checkout root with the Python environment in
-which the matching yadof distribution is installed:
+which the matching yadof distribution and benchmark extra are installed. The
+benchmark extra supplies Rich for reliable multi-progress terminal rendering:
 
 ```powershell
+python -m pip install "yadof[benchmark]"
 python ".\benchmark_automation\benchmark.py" --help
 ```
 
@@ -121,18 +124,23 @@ python ".\benchmark_automation\benchmark.py" run `
 ```
 
 Child stdout/stderr is always written to the append-only command logs. The default
-terminal output contains the same short lifecycle events, with a cell-level progress
-bar redrawn at the bottom of an interactive terminal, followed by a final JSON
-summary. Add `--stream-output` only for deliberate live raw output; it can be large.
+terminal output contains the same short lifecycle events. Rich keeps the active
+cell's individual-evaluation bar directly above the global cell bar at the bottom
+of an interactive terminal, without leaving old frames when other output appears;
+both bars disappear before the final JSON summary. Non-interactive output receives
+throttled complete snapshots. Add `--stream-output` only for deliberate live raw
+output; it can be large. While the live region is active, Rich renders both child
+channels through its stderr console so messages cannot split the cursor owner;
+the append-only logs still preserve stdout and stderr separately.
 Every measured optimization calls the selected baseline's root `postprocess.py`
 after its final generation. SAW writes S-parameter plots/data, Chrono writes a
 trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.
-The runner then invokes `yadof view cost` and writes `benchmark-cost.png` beside
-those task-specific artifacts. One benchmark run has exactly one flat
-`visualizations/` directory: every artifact is written directly inside it with a
-unique `<cell-id>__attempt-<NNNN>__` filename prefix, and no cell/attempt
-subdirectories are created. Either postprocessing or cost-view failure fails the
-attempt so missing human-review artifacts are explicit.
+The runner writes those task-specific artifacts without a prefix in one independent
+`visualizations/<cell-id>__attempt-<NNNN>/` directory per measured attempt. It then
+invokes `yadof view cost` and groups every cost plot in
+`visualizations/viewcost/` under the collision-safe
+`<cell-id>__attempt-<NNNN>__benchmark-cost.png` name. Either postprocessing or
+cost-view failure fails the attempt so missing human-review artifacts are explicit.
 
 Select a precise subset without editing TOML. Repeat a selector to include more
 than one value:
@@ -287,9 +295,11 @@ runs/<run-id>/
       stdout.log
       stderr.log
   visualizations/
-    <cell-id>__attempt-<NNNN>__benchmark-cost.png
-    <cell-id>__attempt-<NNNN>__postprocess_manifest.json
-    <cell-id>__attempt-<NNNN>__<task-specific-artifact>
+    viewcost/
+      <cell-id>__attempt-<NNNN>__benchmark-cost.png
+    <cell-id>__attempt-<NNNN>/
+      postprocess_manifest.json
+      <task-specific-artifact>
   evidence/collect-<NNNN>/   append-only collection and public tool outputs
   reports/report-<NNNN>/     append-only report snapshots
 ```
@@ -413,11 +423,12 @@ To add a case:
    current `yadof init`, deliberate task-input transfer, zero runtime evidence,
    a root `postprocess.py` implementing the common `--workspace`, `--output-dir`,
    and `--output-prefix` interface, `yadof check`, and one disposable smoke. The
-   postprocessor receives the run's shared, possibly nonempty `visualizations/`
-   directory. It must write every persistent artifact directly in that directory
-   using the supplied prefix, create no result subdirectories, and refuse to
-   overwrite existing names. Temporary scratch belongs outside the result
-   directory. The runner reserves `<prefix>benchmark-cost.png`.
+   postprocessor receives its attempt-specific, initially empty result directory
+   below `visualizations/` and an empty filename prefix. It must write every
+   persistent artifact directly in that directory, create no further result
+   subdirectories, and refuse to overwrite existing names. Temporary scratch
+   belongs outside the result directory. The runner owns the separate shared
+   `visualizations/viewcost/` directory and its prefixed cost-plot names.
 2. Add matching `provider_id`, `task_id`, `baseline_id`, and full task fingerprint
    to `baseline.json`, then declare the exact baseline path, `include_paths`,
    objective count, rawData shapes, resource prerequisite, history policy, and

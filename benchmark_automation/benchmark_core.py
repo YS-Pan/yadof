@@ -29,6 +29,17 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from rich.console import Console
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    ProgressColumn,
+    Task,
+    TextColumn,
+)
+from rich.table import Column
+from rich.text import Text
+
 
 SCHEMA_VERSION = 1
 RUNTIME_PATHS = (
@@ -45,6 +56,7 @@ CONFIG_BLOCK_START = "# >>> benchmark_automation managed overrides >>>"
 CONFIG_BLOCK_END = "# <<< benchmark_automation managed overrides <<<"
 POSTPROCESS_SCRIPT_NAME = "postprocess.py"
 VISUALIZATION_DIRECTORY_NAME = "visualizations"
+VIEW_COST_DIRECTORY_NAME = "viewcost"
 COST_PLOT_NAME = "benchmark-cost.png"
 BASELINE_PROVIDER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 BASELINE_ID_PATTERN = re.compile(
@@ -65,8 +77,43 @@ class Paths:
     histories: Path
 
 
+class _AsciiBarColumn(ProgressColumn):
+    """Render a fixed-width Rich bar on legacy Windows code pages."""
+
+    def __init__(self, width: int) -> None:
+        self.width = max(1, int(width))
+        column_width = self.width + 2
+        super().__init__(
+            Column(
+                width=column_width,
+                min_width=column_width,
+                max_width=column_width,
+                no_wrap=True,
+            )
+        )
+
+    def render(self, task: Task) -> Text:
+        if task.total is None:
+            finished = 0
+        elif task.total <= 0:
+            finished = self.width
+        else:
+            finished = min(
+                self.width,
+                int(self.width * task.completed / task.total),
+            )
+        return Text(f"[{'#' * finished}{'-' * (self.width - finished)}]")
+
+
 class CellProgress:
-    """Keep one cell-level progress bar below benchmark lifecycle messages."""
+    """Keep Rich-managed cell and run progress below lifecycle messages."""
+
+    _YADOF_PROGRESS = re.compile(
+        r"^\[yadof\] (?P<phase>smoke|generation (?P<generation>\d+)) "
+        r"\([^)]*\) \[[#.]+\] (?P<finished>\d+)/(?P<total>\d+) "
+        r"successful=(?P<successful>\d+) errors=(?P<errors>\d+) "
+        r"remaining=(?P<remaining>\d+)\s*$"
+    )
 
     def __init__(
         self,
@@ -86,60 +133,243 @@ class CellProgress:
         self.width = max(10, int(width))
         self.interactive = bool(getattr(self.stream, "isatty", lambda: False)())
         self._active = False
-        self._rendered_width = 0
         self._lock = threading.RLock()
+        self._cell_total = 0
+        self._cell_completed = 0
+        self._cell_detail = ""
+        self._noninteractive_bucket = -1
+        self._console = Console(
+            file=self.stream,
+            force_terminal=self.interactive,
+            force_interactive=self.interactive,
+            color_system=None,
+            legacy_windows=False,
+        )
+        self._progress = Progress(
+            TextColumn(
+                "{task.fields[label]}",
+                markup=False,
+                table_column=Column(
+                    width=11,
+                    min_width=11,
+                    max_width=11,
+                    no_wrap=True,
+                ),
+            ),
+            _AsciiBarColumn(self.width),
+            MofNCompleteColumn(),
+            TextColumn(
+                "{task.fields[unit]}",
+                markup=False,
+                table_column=Column(
+                    width=11,
+                    min_width=11,
+                    max_width=11,
+                    no_wrap=True,
+                ),
+            ),
+            TextColumn(
+                "| {task.fields[detail]}",
+                markup=False,
+                table_column=Column(
+                    width=25,
+                    min_width=10,
+                    max_width=25,
+                    overflow="ellipsis",
+                    no_wrap=True,
+                ),
+            ),
+            console=self._console,
+            transient=True,
+            redirect_stdout=False,
+            redirect_stderr=False,
+            disable=not self.interactive,
+        )
+        # Rich preserves task insertion order.  The hidden cell task is created
+        # first so it always appears directly above the global task when active.
+        self._cell_task = self._progress.add_task(
+            "",
+            total=1,
+            completed=0,
+            visible=False,
+            label="[cell]",
+            unit="evaluations",
+            detail="",
+        )
+        self._global_task = self._progress.add_task(
+            "",
+            total=self.total,
+            completed=self.finished,
+            label="[benchmark]",
+            unit="cells",
+            detail=self._global_detail(),
+        )
 
-    def _line(self) -> str:
-        ratio = 1.0 if self.total == 0 else min(1.0, self.finished / self.total)
-        filled = int(self.width * ratio)
-        bar = "#" * filled + "-" * (self.width - filled)
-        current = f" | current={self.current}" if self.current else ""
+    @staticmethod
+    def _bar(finished: int, total: int, width: int) -> str:
+        ratio = 1.0 if total == 0 else min(1.0, finished / total)
+        filled = int(width * ratio)
+        return "#" * filled + "-" * (width - filled)
+
+    def _global_detail(self) -> str:
+        current = f" current={self.current}" if self.current else ""
         return (
-            f"[benchmark] [{bar}] {self.finished}/{self.total} cells "
-            f"| completed={self.completed} failed={self.failed} skipped={self.skipped}"
+            f"completed={self.completed} failed={self.failed} skipped={self.skipped}"
             f"{current}"
         )
 
-    def _clear_locked(self) -> None:
-        if self.interactive and self._active:
-            self.stream.write(f"\r{' ' * self._rendered_width}\r")
-            self._rendered_width = 0
+    def _global_line(self) -> str:
+        bar = self._bar(self.finished, self.total, self.width)
+        return (
+            f"[benchmark] [{bar}] {self.finished}/{self.total} cells "
+            f"| {self._global_detail()}"
+        )
 
-    def _draw_locked(self) -> None:
-        if self.interactive and self._active:
-            line = self._line()
-            self.stream.write(f"\r{line}")
-            self._rendered_width = len(line)
-            self.stream.flush()
+    def _cell_line(self) -> str:
+        bar = self._bar(self._cell_completed, self._cell_total, self.width)
+        return (
+            f"[cell] {self.current or '-'} [{bar}] "
+            f"{self._cell_completed}/{self._cell_total} evaluations "
+            f"| {self._cell_detail}"
+        )
+
+    def _update_rich_locked(self) -> None:
+        self._progress.update(
+            self._global_task,
+            total=self.total,
+            completed=self.finished,
+            detail=self._global_detail(),
+            refresh=True,
+        )
+        self._progress.update(
+            self._cell_task,
+            total=max(1, self._cell_total),
+            completed=self._cell_completed,
+            visible=self.current is not None,
+            label="[cell]",
+            detail=(
+                f"{self.current} {self._cell_detail}"
+                if self.current is not None
+                else self._cell_detail
+            ),
+            refresh=True,
+        )
+
+    def _write_snapshot_locked(self, *, include_cell: bool) -> None:
+        if include_cell and self.current is not None:
+            self.stream.write(f"{self._cell_line()}\n")
+        self.stream.write(f"{self._global_line()}\n")
+        self.stream.flush()
 
     def start(self) -> None:
         with self._lock:
             self._active = True
             if self.interactive:
-                self._draw_locked()
+                self._progress.start()
             else:
-                self.stream.write(f"{self._line()}\n")
-                self.stream.flush()
+                self._write_snapshot_locked(include_cell=False)
 
-    def set_current(self, cell_id: str | None) -> None:
+    def start_cell(self, cell: Mapping[str, Any]) -> None:
         with self._lock:
-            self.current = cell_id
+            self.current = str(cell["cell_id"])
+            planned = int(cell.get("planned_attempted_evaluations", 0))
+            if planned <= 0:
+                planned = max(
+                    1,
+                    int(cell.get("population", 1))
+                    * max(1, int(cell.get("generations", 1))),
+                )
+            self._cell_total = planned
+            self._cell_completed = 0
+            self._cell_detail = "phase=preparing"
+            self._noninteractive_bucket = 0
             if self.interactive:
-                self._clear_locked()
-                self._draw_locked()
+                self._update_rich_locked()
+            else:
+                self._write_snapshot_locked(include_cell=True)
+
+    def set_phase(self, phase: str) -> None:
+        with self._lock:
+            if self.current is None:
+                return
+            self._cell_detail = f"phase={phase}"
+            if self.interactive:
+                self._update_rich_locked()
+
+    def extend_current(self, evaluations: int) -> None:
+        with self._lock:
+            if self.current is None:
+                return
+            self._cell_total += max(0, int(evaluations))
+            if self.interactive:
+                self._update_rich_locked()
+            else:
+                self._noninteractive_bucket = int(
+                    10 * self._cell_completed / max(1, self._cell_total)
+                )
+
+    def observe_yadof_line(self, line: str) -> bool:
+        """Convert one child yadof snapshot into the active cell progress task."""
+
+        match = self._YADOF_PROGRESS.fullmatch(line.strip())
+        if match is None:
+            return False
+        with self._lock:
+            if self.current is None:
+                return True
+            finished = int(match.group("finished"))
+            total = max(1, int(match.group("total")))
+            generation = match.group("generation")
+            if generation is None:
+                absolute_finished = finished
+            else:
+                absolute_finished = int(generation) * total + finished
+            if absolute_finished > self._cell_total:
+                self._cell_total = absolute_finished
+            self._cell_completed = max(self._cell_completed, absolute_finished)
+            self._cell_detail = (
+                f"phase={match.group('phase')} "
+                f"successful={match.group('successful')} errors={match.group('errors')}"
+            )
+            if self.interactive:
+                self._update_rich_locked()
+            else:
+                bucket = min(
+                    10,
+                    int(10 * self._cell_completed / max(1, self._cell_total)),
+                )
+                if bucket > self._noninteractive_bucket:
+                    self._noninteractive_bucket = bucket
+                    self._write_snapshot_locked(include_cell=True)
+        return True
 
     def write_above(self, text: str, *, console: Any | None = None) -> None:
         target = self.stream if console is None else console
         with self._lock:
-            self._clear_locked()
-            target.write(text)
-            if self.interactive and text and not text.endswith(("\n", "\r")):
-                target.write("\n")
-            target.flush()
-            self._draw_locked()
+            if self.interactive:
+                normalized = text if text.endswith(("\n", "\r")) else f"{text}\n"
+                self._console.print(
+                    normalized,
+                    end="",
+                    markup=False,
+                    highlight=False,
+                    soft_wrap=True,
+                )
+            else:
+                target.write(text)
+                target.flush()
 
     def advance(self, status: str) -> None:
         with self._lock:
+            had_cell = self.current is not None
+            if had_cell:
+                if status == "completed":
+                    self._cell_completed = self._cell_total
+                self._cell_detail = f"status={status}"
+                if self.interactive:
+                    self._update_rich_locked()
+                else:
+                    self.stream.write(f"{self._cell_line()}\n")
             self.finished = min(self.total, self.finished + 1)
             if status == "completed":
                 self.completed += 1
@@ -149,20 +379,16 @@ class CellProgress:
                 self.skipped += 1
             self.current = None
             if self.interactive:
-                self._clear_locked()
-                self._draw_locked()
+                self._update_rich_locked()
             else:
-                self.stream.write(f"{self._line()}\n")
-                self.stream.flush()
+                self._write_snapshot_locked(include_cell=False)
 
     def finish(self) -> None:
         with self._lock:
             if not self._active:
                 return
             if self.interactive:
-                self._clear_locked()
-                self.stream.write(f"{self._line()}\n")
-                self.stream.flush()
+                self._progress.stop()
             self._active = False
 
 
@@ -640,6 +866,10 @@ def _visualization_file_prefix(cell_id: str, attempt_number: int) -> str:
     return f"{cell_id}__attempt-{attempt_number:04d}__"
 
 
+def _visualization_result_directory_name(cell_id: str, attempt_number: int) -> str:
+    return f"{cell_id}__attempt-{attempt_number:04d}"
+
+
 def _planned_commands(
     config: Mapping[str, Any], cell: Mapping[str, Any]
 ) -> list[list[str]]:
@@ -682,7 +912,7 @@ def _planned_commands(
             "--random-seed",
             str(cell["seed"]),
             "--no-smoke-test",
-            "--no-progress",
+            "--progress",
             "--fail-on-all-infinite",
         ]
     )
@@ -706,7 +936,7 @@ def _planned_commands(
                 "--random-seed",
                 str(cell["seed"]),
                 "--no-smoke-test",
-                "--no-progress",
+                "--progress",
                 "--fail-on-all-infinite",
             ]
         )
@@ -714,8 +944,11 @@ def _planned_commands(
         _postprocess_command(
             python,
             workspace,
-            f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}",
-            f"{cell['cell_id']}__attempt-<attempt>__",
+            (
+                f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
+                f"{cell['cell_id']}__attempt-<attempt>"
+            ),
+            "",
         )
     )
     commands.append(
@@ -724,6 +957,7 @@ def _planned_commands(
             workspace,
             (
                 f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
+                f"{VIEW_COST_DIRECTORY_NAME}/"
                 f"{cell['cell_id']}__attempt-<attempt>__{COST_PLOT_NAME}"
             ),
         )
@@ -1345,9 +1579,20 @@ def _prepare_attempt(
         "input_fingerprint": None,
         "post_input_fingerprint": None,
         "input_manifest": str(attempt_root / "input_manifest.json"),
-        "visualization_output_dir": str(run_root / VISUALIZATION_DIRECTORY_NAME),
-        "visualization_file_prefix": _visualization_file_prefix(
-            str(cell_plan["cell_id"]), attempt_number
+        "visualization_output_dir": str(
+            run_root
+            / VISUALIZATION_DIRECTORY_NAME
+            / _visualization_result_directory_name(
+                str(cell_plan["cell_id"]), attempt_number
+            )
+        ),
+        "visualization_file_prefix": "",
+        "cost_visualization_output": str(
+            run_root
+            / VISUALIZATION_DIRECTORY_NAME
+            / VIEW_COST_DIRECTORY_NAME
+            / f"{_visualization_file_prefix(str(cell_plan['cell_id']), attempt_number)}"
+            f"{COST_PLOT_NAME}"
         ),
         "commands": [],
         "sealed_utc": None,
@@ -1427,7 +1672,10 @@ def _stream_pipe(
             line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
             target.write(line)
             target.flush()
-            if console is not None:
+            is_progress = (
+                progress.observe_yadof_line(line) if progress is not None else False
+            )
+            if console is not None and not is_progress:
                 if progress is None:
                     console.write(f"{prefix}{line}")
                     console.flush()
@@ -1612,7 +1860,7 @@ def _cell_command(spec: Mapping[str, Any], cell: Mapping[str, Any], workspace: P
         "--random-seed",
         str(cell["seed"]),
         "--no-smoke-test",
-        "--no-progress",
+        "--progress",
         "--fail-on-all-infinite",
     ]
 
@@ -1696,6 +1944,8 @@ def _run_one_cell(
         include_paths = spec["cases"][cell_plan["case"]]["baseline"]["include_paths"]
         workspace = Path(attempt["workspace"])
         timeout = int(spec["runner"]["command_timeout_sec"])
+        if progress is not None:
+            progress.set_phase("init")
         initialize = _execute_logged(
             [spec["package"]["python"], "-m", "yadof", "init", str(workspace)],
             cwd=paths.root,
@@ -1727,6 +1977,8 @@ def _run_one_cell(
             attempt=attempt["attempt"],
             input_fingerprint=attempt["input_fingerprint"],
         )
+        if progress is not None:
+            progress.set_phase("check")
         check = _execute_logged(
             [spec["package"]["python"], "-m", "yadof", "check", "--workspace", str(workspace)],
             cwd=paths.root,
@@ -1750,6 +2002,10 @@ def _run_one_cell(
             )
             return False
         command = _cell_command(spec, cell_plan, workspace)
+        if progress is not None:
+            progress.set_phase(
+                "smoke" if cell_plan["kind"] == "smoke" else "optimization"
+            )
         result = _execute_logged(
             command,
             cwd=paths.root,
@@ -1815,9 +2071,12 @@ def _run_one_cell(
                     "--random-seed",
                     str(cell_plan["seed"]),
                     "--no-smoke-test",
-                    "--no-progress",
+                    "--progress",
                     "--fail-on-all-infinite",
                 ]
+                if progress is not None:
+                    progress.extend_current(extra * int(cell_plan["population"]))
+                    progress.set_phase("checkpoint-extension")
                 extension_result = _execute_logged(
                     extension,
                     cwd=paths.root,
@@ -1861,6 +2120,8 @@ def _run_one_cell(
             visualization_output_dir = Path(attempt["visualization_output_dir"])
             visualization_output_dir.mkdir(parents=True, exist_ok=True)
             visualization_file_prefix = str(attempt["visualization_file_prefix"])
+            if progress is not None:
+                progress.set_phase("postprocess")
             postprocess = _execute_logged(
                 _postprocess_command(
                     spec["package"]["python"],
@@ -1888,9 +2149,8 @@ def _run_one_cell(
                     error="baseline postprocess failed",
                 )
                 return False
-            cost_output = visualization_output_dir / (
-                f"{visualization_file_prefix}{COST_PLOT_NAME}"
-            )
+            cost_output = Path(attempt["cost_visualization_output"])
+            cost_output.parent.mkdir(parents=True, exist_ok=True)
             if cost_output.exists():
                 _seal_attempt(
                     run_root,
@@ -1902,6 +2162,8 @@ def _run_one_cell(
                     error=f"visualization output already exists: {cost_output.name}",
                 )
                 return False
+            if progress is not None:
+                progress.set_phase("view-cost")
             cost_view = _execute_logged(
                 _cost_view_command(
                     spec["package"]["python"],
@@ -1983,8 +2245,8 @@ def execute_run(
                 )
                 progress.advance("skipped")
                 continue
+            progress.start_cell(cell_plan)
             progress.write_above(f"[cell] {cell_plan['cell_id']} started\n")
-            progress.set_current(str(cell_plan["cell_id"]))
             ok = _run_one_cell(
                 config,
                 paths,
