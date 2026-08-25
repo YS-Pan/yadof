@@ -27,16 +27,18 @@ a regular installed yadof distribution from the selected Python environment.
 The initial SAW and Chrono baselines and the runner were created on 2026-08-23
 with installed `yadof 0.4.0`. The selected Chrono baseline was refreshed on
 2026-08-24 with ground contact, semantic rawData curves, Trebuchet visualization,
-and flat visualization output. The selected synthetic `test_com` task retains its
-20-variable non-separable multimodal landscape. All three current baselines accept
-unique filename prefixes so every plot, video, manifest, archive, and cost image
-for one benchmark run lives directly in one `visualizations/` directory. At
-explicit maintainer request, superseded baseline directories are removed after
-selection is updated; each provider retains only its current workspace.
+and flat visualization output, then refreshed on 2026-08-25 with the generic
+Windows short-launch-junction Chrono adapter fix. The selected synthetic `test_com`
+task retains its 20-variable non-separable multimodal landscape. All three current
+baselines accept unique filename prefixes so every plot, video, manifest, archive,
+and cost image for one benchmark run lives directly in one `visualizations/`
+directory. Superseded baseline identities remain immutable inputs by default;
+removal is exceptional and requires explicit maintainer direction.
 
 | Evidence | Result |
 |---|---|
 | Phase-0 smoke for all three baselines | Passed; costs and rawData shapes match the frozen contracts |
+| selected Chrono baseline `trebuchet-462d1201a592` | Preflight 5/5 passed; real fast smoke `20260825_001100-chrono-adapter-long-path-regression-abcdefghijklmnopqrstuvwxyz0123456789` completed with the unchanged four midpoint costs while its representative physical PyChrono scratch/request paths were about 298/311 characters |
 | `adapter-smoke` run `20260823T052657Z-adapters-1b7c0d27af47` | Structural contract satisfied |
 | yadof-tools repair `0665541155009787c938cbf15df177e8c9488fb8` | Built, force-reinstalled, 274 tests passed, and pushed to `origin/main` |
 | post-fix `structural-canary` run `20260823T060003Z-post-viewer-fix-9e43d5c3327b` | Structural contract satisfied, including finite public summary and both audits |
@@ -60,8 +62,11 @@ An earlier authorized full run,
 evidence. Its three Chrono GPSAF cells reached a roughly 272-character PyChrono
 child working directory and failed at Windows process launch with `WinError 267`.
 The final run used the same frozen scientific inputs with the explicit short run
-ID `pfull-0823`; all Chrono GPSAF cells then completed. Prefer short explicit run
-IDs for Windows cases whose task adapters create nested subprocess scratch paths.
+ID `pfull-0823`; all Chrono GPSAF cells then completed. The selected
+`trebuchet-462d1201a592` baseline now carries the package-level adapter fix: every
+Windows PyChrono child launches through a short candidate junction targeting its
+original physical scratch, so future run IDs and output roots do not need manual
+shortening. Historical run specifications remain immutable.
 
 ## Prerequisites
 
@@ -227,8 +232,9 @@ without the default 32-candidate queue becoming the experiment's evidence limit.
 terminal and whose child command output is always retained in per-command logs.
 For a user-authorized long run on Windows, launch that same foreground command in a
 separate normal PowerShell window with `Start-Process -PassThru`, then let the
-calling agent disconnect without `-Wait`. Use an explicit short `--run-id` and the
-same explicit `--runs-dir` for later `inspect`, `collect`, and `report` commands.
+calling agent disconnect without `-Wait`. Use an explicit `--run-id` when a stable
+operator-chosen identity is useful, and keep the same explicit `--runs-dir` for
+later `inspect`, `collect`, and `report` commands.
 The returned process object supplies its PID. After run/resume reaches a final
 state, an interactive CLI waits for Enter instead of exiting automatically, so the
 separate window and its final summary remain visible. Piped/non-interactive

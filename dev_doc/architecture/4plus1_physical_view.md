@@ -32,6 +32,13 @@ and bytecode writes are disabled. Local/distributed publication moves only fully
 validated direct NPZ files into the prepared job's final rawData; fast publication
 copies their arrays into memory before deleting scratch.
 
+On Windows, a candidate also has one unique short launch junction in the parent
+temporary directory. The child sees that alias as its working/temp directory and
+in request/result arguments, while the junction targets the original physical
+scratch below the caller-owned root. The adapter removes the junction before
+scratch cleanup. This alias is neither evidence nor durable state and prevents the
+Windows process current-directory limit from depending on workspace depth.
+
 Fast planning uses its own configured worker cap and declared CPU, memory, and
 scratch-disk requirement per worker; it does not reinterpret HTCondor requests.
 Reusable fast workers run only on this host. Each active candidate may own one

@@ -162,6 +162,13 @@ child `PATH` starts with the resolved runtime prefix plus its
 `Library/mingw-w64/bin`, `Library/usr/bin`, `Library/bin`, `Scripts`, and `bin`
 directories, then retains the inherited child `PATH`.
 
+Windows launches also use a unique short directory junction for the child-visible
+working directory, request/result paths, and `TEMP`/`TMP`. The real candidate
+scratch and evidence remain under the caller-selected scratch root, and the adapter
+removes the junction before cleaning that scratch. Workspace, run, strategy, and
+evaluation names therefore do not need manual shortening to keep the PyChrono child
+below the Windows current-directory path limit.
+
 ## Failures and diagnostics
 
 `PyChronoError.category` distinguishes configuration, launch, child, protocol,
@@ -171,6 +178,8 @@ truncation flags, and a validated child error manifest when available. Important
 categories include `runtime_not_configured`, `runtime_invalid`, `worker_missing`,
 `timeout`, `cancelled`, `child_reported_error`, `child_process_error`,
 `protocol_mismatch`, `output_path_invalid`, and `rawdata_invalid`.
+An unavailable Windows short launch alias falls under `launch_failed`; the adapter
+uses the physical scratch directly only when that path is already launch-safe.
 
 Treat every failure as an evaluation failure. Do not recover partial child files or
 convert them into a normal cost. Actual Project Chrono mechanics validation follows

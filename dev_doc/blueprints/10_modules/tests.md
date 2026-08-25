@@ -71,7 +71,9 @@ lock automatically generated run-directory names to a digits-only UTC
   cleaned Python environment, Windows child-only Conda DLL search entries with
   inherited-PATH retention, bounded diagnostics, invalid/escaping/missing output,
   handled error versus crash, timeout descendant cleanup, and concurrent scratch
-  isolation without Miniforge or PyChrono;
+  isolation without Miniforge or PyChrono, plus a Windows physical scratch longer
+  than the traditional process current-directory limit launched through a cleaned
+  short alias;
 - lazy `view surrogate` GUI/summary/audit registration and help, viewer
   wheel/sdist/dev_doc/report membership, deterministic text/JSON summary and audit
   encoding, checkpoint discovery, 0D/1D/2D rawData slice extraction from

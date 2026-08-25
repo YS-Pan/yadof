@@ -53,7 +53,9 @@ The canonical PyChrono v1 subprocess contract lives in
 interpreter, crossing the process/runtime boundary through bounded versioned JSON
 and schema-compatible NPZ, isolating scratch/environment/process trees, validating
 all child paths and evidence, and preserving the documented failure taxonomy and
-backend-equivalent publication. Its `worker_main()` helper lets task-owned
+backend-equivalent publication. Windows children use candidate-unique short
+directory junctions for launch paths while retaining physical scratch below the
+caller-owned root. Its `worker_main()` helper lets task-owned
 `chrono_worker.py` import PyChrono only after request validation. Neither runtime
 imports the other's framework, and no Conda/yadof dependency is added.
 

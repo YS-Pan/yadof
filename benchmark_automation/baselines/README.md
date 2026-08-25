@@ -6,7 +6,7 @@ These are current-format, runtime-clean task inputs selected explicitly by
 | Case | Provider | Task | Baseline ID | Task fingerprint | Files | Objectives |
 |---|---|---|---|---|---:|---:|
 | SAW | `ngspice` | `saw-ladder` | `saw-ladder-3d2025426a97` | `3d2025426a976aa03cf720757bd37314004db8d29b5a922dcfc36c2d0d753c10` | 9 | 5 |
-| Chrono | `chrono` | `trebuchet` | `trebuchet-42e80c54ebb5` | `42e80c54ebb54872b62961babe4095b6c2601eae9b2393ddc39d3950ed9b7cc9` | 14 | 4 |
+| Chrono | `chrono` | `trebuchet` | `trebuchet-462d1201a592` | `462d1201a592343980c17c9e6e641daaaa8d78e4029f02aee361527996f529fe` | 14 | 4 |
 | test_com | `test-com` | `synthetic-antenna` | `synthetic-antenna-0b64f13b9f0b` | `0b64f13b9f0b209f5dd23ce4d7f841119580f47885536db2184cb661d6c088f8` | 8 | 4 |
 
 The directory contract is:
@@ -55,6 +55,11 @@ and does not create a result subdirectory.
 
 `trebuchet-42e80c54ebb5` derives from `trebuchet-20167c28925b`; its scientific
 task is unchanged, while its visualization output is now entirely flat.
+`trebuchet-462d1201a592` in turn preserves that complete scientific and
+visualization input while refreshing only the copied package Chrono adapter. Its
+Windows child process uses a candidate-unique short junction targeting the original
+physical scratch, so run and workspace depth no longer consume the child
+current-directory limit.
 
 The superseded `synthetic-antenna-aa89d46f3d9a` input's objective extraction
 windows and physical anchors compressed three costs near a soft-cost tail and
@@ -69,11 +74,12 @@ runs continued making material progress through 10,000 evaluations; the detailed
 acceptance evidence is in
 [`../verification/20260824-test-com-difficulty-recalibration.md`](../verification/20260824-test-com-difficulty-recalibration.md).
 
-At explicit maintainer request, every superseded SAW, Chrono, and test_com baseline
-directory is removed after its replacement passes validation. Each provider keeps
-only its selected workspace. Historical run specifications and verification
-documents still identify removed baselines, but such runs cannot be resumed or
-reconstructed from this checkout without restoring the relevant Git history.
+Some earlier superseded SAW, Chrono, and test_com baselines were removed after
+validation at explicit maintainer request. Baseline removal remains exceptional:
+the former `trebuchet-42e80c54ebb5` identity is retained because immutable
+benchmark runs diagnose the Windows path failure against that exact input. A
+historical run whose baseline was removed cannot be resumed or reconstructed from
+this checkout without restoring the relevant Git history.
 
 The hidden `.staging/` and `.assembled/` directories at the benchmark root are
 Phase-0 reconstruction/validation evidence, not runner inputs. In particular,

@@ -93,6 +93,18 @@ directory, another candidate's scratch, and the final yadof history are read-onl
 from the child's perspective. The shared prefix must never receive task data,
 caches, bytecode, logs, or mutable state.
 
+On Windows, the physical candidate scratch remains below this caller-selected
+root, but the adapter launches the child through a unique short directory junction
+in the parent process's temporary directory. The junction targets the physical
+scratch; it does not copy, relocate, or duplicate evidence. The child-visible
+working directory, request/result arguments, `TEMP`, and `TMP` use the short alias
+so Windows `CreateProcess` current-directory limits are independent of workspace,
+run, strategy, and evaluation-name depth. The adapter removes the junction before
+removing the physical scratch on every controlled outcome. If a junction cannot be
+created, a launch may use the physical path only while it is already within the
+Windows current-directory limit; otherwise the adapter reports `launch_failed`
+before starting the child.
+
 The result manifest is the publication marker and is written last. The child writes
 each NPZ and the result through a same-directory temporary file followed by atomic
 replacement. Temporary or partial files are not evidence. The parent treats every
@@ -119,9 +131,11 @@ quoted command string:
 
 The real command is one flat argument list; the line break above is illustrative.
 The operating-system subprocess API owns quoting, including paths containing spaces
-or non-ASCII characters. `shell=True`, command concatenation, and an environment
-activation wrapper are forbidden. The child working directory is the candidate
-scratch.
+or non-ASCII characters. On Windows, the shown scratch paths are the short
+child-visible junction paths described above; parent validation and physical
+storage still use the original candidate scratch. `shell=True`, command
+concatenation, and an environment activation wrapper are forbidden. The child
+working directory is the child-visible candidate scratch.
 
 ## Controlled child environment
 
@@ -131,7 +145,7 @@ globally. Apply these exact changes to the child copy:
 - remove every inherited key whose case-folded name is `pythonpath`;
 - set `PYTHONNOUSERSITE=1`;
 - set `PYTHONDONTWRITEBYTECODE=1`;
-- set `TEMP` and `TMP` to the absolute candidate scratch path.
+- set `TEMP` and `TMP` to the absolute child-visible candidate scratch path.
 - on Windows only, replace case-insensitive `PATH` keys in the child copy with one
   canonical `PATH` whose leading entries are the resolved runtime prefix,
   `Library/mingw-w64/bin`, `Library/usr/bin`, `Library/bin`, `Scripts`, and `bin`
@@ -374,6 +388,8 @@ installation. It covers:
 - handled child error versus an unreported crash;
 - timeout with descendant-process termination;
 - concurrent evaluations with isolated scratch and evidence.
+- Windows launch through a short junction when the physical candidate scratch
+  exceeds the traditional current-directory path limit.
 
 These cases are the protocol acceptance set for the adapter's public launch
 surface. Real mechanics validation remains a separate integration task governed by

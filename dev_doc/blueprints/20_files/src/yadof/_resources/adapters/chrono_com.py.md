@@ -12,6 +12,9 @@
 - Build bounded version-1 JSON requests from assigned parameters.
 - Launch one child process group with unique scratch, a controlled environment,
   bounded diagnostics, timeout, and cancellation.
+- On Windows, create a unique short temporary directory junction to the physical
+  candidate scratch and use it for child `cwd`, request/result paths, and temp
+  variables so launchability is independent of caller path depth.
 - Validate result identity, direct paths, hashes, and no-pickle schema-compatible
   NPZ before returning memory rawData or atomically publishing file rawData.
 - Expose `worker_main(simulate)` so task-owned `chrono_worker.py` validates its
@@ -34,5 +37,8 @@
   standard selected-prefix DLL directories only in the per-child environment copy.
 - Child scratch never overlaps the external runtime prefix or final rawData; it is
   candidate-unique and reclaimed on every adapter-controlled outcome.
+- A Windows launch junction is candidate-unique, contains no independent evidence,
+  and is removed before the physical scratch; a failed junction setup may fall
+  back only to an already launch-safe physical path.
 - A nonzero exit, malformed manifest, escaping path, digest mismatch, or invalid
   NPZ never publishes partial evidence.

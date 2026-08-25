@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "baseline_id": "trebuchet-462d1201a592",
+  "case_id": "chrono",
+  "provider_id": "chrono",
+  "task_id": "trebuchet",
+  "created_utc": "2026-08-25T00:08:54.305Z",
+  "created_by": "yadof benchmark maintainers",
+  "yadof_version": "0.4.0",
+  "task_fingerprint": "462d1201a592343980c17c9e6e641daaaa8d78e4029f02aee361527996f529fe",
+  "include_paths": [
+    "config.py",
+    "submit",
+    "job_template",
+    "postprocess.py",
+    "visualization"
+  ],
+  "source": {
+    "public_provenance": "Frozen Project Chrono trebuchet benchmark workspace derived from trebuchet-42e80c54ebb5.",
+    "reconstruction": "Preserves the contact-aware mechanics, semantic rawData curves, and flat collision-safe visualization outputs while refreshing only the packaged Chrono adapter copy. Windows child processes now launch through a candidate-unique short junction that targets the original physical scratch, so benchmark path depth does not consume the process current-directory limit."
+  },
+  "validation": {
+    "check_errors": 0,
+    "check_warnings": 0,
+    "smoke_costs": [1.0, 0.3304246044224697, 0.39247639835398695, 0.016402541818995975],
+    "objective_count": 4,
+    "rawdata_shapes": {
+      "trebuchet_total_time": [],
+      "trebuchet_loaded_max_height": [],
+      "trebuchet_minimum_ball_center_z": [],
+      "trebuchet_trigger_time": [],
+      "trebuchet_released_flag": [],
+      "trebuchet_release_sling_arm_rotation": [],
+      "trebuchet_minimum_arm_ground_clearance": [],
+      "trebuchet_minimum_hanger_ground_clearance": [],
+      "trebuchet_minimum_counterweight_ground_clearance": [],
+      "trebuchet_ball_x": [513],
+      "trebuchet_ball_z": [513],
+      "trebuchet_ball_vx": [513],
+      "trebuchet_ball_vz": [513],
+      "trebuchet_arm_combined_normal_stress": [513],
+      "trebuchet_hanger_combined_normal_stress": [513],
+      "trebuchet_peak_strength_utilization": [513]
+    },
+    "baseline_record_rows": 0,
+    "baseline_checkpoint_files": 0
+  }
+}

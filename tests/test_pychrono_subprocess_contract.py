@@ -277,6 +277,27 @@ def test_fast_success_uses_clean_environment_paths_with_spaces_and_valid_npz(
     assert tuple(adapter.scratch_root.iterdir()) == ()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows MAX_PATH launch regression")
+def test_windows_long_candidate_scratch_uses_short_launch_alias(
+    adapter: SimpleNamespace,
+) -> None:
+    scratch_root = adapter.scratch_root
+    while len(str(scratch_root / "pychrono-12345678")) <= 280:
+        scratch_root /= "deep-" + ("x" * 75)
+    scratch_root.mkdir(parents=True)
+    adapter.scratch_root = scratch_root
+
+    result = _run(adapter, "success", value=6.25)
+
+    assert result.rawdata is not None
+    assert float(result.rawdata["response.npz"]["values"]) == pytest.approx(6.25)
+    diagnostics = result.manifest["diagnostics"]
+    assert len(str(diagnostics["cwd"])) <= 259
+    assert diagnostics["cwd"] == diagnostics["temp"] == diagnostics["tmp"]
+    assert not Path(str(diagnostics["cwd"])).exists()
+    assert tuple(scratch_root.iterdir()) == ()
+
+
 def test_local_success_publishes_validated_rawdata_atomically(
     adapter: SimpleNamespace, tmp_path: Path
 ) -> None:

@@ -49,7 +49,7 @@ s21_db = [1201]
 s11_db = [1201]
 
 [cases.chrono]
-baseline = "baselines/chrono/trebuchet-42e80c54ebb5"
+baseline = "baselines/chrono/trebuchet-462d1201a592"
 include_paths = ["config.py", "submit", "job_template", "postprocess.py", "visualization"]
 mode = "fast"
 history_policy = "empty"
