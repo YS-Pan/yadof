@@ -22,8 +22,8 @@ Interactive tab:
   manual prediction;
 - apply real-result vectors and clear comparison state;
 - render scalar values, prediction/true curves, the ensemble-member pointwise
-  min/max display, filled two-dimensional color contours without contour lines,
-  and objective bars. Two-dimensional truth and prediction use the same color
+  min/max display, two-dimensional color plots, and objective bars.
+  Two-dimensional truth and prediction use the same color
 scale in adjacent axes.
 - omit recorded rawData overlays and show an explanatory note for off-grid
   coordinates while retaining objective bars calculated from the checkpoint grid.
@@ -40,8 +40,7 @@ Heatmap tab:
 Shared UI:
 
 - consistent ttk styling and conventional selected-tab emphasis;
-- explicit checkmark plus high-contrast accent fill for selected plot dimensions
-  and `Auto refresh`, independent of the platform ttk indicator glyph;
+- clear selected/unselected state for plot dimensions and `Auto refresh`;
 - Up/Down navigation for readonly comboboxes;
 - Left/Right normalized slider movement, with larger Shift steps;
 - scrollable parameter controls;
@@ -64,9 +63,8 @@ indices plus fixed coordinates for the remaining dimensions.
   parsing; duplicate or prefixed task names cannot change semantics.
 - The heatmap uses explicit half-step cell edges so outer blocks are complete and
   generation ticks align with block centers.
-- `pcolormesh(..., shading="flat")` plus `aspect="auto"` gives discrete rectangular
-  cells that fill the available region; zero line width and no edge colors keep
-  neighboring cells flush.
+- The heatmap represents each generation pair as one discrete cell and aligns
+  generation ticks with cell centers; the exact Matplotlib mesh styling may vary.
 - The displayed audit is replaced only in `finish()`, never in begin/progress/stop
   paths.
 - Selecting dimensions or fixed coordinates issues a superseding prediction
@@ -79,6 +77,7 @@ indices plus fixed coordinates for the remaining dimensions.
 
 ## Mutability Profile
 
-Copy, color, spacing, label width, and annotation thresholds may change. Keyboard
-access, separation of the two tabs, last-complete audit behavior, matrix semantics,
+Copy, color, spacing, label width, annotation thresholds, two-dimensional artist
+type, contour overlays, and mesh edge styling may change. Keyboard access,
+separation of the two tabs, last-complete audit behavior, matrix semantics,
 non-interpolated cells, and main-thread drawing should remain stable.

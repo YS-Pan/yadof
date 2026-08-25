@@ -12,9 +12,6 @@ import pytest
 pytest.importorskip("matplotlib")
 torch = pytest.importorskip("torch")
 
-from matplotlib.colors import Normalize
-from matplotlib.figure import Figure
-
 from yadof.tools.surrogate_viewer.backend import (
     AuditCancelled,
     CrossGenerationErrorAudit,
@@ -41,11 +38,6 @@ from yadof.tools.surrogate_viewer.report import (
     format_workspace_summary,
 )
 from yadof.tools.surrogate_viewer.ui.interactive import InteractiveTab
-from yadof.tools.surrogate_viewer.ui.plots import (
-    HeatmapPlot,
-    InteractivePlot,
-)
-from yadof.tools.surrogate_viewer.ui.style import ACCENT, PANEL
 
 
 def _raw_item(name: str, data: np.ndarray) -> dict[str, object]:
@@ -534,31 +526,6 @@ def test_off_grid_query_keeps_stored_grid_predictions_unchanged(
     np.testing.assert_array_equal(scaler.mean, [10.0, 20.0])
 
 
-def test_two_dimensional_plot_is_a_filled_contour_without_line_overlay() -> None:
-    plot = PlotData(
-        name="surface",
-        dimensions=(
-            DimensionSpec(0, "x", np.asarray([0.0, 1.0]), "m"),
-            DimensionSpec(1, "y", np.asarray([0.0, 1.0, 2.0]), "s"),
-        ),
-        values=np.arange(6.0).reshape(2, 3),
-        slice_label="",
-    )
-    axis = Figure().add_subplot()
-
-    artist = InteractivePlot._draw_surface(
-        axis,
-        plot,
-        Normalize(vmin=0.0, vmax=5.0),
-        "prediction",
-    )
-
-    assert artist.filled
-    assert axis.get_xlabel() == "x (m)"
-    assert axis.get_ylabel() == "y (s)"
-    assert not axis.lines
-
-
 def test_interactive_tab_lists_dimensions_and_enforces_two_axis_limit() -> None:
     try:
         root = tk.Tk()
@@ -622,10 +589,6 @@ def test_interactive_tab_lists_dimensions_and_enforces_two_axis_limit() -> None:
             variable.get()
             for variable in tab._dimension_plot_vars
         ] == [True, False, False]
-        assert tab.dimension_toggles[0].cget("text").startswith("✓")
-        assert tab.dimension_toggles[1].cget("text").startswith("□")
-        assert tab.auto_refresh_toggle.cget("text") == "✓  Auto refresh"
-        assert tab.auto_refresh_toggle.cget("background") == ACCENT
         assert tab.real_generation_var.get() == "0"
         assert tab.real_result_var.get() == default_real.label
         assert tab.prediction_inputs()[2] == default_real.job_name
@@ -648,8 +611,6 @@ def test_interactive_tab_lists_dimensions_and_enforces_two_axis_limit() -> None:
 
         tab.auto_refresh_toggle.invoke()
         assert not tab.auto_refresh_var.get()
-        assert tab.auto_refresh_toggle.cget("text") == "□  Auto refresh"
-        assert tab.auto_refresh_toggle.cget("background") == PANEL
 
         tab._dimension_plot_vars[1].set(True)
         tab._dimension_selection_changed(1)
@@ -660,32 +621,6 @@ def test_interactive_tab_lists_dimensions_and_enforces_two_axis_limit() -> None:
         tab._dimension_plot_vars[2].set(True)
         tab._dimension_selection_changed(2)
         assert not tab._dimension_plot_vars[2].get()
-        assert tab.dimension_toggles[2].cget("text").startswith("□")
-    finally:
-        root.destroy()
-
-
-def test_heatmap_cells_touch_without_grid_edges() -> None:
-    try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        pytest.skip(f"Tk display is unavailable: {exc}")
-    root.withdraw()
-    try:
-        plot = HeatmapPlot(root)
-        plot.draw(
-            ErrorMatrix(
-                checkpoint_generations=(1, 2),
-                optimization_generations=(3, 4),
-                values=np.asarray([[0.1, 0.2], [0.3, 0.4]]),
-                metric_label="Mean relative error · all costs",
-                sample_counts=(1, 1),
-            )
-        )
-
-        mesh = plot.ax.collections[0]
-        np.testing.assert_allclose(mesh.get_linewidths(), 0.0)
-        assert mesh.get_edgecolors().size == 0
     finally:
         root.destroy()
 

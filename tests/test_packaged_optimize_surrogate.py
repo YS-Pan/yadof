@@ -510,13 +510,3 @@ def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
     assert not surrogate_state_ready(conditional_inr(), component_context)
     with pytest.raises(RuntimeError, match="not trained"):
         runtime.predict_population(workspace, ((0.5,),))
-
-
-def test_packaged_optimize_and_surrogate_have_no_project_namespace_imports():
-    package_root = Path(__file__).resolve().parents[1] / "src" / "yadof"
-    for module_dir in (package_root / "optimize", package_root / "surrogate"):
-        source = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in module_dir.rglob("*.py")
-        )
-        assert "project." not in source

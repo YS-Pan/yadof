@@ -50,15 +50,13 @@ lock automatically generated run-directory names to a digits-only UTC
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
 - CLI/docs, integrated cost/time views including grouped `view all`,
   the 50-generation run default, default-on run progress with an explicit quiet
-  override, per-generation successful/error/remaining outcome counts without
-  lifecycle marker lines or repeated fast worker-plan output, streamed distributed
-  result notification, flushed pre-execution standalone-smoke feedback,
+  override, per-generation successful/error/remaining outcome counts, streamed
+  distributed result notification, flushed pre-execution standalone-smoke feedback,
   cost-view isolation/reporting for unusable history rows and optional annotations,
-  streamed candidate progress with segment-based bar fill and its exact final total,
+  streamed candidate progress and its final total,
   left-axis average cost, all-individual/current-generation hypervolume values,
-  shaded hypervolume plotting with thin translucent boundary polylines, compact HV legend text, staggered generation
-  labels, non-redundant summaries, compatibility/package
-  imports, and stderr calculation progress without duplicate TTY completion lines,
+  generation grouping, renderable image output, useful summaries, lazy optional
+  viewer registration,
   execute-machine/error encodings, worker-over-Condor machine precedence,
   active/held/removed/terminated historical timeout log fallback,
   evicted/never-executed timeout behavior,
@@ -88,6 +86,13 @@ frequency band, exact active parameter set, or expected simulator result stay wi
 reference/disposable workspace or, when they verify the declared frozen comparison
 contract, below `benchmark_automation/`. Neutral fake adapters and synthetic
 0D/1D/2D/3D rawData remain package fixtures.
+
+Tests should prefer observable behavior, durable data, public boundaries, and
+failure semantics. Do not add repository-layout meta-tests, scans that merely prove
+an old token or path is absent, duplicate import-alias checks, or assertions over
+exact font sizes, DPI, colors, legend coordinates, line widths, and other incidental
+presentation constants. A rendering smoke may prove that valid data produces a
+non-empty artifact without freezing its pixel dimensions.
 
 ## Acceptance
 

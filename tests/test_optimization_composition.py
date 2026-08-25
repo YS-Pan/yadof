@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import importlib
 from pathlib import Path
 import subprocess
 import sys
@@ -53,17 +52,6 @@ def test_public_parent_imports_are_lazy_and_config_has_no_second_selector() -> N
         "SURROGATE_METHOD",
         "SEARCH_BACKEND",
     } & set(DEFAULT_CONFIG)
-
-
-def test_private_algorithm_packages_do_not_replace_public_factories() -> None:
-    import yadof.optimize as optimize
-    import yadof.surrogate as surrogate
-
-    importlib.import_module("yadof.optimize.gpsaf.assistance")
-    importlib.import_module("yadof.surrogate.conditional_inr.runtime")
-
-    assert callable(optimize.gpsaf)
-    assert callable(surrogate.conditional_inr)
 
 
 def test_default_composition_dispatches_ga_and_nsga3_by_objective_count(

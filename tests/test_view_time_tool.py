@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import importlib.util
-from pathlib import Path
 import warnings
 
 import pytest
 
-import yadof.tools.view_cost as view_cost
 import yadof.tools.view_time as view_time
 
 
@@ -201,32 +199,6 @@ def test_build_rows_can_filter_completed_records():
     assert [row["job_name"] for row in rows] == ["job_a"]
 
 
-def test_computer_colors_and_error_bands_are_distinct():
-    computer_colors = view_time._categorical_colors(
-        ("worker-a", "worker-b", "worker-c")
-    )
-    error_colors = view_time._categorical_colors(
-        ("RuntimeError", "timeout", "collect error"),
-        hue_offset=0.08,
-        saturation=0.92,
-        value=0.88,
-    )
-
-    assert len(set(computer_colors.values())) == 3
-    assert len(set(error_colors.values())) == 3
-    assert view_time._error_band_positions(
-        ("RuntimeError", "timeout", "collect error")
-    ) == {
-        "RuntimeError": pytest.approx(0.80),
-        "timeout": pytest.approx(0.85),
-        "collect error": pytest.approx(0.90),
-    }
-    assert view_time._error_band_positions(("timeout",)) == {
-        "timeout": pytest.approx(0.85)
-    }
-    assert view_time.ELAPSED_DATA_TOP < view_time.ERROR_BAND_BOTTOM
-
-
 def test_elapsed_axis_unit_adapts_to_completed_duration():
     assert view_time._elapsed_axis_unit(1.0) == ("minutes", "min", 1.0)
     assert view_time._elapsed_axis_unit(0.5) == ("seconds", "s", 60.0)
@@ -319,176 +291,11 @@ def test_generation_regions_use_time_midpoints_and_restart_per_run():
     ]
 
 
-def test_generation_regions_stagger_labels_and_shade_only_odd_ones():
-    class FakeAxis:
-        def __init__(self):
-            self.spans = []
-            self.labels = []
-            self.transform = object()
-
-        def get_xaxis_transform(self):
-            return self.transform
-
-        def axvspan(self, left, right, **kwargs):
-            self.spans.append((left, right, kwargs))
-
-        def text(self, x, y, label, **kwargs):
-            self.labels.append((x, y, label, kwargs))
-
-    start = datetime(2026, 5, 14, 8, 0, 0)
-    regions = [
-        (0, start, start + timedelta(minutes=1)),
-        (1, start + timedelta(minutes=1), start + timedelta(minutes=2)),
-    ]
-    axis = FakeAxis()
-
-    view_time._draw_generation_regions(axis, regions)
-
-    assert [label[2] for label in axis.labels] == ["0", "1"]
-    assert [label[1] for label in axis.labels] == pytest.approx([0.98, 0.93])
-    assert all(label[3]["transform"] is axis.transform for label in axis.labels)
-    assert all(label[3]["fontsize"] == 8 for label in axis.labels)
-    assert axis.spans == [
-        (
-            start + timedelta(minutes=1),
-            start + timedelta(minutes=2),
-            {
-                "facecolor": "black",
-                "edgecolor": "none",
-                "alpha": pytest.approx(0.1),
-                "zorder": 0,
-            },
-        )
-    ]
-
-
 def test_build_rows_reports_empty_recorded_data():
     fake_api = FakeRecordedDataApi(())
 
     with pytest.raises(view_time.ViewTimeError, match="No recorded timing rows"):
         view_time.build_rows(object(), recorded_api=fake_api)
-
-
-def test_view_time_source_does_not_reference_legacy_jsonl_inputs():
-    source = Path(view_time.__file__).read_text(encoding="utf-8")
-
-    assert "indMeta.jsonl" not in source
-    assert "para_cost.jsonl" not in source
-    assert "optMeta.jsonl" not in source
-    assert "sys.path" not in source
-    assert "alpha=TREND_LINE_ALPHA" in source
-    assert "FAIL_RATE_COLOR" in source
-    assert "Failure rate (%)" in source
-    assert "execute_machine" in source
-    assert "edgecolors=ring_color" in source
-    assert "label=error_type" not in source
-    assert "computer:" not in source
-    assert view_time.FAIL_RATE_LINE_ALPHA == pytest.approx(0.1)
-    assert view_time.ERROR_LABEL_X == pytest.approx(0.015)
-
-
-def test_view_time_plot_style_stays_aligned_to_view_cost():
-    aligned_names = (
-        "PLOT_FIGSIZE",
-        "PLOT_DPI",
-        "PLOT_FONT_SIZE",
-        "PLOT_TITLE_FONT_SIZE",
-        "PLOT_TICK_FONT_SIZE",
-        "PLOT_LEGEND_FONT_SIZE",
-        "PLOT_LEGEND_FRAME_ALPHA",
-        "PLOT_LEGEND_EDGE_PAD",
-        "PLOT_LEGEND_GAP",
-        "PLOT_GENERATION_FONT_SIZE",
-        "PLOT_TIGHT_LAYOUT_PAD",
-        "AXIS_LINE_WIDTH",
-        "TREND_LINE_WIDTH",
-        "TREND_LINE_ALPHA",
-        "EVENT_LINE_ALPHA",
-        "EVENT_LINE_WIDTH",
-        "EVENT_DASH_LENGTH",
-        "OPT_LINE_STYLE",
-        "HASH_LINE_STYLE",
-        "GRID_LINE_WIDTH",
-        "SCATTER_MARKER_SIZE",
-        "SCATTER_EDGE_LINE_WIDTH",
-        "GENERATION_SHADE_COLOR",
-        "GENERATION_SHADE_ALPHA",
-        "GENERATION_LABEL_Y",
-        "GENERATION_LABEL_STAGGER",
-        "OPT_LINE_LABEL",
-        "HASH_LINE_LABEL",
-    )
-
-    assert {
-        name: getattr(view_time, name)
-        for name in aligned_names
-    } == {
-        name: getattr(view_cost, name)
-        for name in aligned_names
-    }
-
-
-def test_view_time_splits_data_and_event_legends():
-    class FakeBBox:
-        x1 = 0.3
-
-        def transformed(self, _transform):
-            return self
-
-    class FakeArtist:
-        def get_window_extent(self, _renderer):
-            return FakeBBox()
-
-    class FakeCanvas:
-        def draw(self):
-            return None
-
-        def get_renderer(self):
-            return object()
-
-    class FakeTransform:
-        def inverted(self):
-            return self
-
-    class FakeSourceAxis:
-        def __init__(self, labels):
-            self.labels = labels
-
-        def get_legend_handles_labels(self):
-            return [object() for _ in self.labels], self.labels
-
-    class FakeLegendAxis:
-        def __init__(self):
-            self.calls = []
-            self.added = []
-            self.figure = type("FakeFigure", (), {"canvas": FakeCanvas()})()
-            self.transAxes = FakeTransform()
-
-        def legend(self, _handles, labels, **kwargs):
-            artist = FakeArtist()
-            self.calls.append((labels, kwargs, artist))
-            return artist
-
-        def add_artist(self, artist):
-            self.added.append(artist)
-
-    axis = FakeLegendAxis()
-    sources = (
-        FakeSourceAxis(["worker-a (avg. 1.00 min)", "avg. time", "Opt. start"]),
-        FakeSourceAxis(["avg. failure rate", "Hash change"]),
-    )
-
-    view_time._add_split_legends(axis, sources)
-
-    assert [call[0] for call in axis.calls] == [
-        ["worker-a (avg. 1.00 min)", "avg. time", "avg. failure rate"],
-        ["Opt. start", "Hash change"],
-    ]
-    assert axis.calls[0][1]["framealpha"] == pytest.approx(0.6)
-    assert axis.calls[1][1]["framealpha"] == pytest.approx(0.6)
-    assert axis.calls[0][1]["bbox_to_anchor"] == pytest.approx((0.015, 0.015))
-    assert axis.calls[1][1]["bbox_to_anchor"] == pytest.approx((0.31, 0.015))
-    assert axis.added == [axis.calls[0][2]]
 
 
 def test_plot_rows_writes_png_without_date_locator_warnings(
@@ -585,19 +392,12 @@ def test_plot_rows_writes_png_without_date_locator_warnings(
 
     assert output.is_file()
     assert output.stat().st_size > 0
-    from matplotlib import image as matplotlib_image
-
-    assert matplotlib_image.imread(output).shape[:2] == (2100, 3300)
     assert "worker-a (avg. 1.00 min)" in captured["labels"]
     assert "worker-b (avg. n/a)" in captured["labels"]
     assert "worker-c (avg. n/a)" in captured["labels"]
     for error_type in ("RuntimeError", "timeout", "collect error"):
-        error_text = captured["error_texts"][error_type]
-        assert error_text.get_position()[0] == pytest.approx(0.015)
-        assert error_text.get_horizontalalignment() == "left"
-        assert error_text.get_verticalalignment() == "center"
+        assert error_type in captured["error_texts"]
     assert len(captured["failure_lines"]) == 1
-    assert captured["failure_lines"][0].get_alpha() == pytest.approx(0.1)
 
 
 def test_plot_rows_scales_fast_elapsed_time_in_milliseconds(tmp_path, monkeypatch):
@@ -641,7 +441,3 @@ def test_plot_rows_scales_fast_elapsed_time_in_milliseconds(tmp_path, monkeypatc
     )
     assert "worker-fast (avg. 5.00 ms)" in captured["labels"]
     assert "avg. time (global: 5.00 ms)" in captured["labels"]
-
-
-def test_view_time_has_a_package_entrypoint():
-    assert Path(view_time.__file__).name == "view_time.py"

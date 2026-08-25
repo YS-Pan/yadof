@@ -10,15 +10,13 @@ optimization, or full model audit in the default suite.
 - Check valid checkpoint discovery, sorting, and malformed-file skipping.
 - Check scalar rawData plus user-selected 0D/1D/2D slices from higher-rank data,
   including stored fixed dimensions and the two-axis limit.
-- Check that stored-grid direct queries equal the legacy decoder/scaler result and
+- Check that stored-grid direct queries equal the checkpoint-grid decoder/scaler result and
   that an intermediate coordinate produces an additional physical prediction.
 - Check fixed-coordinate dropdown values and preservation of arbitrary finite text
   input.
 - Check ensemble finite minimum/maximum derivation for curves and surfaces.
-- Check that axis and `Auto refresh` toggles render explicit selected/unselected
-  symbols and stay synchronized with their BooleanVar values.
-- Check that workspace loading preselects a real generation and individual, and
-  that heatmap meshes render with zero line width and no edge colors.
+- Check that axis and `Auto refresh` controls stay synchronized with their state.
+- Check that workspace loading preselects a real generation and individual.
 - Check Tcl-only popup ancestry safety.
 - Check instant aggregate switching across relative/absolute, cost/rawData, all,
   and item-specific quantities.
@@ -49,10 +47,12 @@ under test.
   suite depend on a display where avoidable.
 - Real-workspace audit and CUDA utilization measurements are integration checks,
   not default unit tests.
+- Widget colors/copy, Matplotlib artist classes, contour overlays, mesh edge style,
+  and exact geometry are presentation choices rather than stable test contracts.
 
 ## Mutability Profile
 
 Add focused tests when contracts expand. Keep packaging and lazy CLI coverage in
 yadof's generic package tests. Avoid snapshots tied to incidental widget geometry
-or exact Matplotlib internals unless those details implement an explicit user
-requirement.
+or exact Matplotlib internals unless a later explicit user requirement makes the
+detail part of the contract.

@@ -51,15 +51,13 @@ requiring an extra ZIP scan. The final summary remains on stdout. One cost comma
 freezes its task parameters/cost callback and finalized segment names, then combines
 rawData decode, schema validation, normalization, and cost recalculation while each
 segment ZIP is open once. The cost PNG places the arithmetic
-`avg. cost` on the left objective axis. This has the same vertical position as the
-former summed cost on an objective-count-scaled right axis. Its right axis instead
+`avg. cost` on the left objective axis. Its right axis
 shows a shaded hypervolume band whose upper boundary accumulates all generations
 and whose lower boundary uses only the current generation, both against the fixed
 normalized reference `(1, ..., 1)`. Each cumulative calculation retains only its
-nondominated front before invoking the HV indicator. Thin translucent upper/lower polylines connect
-the values at the generation plotting positions while the band remains shaded, and
-it uses the compact legend label `HV (all & current gen.)`. Dense generation indices
-alternate between two vertical positions at the top of the axes. Cost
+nondominated front before invoking the HV indicator. Plot styling and label
+placement may evolve as long as the two series remain distinguishable and the
+scientific values are unchanged. Cost
 history implementation lives in the reusable `tools/cost_viewer/`
 subpackage; `tools/view_cost.py` is only the compatibility import facade.
 `view all` invokes cost and time with their normal defaults, prints two labeled
@@ -77,9 +75,9 @@ cancellable in-memory cross-generation error aggregates. Its backend alone adapt
 package checkpoint, recorded-data, and rawData internals; this includes describing
 every rawData dimension, extracting user-selected 0D/1D/2D stored-grid slices, and
 requesting conditional-INR values at arbitrary fixed coordinates. Stored-grid
-selections keep the legacy reconstruction path; off-grid selections interpolate
+selections keep the checkpoint-grid reconstruction path; off-grid selections interpolate
 checkpoint scaler arrays and do not claim recorded truth. UI modules consume
-immutable viewer values and render scalars, curves, or filled color contours.
+immutable viewer values and render scalars, curves, or two-dimensional color plots.
 `report.py` turns backend metadata and selected audit matrices into stable terminal
 text or schema-versioned JSON, using `null` for missing finite aggregates and
 stderr for optional progress. The tool never trains, launches workflows, edits
@@ -90,34 +88,16 @@ Torch, Matplotlib, and Tkinter are loaded only when the viewer is actually used.
 Detailed architecture, module, file, and terminology contracts remain under the
 subtree's own `dev_doc/`; yadof's main developer README links to that entry.
 
-### Cost/time plot alignment contract
+### Cost/time presentation relationship
 
-Unless a requested change explicitly says otherwise, `cost_viewer/plotting.py` and
-`cost_viewer/style.py` are the cost visual reference and `view_time.py` must remain
-aligned with them. Update both tool implementations and the cross-view style test
-whenever a shared value changes. The aligned commands and values are:
-
-| Concern | Matplotlib command / constant | Default |
-|---|---|---|
-| Figure size | `plt.subplots(figsize=PLOT_FIGSIZE)` | `(5.5, 3.5)` inches |
-| Raster resolution | `fig.savefig(..., dpi=PLOT_DPI)` | `600` dpi |
-| Medium text | `PLOT_FONT_SIZE` | `10` pt |
-| Title / tick / legend / generation text | explicit `fontsize` constants | `11 / 8 / 7 / 8` pt |
-| Axis / trend / event / grid width | explicit width constants | `0.8 / 2.0 / 1.2 / 0.4` pt |
-| Average-cost trend width | `AVG_TREND_LINE_WIDTH` in viewCost | `4.0` pt |
-| Average cost/time trend opacity | `TREND_LINE_ALPHA` | `0.25` |
-| Ordinary avg.-cost and viewTime marker diameter / ring width | `SCATTER_MARKER_SIZE` / `SCATTER_EDGE_LINE_WIDTH` | `3.0` pt / `0.4` pt |
-| Pareto emphasis in viewCost | marker area / ring width | `60.0` pt² / `0.75` pt |
-| Generation background / labels | `axvspan(..., facecolor="black", alpha=0.1)` / alternating axes-relative y | odd generations shaded; labels at `0.98 / 0.93` |
-| Optimization-start dashes | `linestyle=(0, (4, 4))` | butt dash caps |
-| Hash-change dashes | `linestyle=(4, (4, 4))` | complementary butt dash caps |
-| Event-line opacity | `EVENT_LINE_ALPHA` | `0.25` |
-| Legends | adjacent lower-left data/event legends | axes-edge pad `0.015`; `framealpha=0.6`; event names `Opt. start`, `Hash change` |
-
-Plot-specific colors, axes, scientific data series, and domain labels may differ.
-Shared presentation values do not drift independently: make a visual change in
-`cost_viewer/plotting.py` or `cost_viewer/style.py` first, mirror it in
-`view_time.py`, and update the alignment table and tests in the same change.
+Cost and time plots should look like related yadof tools and remain legible when
+shown together, but identical Matplotlib constants are not a compatibility
+contract. Share style values when both views genuinely benefit from the same
+choice; allow either view to evolve independently when its data needs differ.
+Tests verify the scientific series, labels needed to interpret them, and successful
+rendering. They do not freeze figure size, DPI, font sizes, line widths, opacities,
+dash phases, generation-label coordinates, legend anchors, or exact artist call
+structure.
 
 ## Task utilities
 

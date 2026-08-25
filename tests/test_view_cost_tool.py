@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import importlib.util
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-import yadof.tools.cost_viewer as cost_viewer
 import yadof.tools.view_cost as view_cost
 from yadof.tools.cost_viewer import plotting
-from yadof.tools.cost_viewer import style
 from yadof.tools.cost_viewer.types import ProgressMessage
 
 
@@ -217,22 +214,6 @@ def test_build_rows_prefers_individual_context_over_opt_metadata():
     assert rows[0]["job_static_hash"] == "hash_a"
 
 
-def test_average_cost_keeps_old_combined_cost_vertical_position():
-    assert view_cost._scatter_alpha(1000) == pytest.approx(0.6)
-    assert view_cost._scatter_alpha(64000) == pytest.approx(0.15)
-
-    rows = view_cost.build_rows(
-        object(),
-        recorded_api=FakeRecordedDataApi(
-            (("job_a", (0.1,), (0.4, 0.8)),)
-        ),
-    )
-
-    combined_cost = 1.2
-    old_right_axis_position = combined_cost / 2.0
-    assert rows[0]["average_cost"] == pytest.approx(old_right_axis_position)
-
-
 def test_hypervolume_series_has_all_and_current_generation_boundaries():
     rows = [
         {
@@ -309,47 +290,6 @@ def test_generation_regions_restart_per_run_and_skip_rows_without_generation():
         (1, 2.5, 4.5),
         (0, 4.5, 5.5),
         (1, 6.5, 7.5),
-    ]
-
-
-def test_generation_regions_stagger_labels_and_shade_only_odd_ones():
-    class FakeAxis:
-        def __init__(self):
-            self.spans = []
-            self.labels = []
-            self.transform = object()
-
-        def get_xaxis_transform(self):
-            return self.transform
-
-        def axvspan(self, left, right, **kwargs):
-            self.spans.append((left, right, kwargs))
-
-        def text(self, x, y, label, **kwargs):
-            self.labels.append((x, y, label, kwargs))
-
-    axis = FakeAxis()
-    regions = [(0, 0.5, 2.5), (1, 2.5, 4.5), (2, 4.5, 6.5)]
-
-    view_cost._draw_generation_regions(axis, regions)
-
-    assert [label[2] for label in axis.labels] == ["0", "1", "2"]
-    assert [label[1] for label in axis.labels] == pytest.approx(
-        [0.98, 0.93, 0.98]
-    )
-    assert all(label[3]["transform"] is axis.transform for label in axis.labels)
-    assert all(label[3]["fontsize"] == 8 for label in axis.labels)
-    assert axis.spans == [
-        (
-            2.5,
-            4.5,
-            {
-                "facecolor": "black",
-                "edgecolor": "none",
-                "alpha": pytest.approx(0.1),
-                "zorder": 0,
-            },
-        )
     ]
 
 
@@ -431,125 +371,6 @@ def test_build_rows_wraps_recorded_data_errors():
         view_cost.build_rows(object(), recorded_api=BrokenRecordedDataApi())
 
 
-def test_view_cost_source_does_not_reference_legacy_jsonl_inputs():
-    package_root = Path(cost_viewer.__file__).parent
-    source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in package_root.glob("*.py")
-    )
-
-    assert "para_cost.jsonl" not in source
-    assert "optMeta.jsonl" not in source
-    assert "indMeta.jsonl" not in source
-    assert "sys.path" not in source
-    assert source.count("linewidths=PARETO_EDGE_LINE_WIDTH") == 2
-
-
-def test_hypervolume_is_rendered_as_a_bounded_translucent_polyline_band():
-    source = Path(plotting.__file__).read_text(encoding="utf-8")
-
-    assert "fill_between(" in source
-    assert "step=\"post\"" not in source
-    assert 'edgecolor="none"' in source
-    assert source.count("ax2.plot(") == 1
-    assert "for boundary in (generation_hv, all_hv):" in source
-    assert "linewidth=HV_BOUNDARY_LINE_WIDTH" in source
-    assert "alpha=HV_BOUNDARY_LINE_ALPHA" in source
-    assert style.HV_SHADE_LABEL == "HV (all & current gen.)"
-    assert style.HV_BOUNDARY_LINE_WIDTH == pytest.approx(1.0)
-    assert style.HV_BOUNDARY_LINE_ALPHA == pytest.approx(0.5)
-    assert style.GENERATION_LABEL_STAGGER == pytest.approx(0.05)
-
-
-def test_view_cost_plot_style_contract():
-    assert view_cost.PLOT_FIGSIZE == (5.5, 3.5)
-    assert view_cost.PLOT_DPI == 600
-    assert view_cost.PLOT_FONT_SIZE == 10
-    assert view_cost.PLOT_TITLE_FONT_SIZE == 11
-    assert view_cost.PLOT_TICK_FONT_SIZE == 8
-    assert view_cost.PLOT_LEGEND_FONT_SIZE == 7
-    assert view_cost.PLOT_LEGEND_FRAME_ALPHA == pytest.approx(0.6)
-    assert view_cost.PLOT_LEGEND_EDGE_PAD == pytest.approx(0.015)
-    assert view_cost.TREND_LINE_WIDTH == pytest.approx(2.0)
-    assert view_cost.TREND_LINE_ALPHA == pytest.approx(0.25)
-    assert view_cost.AVG_TREND_LINE_WIDTH == pytest.approx(4.0)
-    assert view_cost.HV_SHADE_ALPHA == pytest.approx(0.2)
-    assert view_cost.EVENT_LINE_ALPHA == pytest.approx(0.25)
-    assert view_cost.EVENT_LINE_WIDTH == pytest.approx(1.2)
-    assert view_cost.GRID_LINE_WIDTH == pytest.approx(0.4)
-    assert view_cost.SCATTER_MARKER_SIZE == pytest.approx(3.0)
-    assert view_cost.SCATTER_EDGE_LINE_WIDTH == pytest.approx(0.4)
-    assert view_cost.PARETO_MARKER_AREA == pytest.approx(60.0)
-    assert view_cost.PARETO_EDGE_LINE_WIDTH == pytest.approx(0.75)
-    assert view_cost.OPT_LINE_LABEL == "Opt. start"
-    assert view_cost.HASH_LINE_LABEL == "Hash change"
-    assert view_cost.OPT_LINE_STYLE == (0.0, (4.0, 4.0))
-    assert view_cost.HASH_LINE_STYLE == (4.0, (4.0, 4.0))
-
-
-def test_view_cost_splits_data_and_event_legends():
-    class FakeBBox:
-        x1 = 0.3
-
-        def transformed(self, _transform):
-            return self
-
-    class FakeArtist:
-        def get_window_extent(self, _renderer):
-            return FakeBBox()
-
-    class FakeCanvas:
-        def draw(self):
-            return None
-
-        def get_renderer(self):
-            return object()
-
-    class FakeTransform:
-        def inverted(self):
-            return self
-
-    class FakeSourceAxis:
-        def __init__(self, labels):
-            self.labels = labels
-
-        def get_legend_handles_labels(self):
-            return [object() for _ in self.labels], self.labels
-
-    class FakeLegendAxis:
-        def __init__(self):
-            self.calls = []
-            self.added = []
-            self.figure = type("FakeFigure", (), {"canvas": FakeCanvas()})()
-            self.transAxes = FakeTransform()
-
-        def legend(self, _handles, labels, **kwargs):
-            artist = FakeArtist()
-            self.calls.append((labels, kwargs, artist))
-            return artist
-
-        def add_artist(self, artist):
-            self.added.append(artist)
-
-    axis = FakeLegendAxis()
-    sources = (
-        FakeSourceAxis(["cost_a", "Opt. start"]),
-        FakeSourceAxis(["avg. cost", "Hash change"]),
-    )
-
-    view_cost._add_split_legends(axis, sources)
-
-    assert [call[0] for call in axis.calls] == [
-        ["cost_a", "avg. cost"],
-        ["Opt. start", "Hash change"],
-    ]
-    assert axis.calls[0][1]["framealpha"] == pytest.approx(0.6)
-    assert axis.calls[1][1]["framealpha"] == pytest.approx(0.6)
-    assert axis.calls[0][1]["bbox_to_anchor"] == pytest.approx((0.015, 0.015))
-    assert axis.calls[1][1]["bbox_to_anchor"] == pytest.approx((0.31, 0.015))
-    assert axis.added == [axis.calls[0][2]]
-
-
 def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path, monkeypatch):
     if importlib.util.find_spec("matplotlib") is None or importlib.util.find_spec("cycler") is None:
         pytest.skip("matplotlib/cycler is not installed")
@@ -574,12 +395,3 @@ def test_plot_rows_writes_png_when_matplotlib_is_available(tmp_path, monkeypatch
 
     assert output.is_file()
     assert output.stat().st_size > 0
-    from matplotlib import image as matplotlib_image
-
-    assert matplotlib_image.imread(output).shape[:2] == (2100, 3300)
-
-
-def test_view_cost_has_a_package_entrypoint():
-    assert Path(view_cost.__file__).name == "view_cost.py"
-    assert Path(cost_viewer.__file__).name == "__init__.py"
-    assert view_cost.view_cost is cost_viewer.view_cost
