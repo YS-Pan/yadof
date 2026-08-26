@@ -20,12 +20,12 @@ alpha/beta/gamma controls, and surrogate training controls. Task physics and pro
 shape stay in fixed `submit/` and evaluate-side `job_template/` roots. Complete
 strategy selection stays only in `submit/optimization.py`, never in config.
 
-Surrogate training uses only recorded real rawData rows. By default each independently
-initialized ensemble member receives a seeded bootstrap sample drawn only from that
-evidence. Bootstrap is deferred while fewer than two real samples per input variable
-exist, so scarce early design support is not discarded. Training does not synthesize
-mixup targets and does not accept task-owned rawData importance or relative-loss
-settings.
+Surrogate training uses only recorded real rawData rows. By default every independently
+initialized ensemble member sees every retained real row; this preserves all measured
+design support because ensemble spread is diagnostic and does not steer GPSAF.
+`SURROGATE_INR_BOOTSTRAP_MEMBERS = True` remains an explicit opt-in for seeded
+bootstrap rows drawn only from that same evidence. It does not synthesize mixup targets
+and does not accept task-owned rawData importance or relative-loss settings.
 `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` bounds queries per step; when a field is
 larger than that budget, sampling is seeded, without replacement, and balanced across
 modeled fields. Every active field has equal macro loss importance regardless of its
@@ -41,11 +41,7 @@ variables are centered from `[0, 1]` to `[-1, 1]` inside the network. The decode
 linear in this standard-score space, so it can predict beyond the minimum and maximum
 already observed instead of saturating at a historical min/max envelope. Predicted
 standard scores are always inverse-scaled back to rawData before current task cost is
-calculated. During GPSAF selection, every ensemble member independently follows that
-rawData-to-current-cost path. For each objective, GPSAF uses the smallest member cost
-as the candidate's optimistic predicted result. The surrogate prediction API returns
-that optimistic cost together with the full member-cost interval, while
-`predict_raw_data()` continues to expose the ensemble-mean rawData reconstruction.
+calculated.
 
 Advanced history-recorder settings are
 `HISTORY_SEGMENT_MAX_CANDIDATES` (default 16),

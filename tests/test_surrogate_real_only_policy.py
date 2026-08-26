@@ -297,7 +297,7 @@ def test_bootstrap_members_only_receive_rows_from_real_training_evidence(
         )
 
 
-def test_default_ensemble_members_use_seeded_bootstrap(
+def test_default_ensemble_members_receive_every_real_training_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[np.ndarray] = []
@@ -335,18 +335,12 @@ def test_default_ensemble_members_use_seeded_bootstrap(
         seed=41,
     )
 
-    assert DEFAULT_CONFIG["SURROGATE_INR_BOOTSTRAP_MEMBERS"] is True
-    assert config.bootstrap_members is True
-    assert history["bootstrap_requested"] is True
-    assert history["bootstrap_applied"] is True
+    assert DEFAULT_CONFIG["SURROGATE_INR_BOOTSTRAP_MEMBERS"] is False
+    assert config.bootstrap_members is False
+    assert history["bootstrap_requested"] is False
+    assert history["bootstrap_applied"] is False
     assert len(captured) == 3
-    assert all(visible_x.shape == x_train.shape for visible_x in captured)
-    source_rows = {tuple(row) for row in x_train.tolist()}
-    assert all(
-        all(tuple(row) in source_rows for row in visible_x.tolist())
-        for visible_x in captured
-    )
-    assert all(not np.array_equal(visible_x, x_train) for visible_x in captured)
+    assert all(np.array_equal(visible_x, x_train) for visible_x in captured)
 
 
 def test_sparse_high_dimensional_training_preserves_all_real_rows_per_member(
@@ -395,62 +389,7 @@ def test_sparse_high_dimensional_training_preserves_all_real_rows_per_member(
     assert all(np.array_equal(visible_x, x_train) for visible_x in captured)
 
 
-def test_predict_population_costs_every_member_rawdata(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    config = type("LoadedConfig", (), {"workspace": tmp_path})()
-    state = type(
-        "State",
-        (),
-        {
-            "parameter_names": ("x",),
-            "schema": type("Schema", (), {"flat_dim": 1})(),
-            "model": object(),
-        },
-    )()
-    member_flats = np.asarray(
-        [
-            [[3.0], [4.0]],
-            [[1.0], [6.0]],
-            [[2.0], [5.0]],
-        ],
-        dtype=np.float64,
-    )
-    cost_inputs: list[tuple[float, ...]] = []
-
-    monkeypatch.setattr(runtime, "load_config", lambda _workspace: config)
-    monkeypatch.setattr(runtime, "_require_state", lambda _config: state)
-    monkeypatch.setattr(runtime, "_predict_member_flats", lambda _state, _x: member_flats)
-    monkeypatch.setattr(
-        runtime,
-        "_raw_samples_from_flat",
-        lambda _schema, flat: tuple(
-            ({"signal": np.asarray([float(row[0])])},) for row in flat
-        ),
-    )
-
-    def fake_costs(_workspace, raw_samples, _normalized_variables):
-        values = tuple(float(sample[0]["signal"][0]) for sample in raw_samples)
-        cost_inputs.append(values)
-        return tuple((value, 10.0 - value) for value in values)
-
-    monkeypatch.setattr(runtime, "_costs_from_raw", fake_costs)
-
-    rows = runtime.predict_population(tmp_path, ((0.25,), (0.75,)))
-
-    assert cost_inputs == [
-        (3.0, 4.0),
-        (1.0, 6.0),
-        (2.0, 5.0),
-    ]
-    assert rows == (
-        ((1.0, 7.0), ((1.0, 3.0), (7.0, 9.0))),
-        ((4.0, 4.0), ((4.0, 6.0), (4.0, 6.0))),
-    )
-
-
-def test_optimizer_records_use_surrogate_point_costs() -> None:
+def test_optimizer_records_discard_member_spread() -> None:
     import yadof.surrogate.api as surrogate_api
 
     class StubSurrogate:
@@ -473,7 +412,6 @@ def test_optimizer_records_use_surrogate_point_costs() -> None:
     )
 
     assert wide == narrow
-    assert wide[0].pred_costs == (0.2,)
     assert not hasattr(wide[0], "intervals")
     assert not hasattr(surrogate_api, "evaluate_historical_errors")
 
