@@ -59,9 +59,11 @@ history with fewer than two real rows per normalized input dimension keeps every
 row visible to every member even when bootstrap is requested; independent
 initialization retains ensemble diversity until ordinary resampling no longer
 throws away scarce design support. Member spread is exposed as an uncalibrated
-diagnostic and is not durable truth. The live
-GPSAF survival path selects from mean predicted costs only; member min/max spread
-does not affect selected candidates.
+diagnostic and is not durable truth. For optimizer prediction, runtime reconstructs
+every member's rawData, evaluates the current task cost independently, and exposes
+the per-objective minimum as its optimistic point cost. GPSAF consumes that point
+cost while retaining a real-evaluation exploration quota; it does not interpret the
+remaining interval width as calibrated uncertainty.
 
 ## Scheduling and recovery
 

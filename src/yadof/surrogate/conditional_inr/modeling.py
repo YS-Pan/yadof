@@ -34,7 +34,7 @@ class INRTrainConfig:
     train_query_sample_count: int = 8192
     sample_batch_eval: int = 64
     query_batch_eval: int = 8192
-    bootstrap_members: bool = False
+    bootstrap_members: bool = True
     bootstrap_fraction: float = 1.0
 
 

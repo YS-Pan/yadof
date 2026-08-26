@@ -16,6 +16,10 @@
 - Train the INR ensemble through `modeling.py`.
 - Write checkpoints through `checkpoints.py` and training metadata through `metadata.py`.
 - Predict rawData/costs using the latest in-memory trained state.
+- Build cost intervals by reconstructing every ensemble member's rawData and passing
+  every reconstruction through the current task cost function independently.
+- Return the per-objective lower interval endpoint as the optimistic point cost used
+  by GPSAF; keep ensemble-mean rawData available through `predict_raw_data()`.
 
 ## I/O Format
 - `train(generation_index, started_at=None)` returns a `SurrogateState`.

@@ -14,7 +14,9 @@
   `conditional_inr/scheduler.py`.
 
 ## I/O Format
-- Prediction returns optimizer-facing `(costs, intervals)` rows.
+- Prediction returns optimizer-facing `(costs, intervals)` rows. Conditional INR's
+  point costs are the per-objective minima across independently rawData-to-costed
+  ensemble members; intervals retain the corresponding member minima and maxima.
 - Scheduler functions return status objects with action, pending generation, latest completed generation, and optional error text.
 
 ## Non-Obvious Techniques

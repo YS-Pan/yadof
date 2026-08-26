@@ -34,12 +34,14 @@ configured crossover/mutation probabilities and distribution indices. NSGA-III
 reference directions are generated from objective count and configured partitions.
 Duplicate/archive keys use configured decimal precision and bounded refill attempts.
 
-GPSAF alpha/beta pools are ranked using surrogate-predicted mean current costs
-through pymoo survival. Conditional-INR member min/max spread remains a diagnostic
-output at the surrogate/viewer boundary; GPSAF candidate records do not carry it,
-and it is not converted into optimizer noise, knockout probability, or a trust
-decision. A configured exploration quota keeps some candidates outside surrogate
-preference. Every selected row is validated by the real evaluator before becoming
+GPSAF alpha/beta pools are ranked through pymoo survival using the surrogate's point
+costs. Conditional INR defines those point costs as the per-objective optimistic
+member costs: it predicts rawData for every ensemble member, passes each member through
+the current task cost function, and returns the lower endpoint of each member-cost
+interval. Candidate records do not carry the full interval, and it is not converted
+into optimizer noise, knockout probability, or a trust decision. A configured
+exploration quota keeps some candidates outside surrogate preference. Every selected
+row is validated by the real evaluator before becoming
 durable truth.
 
 Distributed evaluation may invoke the scheduler-specific after-submit hook while

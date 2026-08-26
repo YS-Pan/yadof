@@ -1203,37 +1203,25 @@ def predict_population(
 
     x = _x_matrix(normalized_population, _state_input_dim(state))
     member_flats = _predict_member_flats(state, x)
-    mean_flat = np.mean(member_flats, axis=0)
-    predicted_raw = _raw_samples_from_flat(state.schema, mean_flat)
-    costs = _costs_from_raw(
-        config.workspace, predicted_raw, normalized_population
-    )
-
     member_costs = []
     for member_idx in range(member_flats.shape[0]):
-        try:
-            member_raw = _raw_samples_from_flat(state.schema, member_flats[member_idx])
-            member_costs.append(
-                np.asarray(
-                    _costs_from_raw(
-                        config.workspace, member_raw, normalized_population
-                    ),
-                    dtype=np.float64,
-                )
+        member_raw = _raw_samples_from_flat(state.schema, member_flats[member_idx])
+        member_costs.append(
+            np.asarray(
+                _costs_from_raw(
+                    config.workspace, member_raw, normalized_population
+                ),
+                dtype=np.float64,
             )
-        except Exception:
-            continue
-    if member_costs:
-        member_cost_matrix = np.stack(member_costs, axis=0)
-        interval_lower = np.min(member_cost_matrix, axis=0)
-        interval_upper = np.max(member_cost_matrix, axis=0)
-    else:
-        fallback = np.asarray(costs, dtype=np.float64)
-        interval_lower = fallback
-        interval_upper = fallback
+        )
+    if not member_costs:
+        raise RuntimeError("conditional INR prediction produced no ensemble members")
+    member_cost_matrix = np.stack(member_costs, axis=0)
+    interval_lower = np.min(member_cost_matrix, axis=0)
+    interval_upper = np.max(member_cost_matrix, axis=0)
 
     out = []
-    for row_idx, cost_row in enumerate(costs):
+    for row_idx, cost_row in enumerate(interval_lower):
         intervals = []
         for cost_idx, value in enumerate(cost_row):
             lo = float(interval_lower[row_idx, cost_idx])

@@ -24,11 +24,10 @@
 - Field-balanced query sampling uses one seeded permutation per field and advances
   a deterministic cursor across training steps, completing coordinate coverage
   before repeating a field's query positions.
-- Every independently initialized member sees all retained real rows by default;
-  bootstrap remains explicit opt-in because ensemble spread is diagnostic and does
-  not justify discarding unique design support from the fitted mean. Requested
-  bootstrap resampling is still deferred while the real sample count is below twice
-  the input dimension.
+- Independently initialized members use deterministic seeded bootstrap samples by
+  default so their member-cost envelope can drive optimistic GPSAF selection.
+  Bootstrap resampling is deferred while the real sample count is below twice the
+  input dimension, preserving all scarce early rows.
 
 ## Mutability Profile
 - Network and training internals may evolve when checkpoint compatibility is

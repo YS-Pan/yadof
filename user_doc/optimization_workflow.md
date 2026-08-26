@@ -273,10 +273,12 @@ than using an older model. Set `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` to a
 non-negative integer only when the task's evaluation/training timing justifies a
 different throughput-versus-freshness tradeoff. Query minibatches rotate through
 one seeded ordering per rawData field so scarce coordinates are covered before
-they repeat. Every ensemble member sees all retained real rows by default, with
-independent initialization supplying diversity without discarding design support.
-If `SURROGATE_INR_BOOTSTRAP_MEMBERS` is explicitly enabled, bootstrap is still
-deferred until at least two real samples per input variable are available.
+they repeat. Ensemble members use independently seeded bootstrap samples by default;
+bootstrap is deferred until at least two real samples per input variable are
+available. For every GPSAF candidate, each member predicts rawData independently and
+the current task calculates that member's costs. GPSAF ranks the candidate with the
+smallest member cost for each objective while retaining an explicit exploration quota;
+surrogate-selected candidates still require real evaluation before acceptance.
 
 ## 5. Validate and smoke
 
