@@ -27,5 +27,5 @@ changed.
   trees: start with bounded `plan`, `preflight`, or `inspect` output and expand one
   artifact or failed cell at a time.
 - Benchmark execution, resume, and collection remain subject to the cost/risk
-  policy in `benchmark_automation/README.md`. Preserve frozen inputs and existing
-  runtime evidence.
+  policy in `benchmark_automation/README.md`. Baseline templates may be edited for
+  future runs; preserve existing run-local snapshots and runtime evidence.

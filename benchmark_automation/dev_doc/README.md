@@ -13,11 +13,11 @@ baseline handling, execution state, collection, or reporting.
 ## Source-checkout boundary
 
 The yadof repository tracks this runner, configuration, tests, strategy templates,
-developer/user documentation, frozen baseline metadata, and frozen baseline task
-inputs below top-level `benchmark_automation/`. This tree is downloadable with a
-yadof source checkout but is not an installed `yadof` package or runtime resource.
-A baseline is part of the reproducibility contract: never edit a baseline
-in place; create a new identity and update `benchmark.toml` explicitly.
+developer/user documentation, and editable baseline task templates below top-level
+`benchmark_automation/`. This tree is downloadable with a yadof source checkout but
+is not an installed `yadof` package or runtime resource. Baselines may be edited in
+place at any time. Reproducibility belongs to the immutable baseline snapshot copied
+into each new run, not to the live source template.
 
 The following directories are local generated state and are intentionally ignored
 by Git:
@@ -52,7 +52,8 @@ Do not edit site-packages, inject the yadof source checkout through
 
 1. Inspect the current Git status and preserve unrelated work.
 2. Read the relevant runner/config/tests and the architecture sections affected by
-   the change.
+   the change. A baseline edit is ordinary source work: validate it and let the next
+   run snapshot it; do not create fingerprint-named directories.
 3. Keep benchmark-specific orchestration here. Reusable single-workspace yadof
    mechanisms belong in yadof, as described in the root README.
 4. Add or update focused unit tests for behavior changes.

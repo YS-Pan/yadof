@@ -6,7 +6,7 @@ named planning document rather than here.
 
 ## Purpose and boundary
 
-The project compares frozen yadof tasks and optimization strategies through
+The project compares snapshotted yadof tasks and optimization strategies through
 isolated, identity-stable cells. It owns experiment assembly, cross-case/arm/seed
 alignment, validity handling, and descriptive reporting. It does not own yadof's
 optimizer, task execution lifecycle, recorded-data API, or single-workspace viewer
@@ -23,13 +23,13 @@ The benchmark has two evidence modes:
 ## Data flow
 
 ```text
-benchmark.toml + frozen baselines + strategy templates
+benchmark.toml + editable baselines + strategy templates
                          |
                          v
                   plan / preflight
                          |
                          v
-       immutable run_spec.json and matrix.json
+       run-local baseline snapshots + immutable run_spec.json and matrix.json
                          |
                          v
        isolated cell attempt workspaces and logs
@@ -63,7 +63,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
 | `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell config overrides, and resource requirements. |
 | `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements; the non-surrogate arm is explicitly identified as NSGA-III. |
-| `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`; every selected workspace exposes root `postprocess.py`. |
+| `baselines/` | Editable task templates plus provenance selected as `<provider>/<baseline-id>`; names are semantic rather than fingerprint-derived, and every selected workspace exposes root `postprocess.py`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
 | configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default checkout `temp/<run-id>/`, Git-ignored, with each run ID directly below the root. |
@@ -76,28 +76,33 @@ Keeping the CLI thin makes core behavior directly testable.
 
 - Every selected baseline, strategy, configuration, package installation, and
   runner module is fingerprinted before execution.
+- Baseline directories and contents are mutable templates. Their IDs are semantic
+  names without fingerprint suffixes. Preflight checks the current content and a
+  new run copies every declared input to `inputs/baselines/<case>/workspace`, records
+  that snapshot's fingerprint, and uses it for all cells and resume. Later source
+  baseline edits therefore affect only later runs.
+- A baseline manifest's yadof version and task fingerprint are creation provenance,
+  not locks on current content or the exact execution patch. Preflight requires the
+  version provenance, checks runtime cleanliness, runs current installed
+  `yadof check`, and freezes the actual execution package and task identities.
 - An automatically chosen run/output-directory name begins with a UTC
   `YYYYMMDD_HHMMSS` timestamp whose date and time components are digits only;
   optional sanitized label and run-spec fingerprint fields follow the prefix.
-- Immutable input paths remain contained below the benchmark root. Mutable run
+- Configured template/input paths remain contained below the benchmark root. Mutable run
   output may use an explicit external root; relative CLI overrides resolve from the
   invocation directory, and suggested follow-up commands preserve the resolved
   root.
-- A baseline ID and its contents are immutable. Refreshing creates a new directory.
-  Removing a historical identity is exceptional, requires explicit maintainer
-  direction, and makes checkout-based resume/reproduction of runs using it
-  unavailable.
 - Baseline provider directories identify the simulator or adapter. Their child
-  directory identifies the optimization task and task-fingerprint prefix; manifest
-  `provider_id`, `task_id`, `baseline_id`, and full fingerprint must agree with the
-  path.
+  directory is a stable semantic baseline ID; manifest `provider_id`, `case_id`,
+  and `baseline_id` agree with the path, while `task_id` names the optimization
+  problem independently.
 - Each case/arm/seed cell receives its own initialized workspace, state, logs, and
   checkpoint namespace; measured cells never share a smoke workspace.
 - Performance arms for a paired case use equal planned attempted-real-evaluation
   budgets.
 - The formal performance tier uses 100 individuals for 20 generations in every
   measured cell. Its runner-owned measured-cell overrides provide recorder
-  candidate headroom for at least one complete generation without editing frozen
+  candidate headroom for at least one complete generation without editing baseline
   baselines; the pilot remains a separate small cost-discovery tier.
 - Surrogate/optimizer performance evaluation and result-driven algorithm tuning use
   the complete unfiltered performance matrix. Few-generation or dozens-of-individual
@@ -181,8 +186,9 @@ Keeping the CLI thin makes core behavior directly testable.
 - Schema, validation, planning, execution, or reporting changes: update
   `benchmark_core.py`, `benchmark.toml` when applicable, focused tests, and the
   affected invariant above.
-- New case: add a new immutable baseline, provenance, TOML declaration, expected
-  objective/rawData contracts, and the smallest structural validation evidence.
+- New case: add an editable semantic baseline directory, provenance, TOML
+  declaration, expected objective/rawData contracts, and the smallest structural
+  validation evidence.
 - New arm: add a complete strategy template, TOML declaration, equal-budget
   coverage, and structural validation.
 - New public output field: define its stable JSON meaning, validity behavior, and

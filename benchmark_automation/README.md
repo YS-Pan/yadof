@@ -1,7 +1,7 @@
 # yadof benchmark automation
 
-This directory owns a reproducible, resumable comparison of the frozen SAW,
-PyChrono trebuchet, and synthetic `test_com` tasks. It has two deliberately
+This directory owns a reproducible, resumable comparison of the SAW, PyChrono
+trebuchet, and synthetic `test_com` tasks. It has two deliberately
 separate purposes:
 
 - **Structural suites** verify task wiring, real-evaluation-only NSGA-III, GPSAF,
@@ -10,15 +10,15 @@ separate purposes:
   differences. They do not rank arms, apply significance tests, or decide which
   algorithm is better.
 
-The runner never reads the mutable original task directories. Every cell starts
-with `yadof init`, receives only declared inputs from one frozen baseline, and has
-its own workspace, history, optimizer state, checkpoint namespace, logs, and lock.
-Baselines use `baselines/<provider>/<task>-<fingerprint-prefix>`: the provider is
-the simulator or adapter, and the task is the optimization problem rather than the
-benchmark case label or creation date.
+Baseline templates are editable in place under
+`baselines/<provider>/<baseline-id>`; the directory name is semantic and contains
+no fingerprint suffix. Creating a run copies the current declared inputs into an
+immutable run-local snapshot. Every cell starts with `yadof init`, receives inputs
+only from that snapshot, and has its own workspace, history, optimizer state,
+checkpoint namespace, logs, and lock. Later baseline edits affect only later runs.
 
 This is a source-checkout tool. It is tracked beside yadof so a user who clones or
-downloads the yadof repository can run the frozen benchmark, but it is deliberately
+downloads the yadof repository can run the benchmark, but it is deliberately
 outside `src/yadof` and is not installed by `pip install yadof`. The runner consumes
 a regular installed yadof distribution from the selected Python environment.
 
@@ -32,14 +32,13 @@ generic Windows short-launch-junction Chrono adapter fix. The selected synthetic
 `test_com` task retains its 20-variable non-separable multimodal landscape. All
 three current baselines accept the runner's output directory and filename-prefix
 interface. The runner now groups task-specific artifacts by baseline workspace and
-groups all cost views in one sibling directory. Superseded baseline identities
-remain immutable inputs by default; removal is exceptional and requires explicit
-maintainer direction.
+groups all cost views in one sibling directory. Their creation fingerprints remain
+provenance only; the templates and semantic directory names may change in place.
 
 | Evidence | Result |
 |---|---|
-| Phase-0 smoke for all three baselines | Passed; costs and rawData shapes match the frozen contracts |
-| selected Chrono baseline `trebuchet-462d1201a592` | Preflight 5/5 passed; real fast smoke `20260825_001100-chrono-adapter-long-path-regression-abcdefghijklmnopqrstuvwxyz0123456789` completed with the unchanged four midpoint costs while its representative physical PyChrono scratch/request paths were about 298/311 characters |
+| Phase-0 smoke for all three baselines | Passed; costs and rawData shapes match the declared contracts |
+| selected Chrono baseline `trebuchet` | Preflight 5/5 passed; real fast smoke `20260825_001100-chrono-adapter-long-path-regression-abcdefghijklmnopqrstuvwxyz0123456789` completed with the unchanged four midpoint costs while its representative physical PyChrono scratch/request paths were about 298/311 characters |
 | `adapter-smoke` run `20260823T052657Z-adapters-1b7c0d27af47` | Structural contract satisfied |
 | yadof-tools repair `0665541155009787c938cbf15df177e8c9488fb8` | Built, force-reinstalled, 274 tests passed, and pushed to `origin/main` |
 | post-fix `structural-canary` run `20260823T060003Z-post-viewer-fix-9e43d5c3327b` | Structural contract satisfied, including finite public summary and both audits |
@@ -48,7 +47,7 @@ maintainer direction.
 | historical three-generation `performance` run `pfull-0823` | 18/18 cells completed; 1080 attempted, 1062 publicly recorded completions, 18 recorder-budget losses, zero timeouts/all-infinite generations, and 9/9 paired rows included |
 | historical 100-by-20 `performance` run `p20x100-0823` | 18/18 cells completed; its `test-com` rows use the superseded `synthetic-antenna-aa89d46f3d9a` objectives and must not be compared with new-baseline runs |
 | historical first replacement `synthetic-antenna-c7b0133b3a4e` | Corrected objective scaling, but three real-only NSGA-III runs reached HV 0.8597-0.8833 after only 2,000 evaluations; its superseded baseline directory was later removed |
-| selected hard `test-com` baseline `synthetic-antenna-0b64f13b9f0b` | Preserves the accepted scientific task and common diagnostic plot while adding collision-safe flat-output filenames; the underlying three real-only NSGA-III validations each recorded 10,000/10,000 rows, reached HV 0.4347-0.4409, and still gained 5.13%-5.94% over their final ten generations |
+| selected hard `test-com` baseline `synthetic-antenna` | Preserves the accepted scientific task and common diagnostic plot while adding collision-safe flat-output filenames; the underlying three real-only NSGA-III validations each recorded 10,000/10,000 rows, reached HV 0.4347-0.4409, and still gained 5.13%-5.94% over their final ten generations |
 
 The resolved viewer gap and its historical failure evidence are documented in
 [`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).
@@ -62,9 +61,9 @@ An earlier authorized full run,
 `20260823T062344Z-approved-full-campaign-55651e90c9ef`, is retained as incomplete
 evidence. Its three Chrono GPSAF cells reached a roughly 272-character PyChrono
 child working directory and failed at Windows process launch with `WinError 267`.
-The final run used the same frozen scientific inputs with the explicit short run
+The final run used the same scientific inputs with the explicit short run
 ID `pfull-0823`; all Chrono GPSAF cells then completed. The selected
-`trebuchet-462d1201a592` baseline now carries the package-level adapter fix: every
+`trebuchet` baseline now carries the package-level adapter fix: every
 Windows PyChrono child launches through a short candidate junction targeting its
 original physical scratch, so future run IDs and output roots do not need manual
 shortening. Historical run specifications remain immutable.
@@ -92,6 +91,14 @@ The selected Python executable, Python version, installed yadof origin/version,
 module hash, distribution `RECORD` hash, Torch/CUDA/device facts, baseline hashes,
 history identity, strategy hashes, and fully expanded commands are frozen in each
 `run_spec.json`.
+
+A baseline manifest's `yadof_version` and `task_fingerprint` are creation
+provenance, not locks on current template content or the exact execution patch.
+Preflight requires the version provenance, checks runtime cleanliness, and runs the
+current installed `yadof check`. Run creation then records the current task
+fingerprint, snapshots declared inputs, and freezes the actual execution package
+identity. A template created by 0.4.0 can therefore be edited and executed under
+compatible 0.4.1 without fingerprint-derived directories.
 
 ## Commands
 
@@ -196,8 +203,9 @@ python ".\benchmark_automation\benchmark.py" run `
 ```
 
 The equivalent `resume --run-id <existing-id>` command is also available. Resume
-refuses config, installed-package, baseline, history, strategy, or execution-runner
-fingerprint drift. Completed cells are skipped. A workspace that stopped inside a
+refuses config, installed-package, run-local baseline snapshot, history, strategy,
+or execution-runner fingerprint drift; edits to the source baseline do not affect
+it. Completed cells are skipped. A workspace that stopped inside a
 generation is sealed and retained; retry creates a new attempt workspace with an
 explicit `replacement_for` link. It never reruns that generation in the failed
 workspace.
@@ -303,6 +311,8 @@ temp/<run-id>/
   run_spec.json              immutable resolved inputs and runner identity
   matrix.json                immutable selected cell/command expansion
   run_state.json             atomically advanced execution state
+  inputs/baselines/<case>/workspace/
+                             immutable declared-input snapshot for all cells/resume
   metrics.json               latest derived public-API collection
   report.json                latest derived report
   report.md                  latest concise report
@@ -436,11 +446,11 @@ continue independent cells and exit nonzero when any cell is incomplete.
 
 ## Extending the benchmark without editing yadof
 
-To add a case:
+To add or edit a case:
 
-1. Create a new immutable
-   `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>/workspace` with
-   current `yadof init`, deliberate task-input transfer, zero runtime evidence,
+1. Create or edit the semantic
+   `baselines/<provider>/<baseline-id>/workspace` template with current `yadof
+   init`, deliberate task-input transfer, zero runtime evidence,
    a root `postprocess.py` implementing the common `--workspace`, `--output-dir`,
    and `--output-prefix` interface, `yadof check`, and one disposable smoke. The
    postprocessor receives the baseline-specific shared result directory below
@@ -449,10 +459,12 @@ To add a case:
    result subdirectories, and refuse to overwrite existing names. Temporary
    scratch belongs outside the result directory. The runner owns the separate
    shared `visualizations/viewcost/` directory and its prefixed cost-plot names.
-2. Add matching `provider_id`, `task_id`, `baseline_id`, and full task fingerprint
-   to `baseline.json`, then declare the exact baseline path, `include_paths`,
-   objective count, rawData shapes, resource prerequisite, history policy, and
-   budgets in `benchmark.toml`.
+2. Keep matching `provider_id`, `case_id`, and semantic `baseline_id` provenance in
+   `baseline.json`, then declare the exact baseline path, `include_paths`, objective
+   count, rawData shapes, resource prerequisite, history policy, and budgets in
+   `benchmark.toml`. The recorded task fingerprint is creation provenance and need
+   not be renamed or updated after each edit; the next run records its current
+   fingerprint automatically.
 3. Run `plan`, `preflight`, and the smallest structural tier before performance.
 
 To add an arm, add a complete strategy module under `strategy_templates/` with a
@@ -464,8 +476,8 @@ single-workspace observation does not exist publicly, document a yadof-tools gap
 do not scrape `.yadof` internals in the benchmark.
 
 Reusable single-workspace analyzers belong in yadof. This directory owns only
-frozen experiment assembly, cross-case/arm/seed alignment, validity handling, and
-descriptive aggregation.
+run-snapshotted experiment assembly, cross-case/arm/seed alignment, validity
+handling, and descriptive aggregation.
 
 ## Development
 

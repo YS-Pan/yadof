@@ -206,7 +206,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         _with_runs_dir(core.summarize_preflight(resume_preflight), paths)
                     )
                     return 2
-                core.verify_run_inputs(paths, spec)
+                core.verify_run_inputs(paths, _run_root, spec)
                 state = core.execute_run(
                     config,
                     paths,
@@ -262,7 +262,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _with_runs_dir(core.summarize_preflight(resume_preflight), paths)
                 )
                 return 2
-            core.verify_run_inputs(paths, spec)
+            core.verify_run_inputs(paths, _run_root, spec)
             state = core.execute_run(
                 config,
                 paths,

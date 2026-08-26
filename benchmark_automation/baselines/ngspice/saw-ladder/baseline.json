@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "baseline_id": "saw-ladder-3d2025426a97",
+  "baseline_id": "saw-ladder",
   "case_id": "saw",
   "provider_id": "ngspice",
   "task_id": "saw-ladder",

@@ -6,10 +6,11 @@ Framework source lives only under `src/yadof/`; maintained generic tests live un
 `tests/`. Root `dev_doc/` and `user_doc/` are authoritative editable sources and
 are mapped into the wheel as read-only resources. `admin_tool/` owns system/pool
 operations outside package runtime. Complete reference workspaces may be tracked
-under `examples/`. `benchmark_automation/` owns the repository-downloadable frozen
-comparison runner and its focused tests. Build inclusion excludes both examples
-and benchmark automation from wheel/sdist. Runtime workspaces are user-owned and
-normally live outside package source.
+under `examples/`. `benchmark_automation/` owns the repository-downloadable
+comparison runner, editable baseline templates, and its focused tests. Each run
+owns an immutable snapshot of the selected baseline content. Build inclusion
+excludes both examples and benchmark automation from wheel/sdist. Runtime
+workspaces are user-owned and normally live outside package source.
 
 ```text
 src/yadof/                 installed framework
@@ -47,11 +48,12 @@ user_doc/                  user-workflow documentation, primarily for the user's
                             explicitly outside yadof runtime behavior
   example_prompts/         expandable prompt-example collection
 admin_tool/                administrator-only operations
-benchmark_automation/      source-checkout runner, frozen inputs, reports, and tests
-  baselines/<provider>/<task>-<fingerprint-prefix>/
-                            immutable simulator/adapter and optimization-task inputs
+benchmark_automation/      source-checkout runner, editable inputs, reports, and tests
+  baselines/<provider>/<baseline-id>/
+                            mutable simulator/adapter and optimization-task templates
 temp/<run-id>/             default ignored benchmark runtime evidence; run ID is the
                            only directory layer below the configured output root
+  inputs/baselines/<case>/  immutable task snapshot captured when the run is created
 ```
 
 ## Dependency discipline
@@ -78,9 +80,9 @@ contracts.
 
 Benchmark tests remain below `benchmark_automation/tests/` and exercise the
 source-checkout runner against an installed yadof distribution. They may describe
-the frozen benchmark cases, but their default unit/preflight path does not start a
+the configured benchmark cases, but their default unit/preflight path does not start a
 simulator or a measured campaign. Generated benchmark output belongs only in the
-selected ignored runs root, never in package source or frozen inputs.
+selected ignored runs root, never in package source or editable baseline templates.
 The current comparison names its concrete non-surrogate NSGA-III arm, uses a
 runner-owned 32-worker oversubscribed fast setting for measured cells, runs one
 cost-view render after each measured optimization, uses Rich for an active-cell

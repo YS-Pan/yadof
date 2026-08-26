@@ -73,8 +73,10 @@ cell (2,000 attempts per cell; 36,000 across 18 cells). Structural and pilot sui
 may diagnose wiring, prerequisites, failures, and runtime cost only; their results
 must not drive algorithm-performance claims or tuning.
 
-Never edit a frozen baseline or an existing run/attempt to repair evidence. Create
-a new baseline identity or linked replacement attempt through the runner.
+Baseline templates may be edited in place for future runs. Run `preflight` after
+editing them. Never edit an existing run's `inputs/`, attempt workspace, or evidence
+to repair results; resume must use the run-local baseline snapshot and linked
+replacement attempts created by the runner.
 
 ## Development changes
 

@@ -30,7 +30,7 @@ OPTIMIZE_SURROGATE_BETA = 3
 OPTIMIZE_SURROGATE_EXPLORATION_FRACTION = 0.15
 
 [cases.saw]
-baseline = "baselines/ngspice/saw-ladder-3d2025426a97"
+baseline = "baselines/ngspice/saw-ladder"
 include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
 mode = "fast"
 history_policy = "empty"
@@ -49,7 +49,7 @@ s21_db = [1201]
 s11_db = [1201]
 
 [cases.chrono]
-baseline = "baselines/chrono/trebuchet-462d1201a592"
+baseline = "baselines/chrono/trebuchet"
 include_paths = ["config.py", "submit", "job_template", "postprocess.py", "visualization"]
 mode = "fast"
 history_policy = "empty"
@@ -82,7 +82,7 @@ trebuchet_hanger_combined_normal_stress = [513]
 trebuchet_peak_strength_utilization = [513]
 
 [cases.test-com]
-baseline = "baselines/test-com/synthetic-antenna-0b64f13b9f0b"
+baseline = "baselines/test-com/synthetic-antenna"
 include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
 mode = "fast"
 history_policy = "empty"

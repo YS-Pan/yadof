@@ -60,10 +60,12 @@ remains authoritative for Python and dependency requirements.
 ## Source-checkout benchmark
 
 A Git clone or repository download includes `benchmark_automation/`, a
-user-runnable comparison of frozen tasks and strategy arms. It is deliberately not
-installed by `pip install yadof` and is absent from wheel/sdist; it uses the
-matching yadof distribution already installed in the selected Python environment.
-A wheel-only installation therefore does not include this repository tool.
+user-runnable comparison of editable baseline task templates and strategy arms. It
+is deliberately not installed by `pip install yadof` and is absent from
+wheel/sdist; it uses the matching yadof distribution already installed in the
+selected Python environment. Each new run snapshots the selected baseline inputs,
+so later template edits affect only later runs. A wheel-only installation therefore
+does not include this repository tool.
 
 From the source-checkout root, start with the bounded no-write plan:
 

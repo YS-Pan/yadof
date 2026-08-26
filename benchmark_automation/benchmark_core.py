@@ -1,8 +1,8 @@
-"""Reproducible, resumable benchmark orchestration for the frozen yadof cases.
+"""Reproducible, resumable benchmark orchestration for editable yadof cases.
 
-The runner treats task inputs as immutable content, gives every measured cell an
-independent workspace, and delegates task execution to the installed ``yadof``
-CLI.  Collection uses only documented public APIs and JSON CLI views.
+The runner snapshots current task inputs into each new run, gives every measured
+cell an independent workspace, and delegates task execution to the installed
+``yadof`` CLI. Collection uses only documented public APIs and JSON CLI views.
 """
 
 from __future__ import annotations
@@ -58,10 +58,7 @@ POSTPROCESS_SCRIPT_NAME = "postprocess.py"
 VISUALIZATION_DIRECTORY_NAME = "visualizations"
 VIEW_COST_DIRECTORY_NAME = "viewcost"
 COST_PLOT_NAME = "benchmark-cost.png"
-BASELINE_PROVIDER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
-BASELINE_ID_PATTERN = re.compile(
-    r"(?P<task>[a-z][a-z0-9]*(?:-[a-z0-9]+)*)-(?P<fingerprint>[0-9a-f]{12})\Z"
-)
+BASELINE_NAME_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 
 
 class BenchmarkError(RuntimeError):
@@ -485,7 +482,7 @@ def _baseline_identity(
     manifest: Mapping[str, Any],
     case_id: str,
 ) -> dict[str, str]:
-    layout = "baselines/<provider>/<task>-<12-hex-fingerprint-prefix>"
+    layout = "baselines/<provider>/<baseline-id>"
     try:
         relative = baseline.resolve().relative_to((paths.root / "baselines").resolve())
     except ValueError as exc:
@@ -493,37 +490,28 @@ def _baseline_identity(
     if len(relative.parts) != 2:
         raise BenchmarkError(f"case {case_id!r} baseline must use {layout}")
     provider_id, baseline_id = relative.parts
-    match = BASELINE_ID_PATTERN.fullmatch(baseline_id)
-    if BASELINE_PROVIDER_PATTERN.fullmatch(provider_id) is None or match is None:
+    if (
+        BASELINE_NAME_PATTERN.fullmatch(provider_id) is None
+        or BASELINE_NAME_PATTERN.fullmatch(baseline_id) is None
+    ):
         raise BenchmarkError(f"case {case_id!r} baseline must use {layout}")
 
-    task_id = match.group("task")
-    fingerprint_prefix = match.group("fingerprint")
-    task_fingerprint = manifest.get("task_fingerprint")
-    if (
-        not isinstance(task_fingerprint, str)
-        or re.fullmatch(r"[0-9a-f]{64}", task_fingerprint) is None
-    ):
-        raise BenchmarkError(f"case {case_id!r} baseline has an invalid task_fingerprint")
+    task_id = manifest.get("task_id")
+    if not isinstance(task_id, str) or BASELINE_NAME_PATTERN.fullmatch(task_id) is None:
+        raise BenchmarkError(f"case {case_id!r} baseline has an invalid task_id")
     expected = {
         "baseline_id": baseline_id,
         "case_id": case_id,
         "provider_id": provider_id,
-        "task_id": task_id,
     }
     for field, value in expected.items():
         if manifest.get(field) != value:
             raise BenchmarkError(
                 f"case {case_id!r} baseline metadata {field} must be {value!r}"
             )
-    if not task_fingerprint.startswith(fingerprint_prefix):
-        raise BenchmarkError(
-            f"case {case_id!r} baseline directory fingerprint prefix does not match task_fingerprint"
-        )
     return {
         "provider_id": provider_id,
         "task_id": task_id,
-        "fingerprint_prefix": fingerprint_prefix,
     }
 
 
@@ -1225,22 +1213,24 @@ def preflight(
         try:
             details = _baseline_details(config, paths, case_id)
             baseline_map[case_id] = details
-            version_ok = details["yadof_version"] == identity["version"]
+            creation_version = details["yadof_version"]
+            provenance_version_ok = bool(
+                isinstance(creation_version, str) and creation_version.strip()
+            )
+            details["execution_yadof_version"] = identity["version"]
+            details["creation_version_matches_execution"] = (
+                creation_version == identity["version"]
+            )
+            baseline_ok = bool(details["runtime_clean"] and provenance_version_ok)
             checks.append(
                 {
                     "name": f"baseline:{case_id}",
-                    "ok": bool(
-                        details["fingerprint_matches"]
-                        and details["runtime_clean"]
-                        and version_ok
-                    ),
+                    "ok": baseline_ok,
                     "details": details,
                     "error": (
                         None
-                        if version_ok
-                        and details["runtime_clean"]
-                        and details["fingerprint_matches"]
-                        else "baseline fingerprint/version differs or mutable runtime paths are present"
+                        if baseline_ok
+                        else "baseline provenance version is missing or mutable runtime paths are present"
                     ),
                 }
             )
@@ -1353,6 +1343,10 @@ def build_run_spec(
     for case_id in plan["selection"]["cases"]:
         case = config["cases"][case_id]
         baseline = dict(preflight_result["baselines"][case_id])
+        baseline["source_workspace"] = baseline.pop("workspace")
+        baseline["snapshot_workspace"] = (
+            Path("inputs") / "baselines" / case_id / "workspace"
+        ).as_posix()
         if case["history_policy"] == "empty":
             starting_evidence = {
                 "policy": "empty",
@@ -1471,9 +1465,31 @@ def create_run(paths: Paths, spec: Mapping[str, Any], *, run_id: str | None = No
     if run_root.exists():
         raise BenchmarkError(f"run already exists: {chosen}")
     run_root.mkdir(parents=True)
-    write_new_json(run_root / "run_spec.json", spec)
-    write_new_json(run_root / "matrix.json", spec["plan"])
-    atomic_write_json(run_root / "run_state.json", _initial_state(chosen, spec))
+    try:
+        for case_id, case in spec["cases"].items():
+            baseline = case["baseline"]
+            snapshot = resolve_inside(
+                run_root,
+                baseline["snapshot_workspace"],
+                label=f"case {case_id} baseline snapshot",
+            )
+            snapshot.mkdir(parents=True)
+            _copy_declared_inputs(
+                Path(baseline["source_workspace"]),
+                snapshot,
+                baseline["include_paths"],
+            )
+            fingerprint = task_fingerprint(snapshot, baseline["include_paths"])
+            if fingerprint != baseline["actual_task_fingerprint"]:
+                raise BenchmarkError(
+                    f"baseline task changed between preflight and run creation for {case_id}"
+                )
+        write_new_json(run_root / "run_spec.json", spec)
+        write_new_json(run_root / "matrix.json", spec["plan"])
+        atomic_write_json(run_root / "run_state.json", _initial_state(chosen, spec))
+    except Exception:
+        shutil.rmtree(run_root)
+        raise
     return chosen, run_root
 
 
@@ -1498,12 +1514,13 @@ def load_run(paths: Paths, run_id: str) -> tuple[Path, dict[str, Any], dict[str,
 
 def verify_run_inputs(
     paths: Paths,
+    run_root: Path,
     spec: Mapping[str, Any],
     *,
     verify_automation: bool = True,
     verify_config: bool = True,
 ) -> None:
-    """Refuse resume when any immutable selected input or installation drifts."""
+    """Refuse resume when a run-local snapshot or execution dependency drifts."""
 
     if verify_config and file_sha256(paths.config) != spec["config"]["sha256"]:
         raise BenchmarkError("benchmark.toml fingerprint changed since run creation")
@@ -1517,9 +1534,14 @@ def verify_run_inputs(
             raise BenchmarkError(f"installed package identity drift for {key}")
     for case_id, case in spec["cases"].items():
         baseline = case["baseline"]
-        actual = task_fingerprint(Path(baseline["workspace"]), baseline["include_paths"])
+        snapshot = resolve_inside(
+            run_root,
+            baseline["snapshot_workspace"],
+            label=f"case {case_id} baseline snapshot",
+        )
+        actual = task_fingerprint(snapshot, baseline["include_paths"])
         if actual != baseline["actual_task_fingerprint"]:
-            raise BenchmarkError(f"baseline task fingerprint drift for {case_id}")
+            raise BenchmarkError(f"run-local baseline snapshot drift for {case_id}")
         starting = case["starting_evidence"]
         if starting["policy"] == "snapshot":
             actual_history = directory_fingerprint(Path(starting["snapshot"]))
@@ -1635,6 +1657,7 @@ def _prepare_attempt(
 
 def _materialize_attempt_inputs(
     paths: Paths,
+    run_root: Path,
     spec: Mapping[str, Any],
     cell_plan: Mapping[str, Any],
     attempt_root: Path,
@@ -1643,7 +1666,11 @@ def _materialize_attempt_inputs(
     workspace = Path(attempt["workspace"])
     case_id = str(cell_plan["case"])
     case_spec = spec["cases"][case_id]
-    baseline_workspace = Path(case_spec["baseline"]["workspace"])
+    baseline_workspace = resolve_inside(
+        run_root,
+        case_spec["baseline"]["snapshot_workspace"],
+        label=f"case {case_id} baseline snapshot",
+    )
     include_paths = case_spec["baseline"]["include_paths"]
     _copy_declared_inputs(baseline_workspace, workspace, include_paths)
     if case_spec["history_policy"] == "snapshot":
@@ -1998,7 +2025,7 @@ def _run_one_cell(
                 error="yadof init failed",
             )
             return False
-        _materialize_attempt_inputs(paths, spec, cell_plan, attempt_root, attempt)
+        _materialize_attempt_inputs(paths, run_root, spec, cell_plan, attempt_root, attempt)
         _save_state(
             run_root,
             state,
@@ -2877,7 +2904,13 @@ def _collect_cell(
 
 def collect_run(paths: Paths, run_id: str) -> tuple[Path, dict[str, Any]]:
     run_root, spec, state = load_run(paths, run_id)
-    verify_run_inputs(paths, spec, verify_automation=False, verify_config=False)
+    verify_run_inputs(
+        paths,
+        run_root,
+        spec,
+        verify_automation=False,
+        verify_config=False,
+    )
     evidence_dir = _new_sequence_dir(run_root / "evidence", "collect")
     cell_plan_by_id = {cell["cell_id"]: cell for cell in spec["plan"]["cells"]}
     cells: dict[str, Any] = {}
@@ -3387,7 +3420,13 @@ def _report_markdown(report: Mapping[str, Any]) -> str:
 
 def report_run(paths: Paths, run_id: str) -> tuple[Path, Path, dict[str, Any]]:
     run_root, spec, _state = load_run(paths, run_id)
-    verify_run_inputs(paths, spec, verify_automation=False, verify_config=False)
+    verify_run_inputs(
+        paths,
+        run_root,
+        spec,
+        verify_automation=False,
+        verify_config=False,
+    )
     collection_path, collection = _latest_collection(run_root)
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,

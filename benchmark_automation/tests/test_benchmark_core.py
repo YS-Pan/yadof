@@ -20,7 +20,7 @@ def _write_baseline(
     task_id: str = "task",
     baseline_id: str | None = None,
 ) -> Path:
-    identity = baseline_id or f"{task_id}-{TASK_FINGERPRINT[:12]}"
+    identity = baseline_id or task_id
     baseline = root / "baselines" / provider_id / identity
     workspace = baseline / "workspace"
     (workspace / "submit").mkdir(parents=True)
@@ -83,6 +83,7 @@ history_snapshot_dir = "history"
 baseline = "{baseline}"
 include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
 history_policy = "empty"
+mode = "fast"
 
 [arms.real]
 strategy_template = "real.py"
@@ -133,6 +134,43 @@ def test_repository_config_defaults_to_checkout_temp() -> None:
     _config, paths = core.load_config(automation_root / "benchmark.toml")
 
     assert paths.runs == automation_root.parent / "temp"
+
+
+def test_preflight_accepts_baseline_created_by_prior_yadof_patch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = _write_loadable_config(tmp_path)
+    manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["yadof_version"] = "0.4.0"
+    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+    config, paths = core.load_config(config_path)
+    monkeypatch.setattr(
+        core,
+        "_package_identity",
+        lambda: {
+            "version": "0.4.1",
+            "python": "python",
+            "distribution_version": "0.4.1",
+            "distribution_record_sha256": "1" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        core,
+        "_run_read_only",
+        lambda *args, **kwargs: {"returncode": 0, "stdout": "", "stderr": ""},
+    )
+
+    result = core.preflight(config, paths, "structural")
+
+    baseline_check = next(
+        check for check in result["checks"] if check["name"] == "baseline:case"
+    )
+    assert result["ok"] is True
+    assert baseline_check["ok"] is True
+    assert baseline_check["details"]["yadof_version"] == "0.4.0"
+    assert baseline_check["details"]["execution_yadof_version"] == "0.4.1"
+    assert baseline_check["details"]["creation_version_matches_execution"] is False
 
 
 def test_runs_dir_rejects_protected_input_overlap(tmp_path: Path) -> None:
@@ -191,14 +229,16 @@ def test_load_config_rejects_baseline_provider_metadata_mismatch(tmp_path: Path)
         core.load_config(config_path)
 
 
-def test_load_config_rejects_baseline_fingerprint_prefix_mismatch(tmp_path: Path) -> None:
+def test_load_config_accepts_stale_baseline_creation_fingerprint(tmp_path: Path) -> None:
     config_path = _write_loadable_config(tmp_path)
     manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["task_fingerprint"] = "2" * 64
     manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
-    with pytest.raises(core.BenchmarkError, match="fingerprint prefix"):
-        core.load_config(config_path)
+
+    _config, paths = core.load_config(config_path)
+
+    assert paths.root == tmp_path
 
 
 def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
@@ -431,6 +471,60 @@ def test_run_spec_is_immutable_and_state_is_separate(tmp_path: Path) -> None:
         core.load_run(paths, run_id)
 
 
+def test_new_run_snapshots_mutable_baseline_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "editable baseline"
+    source.mkdir()
+    config = source / "config.py"
+    config.write_text("VALUE = 1\n", encoding="utf-8")
+    config_path = tmp_path / "benchmark.toml"
+    config_path.write_text("schema_version = 1\n", encoding="utf-8")
+    identity = {
+        "version": "0.4.1",
+        "origin": "installed",
+        "module_sha256": "1" * 64,
+        "python": "python",
+    }
+    spec = _minimal_spec(tmp_path)
+    spec["config"] = {
+        "path": str(config_path),
+        "sha256": core.file_sha256(config_path),
+    }
+    spec["package"] = identity
+    spec["cases"] = {
+        "case": {
+            "baseline": {
+                "source_workspace": str(source),
+                "snapshot_workspace": "inputs/baselines/case/workspace",
+                "include_paths": ["config.py"],
+                "actual_task_fingerprint": core.task_fingerprint(
+                    source, ["config.py"]
+                ),
+            },
+            "starting_evidence": {"policy": "empty"},
+        }
+    }
+    spec.pop("spec_sha256")
+    spec["spec_sha256"] = core.object_sha256(spec)
+    paths = core.Paths(
+        tmp_path,
+        config_path,
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    monkeypatch.setattr(core, "_package_identity", lambda: identity)
+
+    run_id, run_root = core.create_run(paths, spec, run_id="fixture")
+    config.write_text("VALUE = 2\n", encoding="utf-8")
+    _loaded_root, loaded_spec, _state = core.load_run(paths, run_id)
+
+    snapshot = run_root / "inputs/baselines/case/workspace/config.py"
+    assert snapshot.read_text(encoding="utf-8") == "VALUE = 1\n"
+    core.verify_run_inputs(paths, run_root, loaded_spec)
+
+
 def test_same_run_id_is_isolated_by_runs_dir(tmp_path: Path) -> None:
     spec = _minimal_spec(tmp_path)
     roots = [tmp_path / "first outputs", tmp_path / "第二 输出"]
@@ -627,7 +721,7 @@ def test_measured_cell_groups_postprocess_results_by_baseline_and_shares_viewcos
         commands.append((kwargs["label"], list(command)))
         return {"returncode": 0, "timed_out": False}
 
-    def fake_materialize(_paths, _spec, _cell, _attempt_root, attempt):
+    def fake_materialize(_paths, _run_root, _spec, _cell, _attempt_root, attempt):
         Path(attempt["workspace"]).mkdir(parents=True)
         (Path(attempt["workspace"]) / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
         attempt["input_fingerprint"] = core.task_fingerprint(
@@ -756,7 +850,7 @@ def test_utf8_io_and_space_non_ascii_path(tmp_path: Path) -> None:
 
 
 def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path: Path) -> None:
-    baseline = tmp_path / "baseline"
+    baseline = tmp_path / "inputs" / "baselines" / "case" / "workspace"
     workspace = tmp_path / "attempt" / "workspace"
     attempt_root = workspace.parent
     for root in (baseline, workspace):
@@ -778,7 +872,7 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
         "cases": {
             "case": {
                 "baseline": {
-                    "workspace": str(baseline),
+                    "snapshot_workspace": "inputs/baselines/case/workspace",
                     "include_paths": include,
                     "actual_task_fingerprint": core.task_fingerprint(baseline, include),
                 },
@@ -801,7 +895,7 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
         "input_fingerprint": None,
     }
     paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path, tmp_path / "history")
-    core._materialize_attempt_inputs(paths, spec, cell, attempt_root, attempt)
+    core._materialize_attempt_inputs(paths, tmp_path, spec, cell, attempt_root, attempt)
     assert (workspace / "submit" / "optimization.py").read_text(encoding="utf-8") == "ARM = 'surrogate'\n"
     config_text = (workspace / "config.py").read_text(encoding="utf-8")
     assert "HISTORY_SEGMENT_MAX_CANDIDATES = 100" in config_text

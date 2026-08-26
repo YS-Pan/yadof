@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "baseline_id": "synthetic-antenna-0b64f13b9f0b",
+  "baseline_id": "synthetic-antenna",
   "case_id": "test-com",
   "provider_id": "test-com",
   "task_id": "synthetic-antenna",

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "baseline_id": "trebuchet-42e80c54ebb5",
+  "baseline_id": "trebuchet-path-regression",
   "case_id": "chrono",
   "provider_id": "chrono",
   "task_id": "trebuchet",

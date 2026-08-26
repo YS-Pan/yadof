@@ -111,8 +111,10 @@ detection details, and the package's declared compatibility boundary.
 
 The repository includes a downloadable, user-runnable comparison tool under
 [benchmark_automation](benchmark_automation/README.md). It is deliberately outside
-`src/yadof`: a Git clone or repository download contains the runner, frozen inputs,
-and its focused tests, while `pip install yadof`, wheel, and sdist do not.
+`src/yadof`: a Git clone or repository download contains the runner, editable
+baseline templates, and its focused tests, while `pip install yadof`, wheel, and
+sdist do not. Each new run snapshots the selected baseline content before executing
+cells, so later template edits do not change that run.
 
 Use a Python environment containing the matching installed yadof distribution and
 start with the no-write plan:
