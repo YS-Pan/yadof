@@ -62,11 +62,8 @@ postprocessor a separate attempt directory and writes cost views to the shared
 `visualizations/viewcost/` directory. Animation scratch is temporary and does not
 create a nested result directory.
 
-The retained `trebuchet-path-regression` template derives from the historical
-`trebuchet-20167c28925b` input; its scientific task is unchanged, while its
-visualization output is entirely flat. The selected `trebuchet` template in turn
-preserves that complete scientific and visualization input while refreshing only
-the copied package Chrono adapter. Its
+The selected `trebuchet` template preserves the established scientific and
+visualization inputs while using the current copied package Chrono adapter. Its
 Windows child process uses a candidate-unique short junction targeting the original
 physical scratch, so run and workspace depth no longer consume the child
 current-directory limit.
@@ -84,11 +81,9 @@ runs continued making material progress through 10,000 evaluations; the detailed
 acceptance evidence is in
 [`../verification/20260824-test-com-difficulty-recalibration.md`](../verification/20260824-test-com-difficulty-recalibration.md).
 
-Some earlier superseded SAW, Chrono, and test_com templates were removed after
-validation at explicit maintainer request. The semantically named
-`trebuchet-path-regression` template remains as focused Windows path-regression
-material. Completed run evidence retains its own input identity independently of
-later source-template edits.
+Superseded SAW, Chrono, and test_com templates were removed after validation at
+explicit maintainer request. Completed run evidence retains its own input identity
+independently of later source-template edits.
 
 The hidden `.staging/` and `.assembled/` directories at the benchmark root are
 Phase-0 reconstruction/validation evidence, not runner inputs. In particular,
