@@ -20,6 +20,11 @@ benchmark_automation/
     terminology.md             benchmark-specific vocabulary
 ```
 
+Repository-level pending work, obsolete handoffs, and completed-change history
+remain under root `dev_doc/toDo/`, `dev_doc/obsolete/`, and
+`dev_doc/change_records/`. The benchmark tree must not add parallel lifecycle
+directories or local toDo/change-record contracts.
+
 ## Dependency direction
 
 The CLI depends on core; core never depends on CLI. Core may use standard library,

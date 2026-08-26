@@ -17,6 +17,10 @@ trees at `src/yadof/tools/cost_viewer/dev_doc/` and
 `src/yadof/tools/surrogate_viewer/dev_doc/`. Those trees ship with their tool
 packages and own viewer-specific architecture, blueprints, and terminology; the
 root developer README links to them instead of duplicating those contracts.
+The source-checkout benchmark likewise owns nested current-view architecture,
+blueprints, terminology, and operator routing. Repository-wide pending-work and
+history lifecycle remains centralized here: nested developer trees do not add
+their own toDo, obsolete, or change-record contracts/directories.
 
 ## Developer document roles
 
@@ -92,3 +96,6 @@ are affected.
   user reference and is explicitly identified as external to yadof behavior.
 - Automatic toDos are always evaluated within established task scope; they neither
   require accidental discovery nor authorize an unrelated repository-wide search.
+- Root `dev_doc/` is the exclusive repository owner of toDo, obsolete, and change-
+  record lifecycle; nested tool/benchmark developer trees link to these contracts
+  instead of duplicating them.

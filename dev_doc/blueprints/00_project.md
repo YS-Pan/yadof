@@ -94,8 +94,11 @@ hot-change contract; structural dimension changes are future work.
   `inspect` exposes active progress/inactivity and a confidence-qualified ETA from
   immutable plan data, completed cell wall times, and the active command's bounded
   log tail so later unattended turns need not keep the original run turn alive.
-  The benchmark's nested `dev_doc/` provides required reading/maintenance contracts,
-  split architecture views, generative module/file blueprints, and terminology.
+  The benchmark's nested `dev_doc/` provides local operator, architecture,
+  blueprint, and terminology contracts plus split architecture views and
+  generative module/file blueprints. Root `dev_doc/` exclusively owns repository-
+  wide toDos, obsolete handoffs, and change records; the benchmark does not
+  duplicate those lifecycle facilities.
   Final cumulative HV remains a compact algorithm-labeled table outside JSON stdout.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.

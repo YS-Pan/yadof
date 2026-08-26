@@ -4,6 +4,12 @@
 current-view, contract, and generative-blueprint discipline used by yadof's root
 `dev_doc/`, while keeping ownership local to this source-checkout tool.
 
+Complete the repository root [`dev_doc` reading route](../../dev_doc/README.md)
+before this nested pass. Repository-wide pending-work and history lifecycle belong
+exclusively to root `dev_doc/toDo/`, `dev_doc/obsolete/`, and
+`dev_doc/change_records/`; this benchmark developer tree does not duplicate those
+directories or their contracts.
+
 Read the repository [`README.md`](../README.md) first for the benchmark's purpose,
 command surface, evidence semantics, and execution-risk policy. Read
 [`AGENTS.md`](../AGENTS.md) for the bounded evidence route. The root yadof
@@ -24,13 +30,11 @@ Perform the first benchmark-development context pass in this order:
    the split views are authoritative.
 3. Read [the terminology contract](skill/terminology.md), then
    [`terminology.md`](terminology.md) in full.
-4. Read [the toDo contract](skill/toDo.md) and every benchmark-local toDo when a
-   `toDo/` directory exists. An absent directory means there is no local pending
-   work.
-5. List the `blueprints/` tree, read
+4. List the `blueprints/` tree, read
    [the blueprint contract](skill/blueprints.md), and perform its targeted pass.
-6. Apply [the change-record contract](skill/change_records.md). One completed
-   repository change receives one record under the root `dev_doc/change_records/`.
+5. Apply the root [toDo/obsolete contract](../../dev_doc/skill/toDo.md) and
+   [change-record contract](../../dev_doc/skill/change_records.md). Benchmark work
+   uses only the root pending-work, archive, and completed-change directories.
 
 Do not start from generated runs or load large evidence to learn the runner. Use
 architecture and blueprints for current contracts, source/tests for executable

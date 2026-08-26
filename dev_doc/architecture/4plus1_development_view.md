@@ -92,8 +92,10 @@ in large cells, and keeps complete compact status fields within normal terminal
 widths. Read-only benchmark inspection derives an explicitly qualified ETA from
 completed wall times, immutable plan data, and the active command's bounded progress
 tail for later unattended agent turns. The nested benchmark `dev_doc/` mirrors the
-root current-view discipline with reading/maintenance contracts, split C4 and 4+1
-architecture, generative blueprints, and terminology. Attempt postprocessor
+root current-view discipline with operator/architecture/blueprint/terminology
+contracts, split C4 and 4+1 architecture, generative blueprints, and terminology;
+root `dev_doc/` remains the exclusive owner of repository-wide toDos, obsolete
+handoffs, and change records. Attempt postprocessor
 artifacts remain collision-prefixed inside one directory per baseline workspace;
 cost plots stay under `visualizations/viewcost/`; bounded JSON stdout remains
 separate from terminal progress and the final algorithm-labeled HV table.

@@ -88,7 +88,9 @@ replacement attempts created by the runner.
 
 Before changing runner code or output schemas, follow the complete reading order in
 `dev_doc/README.md`: operator-doc contract and root docs, every split architecture
-view, terminology, active toDos, and targeted blueprints. Use the selected Python
-containing the installed yadof distribution, add focused tests, and run the unit
-suite with a fresh absolute pytest `--basetemp` and `-p no:cacheprovider`.
-Preserve existing user/runtime evidence.
+view, terminology, and targeted blueprints. Root yadof `dev_doc/` exclusively owns
+active toDos, obsolete handoffs, and change records; do not recreate those
+lifecycle contracts below the benchmark. Use the selected Python containing the
+installed yadof distribution, add focused tests, and run the unit suite with a
+fresh absolute pytest `--basetemp` and `-p no:cacheprovider`. Preserve existing
+user/runtime evidence.
