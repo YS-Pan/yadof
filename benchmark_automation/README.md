@@ -240,6 +240,19 @@ also raise recorder batching/headroom to 100 candidates per segment and 128
 unpublished candidates so one full 100-individual generation can be admitted
 without the default 32-candidate queue becoming the experiment's evidence limit.
 
+### Mandatory scale for algorithm work
+
+When the purpose is to evaluate surrogate/optimizer algorithm performance or to
+tune either algorithm from benchmark results, small runs are prohibited. A few
+generations with only dozens of individuals are structural or cost-discovery
+evidence, not algorithm-performance evidence, and must not drive algorithm changes.
+Run the complete, unfiltered `performance` suite instead: the current contract is
+100 individuals × 20 generations, or 2,000 attempted real evaluations in every
+measured cell and 36,000 across the full 18-cell matrix. Do not reduce its cases,
+arms, seeds, population, or generation count for performance diagnosis or tuning.
+The smaller suites remain valid only for wiring, prerequisite, failure-path, and
+runtime-cost checks.
+
 ### Visible detached Windows launch
 
 `run` is a foreground, resumable command whose cell lifecycle is flushed to the
@@ -257,22 +270,23 @@ user-visible launch.
 
 ## Output and immutability
 
-The default output root is `benchmark_automation/runs`. Override it with the
-global `--runs-dir PATH` option before the subcommand. An absolute path is used as
-given; a relative override resolves from the invocation directory. The TOML
-default remains relative to `benchmark.toml`.
+The configured default output root is the source checkout's ignored `temp/`
+directory, expressed as `../temp` relative to `benchmark.toml`. Override it with
+the global `--runs-dir PATH` option before the subcommand. An absolute path is used
+as given; a relative override resolves from the invocation directory.
 
 When `run` does not receive an explicit `--run-id`, its output directory name
 starts with the UTC timestamp `YYYYMMDD_HHMMSS`: both the date and time components
 contain digits only. A sanitized optional label and the 12-hex run-spec suffix
 follow that prefix, for example `20260824_123456-full-benchmark-a1b2c3d4e5f6`.
 
-Agents must run from the yadof checkout root and use a unique ignored directory,
-for example:
+Run from the yadof checkout root. Each run ID supplies the unique directory directly
+below `temp/`; do not add a benchmark or task-specific container layer. An explicit
+equivalent root can still be supplied, for example:
 
 ```powershell
 python ".\benchmark_automation\benchmark.py" `
-  --runs-dir ".\temp\benchmark\<task-id>" `
+  --runs-dir ".\temp" `
   inspect --run-id <existing-id>
 ```
 
@@ -285,7 +299,7 @@ override or select another persistent output root explicitly.
 Each run is identity-stable:
 
 ```text
-runs/<run-id>/
+temp/<run-id>/
   run_spec.json              immutable resolved inputs and runner identity
   matrix.json                immutable selected cell/command expansion
   run_state.json             atomically advanced execution state
@@ -352,7 +366,7 @@ observed attempted budget differs, or its generation-0 fingerprint differs. The
 raw evidence remains listed.
 
 Hypervolume is aligned at cumulative attempted real-evaluation generation ends.
-Evaluation-normalized HV-AUC is `null` because yadof 0.4.0 exposes no public metric
+Evaluation-normalized HV-AUC is `null` because yadof exposes no public metric
 contract for it. Checkpoint training-cutoff provenance is also unavailable, so
 surrogate audit matrices are never relabeled or summarized as out-of-sample.
 

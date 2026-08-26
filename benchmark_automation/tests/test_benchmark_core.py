@@ -127,6 +127,14 @@ def test_runs_dir_override_resolves_from_invocation_directory(tmp_path: Path) ->
     assert absolute_paths.runs == absolute
 
 
+def test_repository_config_defaults_to_checkout_temp() -> None:
+    automation_root = Path(__file__).resolve().parents[1]
+
+    _config, paths = core.load_config(automation_root / "benchmark.toml")
+
+    assert paths.runs == automation_root.parent / "temp"
+
+
 def test_runs_dir_rejects_protected_input_overlap(tmp_path: Path) -> None:
     config_path = _write_loadable_config(tmp_path)
     with pytest.raises(core.BenchmarkError, match="overlaps case 'case' baseline"):

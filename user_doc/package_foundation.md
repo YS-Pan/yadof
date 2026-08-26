@@ -14,9 +14,9 @@ Install a built wheel into the Python environment used by submit and local worke
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.4.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.4.1-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[viewer]"
 ```
 
 The default template's `submit/optimization.py` composes conditional INR. Install
@@ -47,7 +47,7 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-The current package version is `0.4.0`. Recorded history uses immutable
+The current package version is `0.4.1`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
@@ -74,11 +74,11 @@ python ".\benchmark_automation\benchmark.py" plan --suite structural-canary
 `preflight` validates selected resources without launching a simulator. Before a
 smoke, optimization, resume, or collection command, read
 `benchmark_automation/README.md` for external prerequisites and the applicable
-cost/risk authorization. Human users may retain the documented default output;
-agents pass `--runs-dir ".\temp\benchmark\<task-id>"` before the subcommand and
-reuse the same directory for later `inspect`, `resume`, `collect`, and `report`
-commands. Start result interpretation with bounded `inspect` output and expand one
-artifact or failed cell at a time.
+cost/risk authorization. The configured default creates each run directly below
+the checkout's ignored `temp/` directory as `temp/<run-id>/`. If a caller supplies
+an explicit `--runs-dir`, it must reuse that same root for later `inspect`,
+`resume`, `collect`, and `report` commands. Start result interpretation with bounded
+`inspect` output and expand one artifact or failed cell at a time.
 
 ## Initialize and inspect
 

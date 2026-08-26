@@ -370,7 +370,7 @@ def test_cli_defaults_to_bounded_output_and_quiet_children() -> None:
     assert parser.parse_args(
         ["run", "--suite", "performance-pilot", "--stream-output"]
     ).stream_output
-    runs_dir = Path("temp") / "benchmark" / "task-id"
+    runs_dir = Path("temp")
     parsed = parser.parse_args(
         ["--runs-dir", str(runs_dir), "inspect", "--run-id", "fixture"]
     )

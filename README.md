@@ -1,7 +1,7 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.4.0**. Evaluation
+or HTCondor workflows. The current packaged release is **0.4.1**. Evaluation
 history uses immutable standard-ZIP segments plus immutable metadata events.
 
 Its durable modeling contract is:
@@ -38,8 +38,8 @@ ready for additional examples.
 Install the wheel into the Python environment used on the submit machine:
 
 ```powershell
-python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[surrogate]"
-python -m pip install ".\dist\yadof-0.4.0-py3-none-any.whl[viewer]"
+python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[surrogate]"
+python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[viewer]"
 ```
 
 The default workspace composes conditional INR, so `init`, `check`, and `run`
@@ -122,9 +122,9 @@ python ".\benchmark_automation\benchmark.py" plan --suite structural-canary
 ```
 
 Read the suite's prerequisite and cost/risk policy before starting real work.
-Agents should keep generated evidence in an ignored task-specific directory by
-passing `--runs-dir ".\temp\benchmark\<task-id>"` before the subcommand; human-run
-durable campaigns may retain the documented default or choose another directory.
+The configured default places every run directly below the checkout's ignored
+`temp/` directory as `temp/<run-id>/`. An explicit `--runs-dir` may select another
+root, but callers must reuse that same root for every command addressing the run.
 
 ## Package and workspace boundary
 

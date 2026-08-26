@@ -66,7 +66,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `baselines/` | Immutable task inputs plus provenance selected as `<provider>/<task>-<12-hex-fingerprint-prefix>`; every selected workspace exposes root `postprocess.py`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
-| configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default `runs/`, Git-ignored. |
+| configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default checkout `temp/<run-id>/`, Git-ignored, with each run ID directly below the root. |
 | `.staging/`, `.assembled/` | Local baseline construction evidence; Git-ignored and never runner inputs. |
 | `verification/`, `tool_gaps/` | Human-readable historical verification and reusable-yadof issue records. |
 
@@ -99,6 +99,10 @@ Keeping the CLI thin makes core behavior directly testable.
   measured cell. Its runner-owned measured-cell overrides provide recorder
   candidate headroom for at least one complete generation without editing frozen
   baselines; the pilot remains a separate small cost-discovery tier.
+- Surrogate/optimizer performance evaluation and result-driven algorithm tuning use
+  the complete unfiltered performance matrix. Few-generation or dozens-of-individual
+  structural/pilot runs are prohibited for that purpose and remain limited to
+  wiring, prerequisite, failure-path, and runtime-cost evidence.
 - Measured cells deliberately use a 32-worker fast cap with fast resource
   autodetection disabled, allowing CPU oversubscription beyond the physical-core
   count. This is a benchmark experiment setting; preflight/pilot review still owns

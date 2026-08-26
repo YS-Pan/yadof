@@ -50,8 +50,8 @@ admin_tool/                administrator-only operations
 benchmark_automation/      source-checkout runner, frozen inputs, reports, and tests
   baselines/<provider>/<task>-<fingerprint-prefix>/
                             immutable simulator/adapter and optimization-task inputs
-  runs/                    default ignored human-operated runtime evidence
-temp/benchmark/            ignored task-specific agent runtime evidence
+temp/<run-id>/             default ignored benchmark runtime evidence; run ID is the
+                           only directory layer below the configured output root
 ```
 
 ## Dependency discipline

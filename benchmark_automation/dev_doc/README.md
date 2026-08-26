@@ -23,7 +23,8 @@ The following directories are local generated state and are intentionally ignore
 by Git:
 
 - `.assembled/` and `.staging/`: disposable baseline assembly and validation work;
-- `runs/`: command logs, attempt workspaces, collected evidence, and reports.
+- checkout `temp/<run-id>/`: command logs, attempt workspaces, collected evidence,
+  and reports, with no additional benchmark/task container layer.
 
 Do not delete or rewrite existing generated evidence merely because Git ignores
 it. Run immutability and retention are runtime contracts independent of version

@@ -77,9 +77,10 @@ hot-change contract; structural dimension changes are future work.
   member. Baselines are addressed as
   `baselines/<provider>/<task>-<12-hex-fingerprint-prefix>`, separating the
   simulator/adapter identity from the optimization-task identity. Generated runs
-  use its ignored default or an explicit disjoint output root; agents use
-  `temp/benchmark/<task-id>`, and automatically named run directories begin with
-  a digits-only UTC `YYYYMMDD_HHMMSS` date/time prefix. The current non-surrogate
+  use the checkout's ignored `temp/` root or an explicit disjoint output root;
+  every run ID is directly below that root with no benchmark/task container layer,
+  and automatically named run directories begin with a digits-only UTC
+  `YYYYMMDD_HHMMSS` date/time prefix. The current non-surrogate
   arm is named for its concrete NSGA-III algorithm. Measured cells deliberately
   permit 32-way fast oversubscription, run the baseline's common `postprocess.py`
   and one cost view after optimization, place each attempt's collision-prefixed

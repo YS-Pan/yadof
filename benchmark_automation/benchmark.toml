@@ -1,7 +1,7 @@
 schema_version = 1
 
 [runner]
-runs_dir = "runs"
+runs_dir = "../temp"
 strategy_template_dir = "strategy_templates"
 history_snapshot_dir = "history_snapshots"
 minimum_free_disk_mib = 2048

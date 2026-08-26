@@ -478,7 +478,7 @@ def test_package_metadata_and_source_resources() -> None:
     assert {"surrogate", "plot", "hfss", "dev"} <= set(project["optional-dependencies"])
     assert project["optional-dependencies"]["surrogate"] == ["torch>=2.2,<3"]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.4.0"
+    assert yadof.__version__ == "0.4.1"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(

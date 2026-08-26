@@ -2853,7 +2853,7 @@ def _collect_cell(
         "cost_view_summary": cost_view_summary,
         "evaluation_normalized_hv_auc": {
             "value": None,
-            "reason": "yadof 0.4.0 public cost_viewer exposes HV series but no evaluation-normalized HV-AUC contract.",
+            "reason": "The public yadof cost_viewer exposes HV series but no evaluation-normalized HV-AUC contract.",
         },
         "rawdata_shapes": observed_shapes,
         "rawdata_shapes_match_contract": rawdata_shape_match,
@@ -2884,7 +2884,7 @@ def collect_run(paths: Paths, run_id: str) -> tuple[Path, dict[str, Any]]:
     for cell_id, cell_state in state["cells"].items():
         cells[cell_id] = _collect_cell(spec, cell_plan_by_id[cell_id], cell_state, evidence_dir)
     tool_gaps: dict[str, str] = {
-        "evaluation_normalized_hv_auc": "No public yadof 0.4.0 metric contract; values are null.",
+        "evaluation_normalized_hv_auc": "No public yadof metric contract; values are null.",
         "checkpoint_training_cutoff": "Not present in public surrogate summary/audit JSON; overlap/forward labels are withheld.",
     }
     failed_summaries = [

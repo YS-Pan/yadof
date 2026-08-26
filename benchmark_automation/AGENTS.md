@@ -4,10 +4,11 @@ These instructions apply to work below `benchmark_automation/`. Run benchmark
 commands from the yadof source-checkout root. Keep the first read small: route to
 the narrowest artifact that can answer the task.
 
-Agents must put generated runs below a unique ignored task directory such as
-`temp/benchmark/<task-id>` by passing `--runs-dir` before the subcommand. Reuse that
-exact option for every later command addressing the run. Do not infer agent mode in
-the runner and do not delete temporary evidence before handoff.
+The configured default puts every generated run directly below the checkout's
+ignored `temp/` directory as `temp/<run-id>/`; do not add a task-specific container
+layer. If `--runs-dir` overrides that root, reuse the exact option for every later
+command addressing the run. Do not infer agent mode in the runner and do not delete
+temporary evidence before handoff.
 
 ## Progressive disclosure
 
@@ -15,7 +16,7 @@ For an existing run, start with:
 
 ```powershell
 python ".\benchmark_automation\benchmark.py" `
-  --runs-dir ".\temp\benchmark\<task-id>" `
+  --runs-dir ".\temp" `
   inspect --run-id <run-id>
 ```
 
@@ -64,6 +65,13 @@ ordinary result interpretation.
 launch a simulator. `collect` can perform surrogate model inference. Smoke tests,
 optimization runs, resume, and collection remain subject to the cost/risk rules in
 `README.md`; obtain user authorization when those rules require it.
+
+Do not use a few generations or a population of only dozens to evaluate or tune
+surrogate/optimizer performance. That purpose requires the complete unfiltered
+`performance` suite, currently 100 individuals by 20 generations in every measured
+cell (2,000 attempts per cell; 36,000 across 18 cells). Structural and pilot suites
+may diagnose wiring, prerequisites, failures, and runtime cost only; their results
+must not drive algorithm-performance claims or tuning.
 
 Never edit a frozen baseline or an existing run/attempt to repair evidence. Create
 a new baseline identity or linked replacement attempt through the runner.

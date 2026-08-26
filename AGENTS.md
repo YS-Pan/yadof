@@ -21,10 +21,11 @@ changed.
   evidence it routes to.
 - Run benchmark commands from this repository root with a Python environment that
   contains the matching installed yadof distribution.
-- Agents must pass `--runs-dir temp/benchmark/<task-id>` before the subcommand and
-  reuse the same path for every command addressing that run. Do not recursively
-  scan run trees: start with bounded `plan`, `preflight`, or `inspect` output and
-  expand one artifact or failed cell at a time.
+- The configured default writes each run directly to `temp/<run-id>/`; do not add
+  another task-specific container layer. If `--runs-dir` overrides that root, reuse
+  the same path for every command addressing the run. Do not recursively scan run
+  trees: start with bounded `plan`, `preflight`, or `inspect` output and expand one
+  artifact or failed cell at a time.
 - Benchmark execution, resume, and collection remain subject to the cost/risk
   policy in `benchmark_automation/README.md`. Preserve frozen inputs and existing
   runtime evidence.
