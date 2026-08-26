@@ -1,14 +1,40 @@
 # benchmark automation developer guide
 
-`dev_doc/` is the entry point for maintaining the benchmark runner. It borrows
-the current-view documentation approach from yadof while deliberately keeping a
-smaller contract: this guide defines the development workflow, and
-[`architecture.md`](architecture.md) describes the system shape and invariants.
+`dev_doc/` is the entry point for maintaining the benchmark runner. It follows the
+current-view, contract, and generative-blueprint discipline used by yadof's root
+`dev_doc/`, while keeping ownership local to this source-checkout tool.
 
 Read the repository [`README.md`](../README.md) first for the benchmark's purpose,
 command surface, evidence semantics, and execution-risk policy. Read
-`architecture.md` before changing runner behavior, configuration structure,
-baseline handling, execution state, collection, or reporting.
+[`AGENTS.md`](../AGENTS.md) for the bounded evidence route. The root yadof
+architecture remains authoritative for the installed-package/workspace boundary;
+these nested documents own benchmark planning, identity, execution, progress, ETA,
+collection, reporting, and disclosure.
+
+## Required reading order
+
+Perform the first benchmark-development context pass in this order:
+
+1. Read [the operator-document contract](skill/operator_doc.md), then the root
+   benchmark `README.md` and `AGENTS.md`.
+2. Read [the architecture contract](skill/architecture.md), then every file below
+   `architecture/` in full, beginning with
+   [the index](architecture/00_architecture_index.md). The former monolithic
+   [`architecture.md`](architecture.md) remains as a compatibility orientation;
+   the split views are authoritative.
+3. Read [the terminology contract](skill/terminology.md), then
+   [`terminology.md`](terminology.md) in full.
+4. Read [the toDo contract](skill/toDo.md) and every benchmark-local toDo when a
+   `toDo/` directory exists. An absent directory means there is no local pending
+   work.
+5. List the `blueprints/` tree, read
+   [the blueprint contract](skill/blueprints.md), and perform its targeted pass.
+6. Apply [the change-record contract](skill/change_records.md). One completed
+   repository change receives one record under the root `dev_doc/change_records/`.
+
+Do not start from generated runs or load large evidence to learn the runner. Use
+architecture and blueprints for current contracts, source/tests for executable
+detail, and one targeted run artifact only for a concrete runtime diagnosis.
 
 ## Source-checkout boundary
 
@@ -76,10 +102,16 @@ Do not edit site-packages, inject the yadof source checkout through
    rules in the root README and obtain authorization when required.
 8. Review the final diff and run `git diff --check` before committing.
 
-Update `architecture.md` whenever file roles, data flow, persistence, public
-schemas, or invariants change. Update the root README whenever operators need to
+Update the relevant architecture views whenever file roles, data flow,
+persistence, public schemas, ETA semantics, or invariants change. Update matching
+blueprints when module intent, I/O, or non-obvious implementation changes. Update
+the root README whenever operators need to
 change how they configure, execute, resume, collect, interpret, or diagnose a
 benchmark. Small prose corrections need only targeted link/path checks.
+
+Terminal changes require an end-to-end child-stream-to-Rich regression, not only an
+assertion over internal task values. Inspection/ETA changes require deterministic
+fixtures for running, pending, terminal, low-evidence, and live-progress states.
 
 ## Encoding and paths
 

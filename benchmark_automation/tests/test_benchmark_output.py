@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import io
 import json
 import sys
@@ -125,7 +126,7 @@ def test_stream_pipe_converts_child_progress_without_forwarding_it(
     progress.finish()
     assert output.read_text(encoding="utf-8") == child_progress + "ordinary\n"
     assert forwarded.getvalue() == "[err] ordinary\n"
-    assert "2/2 evaluations" in progress_output.getvalue()
+    assert "2/2 eval" in progress_output.getvalue()
 
 
 def test_interactive_rich_progress_keeps_cell_above_global_below_lifecycle() -> None:
@@ -144,7 +145,9 @@ def test_interactive_rich_progress_keeps_cell_above_global_below_lifecycle() -> 
         "[yadof] generation 0 (fast) [##############..............] "
         "1/2 successful=1 errors=0 remaining=1"
     )
+    progress.write_above("after progress\n")
     progress.advance("completed")
+    progress.write_above("after cell\n")
     progress.finish()
     output = terminal.getvalue()
     assert output.count("[cell] first started\n") == 1
@@ -153,8 +156,11 @@ def test_interactive_rich_progress_keeps_cell_above_global_below_lifecycle() -> 
     )
     first_frame = output.index("[cell]", lifecycle_end)
     global_frame = output.index("[benchmark]", first_frame)
-    assert "[----------] 0/2 evaluations" in output[first_frame:global_frame]
+    assert "[----------] 0/2 eval | 0% phase=preparing" in output[first_frame:global_frame]
     assert first_frame < global_frame
+    assert "[#####-----] 1/2 eval | 50% gen=1/1 ok=1 err=0" in output
+    assert "1/2 cells | ok=1 err=0 skip=0" in output
+    assert "…" not in output
 
 
 def test_interactive_progress_refreshes_cell_and_global_atomically(
@@ -193,8 +199,23 @@ def test_interactive_progress_refreshes_cell_and_global_atomically(
         "[yadof] generation 13 (fast) [##############..............] "
         "50/100 successful=42 errors=8 remaining=50"
     )
-    assert frames == [(1350, 2000, 0, 2, "68% gen=14/20 ok=42 err=8")]
+    assert frames == [
+        (1350, 2000, 0, 2, "1350/2000 eval | 68% gen=14/20 ok=42 err=8")
+    ]
     assert progress._progress.live.auto_refresh is False
+
+
+def test_cell_progress_shows_the_first_evaluation_in_large_cells() -> None:
+    progress = core.CellProgress(18, stream=io.StringIO(), width=18)
+    progress.start_cell(
+        {"cell_id": "large", "planned_attempted_evaluations": 2000}
+    )
+    assert progress.observe_yadof_line(
+        "[yadof] generation 0 (fast) [............................] "
+        "1/100 successful=1 errors=0 remaining=99"
+    )
+    assert core.CellProgress._bar(1, 2000, 18) == "#-----------------"
+    assert progress._cell_display_detail().startswith("1/2000 eval | 0.1%")
 
 
 def test_noninteractive_cell_progress_converts_yadof_snapshots() -> None:
@@ -217,7 +238,7 @@ def test_noninteractive_cell_progress_converts_yadof_snapshots() -> None:
     progress.advance("completed")
     progress.finish()
     output = terminal.getvalue()
-    assert "6/6 evaluations | 100% gen=2/2 ok=2 err=1" in output
+    assert "6/6 eval | 100% gen=2/2 ok=2 err=1" in output
     assert output.rfind("[cell] first") < output.rfind("[benchmark]")
 
 
@@ -409,3 +430,137 @@ def test_run_summary_propagates_runs_dir_to_next_command(tmp_path: Path) -> None
         "--run-id",
         "fixture",
     ]
+
+
+def test_run_timing_uses_live_progress_and_completed_cell_wall_time(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "fixture"
+    workspace = (
+        run_root
+        / "cells"
+        / "case-a__real__seed-2"
+        / "attempts"
+        / "0001"
+        / "workspace"
+    )
+    command_root = workspace.parent / "commands" / "0001-optimize"
+    command_root.mkdir(parents=True)
+    stderr = command_root / "stderr.log"
+    stderr.write_text(
+        "[yadof] generation 0 (fast) [##############..............] "
+        "50/100 successful=49 errors=1 remaining=50\n",
+        encoding="utf-8",
+    )
+    (command_root / "command.started.json").write_text(
+        json.dumps(
+            {
+                "label": "optimize",
+                "started_utc": "2026-08-23T00:03:00.000Z",
+                "stderr": str(stderr),
+            }
+        ),
+        encoding="utf-8",
+    )
+    cells = [
+        {
+            "cell_id": f"case-a__real__seed-{seed}",
+            "case": "case-a",
+            "arm": "real",
+            "planned_attempted_evaluations": 100,
+        }
+        for seed in (1, 2, 3)
+    ]
+    spec = {
+        "plan": {"cells": cells, "estimates": {}},
+        "cases": {"case-a": {"observed_eval_sec": 1.0, "max_workers": 1}},
+    }
+    state = {
+        "created_utc": "2026-08-23T00:00:00.000Z",
+        "cells": {
+            "case-a__real__seed-1": {
+                "status": "completed",
+                "case": "case-a",
+                "arm": "real",
+                "attempts": [
+                    {
+                        "created_utc": "2026-08-23T00:00:00.000Z",
+                        "sealed_utc": "2026-08-23T00:01:40.000Z",
+                    }
+                ],
+            },
+            "case-a__real__seed-2": {
+                "status": "running",
+                "case": "case-a",
+                "arm": "real",
+                "attempts": [
+                    {
+                        "created_utc": "2026-08-23T00:03:00.000Z",
+                        "workspace": str(workspace),
+                    }
+                ],
+            },
+            "case-a__real__seed-3": {
+                "status": "pending",
+                "case": "case-a",
+                "arm": "real",
+                "attempts": [],
+            },
+        },
+    }
+    timing = core.estimate_run_timing(
+        spec,
+        state,
+        now=dt.datetime(2026, 8, 23, 0, 3, 50, tzinfo=dt.UTC),
+    )
+    assert timing["active_cell"] == {
+        "cell_id": "case-a__real__seed-2",
+        "phase": "generation-1",
+        "completed_evaluations": 50,
+        "planned_evaluations": 100,
+        "progress_percent": 50.0,
+        "attempt_elapsed_sec": 50,
+        "inactive_sec": 0,
+        "estimated_remaining_sec": 60,
+    }
+    assert timing["estimated_remaining_sec"] == 160
+    assert timing["estimated_completion_utc"] == "2026-08-23T00:06:30.000Z"
+    assert timing["estimate_confidence"] == "high"
+    assert timing["estimate_basis"] == {"same-case-arm": 2}
+
+
+def test_run_timing_reports_exact_terminal_zero_and_low_confidence_fallback() -> None:
+    checked = dt.datetime(2026, 8, 23, 0, 5, tzinfo=dt.UTC)
+    plan_cell = {
+        "cell_id": "case-a__real__seed-1",
+        "case": "case-a",
+        "arm": "real",
+        "planned_attempted_evaluations": 100,
+    }
+    spec = {
+        "plan": {"cells": [plan_cell], "estimates": {}},
+        "cases": {"case-a": {"observed_eval_sec": 2.0, "max_workers": 1}},
+    }
+    terminal = core.estimate_run_timing(
+        spec,
+        {
+            "created_utc": "2026-08-23T00:00:00.000Z",
+            "cells": {plan_cell["cell_id"]: {"status": "failed"}},
+        },
+        now=checked,
+    )
+    assert terminal["estimated_remaining_sec"] == 0
+    assert terminal["estimated_completion_utc"] == "2026-08-23T00:05:00.000Z"
+    assert terminal["estimate_confidence"] == "high"
+
+    pending = core.estimate_run_timing(
+        spec,
+        {
+            "created_utc": "2026-08-23T00:00:00.000Z",
+            "cells": {plan_cell["cell_id"]: {"status": "pending"}},
+        },
+        now=checked,
+    )
+    assert pending["estimated_remaining_sec"] == 200
+    assert pending["estimate_confidence"] == "low"
+    assert pending["estimate_basis"] == {"declared-evaluation-lower-bound": 1}

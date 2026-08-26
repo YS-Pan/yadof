@@ -87,11 +87,16 @@ The current comparison names its concrete non-surrogate NSGA-III arm, uses a
 runner-owned 32-worker oversubscribed fast setting for measured cells, runs one
 cost-view render after each measured optimization, uses Rich for an active-cell
 evaluation bar above the global cell bar with one atomic event-driven refresh and
-cumulative percentage/generation detail, separates each attempt's postprocessor
-artifacts by a collision-safe prefix inside one directory per baseline workspace,
-groups all cost plots under `visualizations/viewcost/`, and keeps
-bounded JSON stdout separate from terminal progress and the final algorithm-labeled
-HV table.
+cumulative count/percentage/generation detail, guarantees visible positive progress
+in large cells, and keeps complete compact status fields within normal terminal
+widths. Read-only benchmark inspection derives an explicitly qualified ETA from
+completed wall times, immutable plan data, and the active command's bounded progress
+tail for later unattended agent turns. The nested benchmark `dev_doc/` mirrors the
+root current-view discipline with reading/maintenance contracts, split C4 and 4+1
+architecture, generative blueprints, and terminology. Attempt postprocessor
+artifacts remain collision-prefixed inside one directory per baseline workspace;
+cost plots stay under `visualizations/viewcost/`; bounded JSON stdout remains
+separate from terminal progress and the final algorithm-labeled HV table.
 
 Mocked distributed tests cover event-log execute segments and preserve provenance
 priority: worker-reported `execute_machine` wins, timed-out active/held segments may

@@ -31,7 +31,6 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from rich.console import Console
 from rich.progress import (
-    MofNCompleteColumn,
     Progress,
     ProgressColumn,
     Task,
@@ -95,22 +94,43 @@ class _AsciiBarColumn(ProgressColumn):
         elif task.total <= 0:
             finished = self.width
         else:
-            finished = min(
-                self.width,
-                int(self.width * task.completed / task.total),
-            )
+            ratio = min(1.0, max(0.0, task.completed / task.total))
+            finished = min(self.width, math.ceil(self.width * ratio)) if ratio else 0
         return Text(f"[{'#' * finished}{'-' * (self.width - finished)}]")
+
+
+_YADOF_PROGRESS = re.compile(
+    r"^\[yadof\] (?P<phase>smoke|generation (?P<generation>\d+)) "
+    r"\([^)]*\) \[[#.]+\] (?P<finished>\d+)/(?P<total>\d+) "
+    r"successful=(?P<successful>\d+) errors=(?P<errors>\d+) "
+    r"remaining=(?P<remaining>\d+)\s*$"
+)
+
+
+def _parse_yadof_progress(line: str) -> dict[str, Any] | None:
+    """Parse one complete yadof progress snapshot from a piped child stream."""
+
+    match = _YADOF_PROGRESS.fullmatch(line.strip())
+    if match is None:
+        return None
+    generation_text = match.group("generation")
+    generation = int(generation_text) if generation_text is not None else None
+    finished = int(match.group("finished"))
+    total = max(1, int(match.group("total")))
+    return {
+        "phase": match.group("phase"),
+        "generation": generation,
+        "finished": finished,
+        "total": total,
+        "absolute_finished": finished if generation is None else generation * total + finished,
+        "successful": int(match.group("successful")),
+        "errors": int(match.group("errors")),
+        "remaining": int(match.group("remaining")),
+    }
 
 
 class CellProgress:
     """Keep Rich-managed cell and run progress below lifecycle messages."""
-
-    _YADOF_PROGRESS = re.compile(
-        r"^\[yadof\] (?P<phase>smoke|generation (?P<generation>\d+)) "
-        r"\([^)]*\) \[[#.]+\] (?P<finished>\d+)/(?P<total>\d+) "
-        r"successful=(?P<successful>\d+) errors=(?P<errors>\d+) "
-        r"remaining=(?P<remaining>\d+)\s*$"
-    )
 
     def __init__(
         self,
@@ -118,7 +138,7 @@ class CellProgress:
         *,
         completed: int = 0,
         stream: Any | None = None,
-        width: int = 28,
+        width: int = 18,
     ) -> None:
         self.total = max(0, int(total))
         self.finished = max(0, int(completed))
@@ -154,25 +174,12 @@ class CellProgress:
                 ),
             ),
             _AsciiBarColumn(self.width),
-            MofNCompleteColumn(),
             TextColumn(
-                "{task.fields[unit]}",
+                "{task.fields[detail]}",
                 markup=False,
                 table_column=Column(
-                    width=11,
-                    min_width=11,
-                    max_width=11,
-                    no_wrap=True,
-                ),
-            ),
-            TextColumn(
-                "| {task.fields[detail]}",
-                markup=False,
-                table_column=Column(
-                    width=25,
-                    min_width=10,
-                    max_width=25,
-                    overflow="ellipsis",
+                    min_width=1,
+                    overflow="crop",
                     no_wrap=True,
                 ),
             ),
@@ -191,7 +198,6 @@ class CellProgress:
             completed=0,
             visible=False,
             label="[cell]",
-            unit="evaluations",
             detail="",
         )
         self._global_task = self._progress.add_task(
@@ -199,48 +205,42 @@ class CellProgress:
             total=self.total,
             completed=self.finished,
             label="[benchmark]",
-            unit="cells",
             detail=self._global_detail(),
         )
 
     @staticmethod
     def _bar(finished: int, total: int, width: int) -> str:
         ratio = 1.0 if total == 0 else min(1.0, finished / total)
-        filled = int(width * ratio)
+        filled = min(width, math.ceil(width * ratio)) if ratio else 0
         return "#" * filled + "-" * (width - filled)
 
     def _global_detail(self) -> str:
-        current = f" current={self.current}" if self.current else ""
         return (
-            f"completed={self.completed} failed={self.failed} skipped={self.skipped}"
-            f"{current}"
+            f"{self.finished}/{self.total} cells | ok={self.completed} "
+            f"err={self.failed} skip={self.skipped}"
         )
 
     def _global_line(self) -> str:
         bar = self._bar(self.finished, self.total, self.width)
-        return (
-            f"[benchmark] [{bar}] {self.finished}/{self.total} cells "
-            f"| {self._global_detail()}"
-        )
+        return f"[benchmark] [{bar}] {self._global_detail()}"
 
     def _cell_line(self) -> str:
         bar = self._bar(self._cell_completed, self._cell_total, self.width)
         return (
             f"[cell] {self.current or '-'} [{bar}] "
-            f"{self._cell_completed}/{self._cell_total} evaluations "
-            f"| {self._cell_display_detail()}"
+            f"{self._cell_display_detail()}"
         )
 
     def _cell_display_detail(self) -> str:
         if self._cell_total <= 0:
-            percentage = 0
+            percentage_text = "0%"
         else:
-            percentage = min(
-                100,
-                (100 * self._cell_completed + self._cell_total // 2)
-                // self._cell_total,
-            )
-        return f"{percentage}% {self._cell_detail}"
+            percentage = min(100.0, 100.0 * self._cell_completed / self._cell_total)
+            percentage_text = f"{percentage:.1f}%" if 0.0 < percentage < 10.0 else f"{percentage:.0f}%"
+        return (
+            f"{self._cell_completed}/{self._cell_total} eval | "
+            f"{percentage_text} {self._cell_detail}"
+        )
 
     def _update_rich_locked(self) -> None:
         self._progress.update(
@@ -317,33 +317,29 @@ class CellProgress:
     def observe_yadof_line(self, line: str) -> bool:
         """Convert one child yadof snapshot into the active cell progress task."""
 
-        match = self._YADOF_PROGRESS.fullmatch(line.strip())
-        if match is None:
+        snapshot = _parse_yadof_progress(line)
+        if snapshot is None:
             return False
         with self._lock:
             if self.current is None:
                 return True
-            finished = int(match.group("finished"))
-            total = max(1, int(match.group("total")))
-            generation = match.group("generation")
-            if generation is None:
-                absolute_finished = finished
-            else:
-                absolute_finished = int(generation) * total + finished
+            total = int(snapshot["total"])
+            generation = snapshot["generation"]
+            absolute_finished = int(snapshot["absolute_finished"])
             if absolute_finished > self._cell_total:
                 self._cell_total = absolute_finished
             self._cell_completed = max(self._cell_completed, absolute_finished)
             if generation is None:
                 phase = "smoke"
             else:
-                generation_number = int(generation) + 1
+                generation_number = generation + 1
                 generation_count = max(
                     generation_number,
                     (self._cell_total + total - 1) // total,
                 )
                 phase = f"gen={generation_number}/{generation_count}"
             self._cell_detail = (
-                f"{phase} ok={match.group('successful')} err={match.group('errors')}"
+                f"{phase} ok={snapshot['successful']} err={snapshot['errors']}"
             )
             if self.interactive:
                 self._update_rich_locked()
@@ -1377,6 +1373,7 @@ def build_run_spec(
             "expected_objectives": int(case["expected_objectives"]),
             "rawdata_shapes": dict(case.get("rawdata_shapes", {})),
             "max_workers": int(case.get("max_workers", 1)),
+            "observed_eval_sec": float(case.get("observed_eval_sec", 0.0)),
             "representative_expensive_generation_sec": case.get(
                 "representative_expensive_generation_sec"
             ),
@@ -3598,7 +3595,291 @@ def summarize_preflight(result: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
-def summarize_run_state(run_root: Path, run_id: str, state: Mapping[str, Any]) -> dict[str, Any]:
+def _parse_utc(value: Any) -> dt.datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.astimezone(dt.UTC) if parsed.tzinfo is not None else parsed.replace(tzinfo=dt.UTC)
+
+
+def _format_utc(value: dt.datetime) -> str:
+    return value.astimezone(dt.UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _attempt_duration_sec(attempt: Mapping[str, Any]) -> float | None:
+    started = _parse_utc(attempt.get("created_utc"))
+    ended = _parse_utc(attempt.get("sealed_utc"))
+    if started is None or ended is None or ended < started:
+        return None
+    return (ended - started).total_seconds()
+
+
+def _duration_observations(
+    state: Mapping[str, Any], plan_by_cell: Mapping[str, Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    observations: list[dict[str, Any]] = []
+    for cell_id, cell in state.get("cells", {}).items():
+        if cell.get("status") != "completed":
+            continue
+        attempts = cell.get("attempts") or []
+        if not attempts:
+            continue
+        duration = _attempt_duration_sec(attempts[-1])
+        plan = plan_by_cell.get(str(cell_id), {})
+        planned = int(plan.get("planned_attempted_evaluations", 0) or 0)
+        if duration is None or duration <= 0.0 or planned <= 0:
+            continue
+        observations.append(
+            {
+                "case": cell.get("case"),
+                "arm": cell.get("arm"),
+                "planned": planned,
+                "duration_sec": duration,
+            }
+        )
+    return observations
+
+
+def _cell_duration_estimate(
+    cell: Mapping[str, Any],
+    spec: Mapping[str, Any],
+    observations: Sequence[Mapping[str, Any]],
+) -> tuple[float | None, str]:
+    planned = int(cell.get("planned_attempted_evaluations", 0) or 0)
+    if planned <= 0:
+        return None, "unavailable"
+    case_id = cell.get("case")
+    arm_id = cell.get("arm")
+    cohorts = (
+        ("same-case-arm", [row for row in observations if row.get("case") == case_id and row.get("arm") == arm_id]),
+        ("same-case", [row for row in observations if row.get("case") == case_id]),
+        ("same-arm", [row for row in observations if row.get("arm") == arm_id]),
+        ("all-completed", list(observations)),
+    )
+    for basis, rows in cohorts:
+        scaled = [
+            float(row["duration_sec"]) * planned / int(row["planned"])
+            for row in rows
+            if int(row.get("planned", 0) or 0) > 0
+        ]
+        if scaled:
+            return statistics.median(scaled), basis
+    case = spec.get("cases", {}).get(case_id, {})
+    observed_eval_sec = float(case.get("observed_eval_sec", 0.0) or 0.0)
+    workers = max(1, int(case.get("max_workers", 1) or 1))
+    if observed_eval_sec > 0.0:
+        return observed_eval_sec * planned / workers, "declared-evaluation-lower-bound"
+    plan = spec.get("plan", {})
+    total_planned = sum(
+        int(item.get("planned_attempted_evaluations", 0) or 0)
+        for item in plan.get("cells", [])
+    )
+    lower_bound = float(
+        plan.get("estimates", {}).get("evaluation_wall_lower_bound_sec", 0.0) or 0.0
+    )
+    if lower_bound > 0.0 and total_planned > 0:
+        return lower_bound * planned / total_planned, "plan-average-lower-bound"
+    return None, "unavailable"
+
+
+def _tail_yadof_progress(path: Path, *, limit_bytes: int = 262_144) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        with path.open("rb") as stream:
+            size = path.stat().st_size
+            stream.seek(max(0, size - limit_bytes))
+            text = stream.read().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in reversed(text.splitlines()):
+        parsed = _parse_yadof_progress(line)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _active_command(attempt: Mapping[str, Any]) -> dict[str, Any] | None:
+    workspace_value = attempt.get("workspace")
+    if not isinstance(workspace_value, str):
+        return None
+    commands_root = Path(workspace_value).parent / "commands"
+    try:
+        command_roots = sorted(
+            (path for path in commands_root.iterdir() if path.is_dir()),
+            key=lambda path: path.name,
+        )
+    except OSError:
+        return None
+    if not command_roots:
+        return None
+    command_root = command_roots[-1]
+    finished_path = command_root / "command.finished.json"
+    started_path = command_root / "command.started.json"
+    metadata_path = finished_path if finished_path.is_file() else started_path
+    if not metadata_path.is_file():
+        return None
+    try:
+        metadata = read_json(metadata_path)
+    except (BenchmarkError, OSError):
+        return None
+    stderr_value = metadata.get("stderr")
+    stderr_path = Path(stderr_value) if isinstance(stderr_value, str) else command_root / "stderr.log"
+    stdout_value = metadata.get("stdout")
+    stdout_path = Path(stdout_value) if isinstance(stdout_value, str) else command_root / "stdout.log"
+    progress = _tail_yadof_progress(stderr_path)
+    activity_times = [_parse_utc(metadata.get("started_utc"))]
+    for candidate in (stderr_path, stdout_path):
+        if candidate.is_file():
+            with contextlib.suppress(OSError):
+                activity_times.append(dt.datetime.fromtimestamp(candidate.stat().st_mtime, dt.UTC))
+    activity = max((value for value in activity_times if value is not None), default=None)
+    return {
+        "label": metadata.get("label"),
+        "started_utc": metadata.get("started_utc"),
+        "finished": finished_path.is_file(),
+        "progress": progress,
+        "last_activity": activity,
+    }
+
+
+def estimate_run_timing(
+    spec: Mapping[str, Any],
+    state: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Estimate sequential-run completion from immutable plans and observed wall time."""
+
+    checked = dt.datetime.now(dt.UTC) if now is None else now.astimezone(dt.UTC)
+    plan_by_cell = {
+        str(cell["cell_id"]): cell for cell in spec.get("plan", {}).get("cells", [])
+    }
+    observations = _duration_observations(state, plan_by_cell)
+    basis_counts: dict[str, int] = defaultdict(int)
+    pending_remaining = 0.0
+    estimate_available = True
+    active_summary: dict[str, Any] | None = None
+    active_remaining = 0.0
+    for cell_id, cell_state in state.get("cells", {}).items():
+        status = str(cell_state.get("status", "unknown"))
+        if status not in {"pending", "running"}:
+            continue
+        plan = plan_by_cell.get(str(cell_id), {})
+        full_duration, basis = _cell_duration_estimate(plan, spec, observations)
+        basis_counts[basis] += 1
+        if full_duration is None:
+            estimate_available = False
+            continue
+        if status == "pending":
+            pending_remaining += full_duration
+            continue
+        attempts = cell_state.get("attempts") or []
+        attempt = attempts[-1] if attempts else {}
+        attempt_started = _parse_utc(attempt.get("created_utc"))
+        attempt_elapsed = (
+            max(0.0, (checked - attempt_started).total_seconds())
+            if attempt_started is not None
+            else 0.0
+        )
+        active_remaining = max(60.0, full_duration - attempt_elapsed)
+        command = _active_command(attempt)
+        planned = int(plan.get("planned_attempted_evaluations", 0) or 0)
+        completed = 0
+        phase = "preparing"
+        last_activity: dt.datetime | None = attempt_started
+        if command is not None:
+            phase = str(command.get("label") or phase)
+            last_activity = command.get("last_activity") or last_activity
+            snapshot = command.get("progress")
+            command_started = _parse_utc(command.get("started_utc"))
+            if isinstance(snapshot, Mapping):
+                completed = min(planned, int(snapshot.get("absolute_finished", 0) or 0))
+                generation = snapshot.get("generation")
+                phase = "smoke" if generation is None else f"generation-{int(generation) + 1}"
+                if completed > 0 and planned > completed and command_started is not None:
+                    command_elapsed = max(0.0, (checked - command_started).total_seconds())
+                    live_remaining = command_elapsed * (planned - completed) / completed
+                    active_remaining = max(active_remaining, live_remaining)
+        inactive_sec = (
+            max(0.0, (checked - last_activity).total_seconds())
+            if last_activity is not None
+            else None
+        )
+        active_summary = {
+            "cell_id": cell_id,
+            "phase": phase,
+            "completed_evaluations": completed,
+            "planned_evaluations": planned,
+            "progress_percent": round(100.0 * completed / planned, 1) if planned > 0 else None,
+            "attempt_elapsed_sec": round(attempt_elapsed),
+            "inactive_sec": round(inactive_sec) if inactive_sec is not None else None,
+            "estimated_remaining_sec": round(active_remaining),
+        }
+    terminal = not any(
+        str(cell.get("status")) in {"pending", "running"}
+        for cell in state.get("cells", {}).values()
+    )
+    if terminal:
+        remaining: float | None = 0.0
+    elif estimate_available:
+        remaining = pending_remaining + active_remaining
+    else:
+        remaining = None
+    bases = set(basis_counts)
+    if terminal:
+        confidence = "high"
+    elif remaining is None:
+        confidence = "unavailable"
+    elif bases <= {"same-case-arm"} and active_summary is not None and active_summary["completed_evaluations"] > 0:
+        confidence = "high"
+    elif not bases.intersection(
+        {
+            "same-arm",
+            "all-completed",
+            "declared-evaluation-lower-bound",
+            "plan-average-lower-bound",
+            "unavailable",
+        }
+    ):
+        confidence = "medium"
+    else:
+        confidence = "low"
+    created = _parse_utc(state.get("created_utc"))
+    elapsed = max(0.0, (checked - created).total_seconds()) if created is not None else None
+    remaining_sec = round(remaining) if remaining is not None else None
+    return _json_safe(
+        {
+            "checked_utc": _format_utc(checked),
+            "started_utc": state.get("created_utc"),
+            "elapsed_sec": round(elapsed) if elapsed is not None else None,
+            "active_cell": active_summary,
+            "estimated_remaining_sec": remaining_sec,
+            "estimated_completion_utc": (
+                _format_utc(checked + dt.timedelta(seconds=remaining_sec))
+                if remaining_sec is not None
+                else None
+            ),
+            "estimate_confidence": confidence,
+            "estimate_basis": dict(sorted(basis_counts.items())),
+            "estimate_note": (
+                "Best-effort wall-clock estimate. Completed cells calibrate later cells; "
+                "declared evaluation estimates exclude optimizer and surrogate-training overhead."
+            ),
+        }
+    )
+
+
+def summarize_run_state(
+    run_root: Path,
+    run_id: str,
+    state: Mapping[str, Any],
+    *,
+    timing: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Return current cell status and only actionable attempt failures."""
     by_status: dict[str, int] = defaultdict(int)
     attention: list[dict[str, Any]] = []
@@ -3637,6 +3918,7 @@ def summarize_run_state(run_root: Path, run_id: str, state: Mapping[str, Any]) -
             "execution_state": state_status,
             "updated_utc": state.get("updated_utc"),
             "cells": {"total": len(cells), "by_status": dict(sorted(by_status.items()))},
+            "timing": timing,
             "attention": attention,
             "run_state": str(run_root / "run_state.json"),
             "next_command": next_command,
@@ -3795,7 +4077,8 @@ def inspect_run(paths: Paths, run_id: str) -> dict[str, Any]:
     report_markdown = run_root / "report.md"
     report_json = run_root / "report.json"
     metrics_json = run_root / "metrics.json"
-    run_summary = summarize_run_state(run_root, run_id, state)
+    timing = estimate_run_timing(spec, state)
+    run_summary = summarize_run_state(run_root, run_id, state, timing=timing)
     run_summary.pop("schema_version", None)
     run_summary.pop("view", None)
     results = summarize_report(read_json(report_json)) if report_json.is_file() else None

@@ -141,8 +141,13 @@ channels through its stderr console so messages cannot split the cursor owner;
 the append-only logs still preserve stdout and stderr separately. Each child
 snapshot updates the cell and global Rich tasks before one atomic refresh, so a
 stale zero-valued cell frame cannot replace the new value. The cell detail starts
-with cumulative percentage and `gen=<current>/<total>` across the whole cell,
-rather than showing only the current generation's local fraction.
+with cumulative count and percentage plus `gen=<current>/<total>` across the whole
+cell, rather than showing only the current generation's local fraction. Any
+positive count lights at least one ASCII bar cell, and values below 10% retain one
+decimal, so `1/2000` no longer renders as an unchanged empty `0%` bar. Count/unit
+fields are compacted into the detail instead of occupying collapsible Rich columns;
+the global row always includes full finished/total, ok, error, and skipped counts
+without a fixed 25-character detail limit.
 Every measured optimization calls the selected baseline's root `postprocess.py`
 after its final generation. SAW writes S-parameter plots/data, Chrono writes a
 trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.
@@ -192,8 +197,31 @@ python ".\benchmark_automation\benchmark.py" inspect `
 
 `inspect` combines execution status, validity totals, structural failures or
 paired performance evidence, artifact sizes/read policies, and the next applicable
-commands. `report --full-json` remains available for consumers that explicitly
-need the complete stable report.
+commands. While a run is active, `run.timing` also supplies:
+
+- `checked_utc`, `started_utc`, and elapsed seconds;
+- active cell, phase, cumulative completed/planned evaluations, percentage,
+  attempt elapsed time, and seconds since the latest command/log activity;
+- estimated remaining seconds, estimated UTC completion, confidence, estimation
+  basis counts, and an explicit caveat.
+
+The estimate is read-only and best effort. It prefers scaled wall-clock medians
+from completed cells in this order: same case/arm, same case, same arm, then all
+completed cells. The active optimize command can raise the projection when its
+observed evaluation rate is slower. With insufficient completed evidence it falls
+back to declared evaluation-only lower bounds, which exclude optimizer and
+surrogate-training overhead and therefore report low confidence. `inspect` reads
+only atomic state, immutable plan data, completed attempt timestamps, and the
+active command's bounded log tail; it does not poll, wait, resume, or modify the
+run. `report --full-json` remains available for consumers that explicitly need the
+complete stable report.
+
+This surface is intended for unattended follow-up. A later agent turn or scheduled
+automation can run `inspect`, schedule its next check near
+`estimated_completion_utc` (earlier when confidence is low), and repeat. When the
+run becomes terminal, that turn can collect/report and decide whether a new
+algorithm/run is warranted. Each check remains a separate read-only action; the
+original benchmark turn does not need to stay alive or continuously poll.
 
 Resume the exact immutable spec after a completed-boundary interruption:
 
@@ -482,5 +510,6 @@ handling, and descriptive aggregation.
 ## Development
 
 Maintainers should start with [`dev_doc/README.md`](dev_doc/README.md). The
-developer guide defines the repository boundary, fixed environment, verification
-workflow, and links to the current architecture and invariants.
+developer guide defines the repository boundary, required reading order, fixed
+environment, verification workflow, architecture views, generative blueprints,
+terminology, and documentation maintenance contracts.

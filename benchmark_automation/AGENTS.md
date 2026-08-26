@@ -22,13 +22,17 @@ python ".\benchmark_automation\benchmark.py" `
 
 Then expand only if the summary leaves a specific question unanswered:
 
-1. Read `<runs-dir>/<run-id>/report.md` for concise narrative and paired values.
-2. Query only the needed top-level field or pair from `report.json`.
-3. For a failed/incomplete cell, query that cell in `run_state.json`, then its
+1. For a running benchmark, use the summary's `run.timing` fields for active
+   progress, inactivity age, remaining seconds, completion UTC, confidence, and
+   basis. Do not read logs merely to recompute ETA.
+
+2. Read `<runs-dir>/<run-id>/report.md` for concise narrative and paired values.
+3. Query only the needed top-level field or pair from `report.json`.
+4. For a failed/incomplete cell, query that cell in `run_state.json`, then its
    latest `command.finished.json`, then the tail of the relevant stdout/stderr log.
-4. Read one cell and one field from `metrics.json` or an append-only
+5. Read one cell and one field from `metrics.json` or an append-only
    `collection.json` only when the report cannot answer the question.
-5. When visual inspection is relevant, open only the attempt's declared result
+6. When visual inspection is relevant, open only the attempt's declared result
    directory below `visualizations/` and its one matching prefixed cost plot below
    `visualizations/viewcost/`. Do not load every visualization artifact.
 
@@ -48,9 +52,11 @@ ordinary result interpretation.
 - In an interactive terminal, `run` and `resume` use Rich to keep the active
   cell's individual-evaluation bar immediately above the global cell bar. Both
   task states update before one atomic refresh; cell progress is cumulative across
-  generations and leads with its percentage and generation count. Both bars remain
-  below unchanged lifecycle/streamed messages and disappear cleanly after
-  execution. The CLI waits for Enter after the final JSON summary.
+  generations and leads with count, percentage, and generation. A positive count
+  always lights one bar cell, low percentages retain one decimal, and compact rows
+  preserve their complete counts/status in normal terminals. Both bars remain below
+  unchanged lifecycle/streamed messages and disappear cleanly after execution. The
+  CLI waits for Enter after the final JSON summary.
   Non-interactive agent execution emits throttled complete snapshots and exits
   normally.
 - After `collect`, run `report`; do not open the generated collection directly.
@@ -80,8 +86,9 @@ replacement attempts created by the runner.
 
 ## Development changes
 
-Before changing runner code or output schemas, read `dev_doc/README.md` and
-`dev_doc/architecture.md`. Use the selected Python containing the installed yadof
-distribution, add focused tests, and run the unit suite with a fresh absolute
-pytest `--basetemp` and `-p no:cacheprovider`. Preserve existing user/runtime
-evidence.
+Before changing runner code or output schemas, follow the complete reading order in
+`dev_doc/README.md`: operator-doc contract and root docs, every split architecture
+view, terminology, active toDos, and targeted blueprints. Use the selected Python
+containing the installed yadof distribution, add focused tests, and run the unit
+suite with a fresh absolute pytest `--basetemp` and `-p no:cacheprovider`.
+Preserve existing user/runtime evidence.

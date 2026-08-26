@@ -1,4 +1,9 @@
-# Architecture
+# Architecture landing page
+
+The detailed current-view architecture now lives under
+[`architecture/`](architecture/00_architecture_index.md). Read every view there for
+a benchmark-development context pass. This page remains a legacy orientation for
+older links; when wording differs, the split architecture views are authoritative.
 
 This page is the current maintainer view of `benchmark_automation`. It describes
 the runner as implemented; planned work belongs in an issue or an explicitly
@@ -133,8 +138,11 @@ Keeping the CLI thin makes core behavior directly testable.
   Rich tasks and performs one atomic event-driven refresh, preventing a stale cell
   frame from winning an adjacent global refresh. It converts yadof's piped
   per-generation snapshots into cumulative whole-cell evaluation progress and
-  leads the compact detail with percentage plus current/total generation while
-  retaining the original snapshots in command logs. Redirected streams receive
+  leads the compact detail with count, percentage, and current/total generation.
+  Positive progress uses ceiling bar fill and sub-10% percentages retain one
+  decimal. Count/unit text is compacted so normal terminal widths retain complete
+  cell and global status without the former fixed detail cap. Original snapshots
+  remain in command logs. Redirected streams receive
   complete snapshots throttled to bounded percentage advances. Interactive
   `--stream-output` routes both displayed child channels through the Rich stderr
   console while their append-only log files keep the original channel separation.
@@ -174,6 +182,11 @@ Keeping the CLI thin makes core behavior directly testable.
 - Default CLI summaries omit expanded commands, fingerprints, raw rows, and full
   diagnostics. Full plan/preflight/report JSON remains explicitly available, and
   `inspect` points from bounded evidence to progressively deeper artifacts.
+- A running `inspect` adds read-only timing: active progress/inactivity, remaining
+  seconds, completion UTC, confidence, and basis. It combines completed-cell wall
+  times with the active command's bounded progress-log tail and immutable plan;
+  lower-bound fallbacks explicitly exclude optimizer/surrogate overhead. ETA never
+  writes state or becomes benchmark evidence.
 - Default report and completed inspect keep the bounded JSON surface on stdout and
   render a compact final cumulative-hypervolume Markdown table on stderr. Table
   columns use the configured concrete arm display names rather than generic

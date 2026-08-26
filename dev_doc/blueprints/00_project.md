@@ -88,9 +88,15 @@ hot-change contract; structural dimension changes are future work.
   task artifacts in the directory shared by its baseline workspace, group prefixed
   cost plots under `visualizations/viewcost/`, and use Rich to retain an active-cell
   evaluation bar above the bottom global cell bar in interactive terminals. Rich
-  updates both task states before one event-driven refresh, and the cell line shows
-  cumulative percentage plus current/total generation. Final cumulative HV remains
-  a compact algorithm-labeled table outside JSON stdout.
+  updates both task states before one event-driven refresh; any positive evaluation
+  count visibly advances the ASCII bar, low percentages retain one decimal, and
+  compact rows keep complete counts/status without a fixed detail cap. Read-only
+  `inspect` exposes active progress/inactivity and a confidence-qualified ETA from
+  immutable plan data, completed cell wall times, and the active command's bounded
+  log tail so later unattended turns need not keep the original run turn alive.
+  The benchmark's nested `dev_doc/` provides required reading/maintenance contracts,
+  split architecture views, generative module/file blueprints, and terminology.
+  Final cumulative HV remains a compact algorithm-labeled table outside JSON stdout.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 
