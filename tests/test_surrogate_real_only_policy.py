@@ -8,6 +8,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from yadof.config import DEFAULT_CONFIG
 from yadof.surrogate.conditional_inr import checkpoints, modeling, runtime
 from yadof.optimize.gpsaf.records import CandidateRecord
 from yadof.optimize.gpsaf.phases import predict_records
@@ -294,6 +295,52 @@ def test_bootstrap_members_only_receive_rows_from_real_training_evidence(
             tuple(x_row.tolist() + y_row.tolist()) in real_rows
             for x_row, y_row in zip(visible_x, visible_y)
         )
+
+
+def test_default_ensemble_members_receive_every_real_training_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[np.ndarray] = []
+
+    def capture_member(_model, **kwargs):
+        captured.append(kwargs["X_train"].copy())
+        return {
+            "loss": 0.0,
+            "configured_epochs": 1.0,
+            "effective_epochs": 1.0,
+            "effective_training_steps": 1.0,
+            "field_coverage_steps": 1.0,
+        }
+
+    monkeypatch.setattr(modeling, "_train_one_member", capture_member)
+    x_train = np.arange(200, dtype=np.float32).reshape(100, 2)
+    config = modeling.INRTrainConfig(
+        ensemble_size=3,
+        hidden_dim=8,
+        hidden_layers=1,
+        x_latent_dim=4,
+        field_emb_dim=2,
+        coord_fourier_features=2,
+    )
+
+    _model, history = modeling.fit_deep_ensemble_conditional_inr(
+        input_dim=2,
+        n_fields=1,
+        X_train=x_train,
+        Y_train=np.arange(200, dtype=np.float32).reshape(100, 2),
+        coord_table=np.zeros((2, 3), dtype=np.float32),
+        field_ids=np.zeros((2,), dtype=np.int64),
+        device=torch.device("cpu"),
+        train_cfg=config,
+        seed=41,
+    )
+
+    assert DEFAULT_CONFIG["SURROGATE_INR_BOOTSTRAP_MEMBERS"] is False
+    assert config.bootstrap_members is False
+    assert history["bootstrap_requested"] is False
+    assert history["bootstrap_applied"] is False
+    assert len(captured) == 3
+    assert all(np.array_equal(visible_x, x_train) for visible_x in captured)
 
 
 def test_sparse_high_dimensional_training_preserves_all_real_rows_per_member(

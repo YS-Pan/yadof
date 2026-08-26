@@ -20,16 +20,19 @@ alpha/beta/gamma controls, and surrogate training controls. Task physics and pro
 shape stay in fixed `submit/` and evaluate-side `job_template/` roots. Complete
 strategy selection stays only in `submit/optimization.py`, never in config.
 
-Surrogate training uses only recorded real rawData rows (or seeded bootstrap rows
-drawn from them). It does not synthesize mixup targets and does not accept task-owned
-rawData importance or relative-loss settings. `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT`
-bounds queries per step; when a field is larger than that budget, sampling is seeded,
-without replacement, and balanced across modeled fields. Every active field has equal
-macro loss importance regardless of its number of scalar positions. If the configured
-epoch/batch schedule would end before a budget-smaller-than-field-count rotation gives
-every field the same number of appearances, yadof extends that member's effective
-epoch count just enough to complete one full rotation cycle and records both
-configured and effective counts.
+Surrogate training uses only recorded real rawData rows. By default every independently
+initialized ensemble member sees every retained real row; this preserves all measured
+design support because ensemble spread is diagnostic and does not steer GPSAF.
+`SURROGATE_INR_BOOTSTRAP_MEMBERS = True` remains an explicit opt-in for seeded
+bootstrap rows drawn only from that same evidence. It does not synthesize mixup targets
+and does not accept task-owned rawData importance or relative-loss settings.
+`SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` bounds queries per step; when a field is
+larger than that budget, sampling is seeded, without replacement, and balanced across
+modeled fields. Every active field has equal macro loss importance regardless of its
+number of scalar positions. If the configured epoch/batch schedule would end before a
+budget-smaller-than-field-count rotation gives every field the same number of
+appearances, yadof extends that member's effective epoch count just enough to complete
+one full rotation cycle and records both configured and effective counts.
 
 For each modeled rawData query position, conditional INR centers recorded values at
 their mean and scales them by their recorded standard deviation, with
