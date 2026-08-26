@@ -180,6 +180,7 @@ class CellProgress:
                 ),
             ),
             console=self._console,
+            auto_refresh=False,
             transient=True,
             redirect_stdout=False,
             redirect_stderr=False,
@@ -230,8 +231,19 @@ class CellProgress:
         return (
             f"[cell] {self.current or '-'} [{bar}] "
             f"{self._cell_completed}/{self._cell_total} evaluations "
-            f"| {self._cell_detail}"
+            f"| {self._cell_display_detail()}"
         )
+
+    def _cell_display_detail(self) -> str:
+        if self._cell_total <= 0:
+            percentage = 0
+        else:
+            percentage = min(
+                100,
+                (100 * self._cell_completed + self._cell_total // 2)
+                // self._cell_total,
+            )
+        return f"{percentage}% {self._cell_detail}"
 
     def _update_rich_locked(self) -> None:
         self._progress.update(
@@ -239,7 +251,7 @@ class CellProgress:
             total=self.total,
             completed=self.finished,
             detail=self._global_detail(),
-            refresh=True,
+            refresh=False,
         )
         self._progress.update(
             self._cell_task,
@@ -247,13 +259,10 @@ class CellProgress:
             completed=self._cell_completed,
             visible=self.current is not None,
             label="[cell]",
-            detail=(
-                f"{self.current} {self._cell_detail}"
-                if self.current is not None
-                else self._cell_detail
-            ),
-            refresh=True,
+            detail=self._cell_display_detail(),
+            refresh=False,
         )
+        self._progress.refresh()
 
     def _write_snapshot_locked(self, *, include_cell: bool) -> None:
         if include_cell and self.current is not None:
@@ -327,9 +336,17 @@ class CellProgress:
             if absolute_finished > self._cell_total:
                 self._cell_total = absolute_finished
             self._cell_completed = max(self._cell_completed, absolute_finished)
+            if generation is None:
+                phase = "smoke"
+            else:
+                generation_number = int(generation) + 1
+                generation_count = max(
+                    generation_number,
+                    (self._cell_total + total - 1) // total,
+                )
+                phase = f"gen={generation_number}/{generation_count}"
             self._cell_detail = (
-                f"phase={match.group('phase')} "
-                f"successful={match.group('successful')} errors={match.group('errors')}"
+                f"{phase} ok={match.group('successful')} err={match.group('errors')}"
             )
             if self.interactive:
                 self._update_rich_locked()

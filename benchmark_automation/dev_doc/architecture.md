@@ -120,12 +120,15 @@ Keeping the CLI thin makes core behavior directly testable.
 - The run/resume CLI owns one Rich live-progress region on stderr. Its active-cell
   individual-evaluation task is always above its global cell task; Rich clears and
   redraws the region below every unchanged lifecycle or streamed child line and
-  removes it on exit. The runner converts yadof's piped per-generation snapshots
-  into the active-cell task while retaining the original snapshots in command
-  logs. Redirected streams receive complete snapshots throttled to bounded
-  percentage advances. Interactive `--stream-output` routes both displayed child
-  channels through the Rich stderr console while their append-only log files keep
-  the original channel separation.
+  removes it on exit. Automatic timer refresh is disabled: the runner updates both
+  Rich tasks and performs one atomic event-driven refresh, preventing a stale cell
+  frame from winning an adjacent global refresh. It converts yadof's piped
+  per-generation snapshots into cumulative whole-cell evaluation progress and
+  leads the compact detail with percentage plus current/total generation while
+  retaining the original snapshots in command logs. Redirected streams receive
+  complete snapshots throttled to bounded percentage advances. Interactive
+  `--stream-output` routes both displayed child channels through the Rich stderr
+  console while their append-only log files keep the original channel separation.
 - After every measured optimization and any declared extension, the runner invokes
   the baseline workspace's common `postprocess.py` interface exactly once with
   `--workspace`, `--output-dir`, and `--output-prefix`. Task-specific visualization

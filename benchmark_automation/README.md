@@ -131,7 +131,11 @@ both bars disappear before the final JSON summary. Non-interactive output receiv
 throttled complete snapshots. Add `--stream-output` only for deliberate live raw
 output; it can be large. While the live region is active, Rich renders both child
 channels through its stderr console so messages cannot split the cursor owner;
-the append-only logs still preserve stdout and stderr separately.
+the append-only logs still preserve stdout and stderr separately. Each child
+snapshot updates the cell and global Rich tasks before one atomic refresh, so a
+stale zero-valued cell frame cannot replace the new value. The cell detail starts
+with cumulative percentage and `gen=<current>/<total>` across the whole cell,
+rather than showing only the current generation's local fraction.
 Every measured optimization calls the selected baseline's root `postprocess.py`
 after its final generation. SAW writes S-parameter plots/data, Chrono writes a
 trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.

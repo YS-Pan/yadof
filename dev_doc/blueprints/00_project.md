@@ -85,8 +85,10 @@ hot-change contract; structural dimension changes are future work.
   and one cost view after optimization, place each attempt's collision-prefixed
   task artifacts in the directory shared by its baseline workspace, group prefixed
   cost plots under `visualizations/viewcost/`, and use Rich to retain an active-cell
-  evaluation bar above the bottom global cell bar in interactive terminals. Final
-  cumulative HV remains a compact algorithm-labeled table outside JSON stdout.
+  evaluation bar above the bottom global cell bar in interactive terminals. Rich
+  updates both task states before one event-driven refresh, and the cell line shows
+  cumulative percentage plus current/total generation. Final cumulative HV remains
+  a compact algorithm-labeled table outside JSON stdout.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 

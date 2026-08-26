@@ -84,7 +84,8 @@ selected ignored runs root, never in package source or frozen inputs.
 The current comparison names its concrete non-surrogate NSGA-III arm, uses a
 runner-owned 32-worker oversubscribed fast setting for measured cells, runs one
 cost-view render after each measured optimization, uses Rich for an active-cell
-evaluation bar above the global cell bar, separates each attempt's postprocessor
+evaluation bar above the global cell bar with one atomic event-driven refresh and
+cumulative percentage/generation detail, separates each attempt's postprocessor
 artifacts by a collision-safe prefix inside one directory per baseline workspace,
 groups all cost plots under `visualizations/viewcost/`, and keeps
 bounded JSON stdout separate from terminal progress and the final algorithm-labeled

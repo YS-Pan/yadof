@@ -46,8 +46,10 @@ ordinary result interpretation.
   failure requires it.
 - In an interactive terminal, `run` and `resume` use Rich to keep the active
   cell's individual-evaluation bar immediately above the global cell bar. Both
-  bars remain below unchanged lifecycle/streamed messages and disappear cleanly
-  after execution. The CLI waits for Enter after the final JSON summary.
+  task states update before one atomic refresh; cell progress is cumulative across
+  generations and leads with its percentage and generation count. Both bars remain
+  below unchanged lifecycle/streamed messages and disappear cleanly after
+  execution. The CLI waits for Enter after the final JSON summary.
   Non-interactive agent execution emits throttled complete snapshots and exits
   normally.
 - After `collect`, run `report`; do not open the generated collection directly.

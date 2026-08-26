@@ -157,6 +157,46 @@ def test_interactive_rich_progress_keeps_cell_above_global_below_lifecycle() -> 
     assert first_frame < global_frame
 
 
+def test_interactive_progress_refreshes_cell_and_global_atomically(
+    monkeypatch,
+) -> None:
+    class TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    progress = core.CellProgress(2, stream=TtyBuffer(), width=10)
+    frames: list[tuple[float, float | None, float, float | None, str]] = []
+
+    def record_frame() -> None:
+        tasks = {task.id: task for task in progress._progress.tasks}
+        cell = tasks[progress._cell_task]
+        global_task = tasks[progress._global_task]
+        frames.append(
+            (
+                cell.completed,
+                cell.total,
+                global_task.completed,
+                global_task.total,
+                str(cell.fields["detail"]),
+            )
+        )
+
+    monkeypatch.setattr(progress._progress, "refresh", record_frame)
+    progress.start_cell(
+        {
+            "cell_id": "chrono__gpsaf-conditional-inr__seed-130363",
+            "planned_attempted_evaluations": 2000,
+        }
+    )
+    frames.clear()
+    assert progress.observe_yadof_line(
+        "[yadof] generation 13 (fast) [##############..............] "
+        "50/100 successful=42 errors=8 remaining=50"
+    )
+    assert frames == [(1350, 2000, 0, 2, "68% gen=14/20 ok=42 err=8")]
+    assert progress._progress.live.auto_refresh is False
+
+
 def test_noninteractive_cell_progress_converts_yadof_snapshots() -> None:
     terminal = io.StringIO()
     progress = core.CellProgress(2, stream=terminal, width=10)
@@ -177,7 +217,7 @@ def test_noninteractive_cell_progress_converts_yadof_snapshots() -> None:
     progress.advance("completed")
     progress.finish()
     output = terminal.getvalue()
-    assert "6/6 evaluations | phase=generation 1 successful=2 errors=1" in output
+    assert "6/6 evaluations | 100% gen=2/2 ok=2 err=1" in output
     assert output.rfind("[cell] first") < output.rfind("[benchmark]")
 
 
