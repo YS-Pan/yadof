@@ -8,7 +8,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from yadof.surrogate.conditional_inr import checkpoints, modeling
+from yadof.surrogate.conditional_inr import checkpoints, modeling, runtime
 from yadof.optimize.gpsaf.records import CandidateRecord
 from yadof.optimize.gpsaf.phases import predict_records
 from yadof.surrogate.conditional_inr.types import (
@@ -35,6 +35,82 @@ def test_field_macro_loss_is_invariant_to_slot_duplication() -> None:
     )
 
     assert float(duplicated) == pytest.approx(float(base))
+
+
+def test_target_scaler_uses_standard_scores_and_allows_extrapolation() -> None:
+    values = np.asarray(
+        [
+            [0.0, 10.0],
+            [2.0, 10.0 + 1.0e-8],
+            [4.0, 10.0 + 2.0e-8],
+        ],
+        dtype=np.float64,
+    )
+
+    scaler = runtime._fit_scaler(values, scale_floor=0.25)
+    transformed = scaler.transform(values)
+
+    np.testing.assert_allclose(scaler.mean, [2.0, 10.0 + 1.0e-8])
+    np.testing.assert_allclose(scaler.scale, [np.sqrt(8.0 / 3.0), 0.25])
+    np.testing.assert_allclose(np.mean(transformed, axis=0), [0.0, 0.0], atol=1.0e-6)
+    np.testing.assert_allclose(scaler.inverse(transformed), values, atol=1.0e-7)
+    assert scaler.inverse(np.asarray([[2.0, 0.0]], dtype=np.float32))[0, 0] > 4.0
+
+
+def test_conditional_inr_centers_inputs_and_has_unbounded_linear_output() -> None:
+    config = modeling.INRTrainConfig(
+        hidden_dim=8,
+        hidden_layers=1,
+        x_latent_dim=4,
+        field_emb_dim=2,
+        coord_fourier_features=2,
+    )
+    model = modeling.build_inr_model(3, 1, config)
+    encoder_inputs: list[torch.Tensor] = []
+    hook = model.x_encoder.register_forward_pre_hook(
+        lambda _module, args: encoder_inputs.append(args[0].detach().clone())
+    )
+    try:
+        model.encode_x(torch.tensor([[0.0, 0.5, 1.0]], dtype=torch.float32))
+    finally:
+        hook.remove()
+    torch.testing.assert_close(
+        encoder_inputs[0],
+        torch.tensor([[-1.0, 0.0, 1.0]], dtype=torch.float32),
+    )
+
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.zero_()
+        output_layer = model.decoder.net[-1]
+        assert isinstance(output_layer, torch.nn.Linear)
+        output_layer.bias.fill_(2.0)
+    prediction = model(
+        torch.full((1, 3), 0.5, dtype=torch.float32),
+        torch.zeros((1, 2, 3), dtype=torch.float32),
+        torch.zeros((1, 2), dtype=torch.long),
+    )
+    torch.testing.assert_close(prediction, torch.full((1, 2), 2.0))
+
+
+def test_conditional_inr_rejects_incompatible_bounded_output_artifacts(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "inr_meta.json").write_text(
+        json.dumps(
+            {
+                "model": "conditional_inr_rawdata_deep_ensemble",
+                "input_dim": 1,
+                "n_fields": 1,
+                "member_count": 1,
+                "train_cfg": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="architecture version 0"):
+        modeling.load_inr_artifacts(tmp_path, torch.device("cpu"))
 
 
 def test_field_balanced_query_sampling_is_seeded_balanced_and_rotating() -> None:

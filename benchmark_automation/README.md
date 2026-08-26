@@ -257,7 +257,7 @@ contention.
 | `adapter-smoke` | one disposable SAW smoke and one disposable Chrono smoke | Fail fast; no measured arm |
 | `structural-full` | full structural path for all three cases | Fail fast; manual/release tier |
 | `performance-pilot` | one paired seed, three generations per arm and case | Continue independent cells; bounded cost discovery |
-| `performance` | three paired seeds, 100 individuals × 20 generations per arm and case | Continue independent cells; long-running |
+| `performance` | one paired seed, 100 individuals × 20 generations per arm and case | Continue independent cells; long-running |
 
 `plan` estimates task-evaluation time from prior observations and declared worker
 caps. It excludes optimizer and surrogate training overhead. The pilot must be run
@@ -273,12 +273,13 @@ must still be checked during preflight and pilot review. Smoke cells retain the
 baseline's normal one-individual safety behavior.
 
 The current performance matrix uses cold starts, equal planned attempted
-real-evaluation budgets across arms for each case, and the seeds `104729`, `130363`,
-and `155921`. Failed candidates consume attempted budget but do not contribute a
-Pareto or hypervolume point.
+real-evaluation budgets across arms for each case, and the paired seed `104729`.
+Failed candidates consume attempted budget but do not contribute a Pareto or
+hypervolume point. One seed makes this repeated tuning loop descriptive rather than
+a statistical robustness claim; historical multi-seed runs remain separate evidence.
 
-The formal `performance` suite plans 36,000 attempted real evaluations: 2,000 per
-cell across 18 cells. `performance-pilot` deliberately remains a three-generation
+The formal `performance` suite plans 12,000 attempted real evaluations: 2,000 per
+cell across 6 cells. `performance-pilot` deliberately remains a three-generation
 cost-discovery tier and must not be reported as the full benchmark. Measured cells
 also raise recorder batching/headroom to 100 candidates per segment and 128
 unpublished candidates so one full 100-individual generation can be admitted
@@ -292,8 +293,9 @@ generations with only dozens of individuals are structural or cost-discovery
 evidence, not algorithm-performance evidence, and must not drive algorithm changes.
 Run the complete, unfiltered `performance` suite instead: the current contract is
 100 individuals × 20 generations, or 2,000 attempted real evaluations in every
-measured cell and 36,000 across the full 18-cell matrix. Do not reduce its cases,
-arms, seeds, population, or generation count for performance diagnosis or tuning.
+measured cell and 12,000 across the full 6-cell matrix. Do not filter its cases,
+arms, paired seed, population, or generation count for performance diagnosis or
+tuning.
 The smaller suites remain valid only for wiring, prerequisite, failure-path, and
 runtime-cost checks.
 

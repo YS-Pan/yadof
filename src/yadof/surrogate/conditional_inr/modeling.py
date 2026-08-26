@@ -13,6 +13,8 @@ import torch.nn.functional as F
 
 MEMBER_SEED_STRIDE = 1009
 BOOTSTRAP_MIN_SAMPLES_PER_INPUT = 2
+MODEL_ARCHITECTURE_VERSION = 2
+MODEL_NAME = "conditional_inr_rawdata_deep_ensemble"
 
 
 @dataclass(frozen=True)
@@ -93,9 +95,14 @@ class ConditionalRawDataINR(nn.Module):
         coord_dim = 3 + 2 * int(cfg.coord_fourier_features)
         decoder_in = int(cfg.x_latent_dim) + coord_dim + int(cfg.field_emb_dim)
         self.decoder = MLP(decoder_in, cfg.hidden_dim, cfg.hidden_layers, 1)
+        output_layer = self.decoder.net[-1]
+        if not isinstance(output_layer, nn.Linear):
+            raise TypeError("conditional INR decoder must end with a linear layer")
+        nn.init.normal_(output_layer.weight, mean=0.0, std=1.0e-3)
+        nn.init.zeros_(output_layer.bias)
 
     def encode_x(self, x: torch.Tensor) -> torch.Tensor:
-        return self.x_encoder(x)
+        return self.x_encoder(2.0 * x - 1.0)
 
     def decode(self, z: torch.Tensor, coords: torch.Tensor, field_ids: torch.Tensor) -> torch.Tensor:
         batch_size, n_queries, _coord_width = coords.shape
@@ -104,7 +111,7 @@ class ConditionalRawDataINR(nn.Module):
         field_feat = self.field_emb(field_ids.reshape(-1)).reshape(batch_size, n_queries, -1)
         hidden = torch.cat((z_expanded, coord_feat, field_feat), dim=-1)
         values = self.decoder(hidden.reshape(batch_size * n_queries, -1)).reshape(batch_size, n_queries)
-        return torch.sigmoid(values)
+        return values
 
     def forward(self, x: torch.Tensor, coords: torch.Tensor, field_ids: torch.Tensor) -> torch.Tensor:
         return self.decode(self.encode_x(x), coords, field_ids)
@@ -151,7 +158,8 @@ def save_inr_artifacts(
         stale.unlink()
 
     meta = {
-        "model": "conditional_inr_rawdata_deep_ensemble",
+        "model": MODEL_NAME,
+        "architecture_version": MODEL_ARCHITECTURE_VERSION,
         "input_dim": int(input_dim),
         "n_fields": int(n_fields),
         "member_count": int(len(members)),
@@ -169,6 +177,13 @@ def save_inr_artifacts(
 def load_inr_artifacts(artifact_dir: Path, device: torch.device):
     artifact_dir = Path(artifact_dir)
     meta = json.loads((artifact_dir / "inr_meta.json").read_text(encoding="utf-8"))
+    architecture_version = int(meta.get("architecture_version", 0))
+    if architecture_version != MODEL_ARCHITECTURE_VERSION:
+        raise ValueError(
+            "conditional INR artifact architecture version "
+            f"{architecture_version} is incompatible with expected "
+            f"version {MODEL_ARCHITECTURE_VERSION}"
+        )
     input_dim = _positive_int("input_dim", meta["input_dim"])
     n_fields = _positive_int("n_fields", meta["n_fields"])
     train_cfg = INRTrainConfig(**dict(meta["train_cfg"]))
@@ -574,7 +589,10 @@ def fit_deep_ensemble_conditional_inr(
     model = members[0] if len(members) == 1 else DeepEnsembleINR(members).to(device)
     model.eval()
     history = {
-        "model": "conditional_inr_rawdata_deep_ensemble",
+        "model": MODEL_NAME,
+        "architecture_version": MODEL_ARCHITECTURE_VERSION,
+        "normalized_input_domain": "[-1, 1]",
+        "decoder_output": "linear_standard_score",
         "member_count": int(member_count),
         "member_seeds": [int(value) for value in member_seeds],
         "epochs": int(train_cfg.epochs),

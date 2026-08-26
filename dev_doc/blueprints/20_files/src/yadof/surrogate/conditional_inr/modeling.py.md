@@ -18,6 +18,9 @@
 ## Non-Obvious Techniques
 - Modeling owns tensors and accelerator details, while runtime owns rawData
   reconstruction, checkpoint publication, and task cost calculation.
+- Normalize design inputs from `[0, 1]` to `[-1, 1]`, predict unbounded per-query
+  standard scores through a near-zero-initialized linear output layer, and persist
+  an explicit architecture version so old bounded-output weights cannot cross-load.
 - Field-balanced query sampling uses one seeded permutation per field and advances
   a deterministic cursor across training steps, completing coordinate coverage
   before repeating a field's query positions.

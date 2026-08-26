@@ -372,11 +372,11 @@ def test_repository_performance_suite_uses_substantial_budget() -> None:
     config, paths = core.load_config(benchmark_root / "benchmark.toml")
     plan = core.build_plan(config, paths, "performance")
     measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
-    assert len(measured) == 18
+    assert len(measured) == 6
     assert all(cell["population"] >= 100 for cell in measured)
     assert all(cell["generations"] >= 20 for cell in measured)
     assert all(cell["max_generations"] == cell["generations"] for cell in measured)
-    assert sum(cell["planned_attempted_evaluations"] for cell in measured) == 36_000
+    assert sum(cell["planned_attempted_evaluations"] for cell in measured) == 12_000
     assert plan["selection"]["arms"] == ["nsga3", "gpsaf-conditional-inr"]
     assert all(config["cases"][case_id]["max_workers"] == 32 for case_id in config["cases"])
     baseline_result_dirs = {

@@ -45,7 +45,7 @@ class ConditionalINRComponent:
         )
         return {
             "component": "conditional-inr",
-            "component_version": 1,
+            "component_version": 2,
             "backend_distribution": "torch",
             "backend_version": metadata.version("torch"),
             "training_policy": "real-field-balanced",

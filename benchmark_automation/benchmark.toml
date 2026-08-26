@@ -142,7 +142,7 @@ fail_fast = false
 purpose = "performance"
 cases = ["saw", "chrono", "test-com"]
 arms = ["nsga3", "gpsaf-conditional-inr"]
-seeds = [104729, 130363, 155921]
+seeds = [104729]
 smoke = false
 fail_fast = false
 

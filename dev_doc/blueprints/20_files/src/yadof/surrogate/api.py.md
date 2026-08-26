@@ -19,6 +19,8 @@
 
 ## Non-Obvious Techniques
 - GPSAF calls the injected component only; it does not import concrete surrogate runtime.
+- The component semantic version changes whenever architecture/scaler semantics
+  would make retained weights unsafe to reuse.
 - Parent import preloads only the empty private-package marker before rebinding the
   same-named public factory, preserving both lazy Torch loading and callable API
   stability.

@@ -27,7 +27,11 @@ Training bundles come from the active campaign session when one exists, so final
 segments and accepted unpublished current rows share one validated view. Outside a
 campaign they come from tolerant public recorded-data queries. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
-constant or near-constant fields. Training targets are only recorded real rows or
+constant or near-constant fields. Each query position is centered by its recorded
+mean and divided by its recorded standard deviation with a configured floor.
+Normalized design inputs are centered to `[-1, 1]`, and the conditional decoder has
+an unbounded linear output in standard-score space so useful rawData extrapolation
+is not clipped to observed extrema. Training targets are only recorded real rows or
 seeded bootstrap draws from them. Query minibatches are seeded, balanced across
 active fields, and sampled without replacement inside each field. Each field owns
 one seeded coordinate ordering; successive steps continue from the previous cursor
@@ -82,6 +86,8 @@ failed root/commit write cannot expose a partial model, and switching away and b
 can recover the retained compatible publication. Incompatible and interrupted
 artifacts remain retained but inactive. Current `submit/calc_cost.py` is reapplied to
 predicted rawData after recovery, so cost policy is never frozen in a checkpoint.
+The model artifact records an explicit architecture version; incompatible bounded-
+output artifacts cold-train instead of being interpreted with the linear decoder.
 
 ## Invariants
 

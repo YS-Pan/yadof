@@ -10,6 +10,8 @@
   convenience pointer, then atomically write a unique namespaced manifest as the
   publication commit record.
 - Write `model_aux.npz` with query tables, field ids, sample count, and target scaling.
+- Retain target mean/standard-deviation arrays as float64 and rely on the model
+  artifact architecture version to reject incompatible bounded-output checkpoints.
 - Convert `RawDataSchema` and train config into JSON-safe summaries.
 
 ## I/O Format

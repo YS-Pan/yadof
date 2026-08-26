@@ -288,11 +288,11 @@ def _write_auxiliary_artifact(
     if state.scaler is not None:
         arrays["target_mean"] = np.ascontiguousarray(
             state.scaler.mean,
-            dtype=np.float32,
+            dtype=np.float64,
         )
         arrays["target_scale"] = np.ascontiguousarray(
             state.scaler.scale,
-            dtype=np.float32,
+            dtype=np.float64,
         )
     np.savez_compressed(staging_dir / state.model_path.name, **arrays)
 
@@ -335,7 +335,8 @@ def _checkpoint_payload(
         "train_history": state.train_history,
         "note": (
             "The real-field-balanced conditional INR predicts full rawData; "
-            "current costs are derived through submit/calc_cost.py. "
+            "its linear decoder predicts per-query standard scores and current "
+            "costs are derived through submit/calc_cost.py. "
             "Ensemble spread is diagnostic, not calibrated confidence."
         ),
     }

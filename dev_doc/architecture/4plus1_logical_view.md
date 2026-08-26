@@ -78,7 +78,10 @@ Optimizer and surrogate are consumers of the same evidence. The surrogate predic
 rawData before cost, constructs its modeled query table from compatible recorded
 numeric rawData, reconstructs full public rawData, and calls current cost logic.
 Every modeled rawData field receives equal macro loss weight and task code cannot
-change training weights. The surrogate never establishes a parallel
+change training weights. Per-query rawData targets use recorded mean/standard-
+deviation scaling and a linear decoder; normalized design inputs are centered at
+zero, and predictions may extrapolate beyond the recorded rawData envelope before
+inverse scaling. The surrogate never establishes a parallel
 `variables -> cost` truth path. Its schedule and checkpoints are keyed by effective
 workspace paths plus active strategy/component identities; source hashes remain
 separate provenance.

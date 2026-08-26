@@ -31,6 +31,15 @@ every field the same number of appearances, yadof extends that member's effectiv
 epoch count just enough to complete one full rotation cycle and records both
 configured and effective counts.
 
+For each modeled rawData query position, conditional INR centers recorded values at
+their mean and scales them by their recorded standard deviation, with
+`SURROGATE_TARGET_SCALE_FLOOR` protecting near-constant positions. Normalized design
+variables are centered from `[0, 1]` to `[-1, 1]` inside the network. The decoder is
+linear in this standard-score space, so it can predict beyond the minimum and maximum
+already observed instead of saturating at a historical min/max envelope. Predicted
+standard scores are always inverse-scaled back to rawData before current task cost is
+calculated.
+
 Advanced history-recorder settings are
 `HISTORY_SEGMENT_MAX_CANDIDATES` (default 16),
 `HISTORY_SEGMENT_TARGET_BYTES` (16 MiB),

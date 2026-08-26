@@ -105,14 +105,15 @@ Keeping the CLI thin makes core behavior directly testable.
   checkpoint namespace; measured cells never share a smoke workspace.
 - Performance arms for a paired case use equal planned attempted-real-evaluation
   budgets.
-- The formal performance tier uses 100 individuals for 20 generations in every
-  measured cell. Its runner-owned measured-cell overrides provide recorder
-  candidate headroom for at least one complete generation without editing baseline
-  baselines; the pilot remains a separate small cost-discovery tier.
+- The formal performance tier uses one paired seed and 100 individuals for 20
+  generations in every measured cell. Its runner-owned measured-cell overrides
+  provide recorder candidate headroom for at least one complete generation without
+  editing baselines; the pilot remains a separate small cost-discovery tier.
 - Surrogate/optimizer performance evaluation and result-driven algorithm tuning use
   the complete unfiltered performance matrix. Few-generation or dozens-of-individual
   structural/pilot runs are prohibited for that purpose and remain limited to
-  wiring, prerequisite, failure-path, and runtime-cost evidence.
+  wiring, prerequisite, failure-path, and runtime-cost evidence. The one-seed
+  matrix is descriptive tuning evidence, not a statistical robustness claim.
 - Measured cells deliberately use a 32-worker fast cap with fast resource
   autodetection disabled, allowing CPU oversubscription beyond the physical-core
   count. This is a benchmark experiment setting; preflight/pilot review still owns

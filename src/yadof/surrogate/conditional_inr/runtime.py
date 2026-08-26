@@ -43,13 +43,11 @@ from .types import (
 
 from .modeling import (
     INRTrainConfig,
+    MODEL_NAME,
     fit_deep_ensemble_conditional_inr,
     load_inr_artifacts,
     predict_conditional_inr_members,
 )
-
-
-MODEL_NAME = "conditional_inr_rawdata_deep_ensemble"
 
 
 StateKey = tuple[str, str, str, str, str, str]
@@ -673,13 +671,13 @@ def _fit_scaler(y: np.ndarray, *, scale_floor: float = 1e-6) -> TargetScaler:
     y = np.ascontiguousarray(y, dtype=np.float64)
     if y.ndim != 2:
         raise ValueError("target scaler expects Y[N,Q]")
-    mean = np.min(y, axis=0)
-    scale = np.max(y, axis=0) - mean
+    mean = np.mean(y, axis=0, dtype=np.float64)
+    scale = np.std(y, axis=0, dtype=np.float64)
     floor = float(scale_floor)
     scale = np.maximum(scale, floor)
     return TargetScaler(
-        mean=np.ascontiguousarray(mean, dtype=np.float32),
-        scale=np.ascontiguousarray(scale, dtype=np.float32),
+        mean=np.ascontiguousarray(mean, dtype=np.float64),
+        scale=np.ascontiguousarray(scale, dtype=np.float64),
     )
 
 
@@ -846,6 +844,7 @@ def train_with_config(
         history["raw_sample_count_before_filter"] = int(raw_sample_count)
         history["dropped_nonfinite_samples"] = int(dropped_nonfinite_samples)
         history["nonfinite_drop_threshold"] = nonfinite_threshold
+        history["target_scaler"] = "per_query_mean_standard_deviation"
     else:
         staged_artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1102,8 +1101,8 @@ def _recover_state_from_checkpoint(
         artifact_sample_count = int(
             np.asarray(auxiliary["training_sample_count"]).item()
         )
-        target_mean = np.asarray(auxiliary["target_mean"], dtype=np.float32)
-        target_scale = np.asarray(auxiliary["target_scale"], dtype=np.float32)
+        target_mean = np.asarray(auxiliary["target_mean"], dtype=np.float64)
+        target_scale = np.asarray(auxiliary["target_scale"], dtype=np.float64)
         coord_table = np.asarray(auxiliary["coord_table"], dtype=np.float32)
         field_ids = np.asarray(auxiliary["field_ids"], dtype=np.int64)
 
@@ -1122,8 +1121,8 @@ def _recover_state_from_checkpoint(
         raise ValueError("checkpoint does not describe a trainable surrogate state")
     device = _select_device(config)
     scaler = TargetScaler(
-        mean=np.ascontiguousarray(target_mean, dtype=np.float32),
-        scale=np.ascontiguousarray(target_scale, dtype=np.float32),
+        mean=np.ascontiguousarray(target_mean, dtype=np.float64),
+        scale=np.ascontiguousarray(target_scale, dtype=np.float64),
     )
     meta_path = artifact_dir / "inr_meta.json"
     if not meta_path.is_file():
