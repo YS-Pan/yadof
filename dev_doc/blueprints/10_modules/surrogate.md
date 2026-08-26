@@ -29,8 +29,10 @@ campaign they come from tolerant public recorded-data queries. RawData fields ar
 into query-aligned numeric slots with schema/axis identity; target scaling handles
 constant or near-constant fields. Training targets are only recorded real rows or
 seeded bootstrap draws from them. Query minibatches are seeded, balanced across
-active fields, and sampled without replacement inside each field. Pointwise Smooth
-L1 is averaged within each field and then macro-averaged equally across fields.
+active fields, and sampled without replacement inside each field. Each field owns
+one seeded coordinate ordering; successive steps continue from the previous cursor
+so all available coordinates are covered before that ordering repeats. Pointwise
+Smooth L1 is averaged within each field and then macro-averaged equally across fields.
 Task-owned weights and synthetic target paths do not exist. Public prediction
 reconstructs the full compatible field.
 When the configured finite training schedule is too short to give every active field
@@ -48,8 +50,12 @@ full-grid reconstruction, optimizer prediction, and audit behavior remain
 unchanged.
 
 Ensemble members may bootstrap real rows and use configured latent, embedding,
-Fourier-feature, hidden-layer, batch, optimizer, and non-finite policies. Member
-spread is exposed as an uncalibrated diagnostic and is not durable truth. The live
+Fourier-feature, hidden-layer, batch, optimizer, and non-finite policies. A sparse
+history with fewer than two real rows per normalized input dimension keeps every
+row visible to every member even when bootstrap is requested; independent
+initialization retains ensemble diversity until ordinary resampling no longer
+throws away scarce design support. Member spread is exposed as an uncalibrated
+diagnostic and is not durable truth. The live
 GPSAF survival path selects from mean predicted costs only; member min/max spread
 does not affect selected candidates.
 
@@ -59,7 +65,8 @@ Runtime state and training schedules are keyed by effective workspace/checkpoint
 paths plus active strategy and `conditional-inr` component identities. At most one
 background training task runs for the active workspace strategy. Real jobs are
 submitted first, then training may use the waiting interval; maximum generation lag
-bounds stale models. An asynchronous trainer receives an owned task snapshot and
+bounds stale models, with a package default of one generation. An asynchronous
+trainer receives an owned task snapshot and
 training bundle rather than reopening mutable task files. Switching strategies
 waits and releases memory while retaining disk state; explicit history clearing
 removes all derived namespaces separately.

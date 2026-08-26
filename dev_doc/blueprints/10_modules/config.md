@@ -20,6 +20,10 @@ Task variable shape, objective definitions, simulator/project names, frequencies
 credentials, and adapter-specific scientific settings remain in workspace task files
 or deliberately supported worker environment entries.
 
+The default conditional-INR freshness bound is one generation. A workspace may
+set another non-negative `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` when its measured
+evaluation/training timing favors throughput over newer surrogate evidence.
+
 Local evaluation defaults to a worker cap of eight, resource autodetection enabled,
 and a 15% host reserve. The cap remains a positive integer. Autodetection and reserve
 settings are independently validated bool/fraction values. Existing HTCondor

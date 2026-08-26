@@ -12,6 +12,7 @@ import torch.nn.functional as F
 
 
 MEMBER_SEED_STRIDE = 1009
+BOOTSTRAP_MIN_SAMPLES_PER_INPUT = 2
 
 
 @dataclass(frozen=True)
@@ -263,7 +264,7 @@ def _field_balanced_query_indices(
     seed: int,
     step_index: int,
 ) -> np.ndarray | None:
-    """Select a seeded, field-balanced, without-replacement query subset."""
+    """Select a seeded, field-balanced query subset with rotating coverage."""
 
     fields = np.asarray(field_ids, dtype=np.int64).reshape(-1)
     n_queries = _positive_int("n_queries", fields.size)
@@ -283,18 +284,17 @@ def _field_balanced_query_indices(
         int(field_id): np.flatnonzero(fields == field_id).astype(np.int64, copy=False)
         for field_id in unique_fields
     }
-    counts = {int(field_id): 0 for field_id in unique_fields}
+    step = max(0, int(step_index))
 
-    if budget < field_count:
-        start = (max(0, int(step_index)) * budget) % field_count
-        selected_fields = [
-            int(base_order[(start + offset) % field_count])
-            for offset in range(budget)
-        ]
-        for field_id in selected_fields:
-            counts[field_id] = 1
-    else:
-        start = max(0, int(step_index)) % field_count
+    def counts_for(selected_step: int) -> dict[int, int]:
+        counts = {int(field_id): 0 for field_id in unique_fields}
+        if budget < field_count:
+            start = (int(selected_step) * budget) % field_count
+            for offset in range(budget):
+                counts[int(base_order[(start + offset) % field_count])] = 1
+            return counts
+
+        start = int(selected_step) % field_count
         rotated = [
             int(base_order[(start + offset) % field_count])
             for offset in range(field_count)
@@ -319,16 +319,36 @@ def _field_balanced_query_indices(
                 remaining -= increment
                 if remaining == 0:
                     break
+        return counts
 
-    rng = np.random.default_rng(
-        int(seed) + (max(0, int(step_index)) + 1) * 1_000_003
+    counts = counts_for(step)
+    period = (
+        field_count // math.gcd(field_count, budget)
+        if budget < field_count
+        else field_count
     )
+    period_counts = [counts_for(period_step) for period_step in range(period)]
+    complete_periods, partial_steps = divmod(step, period)
     selected: list[np.ndarray] = []
     for field_id in base_order:
-        count = counts[int(field_id)]
+        selected_field = int(field_id)
+        count = counts[selected_field]
         if count <= 0:
             continue
-        selected.append(rng.permutation(groups[int(field_id)])[:count])
+        group = groups[selected_field]
+        prior_count = complete_periods * sum(
+            item[selected_field] for item in period_counts
+        ) + sum(
+            period_counts[period_step][selected_field]
+            for period_step in range(partial_steps)
+        )
+        field_order = np.random.default_rng(
+            int(seed) + (selected_field + 1) * 1_000_003
+        ).permutation(group)
+        positions = (
+            prior_count + np.arange(count, dtype=np.int64)
+        ) % int(group.size)
+        selected.append(field_order[positions])
     if not selected:
         raise ValueError("field-balanced query sampling produced no queries")
     output = np.concatenate(selected).astype(np.int64, copy=False)
@@ -482,6 +502,17 @@ def fit_deep_ensemble_conditional_inr(
     active_field_count = int(np.unique(field_ids).size)
     sampled_query_count = int(min(Y_train.shape[1], train_cfg.train_query_sample_count))
     train_query_count_per_step = sampled_query_count
+    # Sparse high-dimensional histories cannot afford the roughly 37% unique-row
+    # loss of an ordinary size-N bootstrap. Independent initialization still
+    # diversifies the ensemble until there are enough rows to resample safely.
+    bootstrap_min_sample_count = max(
+        4,
+        BOOTSTRAP_MIN_SAMPLES_PER_INPUT * input_dim,
+    )
+    bootstrap_applied = bool(
+        train_cfg.bootstrap_members
+        and X_train.shape[0] >= bootstrap_min_sample_count
+    )
 
     if hasattr(torch, "set_float32_matmul_precision"):
         torch.set_float32_matmul_precision("high")
@@ -504,7 +535,7 @@ def fit_deep_ensemble_conditional_inr(
         visible_x = X_train
         visible_y = Y_train
         unique_samples = int(X_train.shape[0])
-        if bool(train_cfg.bootstrap_members) and X_train.shape[0] >= 4:
+        if bootstrap_applied:
             bootstrap_idx = _bootstrap_indices(
                 X_train.shape[0],
                 train_cfg.bootstrap_fraction,
@@ -560,6 +591,9 @@ def fit_deep_ensemble_conditional_inr(
         "active_field_count": int(active_field_count),
         "train_query_subsampled": bool(sampled_query_count < Y_train.shape[1]),
         "field_rotation_required": bool(sampled_query_count < active_field_count),
+        "bootstrap_requested": bool(train_cfg.bootstrap_members),
+        "bootstrap_applied": bool(bootstrap_applied),
+        "bootstrap_min_sample_count": int(bootstrap_min_sample_count),
         "training_policy": "real_field_balanced",
         "device": str(device),
         "members": records,

@@ -94,6 +94,25 @@ def test_field_balanced_query_sampling_is_seeded_balanced_and_rotating() -> None
         minlength=4,
     ).tolist() == [1, 1, 1, 1]
 
+    coverage_fields = np.repeat(np.arange(2, dtype=np.int64), 8)
+    coverage_steps = [
+        modeling._field_balanced_query_indices(
+            field_ids=coverage_fields,
+            sample_count=4,
+            seed=123,
+            step_index=step,
+        )
+        for step in range(4)
+    ]
+    for field_id in range(2):
+        seen = [
+            int(index)
+            for indices in coverage_steps
+            for index in indices
+            if int(coverage_fields[index]) == field_id
+        ]
+        assert len(seen) == len(set(seen)) == 8
+
 
 def test_trainer_extends_short_runs_until_every_field_is_seen(
     monkeypatch: pytest.MonkeyPatch,
@@ -199,6 +218,52 @@ def test_bootstrap_members_only_receive_rows_from_real_training_evidence(
             tuple(x_row.tolist() + y_row.tolist()) in real_rows
             for x_row, y_row in zip(visible_x, visible_y)
         )
+
+
+def test_sparse_high_dimensional_training_preserves_all_real_rows_per_member(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[np.ndarray] = []
+
+    def capture_member(_model, **kwargs):
+        captured.append(kwargs["X_train"].copy())
+        return {
+            "loss": 0.0,
+            "configured_epochs": 1.0,
+            "effective_epochs": 1.0,
+            "effective_training_steps": 1.0,
+            "field_coverage_steps": 1.0,
+        }
+
+    monkeypatch.setattr(modeling, "_train_one_member", capture_member)
+    x_train = np.arange(24, dtype=np.float32).reshape(4, 6)
+    config = modeling.INRTrainConfig(
+        ensemble_size=2,
+        bootstrap_members=True,
+        hidden_dim=8,
+        hidden_layers=1,
+        x_latent_dim=4,
+        field_emb_dim=2,
+        coord_fourier_features=2,
+    )
+
+    _model, history = modeling.fit_deep_ensemble_conditional_inr(
+        input_dim=6,
+        n_fields=1,
+        X_train=x_train,
+        Y_train=np.arange(8, dtype=np.float32).reshape(4, 2),
+        coord_table=np.zeros((2, 3), dtype=np.float32),
+        field_ids=np.zeros((2,), dtype=np.int64),
+        device=torch.device("cpu"),
+        train_cfg=config,
+        seed=41,
+    )
+
+    assert history["bootstrap_requested"] is True
+    assert history["bootstrap_applied"] is False
+    assert history["bootstrap_min_sample_count"] == 12
+    assert len(captured) == 2
+    assert all(np.array_equal(visible_x, x_train) for visible_x in captured)
 
 
 def test_optimizer_records_discard_member_spread() -> None:

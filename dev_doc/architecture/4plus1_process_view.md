@@ -104,6 +104,9 @@ Surrogate training has at most one background task per workspace. Scheduler and
 model state maps are workspace-keyed and protected by locks. Clearing one workspace
 waits/resets only its schedule/state. Training consumes a captured campaign-hot
 history bundle, so pending or same-generation evidence need not wait for durability.
+The default freshness bound is one generation: candidate selection waits when the
+latest usable state would be older, while a workspace may choose another
+non-negative lag when its real-evaluation/training timing warrants it.
 
 One writer belongs to one campaign, not to a backend or generation. Its candidate
 and byte reservations include queued and in-flight envelopes. It flushes at

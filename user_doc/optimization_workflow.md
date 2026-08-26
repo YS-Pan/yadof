@@ -266,6 +266,17 @@ strategy/component namespace. Recorded real evidence and inactive checkpoints st
 on disk. Returning to a compatible old strategy may recover its state; switching
 strategies never requires `history clear`.
 
+Conditional INR starts training from completed real evidence after evaluation is
+submitted. The package default permits the model used for selection to lag by at
+most one generation; when necessary, selection waits for pending training rather
+than using an older model. Set `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` to a
+non-negative integer only when the task's evaluation/training timing justifies a
+different throughput-versus-freshness tradeoff. Query minibatches rotate through
+one seeded ordering per rawData field so scarce coordinates are covered before
+they repeat. When fewer than two real samples per input variable are available,
+ensemble members retain every row even if bootstrap is enabled; independent model
+initialization supplies early diversity without discarding scarce design support.
+
 ## 5. Validate and smoke
 
 ```powershell

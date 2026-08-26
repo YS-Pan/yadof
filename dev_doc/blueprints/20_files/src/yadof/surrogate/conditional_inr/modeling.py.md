@@ -18,6 +18,12 @@
 ## Non-Obvious Techniques
 - Modeling owns tensors and accelerator details, while runtime owns rawData
   reconstruction, checkpoint publication, and task cost calculation.
+- Field-balanced query sampling uses one seeded permutation per field and advances
+  a deterministic cursor across training steps, completing coordinate coverage
+  before repeating a field's query positions.
+- Requested bootstrap resampling is deferred while the real sample count is below
+  twice the input dimension; every member sees all scarce rows and remains diverse
+  through its independent initialization seed.
 
 ## Mutability Profile
 - Network and training internals may evolve when checkpoint compatibility is

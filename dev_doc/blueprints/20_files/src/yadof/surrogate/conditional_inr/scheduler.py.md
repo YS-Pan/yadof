@@ -7,6 +7,8 @@
 - Start at most one background training task at a time.
 - Wait for pending training when the optimizer would otherwise use a too-stale model.
 - Enforce `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`.
+- Use one generation as the package-default maximum lag while preserving a
+  workspace-configurable non-negative bound.
 - Track pending and latest completed training generations.
 - Record failure metadata when blocking or background training fails.
 - `deactivate_workspace()` waits for the active strategy task, removes scheduler
