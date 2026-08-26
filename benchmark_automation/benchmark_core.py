@@ -17,6 +17,7 @@ import json
 import math
 import os
 import platform
+import queue
 import re
 import shutil
 import statistics
@@ -320,9 +321,15 @@ class CellProgress:
         snapshot = _parse_yadof_progress(line)
         if snapshot is None:
             return False
+        self.observe_yadof_snapshot(snapshot)
+        return True
+
+    def observe_yadof_snapshot(self, snapshot: Mapping[str, Any]) -> None:
+        """Apply one already parsed yadof snapshot to the active cell task."""
+
         with self._lock:
             if self.current is None:
-                return True
+                return
             total = int(snapshot["total"])
             generation = snapshot["generation"]
             absolute_finished = int(snapshot["absolute_finished"])
@@ -351,7 +358,6 @@ class CellProgress:
                 if bucket > self._noninteractive_bucket:
                     self._noninteractive_bucket = bucket
                     self._write_snapshot_locked(include_cell=True)
-        return True
 
     def write_above(self, text: str, *, console: Any | None = None) -> None:
         target = self.stream if console is None else console
@@ -1717,6 +1723,7 @@ def _stream_pipe(
     console: Any | None,
     prefix: str,
     progress: CellProgress | None = None,
+    display_events: queue.Queue[tuple[str, Any, Any | None, str]] | None = None,
 ) -> None:
     with output.open("x", encoding="utf-8", errors="replace", newline="\n") as target:
         while True:
@@ -1726,15 +1733,52 @@ def _stream_pipe(
             line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
             target.write(line)
             target.flush()
-            is_progress = (
-                progress.observe_yadof_line(line) if progress is not None else False
-            )
-            if console is not None and not is_progress:
+            snapshot = _parse_yadof_progress(line) if progress is not None else None
+            is_progress = snapshot is not None
+            if display_events is not None and (is_progress or console is not None):
+                display_events.put(
+                    (
+                        "progress" if is_progress else "output",
+                        snapshot if is_progress else line,
+                        console,
+                        prefix,
+                    )
+                )
+            elif is_progress:
+                progress.observe_yadof_snapshot(snapshot)
+            elif console is not None:
                 if progress is None:
                     console.write(f"{prefix}{line}")
                     console.flush()
                 else:
                     progress.write_above(f"{prefix}{line}", console=console)
+
+
+def _render_stream_events(
+    display_events: queue.Queue[tuple[str, Any, Any | None, str]],
+    progress: CellProgress | None,
+) -> None:
+    """Render queued child-stream events from the foreground owner thread."""
+
+    pending_progress: Mapping[str, Any] | None = None
+    for _ in range(4096):
+        try:
+            kind, payload, console, prefix = display_events.get_nowait()
+        except queue.Empty:
+            break
+        if kind == "progress":
+            pending_progress = payload
+        elif console is not None:
+            if pending_progress is not None and progress is not None:
+                progress.observe_yadof_snapshot(pending_progress)
+                pending_progress = None
+            if progress is None:
+                console.write(f"{prefix}{payload}")
+                console.flush()
+            else:
+                progress.write_above(f"{prefix}{payload}", console=console)
+    if pending_progress is not None and progress is not None:
+        progress.observe_yadof_snapshot(pending_progress)
 
 
 def _execute_logged(
@@ -1804,6 +1848,7 @@ def _execute_logged(
         env=child_environment,
     )
     assert process.stdout is not None and process.stderr is not None
+    display_events: queue.Queue[tuple[str, Any, Any | None, str]] = queue.Queue()
     out_thread = threading.Thread(
         target=_stream_pipe,
         args=(
@@ -1812,6 +1857,7 @@ def _execute_logged(
             sys.stdout if stream_output else None,
             f"[{label}:out] ",
             progress,
+            display_events,
         ),
         daemon=True,
     )
@@ -1823,19 +1869,29 @@ def _execute_logged(
             sys.stderr if stream_output else None,
             f"[{label}:err] ",
             progress,
+            display_events,
         ),
         daemon=True,
     )
     out_thread.start()
     err_thread.start()
-    try:
-        returncode = process.wait(timeout=timeout_sec)
-    except subprocess.TimeoutExpired:
-        metadata["timed_out"] = True
-        process.kill()
-        returncode = process.wait()
+    deadline = started + timeout_sec
+    returncode: int | None = None
+    while returncode is None:
+        _render_stream_events(display_events, progress)
+        remaining = deadline - time.perf_counter()
+        if remaining <= 0:
+            metadata["timed_out"] = True
+            process.kill()
+            returncode = process.wait()
+            break
+        try:
+            returncode = process.wait(timeout=min(0.05, remaining))
+        except subprocess.TimeoutExpired:
+            continue
     out_thread.join()
     err_thread.join()
+    _render_stream_events(display_events, progress)
     metadata.update(
         {
             "ended_utc": utc_now(),

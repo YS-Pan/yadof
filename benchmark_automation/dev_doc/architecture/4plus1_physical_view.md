@@ -38,10 +38,11 @@ publication and append-only command logs make that safe.
 
 ## Processes and streams
 
-The foreground runner starts one yadof/postprocessor command at a time. It drains
-two child pipes on threads and writes two logs. Rich renders only in the runner's
-interactive stderr. A detached visible Windows console owns the foreground runner;
-a later inspection process is separate and read-only.
+The foreground runner starts one yadof/postprocessor command at a time. Two child-
+pipe threads write separate logs and enqueue display events. The foreground wait
+loop consumes those events and is the sole Rich/interactive-stderr owner. A
+detached visible Windows console owns the foreground runner; a later inspection
+process is separate and read-only.
 
 ## Retention
 

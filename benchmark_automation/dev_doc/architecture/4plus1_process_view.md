@@ -14,11 +14,13 @@
 ## Child stream and Rich progress
 
 Two drain threads preserve stdout/stderr independently. Every complete line is
-logged immediately. The common yadof parser consumes matching snapshots from either
-stream; non-progress output is optionally displayed above Rich. A parsed generation
-snapshot becomes `generation * population + finished`. The progress lock updates
-cell and global tasks together, then performs one refresh. A positive ratio uses
-ceiling bar fill, and small percentages retain a decimal.
+logged immediately, then a progress or optional streamed-output event is queued.
+The foreground loop that waits for the child process drains this queue at short
+intervals; it is the only thread that writes through Rich or refreshes the live
+region. The common yadof parser consumes matching snapshots from either stream. A
+parsed generation snapshot becomes `generation * population + finished`. The
+progress lock updates cell and global tasks together, then performs one refresh. A
+positive ratio uses ceiling bar fill, and small percentages retain a decimal.
 
 ## Read-only inspection and ETA
 

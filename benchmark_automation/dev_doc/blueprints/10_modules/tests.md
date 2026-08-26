@@ -11,7 +11,8 @@ simulators, performance campaigns, or collection-time model inference.
   collection, and report transformations.
 - CLI bounded output, stream routing, visible-window pause, and exit behavior.
 - Rich ordering, complete compact fields, first-evaluation visibility, GBK safety,
-  atomic refresh, and child-stream conversion.
+  atomic refresh, and actual subprocess child-stream conversion whose terminal
+  refreshes remain on the foreground owner thread.
 - ETA live-progress parsing, cohort fallbacks, confidence, terminal state, and UTC
   projections using fixed times and tiny synthetic logs.
 - Baseline postprocessor output/prefix/overwrite contracts.

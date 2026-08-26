@@ -88,11 +88,13 @@ runner-owned 32-worker oversubscribed fast setting for measured cells, runs one
 cost-view render after each measured optimization, uses Rich for an active-cell
 evaluation bar above the global cell bar with one atomic event-driven refresh and
 cumulative count/percentage/generation detail, guarantees visible positive progress
-in large cells, and keeps complete compact status fields within normal terminal
-widths. Read-only benchmark inspection derives an explicitly qualified ETA from
-completed wall times, immutable plan data, and the active command's bounded progress
-tail for later unattended agent turns. The nested benchmark `dev_doc/` mirrors the
-root current-view discipline with operator/architecture/blueprint/terminology
+in large cells, keeps every Rich refresh on the foreground runner thread while
+pipe threads only log and enqueue events, and keeps complete compact status fields
+within normal terminal widths. Read-only benchmark inspection derives an
+explicitly qualified ETA from completed wall times, immutable plan data, and the
+active command's bounded progress tail for later unattended agent turns. The
+nested benchmark `dev_doc/` mirrors the root current-view discipline with
+operator/architecture/blueprint/terminology
 contracts, split C4 and 4+1 architecture, generative blueprints, and terminology;
 root `dev_doc/` remains the exclusive owner of repository-wide toDos, obsolete
 handoffs, and change records. Attempt postprocessor

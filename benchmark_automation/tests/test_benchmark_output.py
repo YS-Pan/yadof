@@ -4,6 +4,7 @@ import datetime as dt
 import io
 import json
 import sys
+import threading
 from pathlib import Path
 
 import benchmark
@@ -308,6 +309,63 @@ def test_execute_logged_keeps_imports_from_writing_bytecode(tmp_path: Path) -> N
     )
     assert metadata["returncode"] == 0
     assert not (tmp_path / "__pycache__").exists()
+
+
+def test_execute_logged_renders_child_progress_on_foreground_thread(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    attempt_root = tmp_path / "attempt"
+    attempt_root.mkdir()
+    progress = core.CellProgress(1, stream=TtyBuffer(), width=10)
+    progress.start()
+    progress.start_cell(
+        {"cell_id": "threaded", "planned_attempted_evaluations": 2000}
+    )
+    owner_thread = threading.get_ident()
+    rendered: list[tuple[int, str]] = []
+
+    def record_refresh() -> None:
+        tasks = {task.id: task for task in progress._progress.tasks}
+        detail = str(tasks[progress._cell_task].fields["detail"])
+        rendered.append((threading.get_ident(), detail))
+
+    monkeypatch.setattr(progress._progress, "refresh", record_refresh)
+    lines = [
+        "[yadof] generation 0 (fast) [............................] "
+        "1/100 successful=1 errors=0 remaining=99",
+        "[yadof] generation 0 (fast) [##############..............] "
+        "50/100 successful=50 errors=0 remaining=50",
+        "[yadof] generation 1 (fast) [............................] "
+        "1/100 successful=1 errors=0 remaining=99",
+    ]
+    child = (
+        "import sys,time; lines="
+        + repr(lines)
+        + "; [(print(line,file=sys.stderr,flush=True),time.sleep(0.08)) "
+        "for line in lines]"
+    )
+    metadata = core._execute_logged(
+        [sys.executable, "-c", child],
+        cwd=tmp_path,
+        attempt_root=attempt_root,
+        attempt={"commands": []},
+        timeout_sec=30,
+        label="threaded-progress",
+        progress=progress,
+    )
+    progress.finish()
+
+    assert metadata["returncode"] == 0
+    details = [detail for _, detail in rendered]
+    assert any(detail.startswith("1/2000 eval | 0.1%") for detail in details)
+    assert any(detail.startswith("50/2000 eval | 2.5%") for detail in details)
+    assert any(detail.startswith("101/2000 eval | 5.0%") for detail in details)
+    assert {thread_id for thread_id, _ in rendered} == {owner_thread}
 
 
 def test_report_summary_keeps_decision_evidence_without_fingerprints() -> None:

@@ -21,6 +21,8 @@ and dependency direction rather than splitting stateful behavior arbitrarily.
 
 - Progress lines are logged even when consumed for the live display.
 - Stdout/stderr drain concurrently and remain separate on disk.
+- Drain threads enqueue terminal events; the foreground child-wait loop alone calls
+  Rich so Windows console cursor rendering never originates on a pipe thread.
 - A Rich event renders only after both cell/global tasks hold coherent state.
 - A positive large-cell count is visibly nonzero.
 - ETA reads at most the active command's bounded tail; completed-cell duration uses

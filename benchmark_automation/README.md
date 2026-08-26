@@ -148,6 +148,10 @@ decimal, so `1/2000` no longer renders as an unchanged empty `0%` bar. Count/uni
 fields are compacted into the detail instead of occupying collapsible Rich columns;
 the global row always includes full finished/total, ok, error, and skipped counts
 without a fixed 25-character detail limit.
+The stdout/stderr drain threads only preserve logs and enqueue display events; the
+foreground command-wait loop owns every Rich write and refresh. This keeps Windows
+console cursor updates on the terminal owner thread while evaluations are still
+running instead of leaving the visible row at zero until command completion.
 Every measured optimization calls the selected baseline's root `postprocess.py`
 after its final generation. SAW writes S-parameter plots/data, Chrono writes a
 trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.

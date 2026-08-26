@@ -24,6 +24,9 @@
 ## Progress rendering
 
 - `_parse_yadof_progress` is the single parser for complete piped yadof snapshots.
+- Stream-drain threads write their own append-only logs and enqueue display events;
+  they never call Rich. The foreground subprocess-wait loop drains that queue and
+  owns all terminal writes and refreshes.
 - `CellProgress` converts per-generation counts to cumulative whole-cell counts.
 - Any positive count lights at least one ASCII bar cell; values below ten percent
   retain one decimal so a 2,000-evaluation cell cannot look unchanged at `1/2000`.

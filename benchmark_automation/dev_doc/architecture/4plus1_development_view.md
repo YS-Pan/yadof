@@ -38,8 +38,9 @@ mock subprocess/public surfaces but must preserve state and output shapes.
 - Planning, identity, state, execution, progress, ETA, collection, or report changes
   update core, focused tests, affected architecture/blueprints/terminology, root
   README/AGENTS, and one root change record.
-- Terminal regressions require rendered output and child-stream coverage. Testing
-  only `Task.completed` is insufficient.
+- Terminal regressions require rendered output and an actual piped child-stream
+  test that verifies Rich refreshes occur on the foreground owner thread. Testing
+  only `Task.completed` or calling the parser synchronously is insufficient.
 - Timing fixtures use fixed UTC times and small synthetic command logs; development
   never launches a real performance run.
 - Benchmark code remains outside wheel/sdist. Tests use the matching regularly

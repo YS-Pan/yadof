@@ -90,8 +90,10 @@ hot-change contract; structural dimension changes are future work.
   evaluation bar above the bottom global cell bar in interactive terminals. Rich
   updates both task states before one event-driven refresh; any positive evaluation
   count visibly advances the ASCII bar, low percentages retain one decimal, and
-  compact rows keep complete counts/status without a fixed detail cap. Read-only
-  `inspect` exposes active progress/inactivity and a confidence-qualified ETA from
+  pipe-drain threads only log/enqueue while the foreground wait loop owns every Rich
+  refresh. Compact rows keep complete counts/status without a fixed detail cap.
+  Read-only `inspect` exposes active progress/inactivity and a confidence-qualified
+  ETA from
   immutable plan data, completed cell wall times, and the active command's bounded
   log tail so later unattended turns need not keep the original run turn alive.
   The benchmark's nested `dev_doc/` provides local operator, architecture,

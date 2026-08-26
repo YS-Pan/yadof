@@ -26,6 +26,9 @@ lists, and string-keyed objects.
 ## Non-obvious techniques
 
 - One common parser recognizes plain piped yadof progress snapshots.
+- Pipe-drain threads never render. They enqueue parsed/display events for the
+  foreground subprocess wait loop, which regularly services the queue and owns
+  every Rich refresh.
 - Cumulative progress is generation index times local total plus local completion.
 - ASCII bars use ceiling fill for positive ratios; small cumulative percentages
   retain a decimal.

@@ -30,8 +30,9 @@ JSON plus narrowly scoped stderr rendering; full evidence stays on disk.
 
 - Mutable templates become immutable run-local snapshots.
 - Resume validates frozen identity and replaces interrupted attempts.
-- Rich owns cursor movement; one parser feeds both live rendering and ETA log-tail
-  interpretation.
+- Rich owns cursor movement on the foreground runner thread; pipe-drain threads
+  only log and enqueue events. One parser feeds both live rendering and ETA log-
+  tail interpretation.
 - ETA uses hierarchical wall-time cohorts plus live cumulative progress, reports
   confidence/basis, and never becomes a deadline or evidence field.
 - Performance pairing validates equal budgets and initial populations before
