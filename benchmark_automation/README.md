@@ -151,7 +151,11 @@ without a fixed 25-character detail limit.
 The stdout/stderr drain threads only preserve logs and enqueue display events; the
 foreground command-wait loop owns every Rich write and refresh. This keeps Windows
 console cursor updates on the terminal owner thread while evaluations are still
-running instead of leaving the visible row at zero until command completion.
+running instead of leaving the visible row at zero until command completion. If a
+real interactive console inherits `TERM=dumb` or `TERM=unknown` from its launcher,
+the runner removes that contradictory marker from the Rich console's private
+environment so explicit live refreshes are not suppressed. The process-wide and
+child-command environments are unchanged.
 Every measured optimization calls the selected baseline's root `postprocess.py`
 after its final generation. SAW writes S-parameter plots/data, Chrono writes a
 trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.

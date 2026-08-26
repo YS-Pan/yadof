@@ -156,12 +156,25 @@ class CellProgress:
         self._cell_completed = 0
         self._cell_detail = ""
         self._noninteractive_bucket = -1
+        console_environment: Mapping[str, str] | None = None
+        if self.interactive and os.environ.get("TERM", "").lower() in {
+            "dumb",
+            "unknown",
+        }:
+            # A real Windows console launched from Codex may inherit TERM=dumb.
+            # Rich otherwise treats the forced terminal as a dumb terminal and
+            # silently suppresses every in-flight Live.refresh().  Remove the
+            # contradictory marker only from this Console's environment; child
+            # commands and the process-wide environment remain unchanged.
+            console_environment = dict(os.environ)
+            console_environment.pop("TERM", None)
         self._console = Console(
             file=self.stream,
             force_terminal=self.interactive,
             force_interactive=self.interactive,
             color_system=None,
             legacy_windows=False,
+            _environ=console_environment,
         )
         self._progress = Progress(
             TextColumn(

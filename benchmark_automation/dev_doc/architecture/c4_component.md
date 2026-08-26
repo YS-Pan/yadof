@@ -35,6 +35,9 @@
   There is no fixed 25-character detail cap.
 - Rich automatic refresh is off. Both tasks update before one explicit refresh;
   lifecycle lines print above the live region.
+- When an `isatty()` stream inherits `TERM=dumb` or `TERM=unknown`, `CellProgress`
+  removes that contradictory value only from its Rich `Console` environment. Rich
+  can then execute live refreshes without mutating the runner or child environment.
 
 ## Status and ETA
 

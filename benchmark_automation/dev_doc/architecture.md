@@ -146,6 +146,9 @@ Keeping the CLI thin makes core behavior directly testable.
   complete snapshots throttled to bounded percentage advances. Interactive
   `--stream-output` routes both displayed child channels through the Rich stderr
   console while their append-only log files keep the original channel separation.
+  A stream that proves interactive with `isatty()` ignores inherited
+  `TERM=dumb`/`unknown` only inside its Rich console, preserving the process-wide
+  and child-command environments while allowing explicit live refreshes.
 - After every measured optimization and any declared extension, the runner invokes
   the baseline workspace's common `postprocess.py` interface exactly once with
   `--workspace`, `--output-dir`, and `--output-prefix`. Task-specific visualization

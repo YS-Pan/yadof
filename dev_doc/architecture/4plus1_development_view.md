@@ -89,8 +89,10 @@ cost-view render after each measured optimization, uses Rich for an active-cell
 evaluation bar above the global cell bar with one atomic event-driven refresh and
 cumulative count/percentage/generation detail, guarantees visible positive progress
 in large cells, keeps every Rich refresh on the foreground runner thread while
-pipe threads only log and enqueue events, and keeps complete compact status fields
-within normal terminal widths. Read-only benchmark inspection derives an
+pipe threads only log and enqueue events, overrides an inherited Rich-only
+`TERM=dumb`/`unknown` classification after the stream proves interactive, and keeps
+complete compact status fields within normal terminal widths. Read-only benchmark
+inspection derives an
 explicitly qualified ETA from completed wall times, immutable plan data, and the
 active command's bounded progress tail for later unattended agent turns. The
 nested benchmark `dev_doc/` mirrors the root current-view discipline with

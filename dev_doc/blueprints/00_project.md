@@ -91,7 +91,10 @@ hot-change contract; structural dimension changes are future work.
   updates both task states before one event-driven refresh; any positive evaluation
   count visibly advances the ASCII bar, low percentages retain one decimal, and
   pipe-drain threads only log/enqueue while the foreground wait loop owns every Rich
-  refresh. Compact rows keep complete counts/status without a fixed detail cap.
+  refresh. A true interactive stream removes inherited `TERM=dumb`/`unknown` only
+  from the Rich console environment so live refreshes remain enabled without
+  changing child environments. Compact rows keep complete counts/status without a
+  fixed detail cap.
   Read-only `inspect` exposes active progress/inactivity and a confidence-qualified
   ETA from
   immutable plan data, completed cell wall times, and the active command's bounded

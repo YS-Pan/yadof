@@ -42,7 +42,10 @@ The foreground runner starts one yadof/postprocessor command at a time. Two chil
 pipe threads write separate logs and enqueue display events. The foreground wait
 loop consumes those events and is the sole Rich/interactive-stderr owner. A
 detached visible Windows console owns the foreground runner; a later inspection
-process is separate and read-only.
+process is separate and read-only. Launcher-provided `TERM=dumb`/`unknown` is
+ignored only by the Rich console after the stream itself proves interactive, so
+the launcher environment cannot suppress live frames and child environments stay
+intact.
 
 ## Retention
 

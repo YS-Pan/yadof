@@ -24,6 +24,8 @@ and dependency direction rather than splitting stateful behavior arbitrarily.
 - Drain threads enqueue terminal events; the foreground child-wait loop alone calls
   Rich so Windows console cursor rendering never originates on a pipe thread.
 - A Rich event renders only after both cell/global tasks hold coherent state.
+- A true TTY cannot remain classified by Rich as dumb solely because its launcher
+  exported `TERM=dumb`/`unknown`; normalize only the console-local environment.
 - A positive large-cell count is visibly nonzero.
 - ETA reads at most the active command's bounded tail; completed-cell duration uses
   state timestamps rather than successful log scanning.

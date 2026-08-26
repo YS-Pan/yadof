@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+import os
 import sys
 import threading
 from pathlib import Path
@@ -204,6 +205,38 @@ def test_interactive_progress_refreshes_cell_and_global_atomically(
         (1350, 2000, 0, 2, "1350/2000 eval | 68% gen=14/20 ok=42 err=8")
     ]
     assert progress._progress.live.auto_refresh is False
+
+
+def test_interactive_progress_emits_intermediate_frame_under_inherited_dumb_term(
+    monkeypatch,
+) -> None:
+    class TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("NO_COLOR", "1")
+    terminal = TtyBuffer()
+    progress = core.CellProgress(1, stream=terminal, width=10)
+
+    assert progress._console.is_terminal
+    assert not progress._console.is_dumb_terminal
+    assert os.environ["TERM"] == "dumb"
+
+    progress.start()
+    progress.start_cell(
+        {"cell_id": "large", "planned_attempted_evaluations": 2000}
+    )
+    output_before_snapshot = terminal.getvalue()
+    assert progress.observe_yadof_line(
+        "[yadof] generation 0 (fast) [............................] "
+        "1/100 successful=1 errors=0 remaining=99"
+    )
+    intermediate_frame = terminal.getvalue()[len(output_before_snapshot) :]
+    progress.finish()
+
+    assert intermediate_frame
+    assert "1/2000 eval | 0.1% gen=1/20 ok=1 err=0" in intermediate_frame
 
 
 def test_cell_progress_shows_the_first_evaluation_in_large_cells() -> None:

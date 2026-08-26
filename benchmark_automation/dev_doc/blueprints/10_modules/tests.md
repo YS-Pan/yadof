@@ -12,7 +12,9 @@ simulators, performance campaigns, or collection-time model inference.
 - CLI bounded output, stream routing, visible-window pause, and exit behavior.
 - Rich ordering, complete compact fields, first-evaluation visibility, GBK safety,
   atomic refresh, and actual subprocess child-stream conversion whose terminal
-  refreshes remain on the foreground owner thread.
+  refreshes remain on the foreground owner thread. An interactive fake terminal
+  under inherited `TERM=dumb` must receive the intermediate rendered bytes before
+  any later lifecycle message or cell completion.
 - ETA live-progress parsing, cohort fallbacks, confidence, terminal state, and UTC
   projections using fixed times and tiny synthetic logs.
 - Baseline postprocessor output/prefix/overwrite contracts.

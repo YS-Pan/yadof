@@ -29,6 +29,8 @@ lists, and string-keyed objects.
 - Pipe-drain threads never render. They enqueue parsed/display events for the
   foreground subprocess wait loop, which regularly services the queue and owns
   every Rich refresh.
+- Build Rich with a console-local environment that omits `TERM=dumb`/`unknown`
+  only when the destination stream has already returned true from `isatty()`.
 - Cumulative progress is generation index times local total plus local completion.
 - ASCII bars use ceiling fill for positive ratios; small cumulative percentages
   retain a decimal.
