@@ -24,8 +24,9 @@ recorder, surrogate, and viewer mechanism.
 - Installed yadof CLI and Python APIs execute and inspect one workspace.
 - ngspice, PyChrono, CUDA/Torch, and task postprocessors perform case-specific work.
 - Rich owns terminal cursor movement for the two live progress rows.
-- The filesystem stores immutable inputs, attempts, logs, state, visualizations,
-  collection snapshots, and reports.
+- The filesystem stores immutable inputs, bounded timing-history snapshots,
+  attempts, logs/timestamped progress events, state, visualizations, collection
+  snapshots, and reports.
 - A later Codex automation or another agent turn may invoke `inspect` as an
   unattended read-only status/ETA probe.
 

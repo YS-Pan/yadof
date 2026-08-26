@@ -8,20 +8,26 @@
 - A cell is one case/arm/seed experiment or disposable smoke unit.
 - An attempt is one immutable execution workspace for a cell. Replacement attempts
   link to interrupted predecessors without modifying them.
-- A command record is a started/finished metadata pair plus separate stdout and
-  stderr logs.
+- A command record is a started/finished metadata pair, separate stdout/stderr
+  logs, and one append-only timestamped lifecycle/progress event stream.
+- A timing-history snapshot is a bounded immutable operational sample of completed
+  matched cells from earlier immediate run directories. It does not enter run
+  identity or scientific results.
 - Run state is the atomically replaced index of cell/attempt status. It is not the
   scientific result.
 - Collection and reports are derived public-yadof interpretations that may be
   regenerated without changing measured workspaces.
-- Benchmark ETA is a transient inspection estimate derived from observed wall time
-  and live progress. It is not stored evidence or a deadline.
+- Benchmark ETA is a transient inspection estimate derived from the frozen timing
+  sample, current-run wall time, and live phase progress. The estimate is not
+  stored evidence or a deadline.
 
 ## Identity rules
 
 Run ID names the directory, while `spec_sha256` proves resolved content identity.
 Semantic baseline IDs do not contain fingerprints. Resume verifies the frozen spec,
-package, runner, strategies, snapshots, and history rather than trusting the name.
+package, runner, strategies, task snapshots, and scientific history rather than
+trusting the name. The operational timing snapshot is fixed at creation but is not
+an execution-identity input.
 
 ## State rules
 

@@ -41,7 +41,9 @@ mock subprocess/public surfaces but must preserve state and output shapes.
 - Terminal regressions require rendered output and an actual piped child-stream
   test that verifies Rich refreshes occur on the foreground owner thread. Testing
   only `Task.completed` or calling the parser synchronously is insufficient.
-- Timing fixtures use fixed UTC times and small synthetic command logs; development
-  never launches a real performance run.
+- Timing fixtures use fixed UTC times, bounded synthetic prior-run snapshots, and
+  small timestamped command event streams. They include cross-arm rejection,
+  generation-growth forecasting, and recorded-session replay; development never
+  launches a real performance run.
 - Benchmark code remains outside wheel/sdist. Tests use the matching regularly
   installed yadof distribution without repository-source injection.

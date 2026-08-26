@@ -7,11 +7,13 @@ flowchart LR
     Config[benchmark.toml] --> Core
     Inputs[baselines + strategies] --> Core
     Core --> Spec[run_spec + matrix + input snapshots]
+    Core --> TimingHistory[bounded prior-run timing snapshot]
     Core --> Cells[isolated cell attempts]
     Cells --> Yadof[installed yadof]
-    Yadof --> Logs[command logs + workspace evidence]
+    Yadof --> Logs[command logs + timestamped progress events + workspace evidence]
     Logs --> Progress[Rich live progress]
     Spec --> Inspect[read-only inspect]
+    TimingHistory --> Inspect
     Logs --> Inspect
     State[atomic run_state] --> Inspect
     Inspect --> ETA[bounded status and ETA JSON]
@@ -29,12 +31,14 @@ window. It contains no planning, state, ETA, or reporting algorithm.
 
 `benchmark_core.py` validates TOML, creates plans/specs, preflights dependencies,
 snapshots inputs, advances attempts, logs subprocesses, adapts yadof progress,
-estimates completion, collects public observations, and builds reports.
+freezes a bounded shallow prior-run timing sample, estimates completion, collects
+public observations, and builds reports.
 
 ## Inputs and generated state
 
 Tracked baseline/strategy/config content is mutable for future runs. Run-local
-specs, matrices, snapshots, and attempt artifacts are immutable. `run_state.json`
+specs, matrices, timing-history snapshots, input snapshots, and attempt artifacts
+are immutable. `run_state.json`
 is the one atomically replaced execution index. Root `metrics.json`, `report.json`,
 and `report.md` are latest derived views backed by append-only snapshots.
 

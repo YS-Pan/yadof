@@ -17,10 +17,12 @@ cell. All child output remains in command logs.
 
 A later turn runs `inspect --run-id ...` with the same runs root. If execution is
 running, it reads `run.timing.estimated_remaining_sec`, completion UTC, confidence,
-active phase/progress, and inactivity age. The automation schedules another check
-near that estimate; a low-confidence lower-bound result may justify an earlier
-check. It does not resume, kill, collect, or modify the run merely because it is
-still active.
+active phase/progress, inactivity age, and basis support. A matched prior-run cell
+normally anchors the whole-cell remainder; timestamped completed generations can
+raise it when later phases are growing. The automation schedules another check near
+that estimate; a low-confidence lower-bound result may justify an earlier check.
+It does not resume, kill, collect, or modify the run merely because it is still
+active.
 
 If the run is terminal, the turn collects and reports, evaluates descriptive
 results and validity, modifies tracked algorithms only under the full-performance

@@ -11,8 +11,9 @@ filesystem/state behavior directly testable without a simulator.
 - Plan, preflight, spec/matrix creation, baseline snapshots, and state publication.
 - Attempt materialization, subprocess logging, timeout/failure translation,
   progress rendering, postprocessing, visualization, sealing, and resume.
-- Read-only timing estimation over immutable plans, completed wall time, and the
-  active command's bounded log tail.
+- Bounded prior-run timing snapshot creation plus read-only estimation over the
+  immutable plan, matched/current completed wall time, and the active command's
+  bounded progress-event tail.
 - Public-yadof collection, structural checks, performance pairing, reports, and
   bounded summaries.
 
@@ -28,17 +29,22 @@ lists, and string-keyed objects.
 - One common parser recognizes plain piped yadof progress snapshots.
 - Pipe-drain threads never render. They enqueue parsed/display events for the
   foreground subprocess wait loop, which regularly services the queue and owns
-  every Rich refresh.
+  every Rich refresh and append to `progress.jsonl`.
 - Build Rich with a console-local environment that omits `TERM=dumb`/`unknown`
   only when the destination stream has already returned true from `isatty()`.
 - Cumulative progress is generation index times local total plus local completion.
 - ASCII bars use ceiling fill for positive ratios; small cumulative percentages
   retain a decimal.
-- ETA cohort order is same case/arm, same case, same arm, all completed, declared
-  lower bound, then plan-average lower bound. Sequential execution makes remaining
-  time additive. Confidence and basis are output with the value.
+- ETA cohort order is exact prior matched cell, current same case/arm, compatible
+  prior matched cell, current same arm, declared lower bound, then plan-average
+  lower bound. Cross-arm same-case and all-arm pooling are forbidden as point
+  estimates. Three completed generation intervals enable a robust non-negative
+  timing trend; linear cumulative progress is only the earlier fallback.
+  Sequential execution makes remaining time additive. Confidence, basis, sample
+  count, and relative MAD are output with the value.
 - Read-only inspection tolerates a race between started and finished metadata and
-  never requires recursive run scanning.
+  never requires run-root scanning; only new-run creation shallow-scans a bounded
+  number of immediate prior directories.
 
 ## Failure behavior
 

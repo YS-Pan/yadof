@@ -15,8 +15,10 @@ simulators, performance campaigns, or collection-time model inference.
   refreshes remain on the foreground owner thread. An interactive fake terminal
   under inherited `TERM=dumb` must receive the intermediate rendered bytes before
   any later lifecycle message or cell completion.
-- ETA live-progress parsing, cohort fallbacks, confidence, terminal state, and UTC
-  projections using fixed times and tiny synthetic logs.
+- ETA sidecar timestamps, exact/compatible prior snapshots, cross-arm rejection,
+  same-arm/lower-bound fallbacks, generation-duration growth, confidence, terminal
+  state, UTC projections, and recorded-session replay using fixed times and tiny
+  synthetic artifacts.
 - Baseline postprocessor output/prefix/overwrite contracts.
 
 ## Constraints

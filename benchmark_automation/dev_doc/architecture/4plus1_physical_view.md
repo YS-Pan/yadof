@@ -12,6 +12,7 @@ under checkout `temp/<run-id>/`; an explicit `--runs-dir` may select another roo
 <runs-dir>/<run-id>/
   run_spec.json
   matrix.json
+  timing_history.json
   run_state.json
   inputs/baselines/<case>/workspace/
   cells/<cell-id>/attempts/<NNNN>/
@@ -20,6 +21,7 @@ under checkout `temp/<run-id>/`; an explicit `--runs-dir` may select another roo
     commands/<NNNN-label>/
       command.started.json
       command.finished.json
+      progress.jsonl
       stdout.log
       stderr.log
   visualizations/<baseline-id>/
@@ -31,16 +33,19 @@ under checkout `temp/<run-id>/`; an explicit `--runs-dir` may select another roo
   report.md
 ```
 
-Specs, matrices, snapshots, attempts, command records, evidence snapshots, and
-report snapshots are append-only. Run state and root latest derived reports are
-atomically replaced. Inspection reads these files without a lock; atomic
-publication and append-only command logs make that safe.
+Specs, matrices, timing-history/input snapshots, attempts, command records,
+evidence snapshots, and report snapshots are append-only. Run state and root
+latest derived reports are atomically replaced. Inspection reads these files
+without a lock; atomic publication and append-only command logs/events make that
+safe. Run creation alone shallow-scans earlier immediate run directories;
+inspection consumes only the frozen run-local timing snapshot.
 
 ## Processes and streams
 
 The foreground runner starts one yadof/postprocessor command at a time. Two child-
 pipe threads write separate logs and enqueue display events. The foreground wait
-loop consumes those events and is the sole Rich/interactive-stderr owner. A
+loop consumes those events, appends timestamped progress JSON lines, and is the
+sole Rich/interactive-stderr owner. A
 detached visible Windows console owns the foreground runner; a later inspection
 process is separate and read-only. Launcher-provided `TERM=dumb`/`unknown` is
 ignored only by the Rich console after the stream itself proves interactive, so

@@ -96,9 +96,11 @@ hot-change contract; structural dimension changes are future work.
   changing child environments. Compact rows keep complete counts/status without a
   fixed detail cap.
   Read-only `inspect` exposes active progress/inactivity and a confidence-qualified
-  ETA from
-  immutable plan data, completed cell wall times, and the active command's bounded
-  log tail so later unattended turns need not keep the original run turn alive.
+  ETA from immutable plan data, a bounded run-local snapshot of matched prior-run
+  cell timings, arm-safe current completions, and the active command's bounded
+  timestamped progress-event tail. Generation-duration trends can raise the active
+  estimate, while cross-arm same-case durations are not point estimates, so later
+  unattended turns need not keep the original run turn alive.
   The benchmark's nested `dev_doc/` provides local operator, architecture,
   blueprint, and terminology contracts plus split architecture views and
   generative module/file blueprints. Root `dev_doc/` exclusively owns repository-

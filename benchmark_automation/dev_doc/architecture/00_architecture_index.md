@@ -15,8 +15,9 @@ editable declared inputs
 Runtime visibility follows a parallel read-only chain:
 
 ```text
-child yadof snapshots -> live cell/global bars
-immutable plan + completed wall times + active log tail -> inspect timing/ETA
+child yadof snapshots -> timestamped progress events -> live cell/global bars
+immutable plan + frozen prior-run timings + completed wall times + active event tail
+  -> inspect timing/ETA
 ```
 
 The runner never changes algorithm meaning, reads yadof private state, ranks arms,

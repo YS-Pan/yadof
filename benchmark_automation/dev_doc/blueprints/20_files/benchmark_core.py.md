@@ -20,6 +20,8 @@ and dependency direction rather than splitting stateful behavior arbitrarily.
 ## Invariants easy to lose
 
 - Progress lines are logged even when consumed for the live display.
+- Parsed progress is also retained as foreground-written timestamped JSONL between
+  command lifecycle events; finished metadata fingerprints that sidecar.
 - Stdout/stderr drain concurrently and remain separate on disk.
 - Drain threads enqueue terminal events; the foreground child-wait loop alone calls
   Rich so Windows console cursor rendering never originates on a pipe thread.
@@ -27,8 +29,14 @@ and dependency direction rather than splitting stateful behavior arbitrarily.
 - A true TTY cannot remain classified by Rich as dumb solely because its launcher
   exported `TERM=dumb`/`unknown`; normalize only the console-local environment.
 - A positive large-cell count is visibly nonzero.
-- ETA reads at most the active command's bounded tail; completed-cell duration uses
-  state timestamps rather than successful log scanning.
+- New-run creation shallow-scans at most the declared prior-run limit and freezes a
+  bounded timing snapshot. ETA reads that run-local file and at most the active
+  command's bounded progress-event tail; completed-cell duration uses state
+  timestamps rather than successful log scanning. Older runs without a sidecar may
+  use the bounded stderr tail.
+- ETA never pools another arm merely because its case matches. Exact/compatible
+  matched-cell medians precede current same-arm and declared lower bounds; active
+  generation trends require at least three complete timestamped intervals.
 - Run inspection never writes or waits.
 - Immutable artifacts use create-new; only documented latest views use atomic
   replacement.

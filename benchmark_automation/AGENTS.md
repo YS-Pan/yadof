@@ -24,7 +24,9 @@ Then expand only if the summary leaves a specific question unanswered:
 
 1. For a running benchmark, use the summary's `run.timing` fields for active
    progress, inactivity age, remaining seconds, completion UTC, confidence, and
-   basis. Do not read logs merely to recompute ETA.
+   basis/support. Do not read logs merely to recompute ETA. If the estimate itself
+   is under diagnosis, read the run-local `timing_history.json`; only then inspect
+   the active command's bounded `progress.jsonl` tail.
 
 2. Read `<runs-dir>/<run-id>/report.md` for concise narrative and paired values.
 3. Query only the needed top-level field or pair from `report.json`.
@@ -75,7 +77,7 @@ optimization runs, resume, and collection remain subject to the cost/risk rules 
 Do not use a few generations or a population of only dozens to evaluate or tune
 surrogate/optimizer performance. That purpose requires the complete unfiltered
 `performance` suite, currently 100 individuals by 20 generations in every measured
-cell (2,000 attempts per cell; 36,000 across 18 cells). Structural and pilot suites
+cell (2,000 attempts per cell; 12,000 across 6 cells). Structural and pilot suites
 may diagnose wiring, prerequisites, failures, and runtime cost only; their results
 must not drive algorithm-performance claims or tuning.
 

@@ -344,6 +344,38 @@ def test_execute_logged_keeps_imports_from_writing_bytecode(tmp_path: Path) -> N
     assert not (tmp_path / "__pycache__").exists()
 
 
+def test_execute_logged_records_progress_without_live_renderer(tmp_path: Path) -> None:
+    attempt_root = tmp_path / "attempt"
+    attempt_root.mkdir()
+    line = (
+        "[yadof] generation 0 (fast) [############################] "
+        "2/2 successful=2 errors=0 remaining=0"
+    )
+    metadata = core._execute_logged(
+        [sys.executable, "-c", f"import sys; print({line!r}, file=sys.stderr)"],
+        cwd=tmp_path,
+        attempt_root=attempt_root,
+        attempt={"commands": []},
+        timeout_sec=30,
+        label="headless-progress",
+    )
+    events = [
+        json.loads(value)
+        for value in Path(metadata["progress_events"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [event["event"] for event in events] == [
+        "command-start",
+        "progress",
+        "command-end",
+    ]
+    assert events[1]["absolute_finished"] == 2
+    assert metadata["progress_events_sha256"] == core.file_sha256(
+        Path(metadata["progress_events"])
+    )
+
+
 def test_execute_logged_renders_child_progress_on_foreground_thread(
     tmp_path: Path,
     monkeypatch,
@@ -399,6 +431,17 @@ def test_execute_logged_renders_child_progress_on_foreground_thread(
     assert any(detail.startswith("50/2000 eval | 2.5%") for detail in details)
     assert any(detail.startswith("101/2000 eval | 5.0%") for detail in details)
     assert {thread_id for thread_id, _ in rendered} == {owner_thread}
+    event_lines = Path(metadata["progress_events"]).read_text(encoding="utf-8").splitlines()
+    events = [json.loads(line) for line in event_lines]
+    assert [event["event"] for event in events] == [
+        "command-start",
+        "progress",
+        "progress",
+        "progress",
+        "command-end",
+    ]
+    assert all(core._parse_utc(event["observed_utc"]) is not None for event in events)
+    assert [event.get("absolute_finished") for event in events[1:4]] == [1, 50, 101]
 
 
 def test_report_summary_keeps_decision_evidence_without_fingerprints() -> None:
@@ -613,6 +656,10 @@ def test_run_timing_uses_live_progress_and_completed_cell_wall_time(
         "attempt_elapsed_sec": 50,
         "inactive_sec": 0,
         "estimated_remaining_sec": 60,
+        "estimate_basis": "same-case-arm",
+        "basis_sample_count": 1,
+        "basis_relative_mad": 0.0,
+        "generation_timing": None,
     }
     assert timing["estimated_remaining_sec"] == 160
     assert timing["estimated_completion_utc"] == "2026-08-23T00:06:30.000Z"
@@ -655,3 +702,341 @@ def test_run_timing_reports_exact_terminal_zero_and_low_confidence_fallback() ->
     assert pending["estimated_remaining_sec"] == 200
     assert pending["estimate_confidence"] == "low"
     assert pending["estimate_basis"] == {"declared-evaluation-lower-bound": 1}
+
+
+def test_run_timing_never_uses_same_case_across_arms_as_a_point_estimate() -> None:
+    cells = [
+        {
+            "cell_id": "case-a__real__seed-1",
+            "kind": "measured",
+            "case": "case-a",
+            "arm": "real",
+            "planned_attempted_evaluations": 100,
+        },
+        {
+            "cell_id": "case-b__surrogate__seed-1",
+            "kind": "measured",
+            "case": "case-b",
+            "arm": "surrogate",
+            "planned_attempted_evaluations": 100,
+        },
+        {
+            "cell_id": "case-a__surrogate__seed-1",
+            "kind": "measured",
+            "case": "case-a",
+            "arm": "surrogate",
+            "planned_attempted_evaluations": 100,
+        },
+    ]
+    spec = {
+        "plan": {"cells": cells, "estimates": {}},
+        "cases": {
+            "case-a": {"observed_eval_sec": 1.0, "max_workers": 1},
+            "case-b": {"observed_eval_sec": 1.0, "max_workers": 1},
+        },
+    }
+    state = {
+        "created_utc": "2026-08-23T00:00:00.000Z",
+        "cells": {
+            "case-a__real__seed-1": {
+                "status": "completed",
+                "case": "case-a",
+                "arm": "real",
+                "attempts": [
+                    {
+                        "created_utc": "2026-08-23T00:00:00.000Z",
+                        "sealed_utc": "2026-08-23T00:01:40.000Z",
+                    }
+                ],
+            },
+            "case-b__surrogate__seed-1": {
+                "status": "completed",
+                "case": "case-b",
+                "arm": "surrogate",
+                "attempts": [
+                    {
+                        "created_utc": "2026-08-23T00:02:00.000Z",
+                        "sealed_utc": "2026-08-23T00:35:20.000Z",
+                    }
+                ],
+            },
+            "case-a__surrogate__seed-1": {
+                "status": "pending",
+                "case": "case-a",
+                "arm": "surrogate",
+                "attempts": [],
+            },
+        },
+    }
+    timing = core.estimate_run_timing(
+        spec,
+        state,
+        now=dt.datetime(2026, 8, 23, 0, 40, tzinfo=dt.UTC),
+    )
+    assert timing["estimated_remaining_sec"] == 2000
+    assert timing["estimate_basis"] == {"same-arm": 1}
+    assert "same-case" not in timing["estimate_basis"]
+
+
+def test_new_run_snapshots_compatible_completed_cell_history(tmp_path: Path) -> None:
+    def timing_spec(*, package_sha: str, arm_sha: str) -> dict:
+        payload = {
+            "schema_version": 1,
+            "created_utc": "2026-08-23T00:00:00.000Z",
+            "suite": "fixture",
+            "purpose": "performance",
+            "label": None,
+            "config": {"path": "benchmark.toml", "sha256": "0" * 64},
+            "package": {
+                "python": "python",
+                "version": "1",
+                "module_sha256": package_sha,
+            },
+            "host": {"node": "fixture-host", "platform": "fixture-platform"},
+            "automation": {},
+            "runner": {"measured_config_overrides": {}},
+            "cases": {},
+            "arms": {
+                "surrogate": {
+                    "sha256": arm_sha,
+                    "constructed_type": "fixture.Strategy",
+                    "surrogate": True,
+                    "config_overrides": {},
+                }
+            },
+            "plan": {
+                "cells": [
+                    {
+                        "cell_id": "case-a__surrogate__seed-1",
+                        "kind": "measured",
+                        "case": "case-a",
+                        "arm": "surrogate",
+                        "seed": 1,
+                        "population": 100,
+                        "generations": 20,
+                        "max_generations": 20,
+                        "planned_attempted_evaluations": 2000,
+                    }
+                ],
+                "estimates": {},
+            },
+        }
+        payload["spec_sha256"] = core.object_sha256(payload)
+        return payload
+
+    runs = tmp_path / "runs"
+    prior_root = runs / "20260823_000000-prior"
+    prior_root.mkdir(parents=True)
+    prior_spec = timing_spec(package_sha="1" * 64, arm_sha="2" * 64)
+    (prior_root / "run_spec.json").write_text(
+        json.dumps(prior_spec), encoding="utf-8"
+    )
+    (prior_root / "run_state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "run_id": prior_root.name,
+                "spec_sha256": prior_spec["spec_sha256"],
+                "status": "completed",
+                "created_utc": "2026-08-23T00:00:00.000Z",
+                "updated_utc": "2026-08-23T00:35:00.000Z",
+                "cells": {
+                    "case-a__surrogate__seed-1": {
+                        "status": "completed",
+                        "case": "case-a",
+                        "arm": "surrogate",
+                        "attempts": [
+                            {
+                                "created_utc": "2026-08-23T00:00:00.000Z",
+                                "sealed_utc": "2026-08-23T00:35:00.000Z",
+                            }
+                        ],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    current_spec = timing_spec(package_sha="3" * 64, arm_sha="4" * 64)
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        runs,
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    run_id, run_root = core.create_run(paths, current_spec, run_id="current")
+    _loaded_root, _loaded_spec, current_state = core.load_run(paths, run_id)
+    history = core.read_json(run_root / core.TIMING_HISTORY_NAME)
+    assert history["source_run_ids"] == [prior_root.name]
+    assert history["observation_count"] == 1
+
+    timing = core.estimate_run_timing(
+        current_spec,
+        current_state,
+        run_root=run_root,
+        now=dt.datetime(2026, 8, 23, 1, 0, tzinfo=dt.UTC),
+    )
+    assert timing["estimated_remaining_sec"] == 2100
+    assert timing["estimate_basis"] == {"prior-run-compatible-cell": 1}
+    assert timing["historical_observation_count"] == 1
+
+
+def test_run_timing_uses_growth_aware_generation_intervals(tmp_path: Path) -> None:
+    workspace = tmp_path / "cell" / "attempts" / "0001" / "workspace"
+    command_root = workspace.parent / "commands" / "0001-optimize"
+    command_root.mkdir(parents=True)
+    progress_path = command_root / core.PROGRESS_EVENTS_NAME
+    progress_events = [
+        {
+            "schema_version": 1,
+            "event": "command-start",
+            "observed_utc": "2026-08-23T00:00:00.000Z",
+            "phase": "optimize",
+        }
+    ]
+    for generation, observed in enumerate((10, 30, 60)):
+        progress_events.append(
+            {
+                "schema_version": 1,
+                "event": "progress",
+                "observed_utc": f"2026-08-23T00:{observed // 60:02d}:{observed % 60:02d}.000Z",
+                "phase": f"generation {generation}",
+                "generation": generation,
+                "finished": 100,
+                "total": 100,
+                "absolute_finished": (generation + 1) * 100,
+                "successful": 100,
+                "errors": 0,
+                "remaining": 0,
+            }
+        )
+    progress_path.write_text(
+        "\n".join(core.canonical_json(event) for event in progress_events) + "\n",
+        encoding="utf-8",
+    )
+    (command_root / "command.started.json").write_text(
+        json.dumps(
+            {
+                "label": "optimize",
+                "started_utc": "2026-08-23T00:00:00.000Z",
+                "progress_events": str(progress_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+    plan_cell = {
+        "cell_id": "case-a__surrogate__seed-1",
+        "kind": "measured",
+        "case": "case-a",
+        "arm": "surrogate",
+        "population": 100,
+        "generations": 5,
+        "max_generations": 5,
+        "planned_attempted_evaluations": 500,
+    }
+    timing = core.estimate_run_timing(
+        {"plan": {"cells": [plan_cell], "estimates": {}}, "cases": {}},
+        {
+            "created_utc": "2026-08-23T00:00:00.000Z",
+            "cells": {
+                plan_cell["cell_id"]: {
+                    "status": "running",
+                    "case": "case-a",
+                    "arm": "surrogate",
+                    "attempts": [
+                        {
+                            "created_utc": "2026-08-23T00:00:00.000Z",
+                            "workspace": str(workspace),
+                        }
+                    ],
+                }
+            },
+        },
+        now=dt.datetime(2026, 8, 23, 0, 1, 5, tzinfo=dt.UTC),
+    )
+    assert timing["estimated_remaining_sec"] == 85
+    assert timing["estimate_basis"] == {"live-generation-trend": 1}
+    assert timing["active_cell"]["generation_timing"] == {
+        "remaining_sec": 85.0,
+        "completed_generations": 3,
+        "target_generations": 5,
+        "sample_count": 3,
+        "recent_generation_sec": [10.0, 20.0, 30.0],
+        "trend_sec_per_generation": 10.0,
+        "current_generation_elapsed_sec": 5.0,
+    }
+    assert timing["estimated_remaining_sec"] > 44
+
+
+def test_matched_cell_history_replays_observed_performance_runs_within_three_percent() -> None:
+    labels = [
+        ("saw", "nsga"),
+        ("saw", "gpsaf"),
+        ("chrono", "nsga"),
+        ("chrono", "gpsaf"),
+        ("test", "nsga"),
+        ("test", "gpsaf"),
+    ]
+    cells = [
+        {
+            "cell_id": f"{case}__{arm}__seed-1",
+            "kind": "measured",
+            "case": case,
+            "arm": arm,
+            "seed": 1,
+            "population": 100,
+            "generations": 20,
+            "max_generations": 20,
+            "planned_attempted_evaluations": 2000,
+        }
+        for case, arm in labels
+    ]
+    spec = {
+        "package": {"version": "fixture", "module_sha256": "1" * 64},
+        "host": {"node": "fixture", "platform": "fixture"},
+        "runner": {"measured_config_overrides": {}},
+        "cases": {},
+        "arms": {},
+        "plan": {"cells": cells, "estimates": {}},
+    }
+    past_runs = [
+        [100, 1946, 252, 2105, 136, 3915],
+        [96, 2040, 261, 2143, 135, 3850],
+    ]
+    observations = []
+    for run_index, durations in enumerate(past_runs, start=1):
+        for cell, duration in zip(cells, durations, strict=True):
+            exact_signature, compatible_signature = core._timing_signatures(spec, cell)
+            observations.append(
+                {
+                    "source_run_id": f"history-{run_index}",
+                    "planned": cell["planned_attempted_evaluations"],
+                    "duration_sec": duration,
+                    "exact_signature": exact_signature,
+                    "compatible_signature": compatible_signature,
+                }
+            )
+    state = {
+        "created_utc": "2026-08-23T00:00:00.000Z",
+        "cells": {
+            cell["cell_id"]: {
+                "status": "pending",
+                "case": cell["case"],
+                "arm": cell["arm"],
+                "attempts": [],
+            }
+            for cell in cells
+        },
+    }
+    timing = core.estimate_run_timing(
+        spec,
+        state,
+        timing_history={"observations": observations},
+        now=dt.datetime(2026, 8, 23, 0, 1, tzinfo=dt.UTC),
+    )
+    next_observed_total = sum([90, 2025, 249, 2241, 130, 3932])
+    assert timing["estimated_remaining_sec"] == 8490
+    assert abs(timing["estimated_remaining_sec"] - next_observed_total) / next_observed_total < 0.03
+    assert timing["estimate_basis"] == {"prior-run-exact-cell": 6}
+    assert timing["estimate_confidence"] == "medium"

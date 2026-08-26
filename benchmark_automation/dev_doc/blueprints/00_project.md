@@ -29,14 +29,21 @@ JSON plus narrowly scoped stderr rendering; full evidence stays on disk.
 ## Non-obvious techniques
 
 - Mutable templates become immutable run-local snapshots.
+- New runs shallow-scan a bounded set of earlier immediate run directories and
+  freeze completed matched-cell durations into an immutable operational timing
+  snapshot; later inspection never rescans the runs root.
 - Resume validates frozen identity and replaces interrupted attempts.
 - Rich owns cursor movement on the foreground runner thread; pipe-drain threads
-  only log and enqueue events. One parser feeds both live rendering and ETA log-
-  tail interpretation. A verified interactive stream overrides an inherited
+  only log and enqueue events. The foreground loop appends timestamped lifecycle
+  and parsed progress events while the same parser feeds live rendering and ETA
+  phase interpretation. A verified interactive stream overrides an inherited
   Rich-only `TERM=dumb`/`unknown` classification without changing global or child
   environments.
-- ETA uses hierarchical wall-time cohorts plus live cumulative progress, reports
-  confidence/basis, and never becomes a deadline or evidence field.
+- ETA excludes cross-arm same-case point estimates, prefers exact/compatible
+  matched-cell medians, uses current same-arm evidence only as a later fallback,
+  and can raise active time with a robust non-decreasing generation-duration trend.
+  It reports basis/sample/dispersion confidence and never becomes a deadline or
+  evidence field.
 - Performance pairing validates equal budgets and initial populations before
   calculating descriptive differences.
 

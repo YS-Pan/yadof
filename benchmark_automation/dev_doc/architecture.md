@@ -187,9 +187,13 @@ Keeping the CLI thin makes core behavior directly testable.
   diagnostics. Full plan/preflight/report JSON remains explicitly available, and
   `inspect` points from bounded evidence to progressively deeper artifacts.
 - A running `inspect` adds read-only timing: active progress/inactivity, remaining
-  seconds, completion UTC, confidence, and basis. It combines completed-cell wall
-  times with the active command's bounded progress-log tail and immutable plan;
-  lower-bound fallbacks explicitly exclude optimizer/surrogate overhead. ETA never
+  seconds, completion UTC, confidence, basis, and sample/dispersion support. New
+  runs freeze a bounded shallow snapshot of prior completed-cell wall times.
+  Estimation prefers exact or compatible matched-cell history and current-run
+  same-case/arm evidence, never a same-case duration from another arm. Timestamped
+  command progress events permit a non-decreasing generation-duration trend to
+  raise the active estimate; a bounded stderr tail remains an old-run fallback.
+  Lower-bound fallbacks explicitly exclude optimizer/surrogate overhead. ETA never
   writes state or becomes benchmark evidence.
 - Default report and completed inspect keep the bounded JSON surface on stdout and
   render a compact final cumulative-hypervolume Markdown table on stderr. Table

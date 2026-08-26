@@ -93,8 +93,11 @@ pipe threads only log and enqueue events, overrides an inherited Rich-only
 `TERM=dumb`/`unknown` classification after the stream proves interactive, and keeps
 complete compact status fields within normal terminal widths. Read-only benchmark
 inspection derives an
-explicitly qualified ETA from completed wall times, immutable plan data, and the
-active command's bounded progress tail for later unattended agent turns. The
+explicitly qualified ETA from a bounded run-local prior timing snapshot, arm-safe
+completed wall times, immutable plan data, and the active command's timestamped
+bounded progress-event tail for later unattended agent turns. Matched-cell medians
+and generation-duration trends replace cross-arm same-case and purely linear
+point estimates. The
 nested benchmark `dev_doc/` mirrors the root current-view discipline with
 operator/architecture/blueprint/terminology
 contracts, split C4 and 4+1 architecture, generative blueprints, and terminology;

@@ -209,20 +209,33 @@ commands. While a run is active, `run.timing` also supplies:
 
 - `checked_utc`, `started_utc`, and elapsed seconds;
 - active cell, phase, cumulative completed/planned evaluations, percentage,
-  attempt elapsed time, and seconds since the latest command/log activity;
+  attempt elapsed time, seconds since the latest command/log activity, the chosen
+  active-cell basis, supporting sample count/dispersion, and generation timing when
+  available;
 - estimated remaining seconds, estimated UTC completion, confidence, estimation
-  basis counts, and an explicit caveat.
+  basis/support counts, historical-observation count, and an explicit caveat.
 
-The estimate is read-only and best effort. It prefers scaled wall-clock medians
-from completed cells in this order: same case/arm, same case, same arm, then all
-completed cells. The active optimize command can raise the projection when its
-observed evaluation rate is slower. With insufficient completed evidence it falls
-back to declared evaluation-only lower bounds, which exclude optimizer and
-surrogate-training overhead and therefore report low confidence. `inspect` reads
-only atomic state, immutable plan data, completed attempt timestamps, and the
-active command's bounded log tail; it does not poll, wait, resume, or modify the
-run. `report --full-json` remains available for consumers that explicitly need the
-complete stable report.
+The estimate is read-only and best effort. New-run creation takes a bounded shallow
+snapshot of completed cell wall times from earlier runs. A cell prefers an exact
+prior-run match, a completed same-case/same-arm cell in the current run, a
+compatible prior-run match that ignores implementation fingerprints, and then a
+same-arm current-run observation. A duration from another arm is never used merely
+because the case matches. Medians are scaled only within those arm-safe cohorts,
+and confidence also reflects sample count and relative median absolute deviation.
+
+Every command has an append-only `progress.jsonl` stream with timestamped command
+lifecycle and parsed yadof progress events. After at least three complete generation
+intervals, active optimization can raise its estimate with a robust non-decreasing
+generation-duration trend, so growing surrogate-training phases are not treated as
+constant per-evaluation work. The former linear evaluation-rate projection remains
+only a low-evidence fallback when no generation trend is available. With
+insufficient wall-time evidence the estimator falls back to declared evaluation-
+only lower bounds, which exclude optimizer and surrogate-training overhead and
+therefore report low confidence. `inspect` reads only atomic state, immutable plan
+data, the run-local timing snapshot, completed attempt timestamps, and the active
+command's bounded progress-event tail (or stderr tail for an older run); it does
+not poll, wait, resume, or modify the run. `report --full-json` remains available
+for consumers that explicitly need the complete stable report.
 
 This surface is intended for unattended follow-up. A later agent turn or scheduled
 automation can run `inspect`, schedule its next check near
@@ -348,6 +361,7 @@ Each run is identity-stable:
 temp/<run-id>/
   run_spec.json              immutable resolved inputs and runner identity
   matrix.json                immutable selected cell/command expansion
+  timing_history.json        immutable bounded prior-run cell-duration snapshot
   run_state.json             atomically advanced execution state
   inputs/baselines/<case>/workspace/
                              immutable declared-input snapshot for all cells/resume
@@ -360,6 +374,7 @@ temp/<run-id>/
     commands/<NNNN-label>/
       command.started.json
       command.finished.json
+      progress.jsonl         append-only timestamped lifecycle/progress events
       stdout.log
       stderr.log
   visualizations/
@@ -372,10 +387,10 @@ temp/<run-id>/
   reports/report-<NNNN>/     append-only report snapshots
 ```
 
-`run_spec.json`, `matrix.json`, command attempts, logs, and prior evidence/report
-snapshots are never overwritten. `run_state.json` and the root-level latest
-`metrics.json`/reports are written atomically. Collection and reporting do not
-modify measured workspaces, histories, or checkpoints.
+`run_spec.json`, `matrix.json`, `timing_history.json`, command attempts, logs, and
+prior evidence/report snapshots are never overwritten. `run_state.json` and the
+root-level latest `metrics.json`/reports are written atomically. Collection and
+reporting do not modify measured workspaces, histories, or checkpoints.
 
 Smoke workspaces are separate disposable cells. Their records never enter a
 measured NSGA-III or GPSAF arm.
@@ -386,11 +401,13 @@ The repository [`AGENTS.md`](AGENTS.md) defines the complete progressive-
 disclosure policy. In short:
 
 1. Start with `inspect --run-id ...` or the default `plan`/`preflight` summary.
-2. Read `report.md` only when narrative context is useful.
-3. Query targeted `report.json` fields when the summary omits a required detail.
-4. Diagnose one failed cell through `run_state.json`, command metadata, and one log
+2. To diagnose ETA itself, read `timing_history.json`, then at most the active
+   command's bounded `progress.jsonl` tail.
+3. Read `report.md` only when narrative context is useful.
+4. Query targeted `report.json` fields when the summary omits a required detail.
+5. Diagnose one failed cell through `run_state.json`, command metadata, and one log
    tail.
-5. Query one cell/field from `metrics.json` only as the final evidence layer.
+6. Query one cell/field from `metrics.json` only as the final evidence layer.
 
 Do not recursively scan the selected output root and do not load multi-megabyte
 collection files into an agent context. Full evidence remains on disk even when
