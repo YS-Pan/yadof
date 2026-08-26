@@ -82,11 +82,11 @@ hot-change contract; structural dimension changes are future work.
   a digits-only UTC `YYYYMMDD_HHMMSS` date/time prefix. The current non-surrogate
   arm is named for its concrete NSGA-III algorithm. Measured cells deliberately
   permit 32-way fast oversubscription, run the baseline's common `postprocess.py`
-  and one cost view after optimization, place each attempt's unprefixed task
-  artifacts in its own visualization directory, group prefixed cost plots under
-  `visualizations/viewcost/`, and use Rich to retain an active-cell evaluation bar
-  above the bottom global cell bar in interactive terminals. Final cumulative HV
-  remains a compact algorithm-labeled table outside JSON stdout.
+  and one cost view after optimization, place each attempt's collision-prefixed
+  task artifacts in the directory shared by its baseline workspace, group prefixed
+  cost plots under `visualizations/viewcost/`, and use Rich to retain an active-cell
+  evaluation bar above the bottom global cell bar in interactive terminals. Final
+  cumulative HV remains a compact algorithm-labeled table outside JSON stdout.
 - Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 

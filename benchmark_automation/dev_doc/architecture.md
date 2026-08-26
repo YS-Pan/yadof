@@ -36,7 +36,7 @@ benchmark.toml + frozen baselines + strategy templates
                          |
                          +--> baseline postprocess.py
                          |    then yadof view cost
-                         |      -> per-attempt result directory
+                         |      -> per-baseline result directory
                          |         + shared viewcost directory
                          |
                          v
@@ -130,9 +130,11 @@ Keeping the CLI thin makes core behavior directly testable.
   the baseline workspace's common `postprocess.py` interface exactly once with
   `--workspace`, `--output-dir`, and `--output-prefix`. Task-specific visualization
   logic remains baseline-owned.
-- Every measured attempt writes postprocessor artifacts to its own
-  `<run-root>/visualizations/<cell-id>__attempt-####/` directory with an empty
-  filename prefix. All cost views share
+- Every measured attempt writes postprocessor artifacts to its baseline workspace's
+  shared `<run-root>/visualizations/<baseline-id>/` directory with the
+  collision-safe `<cell-id>__attempt-####__` filename prefix. The current matrix
+  therefore produces three task-result directories instead of eighteen. All cost
+  views share
   `<run-root>/visualizations/viewcost/` and retain the collision-safe
   `<cell-id>__attempt-####__benchmark-cost.png` name. Either command failing fails
   the immutable attempt instead of silently omitting required human-review

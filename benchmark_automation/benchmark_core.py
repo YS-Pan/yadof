@@ -866,8 +866,16 @@ def _visualization_file_prefix(cell_id: str, attempt_number: int) -> str:
     return f"{cell_id}__attempt-{attempt_number:04d}__"
 
 
-def _visualization_result_directory_name(cell_id: str, attempt_number: int) -> str:
-    return f"{cell_id}__attempt-{attempt_number:04d}"
+def _baseline_visualization_directory_name(
+    baseline: str | Path | Mapping[str, Any],
+) -> str:
+    if isinstance(baseline, Mapping):
+        value = baseline.get("baseline_id")
+    else:
+        value = Path(baseline).name
+    if not isinstance(value, str) or not value or _safe_id(value) != value:
+        raise BenchmarkError(f"invalid baseline visualization directory name: {value!r}")
+    return value
 
 
 def _planned_commands(
@@ -875,9 +883,11 @@ def _planned_commands(
 ) -> list[list[str]]:
     python = str(Path(sys.executable).resolve())
     workspace = f"<run-root>/cells/{cell['cell_id']}/attempts/<attempt>/workspace"
+    case = config["cases"][cell["case"]]
+    baseline_directory = _baseline_visualization_directory_name(case["baseline"])
+    visualization_prefix = f"{cell['cell_id']}__attempt-<attempt>__"
     commands = [[python, "-m", "yadof", "init", workspace]]
     commands.append([python, "-m", "yadof", "check", "--workspace", workspace])
-    case = config["cases"][cell["case"]]
     if cell["kind"] == "smoke":
         commands.append(
             [
@@ -946,9 +956,9 @@ def _planned_commands(
             workspace,
             (
                 f"<run-root>/{VISUALIZATION_DIRECTORY_NAME}/"
-                f"{cell['cell_id']}__attempt-<attempt>"
+                f"{baseline_directory}"
             ),
-            "",
+            visualization_prefix,
         )
     )
     commands.append(
@@ -1570,6 +1580,12 @@ def _prepare_attempt(
     attempt_root = _attempt_directory(run_root, cell_plan["cell_id"], attempt_number)
     attempt_root.mkdir(parents=True, exist_ok=False)
     workspace = attempt_root / "workspace"
+    baseline_directory = _baseline_visualization_directory_name(
+        spec["cases"][cell_plan["case"]]["baseline"]
+    )
+    visualization_file_prefix = _visualization_file_prefix(
+        str(cell_plan["cell_id"]), attempt_number
+    )
     attempt = {
         "attempt": attempt_number,
         "replacement_for": attempt_number - 1 if attempt_number > 1 else None,
@@ -1582,17 +1598,14 @@ def _prepare_attempt(
         "visualization_output_dir": str(
             run_root
             / VISUALIZATION_DIRECTORY_NAME
-            / _visualization_result_directory_name(
-                str(cell_plan["cell_id"]), attempt_number
-            )
+            / baseline_directory
         ),
-        "visualization_file_prefix": "",
+        "visualization_file_prefix": visualization_file_prefix,
         "cost_visualization_output": str(
             run_root
             / VISUALIZATION_DIRECTORY_NAME
             / VIEW_COST_DIRECTORY_NAME
-            / f"{_visualization_file_prefix(str(cell_plan['cell_id']), attempt_number)}"
-            f"{COST_PLOT_NAME}"
+            / f"{visualization_file_prefix}{COST_PLOT_NAME}"
         ),
         "commands": [],
         "sealed_utc": None,

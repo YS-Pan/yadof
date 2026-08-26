@@ -31,7 +31,7 @@ and prefix-capable visualization output, then refreshed on 2026-08-25 with the
 generic Windows short-launch-junction Chrono adapter fix. The selected synthetic
 `test_com` task retains its 20-variable non-separable multimodal landscape. All
 three current baselines accept the runner's output directory and filename-prefix
-interface. The runner now gives each measured attempt its own result directory and
+interface. The runner now groups task-specific artifacts by baseline workspace and
 groups all cost views in one sibling directory. Superseded baseline identities
 remain immutable inputs by default; removal is exceptional and requires explicit
 maintainer direction.
@@ -135,9 +135,11 @@ the append-only logs still preserve stdout and stderr separately.
 Every measured optimization calls the selected baseline's root `postprocess.py`
 after its final generation. SAW writes S-parameter plots/data, Chrono writes a
 trebuchet MP4/poster/manifest, and test_com writes a compact antenna response plot.
-The runner writes those task-specific artifacts without a prefix in one independent
-`visualizations/<cell-id>__attempt-<NNNN>/` directory per measured attempt. It then
-invokes `yadof view cost` and groups every cost plot in
+The runner writes those task-specific artifacts into one
+`visualizations/<baseline-id>/` directory per baseline workspace. All measured
+cells for that baseline share the directory and use the collision-safe
+`<cell-id>__attempt-<NNNN>__` filename prefix. It then invokes `yadof view cost`
+and groups every cost plot in
 `visualizations/viewcost/` under the collision-safe
 `<cell-id>__attempt-<NNNN>__benchmark-cost.png` name. Either postprocessing or
 cost-view failure fails the attempt so missing human-review artifacts are explicit.
@@ -297,9 +299,9 @@ runs/<run-id>/
   visualizations/
     viewcost/
       <cell-id>__attempt-<NNNN>__benchmark-cost.png
-    <cell-id>__attempt-<NNNN>/
-      postprocess_manifest.json
-      <task-specific-artifact>
+    <baseline-id>/
+      <cell-id>__attempt-<NNNN>__postprocess_manifest.json
+      <cell-id>__attempt-<NNNN>__<task-specific-artifact>
   evidence/collect-<NNNN>/   append-only collection and public tool outputs
   reports/report-<NNNN>/     append-only report snapshots
 ```
@@ -423,12 +425,12 @@ To add a case:
    current `yadof init`, deliberate task-input transfer, zero runtime evidence,
    a root `postprocess.py` implementing the common `--workspace`, `--output-dir`,
    and `--output-prefix` interface, `yadof check`, and one disposable smoke. The
-   postprocessor receives its attempt-specific, initially empty result directory
-   below `visualizations/` and an empty filename prefix. It must write every
-   persistent artifact directly in that directory, create no further result
-   subdirectories, and refuse to overwrite existing names. Temporary scratch
-   belongs outside the result directory. The runner owns the separate shared
-   `visualizations/viewcost/` directory and its prefixed cost-plot names.
+   postprocessor receives the baseline-specific shared result directory below
+   `visualizations/` and a collision-safe cell/attempt filename prefix. It must
+   write every persistent artifact directly in that directory, create no further
+   result subdirectories, and refuse to overwrite existing names. Temporary
+   scratch belongs outside the result directory. The runner owns the separate
+   shared `visualizations/viewcost/` directory and its prefixed cost-plot names.
 2. Add matching `provider_id`, `task_id`, `baseline_id`, and full task fingerprint
    to `baseline.json`, then declare the exact baseline path, `include_paths`,
    objective count, rawData shapes, resource prerequisite, history policy, and

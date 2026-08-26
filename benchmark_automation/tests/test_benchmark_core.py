@@ -197,6 +197,7 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
     config = {
         "cases": {
             "case-a": {
+                "baseline": "baselines/provider/task-111111111111",
                 "mode": "fast",
                 "observed_eval_sec": 2.0,
                 "estimated_record_mib": 1.5,
@@ -245,11 +246,12 @@ def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
     )
     assert all(
         cell["planned_commands"][-2][-3]
-        == f"<run-root>/visualizations/{cell['cell_id']}__attempt-<attempt>"
+        == "<run-root>/visualizations/task-111111111111"
         for cell in measured
     )
     assert all(
-        cell["planned_commands"][-2][-1] == ""
+        cell["planned_commands"][-2][-1]
+        == f"{cell['cell_id']}__attempt-<attempt>__"
         for cell in measured
     )
     assert all(
@@ -329,6 +331,15 @@ def test_repository_performance_suite_uses_substantial_budget() -> None:
     assert sum(cell["planned_attempted_evaluations"] for cell in measured) == 36_000
     assert plan["selection"]["arms"] == ["nsga3", "gpsaf-conditional-inr"]
     assert all(config["cases"][case_id]["max_workers"] == 32 for case_id in config["cases"])
+    baseline_result_dirs = {
+        cell["planned_commands"][-2][-3]
+        for cell in measured
+    }
+    assert baseline_result_dirs == {
+        f"<run-root>/visualizations/{Path(config['cases'][case_id]['baseline']).name}"
+        for case_id in plan["selection"]["cases"]
+    }
+    assert len(baseline_result_dirs) == 3
     assert config["runner"]["measured_config_overrides"] == {
         "HISTORY_SEGMENT_MAX_CANDIDATES": 100,
         "HISTORY_UNPUBLISHED_MAX_CANDIDATES": 128,
@@ -484,14 +495,19 @@ def test_attempt_replacement_links_to_sealed_predecessor(tmp_path: Path) -> None
     run_root = tmp_path / "runs" / "run"
     cell_plan = {"cell_id": "case__real__seed-1", "case": "case", "arm": "real", "seed": 1}
     cell_state = {"status": "pending", "attempts": []}
-    _root1, attempt1 = core._prepare_attempt({}, paths, run_root, {}, cell_plan, cell_state)
+    spec = {
+        "cases": {"case": {"baseline": {"baseline_id": "task-111111111111"}}}
+    }
+    _root1, attempt1 = core._prepare_attempt({}, paths, run_root, spec, cell_plan, cell_state)
     attempt1["status"] = "failed"
     cell_state["status"] = "failed"
-    _root2, attempt2 = core._prepare_attempt({}, paths, run_root, {}, cell_plan, cell_state)
+    _root2, attempt2 = core._prepare_attempt({}, paths, run_root, spec, cell_plan, cell_state)
     assert attempt1["attempt"] == 1
     assert attempt2["attempt"] == 2
     assert attempt2["replacement_for"] == 1
     assert Path(attempt1["workspace"]).parent != Path(attempt2["workspace"]).parent
+    assert attempt1["visualization_output_dir"] == attempt2["visualization_output_dir"]
+    assert attempt1["visualization_file_prefix"] != attempt2["visualization_file_prefix"]
 
 
 def test_candidate_budget_uses_public_generation_population_sizes() -> None:
@@ -550,14 +566,16 @@ def test_suite_failure_policy_controls_independent_cells(
     assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
 
 
-def test_measured_cell_separates_postprocess_results_from_shared_viewcost(
+def test_measured_cell_groups_postprocess_results_by_baseline_and_shares_viewcost(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     run_root = tmp_path / "run"
     run_root.mkdir()
     visualization_dir = run_root / "visualizations"
     visualization_dir.mkdir()
-    (visualization_dir / "prior-cell.png").write_bytes(b"prior")
+    result_dir = visualization_dir / "task-111111111111"
+    result_dir.mkdir()
+    (result_dir / "prior-cell.png").write_bytes(b"prior")
     paths = core.Paths(
         tmp_path,
         tmp_path / "benchmark.toml",
@@ -580,7 +598,10 @@ def test_measured_cell_separates_postprocess_results_from_shared_viewcost(
         "runner": {"command_timeout_sec": 30},
         "cases": {
             "case": {
-                "baseline": {"include_paths": ["config.py"]},
+                "baseline": {
+                    "baseline_id": "task-111111111111",
+                    "include_paths": ["config.py"],
+                },
                 "mode": "fast",
             }
         },
@@ -618,19 +639,18 @@ def test_measured_cell_separates_postprocess_results_from_shared_viewcost(
     ]
     attempt = state["cells"][cell["cell_id"]]["attempts"][0]
     visualization_prefix = f"{cell['cell_id']}__attempt-0001__"
-    result_dir = visualization_dir / f"{cell['cell_id']}__attempt-0001"
     viewcost_dir = visualization_dir / "viewcost"
     assert Path(attempt["visualization_output_dir"]) == result_dir
-    assert attempt["visualization_file_prefix"] == ""
+    assert attempt["visualization_file_prefix"] == visualization_prefix
     assert Path(attempt["cost_visualization_output"]) == (
         viewcost_dir / f"{visualization_prefix}benchmark-cost.png"
     )
     assert visualization_dir.is_dir()
     assert result_dir.is_dir()
     assert viewcost_dir.is_dir()
-    assert (visualization_dir / "prior-cell.png").read_bytes() == b"prior"
+    assert (result_dir / "prior-cell.png").read_bytes() == b"prior"
     assert commands[-2][1][-3] == str(result_dir)
-    assert commands[-2][1][-1] == ""
+    assert commands[-2][1][-1] == visualization_prefix
     assert commands[-1][1][-1] == str(
         viewcost_dir / f"{visualization_prefix}benchmark-cost.png"
     )
