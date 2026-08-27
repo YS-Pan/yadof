@@ -165,6 +165,24 @@ strategy 内增加窄 adapter；不新增通用 public `search.propose_pool()` �
 8. 保存 compact strategy/acquisition metadata：backend/version、pool/draw/support sizes、
    seed、reference point、baseline count、timings、fallback 和失败统计。
 
+### Applicability exploitation gate handoff（来自 082608 Gate 0 v5）
+
+当前前置条件未满足：082608 v5 的 full-grid/quality gate 失败，coordinate/offline-test 被阻塞，
+082609 尚未在独立 calibration designs 上产出可用 probability capability。因此这里不得先把
+当前 experimental head 接入 exploitation，也不得用 v5 validation diagnostics 临时决定阈值。
+
+- 低 `P(smooth)` 候选不得无条件进入 qNEHVI exploitation pool；按实现前封存的 policy 将其
+  排除或作保守处理。该 policy、概率版本和阈值属于 strategy semantic identity。
+- 必须保留显式、可审计的真实 exploration quota，可探索低 applicability/分类边界区域，
+  防止分类器形成永久盲区；探索结果仍走 common real evaluation/recording。
+- 禁止仅扩大低 applicability 候选的 posterior variance：risk-neutral qNEHVI 可能反而偏爱
+  高方差 chatter 区。也禁止用 training loss、cost 或 member min/max 替代校准概率。
+- applicability gate 只消费 082609 产出的显式 typed capability；本 TODO 不重新训练分类器，
+  不改变 zero-observation-noise 与 persistent function-draw identity。
+- 只有后续 architecture 通过 082608 successor gate、082609 校准并冻结 signature/threshold
+  后，本 TODO 才能预注册低 `P(smooth)` 的排除/保守规则和真实 exploration quota；所有低
+  applicability/boundary exploration 仍必须走真实公共 evaluator，以免分类器形成永久盲区。
+
 ## qNEHVI 语义细节
 
 ### 多目标和 reference point
@@ -227,6 +245,8 @@ strategy 内增加窄 adapter；不新增通用 public `search.propose_pool()` �
 - 证明 rawData 按 draw 投影后立即释放，保存状态中没有 predicted rawData。
 - 证明所有选中点都经过 common real evaluator/finalizer/recorder；recording failure 仍按
   当前契约中止 campaign。
+- 测试低 applicability exploitation 排除/保守路径、显式 real exploration quota、边界探索
+  诊断，以及“只增大 variance”不会被当成合法 gate。
 - 现有 GPSAF 和 real-search 回归测试逐项不变，普通 import 不加载新可选依赖。
 
 ## 非目标

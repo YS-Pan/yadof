@@ -96,13 +96,20 @@
   persistent joint function samplers, streamed draw/chunk projection, honest
   finite-versus-continuous support, and semantic-capability identity. It imports no
   optional numerical backend.
-- `surrogate`: lightweight public component/API over that protocol and the private
-  `surrogate.conditional_inr` model, strategy/component-keyed schedule and state,
-  rawData prediction, dynamic cost conversion, and atomic recoverable checkpoints
-  scoped to the active strategy.
+- `surrogate`: lightweight public component/API over that protocol and separate
+  private `surrogate.conditional_inr` and experimental
+  `surrogate.hierarchical_cae` models, strategy/component-keyed schedules and
+  state, rawData prediction, dynamic cost conversion, and atomic recoverable
+  checkpoints scoped to the active strategy. `surrogate.quality` owns only the
+  JSON-safe assessment/policy protocol and generic weights/labels; task diagnostic
+  names and thresholds remain workspace/benchmark declarations.
   The explicit `conditional_inr_posterior()` adapter fixes one ensemble member per
   draw, reconstructs every selected member on the full stored grid, and reports
   nominal and effective finite support without changing `conditional_inr()`.
+  `hierarchical_cae()` shares field codecs across independent parameter-predictor
+  members and exposes an uncalibrated applicability score with zero observation
+  noise. Its initial full-grid candidate failed Gate 0 v5, so coordinate/viewer and
+  production-strategy integration are intentionally absent.
 - `tools`, `_resources`: reusable `tools.cost_viewer` package with left-axis
   objective/average costs and a right-axis all-individual versus
   current-generation hypervolume interval, shaded and bounded by thin translucent
@@ -146,6 +153,9 @@ protocol without being imported by optimization. The Gate 2 qLogNEHVI backend is
 one such sample consumer but is not a strategy. The current GPSAF strategy does not
 consume this capability, so its conditional-INR semantic identity and checkpoint
 signature remain unchanged.
+The experimental hierarchical CAE implements the posterior protocol directly, but
+its failed v5 development gate prevents downstream calibration or acquisition from
+treating it as an accepted production backend.
 `evaluate_manager` consumes task and recorded-data APIs. `recorded_data` and
 `surrogate` may ask `job_template` to reinterpret evidence. Core runtime modules
 never import `tools`. Workspace workflows may import files copied beside them and

@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "preregistration_id": "20260827-new-surrogate-qnehvi-gate0-v2-quality-regime",
+  "parent_preregistration_id": "20260827-new-surrogate-qnehvi-gate0-v1",
+  "status": "gate-0-v2-frozen-formal-benchmark-blocked",
+  "captured_utc": "2026-08-27T09:25:00Z",
+  "purpose": "Add quality/regime robustness metrics, ablations, interfaces, and task-owned Chrono diagnostic policy before any future offline test or formal-result access, without mutating Gate 0 v1.",
+  "artifact_integrity": {
+    "parent": {
+      "benchmark_preregistration.json": "71a4ab2adbb131274735f1784de72b8a427a2dea261087994d1fd585df16357d",
+      "schema_inventory.json": "d73daa5d10ba19fb2af40137c8133758347fc939ac34ebe9e91d365fdd5aa431",
+      "data_availability_audit.json": "0d982415ac60453385f00e021a332290f2ace0e46221024c65b4a92136d47ebb",
+      "acceptance_thresholds.template.json": "d7bf8dc8a7278403711a5a4af02fb619362a38cfeca790476f959d4be42e1a60"
+    },
+    "v2": {
+      "noise_audit_evidence.json": "b6ddf490b74351edf108043fdbbc68684e56f9bd8deba4d756a62da3b62454e4",
+      "quality_regime_protocol.json": "4fa3ac52ad4d7eaeb70e49d223d46bc9e94e81936c7f9b7561d7c9a4813e0e6f",
+      "acceptance_thresholds.template.json": "7a7b19e4d2da15f1e7d552cf42f8cb2055727b80ee0110444a5712c24bdd8259",
+      "../../representation_dataset_v2.toml": "718a2dfb0fde46cc3e2899921d4491250369c1fa2f9a9922e9f402a61a02ac48"
+    }
+  },
+  "parent_contract_preserved": {
+    "schema_inventory": true,
+    "design_identity_and_split": true,
+    "seed_registry": true,
+    "baseline_task_and_source_hashes": true,
+    "zero_observation_noise": true,
+    "rawdata_first_prediction": true,
+    "formal_dataset_or_test_accessed": false
+  },
+  "authorization_scope_update": {
+    "real_simulation_authorized_for_082608_dataset_and_representation_benchmark": true,
+    "full_082611_qnehvi_strategy_or_150000_attempt_formal_matrix_authorized_here": false,
+    "single_long_process_rule": "Launch at most one long campaign/benchmark process and follow the same process to its final exit code; never duplicate it for progress visibility.",
+    "campaign_consistency": "One frozen task snapshot, runtime block, design identity assignment, and evidence root per case; reliability failure stops acceptance."
+  },
+  "dataset_generation_plan": {
+    "registered_before_launch": true,
+    "source_suite_contract": "A v2 immutable config copies the Gate 0 v1 case/runner/nsga3 contracts and adds only the registered two-seed representation-dataset suite; default benchmark.toml remains unchanged",
+    "config": "../../representation_dataset_v2.toml",
+    "command_shape": "benchmark.py --config benchmark_automation/representation_dataset_v2.toml run --suite representation-dataset --run-id <immutable-id> --stream-output",
+    "seeds": [253655847, 1388783452],
+    "seed_derivation": "int.from_bytes(SHA256('yadof:new-surrogate-qnehvi:gate0:v2:dataset-generation:' + decimal_index)[:4], 'big') & 0x7fffffff",
+    "cases": ["saw", "chrono", "test-com"],
+    "population": 100,
+    "generations": 20,
+    "attempted_evaluations_per_seed_case": 2000,
+    "planned_attempted_evaluations_per_case": 4000,
+    "planned_total_attempted_evaluations": 12000,
+    "eligibility_rule": "Union completed schema-compatible real rows from both immutable seed cells, group exact duplicate canonical design IDs, require at least 2800 unique designs per case, then apply the unchanged v1 assignment algorithm.",
+    "test_access": "The sealing tool may validate/hash all eligible rows and assign opaque design IDs, but model/metric code cannot materialize test rows before thresholds are sealed."
+  },
+  "quality_regime_metrics": {
+    "roughness_features": {
+      "second_difference_rms": "RMS of the second finite difference divided by max(p95-p05, standard deviation, 1e-12)",
+      "high_frequency_energy_ratio": "rFFT power in the highest frequency quartile divided by non-DC power",
+      "derivative_reversal_fraction": "fraction of adjacent first differences whose product is negative",
+      "rawdata_mutation_allowed": false
+    },
+    "clean_target_high_frequency_leakage_rate": "Among task-assessed smooth held-out fields, fraction whose predicted high-frequency energy ratio exceeds the sealed training/validation reference rule.",
+    "predicted_to_real_roughness_inflation": "For each assessment stratum and field, ratio of median predicted roughness feature to median real roughness feature; report every feature and field before macro aggregation.",
+    "regime_classifier": {
+      "positive_label": "task-assessed smooth",
+      "negative_label": "task-assessed chatter or failure",
+      "metrics": ["AUPRC", "Brier score", "10-bin equal-mass reliability curve", "expected calibration error"],
+      "cost_or_training_loss_as_label_or_trust_rule": false,
+      "probability_calibration_stage": "082609 on the independent calibration partition; 082608 reports uncalibrated validation diagnostics only"
+    },
+    "strata": {
+      "smooth": "task assessment design_regime=smooth",
+      "chatter": "task assessment design_regime=chatter",
+      "failure": "task assessment design_regime=failure",
+      "boundary": "validation designs whose 10 nearest train designs in canonical normalized-parameter Euclidean distance include both smooth and non-smooth labels; deterministic ties use design identity"
+    },
+    "aggregation": "Compute each metric per design and field, then equal-weight fields; never weight by field point count. Report smooth/chatter/failure/boundary separately."
+  },
+  "required_ablations": [
+    {
+      "id": "no-gating",
+      "robust_field_weighting": false,
+      "shared_token_isolation": false,
+      "private_residual_gate": false,
+      "applicability_head": false
+    },
+    {
+      "id": "robust-weighting-only",
+      "robust_field_weighting": true,
+      "shared_token_isolation": false,
+      "private_residual_gate": false,
+      "applicability_head": true
+    },
+    {
+      "id": "shared-latent-isolation",
+      "robust_field_weighting": true,
+      "shared_token_isolation": true,
+      "private_residual_gate": false,
+      "applicability_head": true
+    },
+    {
+      "id": "gated-private-residual",
+      "robust_field_weighting": true,
+      "shared_token_isolation": true,
+      "private_residual_gate": true,
+      "applicability_head": true
+    }
+  ],
+  "thresholds": {
+    "template": "acceptance_thresholds.template.json",
+    "status": "unsealed",
+    "numeric_values_all_null": true,
+    "formal_test_ready": false,
+    "reason": "The descriptive noise audit is not a legal validation/threshold-pilot partition and no sealed 2800-design formal dataset exists yet."
+  },
+  "coordinate_readout_gate": {
+    "implementation_may_start_only_after": [
+      "full-grid representation thresholds are sealed from legal validation/pilot evidence",
+      "the 1000/2000-design full-grid validation gate passes",
+      "stored-grid consistency, legal off-grid truth, wall-clock, and memory thresholds are sealed"
+    ],
+    "current_status": "blocked"
+  },
+  "downstream_handoff": {
+    "082609": "Calibrate applicability/regime probability on independent calibration designs and check classification calibration plus ensemble epistemic spread; never infer trust from training loss, cost, or member min/max.",
+    "082611": "Exclude low-P(smooth) candidates from qNEHVI exploitation or apply the preregistered conservative policy, while preserving an explicit real exploration quota; do not merely inflate variance.",
+    "082612": "Retain v2 leakage/roughness/classifier/stratified metrics and all four robustness ablations; seal numeric thresholds only from legal validation/threshold-pilot evidence before test access."
+  },
+  "readiness": {
+    "parent_gate0_validator_required": true,
+    "v2_validator_required": true,
+    "eligible_frozen_dataset_available": false,
+    "numeric_thresholds_sealed": false,
+    "formal_test_ready": false,
+    "simulator_launched_by_preregistration": false
+  }
+}

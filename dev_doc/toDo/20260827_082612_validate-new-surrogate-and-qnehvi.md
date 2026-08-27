@@ -84,6 +84,44 @@ inventory 不变（否则新建 preregistration 版本），不得提前作 1000
 或优化性能结论。合法 frozen dataset 只在 Gate 4 前成为硬依赖；正式 test/真实比较
 还必须先封印数值 thresholds 并获得对应 campaign 授权。
 
+### Gate 0 v2 quality/regime 追加预注册（2026-08-27）
+
+在读取任何未来 offline test/formal result 前，已新建
+[Gate 0 v2](../../benchmark_automation/preregistrations/20260827-new-surrogate-qnehvi-v2/README.md)，
+保留并继续校验 v1，而非篡改其“无 structure metric”含义。v2 冻结：
+
+- versioned quality/regime protocol 与 task-owned Chrono diagnostic policy；
+- clean-target 高频泄漏率、predicted/real roughness inflation、regime classifier AUPRC、Brier、
+  reliability/ECE，以及 smooth/chatter/failure/boundary 分层指标；
+- `无门控 / 仅稳健加权 / shared-latent 隔离 / gated residual` 四臂消融；
+- applicability calibration 的 082609 handoff 与 exploitation/exploration 的 082611 handoff；
+- zero observation noise、rawData 不改写、cost 不作 label/trust rule 的边界。
+
+当前 v2 threshold template 的 25 个数值槽全部保持 `null`；1929-row Chrono noise audit 只作
+动机证据，不是合法 threshold pilot。因此 v2 validator 虽可通过，仍明确
+`formal_test_ready=false`，不得用描述性审计数值冒充验收门槛。
+
+### Gate 0 v3--v5 dataset、validation 与停止决定（2026-08-27）
+
+- v3 在不改 v1/v2 split/seed 含义的前提下，固化 task diagnostic 路径和一个真实 campaign
+  生成的 sealed dataset manifest。唯一 campaign 完成 6/6 cells、12000 attempted real
+  evaluations；三个 case 各封存 2800 designs，development/calibration/offline-test 分区合计为
+  6600/600/1200。offline-test locator 从未被 validation 打开。
+- v4 保留首次 validator 0-cell/exit-1 的失败 receipt；只修复 conditional-INR metric adapter
+  的 frozen metadata 恢复后，冻结第二版 116-cell plan。唯一 validation 长进程完成
+  116/116 cells、exit 0、wall 10501.691 s，没有启动 simulator。
+- v5 使用 development-validation evidence 封存 082608 representation 与 quality/regime
+  门槛，并冻结可复算 decision。field-macro MAE/最差字段 guard 在多个 case/size 失败；Chrono
+  gated arm 的 clean 高频泄漏与 smooth roughness 也超限，并且相对 shared isolation 没有改善。
+  因此 `representation_passed=false`、`quality_regime_passed=false`、
+  `full_grid_gate_passed=false`。
+
+v5 只封存了有合法证据的 082608 数值。coordinate stored-grid/off-grid/资源门槛、082609
+posterior/applicability calibration、082611 qNEHVI decision/exploration、082612 formal optimization
+与总工程成本门槛仍未封存。coordinate gate、calibration/offline-test access 和 082608 归档均
+保持 blocked。后续可以新建版本预注册 evidence-triggered regime-specialized/MoE 对照，但
+不得改写 v5 或在当前任务中提前实现该架构。
+
 ## Gate 2 执行状态（2026-08-27）
 
 最早垂直切片已完成：conditional-INR 的显式 finite empirical posterior adapter 与 fake /
@@ -161,6 +199,13 @@ active。
 - 完整 predicted rawData 经 current cost 后的 objective MAE/rank correlation；
 - Pareto dominance/ranking consistency；
 - global-only、global+explicit-group、完全独立字段和无 coordinate-consistency 的消融。
+- 抗噪四臂消融：无门控、仅 design × field 稳健加权、shared-latent 隔离、gated
+  field-private residual；所有臂使用相同 design split/seed，不能隐藏失败臂。
+- clean-target 高频泄漏率、predicted/real roughness inflation，以及 smooth/chatter/failure/
+  parameter-boundary 分层 rawData/current-cost 指标；结构特征只作预登记 task-neutral metric，
+  不修改 rawData。
+- regime/applicability classifier 的 AUPRC、Brier、reliability curve/ECE；082608 只报告
+  未校准 validation diagnostics，独立 calibration designs 上的概率校准属于 082609。
 - rank-3 antenna fields 的显式 `Freq` channel + `Phi/Theta` Conv2d layout，与未声明 layout
   的拒绝行为；不默认把小轴猜成 channel。
 
@@ -206,6 +251,10 @@ active。
   开销；默认不分组不承担 group-state 成本。
 - coordinate trunk 的独立启动条件：full-grid CAE 先通过，且 viewer/off-grid 指标与资源
   预算已登记；未达到条件时延期 trunk，不推翻 rawData/qNEHVI 垂直切片。
+- clean-target 高频泄漏、roughness inflation、regime classifier、各 strata 和四臂消融的
+  082608 development-validation 数值已由 v5 合法封存，但当前模型未通过；独立 calibration
+  designs 上的概率校准、formal-test 与上线门槛仍只能由后续合法 evidence 封存，blocked
+  状态不是通过。
 
 本 TODO 不凭空指定百分比，因为尚无数据分布和硬件基线。门槛必须在 test 集和正式真实
 campaign 结果揭晓前登记；看过结果后调门槛视为新实验，不算原验收通过。

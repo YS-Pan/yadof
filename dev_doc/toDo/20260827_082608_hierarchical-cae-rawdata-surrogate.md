@@ -210,6 +210,74 @@ path 防止负迁移。只有该简单结构的 validation/ablation 证明无法
 让每个 predictor member 对所有字段给出一个联合函数；只有 held-out calibration/decision
 benchmark 证明 decoder/codec epistemic uncertainty 不可忽略时，才升级为完整模型 ensemble。
 
+## 2026-08-27 quality/regime 抗噪 MVP 追加边界
+
+在 formal dataset/test 尚未出现时，Gate 0 已新增不可变 v2 预注册，而没有修改 v1 的
+inventory/splits/seeds。当前 Chrono 证据更符合参数决定的 chatter/failure regime，不解释为
+measurement noise；不得按 cost 过滤、平滑或改写原始 rawData。
+
+本 TODO 的实际实现同时要求：
+
+- core 只拥有版本化、JSON-safe 的 assessment/policy、字段权重、validation、semantic
+  identity/checkpoint/diagnostics；Chrono release/cutoff/contact/recontact 规则由 task policy
+  声明，不能以未追踪 callback 或字段名硬编码进入 core；
+- 损失先形成 design × field 矩阵，再做 capped/weighted macro aggregation；no-policy 默认
+  明确退化为普通等权 field macro，noisy curves 不会连带丢弃同一设计的有效 scalars；
+- noisy/低可信 token 在 teacher fusion 前 mask/downweight，chatter 高频残差只经过
+  field-private gated residual；smooth target 的 residual gate 为零，从结构上限制 clean
+  target 高频泄漏；
+- parameter predictor 提供未校准 `P(smooth)`/applicability head。policy/version、标签语义、
+  权重/阈值、head/loss 配置全部进入 identity/checkpoint；本 TODO 不提前做 082609 概率校准；
+- regime uncertainty 仍是 epistemic/结构状态不确定性，observation noise 保持 zero；同一
+  posterior member/draw 必须跨 candidates/fields 保持身份。
+
+预登记消融固定为 `无门控 / 仅稳健加权 / shared-latent 隔离 / gated residual`。只有 held-out
+证据仍显示明显 clean-target 泄漏，才允许后续 gate 比较 mixture-of-experts；本轮不实现。
+
+## 2026-08-27 实施与 Gate 4 结果
+
+本轮已完成并保留一个可安装、可恢复的 experimental full-grid MVP：stable-selector schema、
+scalar/Conv1d/Conv2d codecs、global/optional-group/field-private latent、共享 codecs 的 predictor
+ensemble、完整 rawData/current-cost 推理、原子 checkpoint/recovery、persistent finite posterior
+draw，以及上述 quality/regime 协议、稳健 design × field loss、shared-token 隔离、gated private
+residual 和未校准 applicability API。现有 conditional-INR 训练与 checkpoint 语义未修改。
+
+实验严格只启动了一个真实数据 campaign 和一个 validation 长进程：
+
+- campaign `hierarchical-cae-gate4-v2-20260827` 的 6 个 cell 全部完成，合计 12000 次 attempted
+  real evaluations；每个 case 从可解释证据中封存 2800 个 design，固定为 development 6600、
+  calibration 600、offline-test 1200。权威清单位于
+  `temp/hierarchical_cae_gate4_runs/hierarchical-cae-gate4-v2-20260827/dataset_seal/sealed_dataset_manifest.json`
+  （SHA-256 `2d1af1439e8e82899a3a6a59a798ba8aefc1c51562a8f3f2d8f8e59b18b4d5c9`）。
+- Gate 0 v3 固化 task diagnostic 路径与 dataset seal；v4 保留首次 0-cell/exit-1 失败证据，且只
+  修复 conditional-INR benchmark metadata adapter 后冻结 116-cell `validation_plan_v2.json`。
+  同一 validation 进程完成 116/116 cells、exit 0、wall 10501.691 s；validation summary SHA-256
+  为 `f672bfa115238718388a17d66b4aaf63066f07a6072bf4a9c96a9e4250aeb0f2`。validation 未启动
+  simulator，也未打开 calibration/offline-test locator。
+- Gate 0 v5 只使用 development-validation 证据封存 082608 representation/quality 数值门槛，
+  并把判定固化到 `validation_decision.json`；它没有放宽门槛来制造通过。
+
+Gate 4 的 full-grid 判定为 **失败**。生产候选相对 conditional-INR 的五 seed 均值如下；
+列依次为 field-macro MAE ratio、RMSE ratio、current-cost macro MAE ratio、最差单字段 RMSE
+ratio：
+
+| case / production arm | train=1000 | train=2000 |
+|---|---|---|
+| SAW / `groups-none` | 1.14577 / 0.98156 / 0.96824 / 1.02985 | 1.15204 / 0.95774 / 1.07139 / 0.98648 |
+| Chrono / `gated-private-residual` | 1.16701 / 0.99810 / 0.92417 / 2.64995 | 1.26278 / 1.00331 / 0.98644 / 3.85268 |
+| test-com / `groups-none` | 1.14817 / 1.06881 / 0.65736 / 2.69171 | 0.89732 / 0.83051 / 0.51594 / 2.76786 |
+
+Chrono gated arm 的 clean-target 高频泄漏率为 0.37714/0.36857，smooth predicted/real 高频
+roughness median ratio 为 2.4013/2.3137；两种训练规模下的泄漏分别比 shared-latent
+isolation 高 5.60%/2.38%。分类诊断本身达到 validation 门槛（AUPRC 0.3204/0.37278、Brier
+0.08130/0.07671、ECE 0.05262/0.03684），但不能抵消 representation、clean leakage、smooth
+roughness 和 gated-ablation 的失败。
+
+因此本 TODO 保持 active：coordinate readout/viewer adapter 不得实现，offline test 不得读取，
+也不能进入 082609 calibration 或 082611 qNEHVI exploitation。下一 architecture gate 可在新
+版本预注册中比较有界 regime-specialized/mixture-of-experts 方案；这是 v5 证据触发的后续
+工作，不属于本 MVP，也不能修改 v5 的冻结含义。
+
 ## 数据规模与调度目标
 
 - 验收重点是 1000 和 2000 个设计附近，不设置小样本性能门槛。
@@ -253,6 +321,9 @@ benchmark 证明 decoder/codec epistemic uncertainty 不可忽略时，才升级
 - design-level split 无坐标泄漏，early stopping 只看 validation designs。
 - checkpoint 原子发布、恢复、namespace 隔离、配置/axis/group 不兼容时冷训练。
 - Torch 仍按选择 lazy import；无对应 extra 时错误可操作。
+- quality assessment 的显式诊断优先级、task diagnostic declarative rules、shape fallback、
+  no-policy 普通行为、design × field cap/weight、shared mask、clean residual gate 和
+  applicability API/identity/checkpoint 全部有测试。
 
 ## 非目标
 
@@ -273,3 +344,7 @@ benchmark 证明 decoder/codec epistemic uncertainty 不可忽略时，才升级
 - coordinate viewer adapter、配置、架构、blueprints、terminology、user docs、artifact 和
   installed-wheel 测试已更新；
 - 现有 conditional-INR/GPSAF 回归测试保持通过，随后将本 TODO 移入 obsolete。
+
+当前只满足组件、full-grid rawData、checkpoint、posterior/quality 协议与相应文档测试部分。
+Gate 0 v5 已明确 `full_grid_gate_passed=false`，所以 1000--2000 design 性能、coordinate
+readout/viewer 和最终归档三项 completion rule 尚未满足；不得移动到 `obsolete/`。

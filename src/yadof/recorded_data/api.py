@@ -149,6 +149,34 @@ def get_rawdata_samples(
     )
 
 
+def get_named_rawdata_samples(
+    workspace: WorkspaceLike,
+    *,
+    job_names: Sequence[str] | None = None,
+    status: str | None = None,
+):
+    """Return rawData evidence with stable direct NPZ basenames."""
+
+    _context, storage = _context_and_storage(workspace)
+    return _query.get_named_rawdata_samples(
+        storage, job_names=job_names, status=status
+    )
+
+
+def get_record_metadata(
+    workspace: WorkspaceLike,
+    *,
+    job_names: Sequence[str] | None = None,
+    status: str | None = None,
+) -> tuple[tuple[str, dict[str, object]], ...]:
+    """Return task/job metadata for selected durable record rows."""
+
+    _context, storage = _context_and_storage(workspace)
+    return _query.get_record_metadata(
+        storage, job_names=job_names, status=status
+    )
+
+
 def get_raw_data(
     workspace: WorkspaceLike,
 ) -> tuple[tuple[dict[str, object], ...], ...]:
@@ -251,6 +279,8 @@ __all__ = [
     "get_historical_optimization_results",
     "get_historical_results",
     "get_job_names",
+    "get_named_rawdata_samples",
+    "get_record_metadata",
     "get_normalized_variable_table",
     "get_normalized_variables",
     "get_optimization_history",

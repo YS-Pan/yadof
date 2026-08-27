@@ -578,6 +578,30 @@ class CampaignSession:
             )
         return tuple(output)
 
+    def record_metadata(
+        self,
+        *,
+        job_names: Sequence[str] | None = None,
+        status: str | None = None,
+    ) -> tuple[tuple[str, dict[str, object]], ...]:
+        """Return task/runtime metadata aligned by stable job name."""
+
+        requested = set(job_names) if job_names is not None else None
+        output = []
+        with self._state_lock:
+            rows = tuple(self._rows.values())
+        for row in rows:
+            name = str(row.record.get("job_name", ""))
+            if requested is not None and name not in requested:
+                continue
+            if status is not None and str(row.record.get("status")) != status:
+                continue
+            metadata = row.record.get("job_metadata")
+            output.append(
+                (name, dict(metadata) if isinstance(metadata, Mapping) else {})
+            )
+        return tuple(output)
+
     def counters(self) -> dict[str, object]:
         return self._writer.counters()
 

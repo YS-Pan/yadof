@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "evidence_id": "chrono-conditional-inr-noise-audit-20260827",
+  "role": "read-only motivation evidence; not a threshold pilot and not formal test evidence",
+  "source": {
+    "row_count": 1929,
+    "summary_path_at_registration": "../../../../temp/chrono_noise_audit/chrono_noise_summary.json",
+    "summary_sha256": "18209b9244c5aec35b1e7e66c129676251462f02b32c1bbeb5baeac27bcf474b",
+    "examples_path_at_registration": "../../../../temp/chrono_noise_audit/chrono_noise_examples.png",
+    "examples_sha256": "cf2ad0271de827fce0980a806913036a187a3957914f5a551d8d27ce019ec772",
+    "scatter_path_at_registration": "../../../../temp/chrono_noise_audit/chrono_noise_scatter.png",
+    "scatter_sha256": "5db69050f5dbb9b9415b042c128384e20f9e4d3ea6b87aa7d1f04a5494340e7c"
+  },
+  "registered_findings": {
+    "aggregate_spearman_four_cost_mean_vs_curve_roughness": 0.46942826632959583,
+    "representative_noisy_design_mean_cost": 0.5590497658625042,
+    "representative_noisy_design_released": false,
+    "representative_noisy_design_steps": 6000,
+    "representative_noisy_design_contacts_at_end": 5,
+    "representative_noisy_design_launch_runway_reattach_count": 138,
+    "representative_smooth_design_release_step": 433,
+    "representative_smooth_design_contacts_at_end": 0,
+    "representative_smooth_design_launch_runway_reattach_count": 0,
+    "stress_curve_worst_to_best_decile_roughness_ratio_approx": 30.0,
+    "position_velocity_worst_to_best_decile_roughness_ratio_range_approx": [3.5, 4.3],
+    "stress_curve_worst_decile_above_best_decile_p95_fraction_range": [0.83, 0.88]
+  },
+  "interpretation_frozen_before_formal_dataset_access": [
+    "The observed signal is treated as parameter-dependent chatter/failure regime evidence, not independent measurement noise.",
+    "Cost is correlated with the regime but is not an assessment label or filter.",
+    "Original rawData remains immutable and current calc_cost.py continues to receive it.",
+    "These descriptive observations justify preregistering metrics and ablations but do not supply numeric acceptance thresholds."
+  ],
+  "formal_dataset_or_test_accessed": false
+}

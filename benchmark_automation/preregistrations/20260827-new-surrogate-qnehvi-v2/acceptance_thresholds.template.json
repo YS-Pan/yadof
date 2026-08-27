@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "threshold_set_id": "20260827-new-surrogate-qnehvi-gate0-v2-quality-regime-template",
+  "status": "unsealed",
+  "formal_test_ready": false,
+  "evidence_partition_allowed": ["validation", "threshold-pilot"],
+  "evidence_partition_forbidden": ["offline-test", "formal-optimization-test"],
+  "sealing_rule": "Populate and hash a separate immutable sealed threshold file only after legal validation/threshold-pilot evidence and before any offline-test/formal-result access.",
+  "representation_thresholds": {
+    "train_1000": {
+      "field_macro_standardized_mae_max": null,
+      "field_macro_standardized_rmse_max": null,
+      "current_cost_mae_max_per_objective": null,
+      "single_field_regression_max": null
+    },
+    "train_2000": {
+      "field_macro_standardized_mae_max": null,
+      "field_macro_standardized_rmse_max": null,
+      "current_cost_mae_max_per_objective": null,
+      "single_field_regression_max": null
+    }
+  },
+  "quality_regime_thresholds": {
+    "clean_target_high_frequency_leakage_rate_max": null,
+    "predicted_to_real_roughness_inflation_max": null,
+    "regime_classifier_auprc_min": null,
+    "regime_probability_expected_calibration_error_max": null,
+    "regime_probability_brier_score_max": null,
+    "smooth_stratum_field_macro_error_max": null,
+    "chatter_stratum_field_macro_error_max": null,
+    "boundary_stratum_field_macro_error_max": null,
+    "gated_residual_vs_shared_isolation_required_improvement": null
+  },
+  "ablation_pass_logic": {
+    "no_gating": null,
+    "robust_weighting_only": null,
+    "shared_latent_isolation": null,
+    "gated_private_residual": null,
+    "rule": "Report all four arms on identical design partitions and seeds; no arm may be omitted because it underperforms."
+  },
+  "coordinate_readout_activation": {
+    "full_grid_representation_pass_required": true,
+    "stored_grid_consistency_max": null,
+    "off_grid_error_max": null,
+    "wall_clock_max": null,
+    "peak_memory_max_bytes": null,
+    "status": "blocked-until-full-grid-and-threshold-seal"
+  },
+  "null_count_expected": 25,
+  "note": "No numeric acceptance value is inferred from the descriptive 1929-row noise audit."
+}

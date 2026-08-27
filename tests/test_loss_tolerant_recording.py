@@ -130,6 +130,33 @@ def test_file_and_memory_evidence_finalize_to_equal_costs(tmp_path: Path) -> Non
         session.close()
 
 
+def test_named_rawdata_and_record_metadata_align_in_live_and_durable_views(
+    tmp_path: Path,
+) -> None:
+    root = _workspace(tmp_path / "workspace")
+    session, snapshot = _session(root)
+    try:
+        finalize_result(session, snapshot, _result(0, 0.35))
+        session.flush_boundary()
+        live_named = session.named_rawdata_samples(status="completed")
+        live_metadata = session.record_metadata(status="completed")
+        assert live_named[0][0] == "candidate_0_0"
+        assert live_named[0][1][0].filename == "response.npz"
+        assert live_metadata[0][0] == "candidate_0_0"
+        assert live_metadata[0][1]["engine"] == "fast"
+    finally:
+        session.close()
+
+    named = recorded_api.get_named_rawdata_samples(root, status="completed")
+    metadata = recorded_api.get_record_metadata(root, status="completed")
+    assert named[0][0] == metadata[0][0] == "candidate_0_0"
+    assert named[0][1][0].filename == "response.npz"
+    assert metadata[0][1]["engine"] == "fast"
+    bundle = recorded_api.get_surrogate_training_data(root)
+    assert bundle["rawdata_filenames"] == (("response.npz",),)
+    assert bundle["record_metadata"][0]["engine"] == "fast"
+
+
 def test_duplicate_campaign_candidate_identity_is_fatal(tmp_path: Path) -> None:
     root = _workspace(tmp_path / "workspace")
     session, snapshot = _session(root)

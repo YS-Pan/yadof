@@ -58,6 +58,18 @@ def test_task_fingerprint_matches_path_tab_hash_manifest(tmp_path: Path) -> None
     assert core.task_fingerprint(workspace, ["config.py", "submit"]) == expected
 
 
+def test_task_fingerprint_ignores_interpreter_bytecode_cache(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    task = workspace / "job_template" / "task.py"
+    task.parent.mkdir(parents=True)
+    task.write_text("VALUE = 1\n", encoding="utf-8")
+    before = core.task_fingerprint(workspace, ["job_template"])
+    cache = task.parent / "__pycache__"
+    cache.mkdir()
+    (cache / "task.cpython-313.pyc").write_bytes(b"transient bytecode")
+    assert core.task_fingerprint(workspace, ["job_template"]) == before
+
+
 def test_resolve_inside_rejects_escape(tmp_path: Path) -> None:
     with pytest.raises(core.BenchmarkError, match="escapes benchmark root"):
         core.resolve_inside(tmp_path, "../outside", label="fixture")

@@ -11,6 +11,10 @@
   current task code.
 - Load rawData samples, assemble surrogate training bundles, and report bounded
   segment/candidate diagnostics.
+- Preserve direct NPZ basenames through `get_named_rawdata_samples()` and expose
+  copied JSON-safe job metadata through `get_record_metadata()`. Hierarchical
+  training bundles align filenames and metadata to the same accepted historical
+  rows; neither view mutates a segment.
 - Expose a cost-view history snapshot whose batches carry already decoded and
   schema-validated evidence from one open segment.
 - Skip malformed, missing, incompatible, or non-finite candidates while preserving

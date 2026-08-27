@@ -3,13 +3,13 @@
 ## Responsibility
 
 `yadof.surrogate` exposes rawData-first surrogate components plus a lightweight,
-backend-neutral joint rawData posterior protocol. The existing concrete component
-trains a conditional implicit-neural-representation ensemble, reconstructs predicted
-rawData, calculates current costs through `job_template`, exposes per-objective
-member min/max spread diagnostics, and publishes recoverable checkpoints/metadata.
-Its public factory remains the narrow component injected by workspace-owned GPSAF
-composition; the new posterior protocol does not change that component or make a
-posterior-assisted strategy available by itself.
+backend-neutral joint rawData posterior protocol. The production component remains
+the conditional implicit-neural-representation ensemble used by workspace-owned
+GPSAF. A separate opt-in `hierarchical_cae()` development component reconstructs
+complete fixed-grid rawData with field-specific convolutional codecs and a joint
+parameter-latent predictor. It is installable and recoverable, but its first
+1000/2000-design Gate 0 v5 candidate failed representation and clean-target leakage
+requirements; it is not a production default and has no coordinate viewer adapter.
 
 ## Source structure
 
@@ -22,9 +22,42 @@ posterior-assisted strategy available by itself.
 - `conditional_inr/` owns model construction/training, rawData adaptation,
   runtime state, staggered scheduling, checkpoint publication, metadata, the
   private finite-member posterior adapter, and private in-memory types.
+- `quality.py` owns the generic, versioned, JSON-safe quality/regime assessment
+  protocol. It accepts explicit task assessments, declarative diagnostic rules, or
+  task-declared shape fallback thresholds; it contains no task field names,
+  simulator thresholds, cost filter, or arbitrary callback.
+- `hierarchical_cae/` owns fixed-schema adaptation; scalar, Conv1d, and Conv2d
+  codecs; global/optional-group/field-private teacher latents; predictor members;
+  robust loss and applicability heads; checkpoint/runtime/scheduler state; and its
+  persistent finite-member posterior adapter.
 - Importing the parent package must not load Torch. The public
   `conditional_inr()` factory remains callable even after private
-  `surrogate.conditional_inr.*` modules are loaded.
+  concrete packages are loaded.
+
+## Hierarchical CAE development component
+
+Every design first produces one loss per field, independent of field point count.
+Optional caps and policy weights are applied only after this matrix exists, so a
+noisy curve does not discard valid scalar fields from the same design. Without a
+quality policy, weights are one, shared masks are one, residual targets are zero,
+and the behavior is an ordinary equal field macro loss.
+
+With a policy, explicit version/policy-matched assessment has priority over task
+diagnostics; declarative morphology rules run only when the selected missing-data
+policy allows them. Low-trust tokens are masked before shared teacher fusion. Base
+decoder gradients are similarly masked for those fields, while chatter/failure
+targets can train a field-private residual decoder. Predictor members emit one
+joint latent, an uncalibrated `P(smooth)`, and field residual logits. A smooth gate
+is structurally zero in teacher training, and inference gates only the private
+residual. Raw evidence is never smoothed or rewritten and current `calc_cost.py`
+always receives reconstructed full-grid rawData.
+
+Schema identity includes exact selectors, shapes, dtypes, axes, axis encodings,
+rank-3 channel/spatial roles, groups, scalers, training/head/loss switches, and the
+complete quality policy. Checkpoint publication is atomic and separate from
+conditional-INR namespaces. Predictor members share codecs; each persistent draw
+fixes one member across candidates and fields and reports finite support with zero
+observation noise. Applicability is not calibrated in this module.
 
 ## Joint posterior contract
 
@@ -157,3 +190,10 @@ output artifacts cold-train instead of being interpreted with the linear decoder
 - Conditional-INR's old mean-cost/min-max tuple, GPSAF behavior, model architecture
   version, and checkpoint signature remain unchanged by the separately identified
   posterior adapter.
+- Hierarchical quality policy changes activate a different semantic namespace;
+  executable task callbacks cannot bypass that identity.
+- A low-trust field cannot contribute unweighted tokens to shared teacher state,
+  and its gated residual never becomes independent Gaussian observation noise.
+- Gate 0 v5 failure blocks coordinate readout, viewer integration, calibration,
+  offline-test access, and production qNEHVI use; retained code is an experimental
+  baseline for the next preregistered architecture gate.

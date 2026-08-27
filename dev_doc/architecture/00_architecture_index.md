@@ -48,6 +48,17 @@ proves that fixed real baselines plus these projected joint samples can be consu
 by BoTorch qLogNEHVI; it is not a complete posterior-assisted strategy, and no
 current default strategy consumes it.
 
+An independent experimental `hierarchical_cae()` component now provides full-grid
+scalar/Conv1d/Conv2d codecs, global/optional-group/field-private latent state,
+shared-codec predictor members, and the same joint rawData posterior boundary. A
+generic versioned quality/regime policy carries task-owned explicit assessments or
+declarative diagnostic/shape fallbacks into field weights, shared-token masks,
+gated private residuals, and an uncalibrated applicability head. Original rawData
+and current-cost interpretation remain unchanged. Gate 0 v5 found the first MVP
+below its preregistered representation and clean-target leakage thresholds, so it
+is retained for experiments but is not a production recommendation; coordinate
+readout, viewer integration, calibration, and qNEHVI consumption remain blocked.
+
 The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
 external simulator installation. Its JSON/NPZ subprocess protocol, environment
 isolation, scratch ownership, failure taxonomy, and backend-equivalent publication

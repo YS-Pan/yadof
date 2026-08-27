@@ -172,9 +172,13 @@ Keep these three decisions separate:
    rawData template instead of being learned. Large fields may be sampled by query
    minibatches during individual training steps, but remain part of the full
    modeled field and full-grid prediction contract.
-3. Surrogate training treats every modeled rawData field equally at the field-loss
-   level. Within each field, every selected scalar position has equal pointwise
-   importance. Task code cannot override this policy.
+3. Conditional-INR training treats every modeled rawData field equally at the
+   field-loss level; task code cannot override that production policy. The
+   experimental hierarchical CAE has the same equal-weight behavior when no
+   quality policy is selected. Its optional versioned quality policy may
+   declaratively downweight a diagnosed chatter/failure field and mask its shared
+   latent contribution without dropping other fields in the design. The policy is
+   part of strategy/checkpoint identity and cannot be an arbitrary task callback.
 
 Therefore, “include all saved far-field rawData in surrogate training” is a
 workflow/rawData requirement. The surrogate models every varying numeric slot in
@@ -200,9 +204,10 @@ normalized candidate
 The installed package exposes a lightweight protocol for future surrogate and
 acquisition components that need joint rawData function draws. This is framework
 infrastructure, not a new selectable strategy: the current template still composes
-conditional INR with GPSAF. Conditional INR now has a separate opt-in posterior
-adapter and a discrete qLogNEHVI backend compatibility spike exists; CAE and the
-complete posterior-assisted/qNEHVI strategy remain separate implementation work.
+conditional INR with GPSAF. Conditional INR has a separate opt-in posterior adapter,
+an experimental full-grid hierarchical CAE component is available, and a discrete
+qLogNEHVI backend compatibility spike exists. None of these creates the complete
+posterior-assisted/qNEHVI strategy.
 
 A posterior-capable component creates one persistent sampler with a draw count and
 seed. The sampler fixes every draw's underlying function identity before candidates
@@ -249,6 +254,38 @@ member inference and current-cost projection. A member failure invalidates its
 complete candidate draw rather than filling fields from another member. Any future
 strategy must explicitly warn, reject, or fall back when that effective support is
 below its declared policy.
+
+### Experimental hierarchical CAE and quality/regime boundary
+
+`hierarchical_cae()` is an explicit development component, not the starter default.
+It freezes direct field selectors, shapes, axes, dtype templates, optional groups,
+and rank-3 channel/spatial roles; scalar, 1-D, and 2-D fields use separate codecs.
+One parameter-predictor member emits global/optional-group/field-private latents for
+all fields, so a persistent posterior draw keeps a coherent member identity across
+candidates and fields. Complete fixed-grid rawData remains the authoritative
+prediction path and current `calc_cost.py` still produces costs.
+
+Tasks that need chatter/failure handling may supply a `RawDataQualityPolicy` made
+from JSON-safe explicit assessments, declarative record-diagnostic rules, and—only
+when diagnostics are absent—declared morphology thresholds. Yadof core contains no
+Chrono names or release/contact thresholds. Assessment changes only training
+weights, shared-token contribution, private residual labels, and the uncalibrated
+applicability head; it never filters by cost, smooths stored curves, or rewrites
+recorded rawData. With no policy, training is ordinary equal design-by-field macro
+Smooth L1.
+
+The applicability API reports each predictor member's uncalibrated `P(smooth)` and
+ensemble spread. This is structural/epistemic regime uncertainty with zero
+observation noise, not an independent Gaussian error attached to each candidate.
+Calibration on independent designs and any exploitation rule are separate future
+work.
+
+Gate 0 v5 retained this component as an experimental baseline but rejected the
+first 1000/2000-design candidate: multiple representation guards failed and the
+gated residual did not sufficiently prevent clean-target high-frequency leakage.
+Do not treat it as a production recommendation. Coordinate/off-grid readout,
+surrogate-viewer support, calibration, offline-test access, and qNEHVI exploitation
+remain deliberately unavailable until a later preregistered architecture passes.
 
 The installed experimental `yadof.optimize.qnehvi_backend` module can score fixed
 caller-supplied discrete batches using projected joint objective samples and a

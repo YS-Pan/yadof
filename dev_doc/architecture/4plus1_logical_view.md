@@ -87,17 +87,28 @@ current code and isolates only concrete normalization, rawData, or cost failures
 Whether combining pre-edit and post-edit evidence is scientifically appropriate
 remains the user's decision.
 
-Optimizer and surrogate are consumers of the same evidence. The surrogate predicts
-rawData before cost, constructs its modeled query table from compatible recorded
-numeric rawData, reconstructs full public rawData, and calls current cost logic.
-Every modeled rawData field receives equal macro loss weight and task code cannot
-change training weights. Per-query rawData targets use recorded mean/standard-
-deviation scaling and a linear decoder; normalized design inputs are centered at
-zero, and predictions may extrapolate beyond the recorded rawData envelope before
-inverse scaling. The surrogate never establishes a parallel
-`variables -> cost` truth path. Its schedule and checkpoints are keyed by effective
-workspace paths plus active strategy/component identities; source hashes remain
-separate provenance.
+Optimizer and surrogate are consumers of the same evidence. A surrogate predicts
+rawData before cost, reconstructs complete public rawData, and calls current cost
+logic; it never establishes a parallel `variables -> cost` truth path. Conditional
+INR constructs a query table, uses recorded mean/standard-deviation scaling and an
+equal field macro loss that task code cannot reweight. The experimental hierarchical
+CAE instead constructs a fixed field schema and uses per-field scaling plus a
+design-by-field macro loss. With no quality policy it is the same ordinary equal
+field behavior. With an explicit versioned policy, task-owned diagnostics may only
+select declared field/shared weights and regime labels; they cannot rewrite rawData
+or use an executable callback outside semantic identity. Both schedules and
+checkpoints are keyed by effective workspace paths plus active strategy/component
+identities; source hashes remain separate provenance.
+
+For hierarchical CAE, noisy field tokens are masked or downweighted before global
+and optional-group teacher fusion. Field-private base/residual decoders use a
+regime-gated residual, with the clean-target gate structurally zero during teacher
+training. Parameter-predictor members jointly emit latent state, `P(smooth)`, and
+per-field residual gates. These probabilities are uncalibrated structural/epistemic
+state diagnostics, not independent Gaussian observation noise. The first MVP is a
+retained failed Gate 0 v5 candidate: its fixed-grid API/checkpoints remain usable
+for development, while coordinate readout and downstream production use stay
+closed.
 
 Posterior samples are another derived surrogate view, not evidence. A sampler
 reports its posterior/support kind honestly (`finite` with an integer unique
@@ -155,3 +166,7 @@ creating an optimization strategy or new source of truth.
   within a draw; candidate permutation, chunk size, and chunk call order do not
   resample it. Optional numerical backends remain lazy at parent
   `yadof.surrogate` and `yadof.optimize` import.
+- Quality/regime assessment is derived training metadata, not evidence replacement:
+  explicit version-matched task assessment wins, declarative diagnostics come next,
+  and task-declared shape features are only a missing-diagnostic fallback. RawData
+  remains authoritative for current cost and future reinterpretation.

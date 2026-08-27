@@ -42,7 +42,11 @@ death raises `RecordingError` and prevents later evaluation.
 
 Public queries list/filter records, recover raw variables, load segment members,
 derive current normalized variables and costs through `job_template`, and assemble
-training bundles. The cost-view reader freezes one finalized segment-name snapshot,
+training bundles. Named training reads preserve every direct NPZ basename and may
+return a separate JSON-safe `job_metadata` row aligned by stable job name, allowing
+task-owned quality/regime policy to consume recorded diagnostics without altering
+rawData. The live campaign session exposes the same named sample/metadata views over
+durable plus accepted current rows. The cost-view reader freezes one finalized segment-name snapshot,
 then opens each selected ZIP once to combine manifest checks, NPZ decode/schema
 validation, and current-cost input delivery. Invalid, missing, or corrupt rawData is skipped with
 diagnostics rather than poisoning all history. Objective changes are reflected on
@@ -66,3 +70,5 @@ readable; central-directory/manifest failure skips one segment.
 - Clearing history validates the exact workspace-owned segment and event targets,
   requires user confirmation, refuses an active lock, and leaves unrelated entries
   untouched.
+- Named rawData and record metadata queries are read-only derived views. Metadata
+  never replaces rawData, changes current cost, or creates a second evidence store.

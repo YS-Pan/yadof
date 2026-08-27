@@ -2,8 +2,8 @@
 
 ## Intent
 - Keep `yadof.surrogate` public calls behind one small API surface.
-- Expose a lazy conditional-INR component plus direct rawData-first model and
-  staggered-training operations without importing Torch at parent-package import.
+- Expose lazy conditional-INR and opt-in hierarchical-CAE components plus direct
+  rawData-first model operations without importing Torch at parent-package import.
 - Re-export the lightweight joint rawData posterior protocol, diagnostics,
   semantic-capability helper, and streaming projection helper without importing an
   optional backend.
@@ -14,6 +14,11 @@
 - Construct `conditional_inr_posterior()` as a separate semantic wrapper that
   delegates legacy lifecycle/prediction calls and lazily creates a persistent
   finite-member rawData sampler.
+- Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
+  an optional versioned `RawDataQualityPolicy`, and `CAETrainConfig`. The component
+  owns full-grid train/recover/predict, finite joint draws, and uncalibrated
+  applicability prediction. A selected quality policy enables the regime head and
+  default robust cap; a regime head without a policy is rejected.
 - Lazily forward `train()`, `predict_population()`, `has_trained_state()`, and
   `latest_state_generation()` to `conditional_inr/runtime.py`.
 - Lazily forward scheduler calls, including `deactivate_workspace()`, to
@@ -29,6 +34,8 @@
   projection returns `[draw,candidate,objective]` costs and `[draw,candidate]`
   validity without recording predicted evidence.
 - Scheduler functions return status objects with action, pending generation, latest completed generation, and optional error text.
+- Global deactivation also drains/releases hierarchical-CAE state while preserving
+  the conditional-INR return contract used by existing callers.
 
 ## Non-Obvious Techniques
 - GPSAF calls the injected component only; it does not import concrete surrogate runtime.
@@ -40,6 +47,8 @@
 - Parent import preloads only the empty private-package marker before rebinding the
   same-named public factory, preserving both lazy Torch loading and callable API
   stability.
+- The hierarchical component remains a development surface after Gate 0 v5 failure;
+  this API does not imply coordinate/viewer or production qNEHVI readiness.
 
 ## Mutability Profile
 - Add public surrogate functions here only when another core module needs them.

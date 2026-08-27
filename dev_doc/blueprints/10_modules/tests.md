@@ -60,6 +60,14 @@ lock automatically generated run-directory names to a digits-only UTC
   derived-cost parity, duplicate/permutation/chunk invariance, nominal/effective
   support, member-failure isolation without field splicing, bounded diagnostics,
   unchanged legacy identity/API, and direct projection into the Gate 2 backend;
+- hierarchical-CAE coverage for mixed scalar/1-D/2-D and explicit rank-3 layouts,
+  schema/dtype/axis round trips, stable non-overlapping groups, no-policy ordinary
+  behavior, explicit/diagnostic/shape assessment priority, design-by-field cap and
+  weights, shared-token masks, clean residual gates, independent anti-noise arms,
+  applicability/semantic identity, tiny staged training, atomic recovery, complete
+  rawData prediction, and coherent member draws. Source-benchmark tests separately
+  freeze Gate 0 v2--v5 integrity, metric-adapter behavior, threshold boundaries,
+  offline-test non-access, and the failed full-grid/coordinate decision;
 - fake sample-backed qLogNEHVI coverage against BoTorch's own qLogEHVI zero-noise
   fixed-baseline limit: minimization negated exactly once, reference point, q=1/q=2,
   deterministic seed, aligned correlated draws, whole-draw invalid rejection,

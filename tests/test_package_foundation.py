@@ -706,6 +706,16 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/conditional_inr/metadata.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/types.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/posterior_adapter.py" in wheel_names
+        assert "yadof/surrogate/quality.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/__init__.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/types.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/schema.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/modeling.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/runtime.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/checkpoints.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/scheduler.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/metadata.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/posterior_adapter.py" in wheel_names
         assert "yadof/surrogate/runtime.py" not in wheel_names
         assert "yadof/surrogate/scheduler.py" not in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names

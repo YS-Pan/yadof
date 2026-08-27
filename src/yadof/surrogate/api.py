@@ -1,8 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field, replace
 from importlib import metadata
+from types import MappingProxyType
 from typing import Mapping
+
+from .hierarchical_cae.schema import (
+    normalize_axis_encodings,
+    normalize_field_layouts,
+    normalize_groups,
+)
+from .hierarchical_cae.types import CAETrainConfig
+from .quality import (
+    ApplicabilityPrediction,
+    DiagnosticCondition,
+    DiagnosticRegimeRule,
+    RawDataQualityPolicy,
+    ShapeQualityRule,
+    quality_policy_from_mapping,
+)
 
 from .posterior import (
     MaterializedRawDataPosterior,
@@ -170,12 +186,226 @@ class ConditionalINRPosteriorAdapter:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class HierarchicalCAEComponent:
+    """Full-grid hierarchical convolutional rawData surrogate component."""
+
+    groups: tuple[tuple[tuple[str, str], ...], ...] = ()
+    field_layouts: Mapping[tuple[str, str], Mapping[str, object]] = field(
+        default_factory=dict
+    )
+    axis_encodings: Mapping[tuple[str, str], Mapping[str, object]] = field(
+        default_factory=dict
+    )
+    quality_policy: RawDataQualityPolicy | None = None
+    train_cfg: CAETrainConfig = CAETrainConfig()
+
+    def __post_init__(self) -> None:
+        groups = normalize_groups(self.groups)
+        layouts = MappingProxyType(
+            {
+                selector: MappingProxyType(dict(layout))
+                for selector, layout in normalize_field_layouts(
+                    self.field_layouts
+                ).items()
+            }
+        )
+        encodings = MappingProxyType(
+            {
+                selector: MappingProxyType(dict(per_axis))
+                for selector, per_axis in normalize_axis_encodings(
+                    self.axis_encodings
+                ).items()
+            }
+        )
+        policy = quality_policy_from_mapping(self.quality_policy)
+        train_cfg = self.train_cfg
+        if policy is not None and not train_cfg.regime_head:
+            train_cfg = replace(
+                train_cfg,
+                regime_head=True,
+                robust_loss_cap=(
+                    4.0
+                    if train_cfg.robust_loss_cap is None
+                    else train_cfg.robust_loss_cap
+                ),
+            )
+        if policy is None and train_cfg.regime_head:
+            raise ValueError(
+                "hierarchical CAE regime_head requires a versioned quality_policy"
+            )
+        object.__setattr__(self, "groups", groups)
+        object.__setattr__(self, "field_layouts", layouts)
+        object.__setattr__(self, "axis_encodings", encodings)
+        object.__setattr__(self, "quality_policy", policy)
+        object.__setattr__(self, "train_cfg", train_cfg)
+
+    def configuration_payload(self) -> dict[str, object]:
+        return {
+            "groups": [
+                [list(selector) for selector in group] for group in self.groups
+            ],
+            "field_layouts": [
+                {
+                    "selector": list(selector),
+                    "channel_axes": list(layout["channel_axes"]),
+                    "spatial_axes": list(layout["spatial_axes"]),
+                }
+                for selector, layout in sorted(self.field_layouts.items())
+            ],
+            "axis_encodings": [
+                {
+                    "selector": list(selector),
+                    "axes": {
+                        axis: encoding.as_dict()
+                        for axis, encoding in sorted(per_axis.items())
+                    },
+                }
+                for selector, per_axis in sorted(self.axis_encodings.items())
+            ],
+            "quality_policy": (
+                None
+                if self.quality_policy is None
+                else self.quality_policy.as_dict()
+            ),
+            "train_cfg": asdict(self.train_cfg),
+        }
+
+    def validate(self, config, problem) -> None:
+        del config, problem
+        try:
+            metadata.version("torch")
+        except metadata.PackageNotFoundError as exc:
+            raise RuntimeError(
+                "hierarchical_cae requires the yadof surrogate extra (torch)"
+            ) from exc
+
+    def semantic_identity(self, config, problem) -> Mapping[str, object]:
+        del problem
+        return {
+            "component": "hierarchical-cae",
+            "component_version": 1,
+            "backend_distribution": "torch",
+            "backend_version": metadata.version("torch"),
+            "training_policy": "design-split-field-macro-hierarchical-latent",
+            "configuration": self.configuration_payload(),
+            "device": str(config["SURROGATE_TORCH_DEVICE"]),
+            "posterior": self.posterior_semantic_identity(config, None),
+            "applicability": {
+                "capability": "yadof.rawdata-applicability",
+                "capability_version": 1,
+                "enabled": self.quality_policy is not None,
+                "calibrated": False,
+                "observation_noise": "zero",
+            },
+        }
+
+    def posterior_semantic_identity(self, config, problem) -> Mapping[str, object]:
+        del config, problem
+        return posterior_capability_identity(
+            posterior_kind="empirical_predictor_ensemble",
+            support_kind=SUPPORT_FINITE,
+            backend_distribution="torch",
+            backend_version=metadata.version("torch"),
+            controlled_parameters={
+                "configured_member_count": self.train_cfg.predictor_members,
+                "member_selection": "seeded-permutation-cycles-v1",
+                "shared_codecs": True,
+                "regime_head": self.train_cfg.regime_head,
+                "quality_policy": (
+                    None
+                    if self.quality_policy is None
+                    else self.quality_policy.as_dict()
+                ),
+                "observation_noise_included": False,
+                "calibrated": False,
+            },
+        )
+
+    def ensure_fresh_enough(self, context):
+        from .hierarchical_cae import runtime, scheduler
+
+        return scheduler.ensure_fresh_enough(
+            context.config.workspace,
+            context.generation_index,
+            _config=context.config,
+            _component=self,
+            _training_data=runtime.training_data_from_session(
+                context.session, context.snapshot
+            ),
+        )
+
+    def has_trained_state(self, context) -> bool:
+        from .hierarchical_cae import runtime
+
+        return bool(
+            runtime.has_trained_state(context.config.workspace, component=self)
+        )
+
+    def start_training(self, context):
+        from .hierarchical_cae import runtime, scheduler
+
+        return scheduler.start_training(
+            context.config.workspace,
+            generation_index=context.generation_index,
+            block=False,
+            _config=context.config,
+            _component=self,
+            _training_data=runtime.training_data_from_session(
+                context.session, context.snapshot
+            ),
+        )
+
+    def predict_population(self, context, population):
+        from .hierarchical_cae import runtime
+
+        return runtime.predict_population(
+            context.config.workspace, population, component=self
+        )
+
+    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int):
+        from .hierarchical_cae.posterior_adapter import make_rawdata_sampler
+
+        return make_rawdata_sampler(
+            context,
+            component=self,
+            draw_count=draw_count,
+            seed=seed,
+        )
+
+    def predict_applicability(self, context, population) -> ApplicabilityPrediction:
+        from .hierarchical_cae import runtime
+
+        return runtime.predict_applicability(
+            context.config.workspace, population, component=self
+        )
+
+
 def conditional_inr() -> ConditionalINRComponent:
     return ConditionalINRComponent()
 
 
 def conditional_inr_posterior() -> ConditionalINRPosteriorAdapter:
     return ConditionalINRPosteriorAdapter()
+
+
+def hierarchical_cae(
+    *,
+    groups=(),
+    field_layouts=None,
+    axis_encodings=None,
+    quality_policy: RawDataQualityPolicy | Mapping[str, object] | None = None,
+    train_config: CAETrainConfig | None = None,
+) -> HierarchicalCAEComponent:
+    """Build the opt-in hierarchical CAE component from task-owned declarations."""
+
+    return HierarchicalCAEComponent(
+        groups=tuple(tuple(group) for group in groups),
+        field_layouts={} if field_layouts is None else dict(field_layouts),
+        axis_encodings={} if axis_encodings is None else dict(axis_encodings),
+        quality_policy=quality_policy_from_mapping(quality_policy),
+        train_cfg=CAETrainConfig() if train_config is None else train_config,
+    )
 
 
 def train(*args, **kwargs):
@@ -221,13 +451,23 @@ def wait_for_pending_training(*args, **kwargs):
 
 
 def deactivate_workspace(*args, **kwargs):
-    from .conditional_inr.scheduler import deactivate_workspace as implementation
+    from .conditional_inr.scheduler import deactivate_workspace as conditional
+    from .hierarchical_cae.scheduler import deactivate_workspace as hierarchical
 
-    return implementation(*args, **kwargs)
+    conditional_status = conditional(*args, **kwargs)
+    hierarchical(*args, **kwargs)
+    return conditional_status
 
 __all__ = [
     "ConditionalINRComponent",
     "ConditionalINRPosteriorAdapter",
+    "HierarchicalCAEComponent",
+    "CAETrainConfig",
+    "DiagnosticCondition",
+    "DiagnosticRegimeRule",
+    "RawDataQualityPolicy",
+    "ShapeQualityRule",
+    "ApplicabilityPrediction",
     "MaterializedRawDataPosterior",
     "RAWDATA_POSTERIOR_PROTOCOL",
     "RAWDATA_POSTERIOR_PROTOCOL_VERSION",
@@ -240,6 +480,7 @@ __all__ = [
     "SUPPORT_FINITE",
     "conditional_inr",
     "conditional_inr_posterior",
+    "hierarchical_cae",
     "deactivate_workspace",
     "ensure_fresh_enough",
     "has_trained_state",

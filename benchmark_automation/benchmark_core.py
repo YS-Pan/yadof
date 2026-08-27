@@ -595,7 +595,13 @@ def _declared_files(workspace: Path, include_paths: Sequence[str]) -> list[Path]
         if not target.exists():
             raise BenchmarkError(f"declared input does not exist: {target}")
         candidates = [target] if target.is_file() else sorted(
-            (path for path in target.rglob("*") if path.is_file()),
+            (
+                path
+                for path in target.rglob("*")
+                if path.is_file()
+                and "__pycache__" not in path.parts
+                and path.suffix.lower() not in {".pyc", ".pyo"}
+            ),
             key=lambda path: path.as_posix().casefold(),
         )
         for path in candidates:

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "receipt_id": "20260827-hierarchical-cae-validation-v1-failure",
+  "status": "failed-before-first-metric-publication",
+  "session_id": 64989,
+  "process_exit_code": 1,
+  "plan_sha256": "b0a2e87ca18dc8e64bae3212bc70515fd63489f1a3783c7af7615e901d0071e0",
+  "runner_archive": {
+    "path": "benchmark_automation/hierarchical_cae_validation_v1.py",
+    "sha256": "657070847a35b698c2d2443c6b6a52ae8ab2df78eaeff3cbd493db04124d27d4"
+  },
+  "attempted_cell": "saw__conditional-inr-mean__train-1000__seed-69168527",
+  "completed_cell_count": 0,
+  "failure": {
+    "type": "ValueError",
+    "message": "conditional-INR predicted metadata did not match the strict hierarchical frozen schema template",
+    "cause": "conditional-INR adds truthful surrogate provenance keys to prediction metadata; the metric adapter compared that enriched metadata directly instead of rebuilding the predicted main arrays through the frozen task template",
+    "numeric_prediction_failure": false,
+    "simulator_failure": false,
+    "recording_failure": false
+  },
+  "evidence": {
+    "run_spec_path": "temp/hierarchical_cae_gate4_runs/hierarchical-cae-gate4-v2-20260827/validation_v1/run_spec.json",
+    "run_spec_sha256": "fcc30556092eb1ee9ef78ea4172320f1ed4af015976cf91cb4b5ef589b6de47f",
+    "saw_preflight_path": "temp/hierarchical_cae_gate4_runs/hierarchical-cae-gate4-v2-20260827/validation_v1/preflight_saw.json",
+    "saw_preflight_sha256": "c7b3f45faf2c3b5e4ce7cc09e5870a257eacbe8d9678618cd727cfb3d485d6f3"
+  },
+  "partition_access": {
+    "development": true,
+    "calibration": false,
+    "offline_test": false
+  }
+}

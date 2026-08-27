@@ -6,7 +6,11 @@ from typing import Callable, Mapping, Sequence
 import zipfile
 
 from ..job_template import api as job_template_api
-from ..job_template.rawdata_contract import RawDataContractError, validate_rawdata_item
+from ..job_template.rawdata_contract import (
+    NamedRawDataItem,
+    RawDataContractError,
+    validate_rawdata_item,
+)
 from ..workspace import WorkspaceContext
 from .paths import RecordedDataPaths
 from .segment_store import (
@@ -116,6 +120,51 @@ def get_rawdata_samples(
     return tuple(output)
 
 
+def get_named_rawdata_samples(
+    storage: RecordedDataPaths,
+    *,
+    job_names: Sequence[str] | None = None,
+    status: str | None = None,
+) -> tuple[tuple[str, tuple[NamedRawDataItem, ...]], ...]:
+    """Return immutable-segment rawData with stable direct NPZ basenames."""
+
+    requested = (
+        set(str(name) for name in job_names) if job_names is not None else None
+    )
+    output = []
+    for reference in _references(storage, status=status):
+        name = str(reference.record.get("job_name", ""))
+        if requested is not None and name not in requested:
+            continue
+        try:
+            items = load_reference_rawdata(reference)
+        except TOLERATED_ROW_ERRORS:
+            continue
+        output.append((name, tuple(items)))
+    return tuple(output)
+
+
+def get_record_metadata(
+    storage: RecordedDataPaths,
+    *,
+    job_names: Sequence[str] | None = None,
+    status: str | None = None,
+) -> tuple[tuple[str, dict[str, object]], ...]:
+    """Return JSON-safe task/job metadata for selected durable records."""
+
+    requested = (
+        set(str(name) for name in job_names) if job_names is not None else None
+    )
+    output = []
+    for reference in _references(storage, status=status):
+        name = str(reference.record.get("job_name", ""))
+        if requested is not None and name not in requested:
+            continue
+        metadata = reference.record.get("job_metadata")
+        output.append((name, dict(metadata) if isinstance(metadata, Mapping) else {}))
+    return tuple(output)
+
+
 def get_raw_data(
     storage: RecordedDataPaths,
 ) -> tuple[tuple[dict[str, object], ...], ...]:
@@ -220,21 +269,32 @@ def get_surrogate_training_data(
 ) -> dict[str, object]:
     historical = get_historical_results(workspace, storage, status="completed")
     wanted = tuple(name for name, _normalized, _costs in historical)
-    samples = dict(
-        get_rawdata_samples(storage, job_names=wanted, status="completed")
+    named_samples = dict(
+        get_named_rawdata_samples(
+            storage, job_names=wanted, status="completed"
+        )
+    )
+    metadata_by_name = dict(
+        get_record_metadata(storage, job_names=wanted, status="completed")
     )
     variables = []
     raw_data = []
+    rawdata_filenames = []
+    record_metadata = []
     for name, normalized, _costs in historical:
-        sample = samples.get(name)
+        sample = named_samples.get(name)
         if sample is None:
             continue
         variables.append(normalized)
-        raw_data.append(tuple(item for item in sample if isinstance(item, dict)))
+        raw_data.append(tuple(dict(item.payload) for item in sample))
+        rawdata_filenames.append(tuple(item.filename for item in sample))
+        record_metadata.append(metadata_by_name.get(name, {}))
     return {
         "parameter_names": tuple(job_template_api.get_parameter_names(workspace)),
         "normalized_variables": tuple(variables),
         "raw_data": tuple(raw_data),
+        "rawdata_filenames": tuple(rawdata_filenames),
+        "record_metadata": tuple(record_metadata),
     }
 
 
@@ -316,6 +376,8 @@ __all__ = [
     "calculate_costs",
     "get_historical_results",
     "get_normalized_variable_table",
+    "get_named_rawdata_samples",
+    "get_record_metadata",
     "get_normalized_variables",
     "get_raw_data",
     "get_raw_variables",
