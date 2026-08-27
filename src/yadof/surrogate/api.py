@@ -4,6 +4,22 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Mapping
 
+from .posterior import (
+    MaterializedRawDataPosterior,
+    RAWDATA_POSTERIOR_PROTOCOL,
+    RAWDATA_POSTERIOR_PROTOCOL_VERSION,
+    RawDataFunctionDraw,
+    RawDataPosterior,
+    RawDataPosteriorDiagnostics,
+    RawDataPosteriorSampler,
+    RawDataPosteriorSurrogate,
+    SUPPORT_CONTINUOUS_OR_UNKNOWN,
+    SUPPORT_FINITE,
+    posterior_capability_identity,
+    project_rawdata_sampler,
+    require_rawdata_posterior_surrogate,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ConditionalINRComponent:
@@ -145,12 +161,25 @@ def deactivate_workspace(*args, **kwargs):
 
 __all__ = [
     "ConditionalINRComponent",
+    "MaterializedRawDataPosterior",
+    "RAWDATA_POSTERIOR_PROTOCOL",
+    "RAWDATA_POSTERIOR_PROTOCOL_VERSION",
+    "RawDataFunctionDraw",
+    "RawDataPosterior",
+    "RawDataPosteriorDiagnostics",
+    "RawDataPosteriorSampler",
+    "RawDataPosteriorSurrogate",
+    "SUPPORT_CONTINUOUS_OR_UNKNOWN",
+    "SUPPORT_FINITE",
     "conditional_inr",
     "deactivate_workspace",
     "ensure_fresh_enough",
     "has_trained_state",
     "latest_state_generation",
     "predict_population",
+    "posterior_capability_identity",
+    "project_rawdata_sampler",
+    "require_rawdata_posterior_surrogate",
     "start_training",
     "train",
     "wait_for_pending_training",

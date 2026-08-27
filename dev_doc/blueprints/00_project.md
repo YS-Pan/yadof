@@ -52,7 +52,11 @@ local/distributed remain file-backed prepared-job transports.
 9. Recalculate normalized variables and fixed-threshold `[0, 1]` objective costs
    through the current workspace task definition.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions
-   only to screen candidates that still receive real evaluation.
+    only to screen candidates that still receive real evaluation.
+11. For an explicitly posterior-capable future consumer, create one persistent
+    function sampler, stream complete named rawData draws by candidate chunk through
+    the generation snapshot's frozen cost interpreter, retain only joint objective
+    samples/validity diagnostics, and never publish predicted rawData.
 
 Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen.
 Shape-preserving parameter-range/level and fixed-width objective changes rebuild
@@ -121,13 +125,17 @@ hot-change contract; structural dimension changes are future work.
 
 - `workspace`, `config`, and `task_loader` establish explicit isolated context.
 - `job_template` interprets task-owned parameters, rawData, and costs.
+- `job_template` also owns exact named rawData schema templates and the thin frozen
+  current-cost projector used by derived posterior samples; it does not own a
+  posterior model or acquisition policy.
 - `evaluate_manager` owns preparation, local/HTCondor transport, result shape,
   retries/timeouts, and recording handoff.
 - `recorded_data` owns durable evidence and current-history queries.
 - `optimize` owns the campaign engine and public composition seam; its `gpsaf/` and
   `pymoo/` subpackages physically isolate GPSAF coordination and the mature-backend
   adapter. The workspace owns complete strategy composition.
-- `surrogate` owns a lightweight public component API; its `conditional_inr/`
+- `surrogate` owns a lightweight public component API plus a backend-neutral joint
+  rawData function-sampler protocol; its `conditional_inr/`
   subpackage physically isolates rawData prediction, uncertainty intervals,
   modeling, scheduling, metadata, and checkpoints.
 - `tools` and `cli` are optional user-facing orchestration/inspection layers.
@@ -144,6 +152,9 @@ Workspace raw variables and rawData are durable source truth. Workflow lifecycle
 metadata and execution provenance are durable diagnostics. Costs, normalized
 variables, surrogate predictions, and objective-specific windows are derived. This
 separation permits cost-policy changes without repeating compatible simulations.
+Posterior rawData draws, their projected objective samples, and acquisition values
+are transient derived state. They never become record envelopes or a second history
+and cannot be used as real-evaluation truth.
 
 Prepared jobs own local/distributed task execution inputs and outputs but not
 durable history. Fast logical evaluations own no durable intermediate directory. The

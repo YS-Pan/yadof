@@ -38,7 +38,7 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 
 对应的独立 handoffs 仍是：
 
-- [联合 posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)
+- [联合 posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)
 - [分层 CAE 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md)
 - [posterior 抽样与校准](20260827_082609_coherent-posterior-sampling-calibration.md)
 - [qNEHVI strategy](20260827_082611_qnehvi-acquisition-strategy.md)
@@ -75,11 +75,12 @@ baseline manifest 都是 0 records/0 checkpoints，`history_snapshots/` 选择 `
 中的历史摘要在本 checkout 默认 runs root 没有可 inspect 的 run spec，因此不是可用训练
 evidence。Gate 0 没有启动真实 simulator campaign，也没有把 smoke shape/cost 冒充设计行。
 
-整个 TODO 仍保持 active，不能移入 obsolete。下一执行单元只能是
-[联合 rawData posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)的轻量
-sampler/projector 与 fake schema tests：开始前必须从 committed tree 通过 Gate 0 validator，
-保持 inventory 不变（否则新建 preregistration 版本），并且不得作 1000/2000-design 拟合、
-校准或优化性能结论。合法 frozen dataset 只在 Gate 4 前成为硬依赖；正式 test/真实比较
+整个 TODO 仍保持 active，不能移入 obsolete。
+[联合 rawData posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)的轻量
+sampler/projector 与 fake schema tests 已完成并归档。082608--082611 仍按各自 TODO 的依赖
+和完成规则独立执行；必须继续从通过 Gate 0 validator 的 committed tree 开始并保持
+inventory 不变（否则新建 preregistration 版本），不得提前作 1000/2000-design 拟合、校准
+或优化性能结论。合法 frozen dataset 只在 Gate 4 前成为硬依赖；正式 test/真实比较
 还必须先封印数值 thresholds 并获得对应 campaign 授权。
 
 ## 基准数据要求

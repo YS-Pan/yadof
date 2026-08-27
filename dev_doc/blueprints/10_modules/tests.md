@@ -48,6 +48,13 @@ lock automatically generated run-directory names to a digits-only UTC
   synthetic 100,000-row catalog scale;
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
+- joint rawData posterior protocol through a neutral sample-backed backend with at
+  least two candidates, different-shaped named fields, and two objectives: stable
+  seed/draw/source identity, repeated candidates, empty populations, candidate
+  permutation and chunk size/order invariance, exact basename/main-key selectors,
+  schema rejection, streamed/materialized projector equivalence, finite task
+  fallback validity, typed invalid outcomes, recorder non-entry, semantic identity,
+  and optional-backend lazy imports;
 - CLI/docs, integrated cost/time views including grouped `view all`,
   the 50-generation run default, default-on run progress with an explicit quiet
   override, per-generation successful/error/remaining outcome counts, streamed

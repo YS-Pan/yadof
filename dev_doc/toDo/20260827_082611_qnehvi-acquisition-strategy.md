@@ -14,7 +14,7 @@
 
 ## 依赖
 
-- [联合 rawData posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)
+- [联合 rawData posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)
 - 至少一个实现该协议的 surrogate：推荐
   [分层 CAE 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md) 和
   [校准 posterior](20260827_082609_coherent-posterior-sampling-calibration.md)；

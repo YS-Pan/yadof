@@ -35,6 +35,16 @@ interpretations of evidence, not stored source truth.
 Cross-task invariant behavior belongs in yadof; workspace workflow/cost files own
 only behavior that varies with the selected optimization task.
 
+The submit-side surrogate boundary also exposes a lightweight backend-neutral joint
+rawData posterior protocol. One persistent sampler fixes function-draw identities
+before candidate chunking; every draw reconstructs complete named rawData fields
+identified by `(direct .npz basename, resolved values/data key)`. A thin projector
+uses one frozen current-task `CostInterpreter` to stream those derived draws into a
+joint objective tensor and invalid mask. Predicted rawData is discarded after
+projection and never enters recorded evidence. No current default strategy consumes
+this capability yet; conditional-INR posterior adaptation and posterior-assisted
+acquisition remain separate work.
+
 The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
 external simulator installation. Its JSON/NPZ subprocess protocol, environment
 isolation, scratch ownership, failure taxonomy, and backend-equivalent publication

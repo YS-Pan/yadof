@@ -324,6 +324,18 @@ def validate_rawdata_item(
     return loaded
 
 
+def resolve_main_array_key(item: RawDataItem) -> str:
+    """Resolve the current schema's canonical main array key.
+
+    ``values`` takes precedence over ``data`` exactly as it does in
+    :class:`RawDataView`.  Callers that use the key as semantic field identity
+    should pair it with the direct ``.npz`` basename; optional metadata names are
+    not part of that identity.
+    """
+
+    return _main_array_key(load_rawdata_item(item))
+
+
 def with_schema_version(metadata: Mapping[str, object]) -> dict[str, object]:
     updated = dict(metadata)
     updated["schema_version"] = RAWDATA_SCHEMA_VERSION
@@ -564,6 +576,7 @@ __all__ = [
     "load_rawdata_views",
     "metadata_from_item",
     "parse_metadata",
+    "resolve_main_array_key",
     "validate_rawdata_directory",
     "validate_rawdata_item",
     "validate_named_rawdata_items",

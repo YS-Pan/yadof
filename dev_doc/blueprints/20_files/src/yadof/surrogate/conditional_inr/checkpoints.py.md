@@ -30,3 +30,7 @@
 ## Mutability Profile
 - A method/policy/signature mismatch is cold-train behavior, not an invitation to
   guess compatibility.
+- The lightweight joint-posterior protocol does not alter this component's current
+  signature or checkpoint compatibility. A future separately selected
+  conditional-INR posterior adapter must add its own posterior/backend identity to
+  the consuming strategy without rewriting these legacy GPSAF artifacts.

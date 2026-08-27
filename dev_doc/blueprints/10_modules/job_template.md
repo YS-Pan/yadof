@@ -6,7 +6,9 @@
 defines parameter semantics, current task queries, assigned job snapshots, rawData
 schema/views/validation, reusable axis reduction,
 definition-based cost dispatch, constraint/failure policy, and objective counting.
-It does not contain a concrete simulator or objective.
+It also freezes named rawData templates and projects transient surrogate draws
+through one current task interpreter. It does not contain a concrete simulator,
+objective, posterior model, or acquisition rule.
 
 ## Task-owned files and roots
 
@@ -58,6 +60,14 @@ does not concatenate unrelated 1-D curves behind an invented channel dimension.
 A multidimensional field is appropriate only when its axes jointly define one
 physical grid/tensor that the prediction contract intends to model as such.
 
+For derived posterior samples, `RawDataSchemaTemplate` freezes the exact canonical
+selector `(direct .npz basename including .npz, resolved values/data main key)` for
+each field. Its signature includes the selector set, main shape/dtype
+representation, and every non-main template value such as axes, unit scalars, and
+metadata, but excludes the predicted main values. Reconstruction requires exactly
+that selector set and produces a complete `StructuredRawDataSample`; validation
+rejects missing/extra fields and schema drift instead of padding or guessing.
+
 ## Cost contract
 
 Costs are recomputed through freshly loaded current `submit/calc_cost.py`. A long-running
@@ -79,6 +89,19 @@ reinterpreted through the current snapshot when mechanically possible. Task/sour
 signatures may invalidate derived caches and record provenance, but job_template
 does not use them to judge scientific equivalence or automatically reject old
 evidence.
+
+`RawDataCostProjector` is a thin adapter around an injected frozen
+`CostInterpreter`. It denormalizes each matching candidate with the interpreter's
+frozen parameters, validates a complete structured sample against the frozen
+template, invokes the same `calc_cost.py` callback, and checks objective width and
+finite results. It projects each draw/candidate independently into
+`[draw,candidate,objective]` plus a validity mask and bounded typed diagnostics;
+invalid costs remain `NaN`. A finite callback result such as task-level
+`error_cost=1.0` is valid because callback fallback provenance is intentionally not
+part of `CostInterpreter`. Schema, callback, width, and non-finite failures are
+invalid. The context-managed `task_rawdata_cost_projector()` keeps the callback
+loaded for the complete projection and uses the generation snapshot when that
+snapshot workspace is supplied.
 
 New task objectives are independently normalized dimensionless minimization costs
 in `[0, 1]`. `soft_cost()` is the canonical fixed-`p=2` algebraic mapping from
@@ -120,3 +143,6 @@ very large finite physical values remain bounded instead of overflowing.
 - A yadof helper must be a stable contract or a mechanism reasonably reusable
   across different task families. One-off array layouts, specialized grouping, and
   narrow objective rules remain task-owned rather than becoming package APIs.
+- Named posterior samples and projected objectives are transient; job_template
+  projector code never imports surrogate backends, calls the recorder, or changes
+  worker/rawData/recorded-data formats.

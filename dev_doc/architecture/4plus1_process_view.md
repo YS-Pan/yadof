@@ -117,6 +117,36 @@ death wakes blocked callers with `RecordingError` and stops the campaign. Shutdo
 waits for queued and in-flight publication and retains the OS campaign lock until
 the writer exits.
 
+## Joint posterior projection
+
+A posterior-capable surrogate creates one persistent function sampler from the
+generation context, requested draw count, and seed. Creation fixes the draw order
+and source function/weight identities before any population is split. Each
+`predict(candidate_chunk)` result exposes those same IDs and streams complete named
+rawData samples one draw at a time:
+
+```text
+fixed draw identity + one candidate chunk
+  -> complete selector-keyed rawData sample
+  -> exact frozen schema-template validation
+  -> frozen CostInterpreter parameter denormalization and calc_cost callback
+  -> one [chunk candidate, objective] cost draw + valid mask
+  -> discard predicted rawData draw
+```
+
+The helper retains only the assembled `[draw, candidate, objective]` costs, masks,
+and bounded diagnostics. A callback-produced finite `error_cost=1.0` is valid; a
+schema mismatch, callback exception, wrong objective width, or non-finite objective
+is invalid and remains `NaN` in the derived tensor. Empty populations do not invoke
+the backend. Candidate permutations and chunk boundaries cannot change draw
+identity. This path never offers an envelope to the campaign recorder and does not
+alter worker, transport, rawData, or segment formats.
+
+The protocol and projector are currently infrastructure only. Existing
+conditional-INR mean/min-max prediction, GPSAF selection, and checkpoint recovery
+continue on their prior path until separately implemented adapters or strategies
+explicitly select the posterior capability.
+
 ## Generation-boundary task changes
 
 `run_generations()` reloads effective configuration for each generation and copies

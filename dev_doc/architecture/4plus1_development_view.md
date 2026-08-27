@@ -17,6 +17,8 @@ src/yadof/                 installed framework
   cli/                     command routing
   workspace/               context/init/check/marker
   job_template/            parameter, rawData, and submit-cost gateways
+    rawdata_template.py    exact named field templates and schema signatures
+    rawdata_projector.py   frozen current-cost projection and validity diagnostics
   evaluate_manager/        fast/job/local/HTCondor execution
     finalizer.py           common current-cost and recorder-offer boundary
     fast_runner.py         reusable isolated no-job-folder fast workers
@@ -32,6 +34,7 @@ src/yadof/                 installed framework
     gpsaf/                 GPSAF assistance, phases, and private records
     pymoo/                 lazy GA/NSGA-III backend adapter
   surrogate/               lightweight public rawData-surrogate API
+    posterior.py           backend-neutral persistent function-sampler protocol
     conditional_inr/       model, runtime, scheduling, checkpoint implementation
   tools/                   optional user-launched utilities
     cost_viewer/           reusable cost analysis/rendering and dev_doc
@@ -66,6 +69,13 @@ Core modules communicate through public package exports or `api.py` boundaries.
 persistence APIs; `optimize` may coordinate evaluation/history/surrogate; core code
 must not depend on optional tools. Stateful APIs accept explicit workspace context.
 No module calculates mutable user paths relative to package `__file__`.
+
+The lightweight `surrogate.posterior` protocol depends only on core Python/NumPy
+and the task-neutral named rawData/projector types. It must not import Torch,
+BoTorch, pymoo algorithms, or a concrete surrogate. `job_template` never imports
+`surrogate`; the projector accepts structured named samples and reuses an injected
+`CostInterpreter`. A future acquisition strategy may depend on both public
+surfaces, while a concrete surrogate depends only on the posterior protocol.
 
 Code placement follows variability: behavior invariant across optimization tasks
 belongs in yadof; behavior that changes with simulator, model, rawData meaning, or
@@ -125,6 +135,12 @@ Task-specific tests that hard-code a concrete model, design, objective, frequenc
 or exact active variable set belong with a disposable/reference workspace, not in
 the reusable package suite. Small neutral shapes and fake adapters remain valid
 generic fixtures.
+
+Joint-posterior contract tests use neutral fake/sample-backed functions with mixed
+rawData shapes and task callbacks. They prove draw/selector identity, seed,
+duplicate, empty, permutation and chunk invariance, streaming/materialized cost
+equivalence, bounded invalid diagnostics, recorder non-entry, semantic identity,
+and optional-backend lazy imports without claiming fitting or acquisition quality.
 
 psutil is a core dependency because local and fast evaluation must observe process
 trees and submit-host capacity on supported platforms. It remains submit-host

@@ -1,0 +1,38 @@
+# File blueprint: src/yadof/surrogate/posterior.py
+
+## Intent
+
+- Define one lightweight, backend-neutral joint rawData posterior surface suitable
+  for future sample-consuming acquisition strategies.
+
+## Functionalities
+
+- Publish runtime-checkable posterior-surrogate, persistent-sampler, and
+  candidate-chunk posterior protocols plus one function-draw container.
+- Validate JSON-safe diagnostics: kind, requested/actual draws, seed, stable
+  draw/source IDs, schema/state/strategy signatures, approximation limitations,
+  observation-noise status, exact selectors, candidate/failure counts, and honest
+  finite versus continuous/unknown support.
+- Build a semantic capability block containing the protocol version, backend
+  distribution/version, posterior/support kinds, and all controlled parameters.
+- Stream candidate chunks and then individual rawData draws through an injected
+  `RawDataCostProjector`, retaining only joint objective samples, validity, and
+  bounded diagnostics.
+
+## Non-Obvious Techniques
+
+- Sampler creation fixes function identities. `predict()` never reselects a member,
+  weight state, mask, or latent noise per row/field/objective; candidate permutation
+  and chunking only reorder/partition the same values.
+- Unique finite support counts distinct source functions, not requested draws.
+  Continuous or unknown support uses `None` rather than a fabricated integer.
+- Empty populations do not call the backend. A chunk-level backend/contract failure
+  becomes conservative invalid samples, never favorable acquisition evidence.
+
+## Invariants
+
+- Import only core Python/NumPy and lightweight job-template types. Parent
+  `yadof.surrogate` and `yadof.optimize` imports must not load Torch, BoTorch,
+  concrete surrogate runtimes, or pymoo algorithms.
+- The file never records predicted rawData and does not implement CAE,
+  conditional-INR adaptation, calibration, or acquisition.

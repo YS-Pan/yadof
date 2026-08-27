@@ -13,6 +13,19 @@
   physical meaning, thresholds, and windows are task concerns; physical units stay
   in rawData and extraction logic. Framework execution failures may still use an
   all-`inf` sentinel outside the normal task-cost scale.
+- A joint rawData posterior is derived submit-side state. One persistent sampler
+  fixes stable draw IDs (and finite-support source IDs when applicable), then
+  evaluates the same possible functions over arbitrary candidate chunks. Each
+  candidate/draw is a complete named rawData sample whose field identity is the
+  exact `(direct .npz basename, resolved values/data main key)` pair. Candidate
+  ordering and chunking may only reorder or partition those function values.
+- A rawData cost projector owns no task logic. It validates each predicted sample
+  against one frozen selector/shape/dtype/axis/metadata template, denormalizes the
+  matching candidate with one frozen `CostInterpreter`, invokes the current task
+  callback, checks objective width and finiteness, and emits joint costs plus a
+  validity mask. Finite task fallback values such as `1.0` remain valid because
+  their origin is not observable at this boundary; schema, callback, width, and
+  non-finite-result failures are invalid.
 - A prepared job is one local/distributed candidate evaluation and owns parameters,
   task inputs, rawData, lifecycle metadata, transport artifacts, and diagnostics.
   A fast logical evaluation keeps the identity/metadata contract but has no durable
@@ -86,6 +99,15 @@ inverse scaling. The surrogate never establishes a parallel
 workspace paths plus active strategy/component identities; source hashes remain
 separate provenance.
 
+Posterior samples are another derived surrogate view, not evidence. A sampler
+reports its posterior/support kind honestly (`finite` with an integer unique
+support, or `continuous_or_unknown` with no invented finite count), seed, stable
+draw identities, schema/state/strategy signatures, limitations, fields, and bounded
+failure statistics. Projection streams one draw for one candidate chunk through
+the frozen cost interpreter and discards the rawData immediately, retaining only
+the smaller `[draw, candidate, objective]` tensor and validity mask. Neither the
+sampler nor projector imports or calls the recorder.
+
 ## Invariants
 
 - Fast/local/distributed evaluators differ in execution transport and intermediate
@@ -119,3 +141,8 @@ separate provenance.
 - External simulator subprocess failures never publish partial evidence. Validated
   local/distributed files and fast in-memory payloads retain identical rawData
   basenames, arrays, metadata, units, and meaning before common recording/cost.
+- A persistent posterior draw denotes one possible function across every candidate,
+  rawData field, and derived objective. Repeated candidates have identical values
+  within a draw; candidate permutation, chunk size, and chunk call order do not
+  resample it. Optional numerical backends remain lazy at parent
+  `yadof.surrogate` and `yadof.optimize` import.

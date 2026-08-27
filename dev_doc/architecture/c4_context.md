@@ -76,6 +76,10 @@ preregistration does not itself authorize or launch a run.
   objective row with diagnostics, and is durably recorded before the population
   boundary completes.
 - Historical rawData can be reinterpreted by the current cost definition.
+- Joint posterior rawData is explicitly derived and transient. A persistent sampler
+  preserves one function draw across candidates, fields, objectives, permutations,
+  and candidate chunks; a frozen current-cost projector emits joint objective
+  samples and invalid masks without publishing predicted rawData as evidence.
 - Users may correct parameter ranges/levels, fixed-width objective/cost policy,
   optimization composition, configuration, and task execution code between generations. Parameter
   identity/count and objective count remain stable until separate structural-change

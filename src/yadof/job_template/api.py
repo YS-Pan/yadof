@@ -44,6 +44,10 @@ class TaskDefinition:
         return len(self.objective_names)
 
 
+class CostObjectiveWidthError(ValueError):
+    """A task cost callback returned a row with the wrong objective width."""
+
+
 @dataclass(frozen=True, slots=True)
 class CostInterpreter:
     """One frozen parameter and cost-definition view of a workspace task."""
@@ -66,6 +70,13 @@ class CostInterpreter:
 
         return normalize_values(self.parameters, raw_variables)
 
+    def denormalize_variables(
+        self, normalized_variables: Sequence[float]
+    ) -> tuple[float, ...]:
+        """Denormalize one vector under the same frozen parameters."""
+
+        return denormalize_values(self.parameters, normalized_variables)
+
     def calculate_costs(
         self,
         samples: Sequence[Sequence[RawDataItem]],
@@ -76,7 +87,7 @@ class CostInterpreter:
         rows = _calculate_costs(samples, self._calculate_sample, raw_variables)
         for row in rows:
             if len(row) != len(self.objective_names):
-                raise ValueError(
+                raise CostObjectiveWidthError(
                     f"{self._source_path} returned {len(row)} costs; expected "
                     f"{len(self.objective_names)}"
                 )
@@ -361,7 +372,7 @@ def calculate_cost(
         rows = _calculate_costs(samples, calculate_sample, raw_variables)
     for row in rows:
         if len(row) != len(names):
-            raise ValueError(
+            raise CostObjectiveWidthError(
                 f"{source_path} returned {len(row)} costs; expected {len(names)}"
             )
     return rows
@@ -435,6 +446,7 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
 
 
 __all__ = [
+    "CostObjectiveWidthError",
     "CostInterpreter",
     "CALC_COST_MODULE_NAME",
     "FAST_EVALUATION_MODULE_NAME",

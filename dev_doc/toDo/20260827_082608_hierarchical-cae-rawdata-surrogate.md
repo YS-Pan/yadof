@@ -234,7 +234,7 @@ benchmark 证明 decoder/codec epistemic uncertainty 不可忽略时，才升级
   `conditional_inr/` 完全分离；不得加载或覆盖其权重。
 - 现有 `conditional_inr()` factory、GPSAF 组合和 viewer 行为保持不变。
 - 新 component 实现
-  [联合 rawData posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)，
+  [联合 rawData posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)，
   同时可以提供由 samples 派生的 mean/rawData 诊断视图。
 - viewer 通过新的 backend adapter 读取该 checkpoint；UI 不直接导入模型内部类型。
 - semantic group specification 属于 task composition identity。改变分组应激活新的可恢复

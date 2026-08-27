@@ -19,7 +19,7 @@
 
 本工作依赖：
 
-- [联合 rawData posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)
+- [联合 rawData posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)
 - [分层 CAE rawData 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md)
 
 目标是为新拟合器提供一组联合、自洽、可复现且明确标注近似性质的 rawData function
@@ -42,7 +42,7 @@ draw s:
 联合函数抽样。
 
 “一次性”描述的是同一函数状态，不要求把候选池同时放进内存。实现使用
-[联合契约](20260827_082607_joint-rawdata-posterior-contract.md)中的持久 sampler：先固定
+[联合契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)中的持久 sampler：先固定
 `theta_s`/member identities，再对任意 candidate chunks 调用 `predict()`。改变 chunk size、
 顺序或候选排列不得改变同一 `x/draw_id` 的函数值。
 

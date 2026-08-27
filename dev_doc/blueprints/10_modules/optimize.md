@@ -42,6 +42,16 @@ decision. A configured exploration quota keeps some candidates outside surrogate
 preference. Every selected row is validated by the real evaluator before becoming
 durable truth.
 
+The public joint rawData posterior protocol and cost projector are available to a
+future explicitly composed strategy, but optimize currently has no posterior-
+assisted strategy or acquisition component. Such a consumer must require the
+runtime-checkable capability rather than probe with `hasattr`, include the
+posterior-capability identity (backend version and every controlled parameter) in
+its strategy identity, consume only projected joint cost samples/valid masks, and
+send every selection through the common real evaluator. Merely adding a posterior
+adapter to a surrogate package must not change the existing GPSAF identity or
+conditional-INR checkpoint namespace.
+
 Distributed evaluation may invoke the scheduler-specific after-submit hook while
 real jobs are running. Fast creates no scheduler submission and does not fabricate
 that event; the existing orchestration fallback invokes deferred work only after
@@ -91,3 +101,5 @@ recent per-job diagnostics. A smoke failure prevents generation submission.
   and activates `strategy-<signature>` while retaining inactive artifacts.
 - Source fingerprints remain separate from deterministic semantic signatures.
 - Stored optimization metadata stays lightweight; rawData remains in recorded_data.
+- Predicted posterior rawData and projected acquisition samples remain transient and
+  never become optimizer history, recorder input, or real-evaluation results.

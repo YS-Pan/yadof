@@ -22,6 +22,10 @@ flowchart LR
     Result --> Finalizer["Common current-cost finalizer"]
     Finalizer --> Optimizer["Optimizer and surrogate"]
     Finalizer -->|backpressured owned envelope| Records["Reliable segment recorder"]
+    Workspace --> SurrogateState["Compatible surrogate state"]
+    SurrogateState --> Posterior["Persistent joint rawData sampler"]
+    Posterior --> Projector["Frozen current-cost projector"]
+    Projector --> Optimizer
 ```
 
 ## Agent interaction
@@ -91,3 +95,12 @@ Its task-side parent/child pair remains inside the local, fast, or execute-node
 boundary: one absolute external interpreter, one task-owned child entry, one
 candidate scratch, and versioned JSON/NPZ artifacts. Only validated rawData crosses
 from that pair into the existing result container.
+
+The posterior/projector branch is derived submit-side computation rather than a
+fourth evaluation backend. A persistent sampler keeps draw identity across
+candidate chunks and emits complete named rawData samples. The projector validates
+them against the frozen schema template, reuses the generation snapshot's
+`CostInterpreter`, and retains only joint objective samples plus validity and
+bounded diagnostics. Neither node calls the finalizer or recorder, and the current
+GPSAF/conditional-INR path remains unchanged until a separately implemented
+consumer explicitly selects this capability.

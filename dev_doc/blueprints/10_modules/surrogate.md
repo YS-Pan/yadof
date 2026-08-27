@@ -2,24 +2,56 @@
 
 ## Responsibility
 
-`yadof.surrogate` models workspace rawData as a function of normalized variables and
-rawData query coordinates. It trains a conditional implicit-neural-representation
-ensemble, reconstructs predicted rawData, calculates current costs through
-`job_template`, exposes per-objective member min/max spread diagnostics, and
-publishes recoverable checkpoints/metadata. Its lightweight public factory is a
-narrow rawData-surrogate component injected by workspace-owned GPSAF composition;
-non-surrogate strategies do not load or create this state.
+`yadof.surrogate` exposes rawData-first surrogate components plus a lightweight,
+backend-neutral joint rawData posterior protocol. The existing concrete component
+trains a conditional implicit-neural-representation ensemble, reconstructs predicted
+rawData, calculates current costs through `job_template`, exposes per-objective
+member min/max spread diagnostics, and publishes recoverable checkpoints/metadata.
+Its public factory remains the narrow component injected by workspace-owned GPSAF
+composition; the new posterior protocol does not change that component or make a
+posterior-assisted strategy available by itself.
 
 ## Source structure
 
-- Parent `__init__.py` and `api.py` own only the lightweight public component and
-  lazy forwarding surface.
+- Parent `__init__.py` and `api.py` own only the lightweight public component,
+  posterior protocol exports, and lazy forwarding surface.
+- `posterior.py` owns runtime-checkable surrogate/sampler/posterior protocols,
+  persistent draw containers, JSON-safe support diagnostics, semantic capability
+  identity, and the draw/candidate-chunk streaming projection helper. It imports no
+  Torch, BoTorch, pymoo algorithm, or concrete surrogate runtime.
 - `conditional_inr/` owns model construction/training, rawData adaptation,
   runtime state, staggered scheduling, checkpoint publication, metadata, and
   private in-memory types.
 - Importing the parent package must not load Torch. The public
   `conditional_inr()` factory remains callable even after private
   `surrogate.conditional_inr.*` modules are loaded.
+
+## Joint posterior contract
+
+A posterior-capable component implements an explicit
+`RawDataPosteriorSurrogate`, including its normal component semantic identity, a
+posterior-capability semantic identity block, and `make_rawdata_sampler()`. The
+sampler fixes requested draw IDs and underlying support sources at creation. Every
+later `predict(candidate_chunk)` returns the same ordered draws, so repeated
+candidates, candidate permutations, chunk sizes, and chunk call order cannot
+resample a function.
+
+One `RawDataFunctionDraw` carries one complete structured sample per candidate.
+Fields are identified only by `(direct .npz basename including .npz, resolved
+values/data main key)`. `RawDataPosteriorDiagnostics` records posterior kind,
+requested/actual draw counts, seed, draw/source IDs, honest `finite` versus
+`continuous_or_unknown` support, schema/state/strategy signatures, approximation
+limits, observation-noise status, supported selectors, candidate count, and bounded
+failures. Continuous/unknown support uses `unique_support=None`; repeated draws from
+a finite ensemble do not increase its integer support.
+
+`project_rawdata_sampler()` streams candidate chunks and then individual draws
+through an injected `RawDataCostProjector`. It retains only
+`[draw,candidate,objective]`, valid masks, and bounded diagnostics. Posterior rawData
+never enters finalization or recording. A component/backend version or controlled
+posterior parameter belongs in the component/strategy semantic identity. Adding a
+future adapter cannot alter the existing conditional-INR GPSAF identity unless that
+adapter is explicitly selected by another strategy.
 
 ## Training data and model
 
@@ -98,3 +130,9 @@ output artifacts cold-train instead of being interpreted with the linear decoder
 - Non-finite/corrupt history is diagnosed and bounded by policy.
 - Prediction output passes the same rawData/cost interpretation used for real data.
 - Full-grid prediction never routes through optional off-grid interpolation.
+- Function draw identity is stable across every candidate and field in one sampler;
+  independent row/field/objective resampling violates the protocol.
+- Parent imports expose the protocol without loading any optional numerical backend.
+- Conditional-INR's old mean-cost/min-max tuple, GPSAF behavior, model architecture
+  version, and checkpoint signature remain unchanged until its separate posterior
+  adapter is implemented.

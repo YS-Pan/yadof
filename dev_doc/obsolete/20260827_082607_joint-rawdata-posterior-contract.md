@@ -26,11 +26,11 @@ conditional-INR 兼容适配器以及未来 posterior 方法可以被 qNEHVI 等
 
 本文件是以下工作包的首要依赖：
 
-1. [分层 CAE rawData 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md)
-2. [自洽后验抽样与校准](20260827_082609_coherent-posterior-sampling-calibration.md)
-3. [conditional-INR 后验兼容适配器](20260827_082610_conditional-inr-posterior-adapter.md)
-4. [qNEHVI 采集与独立策略](20260827_082611_qnehvi-acquisition-strategy.md)
-5. [基准、验收与渐进发布](20260827_082612_validate-new-surrogate-and-qnehvi.md)
+1. [分层 CAE rawData 拟合器](../toDo/20260827_082608_hierarchical-cae-rawdata-surrogate.md)
+2. [自洽后验抽样与校准](../toDo/20260827_082609_coherent-posterior-sampling-calibration.md)
+3. [conditional-INR 后验兼容适配器](../toDo/20260827_082610_conditional-inr-posterior-adapter.md)
+4. [qNEHVI 采集与独立策略](../toDo/20260827_082611_qnehvi-acquisition-strategy.md)
+5. [基准、验收与渐进发布](../toDo/20260827_082612_validate-new-surrogate-and-qnehvi.md)
 
 ## 已确定的契约
 

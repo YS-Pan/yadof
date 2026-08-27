@@ -14,7 +14,7 @@
 ## 依赖和目标
 
 依赖
-[联合 rawData posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)。
+[联合 rawData posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)。
 
 目标是在不改变 conditional-INR 训练、旧 prediction tuple、checkpoint 数学或 GPSAF
 选择行为的前提下，把现有 ensemble member rawData predictions 暴露为有限经验联合后验，

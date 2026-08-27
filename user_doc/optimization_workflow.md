@@ -195,6 +195,41 @@ normalized candidate
   -> objective tuple
 ```
 
+### Joint posterior component boundary
+
+The installed package exposes a lightweight protocol for future surrogate and
+acquisition components that need joint rawData function draws. This is framework
+infrastructure, not a new selectable strategy: the current template still composes
+conditional INR with GPSAF, and conditional-INR posterior adaptation, CAE, and
+qNEHVI remain separate opt-in implementation work.
+
+A posterior-capable component creates one persistent sampler with a draw count and
+seed. The sampler fixes every draw's underlying function identity before candidates
+are split into chunks. Calling `predict()` for different chunks or in another chunk
+order must evaluate those same functions; repeated candidates receive the same
+value within one draw. Every candidate/draw reconstructs complete rawData fields.
+The stable field selector is exactly `(direct .npz basename including .npz,
+resolved values/data main key)`, never optional `metadata.rawdata_name` or mapping
+order. Axis arrays, units, metadata, shape, and dtype stay frozen in the schema
+template.
+
+`task_rawdata_cost_projector()` holds one `CostInterpreter` open against the selected
+generation snapshot. `project_rawdata_sampler()` streams one complete rawData draw
+for one candidate chunk through that interpreter and retains only
+`[draw,candidate,objective]` costs, a validity mask, and bounded diagnostics. A
+finite callback result—including a task helper's indistinguishable
+`error_cost=1.0` fallback—is valid. Schema mismatch, callback exception, wrong
+objective width, or a non-finite objective is invalid and cannot be treated as a
+favorable uncertain sample. Predicted rawData is discarded after projection and
+never enters jobs, rawData transport, recorded segments, or history.
+
+Component authors must place the posterior protocol/backend version and every
+controlled parameter in the component and consuming strategy's semantic identity.
+Finite ensembles report their real distinct support even when draws repeat;
+continuous or unknown support reports `unique_support=None`. Importing
+`yadof.surrogate`, `yadof.optimize`, or these protocol types does not load Torch,
+BoTorch, or another optional numerical backend.
+
 Every objective in that tuple must normally be a dimensionless minimization cost
 in `[0, 1]`, independently normalized from its physical metric: `0` is best and `1`
 is worst. A `calc_cost.py` must not return values directly in seconds, microseconds,
