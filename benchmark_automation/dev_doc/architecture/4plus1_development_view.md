@@ -8,6 +8,8 @@ benchmark_automation/
   benchmark_core.py            planning, state, execution, ETA, collection, report
   benchmark.toml               cases, arms, suites, budgets, resources
   baselines/                   editable semantic task templates
+  preregistrations/            versioned schema/experiment freezes and validators;
+                                not executable suites or result evidence
   strategy_templates/          complete optimization.py arm definitions
   tests/                       focused runner and postprocessor tests
   README.md                    operator contract
@@ -47,3 +49,8 @@ mock subprocess/public surfaces but must preserve state and output shapes.
   launches a real performance run.
 - Benchmark code remains outside wheel/sdist. Tests use the matching regularly
   installed yadof distribution without repository-source injection.
+- A preregistration validator may read current tracked baselines/configuration and
+  prove a deliberately blocked state, but it never launches a simulator, creates a
+  run, treats smoke shapes as rows, or changes the runner matrix. Data and numeric
+  threshold seals are later versioned inputs rather than edits that rewrite the
+  original Gate 0 claim.

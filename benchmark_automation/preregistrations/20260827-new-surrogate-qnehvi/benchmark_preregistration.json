@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "preregistration_id": "20260827-new-surrogate-qnehvi-gate0-v1",
+  "status": "gate-0-frozen-formal-benchmark-blocked",
+  "captured_utc": "2026-08-27T04:17:38.474668Z",
+  "purpose": "Preregister representative schemas, legal provenance, design-level splits, metrics, comparison arms, seeds, resource capture, threshold-sealing rules, stop conditions, and downstream gate inputs before model implementation or test-result access.",
+  "artifact_integrity": {
+    "schema_inventory": {
+      "path": "schema_inventory.json",
+      "sha256": "d73daa5d10ba19fb2af40137c8133758347fc939ac34ebe9e91d365fdd5aa431"
+    },
+    "data_availability_audit": {
+      "path": "data_availability_audit.json",
+      "sha256": "0d982415ac60453385f00e021a332290f2ace0e46221024c65b4a92136d47ebb"
+    },
+    "acceptance_threshold_template": {
+      "path": "acceptance_thresholds.template.json",
+      "sha256": "d7bf8dc8a7278403711a5a4af02fb619362a38cfeca790476f959d4be42e1a60"
+    },
+    "benchmark_configuration_at_registration": {
+      "path": "../../benchmark.toml",
+      "sha256": "a4eb8212df8b4ba8dcba146319f1d379a31d0d94b8863aa7a6428f2099dac0e0"
+    }
+  },
+  "settled_boundaries": {
+    "authoritative_prediction_path": "normalized parameters -> complete schema-compatible rawData -> frozen current calc_cost.py -> costs",
+    "direct_parameters_to_cost_production_model_allowed": false,
+    "predicted_rawdata_is_durable_evidence": false,
+    "task_noise_interpretation": "approximately deterministic; zero observation noise unless a later task contract supplies repeated-measurement evidence",
+    "first_release_fixed_real_pareto_baseline": true,
+    "first_release_pending_points": false,
+    "first_release_outcome_constraints": false,
+    "existing_conditional_inr_and_gpsaf_preserved": true,
+    "default_strategy_change_authorized": false,
+    "new_real_simulator_campaign_authorized": false
+  },
+  "current_automation_contract": {
+    "plan_command": "python benchmark_automation/benchmark.py plan --suite performance",
+    "preflight_command": "python benchmark_automation/benchmark.py preflight --suite structural-full",
+    "performance_suite_at_registration": {
+      "cases": ["saw", "chrono", "test-com"],
+      "arms": ["nsga3", "gpsaf-conditional-inr"],
+      "seeds": [104729],
+      "population": 100,
+      "generations": 20,
+      "attempted_evaluations_per_cell": 2000,
+      "cell_count": 6,
+      "total_attempted_evaluations": 12000,
+      "purpose": "descriptive performance evidence; it does not apply acceptance decisions"
+    },
+    "preflight_at_registration": {
+      "checked_utc": "2026-08-27T04:15:46.951Z",
+      "suite": "structural-full",
+      "passed": 13,
+      "failed": 0,
+      "simulator_launched": false,
+      "baseline_task_fingerprints": {
+        "saw": "3d2025426a976aa03cf720757bd37314004db8d29b5a922dcfc36c2d0d753c10",
+        "chrono": "462d1201a592343980c17c9e6e641daaaa8d78e4029f02aee361527996f529fe",
+        "test-com": "0b64f13b9f0b209f5dd23ce4d7f841119580f47885536db2184cb661d6c088f8"
+      },
+      "strategy_sha256": {
+        "nsga3": "d2915061719e3c75e586ac60d3f009250631e83e011c4c1e1a36e8e3584c4d14",
+        "gpsaf-conditional-inr": "04ff43a74c9627e5b9d5bba8d590fb5c128b3cc95b77211844296d27a3f008e2"
+      }
+    },
+    "frozen_input_rule": "Live baseline directories are mutable templates. Only a run-local input snapshot or another immutable manifest-backed evidence export is frozen. baseline.json task_fingerprint and smoke shapes are creation/schema provenance, not design rows."
+  },
+  "dataset_and_split": {
+    "availability_audit": "data_availability_audit.json",
+    "minimum_unique_compatible_designs_per_case": 2800,
+    "partition_quotas_per_case": {
+      "test": 400,
+      "calibration": 200,
+      "validation": 200,
+      "train_pool": 2000
+    },
+    "nested_training_views": {
+      "warmup_diagnostic": 400,
+      "train_1000": 1000,
+      "train_2000": 2000
+    },
+    "design_identity": {
+      "identity_salt": "yadof:new-surrogate-qnehvi:gate0:v1:design-id",
+      "canonical_components": [
+        "case ID",
+        "task fingerprint",
+        "parameter count",
+        "normalized variables encoded as finite little-endian float64 in canonical parameter order"
+      ],
+      "hash": "SHA-256",
+      "serialization": "identity_salt UTF-8, NUL, case ID UTF-8, NUL, task fingerprint ASCII, NUL, uint32 little-endian parameter count, then each normalized variable as IEEE-754 float64 little-endian",
+      "duplicate_rule": "All exact duplicate identities form one design group. One deterministic real row is used for primary metrics; repeats remain diagnostics and never cross partitions."
+    },
+    "assignment_algorithm": {
+      "assignment_salt": "yadof:new-surrogate-qnehvi:gate0:v1:split-assignment",
+      "training_order_salt": "yadof:new-surrogate-qnehvi:gate0:v1:training-order",
+      "steps": [
+        "Freeze and hash the complete eligible unique-design set in a sealed dataset manifest.",
+        "Sort design IDs by SHA256(assignment_salt NUL case_id NUL task_fingerprint NUL design_id), breaking an impossible digest tie by design_id.",
+        "Assign the first 400 to test, next 200 to calibration, next 200 to validation, and next 2000 to train_pool; leave later designs unused for the primary experiment.",
+        "Sort train_pool by SHA256(training_order_salt NUL case_id NUL task_fingerprint NUL design_id). The first 400 are warmup, first 1000 are train_1000, and all 2000 are train_2000.",
+        "Persist every design ID and partition in the sealed manifest before training or test access."
+      ],
+      "row_order_independent": true,
+      "coordinate_level_split_forbidden": true,
+      "same_design_fields_must_share_partition": true
+    },
+    "test_access_rule": "Model selection and early stopping use validation; posterior scaling uses calibration; the offline test partition remains inaccessible until the numeric threshold file is sealed. Formal optimization campaigns use disjoint run IDs and formal seeds and never enter this offline dataset before the primary endpoint is reported."
+  },
+  "seed_registry": {
+    "derivation": "int.from_bytes(SHA256('yadof:new-surrogate-qnehvi:gate0:v1:seed:' + decimal_index)[:4], 'big') & 0x7fffffff",
+    "model_fit_and_bootstrap": [
+      69168527,
+      154538516,
+      321217228,
+      2018013841,
+      2089865461
+    ],
+    "threshold_pilot_optimization": [
+      466266354,
+      1967917483,
+      1297092814
+    ],
+    "posterior_metric_and_backend_spike": [
+      1714420212,
+      873864728
+    ],
+    "formal_optimization_test": [
+      2130752357,
+      1515921261,
+      1964760593,
+      1316973348,
+      132203503
+    ],
+    "groups_are_pairwise_disjoint": true,
+    "same_case_seed_is_paired_across_online_arms": true
+  },
+  "comparison_matrix": {
+    "offline_representation": [
+      {
+        "id": "conditional-inr-mean",
+        "role": "existing no-regression rawData baseline",
+        "production_candidate": true
+      },
+      {
+        "id": "hierarchical-cae-mean-groups-none",
+        "role": "new representation with global plus field-private state and no group state",
+        "production_candidate": true
+      },
+      {
+        "id": "hierarchical-cae-mean-explicit-s11-gain-groups",
+        "role": "required explicit-group ablation using schema_inventory.json groups",
+        "production_candidate": true
+      },
+      {
+        "id": "hierarchical-cae-independent-fields",
+        "role": "required ablation that removes cross-field sharing",
+        "production_candidate": false
+      },
+      {
+        "id": "hierarchical-cae-no-coordinate-consistency",
+        "role": "required only after the coordinate-readout gate is activated",
+        "production_candidate": false
+      },
+      {
+        "id": "pca-svd-reconstruction",
+        "role": "rank, representation-difficulty, and pipeline sanity diagnostic only",
+        "production_candidate": false
+      }
+    ],
+    "posterior_and_decision": [
+      {
+        "id": "hierarchical-cae-predictor-ensemble-uncalibrated",
+        "role": "first honest finite joint function-draw posterior"
+      },
+      {
+        "id": "hierarchical-cae-predictor-ensemble-calibrated",
+        "role": "target posterior when calibration partition supports scaling"
+      },
+      {
+        "id": "conditional-inr-empirical-adapter",
+        "role": "finite-support compatibility ablation; not a recommended default"
+      }
+    ],
+    "formal_online_arms": [
+      {
+        "id": "nsga3",
+        "role": "non-surrogate real-search baseline",
+        "available_at_registration": true
+      },
+      {
+        "id": "gpsaf-conditional-inr",
+        "role": "existing production no-regression baseline",
+        "available_at_registration": true
+      },
+      {
+        "id": "gpsaf-hierarchical-cae",
+        "role": "mandatory acquisition attribution ablation",
+        "available_at_registration": false
+      },
+      {
+        "id": "qnehvi-hierarchical-cae",
+        "role": "target representation plus posterior plus acquisition arm",
+        "available_at_registration": false
+      },
+      {
+        "id": "qnehvi-conditional-inr-adapter",
+        "role": "limited-support compatibility ablation",
+        "available_at_registration": false
+      }
+    ],
+    "formal_online_budget": {
+      "cases": ["saw", "chrono", "test-com"],
+      "population": 100,
+      "generations": 20,
+      "attempted_evaluations_per_cell": 2000,
+      "formal_seed_count": 5,
+      "formal_arm_count": 5,
+      "formal_cell_count": 75,
+      "formal_total_attempted_evaluations": 150000,
+      "cold_start_included": true,
+      "failed_candidates_consume_budget": true,
+      "generation_zero_population_must_match_by_case_and_seed": true
+    },
+    "exclusions": [
+      "direct parameters-to-cost production surrogate",
+      "mean/min/max intervals presented as posterior samples",
+      "a pilot or filtered performance subset used for algorithm acceptance",
+      "an arm whose selected candidates bypass common real evaluation/finalization/recording"
+    ]
+  },
+  "metrics": {
+    "common_rules": {
+      "unit_of_split_and_bootstrap": "unique design",
+      "field_aggregation": "equal-weight macro average after per-field aggregation; never weight by grid-point count",
+      "scalers": "fit on the applicable training view only and freeze for validation/calibration/test",
+      "finite_only": true,
+      "report_every_case_train_size_field_objective_and_seed": true,
+      "uncertainty_interval": "paired design bootstrap with 10000 deterministic resamples using the registered metric seed; online results additionally report every paired seed value"
+    },
+    "rawdata_representation": [
+      "per-field physical-unit MAE",
+      "per-field physical-unit RMSE",
+      "per-field standardized MAE using training-only mean and standard deviation with a sealed near-constant rule",
+      "per-field standardized RMSE using the same training-only scale",
+      "field-macro standardized MAE and RMSE",
+      "complete predicted-rawData current-cost MAE and RMSE per objective",
+      "Spearman rank correlation per objective with ties handled by average ranks",
+      "pairwise Pareto dominance consistency over all comparable held-out design pairs",
+      "invalid reconstruction and current-cost projection counts"
+    ],
+    "task_neutral_structure_policy": "No peak, gradient, spectrum, or other structure metric is part of v1 acceptance. Adding one requires a preregistration version before test access; task-specific cost windows are evaluated only through current calc_cost.py.",
+    "posterior": [
+      "per-field and field-macro marginal coverage at 50%, 80%, 90%, and 95%",
+      "rawData and current-cost calibration curves and integrated absolute calibration error",
+      "per-field multivariate energy score followed by equal-weight field macro aggregation",
+      "cross-field correlation/covariance preservation on frozen per-field standardized summaries without reordering draw IDs",
+      "current-cost objective energy score and Pareto/ranking decision quality",
+      "posterior_kind, support_kind, unique_support when finite, requested/actual draws, valid-draw fraction, and projection-failure fraction",
+      "proof that observation-noise-disabled draws do not add independent per-x noise",
+      "decision quality before and after any calibration"
+    ],
+    "optimization": [
+      "cumulative minimization hypervolume at each 100-attempt generation boundary with reference (1,...,1)",
+      "primary final hypervolume after 2000 attempted evaluations",
+      "attempted evaluations to the sealed per-case target hypervolume",
+      "paired-seed median difference, dispersion, and sealed confidence result",
+      "exploration hits, duplicates, invalid/failed evaluations, fallbacks, and excluded pairs",
+      "bounded pre-selection prediction/acquisition versus later real-result diagnostics without durable predicted rawData"
+    ],
+    "engineering": [
+      "data-load wall time",
+      "per-field codec pretraining wall time",
+      "parameter-predictor training wall time",
+      "optional full-grid fine-tuning wall time",
+      "posterior draw wall time",
+      "rawData-to-cost projection wall time",
+      "qNEHVI selection wall time",
+      "CPU utilization, peak host RAM, peak VRAM, checkpoint bytes, and restore wall time",
+      "surrogate overhead relative to one real evaluation and one complete real generation",
+      "candidate-pool x draw-count scaling",
+      "candidate chunk-size/order scaling and numerical identity checks"
+    ],
+    "streaming_and_invariance": {
+      "candidate_chunk_sizes": [1, 7, 64, 257],
+      "candidate_orders": ["original", "reversed", "registered permutation"],
+      "required": "For one persistent sampler, reassembly must preserve the same x/draw_id values and projected costs within the sealed dtype/backend tolerance; repeated candidates in one draw must match exactly under deterministic inference.",
+      "memory_requirement": "Only [draw,candidate,objective] plus one candidate chunk of rawData may remain resident; the full draw x candidate x rawData product is forbidden."
+    }
+  },
+  "registration_environment": {
+    "role": "Gate 0 registration and initial comparable-resource block; every actual dataset, pilot, and formal run must freeze its own run_spec/environment and may not pool a changed block silently.",
+    "host": {
+      "node": "DESKTOP-DERG5LD",
+      "os": "Microsoft Windows 11 Pro",
+      "version": "10.0.26200",
+      "build": "26200",
+      "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+      "physical_cores": 8,
+      "logical_cores": 16,
+      "total_memory_bytes_psutil": 102237425664,
+      "total_visible_memory_kib_windows": 99841236,
+      "free_disk_mib_at_preflight": 772346.578125
+    },
+    "gpu": {
+      "name": "NVIDIA GeForce RTX 4060 Ti",
+      "total_memory_bytes": 17175150592,
+      "compute_capability": [8, 9],
+      "multiprocessor_count": 34,
+      "cuda_runtime": "12.8"
+    },
+    "python_and_packages": {
+      "python": "3.13.11",
+      "yadof": "0.4.1",
+      "yadof_module_sha256": "da6d6414f9c97406e865f4a6d950bf968ba5c11872369fd6b944979029634870",
+      "yadof_distribution_record_sha256": "32e79953aed603b2d2bfcf11b3b4fd3e6bffb5e39456aabe639b007e44281c65",
+      "numpy": "2.5.2",
+      "scipy": "1.18.0",
+      "pymoo": "0.6.2",
+      "torch": "2.10.0+cu128",
+      "botorch": null,
+      "gpytorch": null
+    },
+    "external_runtimes": {
+      "ngspice": {
+        "path": "C:/Program Files/ngspice-46_64/Spice64/bin/ngspice_con.exe",
+        "sha256": "86c9ea5f645ca919e305639fa7bdb522355364c424d14e197f1ade617feb3453",
+        "version": "ngspice-46",
+        "preflight_exists": true
+      },
+      "pychrono_python": {
+        "path": "C:/ProgramData/Miniforge3/envs/pychrono-10/python.exe",
+        "sha256": "505965b18833a551f2db5abb2e270cae1187d971faf431998b501dea09c1b464",
+        "preflight_exists": true,
+        "pychrono_version": "10.0.0",
+        "conda_record": {
+          "path": "C:/ProgramData/Miniforge3/envs/pychrono-10/conda-meta/pychrono-10.0.0-py313h418371c_0.json",
+          "sha256": "e220c3f755532c9278b17f5a6b15a0308665661aa442521b2b18d071b35c9e95",
+          "build": "py313h418371c_0",
+          "build_number": 0,
+          "channel": "https://conda.anaconda.org/projectchrono/label/release/win-64",
+          "package_sha256": "3f1c10d3a6ab162a099ed7a96fad8ddf2c97a7cd295093848406db5caa51669b"
+        },
+        "version_probe": "Resolved without importing the native module from the independent interpreter's immutable Conda package record. importlib.metadata has no pychrono distribution entry. An earlier read-only native import diagnostic did not finish within 90 seconds and its exact process was terminated; no simulator was launched. Formal execution must still pass the adapter preflight and freeze the actual run environment."
+      }
+    },
+    "declared_case_observations_not_acceptance_limits": {
+      "saw_eval_sec": 0.7,
+      "chrono_eval_sec": 3.9,
+      "test_com_eval_sec": 0.6,
+      "source": "benchmark.toml planning estimates"
+    },
+    "same_block_rule": "All paired arms for one case/seed must use the same frozen hardware/software/runtime block. A material device, dependency, worker-count, precision, or backend change creates a separate experiment version."
+  },
+  "thresholds": {
+    "template": "acceptance_thresholds.template.json",
+    "status": "unsealed",
+    "formal_test_ready": false,
+    "sealed_file_required_before": [
+      "offline test partition access",
+      "formal optimization comparison launch",
+      "production recommendation"
+    ],
+    "reason": "Numeric values require legal frozen data and validation/resource pilots. Gate 0 freezes the derivation, evidence partitions, fields, and pass logic instead of inventing percentages."
+  },
+  "stop_conditions": [
+    "Stop and version the preregistration if a baseline task fingerprint, selector set, main shape/dtype, exact axis, required metadata template, parameter identity/count, or objective width changes.",
+    "Stop data-dependent gates if any case has fewer than 2800 eligible unique compatible designs after exclusions/deduplication.",
+    "Stop the original experiment if test/formal outcomes are exposed before numeric thresholds are sealed.",
+    "Stop model selection if any design group or any field/coordinate from one design crosses partitions.",
+    "Stop formal acceptance if an arm lacks equal attempted budget, paired initial population, complete validity reporting, or common real-evaluation/finalization/recording.",
+    "Stop and keep a module experimental when rawData representation, joint-posterior decision/calibration, qNEHVI optimization, or engineering-cost gates fail; do not bypass failure with min/max or a direct cost model.",
+    "Stop candidate projection if schema, callback, objective width, or finite checks fail; a finite task-owned error_cost=1.0 remains a valid worst cost and must not be reverse-engineered as invalid.",
+    "Stop coordinate-readout work until full-grid acceptance passes and off-grid truth/metric/resource thresholds are sealed.",
+    "Stop attention, native Conv3d, full-model ensembles, or continuous weight-posterior work unless a preregistered held-out ablation shows the simpler gate is insufficient.",
+    "Stop a campaign on reliable-recording failure; never accept missing population evidence as performance."
+  ],
+  "downstream_gate_inputs": {
+    "gate_1_joint_rawdata_posterior_contract": {
+      "may_start_when": [
+        "this Gate 0 validator passes from the committed source tree",
+        "schema_inventory.json remains unchanged or a new preregistration version is created",
+        "tests use fake schema-compatible rawData and the current frozen CostInterpreter path",
+        "no claim depends on unavailable 1000/2000-design evidence"
+      ],
+      "frozen_inputs": [
+        "stable field selectors and schema compatibility policy",
+        "candidate chunk sizes/orders and invariance semantics",
+        "finite error_cost=1.0 validity semantics",
+        "rawData-first and no-recorder posterior boundary"
+      ],
+      "dataset_required": false
+    },
+    "gate_2_adapter_and_qlognehvi_spike": {
+      "requires": [
+        "Gate 1 sampler/projector surface",
+        "implementation-day mature-library/version/license/API audit",
+        "posterior metric/backend spike seeds"
+      ],
+      "dataset_required": false,
+      "formal_performance_claim_allowed": false
+    },
+    "gate_3_minimal_cae": {
+      "requires": [
+        "Gate 1 protocol",
+        "schema inventory selectors/layouts",
+        "groups=() and frozen antenna explicit-group semantics"
+      ],
+      "synthetic_structural_tests_allowed_without_dataset": true,
+      "performance_claim_allowed_without_dataset": false
+    },
+    "gate_4_full_grid_quality": {
+      "requires": [
+        "sealed eligible dataset manifest with at least 2800 unique designs per case",
+        "reproducible design-level partitions",
+        "sealed numeric acceptance thresholds",
+        "all mandatory offline comparison arms and metric code frozen"
+      ]
+    },
+    "gate_5_complex_posterior": {
+      "requires": "held-out calibration/decision evidence showing the predictor-only ensemble or simple sharing is insufficient"
+    },
+    "gate_6_formal_opt_in_strategy": {
+      "requires": [
+        "all five formal online arms implemented and preflighted",
+        "sealed threshold and resource blocks",
+        "explicit user authorization for the 150000-attempt formal matrix",
+        "separate immutable run IDs and no test-data reuse"
+      ]
+    }
+  },
+  "readiness": {
+    "gate_0_schema_inventory_complete": true,
+    "gate_0_benchmark_plan_complete": true,
+    "eligible_frozen_dataset_available": false,
+    "numeric_thresholds_sealed": false,
+    "formal_benchmark_runnable": false,
+    "next_execution_unit": "dev_doc/toDo/20260827_082607_joint-rawdata-posterior-contract.md"
+  }
+}

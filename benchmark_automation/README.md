@@ -68,6 +68,22 @@ Windows PyChrono child launches through a short candidate junction targeting its
 original physical scratch, so future run IDs and output roots do not need manual
 shortening. Historical run specifications remain immutable.
 
+## Tracked preregistrations
+
+[`preregistrations/20260827-new-surrogate-qnehvi/`](preregistrations/20260827-new-surrogate-qnehvi/README.md)
+freezes the Gate 0 schema inventory and future acceptance plan for a hierarchical
+rawData surrogate, joint posterior, and qNEHVI. A preregistration is a tracked
+experiment input and validator, not a runner suite or a result. It cannot add arms
+that are not implemented, authorize a simulator campaign, or turn baseline smoke
+shapes into design rows.
+
+The current Gate 0 validator intentionally reports that the source schemas match
+while `formal_test_ready` is false: all three baseline templates contain zero
+records, no tracked history snapshot is selected, and numeric thresholds remain
+unsealed until legal frozen train/validation/calibration evidence exists. Later
+dataset and threshold seals are versioned inputs; formal runs must snapshot their
+identities alongside the normal run specification.
+
 ## Prerequisites
 
 Run commands from the yadof source-checkout root with the Python environment in

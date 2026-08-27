@@ -20,6 +20,9 @@ simulators, performance campaigns, or collection-time model inference.
   state, UTC projections, and recorded-session replay using fixed times and tiny
   synthetic artifacts.
 - Baseline postprocessor output/prefix/overwrite contracts.
+- Preregistration validators: source fingerprints, field/axis/parameter contracts,
+  cross-file hashes, row-order-independent design splits, seed separation, and the
+  explicit distinction between a valid Gate 0 freeze and formal-test readiness.
 
 ## Constraints
 

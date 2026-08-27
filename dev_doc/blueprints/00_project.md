@@ -72,12 +72,19 @@ hot-change contract; structural dimension changes are future work.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
 - Source-checkout benchmark: Git-tracked runner, editable baselines, strategy
-  templates, bounded reports, and focused tests under `benchmark_automation/`;
+  templates, versioned preregistration contracts, bounded reports, and focused tests
+  under `benchmark_automation/`;
   downloadable with the repository, outside `src/yadof`, and never a wheel/sdist
   member. Baselines are addressed as `baselines/<provider>/<baseline-id>` without
   fingerprint-derived directory names and may be changed in place. A new run
   snapshots the selected declared inputs below its own `inputs/baselines/` tree;
   all cells and resume use that immutable snapshot rather than the live template.
+  A tracked preregistration may freeze a source-derived schema inventory, legal
+  data-provenance contract, design-level split, metrics, comparison matrix, seeds,
+  resource block, threshold-sealing rule, and stop conditions before test access.
+  It is not an executable suite or evidence: zero-record baseline templates remain
+  zero-row schema sources, and missing datasets or unsealed thresholds keep formal
+  execution explicitly blocked.
   Generated runs use the checkout's ignored `temp/` root or an explicit disjoint output root;
   every run ID is directly below that root with no benchmark/task container layer,
   and automatically named run directories begin with a digits-only UTC

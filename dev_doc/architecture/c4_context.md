@@ -58,7 +58,9 @@ exclude repository examples, source-checkout benchmark automation, workspaces,
 concrete models, jobs, history, checkpoints, logs, caches, credentials, and
 secrets. A Git clone or repository download may additionally carry
 `benchmark_automation/`: it invokes the matching installed distribution, owns
-frozen benchmark inputs, and writes only to an explicitly selected output root.
+frozen run inputs plus inert versioned preregistration contracts, and writes only
+generated execution evidence to an explicitly selected output root. A
+preregistration does not itself authorize or launch a run.
 
 ## System guarantees
 

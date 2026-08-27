@@ -5,6 +5,11 @@
 Tracked inputs and code live below `benchmark_automation/`. Disposable assembly
 state uses `.assembled/` and `.staging/`. Default generated runs live directly
 under checkout `temp/<run-id>/`; an explicit `--runs-dir` may select another root.
+Versioned experiment contracts live under `preregistrations/<registration-id>/`.
+They may contain schema inventories, data-availability audits, unsealed threshold
+templates, plans, and read-only validators, but no generated run or design-row
+evidence. Their committed files remain reviewable independently of ignored runtime
+trees.
 
 ## Run layout
 

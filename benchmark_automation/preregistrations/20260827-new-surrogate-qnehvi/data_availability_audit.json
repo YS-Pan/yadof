@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "preregistration_id": "20260827-new-surrogate-qnehvi-gate0-v1",
+  "status": "no-eligible-frozen-dataset",
+  "audited_utc": "2026-08-27T04:15:46.951Z",
+  "audited_host": "DESKTOP-DERG5LD",
+  "new_real_campaign_authorized_by_this_preregistration": false,
+  "accepted_dataset_source_contract": {
+    "allowed": [
+      "immutable recorded-data segments plus run specification and run-local baseline snapshot from a completed yadof benchmark run",
+      "a tracked immutable history snapshot selected by exact identity in benchmark.toml",
+      "another immutable recorded-evidence export with equivalent task-snapshot, segment, row, and source hashes"
+    ],
+    "required_per_source": [
+      "source kind and immutable locator",
+      "run ID and suite/arm/seed when applicable",
+      "run_spec.json SHA-256 and baseline-snapshot fingerprint",
+      "task snapshot ID and interpretation/evaluation fingerprints",
+      "recording segment membership and SHA-256 digests",
+      "attempted, decoded, compatible, invalid, failed, duplicate, and retained unique-design counts",
+      "generation and candidate provenance",
+      "current calc_cost.py SHA-256",
+      "proof that formal test campaigns and their seeds are absent"
+    ],
+    "forbidden": [
+      "baseline.json smoke shape or smoke cost entries as design rows",
+      "mutable baseline templates or mutable workspace records without an immutable snapshot",
+      "README or verification-summary aggregate numbers without the underlying recorded rawData",
+      "predicted rawData, surrogate samples, costs without rawData, or postprocessed plots",
+      "formal optimization-test outcomes reused for training, validation, calibration, or threshold selection"
+    ]
+  },
+  "audited_sources": {
+    "baseline_templates": {
+      "saw": {
+        "manifest": "../../baselines/ngspice/saw-ladder/baseline.json",
+        "baseline_record_rows": 0,
+        "baseline_checkpoint_files": 0,
+        "eligible_design_rows": 0
+      },
+      "chrono": {
+        "manifest": "../../baselines/chrono/trebuchet/baseline.json",
+        "baseline_record_rows": 0,
+        "baseline_checkpoint_files": 0,
+        "eligible_design_rows": 0
+      },
+      "test-com": {
+        "manifest": "../../baselines/test-com/synthetic-antenna/baseline.json",
+        "baseline_record_rows": 0,
+        "baseline_checkpoint_files": 0,
+        "eligible_design_rows": 0
+      }
+    },
+    "tracked_history_snapshots": {
+      "selection": "empty",
+      "readme": "../../history_snapshots/README.md",
+      "eligible_design_rows": 0
+    },
+    "documented_generated_runs": {
+      "note": "The benchmark README contains historical summaries, but the current checkout's configured temp root has no inspectable run_spec.json/run_state.json for these named runs. Summary prose is not rawData evidence.",
+      "checked_run_ids": [
+        "p20x100-0823",
+        "pfull-0823",
+        "20260823T060003Z-post-viewer-fix-9e43d5c3327b",
+        "20260823T060119Z-post-viewer-fix-ba5ad9cc3103",
+        "20260823T060351Z-post-viewer-fix-5a583e492089",
+        "20260823T052657Z-adapters-1b7c0d27af47"
+      ],
+      "inspectable_in_configured_runs_root": false,
+      "eligible_design_rows": 0
+    }
+  },
+  "minimum_future_dataset": {
+    "per_case_unique_compatible_designs": 2800,
+    "cases": [
+      "saw",
+      "chrono",
+      "test-com"
+    ],
+    "same_dataset_for_all_offline_model_arms": true,
+    "same_split_for_all_offline_model_arms": true,
+    "full_schema_compatible_rawdata_required": true,
+    "cost_window_pretrimming_forbidden": true,
+    "duplicate_design_policy": "Group exact canonical normalized-variable duplicates by design ID, retain one deterministic real record for primary metrics, keep repeat counts as diagnostics, and never split a duplicate group across partitions.",
+    "invalid_row_policy": "Exclude a complete row before splitting when raw variables, selector set, main shape/dtype, exact axes, required metadata, schema validation, or current-cost interpretation is incompatible; report every exclusion category and stop if fewer than 2800 unique rows remain."
+  },
+  "future_sealed_manifest": {
+    "required_filename_pattern": "dataset-manifest-v<integer>.json",
+    "append_only": true,
+    "must_reference_schema_inventory_sha256": true,
+    "must_be_committed_before_model_test_access": true,
+    "must_be_validated_before_gate_4": true
+  },
+  "authorization_boundary": {
+    "current_action": "preregister only",
+    "simulator_campaign_started": false,
+    "candidate_future_source": "A separately authorized complete, unfiltered performance-data run may supply real rows, but it must receive a new immutable run ID and sealed source manifest. The current performance plan is 100 individuals x 20 generations in six cells (12000 attempted evaluations total) and is not launched by Gate 0.",
+    "blocking_gap": "No legal 1000/2000-training-design frozen evidence is presently available in this checkout. Gate 1 protocol/fake tests may proceed; data-dependent fitting, calibration, threshold sealing, and formal performance claims may not."
+  }
+}

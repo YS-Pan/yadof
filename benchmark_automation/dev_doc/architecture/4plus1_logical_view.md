@@ -13,6 +13,11 @@
 - A timing-history snapshot is a bounded immutable operational sample of completed
   matched cells from earlier immediate run directories. It does not enter run
   identity or scientific results.
+- A benchmark preregistration is a tracked, reviewable input contract that freezes
+  schema, provenance, design splits, metrics, comparison cells, resource blocks,
+  threshold-sealing rules, and stop conditions before evidence is inspected. It is
+  neither a runnable suite nor benchmark evidence; missing data or threshold seals
+  keep formal execution blocked.
 - Run state is the atomically replaced index of cell/attempt status. It is not the
   scientific result.
 - Collection and reports are derived public-yadof interpretations that may be

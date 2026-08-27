@@ -51,6 +51,9 @@ admin_tool/                administrator-only operations
 benchmark_automation/      source-checkout runner, editable inputs, reports, and tests
   baselines/<provider>/<baseline-id>/
                             mutable simulator/adapter and optimization-task templates
+  preregistrations/<registration-id>/
+                            versioned schema/experiment freezes and read-only validators;
+                            neither executable suites nor recorded evidence
 temp/<run-id>/             default ignored benchmark runtime evidence; run ID is the
                            only directory layer below the configured output root
   inputs/baselines/<case>/  immutable task snapshot captured when the run is created

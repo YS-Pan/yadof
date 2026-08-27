@@ -5,6 +5,7 @@
 | `source-checkout benchmark` | The tracked runner, configuration, editable baselines, strategies, tests, and documentation below `benchmark_automation/`; it executes an installed yadof distribution but is excluded from wheel/sdist. |
 | `baseline template` | A mutable semantic task directory used only to create later run snapshots. |
 | `run-local baseline snapshot` | Immutable copy of declared baseline inputs owned by one run and used by all of its cells/resume attempts. |
+| `benchmark preregistration` | A versioned tracked schema/experiment contract below `preregistrations/` that freezes provenance, design-level splits, metrics, comparisons, seeds, resource capture, threshold-sealing rules, and stop conditions before test access. It is neither a runnable suite nor evidence; an unsealed dataset or threshold explicitly keeps formal execution blocked. |
 | `run specification` | Immutable resolved identity over package, runner, configuration, host facts, cases, arms, resources, plan, and snapshots. |
 | `cell` | One isolated case/arm/seed experiment or disposable smoke unit in the matrix. |
 | `attempt` | One immutable execution workspace and command history for a cell; an interrupted attempt may have a linked replacement. |

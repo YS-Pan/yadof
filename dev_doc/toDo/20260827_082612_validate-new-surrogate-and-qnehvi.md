@@ -46,6 +46,42 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 可以先在 frozen recorded rawData 上离线推进。任何新的真实 simulator campaign 都受当时
 user documentation 的成本/风险授权约束；本 TODO 不自动授权数千次真实评估。
 
+## Gate 0 执行状态（2026-08-27）
+
+Gate 0 已冻结为可校验的仓库工件：
+
+- [入口与边界](../../benchmark_automation/preregistrations/20260827-new-surrogate-qnehvi/README.md)
+  说明这些文件不是可执行 suite 或结果；
+- [schema inventory](../../benchmark_automation/preregistrations/20260827-new-surrogate-qnehvi/schema_inventory.json)
+  固定三个 case 的 selector、main key/shape/dtype、axis 值和 digest、字段/axis bytes、参数
+  语义、objective width、天线 rank-3 layout、显式 S11/gain groups、task fingerprint 和直接
+  source hash；
+- [benchmark preregistration](../../benchmark_automation/preregistrations/20260827-new-surrogate-qnehvi/benchmark_preregistration.json)
+  固定 design identity、2800 个 unique compatible designs/case 的 design-level split（嵌套
+  1000/2000 train）、互斥 seeds、完整对照矩阵、指标、注册资源环境、停止条件和各 gate
+  输入；
+- [data availability audit](../../benchmark_automation/preregistrations/20260827-new-surrogate-qnehvi/data_availability_audit.json)
+  固定合法 provenance 要求并明确当前缺口；
+- [threshold template](../../benchmark_automation/preregistrations/20260827-new-surrogate-qnehvi/acceptance_thresholds.template.json)
+  固定数值门槛的字段、取证分区、制定规则和 pass logic。数值有意保持 `null`，必须在
+  validation/calibration/pilot 后、读取 test/formal results 前另行封印；
+- `validate.py` 只读核对上述 hash、baseline/task/source、field/axis/parameter、split 和 seed
+  契约，不启动 simulator。首次执行通过，且正确报告 `formal_test_ready=false`。
+
+实际 automation 契约也已复核：当前 `performance` 仍只有 NSGA-III 与
+GPSAF + conditional-INR 两个 arms、一个 seed、每 cell 100 × 20，总计 12000 次 attempted
+evaluations；`structural-full` preflight 在安装的 yadof 0.4.1 上 13/13 通过。三个 editable
+baseline manifest 都是 0 records/0 checkpoints，`history_snapshots/` 选择 `empty`；README
+中的历史摘要在本 checkout 默认 runs root 没有可 inspect 的 run spec，因此不是可用训练
+evidence。Gate 0 没有启动真实 simulator campaign，也没有把 smoke shape/cost 冒充设计行。
+
+整个 TODO 仍保持 active，不能移入 obsolete。下一执行单元只能是
+[联合 rawData posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)的轻量
+sampler/projector 与 fake schema tests：开始前必须从 committed tree 通过 Gate 0 validator，
+保持 inventory 不变（否则新建 preregistration 版本），并且不得作 1000/2000-design 拟合、
+校准或优化性能结论。合法 frozen dataset 只在 Gate 4 前成为硬依赖；正式 test/真实比较
+还必须先封印数值 thresholds 并获得对应 campaign 授权。
+
 ## 基准数据要求
 
 ### 代表性数据

@@ -10,21 +10,26 @@ default output small enough for repeated agent decisions.
 ## Functional contract
 
 1. Expand configuration into a deterministic no-write plan.
-2. Preflight exact external and installed-package prerequisites without simulation.
-3. Snapshot mutable declared inputs and publish immutable run identity.
-4. Execute isolated case/arm/seed cells sequentially with resumable attempts.
-5. Preserve subprocess output, show coherent live cell/global progress, and expose
+2. Preserve optional versioned preregistrations that can freeze schemas, legal
+   provenance, splits, metrics, comparisons, seeds, resources, threshold-sealing
+   rules, and stop conditions without pretending to be suites or results.
+3. Preflight exact external and installed-package prerequisites without simulation.
+4. Snapshot mutable declared inputs and publish immutable run identity.
+5. Execute isolated case/arm/seed cells sequentially with resumable attempts.
+6. Preserve subprocess output, show coherent live cell/global progress, and expose
    read-only status/ETA after the launching turn ends.
-6. Collect only through public yadof observations.
-7. Produce structural validity or paired descriptive performance evidence without
+7. Collect only through public yadof observations.
+8. Produce structural validity or paired descriptive performance evidence without
    ranking algorithms.
 
 ## I/O
 
 Inputs are TOML configuration, semantic baseline directories, strategy templates,
-optional history snapshots, selectors, installed package identity, and resource
-facts. Durable output is the documented run tree. Default CLI output is bounded
-JSON plus narrowly scoped stderr rendering; full evidence stays on disk.
+optional history snapshots, optional tracked preregistration contracts, selectors,
+installed package identity, and resource facts. A preregistration is inert until a
+runner/config change explicitly consumes a later sealed input. Durable output is
+the documented run tree. Default CLI output is bounded JSON plus narrowly scoped
+stderr rendering; full evidence stays on disk.
 
 ## Non-obvious techniques
 
