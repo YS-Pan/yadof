@@ -21,6 +21,10 @@ viewer adapter, and fixed offline mechanism path under the explicit status
   persistent draw containers, JSON-safe support diagnostics, semantic capability
   identity, and the draw/candidate-chunk streaming projection helper. It imports no
   Torch, BoTorch, pymoo algorithm, or concrete surrogate runtime.
+- `calibration.py` owns immutable exact-signature calibration adjuncts,
+  conservative field-spread fitting, monotone member-level applicability fitting,
+  and coherent calibrated sampler wrapping. It is backend-neutral and cannot
+  promote, mutate, or transfer a concrete surrogate checkpoint.
 - `conditional_inr/` owns model construction/training, rawData adaptation,
   runtime state, staggered scheduling, checkpoint publication, metadata, the
   private finite-member posterior adapter, and private in-memory types.
@@ -81,6 +85,13 @@ failures, and per-evaluation effective support. Continuous/unknown support uses
 `unique_support=None`; repeated draws from a finite ensemble do not increase its
 integer support. Effective finite support counts distinct drawn sources that remain
 complete for the requested candidates and, after projection, current cost.
+
+A calibrated finite sampler additionally enumerates every unique member exactly
+once and carries a self-verifying calibration-artifact hash and method version in
+diagnostics. The adjunct scales each complete field around the unchanged empirical
+mean without changing the shared draw axis. Artifact state/strategy/schema/support,
+checkpoint hashes, training provenance, calibration partition, policy, and
+label/head/loss identity must all match; otherwise calibration is unavailable.
 
 `project_rawdata_sampler()` streams candidate chunks and then individual draws
 through an injected `RawDataCostProjector`. It retains only
@@ -201,3 +212,7 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   experimental mechanism evidence. Calibration needs a new pre-access registration
   bound to one durable state signature, and production qNEHVI exploitation remains
   blocked until a performance-accepted architecture and independent calibration exist.
+- A successful 082609 calibration artifact remains
+  `experimental-performance-not-accepted` and non-transferable; it is probability
+  capability evidence for one exact state, not architecture acceptance or full
+  qNEHVI strategy authorization.

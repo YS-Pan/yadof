@@ -505,6 +505,12 @@ def load_locator_rows(
         expected_manifest_hash = str(threshold.get("dataset_manifest_sha256", ""))
         if expected_manifest_hash != _sha256(manifest_path):
             raise PermissionError("threshold file does not bind this dataset manifest")
+        if scope == "calibration" and not bool(
+            threshold.get("calibration_access_authorized", False)
+        ):
+            raise PermissionError(
+                "sealed thresholds do not authorize calibration access"
+            )
         if scope == "offline-test" and not bool(
             threshold.get("offline_test_access_authorized", False)
         ):

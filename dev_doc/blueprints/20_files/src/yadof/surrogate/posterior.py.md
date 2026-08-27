@@ -12,8 +12,8 @@
 - Validate JSON-safe diagnostics: kind, requested/actual draws, seed, stable
   draw/source IDs, schema/state/strategy signatures, approximation limitations,
   observation-noise status, exact selectors, candidate/failure counts, nominal
-  support, per-prediction effective support, and honest finite versus
-  continuous/unknown support.
+  support, per-prediction effective support, optional explicit calibration method
+  and artifact hash, and honest finite versus continuous/unknown support.
 - Build a semantic capability block containing the protocol version, backend
   distribution/version, posterior/support kinds, and all controlled parameters.
 - Stream candidate chunks and then individual rawData draws through an injected
@@ -39,4 +39,5 @@
   `yadof.surrogate` and `yadof.optimize` imports must not load Torch, BoTorch,
   concrete surrogate runtimes, or pymoo algorithms.
 - The file never records predicted rawData and does not implement CAE, concrete
-  conditional-INR inference, calibration, or acquisition.
+  conditional-INR inference, calibration mathematics, or acquisition. It only
+  carries validated calibration diagnostics produced by the separate adjunct.

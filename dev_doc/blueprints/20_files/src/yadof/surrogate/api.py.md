@@ -5,8 +5,8 @@
 - Expose lazy conditional-INR and opt-in hierarchical-CAE components plus direct
   rawData-first model operations without importing Torch at parent-package import.
 - Re-export the lightweight joint rawData posterior protocol, diagnostics,
-  semantic-capability helper, and streaming projection helper without importing an
-  optional backend.
+  semantic-capability helper, signature-bound calibration adjunct, and streaming
+  projection helper without importing an optional backend.
 
 ## Functionalities
 - Construct `conditional_inr()` with validation, semantic identity, scheduler gate,
@@ -29,6 +29,9 @@
   support diagnostics, and `project_rawdata_sampler()` on the explicit public
   surface. A future consumer validates the runtime-checkable protocol rather than
   scattering implicit attribute probes.
+- Re-export immutable spread/applicability calibration records, the self-verifying
+  artifact, conservative fit helpers, and the coherent calibrated-sampler wrapper.
+  These remain NumPy-only and do not make hierarchical CAE a production default.
 
 ## I/O Format
 - Prediction returns optimizer-facing `(costs, intervals)` rows.

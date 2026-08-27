@@ -51,6 +51,9 @@ class RawDataPosteriorDiagnostics:
     retained_prediction_failures: tuple[Mapping[str, object], ...] = ()
     observation_noise_included: bool = False
     effective_unique_support: int | None = None
+    calibrated: bool = False
+    calibration_method: str | None = None
+    calibration_artifact_sha256: str | None = None
 
     def __post_init__(self) -> None:
         posterior_kind = str(self.posterior_kind)
@@ -160,6 +163,37 @@ class RawDataPosteriorDiagnostics:
             "observation_noise_included",
             bool(self.observation_noise_included),
         )
+        calibrated = bool(self.calibrated)
+        method = (
+            None
+            if self.calibration_method is None
+            else str(self.calibration_method)
+        )
+        artifact_sha256 = (
+            None
+            if self.calibration_artifact_sha256 is None
+            else str(self.calibration_artifact_sha256).lower()
+        )
+        if calibrated:
+            if not method:
+                raise ValueError(
+                    "calibrated posterior diagnostics require a method"
+                )
+            if artifact_sha256 is None or len(artifact_sha256) != 64 or any(
+                char not in "0123456789abcdef" for char in artifact_sha256
+            ):
+                raise ValueError(
+                    "calibrated posterior diagnostics require an artifact SHA-256"
+                )
+        elif method is not None or artifact_sha256 is not None:
+            raise ValueError(
+                "uncalibrated posterior diagnostics cannot name calibration state"
+            )
+        object.__setattr__(self, "calibrated", calibrated)
+        object.__setattr__(self, "calibration_method", method)
+        object.__setattr__(
+            self, "calibration_artifact_sha256", artifact_sha256
+        )
         object.__setattr__(self, "candidate_count", int(self.candidate_count))
         object.__setattr__(self, "prediction_failure_count", failures)
         object.__setattr__(self, "retained_prediction_failures", retained)
@@ -215,6 +249,9 @@ class RawDataPosteriorDiagnostics:
                 dict(item) for item in self.retained_prediction_failures
             ],
             "observation_noise_included": self.observation_noise_included,
+            "calibrated": self.calibrated,
+            "calibration_method": self.calibration_method,
+            "calibration_artifact_sha256": self.calibration_artifact_sha256,
         }
 
 
@@ -574,6 +611,9 @@ def _validate_chunk_posterior(
         "limitations",
         "field_selectors",
         "observation_noise_included",
+        "calibrated",
+        "calibration_method",
+        "calibration_artifact_sha256",
     )
     changed = tuple(
         name for name in stable_fields if getattr(current, name) != getattr(base, name)

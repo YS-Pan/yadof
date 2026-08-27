@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "protocol": "yadof.082609.calibration-preregistration",
+  "protocol_version": 1,
+  "plan_id": "20260827-gate0-v8-082609-experimental-posterior-calibration",
+  "status": "sealed-before-calibration-access",
+  "purpose": "Evaluate exact-checkpoint predictor-member posterior spread and applicability calibration on the independent calibration partition. This is experimental framework evidence only and cannot reverse Gate 0 v5, promote the CAE, transfer parameters, implement the complete 082611 strategy, or perform 082612 formal acceptance.",
+  "parent_state": {
+    "v7_start_commit": "f8a684f39e3b85469d33c15085e7e877e7c6ca35",
+    "v5_full_grid_gate_passed": false,
+    "v5_representation_passed": false,
+    "v5_quality_regime_passed": false,
+    "v7_coordinate_framework_completed": true,
+    "v7_offline_mechanism_completed": true,
+    "performance_accepted": false,
+    "coordinate_performance_accepted": false,
+    "todo_082608_may_archive": false
+  },
+  "partition": {
+    "policy": "design-row-only; every rawData field and coordinate follows its design",
+    "cases": [
+      "saw",
+      "chrono",
+      "test-com"
+    ],
+    "train_sizes": [
+      1000,
+      2000
+    ],
+    "development": "development train_pool fits weights/scalers; development validation is early-stopping only",
+    "calibration": "independent calibration locator only; two-fold design-level cross-fitting supplies out-of-fold evidence, then all 200 case designs refit the exact-checkpoint artifact",
+    "test": "offline-test remains unopened; formal test is deferred to 082612 after all decisions freeze",
+    "calibration_locator": {
+      "path": "calibration_locator.json",
+      "row_count": 600,
+      "sha256": "9c3d997bdccf8d5d37970fc9d7c79a1d2a288ff4bb5e558610d1a49c9ff047d4"
+    },
+    "expected_calibration_designs_per_case": 200,
+    "coordinate_level_split_allowed": false,
+    "training_or_validation_rows_allowed_for_final_calibration_evidence": false
+  },
+  "calibration": {
+    "seed": 82609691,
+    "fold_count": 2,
+    "fold_assignment": "sha256(seed:design_id)-first-8-bytes-mod-fold-count-v1",
+    "posterior_family": "finite uniform predictor-member empirical function distribution",
+    "required_draw_policy": "enumerate every unique predictor member exactly once",
+    "candidate_field_scales": [
+      1.0,
+      1.25,
+      1.5,
+      2.0,
+      3.0,
+      4.0,
+      6.0,
+      8.0,
+      12.0,
+      16.0
+    ],
+    "target_coverages": [
+      0.5,
+      0.8,
+      0.9
+    ],
+    "field_spread_family": "conservative-central-interval-grid-scale-v1",
+    "field_selection_rule": "For each exact selector and fit fold, choose the smallest preregistered scale minimizing 2*mean-undercoverage + mean-absolute-coverage-error + 0.05*max(0, energy/identity-energy-1). Scales are >=1 and act around the unmodified ensemble mean.",
+    "applicability_family": "monotone-member-logit-affine-v1",
+    "applicability_fit_input": "flatten predictor-member probabilities within fit designs; repeat the design label per member; apply the same slope/intercept to every member before member averaging",
+    "applicability_cases": [
+      "chrono"
+    ],
+    "non_applicability_cases": [
+      "saw",
+      "test-com"
+    ],
+    "observation_noise_included": false,
+    "direct_cost_fitting_allowed": false,
+    "field_or_objective_draw_reordering_allowed": false,
+    "mean_change_allowed": false
+  },
+  "metrics": {
+    "rawdata": [
+      "per-field standardized ensemble-mean MAE/RMSE",
+      "per-field design-macro multivariate energy score",
+      "central 50/80/90 percent marginal coverage",
+      "cross-field standardized-spatial-mean correlation/covariance error",
+      "maximum ensemble-mean shift",
+      "member pairing and draw-order invariance"
+    ],
+    "current_cost": [
+      "each complete rawData member through current task calc_cost.py",
+      "objective central 50/80/90 percent coverage and energy score",
+      "per-objective MAE/RMSE/Spearman ranking",
+      "Pareto precision/recall/Jaccard and pairwise consistency",
+      "invalid projection count",
+      "per-draw reconstruction/projection wall time and observed RSS"
+    ],
+    "applicability": [
+      "smooth-vs-chatter/failure AUPRC",
+      "Brier score",
+      "equal-mass ten-bin reliability curve/ECE",
+      "member epistemic probability spread",
+      "smooth/chatter/failure/boundary strata"
+    ],
+    "acquisition_proxy": [
+      "existing fixed-pool BoTorch qLogNEHVI backend only",
+      "q=1 all bounded candidates and deterministic q=2 pairs",
+      "selected-to-oracle true hypervolume-improvement efficiency",
+      "acquisition-vs-true-HVI Spearman",
+      "same real evaluation count within each q"
+    ],
+    "acquisition_boundary": "This bounded calibration-pool decision proxy is not the complete 082611 strategy and is not the 082612 formal same-budget optimization benchmark."
+  },
+  "thresholds": {
+    "rawdata": {
+      "max_coverage_error_increase": 0.0,
+      "max_energy_score_ratio": 1.05,
+      "max_correlation_mae_increase": 0.05,
+      "max_ensemble_mean_shift_abs": 1e-10
+    },
+    "cost": {
+      "max_invalid_projection_count": 0,
+      "max_coverage_error_increase": 0.02,
+      "max_mean_spearman_drop": 0.05,
+      "max_pareto_consistency_drop": 0.05
+    },
+    "acquisition_proxy": {
+      "max_selected_to_oracle_efficiency_drop": 0.1,
+      "max_spearman_drop": 0.1
+    },
+    "applicability": {
+      "minimum_class_count": 10,
+      "max_brier_increase": 0.0,
+      "max_ece_increase": 0.02,
+      "max_auprc_drop": 0.01
+    },
+    "authority": "These are framework-calibration artifact gates, not CAE architecture/performance acceptance thresholds."
+  },
+  "acquisition_proxy_protocol": {
+    "valid_rows": "true and all raw/calibrated member costs finite and inside the current [0,1] contract",
+    "ordering": "sha256(seed:design_id)",
+    "baseline_design_count": "min(32,max(8,valid_count//4))",
+    "candidate_design_count": "min(96,valid_count-baseline_count)",
+    "q1": "all bounded candidates",
+    "q2": "up to 64 deterministic non-repeating candidate pairs",
+    "reference_point": "one per minimization cost",
+    "finite_support_policy": "minimum unique support equals checkpoint predictor member count; reject below support",
+    "pending_points": false,
+    "outcome_constraints": false,
+    "gradient_candidate_optimization": false
+  },
+  "failure_rules": {
+    "pre_access": "Any source/artifact/checkpoint/signature/provenance/policy/split/access mismatch aborts before locator access.",
+    "rawdata": "Any rawData/current-cost/acquisition-proxy gate failure writes an explicit uncalibrated identity-scale artifact; no selected nonidentity coefficient is exposed.",
+    "applicability": "Insufficient class support, fit failure, or any applicability gate failure writes explicit uncalibrated status with no slope/intercept.",
+    "signature": "Any state/strategy/schema/checkpoint hash mismatch rejects the artifact; no fallback coefficient reuse.",
+    "architecture": "Every result remains experimental-performance-not-accepted regardless of calibration metrics; coefficients are non-transferable.",
+    "test": "Offline-test access remains forbidden and no post-access threshold may be backfilled."
+  },
+  "checkpoint_contract": {
+    "bundle_status": "complete-development-only-experimental-performance-not-accepted",
+    "cell_count": 6,
+    "cases": 3,
+    "train_sizes": 2,
+    "seed": 69168527,
+    "required_bindings": [
+      "state signature",
+      "strategy signature",
+      "schema signature",
+      "active and namespace manifests",
+      "model file and canonical model-state hashes",
+      "field scaler hash",
+      "training provenance hash",
+      "policy/label/head/loss identity"
+    ],
+    "calibration_storage": "A separate self-verifying calibration checkpoint adjunct binds the immutable base checkpoint; the development checkpoint is not mutated after freeze.",
+    "prediction_population_saved": false,
+    "historical_rawdata_copied_into_checkpoint": false
+  },
+  "resources": {
+    "one_long_process_only": true,
+    "training_checkpoint_process_completed_before_registration": true,
+    "calibration_process_expected_under_one_hour": true,
+    "scheduled_heartbeat_rule": "Create only if actual remaining stage estimate exceeds one hour; otherwise follow the one foreground process to exit.",
+    "candidate_pool_bounded": 96,
+    "q2_batches_bounded": 64,
+    "posterior_rawdata_streaming_boundary": "Only [draw,candidate,objective] persists after per-draw current-cost projection."
+  },
+  "artifact_integrity": {
+    "dataset_manifest_sha256": "2d1af1439e8e82899a3a6a59a798ba8aefc1c51562a8f3f2d8f8e59b18b4d5c9",
+    "development_checkpoint_summary_sha256": "1c5cb5ea4f37f7e596a79c402ab6fb9a9fe16541ebf16c3866024f4cf9429028",
+    "access_seal_sha256": "41330d393a580c778b678b88eaa4c109d1634ff96679908d8f2e2795d703de7b",
+    "v5_decision_sha256": "fe7089703fef3f2ae017a51b416303ae29f41087c07dad9eb2946c0e016c54a3",
+    "v7_amendment_sha256": "f55be2966993553fcc42dd9c83a6a42506b88f803ca989c0ab01ad1526eec3a1",
+    "source_artifacts": {
+      "benchmark_automation/hierarchical_cae_calibration.py": "9efc951d8a4c1d20d281e2b302ccc61517dfb99e934e94457c2596905ee47392",
+      "benchmark_automation/hierarchical_cae_calibration_checkpoint.py": "9a0fd9ef1faff18ff90589001ca4ba49d9f544a52778bf5e97f873ed96044ab0",
+      "benchmark_automation/hierarchical_cae_dataset.py": "cb731bf58f8b81744929ffbf3ff1e2e892030f041ccb555aec7a04bcdf8f8d9c",
+      "benchmark_automation/hierarchical_cae_validation.py": "4ea053886312dd05f343652888e966fc0a847eea9a7e55b4460d7c6721c9020f",
+      "src/yadof/job_template/api.py": "ea8195195e173a4d2d683fcdd510a235c9602ce11c20592c0983b7e52eec4618",
+      "src/yadof/job_template/rawdata_projector.py": "f6232f07f5f9e7931611d5c602a0c38bd999f1bd53e29d66b27aff95a0d5eba2",
+      "src/yadof/optimize/_qlognehvi_backend.py": "de0c3629c627f2b471c1662a9d77be56468356db512f28f417754340514498ec",
+      "src/yadof/optimize/qnehvi_backend.py": "75e04cf603f23e69e7fc17bbf8318007f4492eed365721326470e99723c4c536",
+      "src/yadof/surrogate/__init__.py": "122af6b60875020703059b7e454109463e4cf7b56f86791066cfbd540638fee1",
+      "src/yadof/surrogate/api.py": "5c986076d1d799c5287e5dea1975cf4bb9b60fbee8b7ed5ff9aafbd3c3cb2a56",
+      "src/yadof/surrogate/calibration.py": "38cd6fb62fbede709d70b438444ed6601e3432d47e540482a5f0279d0e84647a",
+      "src/yadof/surrogate/hierarchical_cae/checkpoints.py": "98c8691c3489df4c5cfdf5c238f57c1553f1f37234186cb34f654bf5f87e6eab",
+      "src/yadof/surrogate/hierarchical_cae/modeling.py": "e31609d0970e3f2856836f64ce60c8ffcf0c97548b535a494a08f9269933f136",
+      "src/yadof/surrogate/hierarchical_cae/posterior_adapter.py": "838c07d34463c40030250e7003c7c0d3e0429d54a9f8dbcea3a0d821be01d45a",
+      "src/yadof/surrogate/hierarchical_cae/schema.py": "11c8665b3ca13b6ed30fb687762f17da50e219b859e769f9c8f514cbbed8e1e2",
+      "src/yadof/surrogate/posterior.py": "5b227c6b2abea7fb6ae76cc381ebd1315fa5dddd9e05269047dc13d005709c1a",
+      "src/yadof/surrogate/quality.py": "b1d2ee185ef62df451286b70913e617371292213de0167a38dda53d17fa1cdb4"
+    }
+  },
+  "post_access_rule": "After the first calibration locator read, split, calibrator family, candidate scales, seed, metrics, thresholds, failure rules, checkpoint/source hashes, and acquisition-proxy protocol are immutable. Any changed method requires a new preregistration and cannot reinterpret this result."
+}
