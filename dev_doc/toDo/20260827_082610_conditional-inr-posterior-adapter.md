@@ -20,18 +20,27 @@
 选择行为的前提下，把现有 ensemble member rawData predictions 暴露为有限经验联合后验，
 用于协议测试、迁移和可选 qNEHVI 兼容实验。
 
+执行顺序已确定为：联合契约的最小 sampler/cost-projector surface 完成后立即实现本
+adapter，再用它和 fake posterior 做 qLogNEHVI backend spike；不等待新 CAE、coordinate
+trunk 或完整 calibration 全部完成。这样可以尽早验证接口和库适配，同时不把 adapter
+误当作新模型的性能结论。
+
 ## 已确定的适配语义
 
-### 一个 member 是一个联合 draw
+### 一个 member 是持久 sampler 中的一个联合 draw
 
-- 每个 draw 先选择一个 ensemble member，然后该 member 一次预测整个输入 population。
+- 创建 sampler 时按 seed 为每个 draw 选择并固定一个 ensemble member；之后该 member
+  可以依次预测多个 candidate chunks。
 - 同一 member index 贯穿所有候选、所有 rawData fields 和由 current cost 导出的所有目标。
 - 禁止每个候选、字段或目标独立挑选 member。
 - 使用 full-grid reconstruction；不通过 viewer off-grid API 拼出 acquisition rawData。
+- 候选重排或不同 chunk size 只能重排同一 member 的结果；不能因调用顺序重新 bootstrap
+  或重新选择 member。
 
 ### 有限支持必须透明
 
 - `posterior_kind = "empirical_ensemble"`。
+- `support_kind = "finite"`。
 - `unique_support` 等于可用的有效 member 数；默认通常为 3，但不得硬编码。
 - 请求 draw 数超过 member 数时可以按 seeded policy 重采样或循环，但重复 draw 保留来源
   member identity，不能报告成新的独立支持。
@@ -58,8 +67,8 @@
   结构；不要改变 `predict_population()` 返回类型。
 - public `ConditionalINRComponent` 可通过显式 adapter factory 或 posterior capability
   暴露该功能，但轻量 parent import 仍不得导入 Torch。
-- streaming iterator 每次产生一个 member 对整个 population 的完整 rawData draw，并由
-  公共 cost projector 立即缩减。
+- persistent sampler 固定 member identities；每次产生一个 member 对一个 candidate chunk
+  的完整 rawData draw，并由公共 cost projector 立即缩减。
 
 ## 限制和文档措辞
 
@@ -77,6 +86,8 @@
 - 证明一个 draw 的 member index 在候选、字段和目标之间不变。
 - 请求数大于、小于、等于 ensemble size 时，seed、顺序、重复来源和 `unique_support`
   正确。
+- 同一 sampler 在不同 candidate chunk 切分、调用顺序和 population permutation 下保持
+  member/function identity 与逐点结果不变。
 - 一个 member 失败时诊断和支持度正确，不能拼接其他 member 的字段补齐。
 - 旧 mean rawData、mean costs、intervals、GPSAF selections、checkpoint recovery 和
   viewer tests 完全不变。

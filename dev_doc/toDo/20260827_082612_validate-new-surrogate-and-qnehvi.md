@@ -13,31 +13,63 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 - 真实评估通常小于一核时，因此代理总开销必须实际测量；
 - 必须利用完整 rawData，不接受生产 `parameters -> cost` 直拟合；
 - 新拟合器和 qNEHVI 都作为新模块加入；现有 conditional-INR 和 GPSAF 保留。
+- 重复评估随机性基本不大；首轮 posterior/acquisition 验收按近似确定性、固定真实
+  Pareto baseline 和 zero-observation-noise 解释进行。
 
 ## 依赖和执行顺序
 
-依次完成或达到可测试状态：
+本验收工作不是最后才执行的串行尾项。按以下 gates 推进；每一 gate 都可以停止、修订
+下一步或证明某个复杂结构不值得实现：
 
-1. [联合 posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)
-2. [分层 CAE 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md)
-3. [posterior 抽样与校准](20260827_082609_coherent-posterior-sampling-calibration.md)
-4. [conditional-INR adapter](20260827_082610_conditional-inr-posterior-adapter.md)
-5. [qNEHVI strategy](20260827_082611_qnehvi-acquisition-strategy.md)
+0. **先做 schema inventory 和 benchmark preregistration**：冻结代表性 fields、split、
+   metrics、资源环境、接受/停止条件和对照矩阵。
+1. **最小联合协议**：完成持久 function sampler、candidate chunk invariance，以及复用
+   `CostInterpreter` 的薄 cost projector。
+2. **最早垂直切片**：立即完成
+   [conditional-INR adapter](20260827_082610_conditional-inr-posterior-adapter.md) 和 fake
+   sample-backed qLogNEHVI backend spike，验证库/API/数值边界。
+3. **最小 CAE**：per-field codecs + shared parameter predictor + predictor-only ensemble；
+   首个 MVP 同时支持 stable-selector 显式分组，但不加入 attention/native Conv3d。
+4. **full-grid 质量 gate**：1000/2000-design 表示与 current-cost 指标先过门槛，再实现
+   coordinate trunk。
+5. **校准/复杂 posterior gate**：只在 held-out decision evidence 要求时增加 full-model
+   ensemble、attention 或连续 weight posterior。
+6. **opt-in strategy/真实预算验证**：完成独立 qNEHVI strategy 和同预算真实比较。
 
-可以先在 frozen recorded rawData 上离线推进 1--4。任何新的真实 simulator campaign 都受
-当时 user documentation 的成本/风险授权约束；本 TODO 不自动授权数千次真实评估。
+对应的独立 handoffs 仍是：
+
+- [联合 posterior 契约](20260827_082607_joint-rawdata-posterior-contract.md)
+- [分层 CAE 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md)
+- [posterior 抽样与校准](20260827_082609_coherent-posterior-sampling-calibration.md)
+- [qNEHVI strategy](20260827_082611_qnehvi-acquisition-strategy.md)
+
+可以先在 frozen recorded rawData 上离线推进。任何新的真实 simulator campaign 都受当时
+user documentation 的成本/风险授权约束；本 TODO 不自动授权数千次真实评估。
 
 ## 基准数据要求
 
 ### 代表性数据
 
-- 至少包含一个同时有 1-D 和 2-D rawData 的任务，且已知存在强、弱和近似独立的字段
-  关系；天线示例应覆盖 S11、gain 和 axial ratio（若届时有可合法使用的数据）。
-- 再包含至少一个不同 task family，避免架构只对天线字段命名和网格形状有效。
+- 首版 schema 直接参考当前 benchmark baselines。已核对的 main arrays 为：
+
+  | case | fields / main key | shapes |
+  |---|---|---|
+  | SAW | `s21_db.npz/data`、`s11_db.npz/data` | 2 × `[1201]` |
+  | Chrono | 9 个 scalar `*.npz/values`，7 个 phase-curve `*.npz/values` | 9 × `[]`，7 × `[513]` |
+  | synthetic antenna | 3 个 S11、3 个 gain、3 个 axial-ratio，均为 `*.npz/data` | 3 × `[5]`，3 × `[1,73,73]`，3 × `[5,73,73]` |
+
+  这些 main arrays 都是实数 `float64`；axes 由 baseline task 生成固定 regular grids。
+- 天线 case 用于已知强、弱关系和显式 S11/gain group 消融；SAW 与 Chrono 提供不同 task
+  family、标量和长 1-D 曲线，避免架构只对天线字段命名和网格形状有效。
 - 使用 schema-compatible 完整 rawData，不提前裁成 cost windows。cost 仅在评估指标和
   acquisition projection 阶段通过当前 task callback 得到。
 - 记录参数维度、连续/离散语义、每字段 shape/axes/bytes、设计数、生成成本、缺失/无效
   行处理和 task snapshot identity。
+- baseline templates 自身记录数为零，`baseline.json` 的 smoke shapes 只是 schema 证据。
+  1000/2000-design 数据必须来自合法 frozen recorded evidence 或另行获批的生成 campaign，
+  不能把 template shape 清单误报成训练集。
+- 首版兼容矩阵固定 selector set、shape、axis arrays 和 main dtype representation；complex、
+  missing field、variable shape/axes 与 native Conv3d 是后续能力，不进入首轮上线门槛。
 
 ### Split 和规模
 
@@ -61,7 +93,10 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 5. 现有 non-surrogate pymoo real search，在相同真实评估预算下作为优化基线；
 6. PCA/SVD reconstruction baseline，仅用于表示难度、秩和数据管线 sanity check。
 
-可以增加“新 CAE + GPSAF”来区分拟合器和 acquisition 的贡献。不得把直接
+7. **新 CAE + GPSAF（必需消融）**，用于区分 representation 改善与 acquisition 改善；
+   不能把它降为可选项，否则“新 CAE + qNEHVI”胜负无法归因。
+
+不得把直接
 `parameters -> cost` 模型作为生产候选；如研究人员以后希望把它加入离线参照，需单独
 明确其只读诊断地位，不能改变 rawData-first 接受标准。
 
@@ -75,12 +110,15 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 - 完整 predicted rawData 经 current cost 后的 objective MAE/rank correlation；
 - Pareto dominance/ranking consistency；
 - global-only、global+explicit-group、完全独立字段和无 coordinate-consistency 的消融。
+- rank-3 antenna fields 的显式 `Freq` channel + `Phi/Theta` Conv2d layout，与未声明 layout
+  的拒绝行为；不默认把小轴猜成 channel。
 
 ### 后验质量
 
 - rawData 与 cost 层的 held-out coverage/calibration curve；
 - multivariate score 和跨字段 correlation/covariance preservation；
-- `unique_support`、有效 draw 比例和 projection failure；
+- finite posterior 的 `unique_support`、所有 posterior 的有效 draw 比例和 projection
+  failure；
 - 确定性任务中是否错误地产生 per-`x` 独立噪声；
 - calibration 前后 qNEHVI decision quality，而不是只追求边际 coverage。
 
@@ -100,6 +138,8 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 - CPU、GPU、RAM/VRAM 峰值、checkpoint 大小和恢复时间；
 - 与一次真实评估和整代真实评估耗时的比例；
 - candidate pool/draw count 扩展曲线，确认 streaming 后没有 rawData 乘积常驻内存。
+- candidate chunk size/order 扩展曲线和逐点一致性，确认同一 sampler 的 draw identities
+  不因分块而变化。
 
 ## 验收门槛的制定方式
 
@@ -108,9 +148,13 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 - 1000 和 2000 design 下，新 CAE 相对 conditional-INR 的 field-macro rawData 和
   current-cost error 门槛；
 - 允许单个字段退化的最大幅度，避免平均值掩盖 S11 或 gain 崩溃；
-- posterior coverage/score 和最小有效 unique support；
+- posterior coverage/score，以及 finite posterior 的最小有效 unique support；
 - qNEHVI 相对 GPSAF/non-surrogate baseline 的 HV 改善或非劣门槛、seeds 数和统计规则；
 - 训练/采集 wall-clock、内存和失败率上限。
+- 显式 group 相对 `groups=()` 的收益/最大允许退化，以及 group head 的参数量、墙钟和内存
+  开销；默认不分组不承担 group-state 成本。
+- coordinate trunk 的独立启动条件：full-grid CAE 先通过，且 viewer/off-grid 指标与资源
+  预算已登记；未达到条件时延期 trunk，不推翻 rawData/qNEHVI 垂直切片。
 
 本 TODO 不凭空指定百分比，因为尚无数据分布和硬件基线。门槛必须在 test 集和正式真实
 campaign 结果揭晓前登记；看过结果后调门槛视为新实验，不算原验收通过。
@@ -139,6 +183,8 @@ campaign 结果揭晓前登记；看过结果后调门槛视为新实验，不�
 - workspace 仅通过 `submit/optimization.py` 显式选择新 component/strategy。
 - 新 strategy 使用独立 semantic namespace；切回 GPSAF 恢复其原有 artifacts。
 - cold start、posterior support 不足、backend 缺失和数值失败都有可见 fallback/diagnostic。
+- 首版明确拒绝 pending/outcome-constraint 配置，使用 fixed real Pareto baseline；有限
+  `error_cost=1.0` 仍按有效最差 cost 处理。
 
 ### Phase C：是否推荐默认
 

@@ -5,6 +5,8 @@
 - 用户要求将 qNEHVI 作为新模块加入 yadof，不替换、重写或嵌入现有 GPSAF。
 - qNEHVI 应利用由完整 rawData posterior draws 经当前 `calc_cost.py` 得到的联合 cost
   samples；不能直接拟合 `parameters -> cost`。
+- 用户确认重复评估随机性通常很小。首版按近似确定性、zero-observation-noise 问题实现，
+  已完成真实历史是固定 baseline truth，而不是需要 surrogate 再采样的 noisy observation。
 - 当前 task cost 可以是任意 Python/NumPy 逻辑，通常不可微。即使 CAE/parameter
   predictor 可微，也不能假装整条 rawData-to-cost 路径支持 autograd。
 - yadof 的完整策略由 workspace `submit/optimization.py:build_optimization()` 组合；package
@@ -16,8 +18,8 @@
 - 至少一个实现该协议的 surrogate：推荐
   [分层 CAE 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md) 和
   [校准 posterior](20260827_082609_coherent-posterior-sampling-calibration.md)；
-  [conditional-INR adapter](20260827_082610_conditional-inr-posterior-adapter.md) 仅作为有限
-  兼容路径。
+  [conditional-INR adapter](20260827_082610_conditional-inr-posterior-adapter.md) 作为先完成
+  backend spike 的有限兼容路径，而不是生产推荐模型。
 
 ## 目标模块边界
 
@@ -31,7 +33,8 @@ posterior_assisted(
 )
 ```
 
-- `qnehvi()`：只负责从联合 objective/constraint samples 计算采集值和选择 batch。
+- `qnehvi()`：首版只负责从联合 objective samples 计算采集值和选择 batch；未来明确增加
+  outcome-constraint sample 契约后再扩展。
 - `posterior_assisted()`：负责 generation orchestration、候选池、surrogate freshness、
   posterior/cost projection、exploration quota 和 common real evaluation。
 - `pymoo` 继续拥有 variation/search/population/duplicate 等成熟机制；qNEHVI 不复制
@@ -63,13 +66,33 @@ BoTorch 当前不是 yadof 依赖。若选用它，应加入独立可选 extra �
 普通 `yadof.optimize`、real search 或 GPSAF 导入它；具体版本范围以实施时审计为准，不能
 依赖未经声明的 transitive package。
 
+最近一次计划审计中，BoTorch 官方文档已推荐数值更稳定的 log-improvement 版本。首版
+公开能力仍称 `qnehvi()`（表示用户选择的 qNEHVI acquisition family），但 backend spike
+优先验证 `qLogNoisyExpectedHypervolumeImprovement` 或实施时官方等价继任 API，而不是
+直接固化 legacy `qNoisyExpectedHypervolumeImprovement`。具体类名、版本和 sample-backed
+posterior 适配能力必须在实现当日重查并记录。
+
+### 后端 spike 先于完整策略
+
+在实现 CAE 或 generation orchestration 前，先用 fake sample-backed posterior 和
+conditional-INR adapter 完成一个小型 backend spike：
+
+- 证明 BoTorch `Model.posterior()` / `Posterior.rsample()` 薄适配可以消费 yadof 的联合
+  cost samples，或记录具体不兼容点；
+- 对解析小问题核对 minimization/maximization、reference point、fixed baseline、batch
+  shape、seed 和 qLogNEHVI 数值；
+- 测量 candidate pool × draw × objective 的时间/内存；
+- 失败时只调整 adapter/模块边界，不先写一套自有 hypervolume 数值层。
+
+该 spike 是实现 gate，不要求先有 1000--2000 条 CAE 训练数据。
+
 ### 离散候选池是首版边界
 
 由于 current `calc_cost.py` 通常不可微，首版不进行 gradient-based `optimize_acqf`。采用：
 
 ```text
 pymoo/history-informed candidate pool
-  -> joint rawData posterior over the whole pool and pending points
+  -> one persistent joint rawData sampler evaluated in candidate chunks
   -> streaming current-cost projection
   -> empirical/discrete qNEHVI batch selection
   -> common real evaluation
@@ -79,22 +102,41 @@ pymoo/history-informed candidate pool
 semantic identity。初始 benchmark 可以探索数百至数千个 pool rows，但这些是调优范围，
 不是硬默认或性能保证。实现必须先测量 rawData projection 时间和内存。
 
+首版直接复用 private pymoo candidate-pool mechanics 及其现有 duplicate/refill 语义，在新
+strategy 内增加窄 adapter；不新增通用 public `search.propose_pool()` 协议。只有第二个
+非-pymoo 真实消费者出现时再提炼公开 search capability，避免为了一个调用方扩大架构。
+
+### 首个 MVP 的明确功能边界
+
+- 支持至少两个 objectives、离散候选池、batch selection、fixed real Pareto baseline 和
+  candidate posterior samples。
+- 不增加 pending-state API。当前 `GenerationContext` 没有 pending 字段，当前 generation
+  evaluation 也是同步边界；将来出现真正异步未完成点时，再把 pending 与同一 function
+  sampler 的联合语义作为独立扩展。
+- 不支持 task outcome constraints。现有 parameter/duplicate feasibility 继续由 search/task
+  机制处理；只有出现明确的随机 outcome-constraint rawData 契约后，才扩展 acquisition
+  samples。
+- 当前 cost helper 产生的有限 `error_cost=1.0` 是有效最差 task cost；不能从数值猜测它
+  来自 fallback。schema/callback/width/non-finite failure 才进入 invalid sample policy。
+
 ## 一代的建议流程
 
-1. 从 `GenerationContext` 取得 current real history、problem、snapshot、pending 状态和 seed。
+1. 从 `GenerationContext` 取得 current real history、problem、snapshot 和 seed。
 2. 使用既有 search backend 生成归一化候选池，并应用参数语义、constraints、history/current
    population duplicate keys 和 refill limits。
 3. 在 model 尚未达到已批准 warm-up/新鲜度要求时，使用明确的 real-search cold-start，
    同时按现有 after-submit scheduling 训练；不让 prediction 自动触发隐藏训练。
-4. 对 acquisition 所需的候选、pending 和需要建模的 baseline 一次构造联合 posterior。
-5. 按 draw 生成完整 rawData，使用 generation snapshot 的 current cost projector 立即
-   缩减为 `[draw, point, objective]`，随后释放 predicted rawData。
+4. 从完成的 real history 计算并冻结当前真实 Pareto baseline；不让 surrogate 重采样这些
+   已观测 rows。为候选池创建一个持久 function sampler。
+5. sampler 逐 candidate chunk 生成完整 rawData，使用 generation snapshot 的
+   `CostInterpreter` 薄 projector 立即缩减并拼成 `[draw, candidate, objective]`，随后释放
+   predicted rawData；所有 chunks 复用相同 draw identities。
 6. qNEHVI acquisition 选择 exploitation batch，同时保留显式 exploration fraction；禁止
    整代候选都来自未经校准的 posterior preference。
 7. 通过 common `evaluate_population()` 做真实评估。只有真实 rawData 进入 campaign
    session/recorder；预测 samples 和 acquisition values 只作有界 diagnostics。
 8. 保存 compact strategy/acquisition metadata：backend/version、pool/draw/support sizes、
-   seed、reference point、pending/baseline counts、timings、fallback 和失败统计。
+   seed、reference point、baseline count、timings、fallback 和失败统计。
 
 ## qNEHVI 语义细节
 
@@ -111,19 +153,23 @@ semantic identity。初始 benchmark 可以探索数百至数千个 pool rows，
 ### baseline、pending 与噪声
 
 - 已完成真实 history 的 rawData/current costs 是观测证据，不应用 surrogate mean 替换。
+- 首版从这些有限、合法 rows 中构造固定 nondominated Pareto baseline。`error_cost=1.0`
+  仍是合法最差 row；带 `inf`/NaN 或宽度错误的 rows 排除并报告。
 - qNEHVI 中的“noisy”不能被误解为任意 epistemic spread。默认确定性任务不虚构观测
-  噪声；实现应验证 zero-observation-noise limit 与对应 qEHVI/固定 baseline 计算一致。
+  噪声；qLogNEHVI adapter 必须验证 zero-observation-noise limit 与对应 qLogEHVI/qEHVI
+  固定 baseline 计算一致。若成熟 backend 的特定 API 要求 baseline posterior，薄 adapter
+  只能提供 deterministic samples 或使用其正式等价路径，不能注入伪噪声。
 - 若未来 task 明确声明 measurement noise，baseline latent truth/noise conditioning 必须有
   独立协议和测试；不能从 ensemble spread 猜测观测噪声。
-- pending points 与 candidates 必须位于同一次 function draws 中，避免重复或过度相似的
-  batch 建议。
+- pending points 延后。首版 batch 内的 q 个候选仍由同一个 joint acquisition/duplicate
+  policy 选择，避免相同或过度相似建议。
 
-### 约束、失败和支持度
+### 参数约束、失败和支持度
 
-- 复用当前 task/optimizer 的参数和可行性语义；如 qNEHVI backend 支持约束 sample，转换
-  方式必须显式。
-- posterior `unique_support` 低于 acquisition policy 时，执行预先配置的 warn/fallback/
-  reject，不得重复抽样伪装支持度。
+- 复用当前 task/optimizer 的参数和可行性语义；首版不声明 outcome-constraint sample。
+- 当 `support_kind="finite"` 时，posterior `unique_support` 低于 acquisition policy 才执行
+  预先配置的 warn/fallback/reject；连续或未知支持不能伪造有限 support，也不能套用该
+  整数阈值。有限 ensemble 不得通过重复抽样伪装支持度。
 - 某些 draw/candidate 的 rawData 或 cost 投影失败时，采用预先测试的 conservative mask
   或整 draw 拒绝策略。不能把失败当成优秀 hypervolume improvement。
 - qNEHVI 数值失败只影响本次 surrogate-assisted selection；fallback 必须仍通过正常
@@ -144,11 +190,12 @@ semantic identity。初始 benchmark 可以探索数百至数千个 pool rows，
 ## 验证要求
 
 - 用解析小问题或成熟 backend 对照验证 qNEHVI 数值、minimization 方向、reference point、
-  batch/pending 和 zero-noise limit。
+  batch、fixed real baseline 和 zero-noise limit。
 - 构造相关 candidate/objective samples，证明逐候选或逐目标独立重排会失败，而实现保留
   联合 draw。
-- multiobjective-only 验证、constraints、invalid samples、低 `unique_support`、空/重复
-  candidate pool、backend missing 和 deterministic seed。
+- multiobjective-only 验证、parameter constraints、outcome-constraint/pending capability
+  rejection、invalid samples、有限 `1.0` valid semantics、finite posterior 的低
+  `unique_support`、空/重复 candidate pool、backend missing 和 deterministic seed。
 - spy/fake backend 证明成熟库拥有核心数值循环，yadof 只做适配和 orchestration。
 - 证明 rawData 按 draw 投影后立即释放，保存状态中没有 predicted rawData。
 - 证明所有选中点都经过 common real evaluator/finalizer/recorder；recording failure 仍按
@@ -162,6 +209,7 @@ semantic identity。初始 benchmark 可以探索数百至数千个 pool rows，
 - 首版不做连续 gradient acquisition optimization。
 - 不以 surrogate prediction 接受一个候选或写入 durable history。
 - 不在没有 benchmark 的情况下把 qNEHVI 设为默认 strategy。
+- 首版不实现 pending points、outcome constraints 或通用 public candidate-pool protocol。
 
 ## 完成规则
 
