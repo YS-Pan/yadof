@@ -121,13 +121,24 @@ mask/weights 确实定义同一个函数。
 - 校准必须使用 out-of-sample 或在线“预测先于真实结果”的证据。training-fit error、
   member min/max 和同一数据上的重构残差不能成为信任规则。
 
-### Applicability/regime probability handoff（来自 082608 Gate 0 v5）
+### Applicability/regime probability handoff（来自 082608 Gate 0 v5--v7）
 
-082608 已实现 typed、未校准的 member-level applicability head，但 Gate 0 v5 的 full-grid
-representation/quality gate 失败，calibration locator 未打开。因此本执行单元必须等待后续
-preregistration 选出通过 full-grid gate 的新 surrogate architecture；不能对当前失败的 MVP
-提前消费独立 calibration designs，也不能把 v5 validation 上尚可的 AUPRC/Brier/ECE 当作
-概率校准完成。
+082608 已实现 typed、未校准的 member-level applicability head。Gate 0 v5 的 full-grid
+representation/quality gate 仍失败；v6/v7 只以 `experimental / performance-not-accepted`
+身份完成 coordinate/viewer/offline-test 机制，并且没有打开 calibration locator。这不允许把
+当前模型晋升为可接受 architecture，但允许本执行单元在以下全部前置条件满足后推进
+**实验性 calibration framework**：
+
+- 从已提交且通过 installed-wheel 验收的 v7 tree 开始；
+- 先用 development train/validation 数据建立并冻结一个 durable experimental checkpoint，
+  将其 state signature、policy/label/head/loss identity 和训练 provenance 写入新预登记；
+- 在首次 calibration locator access 前另建并通过专用 preregistration，冻结 split、metrics、
+  calibrator family、selection rule、seed、failure rule 和 artifact hashes；
+- calibration 结果始终标注 performance-not-accepted，只绑定该 exact signature，不得晋升当前
+  architecture，也不得迁移到 successor architecture。
+
+在完成这些前置条件前仍不得读取独立 calibration designs，也不能把 v5 validation 上尚可的
+AUPRC/Brier/ECE 或 v7 offline 描述性结果当作概率校准完成。
 
 - 新 surrogate 的 predictor members 会提供未校准 `P(smooth)`/applicability score；本 TODO
   必须只在独立 calibration designs 上拟合/选择其概率校准，不得复用 training/validation
@@ -139,8 +150,8 @@ preregistration 选出通过 full-grid gate 的新 surrogate architecture；不�
 - 若 posterior draw 后续携带 regime head，该 score 必须复用同一 member/function draw identity，
   跨 candidates/fields 相关；不得把 regime uncertainty 转成独立 Gaussian observation noise。
 - 后续 architecture/checkpoint 必须继续携带 v1 policy/label/head/loss identity，且 calibration
-  artifact 要绑定通过 gate 的具体 state signature；不得把当前失败 MVP 的校准参数迁移给新
-  architecture。
+  artifact 要绑定具体 state signature；实验性 v7 state 不需要被误称为通过 performance gate，
+  且不得把当前失败 MVP 的校准参数迁移给新 architecture。
 
 ## 校准动作的限制
 

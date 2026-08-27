@@ -9,7 +9,9 @@ GPSAF. A separate opt-in `hierarchical_cae()` development component reconstructs
 complete fixed-grid rawData with field-specific convolutional codecs and a joint
 parameter-latent predictor. It is installable and recoverable, but its first
 1000/2000-design Gate 0 v5 candidate failed representation and clean-target leakage
-requirements; it is not a production default and has no coordinate viewer adapter.
+requirements. Gate 0 v6/v7 subsequently completed its all-axis coordinate readout,
+viewer adapter, and fixed offline mechanism path under the explicit status
+`experimental / performance-not-accepted`; none is a production default.
 
 ## Source structure
 
@@ -194,6 +196,8 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   executable task callbacks cannot bypass that identity.
 - A low-trust field cannot contribute unweighted tokens to shared teacher state,
   and its gated residual never becomes independent Gaussian observation noise.
-- Gate 0 v5 failure blocks coordinate readout, viewer integration, calibration,
-  offline-test access, and production qNEHVI use; retained code is an experimental
-  baseline for the next preregistered architecture gate.
+- Gate 0 v5's performance failure remains immutable. Gate 0 v6/v7 separately permits
+  the coordinate readout, viewer integration, and one fixed offline-test path only as
+  experimental mechanism evidence. Calibration needs a new pre-access registration
+  bound to one durable state signature, and production qNEHVI exploitation remains
+  blocked until a performance-accepted architecture and independent calibration exist.

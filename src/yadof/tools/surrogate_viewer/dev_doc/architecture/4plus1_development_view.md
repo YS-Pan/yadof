@@ -10,7 +10,8 @@ src/yadof/tools/surrogate_viewer/
   __main__.py               python -m yadof.tools.surrogate_viewer entry
   backend/
     __init__.py             public viewer-backend exports
-    checkpoints.py          checkpoint discovery/loading/inference
+    checkpoints.py          generic dispatch + conditional-INR loading/inference
+    hierarchical_checkpoints.py  hierarchical-CAE loading/inference/readout
     rawdata.py              rawData schema and plotting adapters
     types.py                immutable transfer and aggregate types
     workspace.py            records, prediction facade, audit orchestration

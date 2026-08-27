@@ -119,7 +119,10 @@ arbitrary finite-value entry, reapplies current cost logic, compares selected re
 individuals where recorded coordinates exist, and can calculate a cancellable
 in-memory cross-generation error audit. Stored-grid selections reproduce
 checkpoint-grid predictions; off-grid selections directly query the conditional
-INR and interpolate its target scaler without changing checkpoint artifacts. The
+INR and interpolate its target scaler, or query a coordinate-enabled experimental
+hierarchical CAE through its declared all-axis in-domain readout, without changing
+checkpoint artifacts. One workspace view uses one compatible active component
+namespace and does not mix methods. The
 resulting rawData view is a scalar, curve, or filled two-dimensional color contour.
 Closing or stopping the viewer leaves configuration, history, rawData, and
 checkpoints unchanged. `view all` remains the non-GUI cost/time pair and never

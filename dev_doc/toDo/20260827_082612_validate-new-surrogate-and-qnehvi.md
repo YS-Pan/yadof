@@ -118,9 +118,30 @@ inventory 不变（否则新建 preregistration 版本），不得提前作 1000
 
 v5 只封存了有合法证据的 082608 数值。coordinate stored-grid/off-grid/资源门槛、082609
 posterior/applicability calibration、082611 qNEHVI decision/exploration、082612 formal optimization
-与总工程成本门槛仍未封存。coordinate gate、calibration/offline-test access 和 082608 归档均
-保持 blocked。后续可以新建版本预注册 evidence-triggered regime-specialized/MoE 对照，但
-不得改写 v5 或在当前任务中提前实现该架构。
+与总工程成本门槛仍未封存。v5 当时阻塞 coordinate、calibration/offline-test access 和 082608
+归档；后续版本必须保持该历史判定，不得改写 v5。
+
+### Gate 0 v6--v7 experimental framework 结果（2026-08-27）
+
+用户在 v5 之后另行授权框架续行。v6 在 offline-test access 前固定 commit/source hashes、
+三个 case、1000/2000 train sizes、seed `69168527`、coordinate settings 和 12-cell plan，并明确
+没有数值 coordinate/performance threshold、不能产生科学 acceptance。v7 冻结唯一运行结果：
+
+- session `33861` 完成 12/12 cells、exit 0、wall 1466.907 s，覆盖全部 1200 offline-test
+  designs；没有读取 calibration locator，也没有启动 simulator；
+- 六个 coordinate cells 的 stored/off-grid 查询均 finite，query state digest 不变，full-grid
+  仍是 cost/audit/optimization 的权威路径；
+- offline summary SHA-256 为
+  `84eed10dc6051374af871a84d5334c988268a029fdf2e18ed5f2bdec8cd93096`；全部比值和资源数据
+  只作 descriptive mechanism evidence；
+- 首次启动因 mixed ACL 在 output-directory creation、locator access 和 training 前失败，产生
+  0 cells；v7 单独保留 receipt，未复制模型运行。
+
+因此 coordinate/viewer/offline-test path 的**机制验收**完成，但 v5 performance failure、
+`performance_accepted=false`、`coordinate_performance_accepted=false`、全部 post-access null
+threshold 和 `todo_082608_may_archive=false` 保持不变。082609 可在新预登记与 exact experimental
+state signature 下推进 calibration framework；082611 的 exploitation 仍必须等待通过性能 gate
+的 architecture 和独立校准 capability。
 
 ## Gate 2 执行状态（2026-08-27）
 
@@ -249,8 +270,9 @@ active。
 - 训练/采集 wall-clock、内存和失败率上限。
 - 显式 group 相对 `groups=()` 的收益/最大允许退化，以及 group head 的参数量、墙钟和内存
   开销；默认不分组不承担 group-state 成本。
-- coordinate trunk 的独立启动条件：full-grid CAE 先通过，且 viewer/off-grid 指标与资源
-  预算已登记；未达到条件时延期 trunk，不推翻 rawData/qNEHVI 垂直切片。
+- coordinate trunk 的生产接受条件：full-grid CAE 先通过，且 viewer/off-grid 指标与资源
+  预算已登记。v6/v7 对当前失败模型的实验性框架授权不满足该科学条件；其 post-access
+  描述性结果不能反填 null threshold 或推翻 v5。
 - clean-target 高频泄漏、roughness inflation、regime classifier、各 strata 和四臂消融的
   082608 development-validation 数值已由 v5 合法封存，但当前模型未通过；独立 calibration
   designs 上的概率校准、formal-test 与上线门槛仍只能由后续合法 evidence 封存，blocked

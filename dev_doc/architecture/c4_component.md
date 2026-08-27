@@ -108,8 +108,10 @@
   nominal and effective finite support without changing `conditional_inr()`.
   `hierarchical_cae()` shares field codecs across independent parameter-predictor
   members and exposes an uncalibrated applicability score with zero observation
-  noise. Its initial full-grid candidate failed Gate 0 v5, so coordinate/viewer and
-  production-strategy integration are intentionally absent.
+  noise. Its initial full-grid candidate failed Gate 0 v5. A v6/v7 experimental
+  continuation adds an all-axis field-local coordinate readout and viewer adapter,
+  while leaving full-grid prediction authoritative and production-strategy
+  integration absent.
 - `tools`, `_resources`: reusable `tools.cost_viewer` package with left-axis
   objective/average costs and a right-axis all-individual versus
   current-generation hypervolume interval, shaded and bounded by thin translucent
@@ -153,9 +155,12 @@ protocol without being imported by optimization. The Gate 2 qLogNEHVI backend is
 one such sample consumer but is not a strategy. The current GPSAF strategy does not
 consume this capability, so its conditional-INR semantic identity and checkpoint
 signature remain unchanged.
-The experimental hierarchical CAE implements the posterior protocol directly, but
-its failed v5 development gate prevents downstream calibration or acquisition from
-treating it as an accepted production backend.
+The experimental hierarchical CAE implements the posterior protocol and a typed
+coordinate/applicability capability directly, but its failed v5 development gate
+prevents downstream calibration or acquisition from treating it as an accepted
+production backend. Calibration plumbing may target one preregistered exact
+experimental state; only a separately performance-accepted and calibrated state may
+later control exploitation.
 `evaluate_manager` consumes task and recorded-data APIs. `recorded_data` and
 `surrogate` may ask `job_template` to reinterpret evidence. Core runtime modules
 never import `tools`. Workspace workflows may import files copied beside them and

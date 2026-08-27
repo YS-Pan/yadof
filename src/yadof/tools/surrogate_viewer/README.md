@@ -79,17 +79,23 @@ yadof view surrogate --workspace "D:\path\to\workspace"
 
 这里有两类不同的输入。**Parameters** 中的连续优化参数可以取训练记录之间
 任意合法值，surrogate 会对该新参数向量推理；离散参数仍只取任务定义的合法
-水平。rawData 的 `Freq`、`Theta` 等是 conditional INR 的输出查询坐标。
-下拉框选择已有网格坐标时，viewer 继续使用原来的完整网格预测和重建路径，
-因此已有 checkpoint 的网格点行为不变。文本框输入非网格坐标时，viewer
-直接在新坐标上查询同一个 INR decoder，并对 checkpoint 中逐网格点的 target
-scaler 做线性插值后恢复物理值；不需要重新训练或迁移 checkpoint。
+水平。rawData 的 `Freq`、`Theta` 等是 surrogate 的输出查询坐标。下拉框选择
+已有网格坐标时，viewer 继续使用 checkpoint 的完整网格预测和重建路径，因此
+网格点行为不变。文本框输入非网格坐标时，conditional-INR checkpoint 查询同一个
+INR decoder，并对逐网格点 target scaler 做线性插值；启用了 architecture v2
+coordinate readout 的 hierarchical-CAE checkpoint 则查询覆盖全部声明轴的 field-local
+readout。后者只允许 stored domain 内的值，轴的 linear/log/periodic 编码来自 checkpoint
+声明，不能由 viewer 猜测。
 
 非网格位置没有 recorded_data 真值，因此上图不会伪造真实曲线/曲面；下方
 objective 对比仍来自 checkpoint 完整网格，并在图上明确提示。超出已存轴范围
-的数值也会送入 decoder，但属于外推，可靠性通常低于网格范围内插值。当前
-checkpoint 只编码前三个 rawData 坐标维度；未来高于三维的数据若要改变第
-四维及之后的查询坐标，需要先扩展模型坐标编码。
+的数值对 conditional-INR 仍会送入 decoder，但属于外推，可靠性通常低于网格范围内
+插值；hierarchical-CAE 会明确拒绝越界。conditional-INR checkpoint 只编码前三个
+rawData 坐标维度；hierarchical-CAE coordinate readout 覆盖 layout 声明的全部轴。
+
+当前 hierarchical-CAE coordinate/viewer 能力标记为
+`experimental / performance-not-accepted`：Gate 0 v6/v7 只证明机制可运行，没有推翻 v5
+性能失败。它不会替代完整网格的 cost、posterior、audit 或 optimizer 路径。
 
 开启 **Auto refresh** 时，参数滑块停止约 350 ms 后自动预测；关闭后可点击
 **Predict now**。
@@ -145,7 +151,9 @@ heatmap 的 CUDA 推理会使用比普通单点预测更大的样本批次，以
 - `report.py`：无窗口 summary/audit 的稳定文本与 JSON 输出；
 - `ui/interactive.py`、`ui/heatmap.py`：两个互相独立的标签页；
 - `ui/plots.py`：Matplotlib 绘图；
-- `backend/checkpoints.py`：checkpoint 加载和批量推理；
+- `backend/checkpoints.py`：通用 discovery/dispatch 与 conditional-INR 加载和批量推理；
+- `backend/hierarchical_checkpoints.py`：hierarchical-CAE checkpoint、full-grid audit 与
+  all-axis coordinate readout 的只读 adapter；
 - `backend/workspace.py`：真实记录、抽样和跨代审计；
 - `backend/rawdata.py`、`backend/types.py`：维度描述、0D/1D/2D 切片、
   rawData 适配和数据契约。

@@ -35,8 +35,8 @@
 ## Backend Components
 
 - `SurrogateWorkspace`: explicit workspace facade and top-level use-case API.
-- `CheckpointPredictor`: one checkpoint's validated model/schema/scaler plus
-  interactive and audit inference.
+- `CheckpointPredictor` / `HierarchicalCAECheckpointPredictor`: one method-specific
+  checkpoint's validated model/schema/scaler plus interactive and audit inference.
 - `CrossGenerationErrorAudit`: compact relative/absolute cost/rawData sum-count
   arrays and zero-inference matrix derivation.
 - `PlotRequest`, `PredictionResult`, `ErrorMatrix`, and metadata dataclasses:
@@ -62,6 +62,7 @@ ui/*
 
 backend/workspace.py
   -> backend/checkpoints.py
+  -> backend/hierarchical_checkpoints.py (through discovery/dispatch)
   -> backend/rawdata.py
   -> backend/types.py
   -> installed yadof APIs
@@ -70,15 +71,20 @@ backend/checkpoints.py
   -> backend/rawdata.py
   -> backend/types.py
   -> installed yadof conditional-INR model/runtime APIs
+
+backend/hierarchical_checkpoints.py
+  -> backend/rawdata.py
+  -> backend/types.py
+  -> installed yadof hierarchical-CAE model/runtime APIs
 ```
 
 The backend must never import UI modules. Plotting code must not parse checkpoints,
 read records, or call private yadof model functions. The UI passes user intent to
 the coordinator; the coordinator submits backend operations.
 
-Package-internal model/runtime imports are isolated to
-`yadof.surrogate.conditional_inr`; the public `yadof.surrogate` namespace remains
-the lazy factory and scheduling facade.
+Package-internal model/runtime imports are isolated to the two checkpoint adapters
+under `backend/`; the public `yadof.surrogate` namespace remains the lazy factory
+and scheduling facade.
 
 ## Interface Invariants
 

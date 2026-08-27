@@ -107,7 +107,11 @@ training. Parameter-predictor members jointly emit latent state, `P(smooth)`, an
 per-field residual gates. These probabilities are uncalibrated structural/epistemic
 state diagnostics, not independent Gaussian observation noise. The first MVP is a
 retained failed Gate 0 v5 candidate: its fixed-grid API/checkpoints remain usable
-for development, while coordinate readout and downstream production use stay
+for development. Gate 0 v6/v7 adds a separately trained field-local coordinate
+readout over the same member global/group/private state. Explicit linear/log/periodic
+axis encodings cover every declared axis; the gated residual remains field-private,
+queries are in-domain and read-only, and fixed-grid output remains authoritative.
+This framework is performance-not-accepted, so downstream production use stays
 closed.
 
 Posterior samples are another derived surrogate view, not evidence. A sampler

@@ -16,9 +16,11 @@
   finite-member rawData sampler.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
   an optional versioned `RawDataQualityPolicy`, and `CAETrainConfig`. The component
-  owns full-grid train/recover/predict, finite joint draws, and uncalibrated
-  applicability prediction. A selected quality policy enables the regime head and
-  default robust cap; a regime head without a policy is rejected.
+  owns full-grid train/recover/predict, finite joint draws, uncalibrated applicability
+  prediction, and an optional architecture-v2 all-axis coordinate readout. A selected
+  quality policy enables the regime head and default robust cap; a regime head without
+  a policy is rejected. `predict_field_at_coordinates()` is viewer/off-grid-only,
+  returns typed member/mean values, and leaves full-grid output authoritative.
 - Lazily forward `train()`, `predict_population()`, `has_trained_state()`, and
   `latest_state_generation()` to `conditional_inr/runtime.py`.
 - Lazily forward scheduler calls, including `deactivate_workspace()`, to
@@ -47,8 +49,10 @@
 - Parent import preloads only the empty private-package marker before rebinding the
   same-named public factory, preserving both lazy Torch loading and callable API
   stability.
-- The hierarchical component remains a development surface after Gate 0 v5 failure;
-  this API does not imply coordinate/viewer or production qNEHVI readiness.
+- The hierarchical component remains a development surface after Gate 0 v5 failure.
+  Gate 0 v6/v7 proves only coordinate/viewer mechanism execution; the API carries
+  `experimental / performance-not-accepted` semantics and does not imply production
+  qNEHVI readiness.
 
 ## Mutability Profile
 - Add public surrogate functions here only when another core module needs them.

@@ -283,9 +283,25 @@ work.
 Gate 0 v5 retained this component as an experimental baseline but rejected the
 first 1000/2000-design candidate: multiple representation guards failed and the
 gated residual did not sufficiently prevent clean-target high-frequency leakage.
-Do not treat it as a production recommendation. Coordinate/off-grid readout,
-surrogate-viewer support, calibration, offline-test access, and qNEHVI exploitation
-remain deliberately unavailable until a later preregistered architecture passes.
+Do not treat it as a production recommendation.
+
+A later, separately preregistered v6/v7 framework continuation added an optional
+architecture-version-2 coordinate readout and a read-only viewer adapter. Enable it
+only with `CAETrainConfig(architecture_version=2, coordinate_readout=True, ...)`.
+`predict_field_at_coordinates()` accepts explicit in-domain coordinates for every
+declared field axis, using declared linear, log, or periodic encodings. It reuses the
+same predictor-member global/group/private state and keeps the gated residual
+field-private. Full-grid decoding remains authoritative for rawData, cost, posterior,
+audit, and optimization; coordinate queries never modify a checkpoint.
+
+The fixed v6 offline mechanism run covered all 1200 frozen offline-test designs and
+proved finite all-axis queries, checkpoint-state preservation, and viewer/evaluation
+plumbing. It deliberately had no numeric coordinate or performance threshold, and
+its single-seed errors did not reverse v5. The component and viewer support therefore
+remain `experimental / performance-not-accepted`. Independent calibration requires
+a new pre-access registration bound to an exact experimental state; qNEHVI
+exploitation remains unavailable until an architecture passes its performance gate
+and that applicability capability is independently calibrated.
 
 The installed experimental `yadof.optimize.qnehvi_backend` module can score fixed
 caller-supplied discrete batches using projected joint objective samples and a

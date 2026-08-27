@@ -65,9 +65,11 @@ lock automatically generated run-directory names to a digits-only UTC
   behavior, explicit/diagnostic/shape assessment priority, design-by-field cap and
   weights, shared-token masks, clean residual gates, independent anti-noise arms,
   applicability/semantic identity, tiny staged training, atomic recovery, complete
-  rawData prediction, and coherent member draws. Source-benchmark tests separately
-  freeze Gate 0 v2--v5 integrity, metric-adapter behavior, threshold boundaries,
-  offline-test non-access, and the failed full-grid/coordinate decision;
+  rawData prediction, coherent member draws, all-axis linear/log/periodic coordinate
+  encoding, stored-grid consistency, in-domain off-grid queries, checkpoint recovery,
+  viewer dispatch, and query-state immutability. Source-benchmark tests separately
+  freeze Gate 0 v2--v5 integrity and failed performance decision, plus the v6 pre-access
+  experimental plan and v7 descriptive result without backfilled thresholds;
 - fake sample-backed qLogNEHVI coverage against BoTorch's own qLogEHVI zero-noise
   fixed-baseline limit: minimization negated exactly once, reference point, q=1/q=2,
   deterministic seed, aligned correlated draws, whole-draw invalid rejection,
@@ -102,8 +104,9 @@ lock automatically generated run-directory names to a digits-only UTC
 - lazy `view surrogate` GUI/summary/audit registration and help, viewer
   wheel/sdist/dev_doc/report membership, deterministic text/JSON summary and audit
   encoding, checkpoint discovery, 0D/1D/2D rawData slice extraction from
-  higher-rank data, arbitrary fixed-coordinate controls, stored-grid/off-grid
-  surrogate-query compatibility, aggregate selection, sampling, and cancellation
+  higher-rank data, arbitrary fixed-coordinate controls, method-specific
+  stored-grid/off-grid surrogate-query compatibility, hierarchical checkpoint
+  discovery/dispatch, aggregate selection, sampling, and cancellation
   when optional dependencies are installed.
 
 ## Test placement

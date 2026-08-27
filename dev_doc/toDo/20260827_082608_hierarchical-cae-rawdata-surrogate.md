@@ -157,8 +157,9 @@ path 防止负迁移。只有该简单结构的 validation/ablation 证明无法
 
 ### 任意坐标查询
 
-- coordinate readout 是 full-grid MVP 之后的独立 gate。只有 grid decoder、current-cost
-  round trip 和目标规模拟合先通过，才实现/训练这一阶段；延期不等于取消该用户需求。
+- coordinate readout 是 full-grid MVP 之后的独立 gate。原始科学验收顺序要求 grid decoder、
+  current-cost round trip 和目标规模拟合先通过；Gate 0 v6 后仅允许以
+  `experimental / performance-not-accepted` 身份完成这一框架阶段，不改变该顺序的生产含义。
 - `CoordinateReadout[i](latent_i, coordinates)` 负责 viewer/off-grid 查询。
 - 坐标编码覆盖字段的全部轴，不再保留 conditional-INR 当前最多三列坐标的限制。
 - 轴编码至少支持显式的 linear normalization；log/periodic 等类型只在 schema 或 factory
@@ -273,10 +274,51 @@ isolation 高 5.60%/2.38%。分类诊断本身达到 validation 门槛（AUPRC 0
 0.08130/0.07671、ECE 0.05262/0.03684），但不能抵消 representation、clean leakage、smooth
 roughness 和 gated-ablation 的失败。
 
-因此本 TODO 保持 active：coordinate readout/viewer adapter 不得实现，offline test 不得读取，
-也不能进入 082609 calibration 或 082611 qNEHVI exploitation。下一 architecture gate 可在新
-版本预注册中比较有界 regime-specialized/mixture-of-experts 方案；这是 v5 证据触发的后续
-工作，不属于本 MVP，也不能修改 v5 的冻结含义。
+因此在 v5 决定时，本 TODO 保持 active，coordinate readout/viewer adapter、offline test、
+082609 calibration 与 082611 qNEHVI exploitation 均被阻塞。下一 architecture gate 可在新版本
+预注册中比较有界 regime-specialized/mixture-of-experts 方案；这是 v5 证据触发的后续工作，
+不属于本 MVP，也不能修改 v5 的冻结含义。
+
+## Gate 0 v6--v7 实验性框架续行（2026-08-27）
+
+用户随后明确决定：v5 性能失败继续冻结，但不再阻塞本日剩余的框架完整性工作。Gate 0 v6
+在首次 offline-test access 前绑定 commit
+`df17efbff8e9b2f44c0a672b1fd0d59aeeb83ed9`、source hashes、一个既有 seed `69168527`、三个
+case、train=1000/2000 和 12-cell plan；coordinate/performance threshold 有意保持 `null`，
+且禁止本执行单元调性能或实现 successor architecture。
+
+在此窄授权下已完成：
+
+- architecture version 2 的 per-field coordinate trunk 使用与 full-grid decoder 相同的
+  member-level global/group/private latent；base readout 加同一 applicability gate 控制的
+  field-private residual，并在 development train/validation 上独立分阶段训练；
+- linear/log/periodic 显式轴编码覆盖所有声明轴，只允许轴域内查询；stored-grid consistency
+  loss 与只读 `predict_field_at_coordinates()` API 不改变 checkpoint state；
+- viewer backend 能在 active strategy 下发现单一 conditional-INR 或 hierarchical-CAE
+  namespace；hierarchical checkpoint 的 full-grid 仍是 cost/audit/optimizer 权威路径，
+  coordinate readout 只服务 viewer/off-grid；
+- 唯一 v6 offline 长进程 session `33861` 完成 12/12 cells、exit 0、wall 1466.907 s，读取三个
+  case 共 1200 个 offline-test designs；未读取 calibration locator、未启动 simulator、test
+  没有参与训练或 early stopping。权威目录为
+  `temp/hierarchical_cae_gate4_runs/hierarchical-cae-gate4-v2-20260827/experimental_offline_v6`，
+  `offline_summary.json` SHA-256 为
+  `84eed10dc6051374af871a84d5334c988268a029fdf2e18ed5f2bdec8cd93096`，`run_spec.json`
+  SHA-256 为 `599410e4e8fcce79709eef3f9da3568c2030cb76c03168b6d4553ef096311482`；
+- 首次 sandbox launch 在创建该精确 output directory 时因混合 ACL 以 exit 1 结束，发生在
+  locator access/training 之前且产生 0 cells；v7 单独保留 receipt，随后只创建该目录并以
+  host identity 运行未改动 runner 一次，没有重复 model/test 计算。
+
+v7 的六个 coordinate cells 均给出有限 stored/off-grid 查询且 query 前后 state digest 相同；
+最大 sampled coordinate-vs-grid standardized RMSE 为 0.63776。单 seed 的 candidate/
+conditional field-macro MAE ratio 为：Chrono 1.20186/1.29294、SAW 1.29201/1.14690、
+test-com 1.15099/0.89248（train=1000/2000）。这些数值只证明机制执行，不能制定或通过
+post-access threshold，也不能反转 v5 的 `full_grid_gate_passed=false`。
+
+因此当前精确状态是：coordinate/viewer/offline-test **框架机制完成**，但 CAE 与 coordinate
+性能均为 **未验收**；082608 继续 active、不得归档。性能调优和 successor architecture 已明确
+延后为独立工作。082609 只能在另行预登记 calibration access、冻结由 development-only 数据
+得到的 durable experimental checkpoint/state signature 后推进实验性 calibration framework；
+082611 可以准备 typed capability plumbing，但当前 head 不得控制 exploitation。
 
 ## 数据规模与调度目标
 
@@ -345,6 +387,8 @@ roughness 和 gated-ablation 的失败。
   installed-wheel 测试已更新；
 - 现有 conditional-INR/GPSAF 回归测试保持通过，随后将本 TODO 移入 obsolete。
 
-当前只满足组件、full-grid rawData、checkpoint、posterior/quality 协议与相应文档测试部分。
-Gate 0 v5 已明确 `full_grid_gate_passed=false`，所以 1000--2000 design 性能、coordinate
-readout/viewer 和最终归档三项 completion rule 尚未满足；不得移动到 `obsolete/`。
+当前已满足组件、full-grid rawData、checkpoint、posterior/quality 协议，以及 experimental
+coordinate readout/viewer/offline-test 的框架与文档测试部分。Gate 0 v5 仍明确
+`full_grid_gate_passed=false`，v6/v7 也明确 `performance_accepted=false` 和
+`coordinate_performance_accepted=false`；因此 1000--2000 design 科学性能及最终归档两项
+completion rule 尚未满足，不得移动到 `obsolete/`。

@@ -2,8 +2,8 @@
 
 ## Intent
 
-Own checkpoint discovery, compatibility validation, artifact loading, device
-selection, and both interactive and audit inference.
+Own generic method discovery/dispatch and the conditional-INR compatibility,
+artifact loading, device selection, interactive, and audit inference path.
 
 ## Functionalities
 
@@ -21,6 +21,9 @@ selection, and both interactive and audit inference.
   remains auditable without mixing retained inactive strategies.
 - Load the conditional-INR ensemble through the installed package's private
   `yadof.surrogate.conditional_inr` implementation boundary.
+- Delegate a uniquely selected hierarchical-CAE namespace to
+  `hierarchical_checkpoints.py`; reject ambiguous active component scopes instead of
+  mixing checkpoint methods.
 - Predict member flat arrays, reconstruct mean/member rawData, and calculate current
   costs.
 - Query a modeled slot at arbitrary physical coordinates and build mean/member

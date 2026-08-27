@@ -44,8 +44,10 @@ row for every stored dimension. Zero to two checked dimensions are retained as
 plot axes; each unchecked dimension offers both a stored-coordinate dropdown and a
 free numeric entry. Requests whose fixed values are stored coordinates reuse the
 already predicted full rawData. A non-grid fixed value queries the same conditional
-INR at that physical coordinate, interpolates checkpoint target-scaler arrays, and
-returns plot-only member values. Recorded truth is omitted for that rawData plot
+INR at that physical coordinate and interpolates checkpoint target-scaler arrays,
+or queries a coordinate-enabled hierarchical CAE at all declared in-domain axes.
+Both return plot-only member values and preserve the checkpoint state. Recorded
+truth is omitted for that rawData plot
 because the requested coordinate was never recorded; objective bars continue to
 use the unchanged full-grid reconstruction.
 

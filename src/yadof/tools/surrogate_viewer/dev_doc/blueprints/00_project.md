@@ -44,17 +44,19 @@ one complete cross-generation audit
 ## End-To-End Responsibilities
 
 1. Load one explicit compatible yadof workspace.
-2. Resolve the workspace's active strategy pointer and discover usable
-   `conditional-inr` checkpoint generations only within that scope while excluding
-   broken/skipped placeholders.
+2. Resolve the workspace's active strategy pointer, select one compatible declared
+   `conditional-inr` or experimental `hierarchical-cae` component namespace, and
+   discover usable generations only within that scope while excluding broken/skipped
+   placeholders. Never mix methods in one view.
 3. Present normalized parameter controls while displaying denormalized physical
    values.
 4. List every dimension of the selected rawData output; accept zero to two plot
    dimensions and a stored-grid or arbitrary finite fixed coordinate for every
    remaining dimension.
 5. Predict rawData and current costs in a background worker.
-6. Reuse the legacy full-grid slice or query the decoder at off-grid coordinates,
-   then display a scalar, curve, or filled two-dimensional color contour.
+6. Reuse the method's full-grid slice or query its supported off-grid path
+   (conditional decoder/scaler or hierarchical all-axis in-domain readout), then
+   display a scalar, curve, or filled two-dimensional color contour.
 7. Optionally load one recorded individual for true/predicted comparison.
 8. Sample each historical generation independently for an audit.
 9. Use every checkpoint to predict the same selected rows.

@@ -7,12 +7,14 @@ read-only values and use-case methods suitable for a desktop viewer.
 
 ## Functionalities
 
-- Resolve the active strategy and discover valid saved checkpoints from its
-  declared `conditional-inr` run/component namespace in generation order.
+- Resolve the active strategy, select one compatible declared conditional-INR or
+  experimental hierarchical-CAE run/component namespace, and discover its valid
+  saved checkpoints in generation order without mixing methods.
 - Load effective workspace configuration, parameters, objectives, records, and one
   rawData template.
 - Validate a checkpoint against current parameter names and rawData schema.
-- Load conditional-INR artifacts onto the configured device.
+- Dispatch to the method-specific adapter and load conditional-INR or
+  hierarchical-CAE artifacts onto the configured device.
 - Predict reconstructed rawData, optional ensemble-member samples, and current
   costs.
 - Load true samples/costs for recorded comparisons.
@@ -23,8 +25,10 @@ read-only values and use-case methods suitable for a desktop viewer.
 - Derive display matrices from small in-memory aggregate arrays.
 - Describe every named or index-fallback dimension of generic rawData.
 - Extract user-selected zero-, one-, or two-dimensional stored-grid slices.
-- Query one rawData slot at arbitrary fixed physical coordinates and convert the
-  resulting member grids into plot values.
+- Query one rawData field at supported fixed physical coordinates and convert the
+  resulting member grids into plot values. Conditional INR retains its existing
+  coordinate/scaler semantics; hierarchical CAE requires an architecture-v2
+  coordinate readout, covers every declared axis, and rejects out-of-domain values.
 - Derive pointwise finite minimum/maximum bounds from compatible ensemble-member
   slices for interactive display.
 
@@ -76,8 +80,10 @@ Non-finite error elements add neither sum nor count.
 - The workspace detects stored fixed coordinates before querying. This preserves
   the old full-grid path exactly and suppresses recorded truth only for off-grid
   plots.
-- Off-grid inverse scaling linearly interpolates checkpoint target mean/scale;
-  checkpoint files and the optimizer/audit reconstruction path are not changed.
+- Conditional-INR off-grid inverse scaling linearly interpolates checkpoint target
+  mean/scale. Hierarchical CAE uses its per-field scaler and coordinate readout.
+  Checkpoint files and the optimizer/audit full-grid reconstruction path are not
+  changed by either method.
 
 ## Mutability Profile
 
@@ -86,6 +92,7 @@ evolve. Workspace read-only behavior, schema validation, array axis meaning,
 current-cost interpretation, cancellation semantics, and no-partial-audit
 publication should remain stable.
 
-Package-internal imports from `yadof.surrogate.conditional_inr` are an intentional
-adapter boundary. They may change with the owning surrogate/rawData implementation,
-but must not leak into UI modules or become an external viewer API.
+Package-internal imports from `yadof.surrogate.conditional_inr` and
+`yadof.surrogate.hierarchical_cae` are intentional method-adapter boundaries. They
+may change with the owning surrogate/rawData implementation, but must not leak into
+UI modules or become an external viewer API.

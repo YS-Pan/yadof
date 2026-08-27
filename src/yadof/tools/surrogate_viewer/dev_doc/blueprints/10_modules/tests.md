@@ -7,11 +7,13 @@ optimization, or full model audit in the default suite.
 
 ## Functionalities
 
-- Check valid checkpoint discovery, sorting, and malformed-file skipping.
+- Check conditional-INR and hierarchical-CAE checkpoint discovery/dispatch, sorting,
+  method isolation, and malformed-file skipping.
 - Check scalar rawData plus user-selected 0D/1D/2D slices from higher-rank data,
   including stored fixed dimensions and the two-axis limit.
-- Check that stored-grid direct queries equal the checkpoint-grid decoder/scaler result and
-  that an intermediate coordinate produces an additional physical prediction.
+- Check that stored-grid direct queries equal each method's checkpoint-grid result,
+  conditional-INR retains its decoder/scaler semantics, and hierarchical CAE covers
+  all declared axes, rejects out-of-domain values, and preserves model state.
 - Check fixed-coordinate dropdown values and preservation of arbitrary finite text
   input.
 - Check ensemble finite minimum/maximum derivation for curves and surfaces.

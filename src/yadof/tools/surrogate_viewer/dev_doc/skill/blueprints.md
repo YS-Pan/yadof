@@ -34,6 +34,8 @@ blueprints/20_files/<source path>.md
 File blueprints mirror source paths. For example,
 `blueprints/20_files/backend/checkpoints.py.md` describes
 `backend/checkpoints.py`.
+`blueprints/20_files/backend/hierarchical_checkpoints.py.md` describes the separate
+experimental hierarchical-CAE reader and all-axis coordinate path.
 
 Recommended module sections are:
 

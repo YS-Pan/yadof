@@ -15,8 +15,9 @@
    same color scale.
 
 Acceptance behavior: the UI remains responsive, superseded results are ignored,
-stored coordinates preserve legacy grid predictions, non-grid coordinates produce
-a direct decoder query without a fabricated recorded overlay, filled
+stored coordinates preserve method-specific full-grid predictions, non-grid
+coordinates produce a supported conditional decoder or hierarchical all-axis
+readout query without a fabricated recorded overlay, filled
 two-dimensional plots have no contour lines, and no workspace file changes.
 
 ## Compare With A Real Individual

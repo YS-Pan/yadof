@@ -49,8 +49,11 @@ behavior rather than application logic.
 - `workspace.py` loads records, task definitions, and the active strategy scope,
   caches one interactive predictor, samples history, and orchestrates audit
   aggregation.
-- `checkpoints.py` discovers checkpoint metadata, validates compatibility, loads
-  artifacts, and performs batched inference.
+- `checkpoints.py` owns generic discovery/dispatch plus conditional-INR compatibility,
+  loading, coordinate queries, and batched inference.
+- `hierarchical_checkpoints.py` validates and loads hierarchical-CAE artifacts,
+  preserves their full-grid audit/cost path, and provides all-axis in-domain
+  coordinate plots for coordinate-enabled checkpoints.
 - `rawdata.py` copies templates, flattens true samples against checkpoint slots,
   aggregates errors by rawData item, and extracts display curves.
 - `types.py` defines the data passed between backend and UI, including derivation of

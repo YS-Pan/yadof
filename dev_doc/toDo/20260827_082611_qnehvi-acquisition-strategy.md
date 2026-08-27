@@ -165,11 +165,13 @@ strategy 内增加窄 adapter；不新增通用 public `search.propose_pool()` �
 8. 保存 compact strategy/acquisition metadata：backend/version、pool/draw/support sizes、
    seed、reference point、baseline count、timings、fallback 和失败统计。
 
-### Applicability exploitation gate handoff（来自 082608 Gate 0 v5）
+### Applicability exploitation gate handoff（来自 082608 Gate 0 v5--v7）
 
-当前前置条件未满足：082608 v5 的 full-grid/quality gate 失败，coordinate/offline-test 被阻塞，
-082609 尚未在独立 calibration designs 上产出可用 probability capability。因此这里不得先把
-当前 experimental head 接入 exploitation，也不得用 v5 validation diagnostics 临时决定阈值。
+当前生产前置条件仍未满足：082608 v5 的 full-grid/quality gate 失败；v6/v7 虽已证明
+experimental coordinate/viewer/offline-test 机制可运行，却没有接受其性能，082609 也尚未在
+独立 calibration designs 上产出可用 probability capability。因此本 TODO 可以让接口 plumbing
+面向未来 typed calibrated capability，但不得把当前 experimental head 接入 exploitation，也
+不得用 v5 validation 或 v7 offline 描述性结果临时决定阈值。
 
 - 低 `P(smooth)` 候选不得无条件进入 qNEHVI exploitation pool；按实现前封存的 policy 将其
   排除或作保守处理。该 policy、概率版本和阈值属于 strategy semantic identity。
@@ -179,8 +181,9 @@ strategy 内增加窄 adapter；不新增通用 public `search.propose_pool()` �
   高方差 chatter 区。也禁止用 training loss、cost 或 member min/max 替代校准概率。
 - applicability gate 只消费 082609 产出的显式 typed capability；本 TODO 不重新训练分类器，
   不改变 zero-observation-noise 与 persistent function-draw identity。
-- 只有后续 architecture 通过 082608 successor gate、082609 校准并冻结 signature/threshold
-  后，本 TODO 才能预注册低 `P(smooth)` 的排除/保守规则和真实 exploration quota；所有低
+- 只有某一 architecture 通过独立 performance gate、082609 在独立 calibration designs 上校准
+  并冻结 signature/policy/threshold 后，本 TODO 才能预注册低 `P(smooth)` 的排除/保守规则和
+  真实 exploration quota；所有低
   applicability/boundary exploration 仍必须走真实公共 evaluator，以免分类器形成永久盲区。
 
 ## qNEHVI 语义细节

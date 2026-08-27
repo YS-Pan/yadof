@@ -379,13 +379,21 @@ older INR hyperparameter configurations remain viewable because the artifact's o
 persisted train config is used. For each
 rawData output it lists every dimension: select zero, one, or two as plot axes and
 enter coordinates for the remaining dimensions. Each fixed dimension has both a
-checkpoint-grid dropdown and an arbitrary finite-value entry. Stored values
-preserve the checkpoint's original full-grid prediction path; off-grid values
-directly query the same conditional INR and interpolate its stored per-coordinate
-target scaler. The interactive plot then shows a scalar value, a curve, or a
+checkpoint-grid dropdown and a finite-value entry. Stored values preserve the
+checkpoint's original full-grid prediction path. Conditional-INR checkpoints query
+their decoder at off-grid values and interpolate the stored per-coordinate target
+scaler; coordinate-enabled hierarchical-CAE checkpoints query their task-neutral
+all-axis coordinate readout and reject values outside the stored domain. A workspace
+view selects one compatible active component namespace and never mixes methods.
+The interactive plot then shows a scalar value, a curve, or a
 filled two-dimensional color contour without contour lines. Recorded truth is
 omitted for off-grid rawData positions because no such evidence exists. Continuous
 task parameters remain independently queryable between recorded samples.
+
+Hierarchical coordinate checkpoints are explicitly experimental and
+performance-not-accepted. Their full-grid decoder remains authoritative for the
+objective bars, audit, optimizer, and posterior; the coordinate path is a read-only
+viewer/off-grid capability and does not imply that Gate 0 v5 passed.
 
 The two terminal modes are intended for people and AI agents that need analysis
 without a window:

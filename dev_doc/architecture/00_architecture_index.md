@@ -56,8 +56,12 @@ declarative diagnostic/shape fallbacks into field weights, shared-token masks,
 gated private residuals, and an uncalibrated applicability head. Original rawData
 and current-cost interpretation remain unchanged. Gate 0 v5 found the first MVP
 below its preregistered representation and clean-target leakage thresholds, so it
-is retained for experiments but is not a production recommendation; coordinate
-readout, viewer integration, calibration, and qNEHVI consumption remain blocked.
+is retained for experiments but is not a production recommendation. A distinct
+Gate 0 v6/v7 continuation completed a per-field, all-axis coordinate readout,
+viewer adapter, and fixed offline path only as
+`experimental / performance-not-accepted`; full-grid output remains authoritative.
+Calibration requires a separate exact-state preregistration, and qNEHVI exploitation
+remains blocked until performance and independent calibration gates pass.
 
 The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
 external simulator installation. Its JSON/NPZ subprocess protocol, environment

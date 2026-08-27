@@ -74,9 +74,11 @@ rawData/current costs, compares selected recorded individuals, and calculates
 cancellable in-memory cross-generation error aggregates. Its backend alone adapts
 package checkpoint, recorded-data, and rawData internals; this includes describing
 every rawData dimension, extracting user-selected 0D/1D/2D stored-grid slices, and
-requesting conditional-INR values at arbitrary fixed coordinates. Stored-grid
-selections keep the checkpoint-grid reconstruction path; off-grid selections interpolate
-checkpoint scaler arrays and do not claim recorded truth. UI modules consume
+dispatching fixed-coordinate queries to the selected conditional-INR or experimental
+hierarchical-CAE checkpoint adapter. Stored-grid selections keep each method's
+checkpoint-grid reconstruction path; conditional-INR off-grid selections interpolate
+checkpoint scaler arrays, while coordinate-enabled hierarchical CAE uses its declared
+all-axis in-domain readout. Neither path claims recorded truth. UI modules consume
 immutable viewer values and render scalars, curves, or two-dimensional color plots.
 `report.py` turns backend metadata and selected audit matrices into stable terminal
 text or schema-versioned JSON, using `null` for missing finite aggregates and
