@@ -11,6 +11,9 @@
 - Create one immutable generation task snapshot per boundary, validate stable
   parameter/objective shapes, and reinterpret history only when its interpretation
   fingerprint changes.
+- Expose transient named rawData samples, including exact direct `.npz` basenames,
+  for schema adapters that must freeze selector identity. This read view neither
+  changes persistence nor retains a second evidence store.
 - Admit owned envelopes against exact candidate and conservative byte budgets;
   producers wait when capacity is full while one writer batches by run/generation
   and selected limits.

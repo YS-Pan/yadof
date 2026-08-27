@@ -46,6 +46,7 @@ from .modeling import (
     MODEL_NAME,
     fit_deep_ensemble_conditional_inr,
     load_inr_artifacts,
+    member_list,
     predict_conditional_inr_members,
 )
 
@@ -719,14 +720,18 @@ def _select_device(config: LoadedConfig) -> torch.device:
     return torch.device("cpu")
 
 
-def _predict_member_flats(state: SurrogateState, x: np.ndarray) -> np.ndarray:
+def _predict_model_flats(
+    state: SurrogateState,
+    x: np.ndarray,
+    model: object,
+) -> np.ndarray:
     if state.model is None or state.schema is None or state.scaler is None or state.schema.flat_dim == 0:
         flat_dim = 0 if state.schema is None else int(state.schema.flat_dim)
         return np.zeros((1, x.shape[0], flat_dim), dtype=np.float64)
     if state.train_cfg is None or state.device is None:
         raise ValueError("surrogate state is missing train config or device")
     scaled = predict_conditional_inr_members(
-        model=state.model,
+        model=model,
         X=np.ascontiguousarray(x, dtype=np.float32),
         coord_table=state.schema.coord_table,
         field_ids=state.schema.field_ids,
@@ -735,6 +740,28 @@ def _predict_member_flats(state: SurrogateState, x: np.ndarray) -> np.ndarray:
         query_batch=max(1, int(state.train_cfg.query_batch_eval)),
     )
     return state.scaler.inverse_members(scaled)
+
+
+def _predict_member_flats(state: SurrogateState, x: np.ndarray) -> np.ndarray:
+    return _predict_model_flats(state, x, state.model)
+
+
+def _predict_selected_member_flat(
+    state: SurrogateState,
+    x: np.ndarray,
+    member_index: int,
+) -> np.ndarray:
+    """Predict one complete ensemble member without changing legacy outputs."""
+
+    if state.model is None:
+        raise ValueError("surrogate state has no model")
+    members = member_list(state.model)
+    selected = int(member_index)
+    if selected < 0 or selected >= len(members):
+        raise IndexError(
+            f"conditional-INR member index {selected} is outside [0, {len(members)})"
+        )
+    return _predict_model_flats(state, x, members[selected])[0]
 
 
 def train(

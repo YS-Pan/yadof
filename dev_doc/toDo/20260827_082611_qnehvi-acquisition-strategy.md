@@ -18,7 +18,7 @@
 - 至少一个实现该协议的 surrogate：推荐
   [分层 CAE 拟合器](20260827_082608_hierarchical-cae-rawdata-surrogate.md) 和
   [校准 posterior](20260827_082609_coherent-posterior-sampling-calibration.md)；
-  [conditional-INR adapter](20260827_082610_conditional-inr-posterior-adapter.md) 作为先完成
+  [conditional-INR adapter](../obsolete/20260827_082610_conditional-inr-posterior-adapter.md) 作为先完成
   backend spike 的有限兼容路径，而不是生产推荐模型。
 
 ## 目标模块边界
@@ -85,6 +85,33 @@ conditional-INR adapter 完成一个小型 backend spike：
 - 失败时只调整 adapter/模块边界，不先写一套自有 hypervolume 数值层。
 
 该 spike 是实现 gate，不要求先有 1000--2000 条 CAE 训练数据。
+
+## Gate 2 backend spike 执行状态（2026-08-27）
+
+Gate 2 的 library/API spike 已完成，详细审计、ownership matrix、数值对照和
+pool × draw × objective 测量见
+[change record](../change_records/20260827_152421_conditional-inr-posterior-and-qlognehvi-spike.md)：
+
+- 选择 MIT BoTorch 0.18.1 的
+  `qLogNoisyExpectedHypervolumeImprovement`，声明独立 `qnehvi` extra，并保持普通
+  `yadof.optimize`/GPSAF/real-search import 不加载 Torch/BoTorch；
+- fake sample-backed `EnsembleModel`/`EnsemblePosterior` 与 conditional-INR adapter
+  的 current-cost samples 均可进入同一 backend；fixed real baseline、zero observation
+  noise、minimization 只取反一次、默认 reference `(1, ..., 1)`、q=1/q=2 和 seed 已验证；
+- zero-noise fixed-baseline 结果与 BoTorch qLogEHVI 对照在 `1e-4` 内；独立打乱一个
+  objective 的 draw 会改变结果，证明实现保留联合 sample pairing；
+- invalid candidate 采用整 MC draw 拒绝，有限 `1.0` 仍有效；有限有效支持度可显式
+  `warn` 或 `reject`；
+- mature backend spy 证明 hypervolume/partitioning/log-improvement 数值循环仍归 BoTorch；
+  yadof 只拥有输入验证、lookup/sample adapter、方向转换、mask/support policy 和 compact
+  diagnostics；
+- CPU warm-process 测量已覆盖 64×16×2、256×32×2、128×32×3，未保存 predicted
+  rawData，也未启动真实 simulator campaign。
+
+本次仅完成本 TODO 的 backend spike gate。尚未实现 `qnehvi()` factory、candidate-pool
+复用、`posterior_assisted()` generation orchestration、exploration/fallback、common real
+evaluation/recording、完整 strategy identity/state 或同预算 benchmark，因此本 TODO 保持
+active，不得归档。
 
 ### 离散候选池是首版边界
 

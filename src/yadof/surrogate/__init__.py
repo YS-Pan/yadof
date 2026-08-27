@@ -1,6 +1,7 @@
 from . import conditional_inr as _conditional_inr_package
 from .api import (
     ConditionalINRComponent,
+    ConditionalINRPosteriorAdapter,
     MaterializedRawDataPosterior,
     RAWDATA_POSTERIOR_PROTOCOL,
     RAWDATA_POSTERIOR_PROTOCOL_VERSION,
@@ -12,6 +13,7 @@ from .api import (
     SUPPORT_CONTINUOUS_OR_UNKNOWN,
     SUPPORT_FINITE,
     conditional_inr,
+    conditional_inr_posterior,
     deactivate_workspace,
     ensure_fresh_enough,
     has_trained_state,
@@ -30,6 +32,7 @@ from .api import (
 
 __all__ = [
     "ConditionalINRComponent",
+    "ConditionalINRPosteriorAdapter",
     "MaterializedRawDataPosterior",
     "RAWDATA_POSTERIOR_PROTOCOL",
     "RAWDATA_POSTERIOR_PROTOCOL_VERSION",
@@ -41,6 +44,7 @@ __all__ = [
     "SUPPORT_CONTINUOUS_OR_UNKNOWN",
     "SUPPORT_FINITE",
     "conditional_inr",
+    "conditional_inr_posterior",
     "deactivate_workspace",
     "ensure_fresh_enough",
     "has_trained_state",

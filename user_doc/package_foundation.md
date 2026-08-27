@@ -16,6 +16,7 @@ processes. Add extras only for features you use:
 ```powershell
 python -m pip install .\dist\yadof-0.4.1-py3-none-any.whl
 python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[qnehvi]"
 python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[viewer]"
 ```
 
@@ -25,6 +26,13 @@ the `surrogate` extra (or `viewer`, which includes Torch) before using the defau
 workspace whose complete strategy intentionally selects no surrogate component;
 strategy validation reports a missing selected backend without importing it
 eagerly from package parent modules.
+
+The separate `qnehvi` extra is currently an experimental backend-spike dependency,
+not a complete strategy or package default. It declares Torch directly and BoTorch
+0.18.x; that BoTorch series requires Python 3.11 or newer even though core yadof
+continues to support Python 3.10. Ordinary real search, GPSAF, conditional INR, and
+`import yadof.optimize` do not import BoTorch. Install this extra only to run the
+discrete sample-backed qLogNEHVI compatibility surface or its validation tests.
 
 `yadof --version` and `yadof version` report the same package version. Distributed
 jobs do **not** carry the yadof package, wheel, source tree, or runtime archive.

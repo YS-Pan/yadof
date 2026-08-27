@@ -12,6 +12,7 @@ import uuid
 
 from ..config import LoadedConfig
 from ..job_template import api as job_template_api
+from ..job_template.rawdata_contract import NamedRawDataItem
 from ..task_snapshot import (
     RECORDER_CONFIG_NAMES,
     GenerationTaskSnapshot,
@@ -537,6 +538,44 @@ class CampaignSession:
             except Exception:
                 continue
             output.append((name, tuple(dict(item.payload) for item in items)))
+        return tuple(output)
+
+    def named_rawdata_samples(
+        self,
+        *,
+        job_names: Sequence[str] | None = None,
+        status: str | None = None,
+    ) -> tuple[tuple[str, tuple[NamedRawDataItem, ...]], ...]:
+        """Return transient evidence with its stable direct ``.npz`` basenames.
+
+        This is the named counterpart of :meth:`rawdata_samples`. It does not
+        change the recorded-data format or retain another evidence copy; callers
+        that need long-lived ownership must freeze or copy the returned payloads.
+        """
+
+        requested = set(job_names) if job_names is not None else None
+        output = []
+        with self._state_lock:
+            rows = tuple(self._rows.values())
+        for row in rows:
+            name = str(row.record.get("job_name", ""))
+            if requested is not None and name not in requested:
+                continue
+            if status is not None and str(row.record.get("status")) != status:
+                continue
+            try:
+                items = self._evidence(row)
+            except Exception:
+                continue
+            output.append(
+                (
+                    name,
+                    tuple(
+                        NamedRawDataItem(item.filename, dict(item.payload))
+                        for item in items
+                    ),
+                )
+            )
         return tuple(output)
 
     def counters(self) -> dict[str, object]:

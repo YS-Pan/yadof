@@ -55,6 +55,18 @@ lock automatically generated run-directory names to a digits-only UTC
   schema rejection, streamed/materialized projector equivalence, finite task
   fallback validity, typed invalid outcomes, recorder non-entry, semantic identity,
   and optional-backend lazy imports;
+- conditional-INR posterior adapter coverage for draw counts below/equal/above the
+  ensemble size, seeded permutation cycles, exact selected-member full-grid and
+  derived-cost parity, duplicate/permutation/chunk invariance, nominal/effective
+  support, member-failure isolation without field splicing, bounded diagnostics,
+  unchanged legacy identity/API, and direct projection into the Gate 2 backend;
+- fake sample-backed qLogNEHVI coverage against BoTorch's own qLogEHVI zero-noise
+  fixed-baseline limit: minimization negated exactly once, reference point, q=1/q=2,
+  deterministic seed, aligned correlated draws, whole-draw invalid rejection,
+  finite `1.0`, finite-support warn/reject, empty/duplicate/backend-missing cases,
+  mature-backend spy ownership, compact memory/timing diagnostics, and lazy parent
+  imports. These tests validate a backend spike, not a complete strategy or
+  acquisition-quality claim;
 - CLI/docs, integrated cost/time views including grouped `view all`,
   the 50-generation run default, default-on run progress with an explicit quiet
   override, per-generation successful/error/remaining outcome counts, streamed

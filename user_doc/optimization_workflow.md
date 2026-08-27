@@ -200,8 +200,9 @@ normalized candidate
 The installed package exposes a lightweight protocol for future surrogate and
 acquisition components that need joint rawData function draws. This is framework
 infrastructure, not a new selectable strategy: the current template still composes
-conditional INR with GPSAF, and conditional-INR posterior adaptation, CAE, and
-qNEHVI remain separate opt-in implementation work.
+conditional INR with GPSAF. Conditional INR now has a separate opt-in posterior
+adapter and a discrete qLogNEHVI backend compatibility spike exists; CAE and the
+complete posterior-assisted/qNEHVI strategy remain separate implementation work.
 
 A posterior-capable component creates one persistent sampler with a draw count and
 seed. The sampler fixes every draw's underlying function identity before candidates
@@ -229,6 +230,35 @@ Finite ensembles report their real distinct support even when draws repeat;
 continuous or unknown support reports `unique_support=None`. Importing
 `yadof.surrogate`, `yadof.optimize`, or these protocol types does not load Torch,
 BoTorch, or another optional numerical backend.
+
+### Conditional-INR compatibility adapter
+
+`conditional_inr_posterior()` explicitly wraps the existing conditional-INR
+component for a future posterior consumer. It does not replace
+`conditional_inr()` in the package template and does not change GPSAF, mean rawData,
+mean costs, min/max intervals, training, viewer behavior, or checkpoint
+compatibility. Its persistent sampler selects one ensemble member per seeded draw
+and keeps that member fixed across candidate chunks, all rawData fields, and all
+derived objectives. Prediction reconstructs only the complete stored grid.
+
+This is a finite empirical ensemble, not a calibrated posterior. Nominal
+`unique_support` is the loaded distinct member count (normally three under the
+default training configuration); requesting more draws repeats member sources and
+adds no information. Diagnostics also report effective distinct sources after
+member inference and current-cost projection. A member failure invalidates its
+complete candidate draw rather than filling fields from another member. Any future
+strategy must explicitly warn, reject, or fall back when that effective support is
+below its declared policy.
+
+The installed experimental `yadof.optimize.qnehvi_backend` module can score fixed
+caller-supplied discrete batches using projected joint objective samples and a
+fixed completed baseline. It uses BoTorch qLogNEHVI, treats finite task cost `1.0`
+as valid, rejects incomplete MC draws as a whole, and retains only compact
+acquisition diagnostics. It is a Gate 2 library/API spike: it does not propose a
+candidate pool, compose `posterior_assisted(...)`, handle pending/outcome
+constraints, choose a real-search fallback, submit/evaluate candidates, or record
+evidence. Do not put it in `build_optimization()` as though it were a complete
+strategy.
 
 Every objective in that tuple must normally be a dimensionless minimization cost
 in `[0, 1]`, independently normalized from its physical metric: `0` is best and `1`

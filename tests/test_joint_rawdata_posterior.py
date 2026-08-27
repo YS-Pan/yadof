@@ -597,9 +597,9 @@ def test_posterior_identity_is_semantic_and_parent_imports_stay_lazy() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert json.loads(completed.stdout) == []
 
-    # The separate conditional-INR adapter remains future work: its old component
-    # identity and GPSAF-facing tuple API are intentionally untouched here.
-    from yadof.surrogate import conditional_inr
+    # The opt-in adapter is posterior-capable without changing the old component
+    # identity or GPSAF-facing tuple API.
+    from yadof.surrogate import conditional_inr, conditional_inr_posterior
 
     component = conditional_inr()
     assert not isinstance(component, RawDataPosteriorSurrogate)
@@ -607,3 +607,4 @@ def test_posterior_identity_is_semantic_and_parent_imports_stay_lazy() -> None:
     assert component.semantic_identity(DEFAULT_CONFIG, object())[
         "component_version"
     ] == 2
+    assert isinstance(conditional_inr_posterior(), RawDataPosteriorSurrogate)

@@ -6,6 +6,9 @@
 ## Functionalities
 - Load training bundles from `recorded_data.api`.
 - Flatten numeric rawData slots into conditional-INR query tables and reconstruct predicted rawData.
+- Keep one controlled private selected-member prediction helper that reuses the
+  existing model forward and scaler inverse path for the posterior adapter without
+  changing the legacy member-major or mean prediction outputs.
 - Query one modeled rawData slot at arbitrary physical axis coordinates without
   mutating its checkpoint schema.
 - Pass only compatible recorded real rows and their query-table field identities to

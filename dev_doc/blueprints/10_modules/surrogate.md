@@ -20,8 +20,8 @@ posterior-assisted strategy available by itself.
   identity, and the draw/candidate-chunk streaming projection helper. It imports no
   Torch, BoTorch, pymoo algorithm, or concrete surrogate runtime.
 - `conditional_inr/` owns model construction/training, rawData adaptation,
-  runtime state, staggered scheduling, checkpoint publication, metadata, and
-  private in-memory types.
+  runtime state, staggered scheduling, checkpoint publication, metadata, the
+  private finite-member posterior adapter, and private in-memory types.
 - Importing the parent package must not load Torch. The public
   `conditional_inr()` factory remains callable even after private
   `surrogate.conditional_inr.*` modules are loaded.
@@ -41,17 +41,38 @@ Fields are identified only by `(direct .npz basename including .npz, resolved
 values/data main key)`. `RawDataPosteriorDiagnostics` records posterior kind,
 requested/actual draw counts, seed, draw/source IDs, honest `finite` versus
 `continuous_or_unknown` support, schema/state/strategy signatures, approximation
-limits, observation-noise status, supported selectors, candidate count, and bounded
-failures. Continuous/unknown support uses `unique_support=None`; repeated draws from
-a finite ensemble do not increase its integer support.
+limits, observation-noise status, supported selectors, candidate count, bounded
+failures, and per-evaluation effective support. Continuous/unknown support uses
+`unique_support=None`; repeated draws from a finite ensemble do not increase its
+integer support. Effective finite support counts distinct drawn sources that remain
+complete for the requested candidates and, after projection, current cost.
 
 `project_rawdata_sampler()` streams candidate chunks and then individual draws
 through an injected `RawDataCostProjector`. It retains only
 `[draw,candidate,objective]`, valid masks, and bounded diagnostics. Posterior rawData
 never enters finalization or recording. A component/backend version or controlled
-posterior parameter belongs in the component/strategy semantic identity. Adding a
-future adapter cannot alter the existing conditional-INR GPSAF identity unless that
-adapter is explicitly selected by another strategy.
+posterior parameter belongs in the component/strategy semantic identity. The
+explicit `conditional_inr_posterior()` wrapper has its own component/capability
+identity and cannot alter the existing conditional-INR GPSAF identity unless that
+wrapper is explicitly selected by another strategy.
+
+## Conditional-INR posterior adapter
+
+The adapter obtains exact direct `.npz` basenames from transient named campaign
+evidence and combines them with the trained state's frozen templates. It rejects a
+state whose modeled slot is not the resolved main array because posterior axes,
+units, and metadata must remain frozen. A seeded permutation-cycle policy fixes one
+loaded ensemble member for every requested draw. Repeated cycles preserve their
+member source IDs and never inflate nominal support.
+
+Each distinct `(member, normalized candidate)` is inferred once per `predict()`
+call using the existing selected-member forward/scaler path, then reconstructed on
+the full stored grid. One-row inference makes the result independent of candidate
+batch composition as well as chunk order/size. A member/candidate failure yields an
+invalid complete sample for every draw using that member; no other member can fill
+one of its fields. The adapter remains uncalibrated, includes no observation noise,
+and does not change mean rawData, mean costs, min/max intervals, viewer behavior,
+model architecture, or checkpoint mathematics.
 
 ## Training data and model
 
@@ -134,5 +155,5 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   independent row/field/objective resampling violates the protocol.
 - Parent imports expose the protocol without loading any optional numerical backend.
 - Conditional-INR's old mean-cost/min-max tuple, GPSAF behavior, model architecture
-  version, and checkpoint signature remain unchanged until its separate posterior
-  adapter is implemented.
+  version, and checkpoint signature remain unchanged by the separately identified
+  posterior adapter.

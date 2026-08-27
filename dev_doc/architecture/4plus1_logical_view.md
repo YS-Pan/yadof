@@ -108,6 +108,15 @@ the frozen cost interpreter and discards the rawData immediately, retaining only
 the smaller `[draw, candidate, objective]` tensor and validity mask. Neither the
 sampler nor projector imports or calls the recorder.
 
+The conditional-INR posterior adapter is an explicit derived view over the loaded
+ensemble: seeded draws retain one member across candidates, fields, and objectives,
+and full-grid reconstruction freezes selector metadata/axes. Its nominal finite
+support is distinct loaded members; its effective support counts distinct drawn
+members that remain complete after inference and cost projection. The experimental
+qLogNEHVI spike consumes only the reduced objective tensor, rejects incomplete
+draws as a whole, and retains no rawData. It proves backend compatibility without
+creating an optimization strategy or new source of truth.
+
 ## Invariants
 
 - Fast/local/distributed evaluators differ in execution transport and intermediate

@@ -108,8 +108,74 @@ class ConditionalINRComponent:
         return runtime.predict_population(context.config.workspace, population)
 
 
+@dataclass(frozen=True, slots=True)
+class ConditionalINRPosteriorAdapter:
+    """Explicit finite-ensemble posterior view over conditional INR.
+
+    The wrapped component keeps its legacy GPSAF identity and tuple API. This
+    adapter has a separate semantic identity so only strategies that opt into the
+    joint posterior enter a new state namespace.
+    """
+
+    component: ConditionalINRComponent = ConditionalINRComponent()
+
+    def validate(self, config, problem) -> None:
+        self.component.validate(config, problem)
+
+    def semantic_identity(self, config, problem) -> Mapping[str, object]:
+        return {
+            "component": "conditional-inr-posterior-adapter",
+            "component_version": 1,
+            "base_surrogate": self.component.semantic_identity(config, problem),
+            "posterior": self.posterior_semantic_identity(config, problem),
+        }
+
+    def posterior_semantic_identity(self, config, problem) -> Mapping[str, object]:
+        del problem
+        return posterior_capability_identity(
+            posterior_kind="empirical_ensemble",
+            support_kind=SUPPORT_FINITE,
+            backend_distribution="torch",
+            backend_version=metadata.version("torch"),
+            controlled_parameters={
+                "configured_member_count": int(
+                    config["SURROGATE_INR_ENSEMBLE_SIZE"]
+                ),
+                "member_selection": "seeded-permutation-cycles-v1",
+                "candidate_evaluation": "fixed-member-full-grid-single-row-v1",
+                "observation_noise_included": False,
+                "calibrated": False,
+            },
+        )
+
+    def ensure_fresh_enough(self, context):
+        return self.component.ensure_fresh_enough(context)
+
+    def has_trained_state(self, context) -> bool:
+        return self.component.has_trained_state(context)
+
+    def start_training(self, context):
+        return self.component.start_training(context)
+
+    def predict_population(self, context, population):
+        return self.component.predict_population(context, population)
+
+    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int):
+        from .conditional_inr.posterior_adapter import make_rawdata_sampler
+
+        return make_rawdata_sampler(
+            context,
+            draw_count=draw_count,
+            seed=seed,
+        )
+
+
 def conditional_inr() -> ConditionalINRComponent:
     return ConditionalINRComponent()
+
+
+def conditional_inr_posterior() -> ConditionalINRPosteriorAdapter:
+    return ConditionalINRPosteriorAdapter()
 
 
 def train(*args, **kwargs):
@@ -161,6 +227,7 @@ def deactivate_workspace(*args, **kwargs):
 
 __all__ = [
     "ConditionalINRComponent",
+    "ConditionalINRPosteriorAdapter",
     "MaterializedRawDataPosterior",
     "RAWDATA_POSTERIOR_PROTOCOL",
     "RAWDATA_POSTERIOR_PROTOCOL_VERSION",
@@ -172,6 +239,7 @@ __all__ = [
     "SUPPORT_CONTINUOUS_OR_UNKNOWN",
     "SUPPORT_FINITE",
     "conditional_inr",
+    "conditional_inr_posterior",
     "deactivate_workspace",
     "ensure_fresh_enough",
     "has_trained_state",

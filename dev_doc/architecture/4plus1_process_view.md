@@ -142,10 +142,30 @@ the backend. Candidate permutations and chunk boundaries cannot change draw
 identity. This path never offers an envelope to the campaign recorder and does not
 alter worker, transport, rawData, or segment formats.
 
-The protocol and projector are currently infrastructure only. Existing
-conditional-INR mean/min-max prediction, GPSAF selection, and checkpoint recovery
-continue on their prior path until separately implemented adapters or strategies
-explicitly select the posterior capability.
+The explicit conditional-INR posterior adapter selects one ensemble member for each
+seeded draw at sampler creation and evaluates that same member one candidate at a
+time on the complete stored grid. A failed member/candidate leaves that complete
+draw/candidate invalid; fields are never borrowed from another member. Nominal
+finite support remains the loaded member count, while per-prediction and
+post-projection diagnostics report effective distinct sources after inference or
+cost failures.
+
+Gate 2 also contains a bounded discrete qLogNEHVI spike:
+
+```text
+fixed completed baseline costs + projected joint candidate costs
+  -> reject any incomplete MC draw as a whole
+  -> negate [0,1] minimization costs/reference exactly once
+  -> sample-backed BoTorch EnsemblePosterior
+  -> BoTorch qLogNoisyExpectedHypervolumeImprovement for supplied q batches
+  -> compact log acquisition values and diagnostics only
+```
+
+The spike has no candidate-pool generator, pending/outcome-constraint surface,
+generation orchestration, fallback real search, evaluator, or recorder call. The
+existing conditional-INR mean/min-max prediction, GPSAF selection, and checkpoint
+recovery continue on their prior path; a complete posterior-assisted strategy
+remains separate work.
 
 ## Generation-boundary task changes
 

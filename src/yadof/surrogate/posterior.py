@@ -50,6 +50,7 @@ class RawDataPosteriorDiagnostics:
     prediction_failure_count: int = 0
     retained_prediction_failures: tuple[Mapping[str, object], ...] = ()
     observation_noise_included: bool = False
+    effective_unique_support: int | None = None
 
     def __post_init__(self) -> None:
         posterior_kind = str(self.posterior_kind)
@@ -93,6 +94,20 @@ class RawDataPosteriorDiagnostics:
             raise ValueError(
                 "finite posterior draw sources exceed reported unique support"
             )
+        effective_support = (
+            None
+            if self.effective_unique_support is None
+            else int(self.effective_unique_support)
+        )
+        if effective_support is not None:
+            if self.support_kind != SUPPORT_FINITE:
+                raise ValueError(
+                    "effective_unique_support is only defined for finite support"
+                )
+            if effective_support < 0 or effective_support > int(unique_support):
+                raise ValueError(
+                    "effective_unique_support must be between zero and unique_support"
+                )
         selectors = tuple(
             (str(selector[0]), str(selector[1]))
             for selector in self.field_selectors
@@ -132,6 +147,7 @@ class RawDataPosteriorDiagnostics:
         object.__setattr__(self, "posterior_kind", posterior_kind)
         object.__setattr__(self, "requested_draw_count", requested)
         object.__setattr__(self, "unique_support", unique_support)
+        object.__setattr__(self, "effective_unique_support", effective_support)
         object.__setattr__(self, "seed", int(self.seed))
         object.__setattr__(self, "draw_ids", ids)
         object.__setattr__(self, "draw_sources", sources)
@@ -164,12 +180,14 @@ class RawDataPosteriorDiagnostics:
         *,
         prediction_failure_count: int = 0,
         retained_prediction_failures: Sequence[Mapping[str, object]] = (),
+        effective_unique_support: int | None = None,
     ) -> "RawDataPosteriorDiagnostics":
         return replace(
             self,
             candidate_count=int(candidate_count),
             prediction_failure_count=int(prediction_failure_count),
             retained_prediction_failures=tuple(retained_prediction_failures),
+            effective_unique_support=effective_unique_support,
         )
 
     def as_dict(self) -> dict[str, object]:
@@ -181,6 +199,7 @@ class RawDataPosteriorDiagnostics:
             "actual_draw_count": self.actual_draw_count,
             "support_kind": self.support_kind,
             "unique_support": self.unique_support,
+            "effective_unique_support": self.effective_unique_support,
             "seed": self.seed,
             "draw_ids": list(self.draw_ids),
             "draw_sources": list(self.draw_sources),
@@ -489,6 +508,15 @@ def project_rawdata_sampler(
             )
 
     source = base.as_dict()
+    complete_draws = (
+        np.all(valid, axis=1)
+        if len(rows)
+        else np.zeros((draw_count,), dtype=bool)
+    )
+    effective_sources = {
+        base.draw_sources[index]
+        for index in np.flatnonzero(complete_draws)
+    }
     source.update(
         {
             "candidate_count": len(rows),
@@ -499,6 +527,12 @@ def project_rawdata_sampler(
             "truncated_prediction_failure_count": max(
                 0,
                 prediction_failure_count - len(retained_prediction_failures),
+            ),
+            "effective_draw_count": int(np.count_nonzero(complete_draws)),
+            "effective_unique_support": (
+                len(effective_sources)
+                if base.support_kind == SUPPORT_FINITE
+                else None
             ),
         }
     )

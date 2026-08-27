@@ -41,9 +41,12 @@ before candidate chunking; every draw reconstructs complete named rawData fields
 identified by `(direct .npz basename, resolved values/data key)`. A thin projector
 uses one frozen current-task `CostInterpreter` to stream those derived draws into a
 joint objective tensor and invalid mask. Predicted rawData is discarded after
-projection and never enters recorded evidence. No current default strategy consumes
-this capability yet; conditional-INR posterior adaptation and posterior-assisted
-acquisition remain separate work.
+projection and never enters recorded evidence. Conditional INR now has a separate
+opt-in finite-ensemble adapter whose identity does not alter the default
+`conditional_inr()`/GPSAF checkpoint path. An experimental discrete backend spike
+proves that fixed real baselines plus these projected joint samples can be consumed
+by BoTorch qLogNEHVI; it is not a complete posterior-assisted strategy, and no
+current default strategy consumes it.
 
 The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
 external simulator installation. Its JSON/NPZ subprocess protocol, environment

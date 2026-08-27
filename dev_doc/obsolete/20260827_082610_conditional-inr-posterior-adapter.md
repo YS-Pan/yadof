@@ -1,5 +1,19 @@
 # 为 conditional-INR 增加联合 posterior 兼容适配器
 
+## 完成状态（2026-08-27）
+
+本工作包已完成并归档。`conditional_inr_posterior()` 以独立 semantic identity 暴露
+conditional-INR 的 finite empirical member draws；seeded persistent sampler、完整 stored-grid
+reconstruction、候选/chunk/permutation identity、nominal/effective support、member failure
+隔离和 bounded diagnostics 均已通过 installed-package 测试。原 `conditional_inr()` component
+version 2、mean rawData、mean costs/min-max intervals、GPSAF、viewer、training/checkpoint 数学
+均保持不变。
+
+Gate 2 还用 fake posterior 与本 adapter 完成了 BoTorch qLogNEHVI backend spike，并验证
+支持度 `warn`/`reject` policy；详细审计与测量见
+[change record](../change_records/20260827_152421_conditional-inr-posterior-and-qlognehvi-spike.md)。
+这不代表完整 qNEHVI strategy 已实现；对应 TODO 仍 active。
+
 ## 背景与已验证现状
 
 - 当前 conditional-INR 是一个联合模型 ensemble。runtime 内部 member prediction 的

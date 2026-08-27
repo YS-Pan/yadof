@@ -28,6 +28,10 @@ keywords = ["optimization", "simulation", "surrogate-model", "workflow"]
 
 [project.optional-dependencies]
 surrogate = ["torch>=2.2,<3"]
+qnehvi = [
+    "torch>=2.4,<3",
+    "botorch>=0.18,<0.19",
+]
 plot = ["matplotlib>=3.8"]
 viewer = [
     "matplotlib>=3.8",

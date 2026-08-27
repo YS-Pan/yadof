@@ -475,8 +475,14 @@ def test_package_metadata_and_source_resources() -> None:
     assert project["requires-python"] == ">=3.10"
     assert project["scripts"] == {"yadof": "yadof.cli:main"}
     assert "psutil>=5.9,<8" in project["dependencies"]
-    assert {"surrogate", "plot", "hfss", "dev"} <= set(project["optional-dependencies"])
+    assert {"surrogate", "qnehvi", "plot", "hfss", "dev"} <= set(
+        project["optional-dependencies"]
+    )
     assert project["optional-dependencies"]["surrogate"] == ["torch>=2.2,<3"]
+    assert project["optional-dependencies"]["qnehvi"] == [
+        "torch>=2.4,<3",
+        "botorch>=0.18,<0.19",
+    ]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
     assert yadof.__version__ == "0.4.1"
 
@@ -683,6 +689,8 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/optimize/gpsaf/records.py" in wheel_names
         assert "yadof/optimize/pymoo/__init__.py" in wheel_names
         assert "yadof/optimize/pymoo/backend.py" in wheel_names
+        assert "yadof/optimize/qnehvi_backend.py" in wheel_names
+        assert "yadof/optimize/_qlognehvi_backend.py" in wheel_names
         assert "yadof/optimize/state.py" in wheel_names
         assert "yadof/optimize/strategy.py" in wheel_names
         assert "yadof/optimize/gpsaf.py" not in wheel_names
@@ -697,6 +705,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/conditional_inr/scheduler.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/metadata.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/types.py" in wheel_names
+        assert "yadof/surrogate/conditional_inr/posterior_adapter.py" in wheel_names
         assert "yadof/surrogate/runtime.py" not in wheel_names
         assert "yadof/surrogate/scheduler.py" not in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names
@@ -746,6 +755,18 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         ) not in wheel_names
         assert "yadof/_resources/docs/dev_doc/README.md" in wheel_names
         assert "yadof/_resources/docs/user_doc/README.md" in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/obsolete/"
+            "20260827_082610_conditional-inr-posterior-adapter.md"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/change_records/"
+            "20260827_152421_conditional-inr-posterior-and-qlognehvi-spike.md"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/toDo/"
+            "20260827_082610_conditional-inr-posterior-adapter.md"
+        ) not in wheel_names
         for source in (REPOSITORY_ROOT / "user_doc").rglob("*"):
             if source.is_file():
                 relative = source.relative_to(REPOSITORY_ROOT / "user_doc").as_posix()
@@ -758,6 +779,9 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert f"Version: {yadof.__version__}" in built_metadata
         assert "Requires-Dist: numpy" in built_metadata
         assert "Requires-Dist: pymoo" in built_metadata
+        assert "Provides-Extra: qnehvi" in built_metadata
+        assert "botorch<0.19,>=0.18" in built_metadata
+        assert "torch<3,>=2.4" in built_metadata
         assert "Provides-Extra: viewer" in built_metadata
         assert not any(name.startswith("project/") for name in wheel_names)
         assert "yadof/cli.py" not in wheel_names

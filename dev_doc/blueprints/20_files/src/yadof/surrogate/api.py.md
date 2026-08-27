@@ -11,6 +11,9 @@
 ## Functionalities
 - Construct `conditional_inr()` with validation, semantic identity, scheduler gate,
   train-after-submit, readiness, and rawData prediction methods required by GPSAF.
+- Construct `conditional_inr_posterior()` as a separate semantic wrapper that
+  delegates legacy lifecycle/prediction calls and lazily creates a persistent
+  finite-member rawData sampler.
 - Lazily forward `train()`, `predict_population()`, `has_trained_state()`, and
   `latest_state_generation()` to `conditional_inr/runtime.py`.
 - Lazily forward scheduler calls, including `deactivate_workspace()`, to
@@ -32,7 +35,7 @@
 - The component semantic version changes whenever architecture/scaler semantics
   would make retained weights unsafe to reuse.
 - Posterior capability identity is separate and must be nested only in a strategy
-  that explicitly selects it; adding a future adapter must not cold-invalidate the
+  that explicitly selects it; the implemented adapter must not cold-invalidate the
   current conditional-INR GPSAF checkpoint identity.
 - Parent import preloads only the empty private-package marker before rebinding the
   same-named public factory, preserving both lazy Torch loading and callable API

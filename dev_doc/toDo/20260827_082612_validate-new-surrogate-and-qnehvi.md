@@ -26,7 +26,7 @@ strategy state、checkpoint 和 viewer。单元测试能够证明格式，却不
 1. **最小联合协议**：完成持久 function sampler、candidate chunk invariance，以及复用
    `CostInterpreter` 的薄 cost projector。
 2. **最早垂直切片**：立即完成
-   [conditional-INR adapter](20260827_082610_conditional-inr-posterior-adapter.md) 和 fake
+   [conditional-INR adapter](../obsolete/20260827_082610_conditional-inr-posterior-adapter.md) 和 fake
    sample-backed qLogNEHVI backend spike，验证库/API/数值边界。
 3. **最小 CAE**：per-field codecs + shared parameter predictor + predictor-only ensemble；
    首个 MVP 同时支持 stable-selector 显式分组，但不加入 attention/native Conv3d。
@@ -77,11 +77,25 @@ evidence。Gate 0 没有启动真实 simulator campaign，也没有把 smoke sha
 
 整个 TODO 仍保持 active，不能移入 obsolete。
 [联合 rawData posterior 契约](../obsolete/20260827_082607_joint-rawdata-posterior-contract.md)的轻量
-sampler/projector 与 fake schema tests 已完成并归档。082608--082611 仍按各自 TODO 的依赖
-和完成规则独立执行；必须继续从通过 Gate 0 validator 的 committed tree 开始并保持
+sampler/projector 与 fake schema tests 已完成并归档；conditional-INR adapter 也已完成
+Gate 2 并归档。082608、082609、082611 仍按各自 TODO 的依赖和完成规则独立执行；必须
+继续从通过 Gate 0 validator 的 committed tree 开始并保持
 inventory 不变（否则新建 preregistration 版本），不得提前作 1000/2000-design 拟合、校准
 或优化性能结论。合法 frozen dataset 只在 Gate 4 前成为硬依赖；正式 test/真实比较
 还必须先封印数值 thresholds 并获得对应 campaign 授权。
+
+## Gate 2 执行状态（2026-08-27）
+
+最早垂直切片已完成：conditional-INR 的显式 finite empirical posterior adapter 与 fake /
+adapter-backed BoTorch qLogNEHVI backend spike 已通过 focused installed-package 验证。完整
+审计、zero-noise 对照、joint draw、invalid/support policy 与资源测量见
+[change record](../change_records/20260827_152421_conditional-inr-posterior-and-qlognehvi-spike.md)。
+
+该 Gate 没有改动 Gate 0 inventory/split/seeds/threshold template，没有读取不存在的 formal
+dataset，没有启动 simulator campaign，也没有产生 CAE、calibration、完整 strategy 或优化
+质量结论。下一执行单元是 Gate 3 的 minimal CAE；Gate 4 前仍需合法 frozen dataset，正式
+test/真实比较前仍需封印数值 thresholds 并取得相应 campaign 权限。本验收 TODO 保持
+active。
 
 ## 基准数据要求
 

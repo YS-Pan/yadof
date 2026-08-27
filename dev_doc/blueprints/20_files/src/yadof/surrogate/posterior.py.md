@@ -11,8 +11,9 @@
   candidate-chunk posterior protocols plus one function-draw container.
 - Validate JSON-safe diagnostics: kind, requested/actual draws, seed, stable
   draw/source IDs, schema/state/strategy signatures, approximation limitations,
-  observation-noise status, exact selectors, candidate/failure counts, and honest
-  finite versus continuous/unknown support.
+  observation-noise status, exact selectors, candidate/failure counts, nominal
+  support, per-prediction effective support, and honest finite versus
+  continuous/unknown support.
 - Build a semantic capability block containing the protocol version, backend
   distribution/version, posterior/support kinds, and all controlled parameters.
 - Stream candidate chunks and then individual rawData draws through an injected
@@ -26,6 +27,9 @@
   and chunking only reorder/partition the same values.
 - Unique finite support counts distinct source functions, not requested draws.
   Continuous or unknown support uses `None` rather than a fabricated integer.
+- Final streaming diagnostics count only distinct sources whose complete draw is
+  valid for every requested candidate after inference and current-cost projection;
+  repeated draws cannot conceal support loss.
 - Empty populations do not call the backend. A chunk-level backend/contract failure
   becomes conservative invalid samples, never favorable acquisition evidence.
 
@@ -34,5 +38,5 @@
 - Import only core Python/NumPy and lightweight job-template types. Parent
   `yadof.surrogate` and `yadof.optimize` imports must not load Torch, BoTorch,
   concrete surrogate runtimes, or pymoo algorithms.
-- The file never records predicted rawData and does not implement CAE,
-  conditional-INR adaptation, calibration, or acquisition.
+- The file never records predicted rawData and does not implement CAE, concrete
+  conditional-INR inference, calibration, or acquisition.

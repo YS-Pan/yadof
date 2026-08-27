@@ -22,6 +22,9 @@ contracts.
   private candidate records.
 - `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
   strategies. Pymoo objects do not cross into the public strategy contract.
+- `qnehvi_backend.py` owns a lightweight experimental scoring boundary;
+  `_qlognehvi_backend.py` owns its optional Torch/BoTorch implementation. Neither
+  file is a public complete-strategy factory or generation orchestrator.
 - The public `gpsaf()` factory remains at `yadof.optimize`; loading private
   `optimize.gpsaf.*` modules must not replace that callable with the subpackage.
 
@@ -44,13 +47,39 @@ durable truth.
 
 The public joint rawData posterior protocol and cost projector are available to a
 future explicitly composed strategy, but optimize currently has no posterior-
-assisted strategy or acquisition component. Such a consumer must require the
+assisted strategy or acquisition component. The Gate 2 discrete qLogNEHVI scorer
+is only a backend compatibility spike. A complete consumer must require the
 runtime-checkable capability rather than probe with `hasattr`, include the
 posterior-capability identity (backend version and every controlled parameter) in
 its strategy identity, consume only projected joint cost samples/valid masks, and
 send every selection through the common real evaluator. Merely adding a posterior
 adapter to a surrogate package must not change the existing GPSAF identity or
 conditional-INR checkpoint namespace.
+
+## Experimental discrete qLogNEHVI backend
+
+`score_discrete_qlognehvi()` accepts fixed completed baseline rows/costs, a
+`JointObjectiveSamples` tensor, and explicit candidate-index batches. It requires
+at least two objectives, a non-empty unique normalized candidate pool, valid
+`[0,1]` minimization costs, a fixed in-contract baseline, and no overlap with
+completed rows. It defaults the cost reference point to all ones and negates costs
+and reference exactly once for BoTorch maximization semantics.
+
+The private lookup `EnsembleModel` repeats each observed baseline cost across the
+same empirical draw axis and exposes aligned candidate draws through
+`EnsemblePosterior`; an enumerating sampler consumes every retained draw exactly
+once. BoTorch `qLogNoisyExpectedHypervolumeImprovement` owns hypervolume,
+partitioning, smoothing, and log-improvement numerics. Yadof groups only supplied
+discrete q batches for evaluation. Any candidate failure rejects its entire MC draw
+conservatively, while a finite task result of `1.0` stays valid. Optional finite
+minimum-support policy either warns or rejects visibly using post-mask distinct
+draw sources.
+
+The result contains only batch indices, log acquisition values, backend/support/
+timing/memory diagnostics. The spike deliberately has no pending points, outcome
+constraints, gradient `optimize_acqf`, candidate-pool mechanics, generation
+fallback, real evaluator, or recorder path. BoTorch remains an independent
+`qnehvi` optional extra and ordinary `import yadof.optimize` does not load it.
 
 Distributed evaluation may invoke the scheduler-specific after-submit hook while
 real jobs are running. Fast creates no scheduler submission and does not fabricate

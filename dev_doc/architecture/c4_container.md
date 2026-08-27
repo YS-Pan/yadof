@@ -101,6 +101,7 @@ fourth evaluation backend. A persistent sampler keeps draw identity across
 candidate chunks and emits complete named rawData samples. The projector validates
 them against the frozen schema template, reuses the generation snapshot's
 `CostInterpreter`, and retains only joint objective samples plus validity and
-bounded diagnostics. Neither node calls the finalizer or recorder, and the current
-GPSAF/conditional-INR path remains unchanged until a separately implemented
-consumer explicitly selects this capability.
+bounded diagnostics. Neither node calls the finalizer or recorder. The opt-in
+conditional-INR adapter and experimental qLogNEHVI scorer now exercise this branch
+without changing the current GPSAF/conditional-INR path; complete posterior-
+assisted orchestration remains separate work.
