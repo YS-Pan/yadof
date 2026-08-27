@@ -10,7 +10,7 @@ from .hierarchical_cae.schema import (
     normalize_field_layouts,
     normalize_groups,
 )
-from .hierarchical_cae.types import CAETrainConfig
+from .hierarchical_cae.types import CAETrainConfig, CoordinatePrediction
 from .quality import (
     ApplicabilityPrediction,
     DiagnosticCondition,
@@ -284,7 +284,9 @@ class HierarchicalCAEComponent:
         del problem
         return {
             "component": "hierarchical-cae",
-            "component_version": 1,
+            "component_version": (
+                2 if self.train_cfg.coordinate_readout else 1
+            ),
             "backend_distribution": "torch",
             "backend_version": metadata.version("torch"),
             "training_policy": "design-split-field-macro-hierarchical-latent",
@@ -297,6 +299,13 @@ class HierarchicalCAEComponent:
                 "enabled": self.quality_policy is not None,
                 "calibrated": False,
                 "observation_noise": "zero",
+            },
+            "coordinate_readout": {
+                "capability": "yadof.hierarchical-cae-coordinate-readout",
+                "capability_version": 1,
+                "enabled": self.train_cfg.coordinate_readout,
+                "authority": "viewer/off-grid-only",
+                "full_grid_decoder_remains_authoritative": True,
             },
         }
 
@@ -378,6 +387,24 @@ class HierarchicalCAEComponent:
 
         return runtime.predict_applicability(
             context.config.workspace, population, component=self
+        )
+
+    def predict_field_at_coordinates(
+        self,
+        context,
+        population,
+        *,
+        field_selector: tuple[str, str],
+        axis_coordinates,
+    ) -> CoordinatePrediction:
+        from .hierarchical_cae import runtime
+
+        return runtime.predict_field_at_coordinates(
+            context.config.workspace,
+            population,
+            component=self,
+            field_selector=field_selector,
+            axis_coordinates=axis_coordinates,
         )
 
 
@@ -463,6 +490,7 @@ __all__ = [
     "ConditionalINRPosteriorAdapter",
     "HierarchicalCAEComponent",
     "CAETrainConfig",
+    "CoordinatePrediction",
     "DiagnosticCondition",
     "DiagnosticRegimeRule",
     "RawDataQualityPolicy",

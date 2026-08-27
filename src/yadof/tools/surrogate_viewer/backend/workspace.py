@@ -16,7 +16,6 @@ from yadof.config import load_config
 from yadof.job_template import api as job_template_api
 from yadof.recorded_data import get_rawdata_samples, list_records
 from yadof.surrogate.conditional_inr.checkpoints import (
-    COMPONENT_NAMESPACE,
     run_namespace_for_signature,
 )
 from yadof.surrogate.conditional_inr.runtime import strategy_signature_for_workspace
@@ -87,7 +86,6 @@ class SurrogateWorkspace:
             self.config.workspace
         )
         self.run_namespace = run_namespace_for_signature(self.strategy_signature)
-        self.component_namespace = COMPONENT_NAMESPACE
         self.checkpoints = discover_checkpoints(
             self.config.workspace.surrogate_checkpoint_dir,
             parameter_definition_signature=(
@@ -97,11 +95,21 @@ class SurrogateWorkspace:
         )
         if not self.checkpoints:
             raise FileNotFoundError(
-                "no trained conditional-INR checkpoints are compatible with the "
+                "no trained surrogate checkpoints are compatible with the "
                 f"active strategy {self.strategy_signature[:16]} below "
                 f"{self.config.workspace.surrogate_checkpoint_dir}; the selected "
                 "strategy may not use a surrogate"
             )
+        component_names = {
+            str(checkpoint.payload.get("component_namespace", ""))
+            for checkpoint in self.checkpoints
+        }
+        if len(component_names) != 1:
+            raise ValueError(
+                "viewer requires one active surrogate component namespace; "
+                f"found {tuple(sorted(component_names))!r}"
+            )
+        self.component_namespace = next(iter(component_names))
 
         definitions = job_template_api.get_parameter_definitions(self.root)
         self.parameters = tuple(
@@ -127,7 +135,7 @@ class SurrogateWorkspace:
             self.real_results[0].job_name
         )
         self.rawdata_names = rawdata_names(self._template_sample)
-        self._predictor: CheckpointPredictor | None = None
+        self._predictor: object | None = None
         self._predictor_lock = threading.RLock()
 
     def _load_real_results(self) -> tuple[RealResult, ...]:
@@ -260,7 +268,7 @@ class SurrogateWorkspace:
         )
         return tuple(float(value) for value in rows[0])
 
-    def _get_predictor(self, generation: int) -> CheckpointPredictor:
+    def _get_predictor(self, generation: int):
         with self._predictor_lock:
             if (
                 self._predictor is None

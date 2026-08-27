@@ -56,7 +56,7 @@ def _json_normalized_mapping(value: Mapping[str, object]) -> dict[str, object]:
     return json.loads(json.dumps(dict(value), sort_keys=True))
 
 
-def discover_checkpoints(
+def _discover_conditional_inr_checkpoints(
     checkpoint_dir: Path,
     *,
     parameter_definition_signature: Mapping[str, object] | None = None,
@@ -163,7 +163,7 @@ class _CheckpointAuditPrediction:
     raw_absolute_counts: np.ndarray
 
 
-class CheckpointPredictor:
+class ConditionalINRCheckpointPredictor:
     """One loaded checkpoint with batched rawData and objective prediction."""
 
     def __init__(
@@ -561,3 +561,68 @@ class CheckpointPredictor:
             raw_absolute_sums=raw_absolute_sums,
             raw_absolute_counts=raw_absolute_counts,
         )
+
+
+def discover_checkpoints(
+    checkpoint_dir: Path,
+    *,
+    parameter_definition_signature: Mapping[str, object] | None = None,
+    strategy_signature: str | None = None,
+) -> tuple[CheckpointInfo, ...]:
+    """Discover compatible conditional-INR and hierarchical-CAE artifacts."""
+
+    from .hierarchical_checkpoints import discover_hierarchical_cae_checkpoints
+
+    combined = (
+        *_discover_conditional_inr_checkpoints(
+            checkpoint_dir,
+            parameter_definition_signature=parameter_definition_signature,
+            strategy_signature=strategy_signature,
+        ),
+        *discover_hierarchical_cae_checkpoints(
+            checkpoint_dir,
+            parameter_definition_signature=parameter_definition_signature,
+            strategy_signature=strategy_signature,
+        ),
+    )
+    selected: dict[tuple[str, str, int], CheckpointInfo] = {}
+    for checkpoint in combined:
+        payload = checkpoint.payload
+        key = (
+            str(payload.get("component_namespace", "")),
+            str(payload.get("run_namespace", "")),
+            int(checkpoint.generation),
+        )
+        previous = selected.get(key)
+        if previous is None or str(payload.get("publication_id", "")) > str(
+            previous.payload.get("publication_id", "")
+        ):
+            selected[key] = checkpoint
+    return tuple(
+        sorted(
+            selected.values(),
+            key=lambda item: (
+                item.generation,
+                str(item.payload.get("component_namespace", "")),
+                str(item.payload.get("run_namespace", "")),
+            ),
+        )
+    )
+
+
+def CheckpointPredictor(
+    workspace: Path,
+    checkpoint: CheckpointInfo,
+    template_sample: Sequence[Mapping[str, object]],
+):
+    """Load the method-specific viewer adapter for a discovered checkpoint."""
+
+    if str(checkpoint.payload.get("surrogate_method", "")) == "hierarchical_cae":
+        from .hierarchical_checkpoints import HierarchicalCAECheckpointPredictor
+
+        return HierarchicalCAECheckpointPredictor(
+            workspace, checkpoint, template_sample
+        )
+    return ConditionalINRCheckpointPredictor(
+        workspace, checkpoint, template_sample
+    )

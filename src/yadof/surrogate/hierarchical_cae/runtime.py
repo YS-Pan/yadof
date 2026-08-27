@@ -33,10 +33,12 @@ from .checkpoints import (
     write_checkpoint,
 )
 from .metadata import monotonic_time, now_text, record_training_success
+from .coordinates import coordinate_grid, interpolate_stored_values
 from .modeling import (
     MODEL_NAME,
     fit_hierarchical_cae,
     load_model_bundle,
+    predict_hierarchical_coordinate_members,
     predict_hierarchical_members,
     unique_design_indices,
 )
@@ -49,6 +51,7 @@ from .schema import (
     standardized_field_matrices,
 )
 from .types import (
+    CoordinatePrediction,
     FieldScaler,
     HierarchicalSchema,
     HierarchicalState,
@@ -789,11 +792,79 @@ def predict_applicability(
     )
 
 
+def predict_field_at_coordinates(
+    workspace: WorkspaceContext | str | Path,
+    population,
+    *,
+    component,
+    field_selector: tuple[str, str],
+    axis_coordinates: Sequence[np.ndarray],
+) -> CoordinatePrediction:
+    """Query the experimental viewer-only trunk without changing full-grid state."""
+
+    config = load_config(workspace)
+    state = _require_state(config, component=component)
+    if not state.train_cfg.coordinate_readout:
+        raise RuntimeError(
+            "the selected hierarchical CAE checkpoint has no coordinate readout"
+        )
+    assert state.schema is not None and state.model is not None
+    assert isinstance(state.device, torch.device)
+    selector = (str(field_selector[0]), str(field_selector[1]))
+    try:
+        field_index = state.schema.field_selectors.index(selector)
+    except ValueError as exc:
+        raise KeyError(selector) from exc
+    layout = state.schema.layouts[field_index]
+    points, output_shape, axes = coordinate_grid(layout, axis_coordinates)
+    rows = _as_population(population)
+    if rows:
+        x = _x_matrix(rows, len(state.parameter_names))
+        standardized = predict_hierarchical_coordinate_members(
+            model=state.model,
+            parameters=x,
+            field_index=field_index,
+            coordinate_points=points,
+            device=state.device,
+            batch_size=state.train_cfg.inference_batch_size,
+            query_batch_size=state.train_cfg.coordinate_query_batch_size,
+        )
+    else:
+        standardized = np.empty(
+            (
+                state.train_cfg.predictor_members,
+                0,
+                int(points.shape[0]),
+            ),
+            dtype=np.float32,
+        )
+    scaler = state.schema.scalers[field_index]
+    means = interpolate_stored_values(layout, scaler.mean, points)
+    scales = interpolate_stored_values(layout, scaler.scale, points)
+    physical = (
+        np.asarray(standardized, dtype=np.float64) * scales[None, None, :]
+        + means[None, None, :]
+    )
+    member_values = np.ascontiguousarray(
+        physical.reshape(
+            (physical.shape[0], physical.shape[1], *output_shape)
+        ),
+        dtype=np.float64,
+    )
+    return CoordinatePrediction(
+        field_selector=selector,
+        axis_coordinates=tuple(values.copy() for values in axes),
+        member_values=member_values,
+        state_signature=state.state_signature,
+    )
+
+
 __all__ = [
     "StateKey",
     "has_trained_state",
     "latest_state_generation",
     "predict_applicability",
+    "predict_field_at_coordinates",
     "predict_population",
     "predict_raw_data",
     "reset_workspace_state",

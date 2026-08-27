@@ -15,6 +15,11 @@ from torch import nn
 from torch.nn import functional as F
 
 from ..quality import QualityAssessmentBatch
+from .coordinates import (
+    coordinate_feature_count,
+    encode_coordinate_points,
+    stored_coordinate_points,
+)
 from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
 
 
@@ -225,6 +230,57 @@ def _mlp(input_dim: int, output_dim: int, width: int, layers: int) -> nn.Module:
     return nn.Sequential(*modules)
 
 
+class _CoordinateReadout(nn.Module):
+    """Field-local coordinate trunk with a gated private residual path."""
+
+    def __init__(
+        self,
+        *,
+        latent_dim: int,
+        private_dim: int,
+        coordinate_dim: int,
+        width: int,
+        layers: int,
+    ) -> None:
+        super().__init__()
+        self.base = _mlp(
+            latent_dim + coordinate_dim,
+            1,
+            width,
+            layers,
+        )
+        self.private_residual = _mlp(
+            private_dim + coordinate_dim,
+            1,
+            width,
+            layers,
+        )
+
+    def forward(
+        self,
+        latent: torch.Tensor,
+        private: torch.Tensor,
+        encoded_coordinates: torch.Tensor,
+        residual_gate: torch.Tensor,
+    ) -> torch.Tensor:
+        if encoded_coordinates.ndim != 2:
+            raise ValueError("encoded coordinates must have shape [query, features]")
+        batch_size = int(latent.shape[0])
+        query_count = int(encoded_coordinates.shape[0])
+        coordinates = encoded_coordinates.unsqueeze(0).expand(
+            batch_size, query_count, -1
+        )
+        expanded_latent = latent.unsqueeze(1).expand(-1, query_count, -1)
+        expanded_private = private.unsqueeze(1).expand(-1, query_count, -1)
+        base = self.base(
+            torch.cat((expanded_latent, coordinates), dim=2)
+        ).squeeze(2)
+        residual = self.private_residual(
+            torch.cat((expanded_private, coordinates), dim=2)
+        ).squeeze(2)
+        return base + residual_gate.reshape(-1, 1) * residual
+
+
 class ParameterLatentPredictor(nn.Module):
     """One independently initialized parameter-to-joint-latent function."""
 
@@ -361,6 +417,16 @@ class HierarchicalCAEModel(nn.Module):
             ParameterLatentPredictor(input_dim, self.predictor_output_dim, cfg)
             for _ in range(cfg.predictor_members)
         )
+        self.coordinate_readouts = nn.ModuleList(
+            _CoordinateReadout(
+                latent_dim=self.field_latent_dim(field_index),
+                private_dim=cfg.private_latent_dim,
+                coordinate_dim=coordinate_feature_count(layout),
+                width=cfg.coordinate_width,
+                layers=cfg.coordinate_layers,
+            )
+            for field_index, layout in enumerate(schema.layouts)
+        ) if cfg.coordinate_readout else nn.ModuleList()
 
     def field_latent_dim(self, field_index: int) -> int:
         if self.cfg.sharing == "independent":
@@ -572,6 +638,28 @@ class HierarchicalCAEModel(nn.Module):
             self.decode_joint(latent, residual_gates),
             applicability_logit,
             residual_logits,
+        )
+
+    def decode_coordinates(
+        self,
+        joint_latent: torch.Tensor,
+        residual_gates: torch.Tensor,
+        *,
+        field_index: int,
+        encoded_coordinates: torch.Tensor,
+    ) -> torch.Tensor:
+        if not self.cfg.coordinate_readout or not self.coordinate_readouts:
+            raise RuntimeError(
+                "this hierarchical CAE checkpoint has no coordinate readout"
+            )
+        index = int(field_index)
+        if not 0 <= index < len(self.schema.layouts):
+            raise IndexError(index)
+        return self.coordinate_readouts[index](
+            self.field_latent(joint_latent, index),
+            joint_latent[:, self.private_slices[index]],
+            encoded_coordinates,
+            residual_gates[:, index],
         )
 
 
@@ -1160,6 +1248,284 @@ def _fine_tune_gate(
     }
 
 
+def _coordinate_point_indices(
+    layout: FieldLayout,
+    limit: int,
+    *,
+    rng: np.random.Generator | None,
+) -> np.ndarray:
+    count = int(layout.point_count)
+    selected = min(count, max(1, int(limit)))
+    if selected == count:
+        return np.arange(count, dtype=np.int64)
+    if rng is not None:
+        return np.sort(rng.choice(count, size=selected, replace=False)).astype(
+            np.int64,
+            copy=False,
+        )
+    return np.unique(
+        np.linspace(0, count - 1, num=selected, dtype=np.int64)
+    )
+
+
+def _coordinate_tensors(
+    layout: FieldLayout,
+    point_indices: np.ndarray,
+    device: torch.device,
+) -> torch.Tensor:
+    physical = stored_coordinate_points(layout)[point_indices]
+    encoded = encode_coordinate_points(layout, physical)
+    return torch.as_tensor(encoded, dtype=torch.float32, device=device)
+
+
+@torch.no_grad()
+def _coordinate_validation_loss(
+    model: HierarchicalCAEModel,
+    parameters: np.ndarray,
+    fields: Sequence[np.ndarray],
+    quality: QualityAssessmentBatch,
+    indices: np.ndarray,
+    device: torch.device,
+    cfg: CAETrainConfig,
+) -> dict[str, object]:
+    model.eval()
+    point_indices = tuple(
+        _coordinate_point_indices(
+            layout,
+            cfg.coordinate_validation_points_per_field,
+            rng=None,
+        )
+        for layout in model.schema.layouts
+    )
+    coordinate_tensors = tuple(
+        _coordinate_tensors(layout, selected, device)
+        for layout, selected in zip(model.schema.layouts, point_indices)
+    )
+    target_numerator = 0.0
+    consistency_numerator = 0.0
+    denominator = 0.0
+    for batch in _batch_indices(indices, cfg.batch_size):
+        x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
+        targets = _field_batch(fields, batch, device)
+        field_weights, _shared, _residual, _applicability = _quality_batch(
+            quality, batch, device, cfg
+        )
+        for member_index in range(len(model.predictors)):
+            latent, _applicability_logit, residual_logits = model.predictor_output(
+                member_index, x
+            )
+            residual_gates = (
+                torch.sigmoid(residual_logits)
+                if cfg.regime_head and cfg.gated_private_residual
+                else torch.zeros_like(residual_logits)
+            )
+            grids = model.decode_joint(latent, residual_gates)
+            for field_index, selected in enumerate(point_indices):
+                predicted = model.decode_coordinates(
+                    latent,
+                    residual_gates,
+                    field_index=field_index,
+                    encoded_coordinates=coordinate_tensors[field_index],
+                )
+                target = targets[field_index].reshape(len(batch), -1)[:, selected]
+                grid = grids[field_index].reshape(len(batch), -1)[:, selected]
+                target_loss = F.smooth_l1_loss(
+                    predicted, target, beta=1.0, reduction="none"
+                ).mean(dim=1)
+                consistency_loss = F.smooth_l1_loss(
+                    predicted, grid, beta=1.0, reduction="none"
+                ).mean(dim=1)
+                weights = field_weights[:, field_index]
+                target_numerator += float(torch.sum(target_loss * weights).cpu())
+                consistency_numerator += float(
+                    torch.sum(consistency_loss * weights).cpu()
+                )
+                denominator += float(torch.sum(weights).cpu())
+    denominator = max(denominator, np.finfo(np.float64).eps)
+    target_loss = target_numerator / denominator
+    consistency_loss = consistency_numerator / denominator
+    return {
+        "target_field_macro_loss": float(target_loss),
+        "grid_consistency_field_macro_loss": float(consistency_loss),
+        "combined_loss": float(
+            target_loss + cfg.coordinate_consistency_weight * consistency_loss
+        ),
+        "sampled_stored_points_per_field": [
+            int(len(values)) for values in point_indices
+        ],
+        "member_count": len(model.predictors),
+    }
+
+
+def _train_coordinate_readouts(
+    model: HierarchicalCAEModel,
+    parameters: np.ndarray,
+    fields: Sequence[np.ndarray],
+    quality: QualityAssessmentBatch,
+    train_indices: np.ndarray,
+    validation_indices: np.ndarray,
+    device: torch.device,
+    cfg: CAETrainConfig,
+    seed: int,
+) -> dict[str, object]:
+    if not cfg.coordinate_readout:
+        return {
+            "enabled": False,
+            "status": "not-configured",
+            "wall_sec": 0.0,
+        }
+    if not model.coordinate_readouts:
+        raise RuntimeError("coordinate readout configuration/model mismatch")
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    coordinate_parameters = [
+        parameter
+        for module in model.coordinate_readouts
+        for parameter in module.parameters()
+    ]
+    for parameter in coordinate_parameters:
+        parameter.requires_grad_(True)
+    optimizer = torch.optim.AdamW(
+        coordinate_parameters,
+        lr=cfg.learning_rate,
+        weight_decay=cfg.weight_decay,
+    )
+    scaler = _make_grad_scaler(device, cfg.mixed_precision)
+    rng = np.random.default_rng(int(seed) + 200003)
+    best_loss = math.inf
+    best_state = _state_copy(model.coordinate_readouts)
+    patience = 0
+    history = []
+    started = time.perf_counter()
+    for epoch in range(cfg.coordinate_epochs):
+        model.train()
+        epoch_losses = []
+        for batch in _batch_indices(train_indices, cfg.batch_size, rng):
+            x = torch.as_tensor(
+                parameters[batch], dtype=torch.float32, device=device
+            )
+            targets = _field_batch(fields, batch, device)
+            field_weights, _shared, _residual, _applicability = _quality_batch(
+                quality, batch, device, cfg
+            )
+            member_index = int(rng.integers(0, len(model.predictors)))
+            with torch.no_grad():
+                latent, _applicability_logit, residual_logits = (
+                    model.predictor_output(member_index, x)
+                )
+                residual_gates = (
+                    torch.sigmoid(residual_logits)
+                    if cfg.regime_head and cfg.gated_private_residual
+                    else torch.zeros_like(residual_logits)
+                )
+                grids = model.decode_joint(latent, residual_gates)
+            optimizer.zero_grad(set_to_none=True)
+            target_numerator = torch.zeros((), dtype=torch.float32, device=device)
+            consistency_numerator = torch.zeros(
+                (), dtype=torch.float32, device=device
+            )
+            denominator = torch.zeros((), dtype=torch.float32, device=device)
+            with _autocast(device, cfg.mixed_precision):
+                for field_index, layout in enumerate(model.schema.layouts):
+                    selected = _coordinate_point_indices(
+                        layout,
+                        cfg.coordinate_points_per_field,
+                        rng=rng,
+                    )
+                    encoded = _coordinate_tensors(layout, selected, device)
+                    predicted = model.decode_coordinates(
+                        latent,
+                        residual_gates,
+                        field_index=field_index,
+                        encoded_coordinates=encoded,
+                    )
+                    target = targets[field_index].reshape(len(batch), -1)[
+                        :, selected
+                    ]
+                    grid = grids[field_index].reshape(len(batch), -1)[:, selected]
+                    target_loss = F.smooth_l1_loss(
+                        predicted, target, beta=1.0, reduction="none"
+                    ).mean(dim=1)
+                    consistency_loss = F.smooth_l1_loss(
+                        predicted, grid, beta=1.0, reduction="none"
+                    ).mean(dim=1)
+                    weights = field_weights[:, field_index]
+                    target_numerator = target_numerator + torch.sum(
+                        target_loss * weights
+                    )
+                    consistency_numerator = consistency_numerator + torch.sum(
+                        consistency_loss * weights
+                    )
+                    denominator = denominator + torch.sum(weights)
+                safe_denominator = torch.clamp(
+                    denominator, min=torch.finfo(torch.float32).eps
+                )
+                loss = (
+                    target_numerator
+                    + cfg.coordinate_consistency_weight * consistency_numerator
+                ) / safe_denominator
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            nn.utils.clip_grad_norm_(
+                coordinate_parameters, cfg.gradient_clip_norm
+            )
+            scaler.step(optimizer)
+            scaler.update()
+            epoch_losses.append(float(loss.detach().cpu()))
+        validation = _coordinate_validation_loss(
+            model,
+            parameters,
+            fields,
+            quality,
+            validation_indices,
+            device,
+            cfg,
+        )
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "training_combined_loss": _mean_loss(epoch_losses),
+                "validation": validation,
+            }
+        )
+        candidate = float(validation["combined_loss"])
+        if not math.isfinite(best_loss) or candidate < best_loss - max(
+            1.0e-7, abs(best_loss) * 1.0e-5
+        ):
+            best_loss = candidate
+            best_state = _state_copy(model.coordinate_readouts)
+            patience = 0
+        else:
+            patience += 1
+            if patience >= cfg.early_stopping_patience:
+                break
+    model.coordinate_readouts.load_state_dict(best_state)
+    final_validation = _coordinate_validation_loss(
+        model,
+        parameters,
+        fields,
+        quality,
+        validation_indices,
+        device,
+        cfg,
+    )
+    for parameter in model.parameters():
+        parameter.requires_grad_(True)
+    return {
+        "enabled": True,
+        "status": "experimental-performance-not-accepted",
+        "epochs_completed": len(history),
+        "best_validation_combined_loss": float(best_loss),
+        "final_validation": final_validation,
+        "coordinate_parameter_count": int(
+            sum(parameter.numel() for parameter in coordinate_parameters)
+        ),
+        "authority": "viewer/off-grid-only; full-grid decoder remains authoritative",
+        "history": history,
+        "wall_sec": time.perf_counter() - started,
+    }
+
+
 def fit_hierarchical_cae(
     *,
     input_dim: int,
@@ -1173,10 +1539,6 @@ def fit_hierarchical_cae(
     train_indices: np.ndarray | None = None,
     validation_indices: np.ndarray | None = None,
 ) -> tuple[HierarchicalCAEModel, dict[str, object]]:
-    if train_cfg.coordinate_readout:
-        raise RuntimeError(
-            "coordinate readout remains gated until full-grid CAE acceptance passes"
-        )
     x = np.ascontiguousarray(parameters, dtype=np.float32)
     if x.ndim != 2 or x.shape[1] != int(input_dim):
         raise ValueError(f"expected parameter matrix [N,{int(input_dim)}]")
@@ -1239,6 +1601,17 @@ def fit_hierarchical_cae(
         train_cfg,
         int(seed),
     )
+    coordinate = _train_coordinate_readouts(
+        model,
+        x,
+        standardized_fields,
+        quality,
+        train_indices,
+        validation_indices,
+        device,
+        train_cfg,
+        int(seed),
+    )
     model.eval()
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
     group_parameter_count = sum(
@@ -1261,10 +1634,7 @@ def fit_hierarchical_cae(
         "codec_stage": codec,
         "predictor_stage": predictors,
         "fine_tune_gate": fine_tune,
-        "coordinate_readout_stage": {
-            "enabled": False,
-            "reason": "full-grid acceptance gate not yet passed",
-        },
+        "coordinate_readout_stage": coordinate,
         "quality_assessment": quality.diagnostics(),
         "total_wall_sec": time.perf_counter() - started,
         "peak_vram_bytes": (
@@ -1338,6 +1708,76 @@ def predict_hierarchical_members(
     )
 
 
+@torch.no_grad()
+def predict_hierarchical_coordinate_members(
+    *,
+    model: HierarchicalCAEModel,
+    parameters: np.ndarray,
+    field_index: int,
+    coordinate_points: np.ndarray,
+    device: torch.device,
+    batch_size: int,
+    query_batch_size: int,
+) -> np.ndarray:
+    """Evaluate one field readout while preserving predictor-member identity."""
+
+    if not model.cfg.coordinate_readout:
+        raise RuntimeError(
+            "coordinate queries require a coordinate-enabled hierarchical CAE checkpoint"
+        )
+    index = int(field_index)
+    if not 0 <= index < len(model.schema.layouts):
+        raise IndexError(index)
+    x = np.ascontiguousarray(parameters, dtype=np.float32)
+    if x.ndim != 2 or x.shape[1] != model.input_dim:
+        raise ValueError(
+            f"expected normalized parameter matrix [N,{model.input_dim}]"
+        )
+    encoded = encode_coordinate_points(
+        model.schema.layouts[index], coordinate_points
+    )
+    member_count = len(model.predictors)
+    result = np.empty(
+        (member_count, x.shape[0], encoded.shape[0]), dtype=np.float32
+    )
+    model.eval()
+    sample_size = max(1, int(batch_size))
+    query_size = max(1, int(query_batch_size))
+    for sample_start in range(0, len(x), sample_size):
+        sample_end = min(sample_start + sample_size, len(x))
+        batch = torch.as_tensor(
+            x[sample_start:sample_end], dtype=torch.float32, device=device
+        )
+        for member_index in range(member_count):
+            latent, _applicability, residual_logits = model.predictor_output(
+                member_index, batch
+            )
+            residual_gates = (
+                torch.sigmoid(residual_logits)
+                if model.cfg.regime_head and model.cfg.gated_private_residual
+                else torch.zeros_like(residual_logits)
+            )
+            for query_start in range(0, encoded.shape[0], query_size):
+                query_end = min(query_start + query_size, encoded.shape[0])
+                coordinate_tensor = torch.as_tensor(
+                    encoded[query_start:query_end],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                values = model.decode_coordinates(
+                    latent,
+                    residual_gates,
+                    field_index=index,
+                    encoded_coordinates=coordinate_tensor,
+                )
+                result[
+                    member_index,
+                    sample_start:sample_end,
+                    query_start:query_end,
+                ] = values.float().cpu().numpy()
+    return np.ascontiguousarray(result)
+
+
 def save_model_bundle(
     path: Path,
     *,
@@ -1377,6 +1817,7 @@ __all__ = [
     "field_macro_loss",
     "fit_hierarchical_cae",
     "load_model_bundle",
+    "predict_hierarchical_coordinate_members",
     "predict_hierarchical_members",
     "save_model_bundle",
     "unique_design_indices",

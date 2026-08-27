@@ -3,6 +3,7 @@ from . import hierarchical_cae as _hierarchical_cae_package
 from .api import (
     ApplicabilityPrediction,
     CAETrainConfig,
+    CoordinatePrediction,
     ConditionalINRComponent,
     ConditionalINRPosteriorAdapter,
     DiagnosticCondition,
@@ -44,6 +45,7 @@ __all__ = [
     "ConditionalINRPosteriorAdapter",
     "HierarchicalCAEComponent",
     "CAETrainConfig",
+    "CoordinatePrediction",
     "DiagnosticCondition",
     "DiagnosticRegimeRule",
     "RawDataQualityPolicy",

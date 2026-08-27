@@ -208,6 +208,13 @@ class CAETrainConfig:
     shared_quality_isolation: bool = True
     gated_private_residual: bool = True
     coordinate_readout: bool = False
+    coordinate_width: int = 64
+    coordinate_layers: int = 2
+    coordinate_epochs: int = 40
+    coordinate_points_per_field: int = 128
+    coordinate_validation_points_per_field: int = 512
+    coordinate_query_batch_size: int = 4096
+    coordinate_consistency_weight: float = 1.0
     mixed_precision: bool = True
     sharing: str = "hierarchical"
 
@@ -228,6 +235,12 @@ class CAETrainConfig:
             "inference_batch_size",
             "early_stopping_patience",
             "minimum_samples",
+            "coordinate_width",
+            "coordinate_layers",
+            "coordinate_epochs",
+            "coordinate_points_per_field",
+            "coordinate_validation_points_per_field",
+            "coordinate_query_batch_size",
         )
         for name in positive_ints:
             if int(getattr(self, name)) <= 0:
@@ -241,6 +254,7 @@ class CAETrainConfig:
             "scale_floor",
             "applicability_loss_weight",
             "residual_gate_loss_weight",
+            "coordinate_consistency_weight",
         ):
             value = float(getattr(self, name))
             if (
@@ -262,6 +276,10 @@ class CAETrainConfig:
         if sharing not in {"hierarchical", "independent"}:
             raise ValueError("sharing must be 'hierarchical' or 'independent'")
         object.__setattr__(self, "sharing", sharing)
+        if self.coordinate_readout and int(self.architecture_version) < 2:
+            raise ValueError(
+                "coordinate_readout requires hierarchical CAE architecture_version >= 2"
+            )
         for name in (
             "regime_head",
             "quality_weighted_loss",
@@ -296,9 +314,27 @@ class HierarchicalState:
     train_history: dict[str, object]
 
 
+@dataclass(frozen=True, slots=True)
+class CoordinatePrediction:
+    """Typed, non-authoritative viewer/off-grid coordinate prediction."""
+
+    field_selector: RawDataFieldSelector
+    axis_coordinates: tuple[np.ndarray, ...]
+    member_values: np.ndarray
+    state_signature: str
+    coordinate_contract: str = "yadof.hierarchical-cae-coordinate-readout-v1"
+    authoritative_full_grid: bool = False
+    calibrated: bool = False
+
+    @property
+    def mean_values(self) -> np.ndarray:
+        return np.mean(self.member_values, axis=0, dtype=np.float64)
+
+
 __all__ = [
     "AxisEncoding",
     "CAETrainConfig",
+    "CoordinatePrediction",
     "FieldLayout",
     "FieldScaler",
     "HierarchicalSchema",

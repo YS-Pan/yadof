@@ -22,6 +22,11 @@ from yadof.surrogate import (
 )
 from yadof.surrogate.hierarchical_cae import modeling
 from yadof.surrogate.hierarchical_cae import runtime
+from yadof.surrogate.hierarchical_cae.coordinates import (
+    coordinate_grid,
+    encode_coordinate_points,
+    interpolate_stored_values,
+)
 from yadof.surrogate.hierarchical_cae.schema import (
     build_schema,
     field_matrices,
@@ -175,6 +180,55 @@ def test_groups_use_stable_selectors_and_reject_overlap() -> None:
                 (("b_curve.npz", "values"), ("c_surface.npz", "values")),
             ),
         )
+
+
+def test_coordinate_encoding_and_interpolation_cover_all_declared_axes() -> None:
+    selector = ("field.npz", "values")
+    schema = build_schema(
+        _rank3_sample(),
+        field_layouts={
+            selector: {
+                "channel_axes": ("Freq",),
+                "spatial_axes": ("Phi", "Theta"),
+            }
+        },
+        axis_encodings={
+            selector: {
+                "Freq": "linear",
+                "Phi": {"kind": "periodic", "period": 1.0},
+                "Theta": "linear",
+            }
+        },
+    )
+    layout = schema.layouts[0]
+    points, shape, axes = coordinate_grid(
+        layout,
+        (
+            np.asarray([0.25, 0.75]),
+            np.asarray([0.125, 0.625]),
+            np.asarray([0.2, 0.8]),
+        ),
+    )
+    encoded = encode_coordinate_points(layout, points)
+    assert shape == (2, 2, 2)
+    assert encoded.shape == (8, 4)
+    assert len(axes) == 3
+    stored = np.arange(layout.point_count, dtype=np.float64)
+    selected = interpolate_stored_values(
+        layout,
+        stored,
+        np.asarray([[0.0, 0.0, 0.0], [1.0, 2.0 / 3.0, 1.0]]),
+    )
+    np.testing.assert_allclose(selected, [0.0, 61.0 / 3.0])
+    with pytest.raises(ValueError, match="outside the stored domain"):
+        encode_coordinate_points(
+            layout, np.asarray([[1.5, 0.5, 0.5]], dtype=np.float64)
+        )
+
+
+def test_coordinate_readout_requires_architecture_v2() -> None:
+    with pytest.raises(ValueError, match="architecture_version"):
+        CAETrainConfig(coordinate_readout=True)
 
 
 def _chrono_like_policy() -> RawDataQualityPolicy:
@@ -613,6 +667,7 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     component = hierarchical_cae(
         quality_policy=_chrono_like_policy(),
         train_config=CAETrainConfig(
+            architecture_version=2,
             token_dim=4,
             global_latent_dim=4,
             group_latent_dim=2,
@@ -631,6 +686,13 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
             minimum_samples=8,
             robust_loss_cap=4.0,
             regime_head=True,
+            coordinate_readout=True,
+            coordinate_width=8,
+            coordinate_layers=1,
+            coordinate_epochs=1,
+            coordinate_points_per_field=4,
+            coordinate_validation_points_per_field=5,
+            coordinate_query_batch_size=7,
             mixed_precision=False,
         ),
     )
@@ -661,6 +723,51 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     )
     assert len(applicability.mean_smooth_probability) == 3
     assert len(applicability.member_smooth_probabilities) == 2
+    bundle_before = state.bundle_path.read_bytes()
+    coordinate = runtime.predict_field_at_coordinates(
+        workspace,
+        population[:2],
+        component=component,
+        field_selector=("c_surface.npz", "values"),
+        axis_coordinates=(
+            np.asarray([0.0, 0.5, 1.0]),
+            np.asarray([0.375]),
+        ),
+    )
+    assert coordinate.member_values.shape == (2, 2, 3, 1)
+    assert coordinate.mean_values.shape == (2, 3, 1)
+    assert np.all(np.isfinite(coordinate.member_values))
+    assert coordinate.authoritative_full_grid is False
+    assert state.bundle_path.read_bytes() == bundle_before
+
+    from yadof.tools.surrogate_viewer.backend import PlotRequest
+    from yadof.tools.surrogate_viewer.backend.hierarchical_checkpoints import (
+        HierarchicalCAECheckpointPredictor,
+        discover_hierarchical_cae_checkpoints,
+    )
+
+    discovered = discover_hierarchical_cae_checkpoints(
+        config.workspace.surrogate_checkpoint_dir,
+        strategy_signature=state.strategy_signature,
+    )
+    assert [item.generation for item in discovered] == [4]
+    viewer = HierarchicalCAECheckpointPredictor(
+        workspace,
+        discovered[0],
+        tuple(dict(item.payload) for item in samples[0].items),
+    )
+    plot, member_plots = viewer.predict_plot(
+        (population[0],),
+        PlotRequest(
+            item_index=2,
+            plotted_dimensions=(0,),
+            fixed_values=((1, 0.375),),
+        ),
+    )
+    assert plot.values.shape == (4,)
+    assert len(member_plots) == 2
+    assert all(np.all(np.isfinite(item.values)) for item in member_plots)
+    assert state.bundle_path.read_bytes() == bundle_before
     context = SimpleNamespace(
         config=config, strategy_signature=state.strategy_signature
     )

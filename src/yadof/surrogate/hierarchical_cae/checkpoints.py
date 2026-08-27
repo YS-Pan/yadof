@@ -312,6 +312,17 @@ def _checkpoint_payload(
         ),
         "train_history": state.train_history,
         "coordinate_readout": bool(state.train_cfg.coordinate_readout),
+        "coordinate_capability": {
+            "contract": "yadof.hierarchical-cae-coordinate-readout-v1",
+            "enabled": bool(state.train_cfg.coordinate_readout),
+            "authority": "viewer/off-grid-only",
+            "full_grid_decoder_remains_authoritative": True,
+            "acceptance_status": (
+                "experimental-performance-not-accepted"
+                if state.train_cfg.coordinate_readout
+                else "not-configured"
+            ),
+        },
         "note": (
             "Full-grid rawData is decoded by field-specific convolutional codecs "
             "from global/optional-group/private parameter-predicted latents. "

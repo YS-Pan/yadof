@@ -3,6 +3,7 @@
 from .types import (
     AxisEncoding,
     CAETrainConfig,
+    CoordinatePrediction,
     FieldLayout,
     HierarchicalSchema,
     HierarchicalState,
@@ -12,6 +13,7 @@ from .types import (
 __all__ = [
     "AxisEncoding",
     "CAETrainConfig",
+    "CoordinatePrediction",
     "FieldLayout",
     "HierarchicalSchema",
     "HierarchicalState",
