@@ -63,6 +63,13 @@ local/distributed remain file-backed prepared-job transports.
     send their one combined unique population through the common real evaluator;
     scientific blockers and soft selection failures use a complete real-search
     fallback without changing GPSAF.
+13. Bind integrated release to a versioned fail-closed acceptance record. Structural
+    mechanism regression may proceed while scientific gates are blocked, but the
+    formal seven-arm same-budget matrix may start only after representation,
+    coordinate, exact-state posterior/applicability calibration, remaining numeric
+    thresholds, installed-wheel identity, and campaign authority all pass. A
+    successful structural run never promotes an experimental head or changes the
+    package template default.
 
 Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen.
 Shape-preserving parameter-range/level and fixed-width objective changes rebuild

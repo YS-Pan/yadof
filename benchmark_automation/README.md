@@ -48,6 +48,7 @@ provenance only; the templates and semantic directory names may change in place.
 | historical 100-by-20 `performance` run `p20x100-0823` | 18/18 cells completed; its `test-com` rows use the superseded `synthetic-antenna-aa89d46f3d9a` objectives and must not be compared with new-baseline runs |
 | historical first replacement `synthetic-antenna-c7b0133b3a4e` | Corrected objective scaling, but three real-only NSGA-III runs reached HV 0.8597-0.8833 after only 2,000 evaluations; its superseded baseline directory was later removed |
 | selected hard `test-com` baseline `synthetic-antenna` | Preserves the accepted scientific task and common diagnostic plot while adding collision-safe flat-output filenames; the underlying three real-only NSGA-III validations each recorded 10,000/10,000 rows, reached HV 0.4347-0.4409, and still gained 5.13%-5.94% over their final ten generations |
+| v10 `structural-full` run `20260827_192319-082612-v10-structural-release-5762ec48fe39` | Candidate installed wheel passed preflight 13/13 and the run completed 9/9 cells, 82/82 structural checks, and all 99 attempted evaluations with 96 completed records plus three explicit Chrono error-cost records; this is non-performance release evidence only |
 
 The resolved viewer gap and its historical failure evidence are documented in
 [`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).
@@ -83,6 +84,15 @@ records, no tracked history snapshot is selected, and numeric thresholds remain
 unsealed until legal frozen train/validation/calibration evidence exists. Later
 dataset and threshold seals are versioned inputs; formal runs must snapshot their
 identities alongside the normal run specification.
+
+[`preregistrations/20260828-integrated-acceptance-release-v10/`](preregistrations/20260828-integrated-acceptance-release-v10/README.md)
+binds the later v5 representation failure, v7 mechanism-only result, v8 failed
+non-transferable calibration, and v9 full-real fallback into the 082612 integrated
+release decision. It freezes the required seven-arm matrix, Phase A/B/C status,
+fallback/hard-stop contract, and nine formal re-entry conditions. The current
+`performance` suite still has only two of the required arms, so its no-write plan
+reports six cells/12,000 attempts but the formal-start gate remains closed. The v10
+structural run above cannot be interpreted as qNEHVI performance evidence.
 
 ## Prerequisites
 

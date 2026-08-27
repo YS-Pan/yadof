@@ -6,6 +6,8 @@
 | `baseline template` | A mutable semantic task directory used only to create later run snapshots. |
 | `run-local baseline snapshot` | Immutable copy of declared baseline inputs owned by one run and used by all of its cells/resume attempts. |
 | `benchmark preregistration` | A versioned tracked schema/experiment contract below `preregistrations/` that freezes provenance, design-level splits, metrics, comparisons, seeds, resource capture, threshold-sealing rules, and stop conditions before test access. It is neither a runnable suite nor evidence; an unsealed dataset or threshold explicitly keeps formal execution blocked. |
+| `formal-start gate` | The fail-closed conjunction of accepted upstream scientific evidence, a complete required arm matrix, all pre-access numeric threshold seals, installed-package identity, resource preflight, and campaign authority. A no-write plan or successful structural suite does not open it. |
+| `fail-closed release phase` | A preregistered Phase A/B/C status that can expose experimental offline or explicit fallback mechanics while independently prohibiting campaign influence, exploitation, recommendation, default migration, and TODO archival. |
 | `run specification` | Immutable resolved identity over package, runner, configuration, host facts, cases, arms, resources, plan, and snapshots. |
 | `cell` | One isolated case/arm/seed experiment or disposable smoke unit in the matrix. |
 | `attempt` | One immutable execution workspace and command history for a cell; an interrupted attempt may have a linked replacement. |

@@ -451,6 +451,32 @@ still enter the explicit real exploration quota and always use the public real
 evaluator. Training loss, cost, member min/max, or enlarged ensemble variance can
 never satisfy this gate.
 
+### Current integrated release status
+
+The v10 integrated decision separates mechanism availability from scientific
+release:
+
+- Phase A permits frozen-evidence offline work and checkpoint/viewer checks.
+  Diagnostic shadow ranking needs its own frozen plan, cannot change selection or
+  submit extra evaluations, and is not currently activated.
+- Phase B exposes the explicit composition above, but today's typed capability
+  must report `typed-exploitation-capability-blocked` and evaluate a complete real
+  search population. Fixed-baseline/state/backend soft failures also use visible
+  full-real fallback. Explicit support rejection, invalid qNEHVI configuration,
+  and recording/finalization failures stop the campaign.
+- Phase C is blocked: the combination is not a recommended opt-in and cannot
+  replace the GPSAF plus conditional-INR template default.
+
+Formal re-entry requires a new versioned architecture candidate; passed
+1000/2000-design representation, worst-field, quality/regime, coordinate, and
+resource gates; exact-state transferable rawData calibration; calibrated
+applicability policy where applicable; all seven frozen comparison arms (including
+hierarchical-CAE + GPSAF); pre-access posterior/optimization/engineering thresholds;
+final installed-wheel and fallback/viewer/checkpoint/recorder checks; and explicit
+campaign authority. Only a complete same-budget run that jointly passes every
+scientific and engineering decision can become a recommended opt-in. Changing the
+default still needs a later explicit user decision.
+
 That composition requires at least two objectives and never silently falls back to
 GA. There are no `OPTIMIZE_METHOD`, `SURROGATE_METHOD`, or search-backend selector
 settings and no complete-method registry. Source hashes are provenance; a

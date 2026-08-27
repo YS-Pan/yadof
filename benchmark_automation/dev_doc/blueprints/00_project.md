@@ -13,13 +13,17 @@ default output small enough for repeated agent decisions.
 2. Preserve optional versioned preregistrations that can freeze schemas, legal
    provenance, splits, metrics, comparisons, seeds, resources, threshold-sealing
    rules, and stop conditions without pretending to be suites or results.
-3. Preflight exact external and installed-package prerequisites without simulation.
-4. Snapshot mutable declared inputs and publish immutable run identity.
-5. Execute isolated case/arm/seed cells sequentially with resumable attempts.
-6. Preserve subprocess output, show coherent live cell/global progress, and expose
+3. When a preregistration declares an integrated release gate, keep structural
+   execution distinct from formal-start authority and require every scientific,
+   matrix, threshold, installed-package, and campaign prerequisite to pass before
+   the formal suite may run.
+4. Preflight exact external and installed-package prerequisites without simulation.
+5. Snapshot mutable declared inputs and publish immutable run identity.
+6. Execute isolated case/arm/seed cells sequentially with resumable attempts.
+7. Preserve subprocess output, show coherent live cell/global progress, and expose
    read-only status/ETA after the launching turn ends.
-7. Collect only through public yadof observations.
-8. Produce structural validity or paired descriptive performance evidence without
+8. Collect only through public yadof observations.
+9. Produce structural validity or paired descriptive performance evidence without
    ranking algorithms.
 
 ## I/O

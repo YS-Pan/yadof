@@ -37,6 +37,13 @@ blocked from qNEHVI exploitation because their architecture/calibration evidence
 is not accepted or transferable; an explicit posterior-assisted composition still
 runs through its audited real-search fallback.
 
+The integrated v10 release decision keeps this feature experimental. Offline
+checkpoint/viewer validation is allowed, and the explicit composition remains a
+useful fail-closed structural surface, but it is neither a recommended opt-in nor
+a scientific optimizer result. The package template still selects GPSAF plus
+conditional INR. Installing the `qnehvi` extra does not open the typed gate and
+does not authorize a performance campaign.
+
 `yadof --version` and `yadof version` report the same package version. Distributed
 jobs do **not** carry the yadof package, wheel, source tree, or runtime archive.
 HTCondor executes job-local `workflow.py` directly. The assigned parameter snapshot

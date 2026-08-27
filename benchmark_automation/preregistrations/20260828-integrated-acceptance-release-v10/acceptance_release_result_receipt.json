@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "protocol": "yadof.082612.integrated-acceptance-release-result",
+  "protocol_version": 1,
+  "status": "complete-integrated-framework-structural-release-performance-not-accepted",
+  "recorded_at": "2026-08-28T03:35:38.579+08:00",
+  "preregistration": {
+    "plan_sha256": "374137b01be582af6a66849ab97fc8b7367562dc035da124dbe81a657e4418b8",
+    "input_validator_sha256": "247105a8e8f80b4b900d2d7558d88e4b036794c05710e56ee183cad06991153c",
+    "result_validator_sha256": "2424c3e8b28f7f5c6eca3ed50caacd04b1df153c4922bfcdb30a4b30e801917a",
+    "input_validation_status": "valid-integrated-framework-formal-benchmark-blocked",
+    "parent_commit": "aebcde11798c70153fa9cda6bb59c2fcccbef6b0"
+  },
+  "final_installed_package": {
+    "version": "0.4.1",
+    "origin": "D:\\project\\20260414 yadof\\20260822 modular\\.venv\\Lib\\site-packages\\yadof\\__init__.py",
+    "module_sha256": "da6d6414f9c97406e865f4a6d950bf968ba5c11872369fd6b944979029634870",
+    "distribution_record_sha256": "3e4897b4808edfd1ab3f40e34e516ba235e3236c210697d4f232cad0b1cc7daf",
+    "wheel_path": "dist/yadof-0.4.1-py3-none-any.whl",
+    "wheel_sha256": "aa35ada7ec6028e1d4437c7cab9eb8e29ce1a175e894ce3635196d92377a2de7",
+    "wheel_bytes": 1246062,
+    "ordinary_optimize_import_loaded_torch": false,
+    "ordinary_optimize_import_loaded_botorch": false,
+    "required_document_members_present": true,
+    "benchmark_automation_wheel_member_count": 0
+  },
+  "source_hashes": {
+    "benchmark_automation/README.md": "15ac3c5296d02ff333278c7d289f7fe370f550b50c0bd6c88a0822c8b8012e4e",
+    "benchmark_automation/dev_doc/architecture/00_architecture_index.md": "29996589efb3ade9e43617f300f13c9b555273662b37727087dd0b13d9cc9b96",
+    "benchmark_automation/dev_doc/blueprints/00_project.md": "72dfcbf803c9ed37b443ed932e97b074057a68fddb807944a6294145f6de309e",
+    "benchmark_automation/dev_doc/terminology.md": "8a4acb886fe71da6198ed8ffa51228a761e2535e400430028b30210258b8e3b1",
+    "benchmark_automation/preregistrations/20260828-integrated-acceptance-release-v10/README.md": "ddf81ab49ccbd9af24458a3097d97e7b519cdfe086444a436e3d3f759ed5306c",
+    "benchmark_automation/tests/test_integrated_acceptance_release.py": "3f0817b91ef81bdca274fae1af1a41b0b0547539383d0397893b4ffcd4bd6813",
+    "dev_doc/architecture/00_architecture_index.md": "614070a6e01276ee76af392aa97dd2156b250d73b0112212811343130dad8f52",
+    "dev_doc/blueprints/00_project.md": "8dd814ce361acba2b48be6f8243bb6bb7cd6989014294b67f0775d109e454cb3",
+    "dev_doc/terminology.md": "de4f5cef2555ef48255bc7df271436b930b063cd534159a7671297a684474000",
+    "dev_doc/toDo/20260827_082612_validate-new-surrogate-and-qnehvi.md": "3a73fe630999e31a7c902d9039745954d83b0a583ad7722d93647b26a348d7b3",
+    "dev_doc/change_records/20260828_032749_integrated-acceptance-release-framework.md": "f5b477904b5003b2e14c52a2cfa6063faa27807682c70cd538af797e084d8900",
+    "user_doc/package_foundation.md": "c5660444e09cedbe53ed0c88d9b182128d3993b2321ec2c66e2bf7c97d907c2b",
+    "user_doc/optimization_workflow.md": "6d0a4a6d50fbd5e894ee661170570758416ce8e3d80973a87a784790771978ed"
+  },
+  "validation": {
+    "input_gate_final_installed_wheel": {
+      "passed": 1,
+      "failed": 0,
+      "wall_sec": 0.8
+    },
+    "installed_import_docs_lazy_dependencies": {
+      "passed": 1,
+      "failed": 0,
+      "wall_sec": 0.9
+    },
+    "installed_package_full_suite": {
+      "passed": 314,
+      "failed": 0,
+      "wall_sec": 71.84
+    },
+    "benchmark_automation_full_suite": {
+      "passed": 76,
+      "failed": 0,
+      "warnings": 3,
+      "wall_sec": 4.65,
+      "warning_boundary": "two Torch JIT deprecations and one BoTorch fused-extension permission fallback to the tested pure-Python implementation"
+    },
+    "wheel_artifact_membership": {
+      "passed": 1,
+      "failed": 0,
+      "wheel_member_count": 546
+    },
+    "structural_preflight": {
+      "passed": 13,
+      "failed": 0,
+      "wall_sec": 2.53
+    }
+  },
+  "structural_regression": {
+    "suite": "structural-full",
+    "purpose": "structural",
+    "run_id": "20260827_192319-082612-v10-structural-release-5762ec48fe39",
+    "run_root": "temp/20260827_192319-082612-v10-structural-release-5762ec48fe39",
+    "spec_sha256": "5762ec48fe39e01c168231e04d6840856b29828a4a55d42a02986ba483824854",
+    "created_utc": "2026-08-27T19:23:19.201Z",
+    "completed_utc": "2026-08-27T19:25:18.234Z",
+    "wall_sec": 119.033,
+    "cell_count": 9,
+    "completed_cell_count": 9,
+    "smoke_cell_count": 3,
+    "measured_cell_count": 6,
+    "attempted_evaluations": 99,
+    "completed_evaluations": 96,
+    "failed_evaluations": 3,
+    "timeout_count": 0,
+    "all_infinite_generation_count": 0,
+    "check_count": 82,
+    "failed_check_count": 0,
+    "contract_satisfied": true,
+    "candidate_distribution_record_sha256": "b91e69580e835756627eae15a03a0a8f26fa892db0b7d178a695ba5070b2c2a3",
+    "candidate_module_sha256": "da6d6414f9c97406e865f4a6d950bf968ba5c11872369fd6b944979029634870",
+    "captured_candidate_wheel_sha256": "bb5d3320e61f32835720daab8615b13d5f6c9facd13da95bb3adb8c404a01c9f",
+    "artifact_sha256": {
+      "run_spec.json": "d94262398f5aedd0b57873223e4cd3f1fe410c1af0072baf4c62939171fd1702",
+      "run_state.json": "edc443b0b026da0b023f200fa2bef30bce159905e616ecfe272b13ce153d4423",
+      "evidence/collect-0001/collection.json": "65ce22aad6191fe313c7ba33c40589293e54113c30c30a6da2b50b9015cc83c3",
+      "report.json": "cab9482d3dbd0be3544ee9fcc261805fd28bc8825cd1aebad2461de52bcd2bc5",
+      "report.md": "ecf2f78a0350535b29638c5c573d7931899626bc3e9a56bea89ed29f268ebe92"
+    },
+    "public_api_issue_count": 3,
+    "public_api_issue_boundary": "disposable smoke hypervolume generation count differs from metadata; attempted-count alignment is unavailable",
+    "tool_gaps": [
+      "evaluation_normalized_hv_auc",
+      "checkpoint_training_cutoff"
+    ],
+    "performance_interpretation_allowed": false,
+    "scheduled_heartbeat_required": false,
+    "launch_audit": {
+      "sandbox_prelaunch_exit_code": 1,
+      "sandbox_prelaunch_failure_stage": "run-directory-creation-before-run-spec-or-simulator",
+      "sandbox_prelaunch_simulator_launched": false,
+      "host_run_process_count": 1,
+      "duplicate_simulator_run_started": false
+    }
+  },
+  "v9_fallback_revalidation": {
+    "workspace": "temp/082611-qnehvi-framework-canary-v9",
+    "public_record_count": 2,
+    "completed_record_count": 2,
+    "optimization_metadata_count": 1,
+    "source": "posterior_assisted_real_random",
+    "surrogate_used": false,
+    "fallback_reason": "typed-exploitation-capability-blocked",
+    "evaluation_handoff": "common-real-evaluate-population",
+    "new_simulator_process_started": false
+  },
+  "formal_benchmark_boundary": {
+    "command_executed": "benchmark.py --runs-dir ./temp plan --suite performance",
+    "command_is_no_write": true,
+    "purpose": "performance",
+    "cases": [
+      "saw",
+      "chrono",
+      "test-com"
+    ],
+    "runner_arms": [
+      "nsga3",
+      "gpsaf-conditional-inr"
+    ],
+    "required_comparison_arm_count": 7,
+    "missing_formal_arm_count": 5,
+    "current_incomplete_plan_cell_count": 6,
+    "current_incomplete_plan_attempted_evaluations": 12000,
+    "formal_start_gate_open": false,
+    "formal_suite_started": false,
+    "formal_result_claimed": false
+  },
+  "automatic_todo_scope_check": {
+    "incidental_redundancy_natural_match": false,
+    "recording_implementation_touched": false,
+    "recording_contract_revalidated_by_v9_and_structural_evidence": true,
+    "incidental_release_marker_found": false,
+    "v5_through_v10_tokens_are_protocol_or_evidence_versions": true
+  },
+  "scientific_boundary": {
+    "todo_082608_active": true,
+    "todo_082609_active": true,
+    "todo_082611_active": true,
+    "todo_082612_active": true,
+    "architecture_performance_accepted": false,
+    "coordinate_performance_accepted": false,
+    "transferable_calibration_available": false,
+    "applicability_probability_capability_available": false,
+    "posterior_assisted_exploitation_allowed": false,
+    "formal_benchmark_started": false,
+    "scientific_acceptance_completed": false,
+    "recommended_opt_in": false,
+    "package_default_changed": false,
+    "upstream_model_tuned": false,
+    "upstream_thresholds_or_failure_evidence_changed": false,
+    "todos_may_archive": {
+      "082608": false,
+      "082609": false,
+      "082611": false,
+      "082612": false
+    }
+  }
+}

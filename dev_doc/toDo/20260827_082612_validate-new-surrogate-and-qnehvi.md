@@ -156,6 +156,46 @@ dataset，没有启动 simulator campaign，也没有产生 CAE、calibration、
 test/真实比较前仍需封印数值 thresholds 并取得相应 campaign 权限。本验收 TODO 保持
 active。
 
+## Gate 0 v10 整体验收与 fail-closed 发布决定（2026-08-28）
+
+[v10 预登记](../../benchmark_automation/preregistrations/20260828-integrated-acceptance-release-v10/README.md)
+在任何 v10 真实结构回归和 final-wheel 验证前，从 clean、与 `origin/main` 对齐的
+`aebcde11798c70153fa9cda6bb59c2fcccbef6b0` 封印。它没有修改 v5/v7/v8/v9，而是把当前真实
+科学状态、七臂正式矩阵、剩余门槛、Phase A/B/C、soft fallback/hard stop 和重新进入正式
+验收的九项条件固化成只读 validator 可复算的 release gate：
+
+- v5 的 `representation_passed=false`、`quality_regime_passed=false`、
+  `full_grid_gate_passed=false` 保持历史权威；v7 只接受 coordinate/viewer/offline 机制；
+- v8 六个 rawData calibration cells 仍 0 个 calibrated，所有 artifacts 都
+  `transferable=false`，没有可用 applicability probability capability；
+- v9 显式 strategy 的两次真实评估只证明 typed blocker 会给出
+  `typed-exploitation-capability-blocked`，经 common real evaluator 完成完整真实 population；
+- 七个正式对照中，当前 runner 只有 real NSGAIII 和 conditional-INR + GPSAF；CAE mean、
+  CAE + qNEHVI、conditional-INR adapter + qNEHVI、PCA/SVD、必需的 CAE + GPSAF 均不是可执行
+  formal arms。formal optimization/posterior-decision/总工程成本门槛也未完整封印，所以
+  `formal_benchmark_start_allowed=false`。
+
+渐进发布结论为：Phase A 只允许 frozen evidence 的离线工作、checkpoint/viewer 机制和另行
+预登记的 bounded diagnostic shadow（不得改变 selection、不得增加真实评估、当前未激活）；
+Phase B 的 public opt-in surface 已存在，但 current posterior 不得控制 exploitation，必须走
+可见的 full-real fallback；Phase C 仍 `blocked-not-recommended-no-default-change`。support reject、
+非法 qNEHVI 配置及 recording/finalization failure 是 hard stop，不能降级成静默继续。
+
+候选 installed wheel 的 `structural-full` preflight 13/13 通过。随后唯一真实 benchmark
+进程 `20260827_192319-082612-v10-structural-release-5762ec48fe39` 完成 9/9 cells、99/99
+attempts、96 completed records、3 个显式 Chrono error-cost records、0 timeout、82/82
+structural checks，`contract_satisfied=true`。三项 smoke hypervolume generation-count public API
+提示只属于 disposable smoke cells；`evaluation_normalized_hv_auc` 和
+`checkpoint_training_cutoff` 仍是已知 public-tool gaps。该 run 只证明现有 NSGAIII、GPSAF +
+conditional-INR、rawData shapes、checkpoint、viewer/audit 和公共记录链无结构回归，不是正式
+qNEHVI arm，也不产生性能接受结论。当前 `performance` 仅执行过 no-write plan：6 cells、
+12000 attempted evaluations；没有启动 formal suite。
+
+精确 wheel/source hash、installed docs、test counts、结构 run artifact hashes 和 v9 fallback
+公共记录复核由 v10 result receipt 保存。082608、082609、082611 与本 082612 均继续 active；
+未归档、未推荐 opt-in、未改变 package template 默认值。完整决策与未来 re-entry 见
+[change record](../change_records/20260828_032749_integrated-acceptance-release-framework.md)。
+
 ## 基准数据要求
 
 ### 代表性数据

@@ -25,6 +25,13 @@ or treats an ETA as scientific evidence. A run may continue while another proces
 calls `inspect`; inspection reads atomically published state and append-only command
 artifacts without taking execution ownership.
 
+A versioned acceptance/release preregistration may additionally close the path
+from planning to formal execution. It binds inherited scientific evidence, the
+complete required comparison matrix, threshold seals, installed-package identity,
+and campaign authority. Structural suites can validate wiring while this gate is
+closed, but their success cannot add a missing arm, mark calibration transferable,
+authorize a performance run, recommend a strategy, or change package defaults.
+
 - [C4 context](c4_context.md): people and external systems.
 - [C4 containers](c4_container.md): modules and data flow.
 - [C4 components](c4_component.md): implementation responsibilities.

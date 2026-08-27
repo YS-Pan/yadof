@@ -68,6 +68,16 @@ Calibration requires a separate exact-state preregistration, and qNEHVI exploita
 remains blocked until performance and independent transferable calibration gates
 pass. The new strategy plumbing does not weaken that boundary.
 
+Integrated release is a separate fail-closed decision layer. Gate 0 v10 binds the
+frozen v5 representation failure, v7 mechanism-only result, v8 non-transferable
+calibration result, v9 full-real fallback evidence, the seven-arm formal matrix,
+and the remaining threshold seals. Phase A is limited to experimental offline,
+viewer/checkpoint, and separately preregistered diagnostic shadow work; Phase B's
+public opt-in surface currently must fall back to full real search; Phase C remains
+not recommended and cannot change the GPSAF + conditional-INR template default.
+Structural benchmark success cannot open any scientific gate or authorize the
+formal same-budget benchmark.
+
 The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
 external simulator installation. Its JSON/NPZ subprocess protocol, environment
 isolation, scratch ownership, failure taxonomy, and backend-equivalent publication
