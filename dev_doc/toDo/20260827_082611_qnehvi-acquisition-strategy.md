@@ -168,10 +168,12 @@ strategy 内增加窄 adapter；不新增通用 public `search.propose_pool()` �
 ### Applicability exploitation gate handoff（来自 082608 Gate 0 v5--v7）
 
 当前生产前置条件仍未满足：082608 v5 的 full-grid/quality gate 失败；v6/v7 虽已证明
-experimental coordinate/viewer/offline-test 机制可运行，却没有接受其性能，082609 也尚未在
-独立 calibration designs 上产出可用 probability capability。因此本 TODO 可以让接口 plumbing
-面向未来 typed calibrated capability，但不得把当前 experimental head 接入 exploitation，也
-不得用 v5 validation 或 v7 offline 描述性结果临时决定阈值。
+experimental coordinate/viewer/offline-test 机制可运行，却没有接受其性能。082609 v8 已在
+600 个独立 calibration designs 上完成 exact-checkpoint calibration framework，但 6/6 rawData
+artifacts 均 fail-closed 为 `uncalibrated`，两个 Chrono applicability fits 也因 design-level
+2-fold class support 不足而不暴露系数。因此仍没有可用 probability capability。本 TODO 可以让
+接口 plumbing 面向未来 typed calibrated capability，但不得把当前 experimental head/artifact
+接入 exploitation，也不得用 v5 validation、v7 offline 或 v8 失败后的 metrics 临时决定阈值。
 
 - 低 `P(smooth)` 候选不得无条件进入 qNEHVI exploitation pool；按实现前封存的 policy 将其
   排除或作保守处理。该 policy、概率版本和阈值属于 strategy semantic identity。

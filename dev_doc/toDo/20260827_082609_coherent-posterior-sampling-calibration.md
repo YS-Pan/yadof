@@ -195,6 +195,46 @@ AUPRC/Brier/ECE 或 v7 offline 描述性结果当作概率校准完成。
   pairing、分类器 calibration 与 ensemble epistemic spread 诊断。
 - 用现有 current-cost 路径验证 rawData sample 到 cost sample 的数值一致性。
 
+### 2026-08-28 v8 实验性校准执行记录
+
+- 从已提交的 v7 tree `f8a684f39e3b85469d33c15085e7e877e7c6ca35` 出发，先用
+  development train/validation 建立了 3 cases × 1000/2000 designs 的 6 个 durable
+  checkpoint；训练只用 development train rows，early stopping 只用 development
+  validation。bundle summary SHA-256 为
+  `1c5cb5ea4f37f7e596a79c402ab6fb9a9fe16541ebf16c3866024f4cf9429028`，6 个
+  cell 的 state/strategy/schema、model/scaler、policy/label/head/loss 及 training
+  provenance 均已冻结。该过程墙钟 471.144 秒，没有打开 calibration/offline-test、没有
+  启动 simulator。
+- 在首次 calibration locator access 前提交了 pre-access tree
+  `d845c57aedce4f8e0ee77925f72bd8cadf5fd973`。v8 plan SHA-256 为
+  `6b03b2f019bd6d1e9993259c3837843c4d7eefa387164b2a477007f6694240fb`，固定了
+  design-level 2-fold split、seed、scale grid、metrics、failure rules、17 个源码/依赖
+  hashes、bounded q=1/q=2 qLogNEHVI proxy 和 scientific boundary；validator 在 locator
+  access 前以 installed wheel 返回 `valid-pre-access-chain`。
+- 唯一正式校准进程读取 600 个独立 calibration designs，完成 6/6 cells，墙钟
+  428.213 秒，退出 0；每个完整 rawData member 均通过当前 task `calc_cost.py`，所有
+  current-cost projection invalid counts 为 0，并为每个 cell 完成 bounded q=1/q=2
+  qLogNEHVI decision proxy。offline-test 仍未打开，未启动 simulator，也没有实现 082611
+  完整 strategy 或 082612 formal same-budget benchmark。
+- 所有 6 个 rawData calibration candidates 都至少违反一个冻结 gate：常见失败包括
+  energy-score ratio、current-cost rank/Pareto quality 以及 acquisition ranking/decision
+  efficiency。虽然 6 个 cell 的 cross-fitted field-macro coverage error 均下降且最大 mean
+  shift 仅 `1.3322676295501878e-15`，仍不得绕过其他失败项。所有 artifact 因而只暴露
+  identity field scales、`rawdata_status=uncalibrated`、`transferable=false`。
+- Chrono calibration labels 为 19 smooth / 181 chatter-or-failure；在预登记的
+  design-level 2-fold 与 minimum class count 10 下无法同时满足每个 fit fold，1000/2000
+  两个 applicability fits 均显式失败并移除 slope/intercept。SAW/test-com 没有质量 policy，
+  applicability 明确为 `not-applicable`。因此 082611 当前没有可用 probability capability。
+- tracked `calibration_result_receipt.json` 与 post-access validator 绑定外部 summary
+  SHA-256 `e8d4997323498557eb6c69807a46f889b21ebf8bc8d25313315848fc83f3533d`、
+  6 个 result/artifact hashes、exact state/provenance 和失败项；installed-wheel validator
+  已验证 6 个 self-verifying artifacts 均 fail-closed。
+
+该执行完成了本 TODO 的实验性 calibration framework 与独立 held-out evidence，但没有
+满足完成规则中的“可供 qNEHVI 使用的 calibrated posterior / acquisition benchmark 通过”。
+因此本 TODO 保持 active，不移入 obsolete；082608 v5 failure/threshold 原样不变，082608
+同样保持 active，禁止在本结果上开展 CAE 性能调优或把系数迁移给 successor architecture。
+
 ## 非目标
 
 - 不声称 deep ensemble 是精确 Bayesian posterior。

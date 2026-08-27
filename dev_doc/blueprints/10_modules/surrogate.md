@@ -12,6 +12,9 @@ parameter-latent predictor. It is installable and recoverable, but its first
 requirements. Gate 0 v6/v7 subsequently completed its all-axis coordinate readout,
 viewer adapter, and fixed offline mechanism path under the explicit status
 `experimental / performance-not-accepted`; none is a production default.
+Gate 0 v8 subsequently exercised exact-signature held-out calibration, but every
+rawData/applicability capability failed closed; this did not change v5 or create a
+production artifact.
 
 ## Source structure
 
@@ -209,9 +212,10 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   and its gated residual never becomes independent Gaussian observation noise.
 - Gate 0 v5's performance failure remains immutable. Gate 0 v6/v7 separately permits
   the coordinate readout, viewer integration, and one fixed offline-test path only as
-  experimental mechanism evidence. Calibration needs a new pre-access registration
-  bound to one durable state signature, and production qNEHVI exploitation remains
-  blocked until a performance-accepted architecture and independent calibration exist.
+  experimental mechanism evidence. Gate 0 v8 used a new pre-access registration
+  bound to durable exact states, but all calibration artifacts failed closed;
+  production qNEHVI exploitation remains blocked until a performance-accepted
+  architecture and usable independent calibration exist.
 - A successful 082609 calibration artifact remains
   `experimental-performance-not-accepted` and non-transferable; it is probability
   capability evidence for one exact state, not architecture acceptance or full

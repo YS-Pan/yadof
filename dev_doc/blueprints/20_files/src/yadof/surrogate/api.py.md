@@ -55,7 +55,8 @@
 - The hierarchical component remains a development surface after Gate 0 v5 failure.
   Gate 0 v6/v7 proves only coordinate/viewer mechanism execution; the API carries
   `experimental / performance-not-accepted` semantics and does not imply production
-  qNEHVI readiness.
+  qNEHVI readiness. Gate 0 v8's six fail-closed calibration artifacts likewise
+  create no current exploitation capability.
 
 ## Mutability Profile
 - Add public surrogate functions here only when another core module needs them.

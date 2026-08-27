@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "protocol": "yadof.082609.calibration-result-receipt",
+  "protocol_version": 1,
+  "status": "complete-experimental-calibration-framework-performance-not-accepted",
+  "pre_access_binding": {
+    "commit": "d845c57aedce4f8e0ee77925f72bd8cadf5fd973",
+    "plan_sha256": "6b03b2f019bd6d1e9993259c3837843c4d7eefa387164b2a477007f6694240fb",
+    "access_seal_sha256": "41330d393a580c778b678b88eaa4c109d1634ff96679908d8f2e2795d703de7b",
+    "pre_access_validation_receipt_sha256": "15d2cb80de8a530292b0c0d7bd1882b85d15ffcc69952eaf93957db27eecc820",
+    "dataset_manifest_sha256": "2d1af1439e8e82899a3a6a59a798ba8aefc1c51562a8f3f2d8f8e59b18b4d5c9",
+    "calibration_locator_sha256": "9c3d997bdccf8d5d37970fc9d7c79a1d2a288ff4bb5e558610d1a49c9ff047d4",
+    "development_checkpoint_summary_sha256": "1c5cb5ea4f37f7e596a79c402ab6fb9a9fe16541ebf16c3866024f4cf9429028"
+  },
+  "external_evidence": {
+    "root": "temp/hierarchical_cae_gate4_runs/hierarchical-cae-gate4-v2-20260827/posterior_calibration_v8/calibration_run_v1",
+    "summary_path": "calibration_summary.json",
+    "summary_sha256": "e8d4997323498557eb6c69807a46f889b21ebf8bc8d25313315848fc83f3533d",
+    "run_spec_sha256": "c9b1ad156c3b19562b450e14ca2a3ebfac1c40eb2b134b5182447e5f8dc1427b",
+    "file_count": 14,
+    "total_bytes": 2079749,
+    "wall_sec": 428.2127685000014,
+    "calibration_design_count": 600,
+    "cell_count": 6
+  },
+  "cells": [
+    {
+      "cell_id": "saw__train-1000__seed-69168527",
+      "state_signature": "3d27843be997d493ffa57a96dc56792c6aa056063c0a33451b27306064eefcab",
+      "training_provenance_sha256": "7cce6798c14d6aea635e648e5ae3127df84e12443c811207a8328b555744f8aa",
+      "result_path": "cells/saw__train-1000__seed-69168527.json",
+      "result_sha256": "dd4a613609616aa3a28644a89e47bdf1343d9486bcf4ef9b28bee32723c6ae50",
+      "artifact_path": "artifacts/saw__train-1000__seed-69168527.json",
+      "artifact_file_sha256": "753973192d5ad3d70a0184d22b0f67a45c883fa75e40ccff76d8d99a7d86bd03",
+      "artifact_self_sha256": "663f01ff36d933d4988afc801d6a452da433de12467a859b322b130824edd9d0",
+      "rawdata_status": "uncalibrated",
+      "applicability_status": "not-applicable",
+      "identity_field_scale_count": 2,
+      "failed_checks": [
+        "current_cost.rank_quality_bounded"
+      ]
+    },
+    {
+      "cell_id": "saw__train-2000__seed-69168527",
+      "state_signature": "3d27843be997d493ffa57a96dc56792c6aa056063c0a33451b27306064eefcab",
+      "training_provenance_sha256": "cb5533d979405b5c59c6d46f70d16a8197d7c438b6309e033966df283e1ed74d",
+      "result_path": "cells/saw__train-2000__seed-69168527.json",
+      "result_sha256": "8dc4058c919b363c355391ff798ec50c6cc1f27e3390a9ffb5540384547a0ddc",
+      "artifact_path": "artifacts/saw__train-2000__seed-69168527.json",
+      "artifact_file_sha256": "9a4bf32fe5d337b6bc8099d92833f7a8d46ad2369dc6bca6b9944f7754dfba8c",
+      "artifact_self_sha256": "98c9d99e5388b72f53ed97b2d177f37e15d8761360ca020c4c2561e5fa7829d8",
+      "rawdata_status": "uncalibrated",
+      "applicability_status": "not-applicable",
+      "identity_field_scale_count": 2,
+      "failed_checks": [
+        "rawdata.energy_score_bounded",
+        "current_cost.rank_quality_bounded",
+        "acquisition_proxy.q2_ranking_bounded"
+      ]
+    },
+    {
+      "cell_id": "chrono__train-1000__seed-69168527",
+      "state_signature": "21d7fdf9275cb3c67f3449df809f48aa5fa5f00f1941dca45c783333bf84c6a6",
+      "training_provenance_sha256": "5f68f7caf89c95c0496ba6eb732949c09b9003188a196ba2d9c0f33efcab9e0c",
+      "result_path": "cells/chrono__train-1000__seed-69168527.json",
+      "result_sha256": "43cc211139eb98ed090c15ed89545e302a75b0c571baf1673eeb85e13f17ac6f",
+      "artifact_path": "artifacts/chrono__train-1000__seed-69168527.json",
+      "artifact_file_sha256": "e3ccecb508580c77f0eaf434bfe189380d2b2cdecc777f07ba02efddf35b04ef",
+      "artifact_self_sha256": "ccf23980c2f88803b9a9bbd314a0ae178d9d715d82350ef8c875e47167f33592",
+      "rawdata_status": "uncalibrated",
+      "applicability_status": "uncalibrated",
+      "identity_field_scale_count": 16,
+      "applicability_fit_failure": "ValueError: applicability calibration has insufficient class support",
+      "applicability_label_counts": {
+        "smooth_positive": 19,
+        "chatter_or_failure_negative": 181
+      },
+      "failed_checks": [
+        "rawdata.energy_score_bounded",
+        "current_cost.pareto_quality_bounded",
+        "current_cost.rank_quality_bounded",
+        "acquisition_proxy.q1_ranking_bounded",
+        "acquisition_proxy.q2_ranking_bounded",
+        "applicability.fit_completed"
+      ]
+    },
+    {
+      "cell_id": "chrono__train-2000__seed-69168527",
+      "state_signature": "21d7fdf9275cb3c67f3449df809f48aa5fa5f00f1941dca45c783333bf84c6a6",
+      "training_provenance_sha256": "6ff6f0b5d0a3047092b28951dcdd85e2e8fc0a0abf467b1cc8fc576c88c7aee5",
+      "result_path": "cells/chrono__train-2000__seed-69168527.json",
+      "result_sha256": "53b0d1b6398ffe3a89ec8ba48b86f8090685adf6987349d707a15fed6981be48",
+      "artifact_path": "artifacts/chrono__train-2000__seed-69168527.json",
+      "artifact_file_sha256": "8d91d79bb0ee634ab9ba7de85120d2cbd1972045498b57f4b2bc8a8d9a95757c",
+      "artifact_self_sha256": "6035e1dcebe076bc29494c0c56dc1133b2f84fab70eff2c630785985cc7868ab",
+      "rawdata_status": "uncalibrated",
+      "applicability_status": "uncalibrated",
+      "identity_field_scale_count": 16,
+      "applicability_fit_failure": "ValueError: applicability calibration has insufficient class support",
+      "applicability_label_counts": {
+        "smooth_positive": 19,
+        "chatter_or_failure_negative": 181
+      },
+      "failed_checks": [
+        "rawdata.energy_score_bounded",
+        "current_cost.pareto_quality_bounded",
+        "current_cost.rank_quality_bounded",
+        "acquisition_proxy.q1_ranking_bounded",
+        "acquisition_proxy.q2_ranking_bounded",
+        "applicability.fit_completed"
+      ]
+    },
+    {
+      "cell_id": "test-com__train-1000__seed-69168527",
+      "state_signature": "e84f64f93b176bb22dfe8f111900144c2454dc0f10016c3077cb73ffc152d664",
+      "training_provenance_sha256": "895010b6e6a15d16eb5e2144a3effc8f378b5daccaed94fb965c545e54c52ced",
+      "result_path": "cells/test-com__train-1000__seed-69168527.json",
+      "result_sha256": "8b3880a89f3c84b9c06efaba6c47b9979d2df78156464d881017e018eb5b7a8c",
+      "artifact_path": "artifacts/test-com__train-1000__seed-69168527.json",
+      "artifact_file_sha256": "4f1041fef00011b40a77c03ce5e1a9fb4c24749bf2fe2b94d962ec0dc828e845",
+      "artifact_self_sha256": "e6893cbe0fb13b7a0d01ae8b51189d4dccb83885a7c46ae19a283ceb6946a5cf",
+      "rawdata_status": "uncalibrated",
+      "applicability_status": "not-applicable",
+      "identity_field_scale_count": 9,
+      "failed_checks": [
+        "rawdata.energy_score_bounded",
+        "acquisition_proxy.q1_decision_efficiency_bounded",
+        "acquisition_proxy.q2_decision_efficiency_bounded",
+        "acquisition_proxy.q2_ranking_bounded"
+      ]
+    },
+    {
+      "cell_id": "test-com__train-2000__seed-69168527",
+      "state_signature": "e84f64f93b176bb22dfe8f111900144c2454dc0f10016c3077cb73ffc152d664",
+      "training_provenance_sha256": "9b959454ba34bf3a483914b188a9809860b172a87ff022d2e08c85756fc0d9f4",
+      "result_path": "cells/test-com__train-2000__seed-69168527.json",
+      "result_sha256": "987bcc7b0c4209c2c5c2db22b50d6a653cee235bcd7b8434f512ed85cbc578a8",
+      "artifact_path": "artifacts/test-com__train-2000__seed-69168527.json",
+      "artifact_file_sha256": "ef001c45472ce1ab3b83d935ccdc4a8e57f9dafcf4911b8cb67f27f0c7aa4c13",
+      "artifact_self_sha256": "4c445f15f9c09437b20a8a9211e28cf77ebfeb97cded1cd5cbec6f8bcdb2fcbc",
+      "rawdata_status": "uncalibrated",
+      "applicability_status": "not-applicable",
+      "identity_field_scale_count": 9,
+      "failed_checks": [
+        "rawdata.energy_score_bounded",
+        "acquisition_proxy.q1_decision_efficiency_bounded",
+        "acquisition_proxy.q1_ranking_bounded",
+        "acquisition_proxy.q2_decision_efficiency_bounded",
+        "acquisition_proxy.q2_ranking_bounded"
+      ]
+    }
+  ],
+  "aggregate_result": {
+    "rawdata_calibrated_cell_count": 0,
+    "applicability_calibrated_cell_count": 0,
+    "all_current_cost_projection_invalid_counts_zero": true,
+    "all_cross_fitted_field_macro_coverage_errors_improved": true,
+    "maximum_ensemble_mean_shift_abs": 1.3322676295501878e-15,
+    "all_artifact_field_scales_are_identity": true,
+    "all_artifact_applicability_coefficients_absent": true,
+    "all_artifacts_non_transferable": true,
+    "bounded_qlognehvi_q1_q2_proxy_completed_for_every_cell": true,
+    "usable_probability_capability_for_082611": false
+  },
+  "access_state": {
+    "development_locator_accessed": true,
+    "calibration_locator_accessed": true,
+    "offline_test_locator_accessed": false,
+    "simulator_launched": false
+  },
+  "scientific_boundary": {
+    "v5_performance_failure_unchanged": true,
+    "v5_thresholds_unchanged": true,
+    "performance_accepted": false,
+    "architecture_promoted": false,
+    "artifact_transferable_to_successor": false,
+    "complete_082611_qnehvi_strategy_implemented": false,
+    "formal_082612_same_budget_benchmark_completed": false,
+    "todo_082608_may_archive": false,
+    "todo_082609_may_archive": false
+  }
+}

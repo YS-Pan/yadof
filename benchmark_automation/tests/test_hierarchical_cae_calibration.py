@@ -177,3 +177,37 @@ def test_v8_preregistration_preserves_failed_performance_boundary() -> None:
         seal["frozen_scientific_boundary"]["calibration_may_transfer_to_successor"]
         is False
     )
+
+
+def test_v8_result_receipt_is_fail_closed_and_keeps_082611_blocked() -> None:
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "preregistrations"
+        / "20260827-new-surrogate-qnehvi-v8"
+    )
+    receipt = json.loads(
+        (root / "calibration_result_receipt.json").read_text(encoding="utf-8")
+    )
+    assert receipt["status"] == (
+        "complete-experimental-calibration-framework-performance-not-accepted"
+    )
+    assert receipt["aggregate_result"]["rawdata_calibrated_cell_count"] == 0
+    assert receipt["aggregate_result"]["applicability_calibrated_cell_count"] == 0
+    assert receipt["aggregate_result"]["all_artifact_field_scales_are_identity"]
+    assert receipt["aggregate_result"][
+        "all_artifact_applicability_coefficients_absent"
+    ]
+    assert receipt["aggregate_result"]["usable_probability_capability_for_082611"] is False
+    assert len(receipt["cells"]) == 6
+    assert all(cell["rawdata_status"] == "uncalibrated" for cell in receipt["cells"])
+    assert all(cell["failed_checks"] for cell in receipt["cells"])
+    assert receipt["access_state"] == {
+        "development_locator_accessed": True,
+        "calibration_locator_accessed": True,
+        "offline_test_locator_accessed": False,
+        "simulator_launched": False,
+    }
+    assert receipt["scientific_boundary"]["v5_performance_failure_unchanged"] is True
+    assert receipt["scientific_boundary"]["performance_accepted"] is False
+    assert receipt["scientific_boundary"]["todo_082608_may_archive"] is False
+    assert receipt["scientific_boundary"]["todo_082609_may_archive"] is False

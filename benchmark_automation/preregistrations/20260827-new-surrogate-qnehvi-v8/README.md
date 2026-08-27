@@ -42,3 +42,25 @@ The intended pre-access sequence is:
 
 Only after that command exits zero may the hash-bound runner open calibration data.
 Offline-test remains sealed for 082612.
+
+## Frozen result
+
+The committed pre-access tree is
+`d845c57aedce4f8e0ee77925f72bd8cadf5fd973`. Its validator produced a
+`valid-pre-access-chain` receipt before the first calibration-locator read. One
+formal process then evaluated all six frozen checkpoint cells over 600 independent
+calibration designs in 428.213 seconds. It launched no simulator and did not open
+offline-test.
+
+Every rawData calibration candidate failed at least one frozen rawData,
+current-cost, or bounded acquisition-proxy check. Both chrono applicability fits
+also failed the preregistered two-fold minimum-class-support rule (19 smooth versus
+181 chatter/failure designs in total). The fail-closed artifacts therefore expose
+only identity field scales, no applicability slope/intercept, and explicit
+`uncalibrated`/`not-applicable` status. No artifact is transferable or usable by
+082611 exploitation.
+
+`calibration_result_receipt.json` freezes the result paths and hashes, cell-level
+state/provenance bindings, failed checks, access state, and unchanged v5 boundary.
+`validate_result.py` rechecks the external result and all six self-verifying typed
+artifacts through the installed wheel without reopening protected data.

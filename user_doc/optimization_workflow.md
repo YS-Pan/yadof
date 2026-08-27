@@ -277,8 +277,8 @@ Smooth L1.
 The applicability API reports each predictor member's uncalibrated `P(smooth)` and
 ensemble spread. This is structural/epistemic regime uncertainty with zero
 observation noise, not an independent Gaussian error attached to each candidate.
-Calibration on independent designs and any exploitation rule are separate future
-work.
+Calibration on independent designs is a separate exact-signature adjunct; the
+current v8 evidence failed closed, and any exploitation rule remains future work.
 
 Gate 0 v5 retained this component as an experimental baseline but rejected the
 first 1000/2000-design candidate: multiple representation guards failed and the
@@ -302,6 +302,34 @@ remain `experimental / performance-not-accepted`. Independent calibration requir
 a new pre-access registration bound to an exact experimental state; qNEHVI
 exploitation remains unavailable until an architecture passes its performance gate
 and that applicability capability is independently calibrated.
+
+### Signature-bound posterior calibration adjunct
+
+The lightweight public surface now includes `PosteriorCalibrationArtifact`,
+`FieldSpreadCalibration`, `ApplicabilityCalibration`, and
+`CalibratedRawDataPosteriorSampler`. A successful artifact is bound to exact
+state/strategy/schema signatures, checkpoint-file hashes, training provenance,
+held-out calibration data, quality policy, and label/head/loss identity. A finite
+calibrated sampler must enumerate each unique member exactly once. Per-field scales
+act around the unchanged empirical member mean and preserve one member/draw axis
+across candidates, chunks, fields, and objectives. Applicability uses one positive-
+slope logit-affine mapping for every member before averaging. Neither path adds
+observation noise or fits current cost directly.
+
+This API is fail-closed. A stale/tampered artifact, repeated finite support, failed
+gate, or signature mismatch cannot silently reuse coefficients. Failed rawData
+calibration exposes only identity scales; failed applicability calibration exposes
+no slope or intercept. Every current hierarchical-CAE calibration artifact also
+fixes `experimental-performance-not-accepted` and `transferable=False`.
+
+The frozen 082609 v8 run evaluated six 1000/2000-design checkpoint cells on 600
+independent calibration designs. All six rawData candidates failed at least one
+preregistered rawData/current-cost/acquisition-proxy check. Chrono had only 19 smooth
+versus 181 chatter/failure calibration labels, so its design-level two-fold fits
+failed the minimum-class-support rule. The resulting artifacts are therefore all
+explicitly uncalibrated (or applicability `not-applicable`), and no current artifact
+may gate 082611 exploitation. Gate 0 v5 and the component's experimental status are
+unchanged.
 
 The installed experimental `yadof.optimize.qnehvi_backend` module can score fixed
 caller-supplied discrete batches using projected joint objective samples and a
