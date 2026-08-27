@@ -6,8 +6,9 @@
 result/context/history/real-evaluation contracts, strategy invocation, and compact
 metadata. The snapshotted workspace owns the complete method through
 `submit/optimization.py:build_optimization()`. Package components expose thin lazy
-pymoo GA/NSGA-III search, objective-count dispatch, real search, and irreducible
-GPSAF assistance; there is no complete-method registry or config selector.
+pymoo GA/NSGA-III search, objective-count dispatch, real search, irreducible GPSAF
+assistance, and the separate posterior-assisted/qNEHVI composition; there is no
+complete-method registry or config selector.
 
 One `CampaignSession` spans a complete `run_generations` campaign. It owns the
 workspace lock, bounded recorder, startup catalog, and in-memory current-campaign
@@ -22,9 +23,12 @@ contracts.
   private candidate records.
 - `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
   strategies. Pymoo objects do not cross into the public strategy contract.
-- `qnehvi_backend.py` owns a lightweight experimental scoring boundary;
-  `_qlognehvi_backend.py` owns its optional Torch/BoTorch implementation. Neither
-  file is a public complete-strategy factory or generation orchestrator.
+- `qnehvi_acquisition.py` owns the public qNEHVI-family controls and discrete greedy
+  multi-start selection. `qnehvi_backend.py` owns the scoring boundary and
+  `_qlognehvi_backend.py` owns its optional Torch/BoTorch numerics.
+- `posterior_assisted.py` owns only the independent generation orchestration around
+  injected search, posterior surrogate, and acquisition components. It reuses the
+  private pymoo mechanics but does not modify GPSAF.
 - The public `gpsaf()` factory remains at `yadof.optimize`; loading private
   `optimize.gpsaf.*` modules must not replace that callable with the subpackage.
 
@@ -45,18 +49,16 @@ decision. A configured exploration quota keeps some candidates outside surrogate
 preference. Every selected row is validated by the real evaluator before becoming
 durable truth.
 
-The public joint rawData posterior protocol and cost projector are available to a
-future explicitly composed strategy, but optimize currently has no posterior-
-assisted strategy or acquisition component. The Gate 2 discrete qLogNEHVI scorer
-is only a backend compatibility spike. A complete consumer must require the
-runtime-checkable capability rather than probe with `hasattr`, include the
-posterior-capability identity (backend version and every controlled parameter) in
-its strategy identity, consume only projected joint cost samples/valid masks, and
-send every selection through the common real evaluator. Merely adding a posterior
-adapter to a surrogate package must not change the existing GPSAF identity or
-conditional-INR checkpoint namespace.
+The public joint rawData posterior protocol, typed exploitation readiness, and cost
+projector feed the explicitly composed posterior-assisted strategy. It requires
+both runtime-checkable capabilities rather than probing with `hasattr`, binds the
+search/surrogate/posterior/readiness/acquisition identities plus all pool/draw/
+chunk/exploration controls and objective names, consumes only projected joint cost
+samples/valid masks, and sends every selection through the common real evaluator.
+Merely adding a posterior adapter or blocker must not change the existing GPSAF
+identity or conditional-INR checkpoint namespace.
 
-## Experimental discrete qLogNEHVI backend
+## Discrete qNEHVI acquisition and qLogNEHVI backend
 
 `score_discrete_qlognehvi()` accepts fixed completed baseline rows/costs, a
 `JointObjectiveSamples` tensor, and explicit candidate-index batches. It requires
@@ -76,10 +78,32 @@ minimum-support policy either warns or rejects visibly using post-mask distinct
 draw sources.
 
 The result contains only batch indices, log acquisition values, backend/support/
-timing/memory diagnostics. The spike deliberately has no pending points, outcome
-constraints, gradient `optimize_acqf`, candidate-pool mechanics, generation
-fallback, real evaluator, or recorder path. BoTorch remains an independent
-`qnehvi` optional extra and ordinary `import yadof.optimize` does not load it.
+timing/memory diagnostics. `qnehvi()` groups singleton and incremental batches for
+deterministic greedy multi-start selection while the backend owns every score. It
+deliberately has no pending points, outcome constraints, gradient `optimize_acqf`,
+candidate-pool mechanics, real evaluator, or recorder path. BoTorch remains an
+independent `qnehvi` optional extra and ordinary `import yadof.optimize` does not
+load it.
+
+## Posterior-assisted generation
+
+The strategy first checks the static typed performance/calibration/transferability
+identity. A blocker immediately selects a complete real-search population. An
+eligible path freezes the finite unique nondominated real baseline, applies the
+surrogate freshness gate, proposes one unique history-informed pymoo pool, obtains
+candidate-aligned runtime readiness, and reserves
+`ceil(population * exploration_fraction)` real exploration rows. Calibrated
+applicability excludes below-threshold exploitation and prioritizes low/boundary
+real exploration only according to the sealed gate identity.
+
+One persistent schema-bearing sampler evaluates only eligible exploitation rows in
+candidate chunks. Projection discards rawData and the acquisition selects the
+configured remainder. Exploitation and exploration are combined once, verified
+unique, and passed to common `evaluate_population()`. Selection/projection/backend
+exceptions and configured support fallback discard all derived choices and run a
+full real-search generation. Configured support rejection propagates. Evaluation,
+finalization, and recording begin outside the fallback catch, so recorder failure
+still aborts the campaign.
 
 Distributed evaluation may invoke the scheduler-specific after-submit hook while
 real jobs are running. Fast creates no scheduler submission and does not fabricate
@@ -132,3 +156,5 @@ recent per-job diagnostics. A smoke failure prevents generation submission.
 - Stored optimization metadata stays lightweight; rawData remains in recorded_data.
 - Predicted posterior rawData and projected acquisition samples remain transient and
   never become optimizer history, recorder input, or real-evaluation results.
+- Current conditional-INR and hierarchical-CAE posterior components always block
+  exploitation; implementation completeness is not scientific activation.

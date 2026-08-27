@@ -33,10 +33,13 @@ src/yadof/                 installed framework
   optimize/                campaign engine + public strategy components/state
     gpsaf/                 GPSAF assistance, phases, and private records
     pymoo/                 lazy GA/NSGA-III backend adapter
-    qnehvi_backend.py      lazy experimental discrete qLogNEHVI spike boundary
+    posterior_assisted.py  independent pool/projection/exploration/real orchestration
+    qnehvi_acquisition.py  discrete greedy multi-start qNEHVI family selector
+    qnehvi_backend.py      lazy discrete qLogNEHVI scoring boundary
     _qlognehvi_backend.py  optional BoTorch sample-backed numerical adapter
   surrogate/               lightweight public rawData-surrogate API
     posterior.py           backend-neutral persistent function-sampler protocol
+    exploitation.py        typed performance/calibration/applicability readiness
     conditional_inr/       model, runtime, scheduling, checkpoint and posterior adapter
   tools/                   optional user-launched utilities
     cost_viewer/           reusable cost analysis/rendering and dev_doc
@@ -77,10 +80,12 @@ and the task-neutral named rawData/projector types. It must not import Torch,
 BoTorch, pymoo algorithms, or a concrete surrogate. `job_template` never imports
 `surrogate`; the projector accepts structured named samples and reuses an injected
 `CostInterpreter`. The explicit conditional-INR adapter imports Torch only below
-its lazy factory call. The experimental qLogNEHVI boundary imports BoTorch only
-when scoring is requested; the ordinary optimize parent, GPSAF, and real search
-remain independent. A future acquisition strategy may depend on both public
-surfaces, while a concrete surrogate depends only on the posterior protocol.
+its lazy factory call. The qLogNEHVI numerical boundary imports BoTorch only when
+scoring is requested; the ordinary optimize parent, GPSAF, and real search remain
+independent. `qnehvi_acquisition` adapts discrete selection without importing the
+backend eagerly, while `posterior_assisted` depends only on the posterior and typed
+readiness contracts until an accepted path actually samples. A concrete surrogate
+implements those contracts without optimization importing its runtime.
 
 Code placement follows variability: behavior invariant across optimization tasks
 belongs in yadof; behavior that changes with simulator, model, rawData meaning, or
@@ -150,8 +155,12 @@ Conditional-INR adapter tests additionally prove finite seeded member support,
 full-grid member/cost parity, chunk/permutation invariance, and member-failure
 isolation. The Gate 2 backend tests compare fixed-baseline zero-noise qLogNEHVI with
 BoTorch qLogEHVI, exercise q=1/q=2, joint draw pairing, support policies and invalid
-whole-draw rejection, and prove BoTorch owns the numerical acquisition loop; they
-do not constitute a strategy or optimization-quality benchmark.
+whole-draw rejection, and prove BoTorch owns the numerical acquisition loop.
+Posterior-assisted tests add multi-start delegation, fixed real Pareto filtering,
+typed readiness, applicability exclusion plus real boundary/low exploration,
+support hard-stop versus fallback, no rawData retention, common-evaluator handoff,
+and recorder-failure propagation. These are mechanism tests, not optimization-
+quality evidence.
 
 psutil is a core dependency because local and fast evaluation must observe process
 trees and submit-host capacity on supported platforms. It remains submit-host

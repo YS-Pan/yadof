@@ -150,7 +150,7 @@ finite support remains the loaded member count, while per-prediction and
 post-projection diagnostics report effective distinct sources after inference or
 cost failures.
 
-Gate 2 also contains a bounded discrete qLogNEHVI spike:
+The discrete qLogNEHVI numerical branch is:
 
 ```text
 fixed completed baseline costs + projected joint candidate costs
@@ -161,11 +161,26 @@ fixed completed baseline costs + projected joint candidate costs
   -> compact log acquisition values and diagnostics only
 ```
 
-The spike has no candidate-pool generator, pending/outcome-constraint surface,
-generation orchestration, fallback real search, evaluator, or recorder call. The
-existing conditional-INR mean/min-max prediction, GPSAF selection, and checkpoint
-recovery continue on their prior path; a complete posterior-assisted strategy
-remains separate work.
+The numerical backend has no candidate-pool generator, pending/outcome-constraint
+surface, evaluator, or recorder call. The independent generation flow is:
+
+```text
+typed readiness + fixed real Pareto baseline + private pymoo candidate pool
+  -> reserve explicit real exploration (including sealed low/boundary policy)
+  -> one persistent calibrated sampler over eligible exploitation candidates
+  -> chunked current-cost projection
+  -> discrete qNEHVI exploitation batch
+  -> exploitation + exploration through common real evaluate_population
+  -> normal finalizer and durable recorder
+```
+
+Any static or runtime readiness failure, unavailable fresh state, unusable baseline,
+projection/acquisition/backend failure, or configured support fallback discards the
+derived selection and evaluates a complete real-search population. A configured
+support rejection remains a hard stop. Once common evaluation begins, individual
+and recorder failures retain their existing semantics and are never converted into
+an acquisition fallback. Existing conditional-INR mean/min-max prediction, GPSAF
+selection, and checkpoint recovery continue unchanged.
 
 ## Generation-boundary task changes
 

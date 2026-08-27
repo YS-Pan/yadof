@@ -201,16 +201,17 @@ normalized candidate
 
 ### Joint posterior component boundary
 
-The installed package exposes a lightweight protocol for future surrogate and
-acquisition components that need joint rawData function draws. This is framework
-infrastructure, not a new selectable strategy: the current template still composes
-conditional INR with GPSAF. Conditional INR has a separate opt-in posterior adapter,
-an experimental full-grid hierarchical CAE component is available, and a discrete
-qLogNEHVI backend compatibility spike exists. None of these creates the complete
-posterior-assisted/qNEHVI strategy.
+The installed package exposes a lightweight protocol for surrogate and acquisition
+components that need joint rawData function draws. The current template still
+composes conditional INR with GPSAF, but a workspace may now explicitly select the
+independent `posterior_assisted(..., acquisition=qnehvi(...))` strategy. Conditional
+INR has a separate opt-in posterior adapter and an experimental full-grid
+hierarchical CAE component is available. Both currently expose typed fail-closed
+readiness, so neither may control exploitation until its architecture is accepted
+and its calibration is usable and transferable.
 
-A posterior-capable component creates one persistent sampler with a draw count and
-seed. The sampler fixes every draw's underlying function identity before candidates
+A posterior-capable component creates one persistent, schema-bearing sampler with a
+draw count and seed. The sampler fixes every draw's underlying function identity before candidates
 are split into chunks. Calling `predict()` for different chunks or in another chunk
 order must evaluate those same functions; repeated candidates receive the same
 value within one draw. Every candidate/draw reconstructs complete rawData fields.
@@ -331,15 +332,13 @@ explicitly uncalibrated (or applicability `not-applicable`), and no current arti
 may gate 082611 exploitation. Gate 0 v5 and the component's experimental status are
 unchanged.
 
-The installed experimental `yadof.optimize.qnehvi_backend` module can score fixed
-caller-supplied discrete batches using projected joint objective samples and a
-fixed completed baseline. It uses BoTorch qLogNEHVI, treats finite task cost `1.0`
-as valid, rejects incomplete MC draws as a whole, and retains only compact
-acquisition diagnostics. It is a Gate 2 library/API spike: it does not propose a
-candidate pool, compose `posterior_assisted(...)`, handle pending/outcome
-constraints, choose a real-search fallback, submit/evaluate candidates, or record
-evidence. Do not put it in `build_optimization()` as though it were a complete
-strategy.
+The private numerical path behind `qnehvi()` uses BoTorch qLogNEHVI. It treats a
+finite task cost of `1.0` as valid, rejects an incomplete Monte Carlo draw as a
+whole, and retains only compact acquisition diagnostics. The public acquisition
+selects a discrete batch with explicit greedy restarts; it still does not own
+candidate generation, pending state, outcome constraints, evaluation, or recording.
+Those generation responsibilities belong only to `posterior_assisted()`. Do not
+return `qnehvi_backend` directly from `build_optimization()`.
 
 Every objective in that tuple must normally be a dimensionless minimization cost
 in `[0, 1]`, independently normalized from its physical metric: `0` is best and `1`
@@ -400,6 +399,57 @@ from yadof.optimize import pymoo_nsga3, real_search
 def build_optimization():
     return real_search(search=pymoo_nsga3())
 ```
+
+For an explicit structural posterior-assisted composition, set
+`OPTIMIZE_POPULATION_SIZE = 10` and make every control visible in the strategy
+source:
+
+```python
+from yadof.optimize import posterior_assisted, pymoo_nsga3, qnehvi
+from yadof.surrogate import conditional_inr_posterior
+
+
+def build_optimization():
+    return posterior_assisted(
+        search=pymoo_nsga3(),
+        surrogate=conditional_inr_posterior(),
+        acquisition=qnehvi(
+            batch_size=8,
+            greedy_restarts=4,
+            minimum_unique_support=3,
+            low_support_policy="fallback",
+        ),
+        candidate_pool_size=256,
+        posterior_draws=3,
+        candidate_chunk_size=16,
+        exploration_fraction=0.2,
+    )
+```
+
+This exact example is intentionally real-search-only today: the conditional-INR
+posterior reports `experimental-performance-not-accepted`, `uncalibrated`, and
+`transferable=False`, so the typed gate prevents acquisition use. The fallback
+still proposes a complete pymoo population, sends every point through common real
+evaluation/finalization/recording, and schedules component training only after jobs
+are submitted. Backend/projection failures have the same full-real fallback;
+`low_support_policy="reject"` is instead an explicit campaign-stopping gate.
+
+The qNEHVI batch must equal population size minus
+`ceil(population_size * exploration_fraction)`, with at least one real exploration
+point and at least one exploitation point. The candidate pool, posterior draws,
+chunk size, batch/restarts, reference point, support rule, exploration fraction,
+objective names, and component identities all enter the semantic strategy
+signature. Pending points and stochastic outcome constraints are not v1
+capabilities and are rejected rather than ignored.
+
+An applicability-aware future composition must receive an explicit typed calibrated
+probability capability and a `calibrated_applicability_gate()` whose threshold,
+boundary width, policy version, calibration-policy SHA-256, and boundary/low
+exploration ordering were sealed before test access. Values below the sealed
+threshold cannot enter exploitation. Some low-probability or boundary points may
+still enter the explicit real exploration quota and always use the public real
+evaluator. Training loss, cost, member min/max, or enlarged ensemble variance can
+never satisfy this gate.
 
 That composition requires at least two objectives and never silently falls back to
 GA. There are no `OPTIMIZE_METHOD`, `SURROGATE_METHOD`, or search-backend selector

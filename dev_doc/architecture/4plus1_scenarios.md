@@ -108,6 +108,19 @@ the user does not want old evidence considered at all, the user explicitly clear
 history or uses another workspace. Task files continue to call reusable
 `yadof.job_template` helpers rather than copying framework mechanisms.
 
+## Run an explicit posterior-assisted composition
+
+The workspace returns `posterior_assisted(search=..., surrogate=...,
+acquisition=qnehvi(...))` from `submit/optimization.py`, with an explicit pool,
+draw/chunk, q batch/restart/support, and real-exploration split. `check` validates
+multi-objective shape and identity without prediction. At runtime the shipped
+posterior components report performance/calibration/transferability blockers, so
+the strategy records that typed reason, proposes a complete real-search population,
+and uses the normal evaluator/finalizer/recorder. A future accepted capability may
+enter the streamed acquisition path only after its exact readiness and any
+applicability gate are sealed; low/boundary exploration remains real. This scenario
+is never a hidden change to GPSAF or the default template.
+
 ## Inspect saved surrogate checkpoints
 
 Install the `viewer` extra and run

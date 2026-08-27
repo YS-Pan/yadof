@@ -20,6 +20,14 @@ alpha/beta/gamma controls, and surrogate training controls. Task physics and pro
 shape stay in fixed `submit/` and evaluate-side `job_template/` roots. Complete
 strategy selection stays only in `submit/optimization.py`, never in config.
 
+An explicitly selected `posterior_assisted()` strategy keeps its pool, draw,
+chunk, qNEHVI batch/restart/support, and real-exploration controls in
+`submit/optimization.py`; there are no matching global config selectors. During a
+fail-closed generation its compact metadata names the typed blocker and fallback
+reason. During a legally enabled generation it records only bounded support,
+projection, applicability, acquisition, timing, and selection diagnostics—never
+predicted rawData or predicted costs as durable history.
+
 Surrogate training uses only recorded real rawData rows. By default every independently
 initialized ensemble member sees every retained real row; this preserves all measured
 design support because ensemble spread is diagnostic and does not steer GPSAF.

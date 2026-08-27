@@ -43,10 +43,14 @@ uses one frozen current-task `CostInterpreter` to stream those derived draws int
 joint objective tensor and invalid mask. Predicted rawData is discarded after
 projection and never enters recorded evidence. Conditional INR now has a separate
 opt-in finite-ensemble adapter whose identity does not alter the default
-`conditional_inr()`/GPSAF checkpoint path. An experimental discrete backend spike
-proves that fixed real baselines plus these projected joint samples can be consumed
-by BoTorch qLogNEHVI; it is not a complete posterior-assisted strategy, and no
-current default strategy consumes it.
+`conditional_inr()`/GPSAF checkpoint path. The independent
+`posterior_assisted(..., acquisition=qnehvi(...))` strategy now reuses private
+pymoo pool mechanics, freezes a real Pareto baseline, streams projected joint
+samples, retains an explicit real-exploration quota, and hands every selected row
+to the common real evaluator. BoTorch still owns qLogNEHVI numerics. Typed
+performance/calibration/transferability readiness blocks every current posterior
+component from exploitation, so explicit compositions remain full-real fallback
+mechanisms rather than accepted optimizer-performance claims.
 
 An independent experimental `hierarchical_cae()` component now provides full-grid
 scalar/Conv1d/Conv2d codecs, global/optional-group/field-private latent state,
@@ -61,7 +65,8 @@ Gate 0 v6/v7 continuation completed a per-field, all-axis coordinate readout,
 viewer adapter, and fixed offline path only as
 `experimental / performance-not-accepted`; full-grid output remains authoritative.
 Calibration requires a separate exact-state preregistration, and qNEHVI exploitation
-remains blocked until performance and independent calibration gates pass.
+remains blocked until performance and independent transferable calibration gates
+pass. The new strategy plumbing does not weaken that boundary.
 
 The packaged `chrono_com.py` adapter treats a dedicated Python/Conda runtime as an
 external simulator installation. Its JSON/NPZ subprocess protocol, environment

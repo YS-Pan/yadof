@@ -127,10 +127,21 @@ The conditional-INR posterior adapter is an explicit derived view over the loade
 ensemble: seeded draws retain one member across candidates, fields, and objectives,
 and full-grid reconstruction freezes selector metadata/axes. Its nominal finite
 support is distinct loaded members; its effective support counts distinct drawn
-members that remain complete after inference and cost projection. The experimental
-qLogNEHVI spike consumes only the reduced objective tensor, rejects incomplete
-draws as a whole, and retains no rawData. It proves backend compatibility without
-creating an optimization strategy or new source of truth.
+members that remain complete after inference and cost projection. The qLogNEHVI
+backend consumes only the reduced objective tensor, rejects incomplete draws as a
+whole, and retains no rawData. The public acquisition performs discrete greedy
+multi-start batch selection by delegating every score to that backend.
+
+The independent posterior-assisted strategy owns the generation-level derived
+flow. It proposes one unique history-informed pymoo pool, filters a fixed real
+nondominated baseline, reserves an explicit real exploration quota, and evaluates
+the final combined population through the common evaluator. Exploitation requires
+one runtime-checkable readiness object binding a performance-accepted architecture,
+calibrated transferable posterior, zero observation noise, exact state/artifact
+signatures, and either not-applicable or calibrated applicability. Member variance,
+loss, cost, or raw uncalibrated probabilities cannot satisfy it. Current shipped
+components advertise static blockers, so their strategy executions fail closed to
+full real search.
 
 ## Invariants
 

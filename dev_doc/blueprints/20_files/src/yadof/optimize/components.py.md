@@ -2,9 +2,9 @@
 
 ## Intent
 
-- Expose only the small production compositions currently required: pymoo GA,
-  pymoo NSGA-III, objective-count dispatch, GPSAF with an injected rawData
-  surrogate, and real search.
+- Retain the established pymoo GA/NSGA-III, objective-count dispatch, GPSAF, and
+  real-search components unchanged. Posterior-assisted and qNEHVI components live
+  in their own narrow modules and are re-exported by `yadof.optimize`.
 
 ## Functionalities
 

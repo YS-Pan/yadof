@@ -75,8 +75,15 @@ lock automatically generated run-directory names to a digits-only UTC
   deterministic seed, aligned correlated draws, whole-draw invalid rejection,
   finite `1.0`, finite-support warn/reject, empty/duplicate/backend-missing cases,
   mature-backend spy ownership, compact memory/timing diagnostics, and lazy parent
-  imports. These tests validate a backend spike, not a complete strategy or
-  acquisition-quality claim;
+  imports;
+- posterior-assisted coverage for public composition/identity, multi-objective-
+  only and pending/outcome rejection, baseline filtering/duplicates/finite `1.0`,
+  deterministic greedy backend delegation, empty/duplicate pools, finite support
+  warn/fallback/reject, typed current blockers, variance-only rejection, calibrated
+  applicability exclusion plus low/boundary real exploration, sampler/readiness
+  signature binding, no predicted rawData retention, common real-evaluator handoff,
+  full-real backend fallback, support hard stop, and recorder-failure propagation.
+  This validates framework behavior, not acquisition or optimizer performance;
 - CLI/docs, integrated cost/time views including grouped `view all`,
   the 50-generation run default, default-on run progress with an explicit quiet
   override, per-generation successful/error/remaining outcome counts, streamed

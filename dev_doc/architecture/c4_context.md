@@ -80,6 +80,12 @@ preregistration does not itself authorize or launch a run.
   preserves one function draw across candidates, fields, objectives, permutations,
   and candidate chunks; a frozen current-cost projector emits joint objective
   samples and invalid masks without publishing predicted rawData as evidence.
+- Posterior-assisted exploitation is opt-in and fail-closed. It requires typed
+  performance acceptance, calibrated transferable exact-state posterior evidence,
+  zero observation noise, and calibrated/not-applicable applicability. It always
+  retains an explicit real exploration quota and sends every selected point to the
+  same real finalizer/recorder; current posterior components therefore use full
+  real-search fallback.
 - Users may correct parameter ranges/levels, fixed-width objective/cost policy,
   optimization composition, configuration, and task execution code between generations. Parameter
   identity/count and objective count remain stable until separate structural-change

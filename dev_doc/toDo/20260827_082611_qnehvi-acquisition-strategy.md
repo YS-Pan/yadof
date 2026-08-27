@@ -108,10 +108,46 @@ pool × draw × objective 测量见
 - CPU warm-process 测量已覆盖 64×16×2、256×32×2、128×32×3，未保存 predicted
   rawData，也未启动真实 simulator campaign。
 
-本次仅完成本 TODO 的 backend spike gate。尚未实现 `qnehvi()` factory、candidate-pool
-复用、`posterior_assisted()` generation orchestration、exploration/fallback、common real
-evaluation/recording、完整 strategy identity/state 或同预算 benchmark，因此本 TODO 保持
-active，不得归档。
+以上是 2026-08-27 的 Gate 2 状态；2026-08-28 的后续框架执行状态见下一节。
+
+## 独立 strategy/framework 执行状态（2026-08-28）
+
+TODO 中不依赖已接受上游科学能力的机制现已完成：
+
+- 新增公开 `qnehvi()` acquisition family。它验证 multiobjective/reference/support，
+  以 deterministic greedy multi-start 组织 batch，但每个 acquisition value 仍交给
+  BoTorch 0.18.1 `qLogNoisyExpectedHypervolumeImprovement`；没有复制 hypervolume 或
+  partitioning 数值层；
+- 新增独立 `posterior_assisted()` complete strategy。它复用 private pymoo
+  history/variation/duplicate/refill，构造 fixed real nondominated baseline，持有一个
+  schema-bearing persistent sampler，按 chunk 投影 current cost，保留显式 real
+  exploration quota，并只通过 common `evaluate_population()` 提交最终真实点；
+- 新增 typed `PosteriorExploitationReadiness` 与预登记
+  `calibrated_applicability_gate()`。performance、calibration、transferability、zero-noise、
+  exact state/artifact 和 applicability 必须同时合法；variance、loss、cost、member range
+  均不能替代 gate；
+- current conditional-INR 和 hierarchical-CAE 均显式返回
+  `experimental-performance-not-accepted / uncalibrated / transferable=false`，因此
+  exploitation fail-closed。082608/082609 的阈值、失败证据和 artifact 未被改写；
+- static/runtime blocker、freshness/baseline/sampler/projection/backend 或 configured
+  support fallback 会丢弃 derived selection 并做完整 real-search + real evaluation；
+  configured support reject 和 recording failure 保持 hard failure；
+- pending points 与 outcome constraints 在 factory 层显式拒绝；finite `1.0` 保持合法，
+  invalid projection 仍 whole-draw reject；diagnostics 不保存 predicted rawData。
+
+Gate 0 v9 预登记和精确 canary inputs 位于
+`benchmark_automation/preregistrations/20260828-qnehvi-strategy-framework-v9/`。只读
+validator 复核 installed wheel 与 v8 blocker；installed-package 聚焦测试 49 项、全量
+测试 314 项通过。唯一一次真实 `test_com` canary 以 population 2 运行一代，2/2 real
+evaluations 完成并记录，metadata 明确为
+`typed-exploitation-capability-blocked -> posterior_assisted_real_random`。这只是机制/
+failure-path evidence，不是性能证据。
+
+082612 的 no-write plan 仍是 6 cells、每 cell 100×20、合计 12,000 attempts；没有新增
+posterior-assisted measured arm，也没有启动该 suite。因此本 TODO 仍保持 active，不得移入
+obsolete。只有 architecture 独立 performance gate 通过、posterior/applicability 在独立
+designs 上校准且 transferable、threshold/policy/exploration quota 在 test access 前封存，
+并且 082612 同预算 benchmark 达到预登记门槛后，才满足最终完成规则。
 
 ### 离散候选池是首版边界
 

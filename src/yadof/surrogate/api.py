@@ -55,6 +55,21 @@ from .posterior import (
     project_rawdata_sampler,
     require_rawdata_posterior_surrogate,
 )
+from .exploitation import (
+    APPLICABILITY_CALIBRATED,
+    APPLICABILITY_NOT_APPLICABLE,
+    APPLICABILITY_UNCALIBRATED,
+    PERFORMANCE_ACCEPTED,
+    PERFORMANCE_NOT_ACCEPTED,
+    POSTERIOR_CALIBRATED,
+    POSTERIOR_EXPLOITATION_PROTOCOL,
+    POSTERIOR_EXPLOITATION_PROTOCOL_VERSION,
+    POSTERIOR_UNCALIBRATED,
+    PosteriorExploitationReadiness,
+    PosteriorExploitationSurrogate,
+    blocked_exploitation_identity,
+    require_posterior_exploitation_surrogate,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +197,27 @@ class ConditionalINRPosteriorAdapter:
                 "observation_noise_included": False,
                 "calibrated": False,
             },
+        )
+
+    def exploitation_semantic_identity(self, config, problem) -> Mapping[str, object]:
+        del config, problem
+        return blocked_exploitation_identity(
+            applicability_status=APPLICABILITY_NOT_APPLICABLE
+        )
+
+    def assess_posterior_exploitation(
+        self, context, population
+    ) -> PosteriorExploitationReadiness:
+        del context
+        return PosteriorExploitationReadiness.blocked(
+            population,
+            applicability_status=APPLICABILITY_NOT_APPLICABLE,
+            failure_reasons=(
+                "conditional-INR posterior architecture has no independent "
+                "performance acceptance",
+                "conditional-INR function draws are uncalibrated and non-transferable",
+            ),
+            diagnostics={"evidence_status": "compatibility-path-only"},
         )
 
     def ensure_fresh_enough(self, context):
@@ -351,6 +387,40 @@ class HierarchicalCAEComponent:
             },
         )
 
+    def exploitation_semantic_identity(self, config, problem) -> Mapping[str, object]:
+        del config, problem
+        return blocked_exploitation_identity(
+            applicability_status=(
+                APPLICABILITY_UNCALIBRATED
+                if self.quality_policy is not None
+                else APPLICABILITY_NOT_APPLICABLE
+            )
+        )
+
+    def assess_posterior_exploitation(
+        self, context, population
+    ) -> PosteriorExploitationReadiness:
+        del context
+        reasons = [
+            "082608 hierarchical CAE remains experimental-performance-not-accepted",
+            "082609 posterior calibration is uncalibrated and non-transferable",
+        ]
+        applicability_status = APPLICABILITY_NOT_APPLICABLE
+        if self.quality_policy is not None:
+            applicability_status = APPLICABILITY_UNCALIBRATED
+            reasons.append(
+                "082609 applicability calibration exposes no transferable probabilities"
+            )
+        return PosteriorExploitationReadiness.blocked(
+            population,
+            applicability_status=applicability_status,
+            failure_reasons=reasons,
+            diagnostics={
+                "architecture_gate": "082608-active",
+                "calibration_gate": "082609-active",
+            },
+        )
+
     def ensure_fresh_enough(self, context):
         from .hierarchical_cae import runtime, scheduler
 
@@ -506,6 +576,9 @@ def deactivate_workspace(*args, **kwargs):
     return conditional_status
 
 __all__ = [
+    "APPLICABILITY_CALIBRATED",
+    "APPLICABILITY_NOT_APPLICABLE",
+    "APPLICABILITY_UNCALIBRATED",
     "APPLICABILITY_METHOD",
     "CALIBRATED",
     "ConditionalINRComponent",
@@ -516,6 +589,12 @@ __all__ = [
     "NOT_APPLICABLE",
     "POSTERIOR_CALIBRATION_PROTOCOL",
     "POSTERIOR_CALIBRATION_PROTOCOL_VERSION",
+    "POSTERIOR_EXPLOITATION_PROTOCOL",
+    "POSTERIOR_EXPLOITATION_PROTOCOL_VERSION",
+    "POSTERIOR_CALIBRATED",
+    "POSTERIOR_UNCALIBRATED",
+    "PERFORMANCE_ACCEPTED",
+    "PERFORMANCE_NOT_ACCEPTED",
     "UNCALIBRATED",
     "ApplicabilityCalibration",
     "CalibratedRawDataPosteriorSampler",
@@ -526,6 +605,8 @@ __all__ = [
     "FieldSpreadCalibration",
     "RawDataQualityPolicy",
     "PosteriorCalibrationArtifact",
+    "PosteriorExploitationReadiness",
+    "PosteriorExploitationSurrogate",
     "ShapeQualityRule",
     "ApplicabilityPrediction",
     "MaterializedRawDataPosterior",
@@ -553,6 +634,7 @@ __all__ = [
     "posterior_capability_identity",
     "project_rawdata_sampler",
     "require_rawdata_posterior_surrogate",
+    "require_posterior_exploitation_surrogate",
     "start_training",
     "select_conservative_spread_scale",
     "train",

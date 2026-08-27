@@ -216,6 +216,12 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   bound to durable exact states, but all calibration artifacts failed closed;
   production qNEHVI exploitation remains blocked until a performance-accepted
   architecture and usable independent calibration exist.
+- `PosteriorExploitationReadiness` is the only optimizer-facing typed authorization:
+  it aligns one normalized pool with performance/posterior/applicability status,
+  transferability, zero-noise state/artifact signatures, calibrated probabilities,
+  and explicit failure reasons. It contains no member variance or loss field.
+  Current conditional-INR and hierarchical components expose static/runtime blocked
+  readiness without invoking their uncalibrated applicability heads.
 - A successful 082609 calibration artifact remains
   `experimental-performance-not-accepted` and non-transferable; it is probability
   capability evidence for one exact state, not architecture acceptance or full

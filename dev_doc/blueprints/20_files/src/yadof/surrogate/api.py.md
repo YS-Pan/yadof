@@ -49,6 +49,10 @@
 - Posterior capability identity is separate and must be nested only in a strategy
   that explicitly selects it; the implemented adapter must not cold-invalidate the
   current conditional-INR GPSAF checkpoint identity.
+- Posterior exploitation identity/readiness is a second, separate typed contract.
+  Both current posterior components return performance-not-accepted,
+  uncalibrated, non-transferable blockers and never forward experimental
+  probabilities into acquisition.
 - Parent import preloads only the empty private-package marker before rebinding the
   same-named public factory, preserving both lazy Torch loading and callable API
   stability.

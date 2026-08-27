@@ -86,7 +86,13 @@
   namespaces. Private `optimize.gpsaf` owns GPSAF assistance/phases/records and
   private `optimize.pymoo` owns the thin lazy GA/NSGA-III backend adapter. The
   package has no complete-method selector or registry.
-- `optimize.qnehvi_backend`: an experimental, discrete-only Gate 2 adapter that
+- `optimize.posterior_assisted`, `qnehvi_acquisition`: the independent opt-in
+  generation orchestrator and acquisition-family component. The strategy owns the
+  private-pymoo candidate pool, fixed real Pareto baseline, typed readiness,
+  streamed projection, explicit real exploration quota, fallback, and common real
+  evaluator handoff. The acquisition owns support policy and discrete greedy
+  multi-start batch selection.
+- `optimize.qnehvi_backend`: a discrete-only adapter that
   converts fixed minimization costs and aligned joint objective draws into a
   BoTorch sample-backed ensemble, delegates qLogNEHVI hypervolume/partitioning
   numerics to BoTorch, and returns compact acquisition diagnostics. Its private
@@ -96,6 +102,9 @@
   persistent joint function samplers, streamed draw/chunk projection, honest
   finite-versus-continuous support, and semantic-capability identity. It imports no
   optional numerical backend.
+- `surrogate.exploitation`: a separate runtime-checkable performance, posterior
+  calibration, transferability, observation-noise, and applicability readiness
+  boundary. It deliberately exposes no variance/loss shortcut.
 - `surrogate`: lightweight public component/API over that protocol and separate
   private `surrogate.conditional_inr` and experimental
   `surrogate.hierarchical_cae` models, strategy/component-keyed schedules and
@@ -149,11 +158,12 @@ one workspace-owned strategy. GPSAF consumes only the narrow injected search and
 surrogate seams; its private package and the private pymoo/conditional-INR packages
 keep concrete implementation imports below the public component layer. Pymoo
 algorithms and the Torch runtime load only on selection.
-Posterior-capable consumers use `surrogate.posterior` and the independent
-`job_template` projector; concrete surrogate implementations implement the
-protocol without being imported by optimization. The Gate 2 qLogNEHVI backend is
-one such sample consumer but is not a strategy. The current GPSAF strategy does not
-consume this capability, so its conditional-INR semantic identity and checkpoint
+Posterior-capable consumers use `surrogate.posterior`, `surrogate.exploitation`,
+and the independent `job_template` projector; concrete surrogate implementations
+implement the protocols without being imported by optimization. The qLogNEHVI
+backend remains only the numeric sample consumer. `posterior_assisted` is the sole
+generation orchestrator for that path. The current GPSAF strategy does not consume
+either capability, so its conditional-INR semantic identity and checkpoint
 signature remain unchanged.
 The experimental hierarchical CAE implements the posterior protocol and a typed
 coordinate/applicability capability directly, but its failed v5 development gate

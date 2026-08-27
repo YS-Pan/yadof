@@ -17,6 +17,7 @@ from ..job_template.rawdata_projector import (
 from ..job_template.rawdata_template import (
     RawDataFieldSelector,
     RawDataSampleLike,
+    RawDataSchemaTemplate,
 )
 
 
@@ -313,6 +314,9 @@ class MaterializedRawDataPosterior:
 @runtime_checkable
 class RawDataPosteriorSampler(Protocol):
     """Persistent fixed-draw sampler reusable across candidate chunks."""
+
+    @property
+    def schema(self) -> RawDataSchemaTemplate: ...
 
     @property
     def diagnostics(self) -> RawDataPosteriorDiagnostics: ...

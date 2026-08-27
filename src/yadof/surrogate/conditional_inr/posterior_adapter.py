@@ -84,6 +84,10 @@ class ConditionalINRRawDataSampler:
         )
 
     @property
+    def schema(self) -> RawDataSchemaTemplate:
+        return self._schema_template
+
+    @property
     def diagnostics(self) -> RawDataPosteriorDiagnostics:
         return self._diagnostics
 

@@ -775,6 +775,10 @@ class CalibratedRawDataPosteriorSampler:
         self._diagnostics = _calibrated_diagnostics(base, artifact)
 
     @property
+    def schema(self) -> RawDataSchemaTemplate:
+        return self._sampler.schema
+
+    @property
     def diagnostics(self) -> RawDataPosteriorDiagnostics:
         return self._diagnostics
 

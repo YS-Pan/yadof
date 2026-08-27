@@ -102,6 +102,8 @@ candidate chunks and emits complete named rawData samples. The projector validat
 them against the frozen schema template, reuses the generation snapshot's
 `CostInterpreter`, and retains only joint objective samples plus validity and
 bounded diagnostics. Neither node calls the finalizer or recorder. The opt-in
-conditional-INR adapter and experimental qLogNEHVI scorer now exercise this branch
-without changing the current GPSAF/conditional-INR path; complete posterior-
-assisted orchestration remains separate work.
+posterior-assisted strategy surrounds this branch with typed readiness, a private-
+pymoo pool, fixed real baseline, explicit real exploration, qNEHVI selection, and
+the existing common evaluator/finalizer/recorder handoff. Current components are
+statically blocked and take its full-real fallback. GPSAF/conditional-INR behavior
+and state remain unchanged.

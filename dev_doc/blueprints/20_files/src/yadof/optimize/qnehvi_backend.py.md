@@ -2,8 +2,8 @@
 
 ## Intent
 
-- Provide the lightweight experimental Gate 2 call boundary for discrete
-  sample-backed qLogNEHVI scoring without exposing a complete strategy.
+- Provide the lightweight Gate 2-origin call boundary used by the public discrete
+  acquisition for sample-backed qLogNEHVI scoring; it is not a complete strategy.
 
 ## Functionalities
 

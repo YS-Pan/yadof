@@ -691,6 +691,8 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/optimize/pymoo/backend.py" in wheel_names
         assert "yadof/optimize/qnehvi_backend.py" in wheel_names
         assert "yadof/optimize/_qlognehvi_backend.py" in wheel_names
+        assert "yadof/optimize/qnehvi_acquisition.py" in wheel_names
+        assert "yadof/optimize/posterior_assisted.py" in wheel_names
         assert "yadof/optimize/state.py" in wheel_names
         assert "yadof/optimize/strategy.py" in wheel_names
         assert "yadof/optimize/gpsaf.py" not in wheel_names
@@ -707,6 +709,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/conditional_inr/types.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/posterior_adapter.py" in wheel_names
         assert "yadof/surrogate/quality.py" in wheel_names
+        assert "yadof/surrogate/exploitation.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/__init__.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/types.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/schema.py" in wheel_names
@@ -772,6 +775,14 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert (
             "yadof/_resources/docs/dev_doc/change_records/"
             "20260827_152421_conditional-inr-posterior-and-qlognehvi-spike.md"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/change_records/"
+            "20260828_020622_qnehvi-posterior-assisted-framework.md"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/toDo/"
+            "20260827_082611_qnehvi-acquisition-strategy.md"
         ) in wheel_names
         assert (
             "yadof/_resources/docs/dev_doc/toDo/"

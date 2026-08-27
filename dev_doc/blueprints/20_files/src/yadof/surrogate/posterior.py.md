@@ -7,8 +7,8 @@
 
 ## Functionalities
 
-- Publish runtime-checkable posterior-surrogate, persistent-sampler, and
-  candidate-chunk posterior protocols plus one function-draw container.
+- Publish runtime-checkable posterior-surrogate, schema-bearing persistent-sampler,
+  and candidate-chunk posterior protocols plus one function-draw container.
 - Validate JSON-safe diagnostics: kind, requested/actual draws, seed, stable
   draw/source IDs, schema/state/strategy signatures, approximation limitations,
   observation-noise status, exact selectors, candidate/failure counts, nominal

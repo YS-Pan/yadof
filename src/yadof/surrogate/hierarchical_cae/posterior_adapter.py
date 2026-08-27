@@ -7,7 +7,10 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from ...job_template.rawdata_template import StructuredRawDataSample
+from ...job_template.rawdata_template import (
+    RawDataSchemaTemplate,
+    StructuredRawDataSample,
+)
 from ..posterior import (
     MaterializedRawDataPosterior,
     RawDataFunctionDraw,
@@ -73,6 +76,11 @@ class HierarchicalCAERawDataSampler:
             field_selectors=state.schema.template.field_selectors,
             observation_noise_included=False,
         )
+
+    @property
+    def schema(self) -> RawDataSchemaTemplate:
+        assert self._state.schema is not None
+        return self._state.schema.template
 
     @property
     def diagnostics(self) -> RawDataPosteriorDiagnostics:

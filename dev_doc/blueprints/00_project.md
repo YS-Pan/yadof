@@ -53,10 +53,16 @@ local/distributed remain file-backed prepared-job transports.
    through the current workspace task definition.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions
     only to screen candidates that still receive real evaluation.
-11. For an explicitly posterior-capable future consumer, create one persistent
-    function sampler, stream complete named rawData draws by candidate chunk through
-    the generation snapshot's frozen cost interpreter, retain only joint objective
-    samples/validity diagnostics, and never publish predicted rawData.
+11. For an explicitly composed posterior-assisted consumer, require typed
+    performance/calibration/transferability readiness, create one persistent
+    schema-bearing function sampler, stream complete named rawData draws by
+    candidate chunk through the generation snapshot's frozen cost interpreter,
+    retain only joint objective samples/validity diagnostics, and never publish
+    predicted rawData.
+12. Keep discrete qNEHVI exploitation separate from explicit real exploration and
+    send their one combined unique population through the common real evaluator;
+    scientific blockers and soft selection failures use a complete real-search
+    fallback without changing GPSAF.
 
 Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen.
 Shape-preserving parameter-range/level and fixed-width objective changes rebuild
