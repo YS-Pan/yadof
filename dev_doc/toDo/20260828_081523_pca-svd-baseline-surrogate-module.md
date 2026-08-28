@@ -140,10 +140,10 @@
 ### 6. 配置所有权
 
 - 新模块参数先由 frozen component/factory settings 所有，不新增一组中央
-  `SURROGATE_PCA_*` uppercase keys。若
-  [模块化 Pydantic 配置 TODO](20260827_191615_modular-pydantic-configuration.md)
-  已进入 Gate 2，则直接使用其 component-owned typed settings 模式；否则使用当前可用的
-  frozen dataclass/显式 factory 参数，并预留无行为变化的迁移路径。
+  `SURROGATE_PCA_*` uppercase keys。遵循
+  [模块化组件配置 TODO](20260827_191615_modular-component-owned-configuration.md)
+  的 internal frozen settings + explicit factory kwargs 模式；该 TODO 尚未整体实施时，也应
+  直接采用这一新模块边界，避免扩大待迁移的中央配置面。
 - 不允许 component 在运行中任意读取完整 ambient `LoadedConfig` 来获取自己的算法参数；
   workspace path、device policy 等真正共享的 framework value 可以通过现有窄边界传入。
 
