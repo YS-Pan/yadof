@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 from .storage import read_json
 
+
 def _parse_utc(value: Any) -> dt.datetime | None:
     if not isinstance(value, str):
         return None
@@ -17,8 +18,12 @@ def _parse_utc(value: Any) -> dt.datetime | None:
     return parsed.astimezone(dt.timezone.utc)
 
 
-def active_progress(run_root: Path, state: Mapping[str, Any], *,
-                    now: dt.datetime | None = None) -> dict[str, Any] | None:
+def active_progress(
+    run_root: Path,
+    state: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any] | None:
     current_time = now or dt.datetime.now(dt.timezone.utc)
     for cell_id, cell in state.get("cells", {}).items():
         if cell.get("status") not in {"checked", "running"}:
@@ -36,18 +41,24 @@ def active_progress(run_root: Path, state: Mapping[str, Any], *,
         for name in ("stdout.log", "stderr.log"):
             path = command_root / name
             if path.is_file():
-                activity_times.append(dt.datetime.fromtimestamp(
-                    path.stat().st_mtime, tz=dt.timezone.utc))
+                activity_times.append(
+                    dt.datetime.fromtimestamp(path.stat().st_mtime, tz=dt.timezone.utc)
+                )
         latest = max(activity_times) if activity_times else None
         return {
             "cell": cell_id,
             "phase": attempt.get("status", cell.get("status")),
             "command": started.get("label"),
             "elapsed_seconds": None if started_time is None else max(
-                0.0, (current_time - started_time).total_seconds()),
+                0.0, (current_time - started_time).total_seconds()
+            ),
             "inactivity_seconds": None if latest is None else max(
-                0.0, (current_time - latest).total_seconds()),
+                0.0, (current_time - latest).total_seconds()
+            ),
         }
+    for item_id, item in state.get("postprocessors", {}).items():
+        if item.get("status") == "running":
+            return {"postprocessor": item_id, "phase": "running"}
     return None
 
 

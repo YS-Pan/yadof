@@ -7,12 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
-from .contracts import (
-    BASELINE_FORMAT,
-    BaselineManifest,
-    BenchmarkError,
-    freeze_json,
-)
+from .contracts import BASELINE_FORMAT, BaselineManifest, BenchmarkError, freeze_json
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9._/-]*\Z")
 _IGNORED_NAMES = {
@@ -32,8 +27,10 @@ _YADOF_RUNTIME_NAMES = {
     "surrogate",
     "tool_output",
 }
-_MANIFEST_FIELDS = {"format", "id", "name", "description", "workspace",
-                    "execution", "contract", "estimates", "snapshot_excludes"}
+_MANIFEST_FIELDS = {
+    "format", "id", "name", "description", "workspace", "execution",
+    "contract", "estimates", "snapshot_excludes",
+}
 
 
 def _read_json(path: Path) -> Mapping[str, Any]:

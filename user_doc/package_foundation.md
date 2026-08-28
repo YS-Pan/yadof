@@ -79,28 +79,28 @@ resource planning measures the workflow and simulator process tree. This is a
 reproducibility snapshot rather than a minimum-version contract; the wheel metadata
 remains authoritative for Python and dependency requirements.
 
-## Source-checkout benchmark
+## Independent benchmark package
 
-A Git clone or repository download includes `benchmark_automation/`, a
-user-runnable comparison of editable, self-describing baseline task templates and
-complete optimization strategies supplied by an external study. It is deliberately
-not installed by `pip install yadof` and is absent from wheel/sdist; it uses the
-matching yadof distribution already installed in the selected Python environment.
-A wheel-only installation therefore does not include this repository tool.
+`yadof-benchmark` is a separate distribution developed beside this package. It
+depends on the public yadof API, but yadof does not import benchmark orchestration
+or include concrete benchmark baselines. Install the companion distribution when
+comparison work is required; its wheel contains its own API, console command,
+self-describing baseline resources, and version-matched user documentation.
 
-From the source-checkout root, list baselines and start with the no-write plan:
+Create a workspace and start with the no-write plan:
 
 ```powershell
-python ".\benchmark_automation\benchmark.py" baselines
-python ".\benchmark_automation\benchmark.py" plan --study D:\studies\comparison.toml
+yadof-benchmark init D:\benchmarks\comparison
+yadof-benchmark baselines
+yadof-benchmark plan --workspace D:\benchmarks\comparison
 ```
 
-The study file lives outside `benchmark_automation/` and selects baseline IDs,
-complete `submit/optimization.py` sources, seeds, a uniform population/generation
-budget, an optional reference, and an output root. Relative paths resolve from the
-study. Each run snapshots its complete driver, baseline workspaces, and strategies;
-later edits affect only later runs. `run` and `resume` may launch the selected task
-software and remain subject to the execution authority in `config_and_run.md`.
+The workspace's `benchmark.py` declares complete strategy sources, any number of
+comparison matrices, execution policy, and postprocessing. Relative paths resolve
+from that workspace. Each run snapshots its complete Python workflow, resources,
+driver, baseline workspaces, and strategies; later edits affect only later runs.
+`run` and `resume` may launch selected task software and remain subject to the
+execution authority in `config_and_run.md`.
 Use `inspect --run PATH` as the read-only first view of a run.
 
 ## Initialize and inspect

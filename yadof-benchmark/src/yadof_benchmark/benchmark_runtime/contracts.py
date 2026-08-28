@@ -1,4 +1,4 @@
-"""Dependency-free contracts for the source-checkout benchmark."""
+"""Dependency-free contracts for code-first benchmark workspaces."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,9 +7,11 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 BASELINE_FORMAT = "yadof.benchmark.baseline"
-STUDY_FORMAT = "yadof.benchmark.study"
-RUN_FORMAT = "yadof.benchmark.run"
+WORKSPACE_FORMAT = "yadof.benchmark.workspace"
+WORKFLOW_FORMAT = "yadof.benchmark.workflow"
+RUN_FORMAT = "yadof.benchmark.workflow-run"
 STATE_FORMAT = "yadof.benchmark.state"
+
 
 class BenchmarkError(RuntimeError):
     """A user-actionable benchmark contract error."""
@@ -83,23 +85,39 @@ class StrategySpec:
 
 
 @dataclass(frozen=True)
-class StudyRequest:
-    name: str
+class ComparisonSpec:
+    id: str
     baseline_ids: tuple[str, ...]
-    strategies: tuple[StrategySpec, ...]
+    strategy_ids: tuple[str, ...]
     seeds: tuple[int, ...]
     population: int
     generations: int
     reference: str | None
+
+
+@dataclass(frozen=True)
+class PostprocessorSpec:
+    id: str
+    callback: str
+
+
+@dataclass(frozen=True)
+class WorkflowRequest:
+    name: str
+    strategies: tuple[StrategySpec, ...]
+    comparisons: tuple[ComparisonSpec, ...]
+    postprocessors: tuple[PostprocessorSpec, ...]
     fail_fast: bool
     runs_dir: Path
     python: Path
-    source: Path | None = None
+    workspace: Path
+    source: Path
 
 
 @dataclass(frozen=True)
 class CellSpec:
     id: str
+    comparison_id: str
     baseline_id: str
     strategy_id: str
     seed: int
@@ -120,6 +138,7 @@ class CellSpec:
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "comparison": self.comparison_id,
             "baseline": self.baseline_id,
             "strategy": self.strategy_id,
             "seed": self.seed,
@@ -138,47 +157,73 @@ class CellSpec:
 
 @dataclass(frozen=True)
 class RunSpec:
-    study: StudyRequest
+    workflow: WorkflowRequest
     baselines: tuple[BaselineManifest, ...]
     cells: tuple[CellSpec, ...]
+    workflow_digest: str
     driver_digest: str
     digest: str
 
     def to_dict(self) -> dict[str, Any]:
-        strategies = []
-        for item in self.study.strategies:
-            strategies.append(
-                {
-                    "id": item.id,
-                    "name": item.name,
-                    "source": None if item.source is None else str(item.source),
-                    "sources": {
-                        key: str(value) for key, value in sorted(item.sources.items())
-                    },
-                }
-            )
+        strategies = [
+            {
+                "id": item.id,
+                "name": item.name,
+                "source": None if item.source is None else str(item.source),
+                "sources": {
+                    key: str(value) for key, value in sorted(item.sources.items())
+                },
+            }
+            for item in self.workflow.strategies
+        ]
+        comparisons = [
+            {
+                "id": item.id,
+                "baselines": list(item.baseline_ids),
+                "strategies": list(item.strategy_ids),
+                "seeds": list(item.seeds),
+                "population": item.population,
+                "generations": item.generations,
+                "reference": item.reference,
+            }
+            for item in self.workflow.comparisons
+        ]
         return {
             "format": RUN_FORMAT,
             "digest": self.digest,
+            "workflow_digest": self.workflow_digest,
             "driver_digest": self.driver_digest,
-            "study": {
-                "name": self.study.name,
-                "source": None if self.study.source is None else str(self.study.source),
-                "baselines": list(self.study.baseline_ids),
+            "workflow": {
+                "format": WORKFLOW_FORMAT,
+                "name": self.workflow.name,
+                "workspace": str(self.workflow.workspace),
+                "source": str(self.workflow.source),
                 "strategies": strategies,
-                "seeds": list(self.study.seeds),
-                "population": self.study.population,
-                "generations": self.study.generations,
-                "reference": self.study.reference,
-                "fail_fast": self.study.fail_fast,
-                "runs_dir": str(self.study.runs_dir),
-                "python": str(self.study.python),
+                "comparisons": comparisons,
+                "postprocessors": [
+                    {"id": item.id, "callback": item.callback}
+                    for item in self.workflow.postprocessors
+                ],
+                "fail_fast": self.workflow.fail_fast,
+                "runs_dir": str(self.workflow.runs_dir),
+                "python": str(self.workflow.python),
             },
             "baselines": {
                 item.id: item.public_dict() for item in self.baselines
             },
             "cells": [cell.to_dict() for cell in self.cells],
         }
+
+
+@dataclass(frozen=True)
+class PostprocessContext:
+    run: Path
+    inputs: Path
+    results: Path
+    visualizations: Path
+    reports: Path
+    temp: Path
+    attempt: Path
 
 
 @dataclass(frozen=True)
@@ -195,14 +240,18 @@ __all__ = [
     "BASELINE_FORMAT",
     "RUN_FORMAT",
     "STATE_FORMAT",
-    "STUDY_FORMAT",
+    "WORKFLOW_FORMAT",
+    "WORKSPACE_FORMAT",
     "BaselineManifest",
     "BenchmarkError",
     "CellSpec",
     "CommandResult",
+    "ComparisonSpec",
+    "PostprocessContext",
+    "PostprocessorSpec",
     "RunSpec",
     "StrategySpec",
-    "StudyRequest",
+    "WorkflowRequest",
     "freeze_json",
     "thaw_json",
 ]

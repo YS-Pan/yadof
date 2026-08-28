@@ -13,12 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .baselines import snapshot_baseline
-from .contracts import (
-    RUN_FORMAT,
-    STATE_FORMAT,
-    BenchmarkError,
-    RunSpec,
-)
+from .contracts import RUN_FORMAT, STATE_FORMAT, BenchmarkError, RunSpec
 
 _ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _IGNORED_PARTS = {
@@ -30,6 +25,7 @@ _IGNORED_PARTS = {
     "recorded_data",
     "visualization_outputs",
 }
+_CACHE_PARTS = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 
 
 def utc_now() -> str:
@@ -88,6 +84,22 @@ def directory_digest(root: str | Path, *, excludes: tuple[str, ...] = ()) -> str
         if any(relative == item or relative.startswith(item + "/") for item in normalized_excludes):
             continue
         entries.append({"path": relative, "sha256": file_digest(path)})
+    return object_digest(entries)
+
+
+def workflow_digest(source: str | Path, resources: str | Path) -> str:
+    source_path = Path(source).resolve()
+    resource_root = Path(resources).resolve()
+    entries = [{"path": "benchmark.py", "sha256": file_digest(source_path)}]
+    for path in sorted(item for item in resource_root.rglob("*") if item.is_file()):
+        relative = path.relative_to(resource_root).as_posix()
+        if any(part in _CACHE_PARTS for part in Path(relative).parts):
+            continue
+        if relative.endswith((".pyc", ".pyo")):
+            continue
+        entries.append(
+            {"path": f"resources/{relative}", "sha256": file_digest(path)}
+        )
     return object_digest(entries)
 
 
@@ -153,25 +165,34 @@ def slug(value: str) -> str:
 
 def make_run_id(spec: RunSpec) -> str:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return f"{stamp}-{slug(spec.study.name)}-{spec.digest[:12]}"
+    return f"{stamp}-{slug(spec.workflow.name)}-{spec.digest[:12]}"
 
 
 def driver_digest(root: str | Path | None = None) -> str:
-    driver_root = (Path(root).resolve() if root else Path(__file__).resolve().parents[1])
-    paths = [driver_root / "benchmark.py", driver_root / "benchmark_core.py"]
+    driver_root = Path(root).resolve() if root else Path(__file__).resolve().parents[1]
+    names = ("__init__.py", "__main__.py", "_version.py", "api.py", "cli.py")
+    paths = [driver_root / name for name in names]
     paths.extend(sorted((driver_root / "benchmark_runtime").glob("*.py")))
-    entries = [{"path": path.relative_to(driver_root).as_posix(),
-                "sha256": file_digest(path)} for path in paths]
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise BenchmarkError(f"benchmark driver is incomplete: {', '.join(missing)}")
+    entries = [
+        {
+            "path": path.relative_to(driver_root).as_posix(),
+            "sha256": file_digest(path),
+        }
+        for path in paths
+    ]
     return object_digest(entries)
 
 
 def _copy_driver(destination: Path) -> None:
-    automation_root = Path(__file__).resolve().parents[1]
+    package_root = Path(__file__).resolve().parents[1]
     destination.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(automation_root / "benchmark.py", destination / "benchmark.py")
-    shutil.copy2(automation_root / "benchmark_core.py", destination / "benchmark_core.py")
+    for name in ("__init__.py", "__main__.py", "_version.py", "api.py", "cli.py"):
+        shutil.copy2(package_root / name, destination / name)
     shutil.copytree(
-        automation_root / "benchmark_runtime",
+        package_root / "benchmark_runtime",
         destination / "benchmark_runtime",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
@@ -186,19 +207,33 @@ def _initial_state(run_id: str, spec: RunSpec) -> dict[str, Any]:
         "created_utc": now,
         "updated_utc": now,
         "cells": {
-            cell.id: {
-                "status": "planned",
-                "attempts": [],
-                "error": None,
-            }
+            cell.id: {"status": "planned", "attempts": [], "error": None}
             for cell in spec.cells
+        },
+        "postprocessors": {
+            item.id: {"status": "planned", "attempts": [], "error": None}
+            for item in spec.workflow.postprocessors
         },
     }
 
 
+def _copy_workflow(spec: RunSpec, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(spec.workflow.source, destination / "benchmark.py")
+    shutil.copytree(
+        spec.workflow.workspace / "resources",
+        destination / "resources",
+        ignore=shutil.ignore_patterns(
+            "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "*.pyc", "*.pyo"
+        ),
+    )
+    if workflow_digest(destination / "benchmark.py", destination / "resources") != spec.workflow_digest:
+        raise BenchmarkError("workflow changed after it was planned")
+
+
 def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
     selected_id = safe_id(run_id or make_run_id(spec), label="run id")
-    runs_dir = spec.study.runs_dir.resolve()
+    runs_dir = spec.workflow.runs_dir.resolve()
     runs_dir.mkdir(parents=True, exist_ok=True)
     run_root = runs_dir / selected_id
     if run_root.exists():
@@ -208,16 +243,15 @@ def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
     try:
         _copy_driver(staging / "driver")
         if driver_digest(staging / "driver") != spec.driver_digest:
-            raise BenchmarkError("driver changed after the study was planned")
+            raise BenchmarkError("driver changed after the workflow was planned")
+        _copy_workflow(spec, staging / "inputs" / "workflow")
         manifests = {item.id: item for item in spec.baselines}
         copied_baselines: set[str] = set()
         copied_strategies: dict[str, str] = {}
         for cell in spec.cells:
             if cell.baseline_id not in copied_baselines:
                 baseline_destination = staging / cell.baseline_snapshot
-                snapshot_baseline(
-                    manifests[cell.baseline_id], baseline_destination.parent
-                )
+                snapshot_baseline(manifests[cell.baseline_id], baseline_destination.parent)
                 copied_baselines.add(cell.baseline_id)
             strategy_destination = staging / cell.strategy_snapshot
             strategy_destination.parent.mkdir(parents=True, exist_ok=True)
@@ -229,8 +263,8 @@ def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
                 raise BenchmarkError(
                     f"strategy snapshot collision at {cell.strategy_snapshot}"
                 )
-        (staging / "cells").mkdir()
-        (staging / "visualizations").mkdir()
+        for name in ("cells", "visualizations", "reports", "temp", "postprocessing"):
+            (staging / name).mkdir()
         spec_data = spec.to_dict()
         spec_data["created_utc"] = utc_now()
         write_new_json(staging / "spec.json", spec_data)
@@ -282,9 +316,7 @@ def prepare_attempt(
 ) -> tuple[Path, Path, dict[str, Any]]:
     cell_state = state["cells"][str(cell["id"])]
     number = len(cell_state["attempts"]) + 1
-    attempt_root = (
-        run_root / "cells" / str(cell["id"]) / "attempts" / f"{number:04d}"
-    )
+    attempt_root = run_root / "cells" / str(cell["id"]) / "attempts" / f"{number:04d}"
     attempt_root.mkdir(parents=True, exist_ok=False)
     workspace = attempt_root / "workspace"
     shutil.copytree(run_root / str(cell["baseline_snapshot"]), workspace)
@@ -323,6 +355,17 @@ def mark_interrupted(run_root: Path, state: dict[str, Any]) -> None:
         cell_state["status"] = "planned"
         cell_state["error"] = None
         changed = True
+    for item in state.get("postprocessors", {}).values():
+        if item.get("status") != "running":
+            continue
+        if item.get("attempts"):
+            attempt = item["attempts"][-1]
+            attempt["status"] = "interrupted"
+            attempt["finished_utc"] = utc_now()
+            attempt["error"] = "postprocessor ended without a terminal record"
+        item["status"] = "planned"
+        item["error"] = None
+        changed = True
     if changed:
         save_state(run_root, state)
 
@@ -347,6 +390,7 @@ __all__ = [
     "save_state",
     "slug",
     "utc_now",
+    "workflow_digest",
     "write_new_json",
     "write_new_text",
 ]

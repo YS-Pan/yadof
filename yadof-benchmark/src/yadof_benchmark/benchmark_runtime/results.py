@@ -19,6 +19,7 @@ from .storage import (
     utc_now,
 )
 
+
 def _rawdata_shapes(
     workspace: Path,
     records: list[Mapping[str, Any]],
@@ -30,9 +31,7 @@ def _rawdata_shapes(
     if not completed:
         return {}
     name = str(completed[-1].get("job_name", ""))
-    samples = get_rawdata_samples(
-        workspace, job_names=[name], status="completed"
-    )
+    samples = get_rawdata_samples(workspace, job_names=[name], status="completed")
     if not samples:
         return {}
     return {
@@ -49,20 +48,26 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
     issues: list[str] = []
     try:
         records = list(recorded_data.list_records(workspace))
-    except Exception as exc:  # noqa: BLE001 - report public API failure in context.
+    except Exception as exc:
         raise BenchmarkError(f"public record collection failed: {exc}") from exc
     try:
         extensions = list(recorded_data.list_optimization_metadata(workspace))
-    except Exception as exc:  # noqa: BLE001 - preserve the rest of the result.
-        extensions, _ = [], issues.append(f"optimization metadata unavailable: {exc}")
+    except Exception as exc:
+        extensions = []
+        issues.append(f"optimization metadata unavailable: {exc}")
     objective_names: list[str] = []
     try:
-        rows = cost_viewer.build_rows(workspace, status="completed", issues=issues,
-                                      objective_names_out=objective_names)
+        rows = cost_viewer.build_rows(
+            workspace,
+            status="completed",
+            issues=issues,
+            objective_names_out=objective_names,
+        )
         if not objective_names:
             objective_names = cost_viewer.objective_names(workspace, rows)
-    except Exception as exc:  # noqa: BLE001 - failed candidates remain reportable.
-        rows, _ = [], issues.append(f"cost rows unavailable: {exc}")
+    except Exception as exc:
+        rows = []
+        issues.append(f"cost rows unavailable: {exc}")
 
     final_hypervolume: float | None = None
     if rows:
@@ -70,12 +75,13 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
             _axis, cumulative, _current, _reference = cost_viewer.hypervolume_series(rows)
             if len(cumulative):
                 final_hypervolume = float(cumulative[-1])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             issues.append(f"hypervolume unavailable: {exc}")
     try:
         observed_shapes = _rawdata_shapes(workspace, records)
-    except Exception as exc:  # noqa: BLE001
-        observed_shapes, _ = {}, issues.append(f"rawData shapes unavailable: {exc}")
+    except Exception as exc:
+        observed_shapes = {}
+        issues.append(f"rawData shapes unavailable: {exc}")
     status_counts = Counter(str(item.get("status", "unknown")) for item in records)
     planned = int(cell["planned_evaluations"])
     completed = int(status_counts.get("completed", 0))
@@ -86,37 +92,60 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
     for row in rows:
         costs = [float(value) for value in row["costs"]]
         names = objective_names if len(objective_names) == len(costs) else [
-            f"objective_{index + 1}" for index in range(len(costs))]
-        metadata = {key: row.get(key) for key in (
-            "optimization_index", "optimization_run_id", "job_static_hash"
-        ) if row.get(key) is not None}
-        cost_rows.append({
-            "baseline": cell["baseline"], "strategy": cell["strategy"],
-            "seed": cell["seed"], "population": cell["population"],
-            "generations": cell["generations"], "job": row.get("job_name"),
-            "generation": row.get("generation_index"),
-            "objectives": dict(zip(names, costs)),
-            "average_objective": row.get("average_cost"), "metadata": metadata,
-        })
+            f"objective_{index + 1}" for index in range(len(costs))
+        ]
+        metadata = {
+            key: row.get(key)
+            for key in ("optimization_index", "optimization_run_id", "job_static_hash")
+            if row.get(key) is not None
+        }
+        cost_rows.append(
+            {
+                "comparison": cell["comparison"],
+                "baseline": cell["baseline"],
+                "strategy": cell["strategy"],
+                "seed": cell["seed"],
+                "population": cell["population"],
+                "generations": cell["generations"],
+                "job": row.get("job_name"),
+                "generation": row.get("generation_index"),
+                "objectives": dict(zip(names, costs)),
+                "average_objective": row.get("average_cost"),
+                "metadata": metadata,
+            }
+        )
     contract = {
-        "objective_count": {"expected": expected_contract.get("objective_count"),
+        "objective_count": {
+            "expected": expected_contract.get("objective_count"),
             "observed": objective_count,
-            "matches": objective_count == expected_contract.get("objective_count")},
-        "rawdata_shapes": {"expected": expected_shapes, "observed": observed_shapes,
-            "matches": bool(observed_shapes) and observed_shapes == expected_shapes},
+            "matches": objective_count == expected_contract.get("objective_count"),
+        },
+        "rawdata_shapes": {
+            "expected": expected_shapes,
+            "observed": observed_shapes,
+            "matches": bool(observed_shapes) and observed_shapes == expected_shapes,
+        },
     }
     result = {
-        "cell": cell["id"], "baseline": cell["baseline"],
-        "strategy": cell["strategy"], "seed": cell["seed"],
-        "budget": {"population": cell["population"],
-                   "generations": cell["generations"],
-                   "planned_evaluations": planned},
+        "cell": cell["id"],
+        "comparison": cell["comparison"],
+        "baseline": cell["baseline"],
+        "strategy": cell["strategy"],
+        "seed": cell["seed"],
+        "budget": {
+            "population": cell["population"],
+            "generations": cell["generations"],
+            "planned_evaluations": planned,
+        },
         "status_counts": dict(sorted(status_counts.items())),
         "completed_evaluations": completed,
         "success_rate": completed / planned if planned else None,
-        "objective_names": objective_names, "final_hypervolume": final_hypervolume,
-        "contract": contract, "rows": cost_rows,
-        "extensions": {"yadof.optimization": extensions}, "issues": issues,
+        "objective_names": objective_names,
+        "final_hypervolume": final_hypervolume,
+        "contract": contract,
+        "rows": cost_rows,
+        "extensions": {"yadof.optimization": extensions},
+        "issues": issues,
     }
     return json_safe(result)
 
@@ -139,11 +168,15 @@ def _comparisons(
     spec: Mapping[str, Any],
     cells: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    reference = spec["study"].get("reference")
+    references = {
+        str(item["id"]): item.get("reference")
+        for item in spec["workflow"]["comparisons"]
+    }
     groups: dict[tuple[Any, ...], list[Mapping[str, Any]]] = defaultdict(list)
     for cell in cells.values():
         budget = cell["budget"]
         key = (
+            cell["comparison"],
             cell["baseline"],
             cell["seed"],
             budget["population"],
@@ -152,14 +185,12 @@ def _comparisons(
         groups[key].append(cell)
     output: list[dict[str, Any]] = []
     for key, members in sorted(groups.items()):
+        reference = references[str(key[0])]
         reference_cell = next(
-            (item for item in members if item["strategy"] == reference),
-            None,
+            (item for item in members if item["strategy"] == reference), None
         )
-        reference_hv = (
-            None
-            if reference_cell is None
-            else reference_cell.get("final_hypervolume")
+        reference_hv = None if reference_cell is None else reference_cell.get(
+            "final_hypervolume"
         )
         for item in sorted(members, key=lambda value: str(value["strategy"])):
             value = item.get("final_hypervolume")
@@ -170,10 +201,11 @@ def _comparisons(
             )
             output.append(
                 {
-                    "baseline": key[0],
-                    "seed": key[1],
-                    "population": key[2],
-                    "generations": key[3],
+                    "comparison": key[0],
+                    "baseline": key[1],
+                    "seed": key[2],
+                    "population": key[3],
+                    "generations": key[4],
                     "strategy": item["strategy"],
                     "reference": reference,
                     "completed_evaluations": item.get("completed_evaluations"),
@@ -192,15 +224,8 @@ def _comparisons(
 def _csv_text(rows: list[Mapping[str, Any]]) -> str:
     stream = io.StringIO(newline="")
     fields = [
-        "baseline",
-        "strategy",
-        "seed",
-        "population",
-        "generations",
-        "job",
-        "generation",
-        "objectives",
-        "average_objective",
+        "comparison", "baseline", "strategy", "seed", "population",
+        "generations", "job", "generation", "objectives", "average_objective",
         "metadata",
     ]
     writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
@@ -228,8 +253,8 @@ def _markdown(
         "",
         f"Status: `{state['status']}`",
         "",
-        "| Baseline | Seed | Strategy | Evaluations | Success | Runtime (s) | Final hypervolume | Reference delta |",
-        "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Comparison | Baseline | Seed | Strategy | Evaluations | Success | Runtime (s) | Final hypervolume | Reference delta |",
+        "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in comparisons:
         hv = row.get("final_hypervolume")
@@ -237,7 +262,8 @@ def _markdown(
         rate = row.get("success_rate")
         runtime = row.get("runtime_seconds")
         lines.append(
-            "| {baseline} | {seed} | {strategy} | {done}/{planned} | {rate} | {runtime} | {hv} | {delta} |".format(
+            "| {comparison} | {baseline} | {seed} | {strategy} | {done}/{planned} | {rate} | {runtime} | {hv} | {delta} |".format(
+                comparison=str(row["comparison"]).replace("|", "\\|"),
                 baseline=str(row["baseline"]).replace("|", "\\|"),
                 seed=row["seed"],
                 strategy=str(row["strategy"]).replace("|", "\\|"),
@@ -258,13 +284,17 @@ def _markdown(
         ]
     )
     incomplete = [
-        (cell_id, cell) for cell_id, cell in state["cells"].items()
+        (cell_id, cell)
+        for cell_id, cell in state["cells"].items()
         if cell.get("status") != "collected"
     ]
     if incomplete:
         lines.extend(["", "## Incomplete cells", ""])
         for cell_id, cell in incomplete:
-            lines.append(f"- `{cell_id}`: {cell.get('status')} — {cell.get('error') or 'no error detail'}")
+            lines.append(
+                f"- `{cell_id}`: {cell.get('status')} — "
+                f"{cell.get('error') or 'no error detail'}"
+            )
         lines.append("")
     return "\n".join(lines)
 
@@ -295,43 +325,52 @@ def publish_results(
             cell_id: {"status": item.get("status"), "error": item.get("error")}
             for cell_id, item in state["cells"].items()
         },
+        "postprocessor_states": {
+            item_id: {"status": item.get("status"), "error": item.get("error")}
+            for item_id, item in state.get("postprocessors", {}).items()
+        },
         "cells": cells,
         "rows": rows,
         "comparisons": comparisons,
     }
     atomic_write_json(run_root / "results.json", result)
     atomic_write_text(run_root / "results.csv", _csv_text(rows))
-    atomic_write_text(
-        run_root / "report.md",
-        _markdown(str(state["run_id"]), state, comparisons),
-    )
+    atomic_write_text(run_root / "reports" / "summary.md", _markdown(
+        str(state["run_id"]), state, comparisons
+    ))
     return result
 
 
 def inspect_run(run: str | Path) -> dict[str, Any]:
     run_root = Path(run).resolve()
     spec, state = load_run(run_root)
-    counts = Counter(
-        str(cell.get("status", "unknown")) for cell in state["cells"].values()
-    )
+    counts = Counter(str(cell.get("status", "unknown")) for cell in state["cells"].values())
     errors = {
         cell_id: cell.get("error")
         for cell_id, cell in state["cells"].items()
         if cell.get("error")
     }
+    errors.update(
+        {
+            f"postprocessor:{item_id}": item.get("error")
+            for item_id, item in state.get("postprocessors", {}).items()
+            if item.get("error")
+        }
+    )
     return {
         "format": "yadof.benchmark.inspect",
         "run_id": state["run_id"],
         "run": str(run_root),
-        "study": spec["study"]["name"],
+        "workflow": spec["workflow"]["name"],
         "status": state["status"],
         "updated_utc": state["updated_utc"],
         "cell_counts": dict(sorted(counts.items())),
+        "postprocessors": state.get("postprocessors", {}),
         "active": active_progress(run_root, state),
         "errors": errors,
         "artifacts": {
             name: str(run_root / name)
-            for name in ("spec.json", "state.json", "results.json", "report.md")
+            for name in ("spec.json", "state.json", "results.json", "results.csv", "reports/summary.md")
             if (run_root / name).is_file()
         },
     }

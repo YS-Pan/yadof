@@ -74,12 +74,12 @@ subtree. Its developer entry point remains
 read that tree before changing the viewer backend, GUI, audit contracts, or its
 package integration.
 
-The repository also carries source-checkout-only benchmark automation outside the
-installed package. Its developer entry point is
-[benchmark_automation/dev_doc/README.md](../benchmark_automation/dev_doc/README.md).
-That compact tree owns current architecture, study/run formats, self-describing
-baselines, and focused tests. The directory is downloadable with the repository
-but excluded from wheel and sdist.
+The repository also develops the independent `yadof-benchmark` distribution. Its
+developer entry point is
+[yadof-benchmark/dev_doc/README.md](../yadof-benchmark/dev_doc/README.md).
+That package owns its code-first workspace/API contract, self-describing packaged
+baselines, run/recovery format, user documents, and focused tests. Keep benchmark
+orchestration outside `src/yadof`; communicate through public installed yadof APIs.
 
 ## Installed Development Environment
 

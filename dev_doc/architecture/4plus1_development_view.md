@@ -12,7 +12,7 @@ admin_tool/
   htcondor_pool/           HTCondor configuration and diagnosis tool
   pychrono_runtime/        PyChrono provisioning and validation tools
 examples/                  source-checkout reference workspaces
-benchmark_automation/      source-checkout comparison tool and its local docs/tests
+yadof-benchmark/           independent benchmark distribution, resources, docs/tests
 temp/                      ignored scratch and generated source-checkout evidence
 ```
 

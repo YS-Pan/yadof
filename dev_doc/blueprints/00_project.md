@@ -91,20 +91,20 @@ hot-change contract; structural dimension changes are future work.
   directories are not implicit prepared-job inputs.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
-- Source-checkout benchmark: Git-tracked generic runner, self-describing baselines,
-  current developer documents, and focused tests under `benchmark_automation/`;
-  downloadable with the repository, outside `src/yadof`, and never a wheel/sdist
-  member. External studies select baseline IDs, complete optimization strategy
-  files, seeds, a uniform budget, an optional reference, failure policy, interpreter,
-  and output root. Adding an algorithm requires no benchmark source, documentation,
-  or test change. A new run snapshots the complete driver, selected clean baseline
-  workspaces, and strategy inputs. Every exact materialized cell passes `yadof
-  check` before execution, and resume uses only run-owned files. Public yadof rows
-  become arbitrary-arm long results and optional descriptive reference deltas;
-  opaque optimization metadata is retained without algorithm-specific interpretation.
-  Digests record provenance but never compare current files to reject recovery.
-  Root `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and
-  change records.
+- Benchmark distribution: independent `yadof-benchmark/` project with its own
+  `yadof_benchmark` package, console command, code-first workspace API,
+  self-describing packaged baselines, user/developer documents, and focused tests.
+  Workspace `benchmark.py` files select complete optimization strategies and
+  declare any number of comparison matrices plus postprocessors. Adding an
+  algorithm requires no runner registry or source change. A new run snapshots the
+  complete Python workflow/resources, driver, selected clean baseline workspaces,
+  and strategy inputs. Every exact materialized cell passes `yadof check` before
+  execution, and resume uses only run-owned files. Public yadof rows become
+  arbitrary-arm long results and optional descriptive reference deltas; opaque
+  optimization metadata is retained without algorithm-specific interpretation.
+  The distribution depends on yadof's public surface, never the reverse. Root
+  `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
+  records.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with
   executable administrator resources in sibling directories under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
@@ -223,9 +223,10 @@ concurrency semantics without a PyChrono installation. Live pools/simulators and
 concrete physical assertions remain integration tests outside the default package
 suite and follow the user workflow's cost- and risk-based execution policy.
 
-The source-checkout benchmark has a separate focused unit suite below
-`benchmark_automation/tests/`. Its baseline discovery, planning, snapshot,
-execution, recovery, report, and CLI tests use fake commands and do not start a
-simulator. Real `run` and `resume` operations remain subject to the user workflow's
-cost/risk authorization. The package artifact allowlist keeps the benchmark absent
-from wheel and sdist even though it is tracked in the repository.
+The independent benchmark distribution has a focused unit suite below
+`yadof-benchmark/tests/`. Its initialization, Python workflow loading, baseline
+discovery, planning, snapshot, execution, postprocessing, recovery, report, and CLI
+tests use fake commands and do not start a simulator. Real `run` and `resume`
+operations remain subject to the user workflow's cost/risk authorization. Separate
+artifact allowlists keep benchmark resources out of the yadof wheel and include
+them in the `yadof-benchmark` wheel.

@@ -7,11 +7,11 @@ import the wheel force-installed into the sibling `.venv`. Tests create neutral
 temporary workspaces. Default tests require no live pool, simulator, concrete model,
 license, machine identity, or credential.
 
-The source-checkout benchmark is a separate repository tool and owns focused
-runner tests under `benchmark_automation/tests/`. They use temporary
+The independent benchmark distribution owns focused tests under
+`yadof-benchmark/tests/`. They use temporary code-first benchmark workspaces,
 self-describing baselines, arbitrary complete strategy files, fake child commands,
 and public result fixtures while consuming a regular installed yadof distribution.
-They are not part of the package's generic test namespace or wheel/sdist contents.
+They are not part of yadof's generic test namespace or yadof wheel/sdist contents.
 
 ## Required coverage
 
@@ -124,7 +124,7 @@ They are not part of the package's generic test namespace or wheel/sdist content
 Task-specific tests that assert a concrete model/design, physical objective,
 frequency band, exact active parameter set, or expected simulator result stay with a
 reference/disposable workspace or, when they verify the declared frozen comparison
-contract, below `benchmark_automation/`. Neutral fake adapters and synthetic
+contract, below `yadof-benchmark/`. Neutral fake adapters and synthetic
 0D/1D/2D/3D rawData remain package fixtures.
 
 Tests should prefer observable behavior, durable data, public boundaries, and

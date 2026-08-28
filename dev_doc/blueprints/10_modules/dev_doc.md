@@ -17,10 +17,10 @@ trees at `src/yadof/tools/cost_viewer/dev_doc/` and
 `src/yadof/tools/surrogate_viewer/dev_doc/`. Those trees ship with their tool
 packages and own viewer-specific architecture, blueprints, and terminology; the
 root developer README links to them instead of duplicating those contracts.
-The source-checkout benchmark owns a compact developer tree containing its current
-architecture plus study and run formats. Repository-wide pending-work and history
-lifecycle remains centralized here: nested developer trees do not add their own
-toDo, obsolete, or change-record contracts/directories.
+The independent `yadof-benchmark` package owns a compact developer tree containing
+its current architecture plus workspace/workflow and run formats. Repository-wide
+pending-work and history lifecycle remains centralized here: the companion package
+does not add its own toDo, obsolete, or change-record contracts/directories.
 
 Administrator documentation is a separate source-checkout tree at
 `admin_tool/admin_doc/`, organized by administered system. Executable administrator

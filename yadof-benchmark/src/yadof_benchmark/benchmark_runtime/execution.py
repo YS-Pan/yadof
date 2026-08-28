@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from .contracts import BenchmarkError, CommandResult
+from .postprocessing import execute_postprocessors
 from .results import collect_cell, publish_results
 from .storage import (
     latest_attempt,
@@ -24,9 +25,11 @@ EventSink = Callable[[Mapping[str, Any]], None]
 CommandRunner = Callable[..., CommandResult]
 Collector = Callable[[Path, Mapping[str, Any]], dict[str, Any]]
 
+
 def _emit(sink: EventSink | None, **event: Any) -> None:
     if sink is not None:
         sink({"utc": utc_now(), **event})
+
 
 def _stop_process_tree(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
@@ -50,9 +53,15 @@ def _start_process(command: Sequence[str], cwd: Path) -> subprocess.Popen[str]:
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     try:
         return subprocess.Popen(
-            list(command), cwd=cwd, stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            encoding="utf-8", errors="replace", bufsize=1,
+            list(command),
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
             creationflags=flags,
         )
     except OSError as exc:
@@ -93,34 +102,59 @@ def _watch(
         if now >= next_update:
             with lock:
                 inactive = now - last_activity[0]
-            _emit(event_sink, event="command-progress", label=label,
-                  elapsed_seconds=round(now - started, 3),
-                  inactivity_seconds=round(inactive, 3))
+            _emit(
+                event_sink,
+                event="command-progress",
+                label=label,
+                elapsed_seconds=round(now - started, 3),
+                inactivity_seconds=round(inactive, 3),
+            )
             next_update = now + 5.0
         time.sleep(0.1)
     return False
 
 
 def _finish_command(
-    command: Sequence[str], command_root: Path, label: str,
-    process: subprocess.Popen[str], started: float, started_utc: str,
-    timed_out: bool, event_sink: EventSink | None,
+    command: Sequence[str],
+    command_root: Path,
+    label: str,
+    process: subprocess.Popen[str],
+    started: float,
+    started_utc: str,
+    timed_out: bool,
+    event_sink: EventSink | None,
 ) -> CommandResult:
     duration = time.monotonic() - started
     result = CommandResult(
-        tuple(str(item) for item in command), int(process.returncode), duration,
-        timed_out, command_root / "stdout.log", command_root / "stderr.log",
+        tuple(str(item) for item in command),
+        int(process.returncode),
+        duration,
+        timed_out,
+        command_root / "stdout.log",
+        command_root / "stderr.log",
     )
-    write_new_json(command_root / "finished.json", {
-        "label": label, "command": list(command),
-        "returncode": result.returncode, "timed_out": timed_out,
-        "duration_seconds": duration, "started_utc": started_utc,
-        "finished_utc": utc_now(), "stdout": result.stdout.name,
-        "stderr": result.stderr.name,
-    })
-    _emit(event_sink, event="command-finished", label=label,
-          returncode=result.returncode, timed_out=timed_out,
-          duration_seconds=round(duration, 3))
+    write_new_json(
+        command_root / "finished.json",
+        {
+            "label": label,
+            "command": list(command),
+            "returncode": result.returncode,
+            "timed_out": timed_out,
+            "duration_seconds": duration,
+            "started_utc": started_utc,
+            "finished_utc": utc_now(),
+            "stdout": result.stdout.name,
+            "stderr": result.stderr.name,
+        },
+    )
+    _emit(
+        event_sink,
+        event="command-finished",
+        label=label,
+        returncode=result.returncode,
+        timed_out=timed_out,
+        duration_seconds=round(duration, 3),
+    )
     return result
 
 
@@ -135,26 +169,44 @@ def run_logged(
 ) -> CommandResult:
     command_root.mkdir(parents=True, exist_ok=False)
     started_utc = utc_now()
-    write_new_json(command_root / "started.json", {
-        "label": label, "command": list(command), "cwd": str(cwd),
-        "started_utc": started_utc, "timeout_seconds": timeout_seconds,
-    })
+    write_new_json(
+        command_root / "started.json",
+        {
+            "label": label,
+            "command": list(command),
+            "cwd": str(cwd),
+            "started_utc": started_utc,
+            "timeout_seconds": timeout_seconds,
+        },
+    )
     started = time.monotonic()
     last_activity = [started]
     activity_lock = threading.Lock()
     process = _start_process(command, cwd)
     threads = [
-        threading.Thread(target=_drain, args=(process.stdout,
-            command_root / "stdout.log", last_activity, activity_lock), daemon=True),
-        threading.Thread(target=_drain, args=(process.stderr,
-            command_root / "stderr.log", last_activity, activity_lock), daemon=True),
+        threading.Thread(
+            target=_drain,
+            args=(process.stdout, command_root / "stdout.log", last_activity, activity_lock),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=_drain,
+            args=(process.stderr, command_root / "stderr.log", last_activity, activity_lock),
+            daemon=True,
+        ),
     ]
     for thread in threads:
         thread.start()
     try:
-        timed_out = _watch(process, started=started, timeout_seconds=timeout_seconds,
-                           last_activity=last_activity, lock=activity_lock,
-                           label=label, event_sink=event_sink)
+        timed_out = _watch(
+            process,
+            started=started,
+            timeout_seconds=timeout_seconds,
+            last_activity=last_activity,
+            lock=activity_lock,
+            label=label,
+            event_sink=event_sink,
+        )
     except BaseException:
         _stop_process_tree(process)
         raise
@@ -162,8 +214,9 @@ def run_logged(
         process.wait()
         for thread in threads:
             thread.join(timeout=5)
-    return _finish_command(command, command_root, label, process, started,
-                           started_utc, timed_out, event_sink)
+    return _finish_command(
+        command, command_root, label, process, started, started_utc, timed_out, event_sink
+    )
 
 
 def _resource_check(execution: Mapping[str, Any]) -> None:
@@ -218,7 +271,7 @@ def _execute_cell(
     cell_state = state["cells"][str(cell["id"])]
     attempt_root, workspace, attempt = prepare_attempt(run_root, cell, state)
     timeout = int(cell.get("execution", {}).get("timeout_seconds", 7200))
-    python = str(spec["study"]["python"])
+    python = str(spec["workflow"]["python"])
     try:
         _resource_check(cell.get("execution", {}))
         check_root = attempt_root / "commands" / "01-check"
@@ -226,8 +279,12 @@ def _execute_cell(
         save_state(run_root, state)
         check = command_runner(
             [python, "-m", "yadof", "check", "--workspace", str(workspace)],
-            cwd=workspace, command_root=check_root, label="check",
-            timeout_seconds=min(timeout, 600), event_sink=event_sink)
+            cwd=workspace,
+            command_root=check_root,
+            label="check",
+            timeout_seconds=min(timeout, 600),
+            event_sink=event_sink,
+        )
         _record_command(run_root, attempt, check_root, check)
         if check.returncode:
             raise _command_failure("yadof check", check)
@@ -235,22 +292,29 @@ def _execute_cell(
         cell_state["status"] = "checked"
         save_state(run_root, state)
 
-        command = [python, "-m", "yadof", "run", "--workspace", str(workspace),
-                   "--generations", str(cell["generations"]),
-                   "--population-size", str(cell["population"]),
-                   "--random-seed", str(cell["seed"]), "--no-smoke-test"]
+        command = [
+            python, "-m", "yadof", "run", "--workspace", str(workspace),
+            "--generations", str(cell["generations"]),
+            "--population-size", str(cell["population"]),
+            "--random-seed", str(cell["seed"]), "--no-smoke-test",
+        ]
         mode = cell.get("execution", {}).get("mode")
         if mode:
             command.extend(["--mode", str(mode)])
-        run_root_command = attempt_root / "commands" / "02-run"
-        attempt["active_command"] = run_root_command.relative_to(run_root).as_posix()
+        run_command_root = attempt_root / "commands" / "02-run"
+        attempt["active_command"] = run_command_root.relative_to(run_root).as_posix()
         attempt["status"] = "running"
         cell_state["status"] = "running"
         save_state(run_root, state)
         measured = command_runner(
-            command, cwd=workspace, command_root=run_root_command, label="run",
-            timeout_seconds=timeout, event_sink=event_sink)
-        _record_command(run_root, attempt, run_root_command, measured)
+            command,
+            cwd=workspace,
+            command_root=run_command_root,
+            label="run",
+            timeout_seconds=timeout,
+            event_sink=event_sink,
+        )
+        _record_command(run_root, attempt, run_command_root, measured)
         if measured.returncode:
             raise _command_failure("yadof run", measured)
         attempt["status"] = "succeeded"
@@ -258,7 +322,7 @@ def _execute_cell(
         cell_state["status"] = "succeeded"
         save_state(run_root, state)
         return True
-    except Exception as exc:  # noqa: BLE001 - seal every failed attempt.
+    except Exception as exc:
         attempt["active_command"] = None
         attempt["status"] = "failed"
         attempt["finished_utc"] = utc_now()
@@ -279,12 +343,12 @@ def _collect_succeeded(
     event_sink: EventSink | None,
 ) -> bool:
     cell_state = state["cells"][str(cell["id"])]
-    _attempt_root, attempt = latest_attempt(run_root, cell_state)
+    attempt_root, attempt = latest_attempt(run_root, cell_state)
     workspace = run_root / str(attempt["workspace"])
     try:
         result = collector(workspace, cell)
         result["runtime_seconds"] = attempt.get("runtime_seconds", 0.0)
-        result_path = _attempt_root / "result.json"
+        result_path = attempt_root / "result.json"
         write_new_json(result_path, result)
         attempt["result"] = result_path.relative_to(run_root).as_posix()
         attempt["status"] = "collected"
@@ -293,16 +357,11 @@ def _collect_succeeded(
         save_state(run_root, state)
         _emit(event_sink, event="cell-collected", cell=cell["id"])
         return True
-    except Exception as exc:  # noqa: BLE001 - retry collection on resume.
+    except Exception as exc:
         cell_state["status"] = "succeeded"
         cell_state["error"] = f"collection failed: {exc}"
         save_state(run_root, state)
-        _emit(
-            event_sink,
-            event="collection-failed",
-            cell=cell["id"],
-            error=str(exc),
-        )
+        _emit(event_sink, event="collection-failed", cell=cell["id"], error=str(exc))
         return False
 
 
@@ -323,7 +382,7 @@ def execute_existing_run(
     state["status"] = "running"
     save_state(run_root, state)
     cell_by_id = {str(cell["id"]): cell for cell in spec["cells"]}
-    fail_fast = bool(spec["study"].get("fail_fast", False))
+    fail_fast = bool(spec["workflow"].get("fail_fast", False))
     for cell_id in [str(cell["id"]) for cell in spec["cells"]]:
         cell = cell_by_id[cell_id]
         cell_state = state["cells"][cell_id]
@@ -351,11 +410,19 @@ def execute_existing_run(
         ) and fail_fast:
             break
         publish_results(run_root, spec, state)
-    statuses = [cell["status"] for cell in state["cells"].values()]
-    state["status"] = (
-        "completed" if statuses and all(value == "collected" for value in statuses)
-        else "failed"
+    cells_complete = bool(state["cells"]) and all(
+        item["status"] == "collected" for item in state["cells"].values()
     )
+    if cells_complete:
+        state["status"] = "postprocessing"
+        save_state(run_root, state)
+        publish_results(run_root, spec, state)
+        processed = execute_postprocessors(
+            run_root, spec, state, event_sink=event_sink
+        )
+        state["status"] = "completed" if processed else "failed"
+    else:
+        state["status"] = "failed"
     save_state(run_root, state)
     publish_results(run_root, spec, state)
     _emit(event_sink, event="run-finished", status=state["status"])

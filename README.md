@@ -107,27 +107,28 @@ minimum requirement. See
 [dev_doc/development_environment.md](dev_doc/development_environment.md) for paths,
 detection details, and the package's declared compatibility boundary.
 
-## Source-checkout benchmark
+## Benchmark package
 
-The repository includes a downloadable, user-runnable comparison tool under
-[benchmark_automation](benchmark_automation/dev_doc/README.md). It is deliberately
-outside `src/yadof`: a Git clone or repository download contains the runner,
-self-describing baseline templates, and focused tests, while `pip install yadof`,
-wheel, and sdist do not. Complete `submit/optimization.py` files are supplied by an
-external study; adding an algorithm requires no benchmark source change.
+The repository develops the independent
+[yadof-benchmark](yadof-benchmark/user_doc/README.md) distribution beside yadof.
+It depends only on public yadof behavior and owns its console command, packaged
+self-describing baselines, documentation, and focused tests. Installing `yadof`
+alone does not install benchmark orchestration; installing `yadof-benchmark`
+declares the matching yadof dependency.
 
-Use a Python environment containing the matching installed yadof distribution and
-start with the no-write plan:
+Create a code-first workspace, edit its complete `benchmark.py`, and start with the
+read-only plan:
 
 ```powershell
-python ".\benchmark_automation\benchmark.py" baselines
-python ".\benchmark_automation\benchmark.py" plan --study D:\studies\comparison.toml
+yadof-benchmark init D:\benchmarks\comparison
+yadof-benchmark baselines
+yadof-benchmark plan --workspace D:\benchmarks\comparison
 ```
 
-The study selects baseline IDs, strategies, seeds, one uniform budget, an optional
-reference, and its run root. `plan` writes nothing. `run` snapshots the complete
-driver, baselines, and strategy inputs; `resume --run PATH` executes only that
-run-owned snapshot. Read [the study format](benchmark_automation/dev_doc/study_format.md)
+The Python workflow may declare multiple comparison matrices and retryable
+postprocessors without a fixed configuration schema. `run` snapshots the workflow,
+resources, baselines, complete strategies, and driver; `resume --run PATH` uses only
+that run-owned evidence. Read [the workspace contract](yadof-benchmark/user_doc/workspace.md)
 and apply the normal cost/risk policy before starting real work.
 
 ## Package and workspace boundary

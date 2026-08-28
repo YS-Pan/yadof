@@ -6,8 +6,9 @@ The foundation separates immutable installed framework resources from mutable,
 explicitly selected user workspaces. Distribution metadata has one version source
 and one console entry point. Wheel/sdist membership is allowlisted around package
 code, generic templates/adapters, and version-matched documentation. The top-level
-`benchmark_automation/` directory is a source-checkout tool, not an installed
-package resource, console entry point, or implicit workspace.
+`yadof-benchmark/` project is a separate distribution with its own installed
+package resources and console entry point; it is not a yadof package resource or
+implicit yadof workspace.
 
 The current package version is 0.4.2. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
@@ -59,8 +60,8 @@ Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 - Checking never launches the workflow, trains/evaluates, or mutates task/runtime state.
 - Configured framework paths never overlap fixed `submit/`, `job_template/`, or one another.
 - Package code remains functional when site-packages is read-only.
-- Wheel/sdist exclude concrete models, workspaces, jobs, records, caches, logs,
-  checkpoints, credentials, examples, and source-checkout benchmark automation.
+- The yadof wheel/sdist excludes concrete models, workspaces, jobs, records, caches,
+  logs, checkpoints, credentials, examples, and benchmark orchestration/resources.
 - Loaded workspace modules and helper names are removed after use.
 - Unreserved user-created workspace directories remain user-owned and are not
   inferred as framework state or prepared-job input.

@@ -1,4 +1,4 @@
-"""Public API for the source-checkout benchmark."""
+"""Public API for code-first yadof benchmark workspaces."""
 from __future__ import annotations
 
 import importlib
@@ -8,49 +8,79 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from benchmark_runtime.baselines import discover_baselines as _discover_baselines
-from benchmark_runtime.contracts import (
+from .benchmark_runtime.baselines import discover_baselines as _discover_baselines
+from .benchmark_runtime.contracts import (
     BaselineManifest,
     BenchmarkError,
+    ComparisonSpec,
+    PostprocessContext,
     RunSpec,
-    StudyRequest,
+    WorkflowRequest,
 )
-from benchmark_runtime.execution import execute_existing_run
-from benchmark_runtime.planning import (
-    load_study as _load_study,
-    plan_study as _plan_study,
+from .benchmark_runtime.execution import execute_existing_run
+from .benchmark_runtime.planning import (
+    load_workflow as _load_workflow,
+    plan_workflow,
 )
-from benchmark_runtime.results import inspect_run as _inspect_run
-from benchmark_runtime.storage import create_run
+from .benchmark_runtime.results import inspect_run as _inspect_run
+from .benchmark_runtime.storage import create_run
+from .benchmark_runtime.workflow import Benchmark
+from .benchmark_runtime.workspace import init_workspace as _init_workspace
 
-_AUTOMATION_ROOT = Path(__file__).resolve().parent
-_BASELINES_ROOT = _AUTOMATION_ROOT / "baselines"
-_DEFAULT_RUNS_ROOT = _AUTOMATION_ROOT.parent / "temp"
+_PACKAGE_ROOT = Path(__file__).resolve().parent
+
+
+def _resource_root(name: str) -> Path:
+    source_tree = _PACKAGE_ROOT.parents[1] / name
+    if source_tree.is_dir():
+        return source_tree
+    installed = _PACKAGE_ROOT / "_resources" / name
+    if installed.is_dir():
+        return installed
+    raise BenchmarkError(f"installed benchmark resource is missing: {name}")
+
+
+def user_doc_root() -> Path:
+    """Return the version-matched installed user documentation root."""
+
+    return _resource_root("user_doc")
 
 
 def discover_baselines(
     root: str | Path | None = None,
 ) -> dict[str, BaselineManifest]:
-    return _discover_baselines(root or _BASELINES_ROOT)
+    return _discover_baselines(root or _resource_root("baselines"))
 
 
-def load_study(path: str | Path) -> StudyRequest:
-    return _load_study(path, default_runs_dir=_DEFAULT_RUNS_ROOT)
+def init_workspace(path: str | Path) -> dict[str, Any]:
+    return _init_workspace(path)
 
 
-def plan_study(study: str | Path | StudyRequest) -> RunSpec:
-    request = load_study(study) if isinstance(study, (str, Path)) else study
-    return _plan_study(request, discover_baselines())
+def load_workflow(workspace: str | Path) -> WorkflowRequest:
+    return _load_workflow(workspace)
 
 
-def run_study(
-    study: str | Path | StudyRequest,
+def plan_workspace(
+    workspace: str | Path | WorkflowRequest,
+    *,
+    baselines_root: str | Path | None = None,
+) -> RunSpec:
+    request = (
+        _load_workflow(workspace)
+        if isinstance(workspace, (str, Path))
+        else workspace
+    )
+    return plan_workflow(request, discover_baselines(baselines_root))
+
+
+def run_workspace(
+    workspace: str | Path | WorkflowRequest,
     *,
     run_id: str | None = None,
+    baselines_root: str | Path | None = None,
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    request = load_study(study) if isinstance(study, (str, Path)) else study
-    spec = _plan_study(request, discover_baselines())
+    spec = plan_workspace(workspace, baselines_root=baselines_root)
     run_root = create_run(spec, run_id=run_id)
     execute_existing_run(run_root, event_sink=event_sink)
     return _inspect_run(run_root)
@@ -100,13 +130,18 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
 
 __all__ = [
     "BaselineManifest",
+    "Benchmark",
     "BenchmarkError",
+    "ComparisonSpec",
+    "PostprocessContext",
     "RunSpec",
-    "StudyRequest",
+    "WorkflowRequest",
     "discover_baselines",
+    "init_workspace",
     "inspect_run",
-    "load_study",
-    "plan_study",
+    "load_workflow",
+    "plan_workspace",
     "resume_run",
-    "run_study",
+    "run_workspace",
+    "user_doc_root",
 ]

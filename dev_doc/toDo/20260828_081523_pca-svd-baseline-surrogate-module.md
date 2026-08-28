@@ -247,8 +247,8 @@
 - oracle 与 deployable 语义由各自完整 strategy 的 identity 和命名空间元数据表达；benchmark
   原样保存扩展元数据，但不解释、分类或据此改变比较流程。
 - 已冻结的计划、hash、receipt 和失败结论不变；新证据进入独立 run。
-- source-checkout benchmark focused tests、无写入 plan 和 installed-wheel package
-  suite 全部通过；真实 measured run 的权限和结果单独记录。
+- `yadof-benchmark` focused tests、代码式 workspace 无写入 plan 和两个 installed-wheel
+  package suite 全部通过；真实 measured run 的权限和结果单独记录。
 
 ## 非目标
 
