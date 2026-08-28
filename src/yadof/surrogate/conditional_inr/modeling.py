@@ -10,6 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .settings import DEFAULT_CONDITIONAL_INR_SETTINGS
+
 
 MEMBER_SEED_STRIDE = 1009
 BOOTSTRAP_MIN_SAMPLES_PER_INPUT = 2
@@ -19,23 +21,23 @@ MODEL_NAME = "conditional_inr_rawdata_deep_ensemble"
 
 @dataclass(frozen=True)
 class INRTrainConfig:
-    epochs: int = 32
-    ensemble_size: int = 3
-    batch_size: int = 16
-    lr: float = 1e-3
-    weight_decay: float = 1e-5
-    loss_beta: float = 0.05
-    x_latent_dim: int = 96
-    field_emb_dim: int = 12
-    coord_fourier_features: int = 24
-    hidden_dim: int = 192
-    hidden_layers: int = 3
-    train_query_chunk: int = 4096
-    train_query_sample_count: int = 8192
-    sample_batch_eval: int = 64
-    query_batch_eval: int = 8192
-    bootstrap_members: bool = False
-    bootstrap_fraction: float = 1.0
+    epochs: int = DEFAULT_CONDITIONAL_INR_SETTINGS.epochs
+    ensemble_size: int = DEFAULT_CONDITIONAL_INR_SETTINGS.ensemble_size
+    batch_size: int = DEFAULT_CONDITIONAL_INR_SETTINGS.batch_size
+    lr: float = DEFAULT_CONDITIONAL_INR_SETTINGS.learning_rate
+    weight_decay: float = DEFAULT_CONDITIONAL_INR_SETTINGS.weight_decay
+    loss_beta: float = DEFAULT_CONDITIONAL_INR_SETTINGS.loss_beta
+    x_latent_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.x_latent_dim
+    field_emb_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.field_embedding_dim
+    coord_fourier_features: int = DEFAULT_CONDITIONAL_INR_SETTINGS.coordinate_fourier_features
+    hidden_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.hidden_dim
+    hidden_layers: int = DEFAULT_CONDITIONAL_INR_SETTINGS.hidden_layers
+    train_query_chunk: int = DEFAULT_CONDITIONAL_INR_SETTINGS.train_query_chunk
+    train_query_sample_count: int = DEFAULT_CONDITIONAL_INR_SETTINGS.train_query_sample_count
+    sample_batch_eval: int = DEFAULT_CONDITIONAL_INR_SETTINGS.sample_batch_eval
+    query_batch_eval: int = DEFAULT_CONDITIONAL_INR_SETTINGS.query_batch_eval
+    bootstrap_members: bool = DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_members
+    bootstrap_fraction: float = DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_fraction
 
 
 def _positive_int(name: str, value: int) -> int:

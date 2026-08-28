@@ -243,10 +243,27 @@ class CAETrainConfig:
             "coordinate_query_batch_size",
         )
         for name in positive_ints:
-            if int(getattr(self, name)) <= 0:
-                raise ValueError(f"{name} must be positive")
-        if int(self.fine_tune_epochs) < 0:
-            raise ValueError("fine_tune_epochs must be non-negative")
+            raw = getattr(self, name)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                raise TypeError(
+                    f"hierarchical_cae(): {name}={raw!r} must be an integer"
+                )
+            if raw <= 0:
+                raise ValueError(
+                    f"hierarchical_cae(): {name}={raw!r} must be positive"
+                )
+        if isinstance(self.fine_tune_epochs, bool) or not isinstance(
+            self.fine_tune_epochs, int
+        ):
+            raise TypeError(
+                "hierarchical_cae(): "
+                f"fine_tune_epochs={self.fine_tune_epochs!r} must be an integer"
+            )
+        if self.fine_tune_epochs < 0:
+            raise ValueError(
+                "hierarchical_cae(): "
+                f"fine_tune_epochs={self.fine_tune_epochs!r} must be non-negative"
+            )
         for name in (
             "learning_rate",
             "weight_decay",
@@ -256,29 +273,67 @@ class CAETrainConfig:
             "residual_gate_loss_weight",
             "coordinate_consistency_weight",
         ):
-            value = float(getattr(self, name))
+            raw = getattr(self, name)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                raise TypeError(
+                    f"hierarchical_cae(): {name}={raw!r} must be a real number"
+                )
+            value = float(raw)
             if (
                 not np.isfinite(value)
                 or value < 0
                 or (name != "weight_decay" and value == 0)
             ):
-                raise ValueError(f"{name} must be finite and positive")
+                raise ValueError(
+                    f"hierarchical_cae(): {name}={getattr(self, name)!r} "
+                    "must be finite and positive"
+                )
         if self.robust_loss_cap is not None:
+            if isinstance(self.robust_loss_cap, bool) or not isinstance(
+                self.robust_loss_cap, (int, float)
+            ):
+                raise TypeError(
+                    "hierarchical_cae(): "
+                    f"robust_loss_cap={self.robust_loss_cap!r} must be a real number"
+                )
             cap = float(self.robust_loss_cap)
             if not np.isfinite(cap) or cap <= 0:
-                raise ValueError("robust_loss_cap must be finite and positive")
+                raise ValueError(
+                    "hierarchical_cae(): "
+                    f"robust_loss_cap={self.robust_loss_cap!r} must be finite and positive"
+                )
             object.__setattr__(self, "robust_loss_cap", cap)
+        for name in ("validation_fraction", "bootstrap_fraction"):
+            raw = getattr(self, name)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                raise TypeError(
+                    f"hierarchical_cae(): {name}={raw!r} must be a real number"
+                )
         if not 0 < float(self.validation_fraction) < 0.5:
-            raise ValueError("validation_fraction must be between zero and 0.5")
+            raise ValueError(
+                "hierarchical_cae(): "
+                f"validation_fraction={self.validation_fraction!r} must be between zero and 0.5"
+            )
         if not 0 < float(self.bootstrap_fraction) <= 1:
-            raise ValueError("bootstrap_fraction must be in (0, 1]")
-        sharing = str(self.sharing).strip().lower()
+            raise ValueError(
+                "hierarchical_cae(): "
+                f"bootstrap_fraction={self.bootstrap_fraction!r} must be in (0, 1]"
+            )
+        if not isinstance(self.sharing, str):
+            raise TypeError(
+                f"hierarchical_cae(): sharing={self.sharing!r} must be a string"
+            )
+        sharing = self.sharing.strip().lower()
         if sharing not in {"hierarchical", "independent"}:
-            raise ValueError("sharing must be 'hierarchical' or 'independent'")
+            raise ValueError(
+                f"hierarchical_cae(): sharing={self.sharing!r} must be "
+                "'hierarchical' or 'independent'"
+            )
         object.__setattr__(self, "sharing", sharing)
         if self.coordinate_readout and int(self.architecture_version) < 2:
             raise ValueError(
-                "coordinate_readout requires hierarchical CAE architecture_version >= 2"
+                "hierarchical_cae(): coordinate_readout=True requires "
+                f"architecture_version={self.architecture_version!r} to be >= 2"
             )
         for name in (
             "regime_head",
@@ -289,7 +344,9 @@ class CAETrainConfig:
             "mixed_precision",
         ):
             if type(getattr(self, name)) is not bool:
-                raise TypeError(f"{name} must be a bool")
+                raise TypeError(
+                    f"hierarchical_cae(): {name}={getattr(self, name)!r} must be bool"
+                )
 
 
 @dataclass(frozen=True, slots=True)

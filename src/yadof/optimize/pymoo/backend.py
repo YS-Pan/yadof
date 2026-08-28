@@ -30,6 +30,7 @@ from ..gpsaf.records import (
 )
 from ..problem_info import ProblemInfo
 from ..strategy import HistoryRecord, Population as OptimizerPopulation
+from .settings import PymooSearchSettings
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class PymooContext:
     seed: int
     generation_index: int
     search_algorithm: str
+    search_settings: PymooSearchSettings
     baseline_optimizer: str
     problem_adapter: Problem
     reference_directions: ReferenceDirectionInfo | None = None
@@ -113,12 +115,12 @@ def _choose_das_dennis_partitions(objective_count: int, population_size: int) ->
 
 
 def _reference_directions(
-    config: LoadedConfig, objective_count: int, population_size: int
+    settings: PymooSearchSettings, objective_count: int, population_size: int
 ) -> ReferenceDirectionInfo | None:
     if int(objective_count) < 2:
         return None
-    method = str(getattr(config, "OPTIMIZE_NSGA3_REF_DIR_METHOD", "das-dennis"))
-    configured = getattr(config, "OPTIMIZE_NSGA3_PARTITIONS", None)
+    method = str(settings.reference_direction_method)
+    configured = settings.reference_direction_partitions
     partitions = (
         _choose_das_dennis_partitions(objective_count, population_size)
         if configured is None
@@ -132,18 +134,20 @@ def _reference_directions(
 
 
 def _make_algorithm(context: PymooContext):
-    config = context.config
+    settings = context.search_settings
     dim = max(1, int(context.problem.variable_count))
-    mutation_prob = float(getattr(config, "OPTIMIZE_MUTATION_PROBABILITY", 0.35))
-    mutation_prob_var = min(1.0, float(getattr(config, "OPTIMIZE_DIM_MUT_PER_INDIVIDUAL", 1.0)) / float(dim))
+    mutation_prob_var = min(
+        1.0,
+        float(settings.mutated_dimensions_per_individual) / float(dim),
+    )
     crossover = SBX(
-        prob=float(getattr(config, "OPTIMIZE_CROSSOVER_PROBABILITY", 0.8)),
-        eta=float(getattr(config, "OPTIMIZE_CROSSOVER_ETA", 20.0)),
+        prob=settings.crossover_probability,
+        eta=settings.crossover_eta,
     )
     mutation = PM(
-        prob=mutation_prob,
+        prob=settings.mutation_probability,
         prob_var=mutation_prob_var,
-        eta=float(getattr(config, "OPTIMIZE_MUTATION_ETA", 20.0)),
+        eta=settings.mutation_eta,
         at_least_once=True,
     )
     if context.search_algorithm == "ga":
@@ -182,10 +186,11 @@ def make_context(
     seed: int,
     generation_index: int,
     search_algorithm: str,
+    search_settings: PymooSearchSettings,
 ) -> PymooContext:
     selected_algorithm = str(search_algorithm).strip().lower()
     reference_directions = (
-        _reference_directions(config, problem.objective_count, population_size)
+        _reference_directions(search_settings, problem.objective_count, population_size)
         if selected_algorithm == "nsga3"
         else None
     )
@@ -196,6 +201,7 @@ def make_context(
         seed=int(seed),
         generation_index=int(generation_index),
         search_algorithm=selected_algorithm,
+        search_settings=search_settings,
         baseline_optimizer=(
             "pymoo.GA" if selected_algorithm == "ga" else "pymoo.NSGA3"
         ),
@@ -278,9 +284,7 @@ def generate_candidate_pool(
     if int(need) <= 0:
         return accepted
 
-    attempts = max(
-        1, int(getattr(context.config, "OPTIMIZE_REFILL_ATTEMPTS", 8))
-    )
+    attempts = context.search_settings.refill_attempts
     decimals = int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10))
     for _attempt in range(attempts):
         infills = state.ask()

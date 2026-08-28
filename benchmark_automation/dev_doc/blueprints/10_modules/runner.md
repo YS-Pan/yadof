@@ -11,6 +11,9 @@ filesystem/state behavior directly testable without a simulator.
 - Plan, preflight, spec/matrix creation, baseline snapshots, and state publication.
 - Attempt materialization, subprocess logging, timeout/failure translation,
   progress rendering, postprocessing, visualization, sealing, and resume.
+- Per-arm single templates or complete per-case template mappings. Materialization
+  copies the sealed case selection into `submit/optimization.py`; component settings
+  never travel through managed config overrides.
 - Bounded prior-run timing snapshot creation plus read-only estimation over the
   immutable plan, matched/current completed wall time, and the active command's
   bounded progress-event tail.

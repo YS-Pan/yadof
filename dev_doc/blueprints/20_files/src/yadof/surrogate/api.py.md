@@ -11,11 +11,14 @@
 ## Functionalities
 - Construct `conditional_inr()` with validation, semantic identity, scheduler gate,
   train-after-submit, readiness, and rawData prediction methods required by GPSAF.
+  All mathematical/training/backend values are explicit keyword-only factory
+  arguments stored in a private frozen settings snapshot.
 - Construct `conditional_inr_posterior()` as a separate semantic wrapper that
   delegates legacy lifecycle/prediction calls and lazily creates a persistent
   finite-member rawData sampler.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
-  an optional versioned `RawDataQualityPolicy`, and `CAETrainConfig`. The component
+  an optional versioned `RawDataQualityPolicy`, explicit device/training kwargs,
+  and an internal `CAETrainConfig`. The component
   owns full-grid train/recover/predict, finite joint draws, uncalibrated applicability
   prediction, and an optional architecture-v2 all-axis coordinate readout. A selected
   quality policy enables the regime head and default robust cap; a regime head without
@@ -46,6 +49,8 @@
 - GPSAF calls the injected component only; it does not import concrete surrogate runtime.
 - The component semantic version changes whenever architecture/scaler semantics
   would make retained weights unsafe to reuse.
+- Factory defaults are validated by the same path as explicit values. Nested task
+  declarations are copied into tuples/read-only mappings before identity use.
 - Posterior capability identity is separate and must be nested only in a strategy
   that explicitly selects it; the implemented adapter must not cold-invalidate the
   current conditional-INR GPSAF checkpoint identity.

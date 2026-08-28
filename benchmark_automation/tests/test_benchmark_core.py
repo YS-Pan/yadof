@@ -895,9 +895,15 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
         },
         "arms": {
             "surrogate": {
-                "template": str(strategy),
-                "sha256": core.file_sha256(strategy),
-                "config_overrides": {"OPTIMIZE_SURROGATE_ALPHA": 3},
+                "template": None,
+                "sha256": None,
+                "case_strategy_templates": {
+                    "case": {
+                        "path": str(strategy),
+                        "sha256": core.file_sha256(strategy),
+                    }
+                },
+                "config_overrides": {},
             }
         },
     }
@@ -912,7 +918,7 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
     config_text = (workspace / "config.py").read_text(encoding="utf-8")
     assert "HISTORY_SEGMENT_MAX_CANDIDATES = 100" in config_text
     assert "HISTORY_UNPUBLISHED_MAX_CANDIDATES = 128" in config_text
-    assert "OPTIMIZE_SURROGATE_ALPHA = 3" in config_text
+    assert "ARM = 'surrogate'" not in config_text
     manifest = core.read_json(attempt_root / "input_manifest.json")
     assert manifest["starting_evidence_fingerprint"] == "empty"
 

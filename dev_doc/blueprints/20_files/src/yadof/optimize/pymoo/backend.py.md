@@ -10,8 +10,8 @@
 - Expose the small adapter surface used by common search and GPSAF phases.
 
 ## I/O Format
-- Accepts normalized bounds, populations, objective rows, and optimization
-  configuration.
+- Accepts normalized bounds, populations, objective rows, core candidate-identity
+  policy, and one immutable `PymooSearchSettings` snapshot.
 - Returns pymoo-backed search contexts or normalized candidate rows through local
   adapter dataclasses.
 
@@ -22,3 +22,5 @@
 ## Mutability Profile
 - Pymoo-version details stay here; public optimization factories and workspace
   contracts must not expose pymoo objects.
+- Operator, refill, and reference-direction values have no fallback lookup in
+  `LoadedConfig`; the selected factory snapshot is authoritative.

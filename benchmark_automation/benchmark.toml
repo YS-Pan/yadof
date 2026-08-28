@@ -20,14 +20,13 @@ display_name = "NSGA-III"
 surrogate = false
 
 [arms.gpsaf-conditional-inr]
-strategy_template = "gpsaf_conditional_inr.py"
 display_name = "GPSAF + conditional-INR"
 surrogate = true
 
-[arms.gpsaf-conditional-inr.config_overrides]
-OPTIMIZE_SURROGATE_ALPHA = 3
-OPTIMIZE_SURROGATE_BETA = 3
-OPTIMIZE_SURROGATE_EXPLORATION_FRACTION = 0.15
+[arms.gpsaf-conditional-inr.case_strategy_templates]
+saw = "gpsaf_conditional_inr_saw.py"
+chrono = "gpsaf_conditional_inr_chrono.py"
+test-com = "gpsaf_conditional_inr_test_com.py"
 
 [cases.saw]
 baseline = "baselines/ngspice/saw-ladder"

@@ -66,8 +66,8 @@ Keeping the CLI thin makes core behavior directly testable.
 | `benchmark.py` | Thin command-line entry point. |
 | `benchmark_core.py` | Runner implementation and stable data transformations. |
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
-| `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell config overrides, and resource requirements. |
-| `strategy_templates/` | Complete arm-specific `submit/optimization.py` replacements; the non-surrogate arm is explicitly identified as NSGA-III. |
+| `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell core-config overrides, per-case strategy-template selection, and resource requirements. |
+| `strategy_templates/` | Complete arm/case-specific `submit/optimization.py` replacements carrying explicit component factory kwargs; the non-surrogate arm is explicitly identified as NSGA-III. |
 | `baselines/` | Editable task templates plus provenance selected as `<provider>/<baseline-id>`; names are semantic rather than fingerprint-derived, and every selected workspace exposes root `postprocess.py`. |
 | `history_snapshots/` | Optional immutable warm-start inputs; currently no snapshot is selected. |
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |

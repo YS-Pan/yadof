@@ -5,20 +5,72 @@
 Effective values are loaded in this order:
 
 1. validated package defaults;
-2. uppercase settings in workspace `config.py`;
+2. uppercase core campaign settings in workspace `config.py`;
 3. temporary API/CLI overrides for one invocation.
 
 Unknown uppercase settings and invalid values fail before a batch starts. Loading
 never rewrites config. Use `yadof check --workspace PATH` to see the selected mode
 and validate paths.
 
-Common workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
+Common core workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 `LOCAL_EVALUATION_MAX_WORKERS`, `FAST_EVALUATION_MAX_WORKERS`,
 `FAST_EVALUATION_SCRATCH_DIR`, `OPTIMIZE_POPULATION_SIZE`,
-`OPTIMIZE_SMOKE_TEST_ENABLED`, HTCondor request/calibration/timeout settings, GPSAF
-alpha/beta/gamma controls, and surrogate training controls. Task physics and problem
-shape stay in fixed `submit/` and evaluate-side `job_template/` roots. Complete
-strategy selection stays only in `submit/optimization.py`, never in config.
+`OPTIMIZE_SMOKE_TEST_ENABLED`, `OPTIMIZE_RANDOM_SEED`,
+`OPTIMIZE_ARCHIVE_KEY_DECIMALS`, `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`, and
+HTCondor request/calibration/timeout settings. Search, GPSAF, and surrogate model
+parameters are explicit keyword arguments in `submit/optimization.py`; they are not
+core config settings and cannot be changed with a temporary config override. Task
+physics and problem shape stay in fixed `submit/` and evaluate-side
+`job_template/` roots. Complete strategy selection and component configuration stay
+only in `submit/optimization.py`, never in config.
+
+### One-time component setting migration
+
+Old component-specific uppercase names are deliberately unsupported. Move each
+value from `config.py` to the corresponding factory call in
+`submit/optimization.py`:
+
+| Removed config name | Factory keyword |
+| --- | --- |
+| `OPTIMIZE_NSGA3_REF_DIR_METHOD` | `pymoo_nsga3(reference_direction_method=...)` |
+| `OPTIMIZE_NSGA3_PARTITIONS` | `pymoo_nsga3(reference_direction_partitions=...)` |
+| `OPTIMIZE_REFILL_ATTEMPTS` | `pymoo_ga(refill_attempts=...)` / `pymoo_nsga3(refill_attempts=...)` |
+| `OPTIMIZE_CROSSOVER_PROBABILITY` | both pymoo factories: `crossover_probability` |
+| `OPTIMIZE_MUTATION_PROBABILITY` | both pymoo factories: `mutation_probability` |
+| `OPTIMIZE_CROSSOVER_ETA` | both pymoo factories: `crossover_eta` |
+| `OPTIMIZE_MUTATION_ETA` | both pymoo factories: `mutation_eta` |
+| `OPTIMIZE_DIM_MUT_PER_INDIVIDUAL` | both pymoo factories: `mutated_dimensions_per_individual` |
+| `OPTIMIZE_SURROGATE_ALPHA` | `gpsaf(alpha=...)` |
+| `OPTIMIZE_SURROGATE_BETA` | `gpsaf(beta=...)` |
+| `OPTIMIZE_SURROGATE_GAMMA` | `gpsaf(gamma=...)` |
+| `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` | `gpsaf(exploration_fraction=...)` |
+| `SURROGATE_CONSTANT_ATOL` | `conditional_inr(constant_atol=...)` |
+| `SURROGATE_TARGET_SCALE_FLOOR` | `conditional_inr(target_scale_floor=...)` |
+| `SURROGATE_TORCH_DEVICE` | selected surrogate factory: `device=...` |
+| `SURROGATE_INR_EPOCHS` | `conditional_inr(epochs=...)` |
+| `SURROGATE_INR_ENSEMBLE_SIZE` | `conditional_inr(ensemble_size=...)` |
+| `SURROGATE_INR_BATCH_SIZE` | `conditional_inr(batch_size=...)` |
+| `SURROGATE_INR_LR` | `conditional_inr(learning_rate=...)` |
+| `SURROGATE_INR_WEIGHT_DECAY` | `conditional_inr(weight_decay=...)` |
+| `SURROGATE_INR_LOSS_BETA` | `conditional_inr(loss_beta=...)` |
+| `SURROGATE_MAX_NONFINITE_FRACTION` | `conditional_inr(max_nonfinite_fraction=...)` |
+| `SURROGATE_INR_X_LATENT_DIM` | `conditional_inr(x_latent_dim=...)` |
+| `SURROGATE_INR_FIELD_EMB_DIM` | `conditional_inr(field_embedding_dim=...)` |
+| `SURROGATE_INR_COORD_FOURIER_FEATURES` | `conditional_inr(coordinate_fourier_features=...)` |
+| `SURROGATE_INR_HIDDEN_DIM` | `conditional_inr(hidden_dim=...)` |
+| `SURROGATE_INR_HIDDEN_LAYERS` | `conditional_inr(hidden_layers=...)` |
+| `SURROGATE_INR_TRAIN_QUERY_CHUNK` | `conditional_inr(train_query_chunk=...)` |
+| `SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` | `conditional_inr(train_query_sample_count=...)` |
+| `SURROGATE_INR_SAMPLE_BATCH_EVAL` | `conditional_inr(sample_batch_eval=...)` |
+| `SURROGATE_INR_QUERY_BATCH_EVAL` | `conditional_inr(query_batch_eval=...)` |
+| `SURROGATE_INR_BOOTSTRAP_MEMBERS` | `conditional_inr(bootstrap_members=...)` |
+| `SURROGATE_INR_BOOTSTRAP_FRACTION` | `conditional_inr(bootstrap_fraction=...)` |
+
+`OPTIMIZE_POPULATION_SIZE`, `OPTIMIZE_RANDOM_SEED`,
+`OPTIMIZE_ARCHIVE_KEY_DECIMALS`, and
+`OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` remain core campaign settings. The surrogate
+viewer selects its own available device automatically; a component `device=` value
+controls that component's training and checkpoint recovery.
 
 An explicitly selected `posterior_assisted()` strategy keeps its pool, draw,
 chunk, qNEHVI batch/restart/support, and real-exploration controls in
@@ -31,10 +83,11 @@ predicted rawData or predicted costs as durable history.
 Surrogate training uses only recorded real rawData rows. By default every independently
 initialized ensemble member sees every retained real row; this preserves all measured
 design support because ensemble spread is diagnostic and does not steer GPSAF.
-`SURROGATE_INR_BOOTSTRAP_MEMBERS = True` remains an explicit opt-in for seeded
+`conditional_inr(bootstrap_members=True)` remains an explicit opt-in for seeded
 bootstrap rows drawn only from that same evidence. It does not synthesize mixup targets
 and does not accept task-owned rawData importance or relative-loss settings.
-`SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT` bounds queries per step; when a field is
+The `conditional_inr(train_query_sample_count=...)` argument bounds queries per
+step; when a field is
 larger than that budget, sampling is seeded, without replacement, and balanced across
 modeled fields. Every active field has equal macro loss importance regardless of its
 number of scalar positions. If the configured epoch/batch schedule would end before a
@@ -44,7 +97,8 @@ one full rotation cycle and records both configured and effective counts.
 
 For each modeled rawData query position, conditional INR centers recorded values at
 their mean and scales them by their recorded standard deviation, with
-`SURROGATE_TARGET_SCALE_FLOOR` protecting near-constant positions. Normalized design
+`conditional_inr(target_scale_floor=...)` protecting near-constant positions.
+Normalized design
 variables are centered from `[0, 1]` to `[-1, 1]` inside the network. The decoder is
 linear in this standard-score space, so it can predict beyond the minimum and maximum
 already observed instead of saturating at a historical min/max envelope. Predicted

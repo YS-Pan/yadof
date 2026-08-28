@@ -294,10 +294,7 @@ def test_check_reports_invalid_marker_config_and_static_rawdata(tmp_path: Path) 
 
     assert not report.ok
     assert "workspace marker is not valid JSON" in report.format()
-    assert (
-        "EVALUATION_MODE must be 'fast', 'local', or 'distributed'"
-        in report.format()
-    )
+    assert "EVALUATION_MODE must be one of: 'fast', 'local', 'distributed'" in report.format()
 
     init_workspace_root = tmp_path / "rawdata-workspace"
     init_workspace(init_workspace_root)

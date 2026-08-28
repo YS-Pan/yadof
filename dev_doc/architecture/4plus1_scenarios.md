@@ -95,8 +95,9 @@ generation uses the new policy coherently. The full task tree was captured befor
 that generation's first candidate, so an edit during execution cannot split its
 population; it becomes visible at the following boundary.
 
-The same supported boundary applies when correcting parameter definitions,
-configuration, workflow/evaluation code, or task helpers. The new generation may
+The same supported boundary applies when correcting parameter definitions, core
+configuration, explicit component factory kwargs in `submit/optimization.py`,
+workflow/evaluation code, or task helpers. The new generation may
 use different parameter ranges/levels, objective meanings or thresholds, and is
 intentionally allowed to be a scientifically different optimization problem.
 Parameter identity/count and objective count remain stable for this supported

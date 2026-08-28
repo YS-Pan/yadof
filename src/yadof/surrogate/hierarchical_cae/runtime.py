@@ -215,14 +215,14 @@ def _unique_training_data(data: NamedTrainingData) -> tuple[NamedTrainingData, i
     )
 
 
-def _select_device(config: LoadedConfig) -> torch.device:
-    requested = str(
-        getattr(config, "SURROGATE_TORCH_DEVICE", "auto")
-    ).strip().lower()
+def _select_device(requested: str) -> torch.device:
+    requested = str(requested).strip().lower()
     if requested != "auto":
         device = torch.device(requested)
         if device.type == "cuda" and not torch.cuda.is_available():
-            raise RuntimeError("SURROGATE_TORCH_DEVICE requests unavailable CUDA")
+            raise RuntimeError(
+                f"hierarchical_cae(): device={requested!r} requests unavailable CUDA"
+            )
         return device
     if torch.cuda.is_available():
         return torch.device("cuda")
@@ -279,6 +279,7 @@ def train_with_config(
     component,
     started_at: str | None = None,
     training_data: NamedTrainingData | None = None,
+    random_seed: int | None = None,
 ) -> HierarchicalState:
     training_started_at = now_text() if started_at is None else str(started_at)
     started_monotonic = monotonic_time()
@@ -362,10 +363,10 @@ def train_with_config(
         train_cfg=component.train_cfg,
         quality_policy=component.quality_policy,
     )
-    device = _select_device(config)
-    seed = int(getattr(config, "OPTIMIZE_RANDOM_SEED", 20260510)) + int(
-        generation_index
-    ) * 1009
+    device = _select_device(component.device)
+    seed = int(
+        config.OPTIMIZE_RANDOM_SEED if random_seed is None else random_seed
+    ) + int(generation_index) * 1009
     host_rss_before = int(psutil.Process().memory_info().rss)
     model, history = fit_hierarchical_cae(
         input_dim=x.shape[1],
@@ -626,7 +627,7 @@ def _recover_state_from_checkpoint(
                 )
             )
     schema = replace(schema, scalers=tuple(scalers))
-    device = _select_device(config)
+    device = _select_device(component.device)
     bundle_path = artifact_dir / Path(str(payload["model_path"])).name
     model, loaded_cfg = load_model_bundle(
         bundle_path, schema=schema, device=device

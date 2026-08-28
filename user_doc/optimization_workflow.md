@@ -288,7 +288,7 @@ Do not treat it as a production recommendation.
 
 A later, separately preregistered v6/v7 framework continuation added an optional
 architecture-version-2 coordinate readout and a read-only viewer adapter. Enable it
-only with `CAETrainConfig(architecture_version=2, coordinate_readout=True, ...)`.
+only with `hierarchical_cae(architecture_version=2, coordinate_readout=True, ...)`.
 `predict_field_at_coordinates()` accepts explicit in-domain coordinates for every
 declared field axis, using declared linear, log, or periodic encodings. It reuses the
 same predictor-member global/group/private state and keeps the gated residual
@@ -389,6 +389,16 @@ def build_optimization():
         surrogate=conditional_inr(),
     )
 ```
+
+The factory calls above are also the only workspace entry for component settings.
+For example, a tuned source may use
+`pymoo_ga(crossover_probability=0.9, mutation_eta=15.0)`,
+`gpsaf(..., alpha=3, beta=3, exploration_fraction=0.15)`, and
+`conditional_inr(device="cuda", epochs=64, bootstrap_members=True)`. These
+keyword-only values are validated when the generation snapshot loads. Editing the
+file affects the next generation; the current generation continues with its frozen
+component values. Removed uppercase algorithm/model names in `config.py` fail as
+unknown settings instead of being translated or ignored.
 
 For a real multi-objective NSGA-III-only campaign with no GPSAF or surrogate:
 
@@ -497,7 +507,7 @@ different throughput-versus-freshness tradeoff. Query minibatches rotate through
 one seeded ordering per rawData field so scarce coordinates are covered before
 they repeat. Every ensemble member sees all retained real rows by default, with
 independent initialization supplying diversity without discarding design support.
-If `SURROGATE_INR_BOOTSTRAP_MEMBERS` is explicitly enabled, bootstrap is still
+If `conditional_inr(bootstrap_members=True)` is selected, bootstrap is still
 deferred until at least two real samples per input variable are available.
 
 ## 5. Validate and smoke

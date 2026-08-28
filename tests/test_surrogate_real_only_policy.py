@@ -8,7 +8,6 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from yadof.config import DEFAULT_CONFIG
 from yadof.surrogate.conditional_inr import checkpoints, modeling, runtime
 from yadof.optimize.gpsaf.records import CandidateRecord
 from yadof.optimize.gpsaf.phases import predict_records
@@ -335,7 +334,11 @@ def test_default_ensemble_members_receive_every_real_training_row(
         seed=41,
     )
 
-    assert DEFAULT_CONFIG["SURROGATE_INR_BOOTSTRAP_MEMBERS"] is False
+    from yadof.surrogate.conditional_inr.settings import (
+        DEFAULT_CONDITIONAL_INR_SETTINGS,
+    )
+
+    assert DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_members is False
     assert config.bootstrap_members is False
     assert history["bootstrap_requested"] is False
     assert history["bootstrap_applied"] is False

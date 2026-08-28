@@ -87,6 +87,13 @@ current code and isolates only concrete normalization, rawData, or cost failures
 Whether combining pre-edit and post-edit evidence is scientifically appropriate
 remains the user's decision.
 
+Core configuration and component configuration have distinct owners. One
+declarative core schema validates campaign/framework policy and provenance.
+Snapshotted `submit/optimization.py` factories eagerly build private immutable
+search, GPSAF, and surrogate settings; no component-specific uppercase key or
+temporary override is accepted. The complete resolved settings payload participates
+in semantic identity while source hashes remain provenance only.
+
 Optimizer and surrogate are consumers of the same evidence. A surrogate predicts
 rawData before cost, reconstructs complete public rawData, and calls current cost
 logic; it never establishes a parallel `variables -> cost` truth path. Conditional

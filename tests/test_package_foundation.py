@@ -293,9 +293,15 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             (run_workspace / "config.py").write_text(
                 'EVALUATION_MODE = "local"\n'
                 "OPTIMIZE_POPULATION_SIZE = 2\n"
-                "OPTIMIZE_SMOKE_TEST_ENABLED = False\n"
-                "OPTIMIZE_SURROGATE_ALPHA = 1\n"
-                "OPTIMIZE_SURROGATE_BETA = 0\n",
+                "OPTIMIZE_SMOKE_TEST_ENABLED = False\n",
+                encoding="utf-8",
+            )
+            (run_workspace / "submit/optimization.py").write_text(
+                "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
+                "from yadof.surrogate import conditional_inr\n"
+                "def build_optimization():\n"
+                "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
+                "    return gpsaf(search=search, surrogate=conditional_inr(), alpha=1, beta=0)\n",
                 encoding="utf-8",
             )
             for generation in (2, 3):

@@ -764,9 +764,39 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
         display_name = arm.get("display_name", arm_id)
         if not isinstance(display_name, str) or not display_name.strip():
             raise BenchmarkError(f"arm {arm_id!r} display_name must be a non-empty string")
-        template = resolve_inside(paths.strategies, str(arm.get("strategy_template", "")), label=f"arm {arm_id} template")
-        if not template.is_file():
-            raise BenchmarkError(f"strategy template does not exist: {template}")
+        case_templates = arm.get("case_strategy_templates")
+        if case_templates is not None:
+            if "strategy_template" in arm:
+                raise BenchmarkError(
+                    f"arm {arm_id!r} must choose strategy_template or "
+                    "case_strategy_templates, not both"
+                )
+            if not isinstance(case_templates, dict) or not case_templates:
+                raise BenchmarkError(
+                    f"arm {arm_id!r} case_strategy_templates must be a non-empty table"
+                )
+            unknown_cases = sorted(set(case_templates) - set(cases))
+            if unknown_cases:
+                raise BenchmarkError(
+                    f"arm {arm_id!r} has templates for unknown cases: "
+                    + ", ".join(unknown_cases)
+                )
+            for case_id, template_name in case_templates.items():
+                template = resolve_inside(
+                    paths.strategies,
+                    str(template_name),
+                    label=f"arm {arm_id} case {case_id} template",
+                )
+                if not template.is_file():
+                    raise BenchmarkError(f"strategy template does not exist: {template}")
+        else:
+            template = resolve_inside(
+                paths.strategies,
+                str(arm.get("strategy_template", "")),
+                label=f"arm {arm_id} template",
+            )
+            if not template.is_file():
+                raise BenchmarkError(f"strategy template does not exist: {template}")
         _config_overrides(
             arm.get("config_overrides", {}),
             label=f"arm {arm_id} config_overrides",
@@ -784,6 +814,15 @@ def validate_config(config: Mapping[str, Any], paths: Paths) -> None:
             raise BenchmarkError(f"suite {suite_id!r} names an unknown or empty case set")
         if not all(arm in arms for arm in suite_arms):
             raise BenchmarkError(f"suite {suite_id!r} names an unknown arm")
+        for arm_id in suite_arms:
+            case_templates = arms[arm_id].get("case_strategy_templates")
+            if isinstance(case_templates, dict):
+                missing = sorted(set(suite_cases) - set(case_templates))
+                if missing:
+                    raise BenchmarkError(
+                        f"suite {suite_id!r} arm {arm_id!r} has no case strategy "
+                        "template for: " + ", ".join(missing)
+                    )
         if not seeds or not all(isinstance(seed, int) and seed >= 0 for seed in seeds):
             raise BenchmarkError(f"suite {suite_id!r} seeds must be non-negative integers")
         smoke_only = bool(suite.get("smoke_only", False))
@@ -1158,21 +1197,54 @@ def _baseline_details(config: Mapping[str, Any], paths: Paths, case_id: str) -> 
 
 def _strategy_details(config: Mapping[str, Any], paths: Paths, arm_id: str) -> dict[str, Any]:
     arm = config["arms"][arm_id]
-    template = resolve_inside(paths.strategies, arm["strategy_template"], label=f"arm {arm_id} template")
-    module_name = f"benchmark_strategy_{_safe_id(arm_id).replace('-', '_')}"
-    spec = importlib.util.spec_from_file_location(module_name, template)
-    if spec is None or spec.loader is None:
-        raise BenchmarkError(f"cannot load strategy template: {template}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    builder = getattr(module, "build_optimization", None)
-    if not callable(builder):
-        raise BenchmarkError(f"strategy {template} has no callable build_optimization")
-    strategy = builder()
+    configured = arm.get("case_strategy_templates")
+    template_names = (
+        {str(case_id): str(value) for case_id, value in configured.items()}
+        if isinstance(configured, dict)
+        else {"*": str(arm["strategy_template"])}
+    )
+    template_details: dict[str, dict[str, str]] = {}
+    constructed_types: set[str] = set()
+    for case_id, template_name in sorted(template_names.items()):
+        template = resolve_inside(
+            paths.strategies,
+            template_name,
+            label=f"arm {arm_id} case {case_id} template",
+        )
+        module_name = (
+            f"benchmark_strategy_{_safe_id(arm_id).replace('-', '_')}_"
+            f"{_safe_id(case_id).replace('-', '_')}"
+        )
+        spec = importlib.util.spec_from_file_location(module_name, template)
+        if spec is None or spec.loader is None:
+            raise BenchmarkError(f"cannot load strategy template: {template}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        builder = getattr(module, "build_optimization", None)
+        if not callable(builder):
+            raise BenchmarkError(
+                f"strategy {template} has no callable build_optimization"
+            )
+        strategy = builder()
+        constructed_types.add(
+            f"{type(strategy).__module__}.{type(strategy).__qualname__}"
+        )
+        template_details[case_id] = {
+            "path": str(template),
+            "sha256": file_sha256(template),
+        }
+    if len(constructed_types) != 1:
+        raise BenchmarkError(
+            f"arm {arm_id!r} case strategies construct different component types"
+        )
+    default = template_details.get("*")
     return {
-        "template": str(template),
-        "sha256": file_sha256(template),
-        "constructed_type": f"{type(strategy).__module__}.{type(strategy).__qualname__}",
+        "template": None if default is None else default["path"],
+        "sha256": None if default is None else default["sha256"],
+        "case_strategy_templates": (
+            {} if default is not None else template_details
+        ),
+        "constructed_type": next(iter(constructed_types)),
         "display_name": str(arm.get("display_name", arm_id)),
         "surrogate": bool(arm.get("surrogate", False)),
         "config_overrides": _config_overrides(
@@ -1722,10 +1794,23 @@ def _materialize_attempt_inputs(
     if cell_plan["kind"] == "measured":
         arm_id = str(cell_plan["arm"])
         arm_spec = spec["arms"][arm_id]
-        if file_sha256(Path(arm_spec["template"])) != arm_spec["sha256"]:
+        selected_template = arm_spec.get("case_strategy_templates", {}).get(
+            case_id
+        )
+        template_path = Path(
+            arm_spec["template"]
+            if selected_template is None
+            else selected_template["path"]
+        )
+        template_sha256 = (
+            arm_spec["sha256"]
+            if selected_template is None
+            else selected_template["sha256"]
+        )
+        if file_sha256(template_path) != template_sha256:
             raise BenchmarkError(f"strategy template fingerprint drift for {arm_id}")
         overrides.update(arm_spec.get("config_overrides", {}))
-        shutil.copy2(Path(arm_spec["template"]), workspace / "submit" / "optimization.py")
+        shutil.copy2(template_path, workspace / "submit" / "optimization.py")
     _apply_config_overrides(workspace / "config.py", overrides)
     manifest = task_manifest(workspace, include_paths)
     fingerprint = task_fingerprint(workspace, include_paths)

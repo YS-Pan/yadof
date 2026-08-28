@@ -14,6 +14,8 @@
   search objects.
 - Produces normalized candidate rows and GPSAF diagnostics used by
   `assistance.py`.
+- Consumes resolved GPSAF settings explicitly; the core training-lag policy remains
+  a narrow scheduler input owned by the generation composition.
 
 ## Non-Obvious Techniques
 - Pymoo integration is imported from the sibling `optimize.pymoo` package; shared

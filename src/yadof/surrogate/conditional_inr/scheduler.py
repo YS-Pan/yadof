@@ -10,6 +10,7 @@ from ...task_snapshot import create_generation_snapshot
 from ...workspace import WorkspaceContext
 from . import metadata as surrogate_metadata
 from . import runtime
+from .settings import ConditionalINRSettings, DEFAULT_CONDITIONAL_INR_SETTINGS
 
 
 WorkspaceLike = WorkspaceContext | str | Path
@@ -21,6 +22,7 @@ class _WorkspaceSchedule:
     pending_generation: int | None = None
     last_completed_generation: int | None = None
     last_error: str = ""
+    settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS
 
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="yadof-surrogate")
@@ -37,14 +39,24 @@ class TrainingScheduleStatus:
     error: str = ""
 
 
-def has_trained_state(workspace: WorkspaceLike) -> bool:
-    return runtime.has_trained_state(workspace)
+def has_trained_state(
+    workspace: WorkspaceLike,
+    *,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+) -> bool:
+    return runtime.has_trained_state(workspace, _settings=_settings)
 
 
-def latest_completed_generation_index(workspace: WorkspaceLike) -> int | None:
+def latest_completed_generation_index(
+    workspace: WorkspaceLike,
+    *,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+) -> int | None:
     config = load_config(workspace)
     key = runtime.workspace_state_key(config)
-    state_generation = runtime.latest_state_generation(config.workspace)
+    state_generation = runtime.latest_state_generation(
+        config.workspace, _settings=_settings
+    )
     with _LOCK:
         schedule = _SCHEDULES.get(key)
         candidates = [
@@ -58,15 +70,20 @@ def latest_completed_generation_index(workspace: WorkspaceLike) -> int | None:
     return max(candidates) if candidates else None
 
 
-def wait_for_pending_training(workspace: WorkspaceLike) -> TrainingScheduleStatus:
+def wait_for_pending_training(
+    workspace: WorkspaceLike,
+    *,
+    _settings: ConditionalINRSettings | None = None,
+) -> TrainingScheduleStatus:
     config = load_config(workspace)
     key = runtime.workspace_state_key(config)
     with _LOCK:
         schedule = _schedule_locked(key)
         future = schedule.pending
         pending_generation = schedule.pending_generation
+        selected_settings = schedule.settings if _settings is None else _settings
     if future is None:
-        return _status(config, key, "idle")
+        return _status(config, key, "idle", settings=selected_settings)
     try:
         state = future.result()
     except Exception as exc:  # noqa: BLE001 - optimizer falls back to real evaluation.
@@ -74,6 +91,7 @@ def wait_for_pending_training(workspace: WorkspaceLike) -> TrainingScheduleStatu
             config,
             key,
             "failed",
+            settings=selected_settings,
             generation_index=pending_generation,
             error=f"{exc.__class__.__name__}: {exc}",
         )
@@ -90,6 +108,7 @@ def wait_for_pending_training(workspace: WorkspaceLike) -> TrainingScheduleStatu
         config,
         key,
         "completed" if usable else "skipped_not_trainable",
+        settings=selected_settings,
         generation_index=pending_generation,
     )
 
@@ -101,23 +120,35 @@ def start_training(
     block: bool = False,
     _config: LoadedConfig | None = None,
     _training_data=None,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+    _random_seed: int | None = None,
 ) -> TrainingScheduleStatus:
     config = load_config(workspace) if _config is None else _config
     key = runtime.workspace_state_key(config)
     generation = int(generation_index)
 
     if block:
-        wait_for_pending_training(config.workspace)
+        wait_for_pending_training(config.workspace, _settings=_settings)
         return _train_blocking(
-            config, key, generation, training_data=_training_data
+            config,
+            key,
+            generation,
+            settings=_settings,
+            random_seed=_random_seed,
+            training_data=_training_data,
         )
 
     with _LOCK:
         schedule = _schedule_locked(key)
+        schedule.settings = _settings
         _refresh_finished_locked(schedule)
         if schedule.pending is not None and not schedule.pending.done():
             return _status_locked(
-                config, key, "already_running", generation_index=generation
+                config,
+                key,
+                "already_running",
+                settings=_settings,
+                generation_index=generation,
             )
         owned_snapshot = create_generation_snapshot(config)
         future = _EXECUTOR.submit(
@@ -125,6 +156,8 @@ def start_training(
             owned_snapshot.config,
             generation,
             _training_data,
+            _settings,
+            _random_seed,
         )
         schedule.pending = future
         schedule.pending_generation = generation
@@ -133,7 +166,13 @@ def start_training(
                 state_key, selected, selected_generation, completed, owned
             )
         )
-        return _status_locked(config, key, "started", generation_index=generation)
+        return _status_locked(
+            config,
+            key,
+            "started",
+            settings=_settings,
+            generation_index=generation,
+        )
 
 
 def ensure_fresh_enough(
@@ -142,30 +181,52 @@ def ensure_fresh_enough(
     *,
     _config: LoadedConfig | None = None,
     _training_data=None,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+    _max_training_lag: int | None = None,
+    _random_seed: int | None = None,
 ) -> TrainingScheduleStatus:
     config = load_config(workspace) if _config is None else _config
     key = runtime.workspace_state_key(config)
-    max_lag = max(0, int(config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG))
+    max_lag = max(
+        0,
+        int(
+            config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
+            if _max_training_lag is None
+            else _max_training_lag
+        ),
+    )
     generation = int(generation_index)
-    latest = latest_completed_generation_index(config.workspace)
+    latest = latest_completed_generation_index(
+        config.workspace, _settings=_settings
+    )
     virtual_latest = -1 if latest is None else int(latest)
     if generation - virtual_latest <= max_lag:
-        return _status(config, key, "fresh", generation_index=generation)
+        return _status(
+            config, key, "fresh", settings=_settings, generation_index=generation
+        )
 
-    waited = wait_for_pending_training(config.workspace)
-    latest = latest_completed_generation_index(config.workspace)
+    waited = wait_for_pending_training(config.workspace, _settings=_settings)
+    latest = latest_completed_generation_index(
+        config.workspace, _settings=_settings
+    )
     virtual_latest = -1 if latest is None else int(latest)
     if generation - virtual_latest <= max_lag:
         return _status(
             config,
             key,
             "waited",
+            settings=_settings,
             generation_index=generation,
             error=waited.error,
         )
 
     return _train_blocking(
-        config, key, generation, training_data=_training_data
+        config,
+        key,
+        generation,
+        settings=_settings,
+        random_seed=_random_seed,
+        training_data=_training_data,
     )
 
 
@@ -183,7 +244,11 @@ def reset_workspace_schedule(workspace: WorkspaceLike) -> None:
         _SCHEDULES.pop(key, None)
 
 
-def deactivate_workspace(workspace: WorkspaceLike) -> TrainingScheduleStatus:
+def deactivate_workspace(
+    workspace: WorkspaceLike,
+    *,
+    _settings: ConditionalINRSettings | None = None,
+) -> TrainingScheduleStatus:
     """Finish and release one active strategy's in-memory surrogate state.
 
     Published checkpoint artifacts are deliberately retained so that selecting
@@ -192,7 +257,7 @@ def deactivate_workspace(workspace: WorkspaceLike) -> TrainingScheduleStatus:
 
     config = load_config(workspace)
     key = runtime.workspace_state_key(config)
-    status = wait_for_pending_training(config.workspace)
+    status = wait_for_pending_training(config.workspace, _settings=_settings)
     with _LOCK:
         _SCHEDULES.pop(key, None)
     runtime.reset_workspace_state(config.workspace)
@@ -210,15 +275,21 @@ def _train_blocking(
     key: runtime.StateKey,
     generation_index: int,
     *,
+    settings: ConditionalINRSettings,
+    random_seed: int | None,
     training_data=None,
 ) -> TrainingScheduleStatus:
     started_at = surrogate_metadata.now_text()
+    with _LOCK:
+        _schedule_locked(key).settings = settings
     try:
         state = runtime.train_with_config(
             config,
             generation_index=int(generation_index),
             started_at=started_at,
             training_data=training_data,
+            settings=settings,
+            random_seed=random_seed,
         )
     except Exception as exc:  # noqa: BLE001 - optimizer may continue without a model.
         surrogate_metadata.record_training_failure(
@@ -237,6 +308,7 @@ def _train_blocking(
             config,
             key,
             "failed",
+            settings=settings,
             generation_index=int(generation_index),
             error=error,
         )
@@ -251,18 +323,25 @@ def _train_blocking(
         config,
         key,
         "trained_blocking" if usable else "skipped_not_trainable",
+        settings=settings,
         generation_index=int(generation_index),
     )
 
 
 def _train_in_background(
-    config: LoadedConfig, generation_index: int, training_data=None
+    config: LoadedConfig,
+    generation_index: int,
+    training_data,
+    settings: ConditionalINRSettings,
+    random_seed: int | None,
 ):
     return runtime.train_with_config(
         config,
         generation_index=int(generation_index),
         started_at=surrogate_metadata.now_text(),
         training_data=training_data,
+        settings=settings,
+        random_seed=random_seed,
     )
 
 
@@ -334,6 +413,7 @@ def _status(
     key: runtime.StateKey,
     action: str,
     *,
+    settings: ConditionalINRSettings,
     generation_index: int | None = None,
     error: str = "",
 ) -> TrainingScheduleStatus:
@@ -342,6 +422,7 @@ def _status(
             config,
             key,
             action,
+            settings=settings,
             generation_index=generation_index,
             error=error,
         )
@@ -352,11 +433,14 @@ def _status_locked(
     key: runtime.StateKey,
     action: str,
     *,
+    settings: ConditionalINRSettings,
     generation_index: int | None = None,
     error: str = "",
 ) -> TrainingScheduleStatus:
     schedule = _schedule_locked(key)
-    state_generation = runtime.latest_state_generation(config.workspace)
+    state_generation = runtime.latest_state_generation(
+        config.workspace, _settings=settings
+    )
     candidates = [
         value
         for value in (state_generation, schedule.last_completed_generation)

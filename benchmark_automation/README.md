@@ -549,8 +549,11 @@ To add or edit a case:
 3. Run `plan`, `preflight`, and the smallest structural tier before performance.
 
 To add an arm, add a complete strategy module under `strategy_templates/` with a
-callable `build_optimization()`, declare its exact overrides in TOML, and give it
-equal performance budgets. To add seeds, edit the suite's predeclared list before
+callable `build_optimization()`, then select either one `strategy_template` or an
+explicit `case_strategy_templates` mapping in TOML and give it equal performance
+budgets. Search/GPSAF/surrogate parameters belong directly in those factory calls;
+`config_overrides` is reserved for core campaign settings and cannot configure a
+component. To add seeds, edit the suite's predeclared list before
 creating a run. To add a cross-arm descriptive metric, consume a public
 single-workspace yadof API/tool result and version the emitted schema. If the
 single-workspace observation does not exist publicly, document a yadof-tools gap;

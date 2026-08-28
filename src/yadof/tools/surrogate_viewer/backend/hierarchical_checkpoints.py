@@ -146,10 +146,7 @@ def discover_hierarchical_cae_checkpoints(
     )
 
 
-def _select_device(config) -> torch.device:
-    requested = str(getattr(config, "SURROGATE_TORCH_DEVICE", "auto")).lower()
-    if requested != "auto":
-        return torch.device(requested)
+def _select_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     if hasattr(torch, "xpu") and torch.xpu.is_available():
@@ -178,7 +175,7 @@ class HierarchicalCAECheckpointPredictor:
         self.workspace = Path(workspace).resolve()
         self.checkpoint = checkpoint
         self._config = load_config(self.workspace)
-        self.device = _select_device(self._config)
+        self.device = _select_device()
         payload = validate_manifest_identity(checkpoint.payload)
         self.artifact_dir = resolve_artifact_dir(
             self._config.workspace.surrogate_checkpoint_dir, payload

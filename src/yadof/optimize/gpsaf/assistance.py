@@ -14,12 +14,11 @@ from .phases import (
     notify_surrogate_after_submission,
     surrogate_population,
 )
+from .settings import GPSAFSettings
 
 
-def _surrogate_requested(config) -> bool:
-    alpha = int(getattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1))
-    beta = int(getattr(config, "OPTIMIZE_SURROGATE_BETA", 0))
-    return alpha > 1 or beta > 0
+def _surrogate_requested(settings: GPSAFSettings) -> bool:
+    return settings.alpha > 1 or settings.beta > 0
 
 
 def run_generation(
@@ -27,6 +26,7 @@ def run_generation(
     *,
     search,
     surrogate,
+    settings: GPSAFSettings,
 ) -> OptimizationResult:
     config = generation.config
     size = generation.population_size
@@ -41,20 +41,23 @@ def run_generation(
         search_algorithm=search.resolve_algorithm(
             generation.problem.objective_count
         ),
+        search_settings=search.backend_settings(
+            generation.problem.objective_count
+        ),
     )
     diagnostics: dict[str, object] = pymoo_diagnostics(context)
     diagnostics.update(
         {
-            "surrogate_alpha": int(getattr(config, "OPTIMIZE_SURROGATE_ALPHA", 1)),
-            "surrogate_beta": int(getattr(config, "OPTIMIZE_SURROGATE_BETA", 0)),
-            "surrogate_gamma": float(getattr(config, "OPTIMIZE_SURROGATE_GAMMA", 0.5)),
+            "surrogate_alpha": settings.alpha,
+            "surrogate_beta": settings.beta,
+            "surrogate_gamma": settings.gamma,
         }
     )
     surrogate_used = False
     rng = random.Random(seed + generation.generation_index * 1009)
     source = "gpsaf_random"
 
-    if history and _surrogate_requested(config):
+    if history and _surrogate_requested(settings):
         diagnostics.update(
             ensure_surrogate_fresh_enough(
                 surrogate,
@@ -69,6 +72,7 @@ def run_generation(
             generation_index=generation.generation_index,
             population_size=size,
             seed=seed,
+            settings=settings,
         )
         diagnostics.update(surrogate_info)
         if population is None:
@@ -84,7 +88,7 @@ def run_generation(
             surrogate_used = True
             source = "gpsaf_surrogate"
     else:
-        if not _surrogate_requested(config):
+        if not _surrogate_requested(settings):
             diagnostics["surrogate_mode"] = "disabled_by_gpsaf_parameters"
         elif not history:
             diagnostics["surrogate_mode"] = "warmup_no_history"
@@ -104,7 +108,7 @@ def run_generation(
                 generation,
             )
         )
-        if _surrogate_requested(config)
+        if _surrogate_requested(settings)
         else None
     )
     costs = evaluate_population(

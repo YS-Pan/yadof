@@ -124,11 +124,10 @@ def run_alpha_phase(
     *,
     surrogate,
     generation_context: GenerationContext,
+    settings,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
     predicted_pool: list[CandidateRecord] = []
-    alpha = max(
-        1, int(getattr(context.config, "OPTIMIZE_SURROGATE_ALPHA", 4))
-    )
+    alpha = max(1, settings.alpha)
     batches_completed = 0
 
     for batch_index in range(alpha):
@@ -168,10 +167,9 @@ def run_beta_phase(
     *,
     surrogate,
     generation_context: GenerationContext,
+    settings,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
-    beta = max(
-        0, int(getattr(context.config, "OPTIMIZE_SURROGATE_BETA", 2))
-    )
+    beta = max(0, settings.beta)
     if beta <= 0 or not anchors:
         return list(anchors), {
             "beta_iterations": 0,
@@ -234,20 +232,8 @@ def run_beta_phase(
     }
 
 
-def _exploration_count(context: PymooContext, population_size: int) -> int:
-    fraction = max(
-        0.0,
-        min(
-            1.0,
-            float(
-                getattr(
-                    context.config,
-                    "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION",
-                    0.0,
-                )
-            ),
-        ),
-    )
+def _exploration_count(settings, population_size: int) -> int:
+    fraction = settings.exploration_fraction
     if fraction <= 0.0:
         return 0
     return min(int(population_size), max(1, int(round(int(population_size) * fraction))))
@@ -262,6 +248,7 @@ def surrogate_population(
     generation_index: int,
     population_size: int,
     seed: int,
+    settings,
 ) -> tuple[Population | None, dict[str, object]]:
     _progress(
         f"surrogate: selecting population; history={len(history)}; "
@@ -280,7 +267,7 @@ def surrogate_population(
         int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10)),
     )
     diagnostics: dict[str, object] = {"optimizer": "gpsaf"}
-    exploration_count = _exploration_count(context, population_size)
+    exploration_count = _exploration_count(settings, population_size)
     surrogate_target = max(0, int(population_size) - int(exploration_count))
 
     try:
@@ -297,13 +284,7 @@ def surrogate_population(
             else []
         )
         diagnostics["exploration_count"] = int(len(exploration_records))
-        diagnostics["exploration_fraction"] = float(
-            getattr(
-                context.config,
-                "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION",
-                0.0,
-            )
-        )
+        diagnostics["exploration_fraction"] = settings.exploration_fraction
         if surrogate_target <= 0:
             return tuple(record.x for record in exploration_records[: int(population_size)]), diagnostics
 
@@ -315,6 +296,7 @@ def surrogate_population(
             rng,
             surrogate=surrogate,
             generation_context=generation_context,
+            settings=settings,
         )
         diagnostics.update(alpha_info)
         if not anchors:
@@ -329,6 +311,7 @@ def surrogate_population(
             rng,
             surrogate=surrogate,
             generation_context=generation_context,
+            settings=settings,
         )
         diagnostics.update(beta_info)
         final_records = list(final_records) + list(exploration_records)

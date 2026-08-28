@@ -188,6 +188,7 @@ class ConditionalINRRawDataSampler:
 def make_rawdata_sampler(
     context,
     *,
+    component,
     draw_count: int,
     seed: int,
 ) -> ConditionalINRRawDataSampler:
@@ -196,7 +197,7 @@ def make_rawdata_sampler(
     requested = int(draw_count)
     if requested <= 0:
         raise ValueError("draw_count must be positive")
-    state = runtime._require_state(context.config)
+    state = runtime._require_state(context.config, component.settings)
     strategy_signature = str(context.strategy_signature)
     if state.strategy_signature != strategy_signature:
         raise RuntimeError(

@@ -5,12 +5,19 @@ from importlib import metadata
 from types import MappingProxyType
 from typing import Mapping
 
+from .._component_settings import text
+
 from .hierarchical_cae.schema import (
     normalize_axis_encodings,
     normalize_field_layouts,
     normalize_groups,
 )
 from .hierarchical_cae.types import CAETrainConfig, CoordinatePrediction
+from .conditional_inr.settings import (
+    ConditionalINRSettings,
+    DEFAULT_CONDITIONAL_INR_SETTINGS,
+    create_settings as create_conditional_inr_settings,
+)
 from .quality import (
     ApplicabilityPrediction,
     DiagnosticCondition,
@@ -72,9 +79,14 @@ from .exploitation import (
 )
 
 
+DEFAULT_CAE_TRAIN_CONFIG = CAETrainConfig()
+
+
 @dataclass(frozen=True, slots=True)
 class ConditionalINRComponent:
     """Narrow rawData-first surrogate component consumed by GPSAF."""
+
+    settings: ConditionalINRSettings
 
     def validate(self, config, problem) -> None:
         del config, problem
@@ -86,39 +98,14 @@ class ConditionalINRComponent:
             ) from exc
 
     def semantic_identity(self, config, problem) -> Mapping[str, object]:
-        del problem
-        controlled_names = (
-            "SURROGATE_CONSTANT_ATOL",
-            "SURROGATE_TARGET_SCALE_FLOOR",
-            "SURROGATE_TORCH_DEVICE",
-            "SURROGATE_INR_EPOCHS",
-            "SURROGATE_INR_ENSEMBLE_SIZE",
-            "SURROGATE_INR_BATCH_SIZE",
-            "SURROGATE_INR_LR",
-            "SURROGATE_INR_WEIGHT_DECAY",
-            "SURROGATE_INR_LOSS_BETA",
-            "SURROGATE_MAX_NONFINITE_FRACTION",
-            "SURROGATE_INR_X_LATENT_DIM",
-            "SURROGATE_INR_FIELD_EMB_DIM",
-            "SURROGATE_INR_COORD_FOURIER_FEATURES",
-            "SURROGATE_INR_HIDDEN_DIM",
-            "SURROGATE_INR_HIDDEN_LAYERS",
-            "SURROGATE_INR_TRAIN_QUERY_CHUNK",
-            "SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT",
-            "SURROGATE_INR_SAMPLE_BATCH_EVAL",
-            "SURROGATE_INR_QUERY_BATCH_EVAL",
-            "SURROGATE_INR_BOOTSTRAP_MEMBERS",
-            "SURROGATE_INR_BOOTSTRAP_FRACTION",
-        )
+        del config, problem
         return {
             "component": "conditional-inr",
             "component_version": 2,
             "backend_distribution": "torch",
             "backend_version": metadata.version("torch"),
             "training_policy": "real-field-balanced",
-            "controlled_parameters": {
-                name: config[name] for name in controlled_names
-            },
+            "controlled_parameters": self.settings.semantic_parameters(),
         }
 
     def ensure_fresh_enough(self, context):
@@ -128,6 +115,11 @@ class ConditionalINRComponent:
             context.config.workspace,
             context.generation_index,
             _config=context.config,
+            _settings=self.settings,
+            _max_training_lag=int(
+                context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
+            ),
+            _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
             _training_data=runtime.training_data_from_session(
                 context.session,
                 context.snapshot,
@@ -137,7 +129,11 @@ class ConditionalINRComponent:
     def has_trained_state(self, context) -> bool:
         from .conditional_inr import runtime
 
-        return bool(runtime.has_trained_state(context.config.workspace))
+        return bool(
+            runtime.has_trained_state(
+                context.config.workspace, _settings=self.settings
+            )
+        )
 
     def start_training(self, context):
         from .conditional_inr import runtime, scheduler
@@ -147,6 +143,8 @@ class ConditionalINRComponent:
             generation_index=context.generation_index,
             block=False,
             _config=context.config,
+            _settings=self.settings,
+            _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
             _training_data=runtime.training_data_from_session(
                 context.session,
                 context.snapshot,
@@ -156,7 +154,9 @@ class ConditionalINRComponent:
     def predict_population(self, context, population):
         from .conditional_inr import runtime
 
-        return runtime.predict_population(context.config.workspace, population)
+        return runtime.predict_population(
+            context.config.workspace, population, _settings=self.settings
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +168,7 @@ class ConditionalINRPosteriorAdapter:
     joint posterior enter a new state namespace.
     """
 
-    component: ConditionalINRComponent = ConditionalINRComponent()
+    component: ConditionalINRComponent
 
     def validate(self, config, problem) -> None:
         self.component.validate(config, problem)
@@ -189,9 +189,7 @@ class ConditionalINRPosteriorAdapter:
             backend_distribution="torch",
             backend_version=metadata.version("torch"),
             controlled_parameters={
-                "configured_member_count": int(
-                    config["SURROGATE_INR_ENSEMBLE_SIZE"]
-                ),
+                "configured_member_count": self.component.settings.ensemble_size,
                 "member_selection": "seeded-permutation-cycles-v1",
                 "candidate_evaluation": "fixed-member-full-grid-single-row-v1",
                 "observation_noise_included": False,
@@ -237,6 +235,7 @@ class ConditionalINRPosteriorAdapter:
 
         return make_rawdata_sampler(
             context,
+            component=self.component,
             draw_count=draw_count,
             seed=seed,
         )
@@ -254,7 +253,8 @@ class HierarchicalCAEComponent:
         default_factory=dict
     )
     quality_policy: RawDataQualityPolicy | None = None
-    train_cfg: CAETrainConfig = CAETrainConfig()
+    train_cfg: CAETrainConfig = DEFAULT_CAE_TRAIN_CONFIG
+    device: str = "auto"
 
     def __post_init__(self) -> None:
         groups = normalize_groups(self.groups)
@@ -295,6 +295,9 @@ class HierarchicalCAEComponent:
         object.__setattr__(self, "axis_encodings", encodings)
         object.__setattr__(self, "quality_policy", policy)
         object.__setattr__(self, "train_cfg", train_cfg)
+        object.__setattr__(
+            self, "device", text("hierarchical_cae", "device", self.device)
+        )
 
     def configuration_payload(self) -> dict[str, object]:
         return {
@@ -347,7 +350,7 @@ class HierarchicalCAEComponent:
             "backend_version": metadata.version("torch"),
             "training_policy": "design-split-field-macro-hierarchical-latent",
             "configuration": self.configuration_payload(),
-            "device": str(config["SURROGATE_TORCH_DEVICE"]),
+            "device": self.device,
             "posterior": self.posterior_semantic_identity(config, None),
             "applicability": {
                 "capability": "yadof.rawdata-applicability",
@@ -429,6 +432,10 @@ class HierarchicalCAEComponent:
             context.generation_index,
             _config=context.config,
             _component=self,
+            _max_training_lag=int(
+                context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
+            ),
+            _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
             _training_data=runtime.training_data_from_session(
                 context.session, context.snapshot
             ),
@@ -450,6 +457,7 @@ class HierarchicalCAEComponent:
             block=False,
             _config=context.config,
             _component=self,
+            _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
             _training_data=runtime.training_data_from_session(
                 context.session, context.snapshot
             ),
@@ -498,12 +506,107 @@ class HierarchicalCAEComponent:
         )
 
 
-def conditional_inr() -> ConditionalINRComponent:
-    return ConditionalINRComponent()
+def conditional_inr(
+    *,
+    constant_atol: float = DEFAULT_CONDITIONAL_INR_SETTINGS.constant_atol,
+    target_scale_floor: float = DEFAULT_CONDITIONAL_INR_SETTINGS.target_scale_floor,
+    device: str = DEFAULT_CONDITIONAL_INR_SETTINGS.device,
+    epochs: int = DEFAULT_CONDITIONAL_INR_SETTINGS.epochs,
+    ensemble_size: int = DEFAULT_CONDITIONAL_INR_SETTINGS.ensemble_size,
+    batch_size: int = DEFAULT_CONDITIONAL_INR_SETTINGS.batch_size,
+    learning_rate: float = DEFAULT_CONDITIONAL_INR_SETTINGS.learning_rate,
+    weight_decay: float = DEFAULT_CONDITIONAL_INR_SETTINGS.weight_decay,
+    loss_beta: float = DEFAULT_CONDITIONAL_INR_SETTINGS.loss_beta,
+    max_nonfinite_fraction: float = DEFAULT_CONDITIONAL_INR_SETTINGS.max_nonfinite_fraction,
+    x_latent_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.x_latent_dim,
+    field_embedding_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.field_embedding_dim,
+    coordinate_fourier_features: int = DEFAULT_CONDITIONAL_INR_SETTINGS.coordinate_fourier_features,
+    hidden_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.hidden_dim,
+    hidden_layers: int = DEFAULT_CONDITIONAL_INR_SETTINGS.hidden_layers,
+    train_query_chunk: int = DEFAULT_CONDITIONAL_INR_SETTINGS.train_query_chunk,
+    train_query_sample_count: int = DEFAULT_CONDITIONAL_INR_SETTINGS.train_query_sample_count,
+    sample_batch_eval: int = DEFAULT_CONDITIONAL_INR_SETTINGS.sample_batch_eval,
+    query_batch_eval: int = DEFAULT_CONDITIONAL_INR_SETTINGS.query_batch_eval,
+    bootstrap_members: bool = DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_members,
+    bootstrap_fraction: float = DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_fraction,
+) -> ConditionalINRComponent:
+    return ConditionalINRComponent(
+        create_conditional_inr_settings(
+            "conditional_inr",
+            constant_atol=constant_atol,
+            target_scale_floor=target_scale_floor,
+            device=device,
+            epochs=epochs,
+            ensemble_size=ensemble_size,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            loss_beta=loss_beta,
+            max_nonfinite_fraction=max_nonfinite_fraction,
+            x_latent_dim=x_latent_dim,
+            field_embedding_dim=field_embedding_dim,
+            coordinate_fourier_features=coordinate_fourier_features,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            train_query_chunk=train_query_chunk,
+            train_query_sample_count=train_query_sample_count,
+            sample_batch_eval=sample_batch_eval,
+            query_batch_eval=query_batch_eval,
+            bootstrap_members=bootstrap_members,
+            bootstrap_fraction=bootstrap_fraction,
+        )
+    )
 
 
-def conditional_inr_posterior() -> ConditionalINRPosteriorAdapter:
-    return ConditionalINRPosteriorAdapter()
+def conditional_inr_posterior(
+    *,
+    constant_atol: float = DEFAULT_CONDITIONAL_INR_SETTINGS.constant_atol,
+    target_scale_floor: float = DEFAULT_CONDITIONAL_INR_SETTINGS.target_scale_floor,
+    device: str = DEFAULT_CONDITIONAL_INR_SETTINGS.device,
+    epochs: int = DEFAULT_CONDITIONAL_INR_SETTINGS.epochs,
+    ensemble_size: int = DEFAULT_CONDITIONAL_INR_SETTINGS.ensemble_size,
+    batch_size: int = DEFAULT_CONDITIONAL_INR_SETTINGS.batch_size,
+    learning_rate: float = DEFAULT_CONDITIONAL_INR_SETTINGS.learning_rate,
+    weight_decay: float = DEFAULT_CONDITIONAL_INR_SETTINGS.weight_decay,
+    loss_beta: float = DEFAULT_CONDITIONAL_INR_SETTINGS.loss_beta,
+    max_nonfinite_fraction: float = DEFAULT_CONDITIONAL_INR_SETTINGS.max_nonfinite_fraction,
+    x_latent_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.x_latent_dim,
+    field_embedding_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.field_embedding_dim,
+    coordinate_fourier_features: int = DEFAULT_CONDITIONAL_INR_SETTINGS.coordinate_fourier_features,
+    hidden_dim: int = DEFAULT_CONDITIONAL_INR_SETTINGS.hidden_dim,
+    hidden_layers: int = DEFAULT_CONDITIONAL_INR_SETTINGS.hidden_layers,
+    train_query_chunk: int = DEFAULT_CONDITIONAL_INR_SETTINGS.train_query_chunk,
+    train_query_sample_count: int = DEFAULT_CONDITIONAL_INR_SETTINGS.train_query_sample_count,
+    sample_batch_eval: int = DEFAULT_CONDITIONAL_INR_SETTINGS.sample_batch_eval,
+    query_batch_eval: int = DEFAULT_CONDITIONAL_INR_SETTINGS.query_batch_eval,
+    bootstrap_members: bool = DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_members,
+    bootstrap_fraction: float = DEFAULT_CONDITIONAL_INR_SETTINGS.bootstrap_fraction,
+) -> ConditionalINRPosteriorAdapter:
+    return ConditionalINRPosteriorAdapter(
+        conditional_inr(
+            constant_atol=constant_atol,
+            target_scale_floor=target_scale_floor,
+            device=device,
+            epochs=epochs,
+            ensemble_size=ensemble_size,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            loss_beta=loss_beta,
+            max_nonfinite_fraction=max_nonfinite_fraction,
+            x_latent_dim=x_latent_dim,
+            field_embedding_dim=field_embedding_dim,
+            coordinate_fourier_features=coordinate_fourier_features,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            train_query_chunk=train_query_chunk,
+            train_query_sample_count=train_query_sample_count,
+            sample_batch_eval=sample_batch_eval,
+            query_batch_eval=query_batch_eval,
+            bootstrap_members=bootstrap_members,
+            bootstrap_fraction=bootstrap_fraction,
+        )
+    )
 
 
 def hierarchical_cae(
@@ -512,7 +615,46 @@ def hierarchical_cae(
     field_layouts=None,
     axis_encodings=None,
     quality_policy: RawDataQualityPolicy | Mapping[str, object] | None = None,
-    train_config: CAETrainConfig | None = None,
+    device: str = "auto",
+    architecture_version: int = DEFAULT_CAE_TRAIN_CONFIG.architecture_version,
+    token_dim: int = DEFAULT_CAE_TRAIN_CONFIG.token_dim,
+    global_latent_dim: int = DEFAULT_CAE_TRAIN_CONFIG.global_latent_dim,
+    group_latent_dim: int = DEFAULT_CAE_TRAIN_CONFIG.group_latent_dim,
+    private_latent_dim: int = DEFAULT_CAE_TRAIN_CONFIG.private_latent_dim,
+    codec_width: int = DEFAULT_CAE_TRAIN_CONFIG.codec_width,
+    predictor_width: int = DEFAULT_CAE_TRAIN_CONFIG.predictor_width,
+    predictor_layers: int = DEFAULT_CAE_TRAIN_CONFIG.predictor_layers,
+    predictor_members: int = DEFAULT_CAE_TRAIN_CONFIG.predictor_members,
+    codec_epochs: int = DEFAULT_CAE_TRAIN_CONFIG.codec_epochs,
+    predictor_epochs: int = DEFAULT_CAE_TRAIN_CONFIG.predictor_epochs,
+    fine_tune_epochs: int = DEFAULT_CAE_TRAIN_CONFIG.fine_tune_epochs,
+    batch_size: int = DEFAULT_CAE_TRAIN_CONFIG.batch_size,
+    inference_batch_size: int = DEFAULT_CAE_TRAIN_CONFIG.inference_batch_size,
+    learning_rate: float = DEFAULT_CAE_TRAIN_CONFIG.learning_rate,
+    weight_decay: float = DEFAULT_CAE_TRAIN_CONFIG.weight_decay,
+    validation_fraction: float = DEFAULT_CAE_TRAIN_CONFIG.validation_fraction,
+    early_stopping_patience: int = DEFAULT_CAE_TRAIN_CONFIG.early_stopping_patience,
+    gradient_clip_norm: float = DEFAULT_CAE_TRAIN_CONFIG.gradient_clip_norm,
+    bootstrap_fraction: float = DEFAULT_CAE_TRAIN_CONFIG.bootstrap_fraction,
+    scale_floor: float = DEFAULT_CAE_TRAIN_CONFIG.scale_floor,
+    minimum_samples: int = DEFAULT_CAE_TRAIN_CONFIG.minimum_samples,
+    robust_loss_cap: float | None = DEFAULT_CAE_TRAIN_CONFIG.robust_loss_cap,
+    applicability_loss_weight: float = DEFAULT_CAE_TRAIN_CONFIG.applicability_loss_weight,
+    residual_gate_loss_weight: float = DEFAULT_CAE_TRAIN_CONFIG.residual_gate_loss_weight,
+    regime_head: bool = DEFAULT_CAE_TRAIN_CONFIG.regime_head,
+    quality_weighted_loss: bool = DEFAULT_CAE_TRAIN_CONFIG.quality_weighted_loss,
+    shared_quality_isolation: bool = DEFAULT_CAE_TRAIN_CONFIG.shared_quality_isolation,
+    gated_private_residual: bool = DEFAULT_CAE_TRAIN_CONFIG.gated_private_residual,
+    coordinate_readout: bool = DEFAULT_CAE_TRAIN_CONFIG.coordinate_readout,
+    coordinate_width: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_width,
+    coordinate_layers: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_layers,
+    coordinate_epochs: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_epochs,
+    coordinate_points_per_field: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_points_per_field,
+    coordinate_validation_points_per_field: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_validation_points_per_field,
+    coordinate_query_batch_size: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_query_batch_size,
+    coordinate_consistency_weight: float = DEFAULT_CAE_TRAIN_CONFIG.coordinate_consistency_weight,
+    mixed_precision: bool = DEFAULT_CAE_TRAIN_CONFIG.mixed_precision,
+    sharing: str = DEFAULT_CAE_TRAIN_CONFIG.sharing,
 ) -> HierarchicalCAEComponent:
     """Build the opt-in hierarchical CAE component from task-owned declarations."""
 
@@ -521,7 +663,48 @@ def hierarchical_cae(
         field_layouts={} if field_layouts is None else dict(field_layouts),
         axis_encodings={} if axis_encodings is None else dict(axis_encodings),
         quality_policy=quality_policy_from_mapping(quality_policy),
-        train_cfg=CAETrainConfig() if train_config is None else train_config,
+        train_cfg=CAETrainConfig(
+            architecture_version=architecture_version,
+            token_dim=token_dim,
+            global_latent_dim=global_latent_dim,
+            group_latent_dim=group_latent_dim,
+            private_latent_dim=private_latent_dim,
+            codec_width=codec_width,
+            predictor_width=predictor_width,
+            predictor_layers=predictor_layers,
+            predictor_members=predictor_members,
+            codec_epochs=codec_epochs,
+            predictor_epochs=predictor_epochs,
+            fine_tune_epochs=fine_tune_epochs,
+            batch_size=batch_size,
+            inference_batch_size=inference_batch_size,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            validation_fraction=validation_fraction,
+            early_stopping_patience=early_stopping_patience,
+            gradient_clip_norm=gradient_clip_norm,
+            bootstrap_fraction=bootstrap_fraction,
+            scale_floor=scale_floor,
+            minimum_samples=minimum_samples,
+            robust_loss_cap=robust_loss_cap,
+            applicability_loss_weight=applicability_loss_weight,
+            residual_gate_loss_weight=residual_gate_loss_weight,
+            regime_head=regime_head,
+            quality_weighted_loss=quality_weighted_loss,
+            shared_quality_isolation=shared_quality_isolation,
+            gated_private_residual=gated_private_residual,
+            coordinate_readout=coordinate_readout,
+            coordinate_width=coordinate_width,
+            coordinate_layers=coordinate_layers,
+            coordinate_epochs=coordinate_epochs,
+            coordinate_points_per_field=coordinate_points_per_field,
+            coordinate_validation_points_per_field=coordinate_validation_points_per_field,
+            coordinate_query_batch_size=coordinate_query_batch_size,
+            coordinate_consistency_weight=coordinate_consistency_weight,
+            mixed_precision=mixed_precision,
+            sharing=sharing,
+        ),
+        device=device,
     )
 
 

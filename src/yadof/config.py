@@ -17,198 +17,104 @@ class ConfigError(ValueError):
     """Raised when a workspace configuration is missing or invalid."""
 
 
-_DEFAULT_ITEMS: tuple[tuple[str, object], ...] = (
+@dataclass(frozen=True, slots=True)
+class SettingSpec:
+    """One authoritative core setting declaration."""
+
+    name: str
+    default: object
+    kind: str
+    reload_policy: str = "generation"
+    path_policy: str | None = None
+    choices: tuple[object, ...] = ()
+
+
+def _spec(
+    name: str,
+    default: object,
+    kind: str,
+    *,
+    reload_policy: str = "generation",
+    path_policy: str | None = None,
+    choices: tuple[object, ...] = (),
+) -> SettingSpec:
+    return SettingSpec(name, default, kind, reload_policy, path_policy, choices)
+
+
+_CORE_SETTING_SPECS: tuple[SettingSpec, ...] = (
     # Workspace paths. Relative values are rooted at the selected workspace.
-    ("JOB_TEMPLATE_DIR", "job_template"),
-    ("JOBS_DIR", "jobs"),
-    ("RECORDED_DATA_DIR", "recorded_data"),
-    ("SURROGATE_CHECKPOINT_DIR", ".yadof/surrogate/checkpoints"),
-    ("LOGS_DIR", ".yadof/logs"),
-    ("TOOL_OUTPUT_DIR", ".yadof/tool_output"),
-    ("FAST_EVALUATION_SCRATCH_DIR", ".yadof/fast_scratch"),
+    _spec("JOB_TEMPLATE_DIR", "job_template", "path", path_policy="workspace_relative"),
+    _spec("JOBS_DIR", "jobs", "path", path_policy="workspace_relative"),
+    _spec("RECORDED_DATA_DIR", "recorded_data", "path", path_policy="workspace_relative"),
+    _spec("SURROGATE_CHECKPOINT_DIR", ".yadof/surrogate/checkpoints", "path", path_policy="workspace_relative"),
+    _spec("LOGS_DIR", ".yadof/logs", "path", path_policy="workspace_relative"),
+    _spec("TOOL_OUTPUT_DIR", ".yadof/tool_output", "path", path_policy="workspace_relative"),
+    _spec("FAST_EVALUATION_SCRATCH_DIR", ".yadof/fast_scratch", "path", path_policy="workspace_relative"),
     # Reliable immutable-segment history recorder. These values are frozen for
     # one active campaign even when other workspace config is hot-reloaded.
-    ("HISTORY_SEGMENT_MAX_CANDIDATES", 16),
-    ("HISTORY_SEGMENT_TARGET_BYTES", 16 * 1024 * 1024),
-    ("HISTORY_MAX_CANDIDATE_BYTES", 64 * 1024 * 1024),
-    ("HISTORY_UNPUBLISHED_MAX_CANDIDATES", 32),
-    ("HISTORY_UNPUBLISHED_MAX_BYTES", 512 * 1024 * 1024),
-    ("HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES", 3),
+    _spec("HISTORY_SEGMENT_MAX_CANDIDATES", 16, "positive_int", reload_policy="session_frozen"),
+    _spec("HISTORY_SEGMENT_TARGET_BYTES", 16 * 1024 * 1024, "positive_int", reload_policy="session_frozen"),
+    _spec("HISTORY_MAX_CANDIDATE_BYTES", 64 * 1024 * 1024, "positive_int", reload_policy="session_frozen"),
+    _spec("HISTORY_UNPUBLISHED_MAX_CANDIDATES", 32, "positive_int", reload_policy="session_frozen"),
+    _spec("HISTORY_UNPUBLISHED_MAX_BYTES", 512 * 1024 * 1024, "positive_int", reload_policy="session_frozen"),
+    _spec("HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES", 3, "positive_int", reload_policy="session_frozen"),
     # Evaluation backend.
-    ("EVALUATION_MODE", "local"),
-    ("EVALUATION_TIMEOUT_SEC", 6 * 60 * 60),
-    ("LOCAL_EVALUATION_MAX_WORKERS", 8),
-    ("LOCAL_RESOURCE_AUTODETECT_ENABLED", True),
-    ("LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION", 0.15),
-    ("FAST_EVALUATION_MAX_WORKERS", 8),
-    ("FAST_RESOURCE_AUTODETECT_ENABLED", True),
-    ("FAST_RESOURCE_SYSTEM_RESERVE_FRACTION", 0.15),
-    ("FAST_EVALUATION_CPUS_PER_WORKER", 1),
-    ("FAST_EVALUATION_MEMORY_MIB_PER_WORKER", 512),
-    ("FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER", 1024),
+    _spec("EVALUATION_MODE", "local", "choice", choices=("fast", "local", "distributed")),
+    _spec("EVALUATION_TIMEOUT_SEC", 6 * 60 * 60, "positive_real"),
+    _spec("LOCAL_EVALUATION_MAX_WORKERS", 8, "positive_int"),
+    _spec("LOCAL_RESOURCE_AUTODETECT_ENABLED", True, "bool"),
+    _spec("LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION", 0.15, "fraction"),
+    _spec("FAST_EVALUATION_MAX_WORKERS", 8, "positive_int"),
+    _spec("FAST_RESOURCE_AUTODETECT_ENABLED", True, "bool"),
+    _spec("FAST_RESOURCE_SYSTEM_RESERVE_FRACTION", 0.15, "fraction"),
+    _spec("FAST_EVALUATION_CPUS_PER_WORKER", 1, "positive_int"),
+    _spec("FAST_EVALUATION_MEMORY_MIB_PER_WORKER", 512, "positive_int"),
+    _spec("FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER", 1024, "positive_int"),
     # HTCondor backend.
-    ("HTCONDOR_SUBMIT_EXE", "condor_submit"),
-    ("HTCONDOR_REMOVE_EXE", "condor_rm"),
-    ("HTCONDOR_HISTORY_EXE", "condor_history"),
-    ("HTCONDOR_POLL_SEC", 30.0),
-    ("HTCONDOR_REQUEST_CPUS", 1),
-    ("HTCONDOR_REQUEST_MEMORY", "4GB"),
-    ("HTCONDOR_REQUEST_DISK", "2GB"),
-    ("HTCONDOR_RESOURCE_AUTODETECT_ENABLED", True),
-    ("HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER", 2.0),
-    ("HTCONDOR_RESOURCE_TRIM_TOP_FRACTION", 0.05),
-    ("YADOF_RESOURCE_RETRY_DOUBLINGS", 4),
-    ("HTCONDOR_REQUEST_DISK_MULTIPLIER", 1.0),
-    ("HTCONDOR_JOB_TIMEOUT_MODE", "auto"),
-    ("HTCONDOR_JOB_TIMEOUT_SEC", 60 * 60),
-    ("HTCONDOR_JOB_TIMEOUT_MULTIPLIER", 2.0),
-    ("HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION", 0.10),
-    ("HTCONDOR_LOAD_PROFILE", True),
-    ("HTCONDOR_RUN_AS_OWNER", False),
-    ("HTCONDOR_REQUIREMENTS", '(OpSys == "WINDOWS")'),
-    ("HTCONDOR_ALLOWED_MACHINES", ()),
-    ("HTCONDOR_EXCLUDED_MACHINES", ()),
-    ("HTCONDOR_ENVIRONMENT", "USERPROFILE=._home HOME=._home TEMP=._tmp TMP=._tmp"),
+    _spec("HTCONDOR_SUBMIT_EXE", "condor_submit", "string"),
+    _spec("HTCONDOR_REMOVE_EXE", "condor_rm", "string"),
+    _spec("HTCONDOR_HISTORY_EXE", "condor_history", "string"),
+    _spec("HTCONDOR_POLL_SEC", 30.0, "positive_real"),
+    _spec("HTCONDOR_REQUEST_CPUS", 1, "positive_int"),
+    _spec("HTCONDOR_REQUEST_MEMORY", "4GB", "resource"),
+    _spec("HTCONDOR_REQUEST_DISK", "2GB", "resource"),
+    _spec("HTCONDOR_RESOURCE_AUTODETECT_ENABLED", True, "bool"),
+    _spec("HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER", 2.0, "positive_real"),
+    _spec("HTCONDOR_RESOURCE_TRIM_TOP_FRACTION", 0.05, "fraction"),
+    _spec("YADOF_RESOURCE_RETRY_DOUBLINGS", 4, "nonnegative_int"),
+    _spec("HTCONDOR_REQUEST_DISK_MULTIPLIER", 1.0, "positive_real"),
+    _spec("HTCONDOR_JOB_TIMEOUT_MODE", "auto", "choice", choices=("auto", "fixed")),
+    _spec("HTCONDOR_JOB_TIMEOUT_SEC", 60 * 60, "positive_int"),
+    _spec("HTCONDOR_JOB_TIMEOUT_MULTIPLIER", 2.0, "positive_real"),
+    _spec("HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION", 0.10, "fraction"),
+    _spec("HTCONDOR_LOAD_PROFILE", True, "bool"),
+    _spec("HTCONDOR_RUN_AS_OWNER", False, "bool"),
+    _spec("HTCONDOR_REQUIREMENTS", '(OpSys == "WINDOWS")', "string"),
+    _spec("HTCONDOR_ALLOWED_MACHINES", (), "string_sequence"),
+    _spec("HTCONDOR_EXCLUDED_MACHINES", (), "string_sequence"),
+    _spec("HTCONDOR_ENVIRONMENT", "USERPROFILE=._home HOME=._home TEMP=._tmp TMP=._tmp", "string"),
     # Optimizer.
-    ("OPTIMIZE_POPULATION_SIZE", 200),
-    ("OPTIMIZE_SMOKE_TEST_ENABLED", True),
-    ("OPTIMIZE_RANDOM_SEED", 20260624),
-    ("OPTIMIZE_NSGA3_REF_DIR_METHOD", "das-dennis"),
-    ("OPTIMIZE_NSGA3_PARTITIONS", None),
-    ("OPTIMIZE_REFILL_ATTEMPTS", 8),
-    ("OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10),
-    ("OPTIMIZE_CROSSOVER_PROBABILITY", 0.85),
-    ("OPTIMIZE_MUTATION_PROBABILITY", 0.35),
-    ("OPTIMIZE_CROSSOVER_ETA", 10.0),
-    ("OPTIMIZE_MUTATION_ETA", 10.0),
-    ("OPTIMIZE_DIM_MUT_PER_INDIVIDUAL", 7),
-    # GPSAF surrogate assistance.
-    ("OPTIMIZE_SURROGATE_ALPHA", 3),
-    ("OPTIMIZE_SURROGATE_BETA", 3),
-    ("OPTIMIZE_SURROGATE_GAMMA", 0.5),
-    ("OPTIMIZE_SURROGATE_EXPLORATION_FRACTION", 0.10),
-    ("OPTIMIZE_SURROGATE_MAX_TRAINING_LAG", 1),
-    # Surrogate model.
-    ("SURROGATE_RELATIVE_ERROR_EPS", 1e-8),
-    ("SURROGATE_CONSTANT_ATOL", 1e-12),
-    ("SURROGATE_TARGET_SCALE_FLOOR", 1e-6),
-    ("SURROGATE_TORCH_DEVICE", "auto"),
-    ("SURROGATE_INR_EPOCHS", 32),
-    ("SURROGATE_INR_ENSEMBLE_SIZE", 3),
-    ("SURROGATE_INR_BATCH_SIZE", 16),
-    ("SURROGATE_INR_LR", 1e-3),
-    ("SURROGATE_INR_WEIGHT_DECAY", 1e-5),
-    ("SURROGATE_INR_LOSS_BETA", 0.05),
-    ("SURROGATE_MAX_NONFINITE_FRACTION", 0.20),
-    ("SURROGATE_INR_X_LATENT_DIM", 96),
-    ("SURROGATE_INR_FIELD_EMB_DIM", 12),
-    ("SURROGATE_INR_COORD_FOURIER_FEATURES", 24),
-    ("SURROGATE_INR_HIDDEN_DIM", 192),
-    ("SURROGATE_INR_HIDDEN_LAYERS", 3),
-    ("SURROGATE_INR_TRAIN_QUERY_CHUNK", 4096),
-    ("SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT", 8192),
-    ("SURROGATE_INR_SAMPLE_BATCH_EVAL", 64),
-    ("SURROGATE_INR_QUERY_BATCH_EVAL", 8192),
-    ("SURROGATE_INR_BOOTSTRAP_MEMBERS", False),
-    ("SURROGATE_INR_BOOTSTRAP_FRACTION", 1.0),
+    _spec("OPTIMIZE_POPULATION_SIZE", 200, "positive_int"),
+    _spec("OPTIMIZE_SMOKE_TEST_ENABLED", True, "bool"),
+    _spec("OPTIMIZE_RANDOM_SEED", 20260624, "nonnegative_int"),
+    _spec("OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10, "nonnegative_int"),
+    _spec("OPTIMIZE_SURROGATE_MAX_TRAINING_LAG", 1, "nonnegative_int"),
+    # Cross-component viewer diagnostic policy.
+    _spec("SURROGATE_RELATIVE_ERROR_EPS", 1e-8, "positive_real"),
 )
 
-DEFAULT_CONFIG: Mapping[str, object] = MappingProxyType(dict(_DEFAULT_ITEMS))
+_CORE_SETTING_BY_NAME = MappingProxyType(
+    {spec.name: spec for spec in _CORE_SETTING_SPECS}
+)
+if len(_CORE_SETTING_BY_NAME) != len(_CORE_SETTING_SPECS):
+    raise RuntimeError("core configuration schema contains duplicate names")
+DEFAULT_CONFIG: Mapping[str, object] = MappingProxyType(
+    {spec.name: spec.default for spec in _CORE_SETTING_SPECS}
+)
 
-_PATH_NAMES = {
-    "JOB_TEMPLATE_DIR",
-    "JOBS_DIR",
-    "RECORDED_DATA_DIR",
-    "SURROGATE_CHECKPOINT_DIR",
-    "LOGS_DIR",
-    "TOOL_OUTPUT_DIR",
-    "FAST_EVALUATION_SCRATCH_DIR",
-}
-_BOOL_NAMES = {
-    "LOCAL_RESOURCE_AUTODETECT_ENABLED",
-    "FAST_RESOURCE_AUTODETECT_ENABLED",
-    "HTCONDOR_RESOURCE_AUTODETECT_ENABLED",
-    "HTCONDOR_LOAD_PROFILE",
-    "HTCONDOR_RUN_AS_OWNER",
-    "OPTIMIZE_SMOKE_TEST_ENABLED",
-    "SURROGATE_INR_BOOTSTRAP_MEMBERS",
-}
-_POSITIVE_INT_NAMES = {
-    "LOCAL_EVALUATION_MAX_WORKERS",
-    "FAST_EVALUATION_MAX_WORKERS",
-    "FAST_EVALUATION_CPUS_PER_WORKER",
-    "FAST_EVALUATION_MEMORY_MIB_PER_WORKER",
-    "FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER",
-    "HISTORY_SEGMENT_MAX_CANDIDATES",
-    "HISTORY_SEGMENT_TARGET_BYTES",
-    "HISTORY_MAX_CANDIDATE_BYTES",
-    "HISTORY_UNPUBLISHED_MAX_CANDIDATES",
-    "HISTORY_UNPUBLISHED_MAX_BYTES",
-    "HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES",
-    "HTCONDOR_REQUEST_CPUS",
-    "HTCONDOR_JOB_TIMEOUT_SEC",
-    "OPTIMIZE_POPULATION_SIZE",
-    "OPTIMIZE_REFILL_ATTEMPTS",
-    "OPTIMIZE_DIM_MUT_PER_INDIVIDUAL",
-    "SURROGATE_INR_EPOCHS",
-    "SURROGATE_INR_ENSEMBLE_SIZE",
-    "SURROGATE_INR_BATCH_SIZE",
-    "SURROGATE_INR_X_LATENT_DIM",
-    "SURROGATE_INR_FIELD_EMB_DIM",
-    "SURROGATE_INR_COORD_FOURIER_FEATURES",
-    "SURROGATE_INR_HIDDEN_DIM",
-    "SURROGATE_INR_HIDDEN_LAYERS",
-    "SURROGATE_INR_TRAIN_QUERY_CHUNK",
-    "SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT",
-    "SURROGATE_INR_SAMPLE_BATCH_EVAL",
-    "SURROGATE_INR_QUERY_BATCH_EVAL",
-}
-_NONNEGATIVE_INT_NAMES = {
-    "YADOF_RESOURCE_RETRY_DOUBLINGS",
-    "OPTIMIZE_RANDOM_SEED",
-    "OPTIMIZE_ARCHIVE_KEY_DECIMALS",
-    "OPTIMIZE_SURROGATE_ALPHA",
-    "OPTIMIZE_SURROGATE_BETA",
-    "OPTIMIZE_SURROGATE_MAX_TRAINING_LAG",
-}
-_POSITIVE_REAL_NAMES = {
-    "EVALUATION_TIMEOUT_SEC",
-    "HTCONDOR_POLL_SEC",
-    "HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER",
-    "HTCONDOR_REQUEST_DISK_MULTIPLIER",
-    "HTCONDOR_JOB_TIMEOUT_MULTIPLIER",
-    "OPTIMIZE_CROSSOVER_ETA",
-    "OPTIMIZE_MUTATION_ETA",
-    "SURROGATE_RELATIVE_ERROR_EPS",
-    "SURROGATE_TARGET_SCALE_FLOOR",
-    "SURROGATE_INR_LR",
-    "SURROGATE_INR_BOOTSTRAP_FRACTION",
-}
-_NONNEGATIVE_REAL_NAMES = {
-    "SURROGATE_CONSTANT_ATOL",
-    "SURROGATE_INR_WEIGHT_DECAY",
-    "SURROGATE_INR_LOSS_BETA",
-}
-_FRACTION_NAMES = {
-    "LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION",
-    "FAST_RESOURCE_SYSTEM_RESERVE_FRACTION",
-    "HTCONDOR_RESOURCE_TRIM_TOP_FRACTION",
-    "HTCONDOR_JOB_TIMEOUT_TRIM_TOP_FRACTION",
-    "OPTIMIZE_CROSSOVER_PROBABILITY",
-    "OPTIMIZE_MUTATION_PROBABILITY",
-    "OPTIMIZE_SURROGATE_GAMMA",
-    "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION",
-    "SURROGATE_MAX_NONFINITE_FRACTION",
-}
-_STRING_NAMES = {
-    "HTCONDOR_SUBMIT_EXE",
-    "HTCONDOR_REMOVE_EXE",
-    "HTCONDOR_HISTORY_EXE",
-    "HTCONDOR_REQUIREMENTS",
-    "HTCONDOR_ENVIRONMENT",
-    "OPTIMIZE_NSGA3_REF_DIR_METHOD",
-    "SURROGATE_TORCH_DEVICE",
-}
+_PATH_NAMES = frozenset(
+    spec.name for spec in _CORE_SETTING_SPECS if spec.path_policy is not None
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,8 +147,11 @@ class LoadedConfig:
         """Format effective values with their package/workspace/CLI precedence."""
 
         lines = [f"workspace = {self.workspace.root}"]
-        for name, _default in _DEFAULT_ITEMS:
-            lines.append(f"{name} = {self.values[name]!r}  # {self.sources[name]}")
+        for spec in _CORE_SETTING_SPECS:
+            lines.append(
+                f"{spec.name} = {self.values[spec.name]!r}  # "
+                f"{self.sources[spec.name]}; reload={spec.reload_policy}"
+            )
         return "\n".join(lines)
 
 
@@ -274,45 +183,49 @@ def _real(value: object, name: str) -> float:
 
 
 def _validate_value(name: str, value: object) -> object:
-    if name in _PATH_NAMES:
+    spec = _CORE_SETTING_BY_NAME.get(name)
+    if spec is None:
+        raise ConfigError(f"no validator is registered for config setting {name}")
+    kind = spec.kind
+    if kind == "path":
         if not isinstance(value, (str, os.PathLike)) or not str(value):
             raise ConfigError(f"{name} must be a non-empty path")
         return value
-    if name in _BOOL_NAMES:
+    if kind == "bool":
         if not isinstance(value, bool):
             raise ConfigError(f"{name} must be bool, got {type(value).__name__}")
         return value
-    if name in _POSITIVE_INT_NAMES or name in _NONNEGATIVE_INT_NAMES:
+    if kind in {"positive_int", "nonnegative_int"}:
         if isinstance(value, bool) or not isinstance(value, int):
             raise ConfigError(f"{name} must be an integer, got {type(value).__name__}")
-        minimum = 1 if name in _POSITIVE_INT_NAMES else 0
+        minimum = 1 if kind == "positive_int" else 0
         if value < minimum:
             raise ConfigError(f"{name} must be >= {minimum}")
         return value
-    if name in _POSITIVE_REAL_NAMES or name in _NONNEGATIVE_REAL_NAMES:
+    if kind in {"positive_real", "nonnegative_real"}:
         number = _real(value, name)
-        if number <= 0.0 and name in _POSITIVE_REAL_NAMES:
+        if number <= 0.0 and kind == "positive_real":
             raise ConfigError(f"{name} must be > 0")
-        if number < 0.0 and name in _NONNEGATIVE_REAL_NAMES:
+        if number < 0.0 and kind == "nonnegative_real":
             raise ConfigError(f"{name} must be >= 0")
         return value
-    if name in _FRACTION_NAMES:
+    if kind == "fraction":
         number = _real(value, name)
         if not 0.0 <= number <= 1.0:
             raise ConfigError(f"{name} must be between 0 and 1")
         return value
-    if name in _STRING_NAMES:
+    if kind == "string":
         if not isinstance(value, str) or not value.strip():
             raise ConfigError(f"{name} must be a non-empty string")
         return value
-    if name in {"HTCONDOR_ALLOWED_MACHINES", "HTCONDOR_EXCLUDED_MACHINES"}:
+    if kind == "string_sequence":
         if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
             raise ConfigError(f"{name} must be a sequence of strings")
         result = tuple(value)
         if not all(isinstance(item, str) and item for item in result):
             raise ConfigError(f"{name} must contain only non-empty strings")
         return result
-    if name in {"HTCONDOR_REQUEST_MEMORY", "HTCONDOR_REQUEST_DISK"}:
+    if kind == "resource":
         if isinstance(value, bool) or not isinstance(value, (str, int)):
             raise ConfigError(f"{name} must be a resource string or positive integer")
         if isinstance(value, str) and not value.strip():
@@ -320,21 +233,10 @@ def _validate_value(name: str, value: object) -> object:
         if isinstance(value, int) and value <= 0:
             raise ConfigError(f"{name} must be positive")
         return value
-    if name == "OPTIMIZE_NSGA3_PARTITIONS":
-        if value is not None and (
-            isinstance(value, bool) or not isinstance(value, int) or value <= 0
-        ):
-            raise ConfigError(f"{name} must be None or a positive integer")
-        return value
-    if name == "EVALUATION_MODE":
-        if value not in {"fast", "local", "distributed"}:
-            raise ConfigError(
-                "EVALUATION_MODE must be 'fast', 'local', or 'distributed'"
-            )
-        return value
-    if name == "HTCONDOR_JOB_TIMEOUT_MODE":
-        if value not in {"auto", "fixed"}:
-            raise ConfigError("HTCONDOR_JOB_TIMEOUT_MODE must be 'auto' or 'fixed'")
+    if kind == "choice":
+        if value not in spec.choices:
+            choices = ", ".join(repr(item) for item in spec.choices)
+            raise ConfigError(f"{name} must be one of: {choices}")
         return value
     raise ConfigError(f"no validator is registered for config setting {name}")
 
@@ -433,7 +335,10 @@ def load_config(
     """Load package defaults, workspace config, then non-mutating overrides."""
 
     base_workspace = resolve_workspace(workspace)
-    values = {name: _validate_value(name, value) for name, value in _DEFAULT_ITEMS}
+    values = {
+        spec.name: _validate_value(spec.name, spec.default)
+        for spec in _CORE_SETTING_SPECS
+    }
     sources = {name: "package default" for name in values}
     default_workspace = WorkspaceContext.from_path(base_workspace.root)
     for name, path in base_workspace.path_settings().items():

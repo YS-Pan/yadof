@@ -164,9 +164,9 @@ def test_config_preserves_explicit_context_paths_until_file_override(tmp_path: P
         ("OPTIMIZE_POPULATION_SIZE = 'many'\n", "must be an integer"),
         (
             "EVALUATION_MODE = 'cluster'\n",
-            "must be 'fast', 'local', or 'distributed'",
+            "must be one of",
         ),
-        ("HTCONDOR_JOB_TIMEOUT_MODE = 'sometimes'\n", "must be 'auto' or 'fixed'"),
+        ("HTCONDOR_JOB_TIMEOUT_MODE = 'sometimes'\n", "must be one of"),
         ("SURROGATE_RAWDATA_IMPORTANCE_FLOOR = 0.25\n", "unknown config setting"),
         ("SURROGATE_RAWDATA_IMPORTANCE_BOOST = 2.0\n", "unknown config setting"),
         ("SURROGATE_INR_MIXUP_WEIGHT = 0.1\n", "unknown config setting"),
@@ -183,6 +183,63 @@ def test_config_rejects_unknown_names_types_and_modes(
 
     with pytest.raises(ConfigError, match=message):
         load_config(root, validate_task_paths=False)
+
+
+@pytest.mark.parametrize(
+    "removed_name",
+    [
+        "OPTIMIZE_NSGA3_REF_DIR_METHOD",
+        "OPTIMIZE_NSGA3_PARTITIONS",
+        "OPTIMIZE_REFILL_ATTEMPTS",
+        "OPTIMIZE_CROSSOVER_PROBABILITY",
+        "OPTIMIZE_MUTATION_PROBABILITY",
+        "OPTIMIZE_CROSSOVER_ETA",
+        "OPTIMIZE_MUTATION_ETA",
+        "OPTIMIZE_DIM_MUT_PER_INDIVIDUAL",
+        "OPTIMIZE_SURROGATE_ALPHA",
+        "OPTIMIZE_SURROGATE_BETA",
+        "OPTIMIZE_SURROGATE_GAMMA",
+        "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION",
+        "SURROGATE_CONSTANT_ATOL",
+        "SURROGATE_TARGET_SCALE_FLOOR",
+        "SURROGATE_TORCH_DEVICE",
+        "SURROGATE_INR_EPOCHS",
+        "SURROGATE_INR_ENSEMBLE_SIZE",
+        "SURROGATE_INR_BATCH_SIZE",
+        "SURROGATE_INR_LR",
+        "SURROGATE_INR_WEIGHT_DECAY",
+        "SURROGATE_INR_LOSS_BETA",
+        "SURROGATE_MAX_NONFINITE_FRACTION",
+        "SURROGATE_INR_X_LATENT_DIM",
+        "SURROGATE_INR_FIELD_EMB_DIM",
+        "SURROGATE_INR_COORD_FOURIER_FEATURES",
+        "SURROGATE_INR_HIDDEN_DIM",
+        "SURROGATE_INR_HIDDEN_LAYERS",
+        "SURROGATE_INR_TRAIN_QUERY_CHUNK",
+        "SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT",
+        "SURROGATE_INR_SAMPLE_BATCH_EVAL",
+        "SURROGATE_INR_QUERY_BATCH_EVAL",
+        "SURROGATE_INR_BOOTSTRAP_MEMBERS",
+        "SURROGATE_INR_BOOTSTRAP_FRACTION",
+    ],
+)
+def test_removed_component_setting_is_unknown_core_config(
+    tmp_path: Path, removed_name: str
+) -> None:
+    root = tmp_path / removed_name.lower()
+    root.mkdir()
+    (root / "config.py").write_text(
+        f"{removed_name} = 1\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigError, match=rf"unknown config setting.*{removed_name}"):
+        load_config(root, validate_task_paths=False)
+    with pytest.raises(ConfigError, match=rf"unknown config setting.*{removed_name}"):
+        load_config(
+            root,
+            overrides={removed_name: 1},
+            validate_task_paths=False,
+        )
 
 
 def test_config_validates_required_task_paths_before_batch_work(tmp_path: Path) -> None:

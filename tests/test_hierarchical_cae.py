@@ -632,8 +632,7 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     workspace = tmp_path / "hierarchical-runtime"
     init_workspace(workspace)
     (workspace / "config.py").write_text(
-        'EVALUATION_MODE = "local"\n'
-        'SURROGATE_TORCH_DEVICE = "cpu"\n',
+        'EVALUATION_MODE = "local"\n',
         encoding="utf-8",
     )
     parameter_names = tuple(job_template_api.get_parameter_names(workspace))
@@ -666,35 +665,34 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     )
     component = hierarchical_cae(
         quality_policy=_chrono_like_policy(),
-        train_config=CAETrainConfig(
-            architecture_version=2,
-            token_dim=4,
-            global_latent_dim=4,
-            group_latent_dim=2,
-            private_latent_dim=3,
-            codec_width=8,
-            predictor_width=12,
-            predictor_layers=1,
-            predictor_members=2,
-            codec_epochs=1,
-            predictor_epochs=1,
-            fine_tune_epochs=0,
-            batch_size=4,
-            inference_batch_size=5,
-            validation_fraction=0.25,
-            early_stopping_patience=1,
-            minimum_samples=8,
-            robust_loss_cap=4.0,
-            regime_head=True,
-            coordinate_readout=True,
-            coordinate_width=8,
-            coordinate_layers=1,
-            coordinate_epochs=1,
-            coordinate_points_per_field=4,
-            coordinate_validation_points_per_field=5,
-            coordinate_query_batch_size=7,
-            mixed_precision=False,
-        ),
+        device="cpu",
+        architecture_version=2,
+        token_dim=4,
+        global_latent_dim=4,
+        group_latent_dim=2,
+        private_latent_dim=3,
+        codec_width=8,
+        predictor_width=12,
+        predictor_layers=1,
+        predictor_members=2,
+        codec_epochs=1,
+        predictor_epochs=1,
+        fine_tune_epochs=0,
+        batch_size=4,
+        inference_batch_size=5,
+        validation_fraction=0.25,
+        early_stopping_patience=1,
+        minimum_samples=8,
+        robust_loss_cap=4.0,
+        regime_head=True,
+        coordinate_readout=True,
+        coordinate_width=8,
+        coordinate_layers=1,
+        coordinate_epochs=1,
+        coordinate_points_per_field=4,
+        coordinate_validation_points_per_field=5,
+        coordinate_query_batch_size=7,
+        mixed_precision=False,
     )
     config = load_config(workspace)
     state = runtime.train_with_config(

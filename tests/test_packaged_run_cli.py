@@ -28,9 +28,15 @@ def _workspace(tmp_path: Path, *, smoke: bool = False) -> Path:
     (root / "config.py").write_text(
         'EVALUATION_MODE = "local"\n'
         "OPTIMIZE_POPULATION_SIZE = 2\n"
-        f"OPTIMIZE_SMOKE_TEST_ENABLED = {smoke!r}\n"
-        "OPTIMIZE_SURROGATE_ALPHA = 1\n"
-        "OPTIMIZE_SURROGATE_BETA = 0\n",
+        f"OPTIMIZE_SMOKE_TEST_ENABLED = {smoke!r}\n",
+        encoding="utf-8",
+    )
+    (root / "submit/optimization.py").write_text(
+        "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
+        "from yadof.surrogate import conditional_inr\n"
+        "def build_optimization():\n"
+        "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
+        "    return gpsaf(search=search, surrogate=conditional_inr(), alpha=1, beta=0)\n",
         encoding="utf-8",
     )
     return root

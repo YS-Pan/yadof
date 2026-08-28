@@ -13,10 +13,12 @@
   mutating its checkpoint schema.
 - Pass only compatible recorded real rows and their query-table field identities to
   modeling; runtime does not create synthetic targets or task-owned weights.
-- Fit a float64 per-query mean/standard-deviation scaler with the configured floor;
+- Fit a float64 per-query mean/standard-deviation scaler with the component floor;
   inverse-scale every linear model output back to physical rawData before current
   task cost calculation.
 - Train the INR ensemble through `modeling.py`.
+- Receive one immutable conditional-INR settings snapshot and a narrow core random
+  seed. Do not read model/backend values from `LoadedConfig`.
 - Write checkpoints through `checkpoints.py` and training metadata through `metadata.py`.
 - Predict rawData/costs using the latest in-memory trained state.
 

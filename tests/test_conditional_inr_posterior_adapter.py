@@ -142,7 +142,7 @@ def _state(tmp_path: Path, member_count: int = 3) -> SurrogateState:
 
 def _context(monkeypatch, tmp_path: Path, member_count: int = 3):
     state = _state(tmp_path, member_count)
-    monkeypatch.setattr(runtime, "_require_state", lambda config: state)
+    monkeypatch.setattr(runtime, "_require_state", lambda config, settings: state)
     context = SimpleNamespace(
         config=object(),
         session=_NamedSession(),

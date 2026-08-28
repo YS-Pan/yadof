@@ -40,32 +40,28 @@ def _workspace(tmp_path: Path, name: str, *, surrogate: bool = False) -> Path:
         "OPTIMIZE_POPULATION_SIZE = 2",
         "OPTIMIZE_SMOKE_TEST_ENABLED = False",
     ]
-    if surrogate:
-        settings.extend(
-            [
-                "OPTIMIZE_SURROGATE_ALPHA = 2",
-                "OPTIMIZE_SURROGATE_BETA = 1",
-                "OPTIMIZE_SURROGATE_EXPLORATION_FRACTION = 0.0",
-                'SURROGATE_TORCH_DEVICE = "cpu"',
-                "SURROGATE_INR_EPOCHS = 2",
-                "SURROGATE_INR_ENSEMBLE_SIZE = 2",
-                "SURROGATE_INR_BATCH_SIZE = 2",
-                "SURROGATE_INR_X_LATENT_DIM = 8",
-                "SURROGATE_INR_FIELD_EMB_DIM = 4",
-                "SURROGATE_INR_COORD_FOURIER_FEATURES = 4",
-                "SURROGATE_INR_HIDDEN_DIM = 16",
-                "SURROGATE_INR_HIDDEN_LAYERS = 1",
-                "SURROGATE_INR_BOOTSTRAP_MEMBERS = False",
-            ]
-        )
-    else:
-        settings.extend(
-            [
-                "OPTIMIZE_SURROGATE_ALPHA = 1",
-                "OPTIMIZE_SURROGATE_BETA = 0",
-            ]
-        )
     (root / "config.py").write_text("\n".join(settings) + "\n", encoding="utf-8")
+    component_arguments = (
+        'device="cpu", epochs=2, ensemble_size=2, batch_size=2, '
+        "x_latent_dim=8, field_embedding_dim=4, coordinate_fourier_features=4, "
+        "hidden_dim=16, hidden_layers=1, bootstrap_members=False"
+        if surrogate
+        else ""
+    )
+    gpsaf_arguments = (
+        "alpha=2, beta=1, exploration_fraction=0.0"
+        if surrogate
+        else "alpha=1, beta=0"
+    )
+    (root / "submit/optimization.py").write_text(
+        "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
+        "from yadof.surrogate import conditional_inr\n"
+        "def build_optimization():\n"
+        "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
+        f"    surrogate = conditional_inr({component_arguments})\n"
+        f"    return gpsaf(search=search, surrogate=surrogate, {gpsaf_arguments})\n",
+        encoding="utf-8",
+    )
     return root
 
 
@@ -293,10 +289,23 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     pytest.importorskip("torch")
 
     from yadof.optimize import run_one_generation
+    from yadof.surrogate import conditional_inr
     from yadof.surrogate.conditional_inr import runtime
 
     workspace_a = _workspace(tmp_path, "surrogate_a", surrogate=True)
     workspace_b = _workspace(tmp_path, "surrogate_b", surrogate=True)
+    component_settings = conditional_inr(
+        device="cpu",
+        epochs=2,
+        ensemble_size=2,
+        batch_size=2,
+        x_latent_dim=8,
+        field_embedding_dim=4,
+        coordinate_fourier_features=4,
+        hidden_dim=16,
+        hidden_layers=1,
+        bootstrap_members=False,
+    ).settings
 
     # Warm-up uses real evaluation only because no history/model exists yet.
     run_one_generation(
@@ -305,9 +314,9 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     from yadof.surrogate import wait_for_pending_training
 
     wait_for_pending_training(workspace_a)
-    assert runtime.has_trained_state(workspace_a)
-    assert not runtime.has_trained_state(workspace_b)
-    state = runtime._require_state(load_config(workspace_a))
+    assert runtime.has_trained_state(workspace_a, _settings=component_settings)
+    assert not runtime.has_trained_state(workspace_b, _settings=component_settings)
+    state = runtime._require_state(load_config(workspace_a), component_settings)
     assert state.train_history["training_policy"] == "real_field_balanced"
     assert "mixup" not in state.train_history
     assert "relative" not in state.train_history
@@ -334,7 +343,9 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
         assert "query_weights" not in auxiliary.files
         assert "training_flat_values" not in auxiliary.files
 
-    before = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
+    before = runtime.predict_population(
+        workspace_a, ((0.25,),), _settings=component_settings
+    )[0][0][0]
     calc_cost = workspace_a / "submit" / "calc_cost.py"
     calc_cost.write_text(
         calc_cost.read_text(encoding="utf-8").replace(
@@ -343,17 +354,21 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
         ),
         encoding="utf-8",
     )
-    after = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
+    after = runtime.predict_population(
+        workspace_a, ((0.25,),), _settings=component_settings
+    )[0][0][0]
     assert after != pytest.approx(before)
     assert 0.0 <= before <= 1.0
     assert 0.0 <= after <= 1.0
 
     # Drop memory state and prove recovery is from A's checkpoint and current task.
     runtime.reset_workspace_state(workspace_a)
-    assert runtime.has_trained_state(workspace_a)
-    recovered = runtime.predict_population(workspace_a, ((0.25,),))[0][0][0]
+    assert runtime.has_trained_state(workspace_a, _settings=component_settings)
+    recovered = runtime.predict_population(
+        workspace_a, ((0.25,),), _settings=component_settings
+    )[0][0][0]
     assert recovered == pytest.approx(after)
-    assert not runtime.has_trained_state(workspace_b)
+    assert not runtime.has_trained_state(workspace_b, _settings=component_settings)
 
     # Parameter normalization is semantic state: range edits reject the old model.
     parameter_path = workspace_a / "job_template" / "parameters_constraints.py"
@@ -363,36 +378,42 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
         encoding="utf-8",
     )
     runtime.reset_workspace_state(workspace_a)
-    assert not runtime.has_trained_state(workspace_a)
+    assert not runtime.has_trained_state(workspace_a, _settings=component_settings)
     assert artifact_dir.is_dir()
     parameter_path.write_text(original_parameters, encoding="utf-8")
     runtime.reset_workspace_state(workspace_a)
-    assert runtime.has_trained_state(workspace_a)
-    assert runtime._require_state(load_config(workspace_a)).artifact_dir == artifact_dir
+    assert runtime.has_trained_state(workspace_a, _settings=component_settings)
+    assert runtime._require_state(
+        load_config(workspace_a), component_settings
+    ).artifact_dir == artifact_dir
 
     # A different train config may publish at the same generation without deleting A.
-    config_path = workspace_a / "config.py"
-    original_config = config_path.read_text(encoding="utf-8")
-    config_path.write_text(
-        original_config.replace(
-            "SURROGATE_INR_HIDDEN_DIM = 16",
-            "SURROGATE_INR_HIDDEN_DIM = 20",
-        ),
-        encoding="utf-8",
-    )
+    changed_settings = conditional_inr(
+        device="cpu",
+        epochs=2,
+        ensemble_size=2,
+        batch_size=2,
+        x_latent_dim=8,
+        field_embedding_dim=4,
+        coordinate_fourier_features=4,
+        hidden_dim=20,
+        hidden_layers=1,
+        bootstrap_members=False,
+    ).settings
     runtime.reset_workspace_state(workspace_a)
-    assert not runtime.has_trained_state(workspace_a)
-    state_b = runtime.train(workspace_a, generation_index=0)
+    assert not runtime.has_trained_state(workspace_a, _settings=changed_settings)
+    state_b = runtime.train(
+        workspace_a, generation_index=0, _settings=changed_settings
+    )
     assert state_b.state_signature != manifest["state_signature"]
     assert state_b.artifact_dir != artifact_dir
     assert artifact_dir.is_dir()
     assert state_b.artifact_dir.is_dir()
 
     # Returning to A recovers A's retained namespaced publication, not B's root pointer.
-    config_path.write_text(original_config, encoding="utf-8")
     runtime.reset_workspace_state(workspace_a)
-    assert runtime.has_trained_state(workspace_a)
-    returned = runtime._require_state(load_config(workspace_a))
+    assert runtime.has_trained_state(workspace_a, _settings=component_settings)
+    returned = runtime._require_state(load_config(workspace_a), component_settings)
     assert returned.state_signature == manifest["state_signature"]
     assert returned.artifact_dir == artifact_dir
 
@@ -423,19 +444,33 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
 ) -> None:
     from yadof.optimize import run_one_generation
     from yadof.optimize.state import read_active_strategy_state
-    from yadof.surrogate import wait_for_pending_training
+    from yadof.surrogate import conditional_inr, wait_for_pending_training
     from yadof.surrogate.conditional_inr import runtime
     from yadof.tools.surrogate_viewer.backend.workspace import SurrogateWorkspace
 
     workspace = _workspace(tmp_path, "strategy_state", surrogate=True)
     optimization_path = workspace / "submit/optimization.py"
     default_source = optimization_path.read_text(encoding="utf-8")
+    component_settings = conditional_inr(
+        device="cpu",
+        epochs=2,
+        ensemble_size=2,
+        batch_size=2,
+        x_latent_dim=8,
+        field_embedding_dim=4,
+        coordinate_fourier_features=4,
+        hidden_dim=16,
+        hidden_layers=1,
+        bootstrap_members=False,
+    ).settings
 
     run_one_generation(workspace, generation_index=0, random_seed=43)
     wait_for_pending_training(workspace)
     first_active = read_active_strategy_state(workspace)
     assert first_active is not None
-    first_model = runtime._require_state(load_config(workspace)).artifact_dir
+    first_model = runtime._require_state(
+        load_config(workspace), component_settings
+    ).artifact_dir
     assert first_model.is_dir()
 
     optimization_path.write_text(
@@ -448,7 +483,9 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
     second_active = read_active_strategy_state(workspace)
     assert second_active is not None
     assert second_active.strategy_signature != first_active.strategy_signature
-    assert not runtime.has_trained_state(workspace)
+    assert not runtime.has_trained_state(
+        workspace, _settings=component_settings
+    )
     assert first_model.is_dir()
     with pytest.raises(FileNotFoundError, match="selected strategy may not use"):
         SurrogateWorkspace(workspace)
@@ -459,7 +496,7 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
     assert third_active is not None
     assert third_active.strategy_signature == first_active.strategy_signature
     assert returned.surrogate_used is True
-    assert runtime.has_trained_state(workspace)
+    assert runtime.has_trained_state(workspace, _settings=component_settings)
     assert first_model.is_dir()
     wait_for_pending_training(workspace)
 

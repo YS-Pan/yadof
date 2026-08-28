@@ -15,7 +15,16 @@ negative/fraction violations, and missing required task paths fail eagerly befor
 batch work. Relative path settings resolve from the explicit workspace root and are
 returned as absolute paths through the effective `WorkspaceContext`.
 
-The module owns generic fast/local/distributed evaluation, HTCondor, optimizer, and surrogate policy.
+The module owns generic fast/local/distributed evaluation, HTCondor, and genuine
+cross-component campaign policy. One immutable `SettingSpec` declaration per core
+name owns its default, primitive validator kind, reload policy, and path policy;
+defaults, legal names, description order, and path handling are derived from that
+schema rather than parallel name lists.
+
+Search operators, GPSAF phase counts, and surrogate model/backend parameters are
+not core config. Their only workspace source is explicit keyword-only component
+factories in `submit/optimization.py`. Removed component names fail as unknown
+settings and temporary overrides cannot reach component settings.
 Task variable shape, objective definitions, simulator/project names, frequencies,
 credentials, and adapter-specific scientific settings remain in workspace task files
 or deliberately supported worker environment entries.
@@ -57,4 +66,4 @@ precedence.
 - Config execution is scoped to one explicit file and converts exceptions/SystemExit
   to actionable `ConfigError`.
 - Temporary overrides do not rewrite workspace files.
-- `describe()` exposes effective values and their provenance.
+- `describe()` exposes effective values, provenance, and reload policy.

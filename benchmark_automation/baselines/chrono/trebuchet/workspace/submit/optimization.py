@@ -9,5 +9,9 @@ def build_optimization():
         single=pymoo_ga(),
         multi=pymoo_nsga3(),
     )
-    return gpsaf(search=search, surrogate=conditional_inr())
-
+    return gpsaf(
+        search=search,
+        surrogate=conditional_inr(),
+        alpha=3,
+        beta=3,
+    )

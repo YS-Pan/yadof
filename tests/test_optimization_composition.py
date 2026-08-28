@@ -11,11 +11,13 @@ import pytest
 
 from yadof.config import DEFAULT_CONFIG, load_config
 from yadof.optimize import run_one_generation
+from yadof.optimize import gpsaf, pymoo_ga
 from yadof.optimize.state import read_active_strategy_state
 from yadof.optimize.strategy import load_workspace_strategy
 from yadof.recorded_data.session import CampaignSession
 from yadof.workspace.check import check_workspace
 from yadof.workspace.init import init_workspace
+from yadof.surrogate import conditional_inr, hierarchical_cae
 
 
 def _small_workspace(root: Path) -> Path:
@@ -23,9 +25,15 @@ def _small_workspace(root: Path) -> Path:
     (root / "config.py").write_text(
         'EVALUATION_MODE = "local"\n'
         "OPTIMIZE_POPULATION_SIZE = 2\n"
-        "OPTIMIZE_SURROGATE_ALPHA = 1\n"
-        "OPTIMIZE_SURROGATE_BETA = 0\n"
         "OPTIMIZE_SMOKE_TEST_ENABLED = False\n",
+        encoding="utf-8",
+    )
+    (root / "submit/optimization.py").write_text(
+        "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
+        "from yadof.surrogate import conditional_inr\n"
+        "def build_optimization():\n"
+        "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
+        "    return gpsaf(search=search, surrogate=conditional_inr(), alpha=1, beta=0)\n",
         encoding="utf-8",
     )
     return root
@@ -52,6 +60,100 @@ def test_public_parent_imports_are_lazy_and_config_has_no_second_selector() -> N
         "SURROGATE_METHOD",
         "SEARCH_BACKEND",
     } & set(DEFAULT_CONFIG)
+
+
+def test_component_factory_defaults_explicit_parity_and_eager_validation() -> None:
+    assert pymoo_ga().settings == pymoo_ga(
+        crossover_probability=0.85,
+        mutation_probability=0.35,
+        crossover_eta=10.0,
+        mutation_eta=10.0,
+        mutated_dimensions_per_individual=7,
+        refill_attempts=8,
+    ).settings
+    default_conditional = conditional_inr()
+    assert default_conditional.settings == conditional_inr(
+        constant_atol=1.0e-12,
+        target_scale_floor=1.0e-6,
+        device="auto",
+        epochs=32,
+        ensemble_size=3,
+        batch_size=16,
+        learning_rate=1.0e-3,
+        weight_decay=1.0e-5,
+        loss_beta=0.05,
+        max_nonfinite_fraction=0.20,
+        x_latent_dim=96,
+        field_embedding_dim=12,
+        coordinate_fourier_features=24,
+        hidden_dim=192,
+        hidden_layers=3,
+        train_query_chunk=4096,
+        train_query_sample_count=8192,
+        sample_batch_eval=64,
+        query_batch_eval=8192,
+        bootstrap_members=False,
+        bootstrap_fraction=1.0,
+    ).settings
+    controlled = default_conditional.semantic_identity(None, None)[
+        "controlled_parameters"
+    ]
+    assert set(controlled) == {
+        "constant_atol",
+        "target_scale_floor",
+        "device",
+        "epochs",
+        "ensemble_size",
+        "batch_size",
+        "learning_rate",
+        "weight_decay",
+        "loss_beta",
+        "max_nonfinite_fraction",
+        "x_latent_dim",
+        "field_embedding_dim",
+        "coordinate_fourier_features",
+        "hidden_dim",
+        "hidden_layers",
+        "train_query_chunk",
+        "train_query_sample_count",
+        "sample_batch_eval",
+        "query_batch_eval",
+        "bootstrap_members",
+        "bootstrap_fraction",
+    }
+    with pytest.raises(ValueError, match=r"pymoo_ga\(\).*mutation_probability=1.5.*<= 1.0"):
+        pymoo_ga(mutation_probability=1.5)
+    with pytest.raises(ValueError, match=r"gpsaf\(\).*alpha=-1.*>= 0"):
+        gpsaf(
+            search=pymoo_ga(),
+            surrogate=conditional_inr(),
+            alpha=-1,
+        )
+    with pytest.raises(ValueError, match=r"conditional_inr\(\).*epochs=0.*>= 1"):
+        conditional_inr(epochs=0)
+    with pytest.raises(
+        ValueError,
+        match=r"hierarchical_cae\(\).*coordinate_readout=True.*architecture_version=1.*>= 2",
+    ):
+        hierarchical_cae(coordinate_readout=True)
+
+
+def test_hierarchical_factory_freezes_nested_workspace_inputs() -> None:
+    groups = [[("sample.npz", "values")]]
+    layouts = {
+        ("sample.npz", "values"): {
+            "channel_axes": ["port"],
+            "spatial_axes": ["frequency"],
+        }
+    }
+    component = hierarchical_cae(groups=groups, field_layouts=layouts)
+    groups[0].append(("other.npz", "values"))
+    layouts[("sample.npz", "values")]["channel_axes"].append("mode")
+
+    assert component.groups == ((('sample.npz', 'values'),),)
+    assert tuple(component.field_layouts[("sample.npz", "values")]["channel_axes"]) == (
+        "port",
+    )
 
 
 def test_default_composition_dispatches_ga_and_nsga3_by_objective_count(
@@ -311,5 +413,35 @@ def test_generation_snapshot_freezes_both_complete_source_roots(
         assert "job_template/workflow.py" in first.source_hashes
         assert first.submit_directory.parent == first.snapshot_root
         assert first.job_template_directory.parent == first.snapshot_root
+    finally:
+        session.close()
+
+
+def test_factory_edit_reloads_next_generation_without_mutating_snapshot(
+    tmp_path: Path,
+) -> None:
+    root = _small_workspace(tmp_path / "factory-reload")
+    session = CampaignSession(load_config(root))
+    try:
+        first = session.begin_generation(load_config(root))
+        first_definition = load_workspace_strategy(
+            first.config.workspace, config=first.config
+        )
+        optimization_path = root / "submit/optimization.py"
+        optimization_path.write_text(
+            optimization_path.read_text(encoding="utf-8").replace(
+                "alpha=1, beta=0", "alpha=2, beta=0"
+            ),
+            encoding="utf-8",
+        )
+        second = session.begin_generation(load_config(root))
+        second_definition = load_workspace_strategy(
+            second.config.workspace, config=second.config
+        )
+
+        assert first_definition.identity["gpsaf_parameters"]["alpha"] == 1
+        assert second_definition.identity["gpsaf_parameters"]["alpha"] == 2
+        assert first_definition.signature != second_definition.signature
+        assert first.optimization_fingerprint != second.optimization_fingerprint
     finally:
         session.close()

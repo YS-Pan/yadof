@@ -31,8 +31,8 @@ src/yadof/                 installed framework
     records.py             owned envelopes and immutable event files
     query.py               partial/corruption-tolerant history
   optimize/                campaign engine + public strategy components/state
-    gpsaf/                 GPSAF assistance, phases, and private records
-    pymoo/                 lazy GA/NSGA-III backend adapter
+    gpsaf/                 GPSAF assistance, phases, private settings and records
+    pymoo/                 lazy GA/NSGA-III backend adapter + private settings
     posterior_assisted.py  independent pool/projection/exploration/real orchestration
     qnehvi_acquisition.py  discrete greedy multi-start qNEHVI family selector
     qnehvi_backend.py      lazy discrete qLogNEHVI scoring boundary
@@ -94,6 +94,13 @@ objective policy belongs in workspace `job_template/workflow.py` and
 fixed behavior is shipped through the package-owned `worker_misc.py`, while
 submit-side reusable cost/rawData behavior is exposed through
 `yadof.job_template`. Task modules call these surfaces and do not copy them.
+
+Component parameters follow the same placement rule: workspace authors express
+them only as explicit factory kwargs in `submit/optimization.py`. Module-local
+frozen settings files remain standard-library-only so ordinary parent imports stay
+backend-lazy. Core config retains campaign scheduling/identity policy and passes it
+through narrow composition arguments; adding a component requires no central config
+registration.
 
 Tests import an installed distribution. Generic default tests do not depend on a
 simulator or live HTCondor pool; scheduler commands and adapters are mocked. Artifact

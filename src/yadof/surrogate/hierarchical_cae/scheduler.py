@@ -112,6 +112,7 @@ def start_training(
     _config: LoadedConfig | None = None,
     _component,
     _training_data=None,
+    _random_seed: int | None = None,
 ) -> TrainingScheduleStatus:
     config = load_config(workspace) if _config is None else _config
     key = runtime.workspace_state_key(config, component=_component)
@@ -123,6 +124,7 @@ def start_training(
             key,
             generation,
             component=_component,
+            random_seed=_random_seed,
             training_data=_training_data,
         )
 
@@ -143,6 +145,7 @@ def start_training(
             generation,
             _component,
             _training_data,
+            _random_seed,
         )
         schedule.pending = future
         schedule.pending_generation = generation
@@ -168,10 +171,19 @@ def ensure_fresh_enough(
     _config: LoadedConfig | None = None,
     _component,
     _training_data=None,
+    _max_training_lag: int | None = None,
+    _random_seed: int | None = None,
 ) -> TrainingScheduleStatus:
     config = load_config(workspace) if _config is None else _config
     key = runtime.workspace_state_key(config, component=_component)
-    max_lag = max(0, int(config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG))
+    max_lag = max(
+        0,
+        int(
+            config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
+            if _max_training_lag is None
+            else _max_training_lag
+        ),
+    )
     generation = int(generation_index)
     latest = latest_completed_generation_index(
         config.workspace, _component=_component
@@ -203,6 +215,7 @@ def ensure_fresh_enough(
         key,
         generation,
         component=_component,
+        random_seed=_random_seed,
         training_data=_training_data,
     )
 
@@ -280,6 +293,7 @@ def _train_blocking(
     generation_index: int,
     *,
     component,
+    random_seed: int | None,
     training_data=None,
 ) -> TrainingScheduleStatus:
     started_at = surrogate_metadata.now_text()
@@ -290,6 +304,7 @@ def _train_blocking(
             component=component,
             started_at=started_at,
             training_data=training_data,
+            random_seed=random_seed,
         )
     except Exception as exc:  # noqa: BLE001 - optimizer may use real evaluation.
         surrogate_metadata.record_training_failure(
@@ -328,7 +343,11 @@ def _train_blocking(
 
 
 def _train_in_background(
-    config: LoadedConfig, generation_index: int, component, training_data=None
+    config: LoadedConfig,
+    generation_index: int,
+    component,
+    training_data,
+    random_seed: int | None,
 ):
     return runtime.train_with_config(
         config,
@@ -336,6 +355,7 @@ def _train_in_background(
         component=component,
         started_at=surrogate_metadata.now_text(),
         training_data=training_data,
+        random_seed=random_seed,
     )
 
 

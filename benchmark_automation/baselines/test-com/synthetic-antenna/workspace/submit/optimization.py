@@ -9,5 +9,17 @@ def build_optimization():
         single=pymoo_ga(),
         multi=pymoo_nsga3(),
     )
-    return gpsaf(search=search, surrogate=conditional_inr())
-
+    return gpsaf(
+        search=search,
+        surrogate=conditional_inr(
+            device="cuda",
+            epochs=32,
+            ensemble_size=3,
+            train_query_sample_count=8192,
+            bootstrap_members=True,
+            bootstrap_fraction=1.0,
+        ),
+        alpha=3,
+        beta=3,
+        exploration_fraction=0.15,
+    )

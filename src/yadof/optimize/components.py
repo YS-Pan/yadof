@@ -8,6 +8,8 @@ from typing import Mapping, Protocol
 
 from ..config import LoadedConfig
 from .problem_info import ProblemInfo
+from .gpsaf.settings import GPSAFSettings, create_settings as create_gpsaf_settings
+from .pymoo.settings import PymooSearchSettings, create_settings as create_pymoo_settings
 from .strategy import GenerationContext, OptimizationResult, evaluate_population
 
 
@@ -15,6 +17,8 @@ class SearchComponent(Protocol):
     def validate(self, config: LoadedConfig, problem: ProblemInfo) -> None: ...
 
     def resolve_algorithm(self, objective_count: int) -> str: ...
+
+    def backend_settings(self, objective_count: int) -> PymooSearchSettings: ...
 
     def semantic_identity(
         self,
@@ -26,6 +30,7 @@ class SearchComponent(Protocol):
 @dataclass(frozen=True, slots=True)
 class PymooSearch:
     algorithm: str
+    settings: PymooSearchSettings
 
     def validate(self, config: LoadedConfig, problem: ProblemInfo) -> None:
         del config
@@ -48,6 +53,10 @@ class PymooSearch:
             raise ValueError(f"unsupported pymoo search algorithm: {self.algorithm!r}")
         return selected
 
+    def backend_settings(self, objective_count: int) -> PymooSearchSettings:
+        del objective_count
+        return self.settings
+
     def semantic_identity(
         self,
         config: LoadedConfig,
@@ -56,23 +65,19 @@ class PymooSearch:
         selected = self.resolve_algorithm(problem.objective_count)
         controlled: dict[str, object] = {
             "population_size": int(config.OPTIMIZE_POPULATION_SIZE),
-            "crossover_probability": float(config.OPTIMIZE_CROSSOVER_PROBABILITY),
-            "mutation_probability": float(config.OPTIMIZE_MUTATION_PROBABILITY),
-            "crossover_eta": float(config.OPTIMIZE_CROSSOVER_ETA),
-            "mutation_eta": float(config.OPTIMIZE_MUTATION_ETA),
-            "mutated_dimensions_per_individual": int(
-                config.OPTIMIZE_DIM_MUT_PER_INDIVIDUAL
-            ),
-            "refill_attempts": int(config.OPTIMIZE_REFILL_ATTEMPTS),
+            "crossover_probability": self.settings.crossover_probability,
+            "mutation_probability": self.settings.mutation_probability,
+            "crossover_eta": self.settings.crossover_eta,
+            "mutation_eta": self.settings.mutation_eta,
+            "mutated_dimensions_per_individual": self.settings.mutated_dimensions_per_individual,
+            "refill_attempts": self.settings.refill_attempts,
             "archive_key_decimals": int(config.OPTIMIZE_ARCHIVE_KEY_DECIMALS),
         }
         if selected == "nsga3":
             controlled.update(
                 {
-                    "reference_direction_method": str(
-                        config.OPTIMIZE_NSGA3_REF_DIR_METHOD
-                    ),
-                    "reference_direction_partitions": config.OPTIMIZE_NSGA3_PARTITIONS,
+                    "reference_direction_method": self.settings.reference_direction_method,
+                    "reference_direction_partitions": self.settings.reference_direction_partitions,
                 }
             )
         return {
@@ -99,6 +104,9 @@ class ObjectiveCountSearch:
     def resolve_algorithm(self, objective_count: int) -> str:
         return self._selected(objective_count).resolve_algorithm(objective_count)
 
+    def backend_settings(self, objective_count: int) -> PymooSearchSettings:
+        return self._selected(objective_count).backend_settings(objective_count)
+
     def semantic_identity(
         self,
         config: LoadedConfig,
@@ -115,6 +123,7 @@ class ObjectiveCountSearch:
 class GPSAFStrategy:
     search: SearchComponent
     surrogate: object
+    settings: GPSAFSettings
 
     def validate(self, config: LoadedConfig, problem: ProblemInfo) -> None:
         self.search.validate(config, problem)
@@ -137,12 +146,10 @@ class GPSAFStrategy:
             "search": self.search.semantic_identity(config, problem),
             "surrogate": identity(config, problem),
             "gpsaf_parameters": {
-                "alpha": int(config.OPTIMIZE_SURROGATE_ALPHA),
-                "beta": int(config.OPTIMIZE_SURROGATE_BETA),
-                "gamma": float(config.OPTIMIZE_SURROGATE_GAMMA),
-                "exploration_fraction": float(
-                    config.OPTIMIZE_SURROGATE_EXPLORATION_FRACTION
-                ),
+                "alpha": self.settings.alpha,
+                "beta": self.settings.beta,
+                "gamma": self.settings.gamma,
+                "exploration_fraction": self.settings.exploration_fraction,
                 "maximum_training_lag": int(
                     config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
                 ),
@@ -156,6 +163,7 @@ class GPSAFStrategy:
             context,
             search=self.search,
             surrogate=self.surrogate,
+            settings=self.settings,
         )
 
 
@@ -196,6 +204,9 @@ class RealSearchStrategy:
             search_algorithm=self.search.resolve_algorithm(
                 context.problem.objective_count
             ),
+            search_settings=self.search.backend_settings(
+                context.problem.objective_count
+            ),
         )
         records, source = baseline_records(
             context=search_context,
@@ -221,12 +232,58 @@ class RealSearchStrategy:
         )
 
 
-def pymoo_ga() -> PymooSearch:
-    return PymooSearch("ga")
+def pymoo_ga(
+    *,
+    crossover_probability: float = 0.85,
+    mutation_probability: float = 0.35,
+    crossover_eta: float = 10.0,
+    mutation_eta: float = 10.0,
+    mutated_dimensions_per_individual: int = 7,
+    refill_attempts: int = 8,
+) -> PymooSearch:
+    return PymooSearch(
+        "ga",
+        create_pymoo_settings(
+            "pymoo_ga",
+            algorithm="ga",
+            crossover_probability=crossover_probability,
+            mutation_probability=mutation_probability,
+            crossover_eta=crossover_eta,
+            mutation_eta=mutation_eta,
+            mutated_dimensions_per_individual=mutated_dimensions_per_individual,
+            refill_attempts=refill_attempts,
+            reference_direction_method=None,
+            reference_direction_partitions=None,
+        ),
+    )
 
 
-def pymoo_nsga3() -> PymooSearch:
-    return PymooSearch("nsga3")
+def pymoo_nsga3(
+    *,
+    crossover_probability: float = 0.85,
+    mutation_probability: float = 0.35,
+    crossover_eta: float = 10.0,
+    mutation_eta: float = 10.0,
+    mutated_dimensions_per_individual: int = 7,
+    refill_attempts: int = 8,
+    reference_direction_method: str = "das-dennis",
+    reference_direction_partitions: int | None = None,
+) -> PymooSearch:
+    return PymooSearch(
+        "nsga3",
+        create_pymoo_settings(
+            "pymoo_nsga3",
+            algorithm="nsga3",
+            crossover_probability=crossover_probability,
+            mutation_probability=mutation_probability,
+            crossover_eta=crossover_eta,
+            mutation_eta=mutation_eta,
+            mutated_dimensions_per_individual=mutated_dimensions_per_individual,
+            refill_attempts=refill_attempts,
+            reference_direction_method=reference_direction_method,
+            reference_direction_partitions=reference_direction_partitions,
+        ),
+    )
 
 
 def by_objective_count(
@@ -237,8 +294,25 @@ def by_objective_count(
     return ObjectiveCountSearch(single=single, multi=multi)
 
 
-def gpsaf(*, search: SearchComponent, surrogate: object) -> GPSAFStrategy:
-    return GPSAFStrategy(search=search, surrogate=surrogate)
+def gpsaf(
+    *,
+    search: SearchComponent,
+    surrogate: object,
+    alpha: int = 3,
+    beta: int = 3,
+    gamma: float = 0.5,
+    exploration_fraction: float = 0.10,
+) -> GPSAFStrategy:
+    return GPSAFStrategy(
+        search=search,
+        surrogate=surrogate,
+        settings=create_gpsaf_settings(
+            alpha=alpha,
+            beta=beta,
+            gamma=gamma,
+            exploration_fraction=exploration_fraction,
+        ),
+    )
 
 
 def real_search(*, search: SearchComponent) -> RealSearchStrategy:

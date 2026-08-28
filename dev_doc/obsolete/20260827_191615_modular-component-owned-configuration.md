@@ -1,5 +1,8 @@
 # 直接迁移到声明式核心配置与组件自有 Settings
 
+> 已于 2026-08-28 完成并归档。实现、迁移表和验证记录见
+> `../change_records/20260828_104827_implement-component-owned-configuration.md`。
+
 ## 状态与背景
 
 - 本文是待执行的架构重构 handoff，不代表当前运行时、配置格式或 public API 已经改变。

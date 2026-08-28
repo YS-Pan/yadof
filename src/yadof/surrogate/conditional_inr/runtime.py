@@ -49,6 +49,7 @@ from .modeling import (
     member_list,
     predict_conditional_inr_members,
 )
+from .settings import ConditionalINRSettings, DEFAULT_CONDITIONAL_INR_SETTINGS
 
 
 StateKey = tuple[str, str, str, str, str, str]
@@ -682,35 +683,30 @@ def _fit_scaler(y: np.ndarray, *, scale_floor: float = 1e-6) -> TargetScaler:
     )
 
 
-def _train_config_from_loaded_config(config: LoadedConfig) -> INRTrainConfig:
-    defaults = INRTrainConfig()
+def _train_config_from_settings(settings: ConditionalINRSettings) -> INRTrainConfig:
     return INRTrainConfig(
-        epochs=int(getattr(config, "SURROGATE_INR_EPOCHS", defaults.epochs)),
-        ensemble_size=int(getattr(config, "SURROGATE_INR_ENSEMBLE_SIZE", defaults.ensemble_size)),
-        batch_size=int(getattr(config, "SURROGATE_INR_BATCH_SIZE", defaults.batch_size)),
-        lr=float(getattr(config, "SURROGATE_INR_LR", defaults.lr)),
-        weight_decay=float(getattr(config, "SURROGATE_INR_WEIGHT_DECAY", defaults.weight_decay)),
-        loss_beta=float(getattr(config, "SURROGATE_INR_LOSS_BETA", defaults.loss_beta)),
-        x_latent_dim=int(getattr(config, "SURROGATE_INR_X_LATENT_DIM", defaults.x_latent_dim)),
-        field_emb_dim=int(getattr(config, "SURROGATE_INR_FIELD_EMB_DIM", defaults.field_emb_dim)),
-        coord_fourier_features=int(
-            getattr(config, "SURROGATE_INR_COORD_FOURIER_FEATURES", defaults.coord_fourier_features)
-        ),
-        hidden_dim=int(getattr(config, "SURROGATE_INR_HIDDEN_DIM", defaults.hidden_dim)),
-        hidden_layers=int(getattr(config, "SURROGATE_INR_HIDDEN_LAYERS", defaults.hidden_layers)),
-        train_query_chunk=int(getattr(config, "SURROGATE_INR_TRAIN_QUERY_CHUNK", defaults.train_query_chunk)),
-        train_query_sample_count=int(
-            getattr(config, "SURROGATE_INR_TRAIN_QUERY_SAMPLE_COUNT", defaults.train_query_sample_count)
-        ),
-        sample_batch_eval=int(getattr(config, "SURROGATE_INR_SAMPLE_BATCH_EVAL", defaults.sample_batch_eval)),
-        query_batch_eval=int(getattr(config, "SURROGATE_INR_QUERY_BATCH_EVAL", defaults.query_batch_eval)),
-        bootstrap_members=bool(getattr(config, "SURROGATE_INR_BOOTSTRAP_MEMBERS", defaults.bootstrap_members)),
-        bootstrap_fraction=float(getattr(config, "SURROGATE_INR_BOOTSTRAP_FRACTION", defaults.bootstrap_fraction)),
+        epochs=settings.epochs,
+        ensemble_size=settings.ensemble_size,
+        batch_size=settings.batch_size,
+        lr=settings.learning_rate,
+        weight_decay=settings.weight_decay,
+        loss_beta=settings.loss_beta,
+        x_latent_dim=settings.x_latent_dim,
+        field_emb_dim=settings.field_embedding_dim,
+        coord_fourier_features=settings.coordinate_fourier_features,
+        hidden_dim=settings.hidden_dim,
+        hidden_layers=settings.hidden_layers,
+        train_query_chunk=settings.train_query_chunk,
+        train_query_sample_count=settings.train_query_sample_count,
+        sample_batch_eval=settings.sample_batch_eval,
+        query_batch_eval=settings.query_batch_eval,
+        bootstrap_members=settings.bootstrap_members,
+        bootstrap_fraction=settings.bootstrap_fraction,
     )
 
 
-def _select_device(config: LoadedConfig) -> torch.device:
-    requested = str(getattr(config, "SURROGATE_TORCH_DEVICE", "auto")).lower()
+def _select_device(requested: str) -> torch.device:
+    requested = str(requested).lower()
     if requested != "auto":
         return torch.device(requested)
     if torch.cuda.is_available():
@@ -769,11 +765,13 @@ def train(
     *,
     generation_index: int = 0,
     started_at: str | None = None,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
 ) -> SurrogateState:
     return train_with_config(
         load_config(workspace),
         generation_index=generation_index,
         started_at=started_at,
+        settings=_settings,
     )
 
 
@@ -783,6 +781,8 @@ def train_with_config(
     generation_index: int = 0,
     started_at: str | None = None,
     training_data: TrainingData | None = None,
+    settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+    random_seed: int | None = None,
 ) -> SurrogateState:
 
     training_started_at = now_text() if started_at is None else str(started_at)
@@ -792,14 +792,14 @@ def train_with_config(
     if len(data.normalized_variables) != len(data.raw_data):
         raise ValueError("surrogate training needs one rawData sample per normalized variable row")
     raw_sample_count = len(data.raw_data)
-    nonfinite_threshold = float(config.SURROGATE_MAX_NONFINITE_FRACTION)
+    nonfinite_threshold = settings.max_nonfinite_fraction
     data, dropped_nonfinite_samples = _filter_training_data_by_nonfinite_fraction(
         data, threshold=nonfinite_threshold
     )
 
     x = _x_matrix(data.normalized_variables)
     schema, y = _flatten_raw_samples(
-        data.raw_data, constant_atol=float(config.SURROGATE_CONSTANT_ATOL)
+        data.raw_data, constant_atol=settings.constant_atol
     )
     trainable = bool(
         x.shape[0] >= 2
@@ -809,7 +809,7 @@ def train_with_config(
     )
     model = None
     scaler = None
-    train_cfg = _train_config_from_loaded_config(config) if trainable else None
+    train_cfg = _train_config_from_settings(settings) if trainable else None
     device = None
     parameter_definition_signature = (
         job_template_api.get_parameter_definition_signature(config.workspace)
@@ -851,9 +851,9 @@ def train_with_config(
 
     if trainable:
         scaler = _fit_scaler(
-            y, scale_floor=float(config.SURROGATE_TARGET_SCALE_FLOOR)
+            y, scale_floor=settings.target_scale_floor
         )
-        device = _select_device(config)
+        device = _select_device(settings.device)
         y_scaled = scaler.transform(y)
         model, history = fit_deep_ensemble_conditional_inr(
             input_dim=int(x.shape[1]),
@@ -865,7 +865,9 @@ def train_with_config(
             device=device,
             train_cfg=train_cfg,
             artifact_dir=staged_artifact_dir,
-            seed=int(getattr(config, "OPTIMIZE_RANDOM_SEED", 20260510)) + int(generation_index) * 1009,
+            seed=int(
+                config.OPTIMIZE_RANDOM_SEED if random_seed is None else random_seed
+            ) + int(generation_index) * 1009,
         )
         history["skipped"] = False
         history["raw_sample_count_before_filter"] = int(raw_sample_count)
@@ -927,16 +929,24 @@ def _is_usable_state(state: SurrogateState | None) -> bool:
     )
 
 
-def has_trained_state(workspace: WorkspaceContext | str | Path) -> bool:
+def has_trained_state(
+    workspace: WorkspaceContext | str | Path,
+    *,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+) -> bool:
     config = load_config(workspace)
-    return _is_usable_state(_state_for_config(config, recover=True))
+    return _is_usable_state(
+        _state_for_config(config, settings=_settings, recover=True)
+    )
 
 
 def latest_state_generation(
     workspace: WorkspaceContext | str | Path,
+    *,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
 ) -> int | None:
     config = load_config(workspace)
-    state = _state_for_config(config, recover=True)
+    state = _state_for_config(config, settings=_settings, recover=True)
     return int(state.generation_index) if _is_usable_state(state) else None
 
 
@@ -948,8 +958,11 @@ def reset_workspace_state(workspace: WorkspaceContext | str | Path) -> None:
         _STATES.pop(workspace_state_key(config), None)
 
 
-def _require_state(config: LoadedConfig) -> SurrogateState:
-    state = _state_for_config(config, recover=True)
+def _require_state(
+    config: LoadedConfig,
+    settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
+) -> SurrogateState:
+    state = _state_for_config(config, settings=settings, recover=True)
     if not _is_usable_state(state):
         raise RuntimeError("surrogate model is not trained")
     assert state is not None
@@ -957,7 +970,10 @@ def _require_state(config: LoadedConfig) -> SurrogateState:
 
 
 def _state_for_config(
-    config: LoadedConfig, *, recover: bool
+    config: LoadedConfig,
+    *,
+    settings: ConditionalINRSettings,
+    recover: bool,
 ) -> SurrogateState | None:
     key = workspace_state_key(config)
     with _STATE_LOCK:
@@ -971,7 +987,7 @@ def _state_for_config(
             job_template_api.get_parameter_definition_signature(config.workspace)
         )
         current_train_cfg = (
-            _train_config_from_loaded_config(config)
+            _train_config_from_settings(settings)
             if state.train_cfg is not None
             else None
         )
@@ -988,14 +1004,18 @@ def _state_for_config(
             state = None
     if state is not None or not recover:
         return state
-    state = _recover_latest_state(config)
+    state = _recover_latest_state(config, settings=settings)
     if state is None:
         return None
     with _STATE_LOCK:
         return _STATES.setdefault(key, state)
 
 
-def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
+def _recover_latest_state(
+    config: LoadedConfig,
+    *,
+    settings: ConditionalINRSettings,
+) -> SurrogateState | None:
     checkpoint_dir = config.workspace.surrogate_checkpoint_dir
     if not checkpoint_dir.is_dir():
         return None
@@ -1004,11 +1024,11 @@ def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
     if len(data.normalized_variables) != len(data.raw_data):
         return None
     data, _dropped = _filter_training_data_by_nonfinite_fraction(
-        data, threshold=float(config.SURROGATE_MAX_NONFINITE_FRACTION)
+        data, threshold=settings.max_nonfinite_fraction
     )
     x = _x_matrix(data.normalized_variables)
     schema, current_flat = _flatten_raw_samples(
-        data.raw_data, constant_atol=float(config.SURROGATE_CONSTANT_ATOL)
+        data.raw_data, constant_atol=settings.constant_atol
     )
     trainable = bool(
         x.shape[0] >= 2
@@ -1018,7 +1038,7 @@ def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
     )
     if not trainable:
         return None
-    train_cfg = _train_config_from_loaded_config(config) if trainable else None
+    train_cfg = _train_config_from_settings(settings) if trainable else None
     parameter_definition_signature = (
         job_template_api.get_parameter_definition_signature(config.workspace)
     )
@@ -1050,6 +1070,7 @@ def _recover_latest_state(config: LoadedConfig) -> SurrogateState | None:
                 train_cfg=train_cfg,
                 parameter_definition_signature=parameter_definition_signature,
                 expected_signature=expected_signature,
+                device_name=settings.device,
             )
         except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
             continue
@@ -1067,6 +1088,7 @@ def _recover_state_from_checkpoint(
     train_cfg: INRTrainConfig | None,
     parameter_definition_signature: Mapping[str, object],
     expected_signature: str,
+    device_name: str,
 ) -> SurrogateState:
     payload = validate_manifest_identity(
         json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -1146,7 +1168,7 @@ def _recover_state_from_checkpoint(
 
     if train_cfg is None or current_flat.shape[1] == 0:
         raise ValueError("checkpoint does not describe a trainable surrogate state")
-    device = _select_device(config)
+    device = _select_device(device_name)
     scaler = TargetScaler(
         mean=np.ascontiguousarray(target_mean, dtype=np.float64),
         scale=np.ascontiguousarray(target_scale, dtype=np.float64),
@@ -1204,10 +1226,13 @@ def _state_input_dim(state: SurrogateState) -> int:
 
 
 def predict_raw_data(
-    workspace: WorkspaceContext | str | Path, population
+    workspace: WorkspaceContext | str | Path,
+    population,
+    *,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
 ) -> tuple[RawSample, ...]:
     config = load_config(workspace)
-    state = _require_state(config)
+    state = _require_state(config, _settings)
     if state.schema is None or state.schema.flat_dim == 0:
         return tuple()
     x = _x_matrix(population, _state_input_dim(state))
@@ -1217,10 +1242,13 @@ def predict_raw_data(
 
 
 def predict_population(
-    workspace: WorkspaceContext | str | Path, population
+    workspace: WorkspaceContext | str | Path,
+    population,
+    *,
+    _settings: ConditionalINRSettings = DEFAULT_CONDITIONAL_INR_SETTINGS,
 ) -> tuple[tuple[tuple[float, ...], tuple[tuple[float, float], ...]], ...]:
     config = load_config(workspace)
-    state = _require_state(config)
+    state = _require_state(config, _settings)
     normalized_population = _as_population(population)
     if not normalized_population:
         return ()

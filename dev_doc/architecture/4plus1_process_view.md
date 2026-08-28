@@ -184,14 +184,17 @@ selection, and checkpoint recovery continue unchanged.
 
 ## Generation-boundary task changes
 
-`run_generations()` reloads effective configuration for each generation and copies
+`run_generations()` reloads effective core configuration for each generation and copies
 the complete task source tree into one immutable snapshot before evaluation. The
 supported coherence contract is exactly one task/config snapshot per generation;
 even fast worker imports use that tree. Between generations, a user may
 change cost interpretation, parameter ranges/levels, fixed-width objective policy,
 evaluator/workflow logic, or task helpers to correct or deliberately redefine the
 optimization problem. The following generation reinterprets mechanically usable
-history through the new definitions. Parameter identity/count and objective count
+history through the new definitions. The snapshotted optimization builder also
+constructs and validates one immutable settings snapshot per selected component;
+that snapshot is passed unchanged through identity, scheduling, and runtime for the
+generation. Parameter identity/count and objective count
 remain stable in the current contract; structural dimension changes are separate
 future work.
 

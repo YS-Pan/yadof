@@ -439,6 +439,9 @@ class PosteriorAssistedStrategy:
             search_algorithm=self.search.resolve_algorithm(
                 context.problem.objective_count
             ),
+            search_settings=self.search.backend_settings(
+                context.problem.objective_count
+            ),
         )
         records, source = baseline_records(
             context=search_context,
@@ -554,6 +557,9 @@ def _candidate_pool(
         seed=context.random_seed + context.generation_index * 1009 + 27011,
         generation_index=context.generation_index,
         search_algorithm=strategy.search.resolve_algorithm(
+            context.problem.objective_count
+        ),
+        search_settings=strategy.search.backend_settings(
             context.problem.objective_count
         ),
     )

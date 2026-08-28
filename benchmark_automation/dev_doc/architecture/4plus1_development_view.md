@@ -10,7 +10,7 @@ benchmark_automation/
   baselines/                   editable semantic task templates
   preregistrations/            versioned schema/experiment freezes and validators;
                                 not executable suites or result evidence
-  strategy_templates/          complete optimization.py arm definitions
+  strategy_templates/          complete optimization.py arm/case definitions with component kwargs
   tests/                       focused runner and postprocessor tests
   README.md                    operator contract
   AGENTS.md                    bounded agent route

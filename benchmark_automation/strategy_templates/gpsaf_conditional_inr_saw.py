@@ -1,16 +1,12 @@
-"""Complete optimization strategy for the generic starter workspace."""
+"""Measured GPSAF strategy for the SAW conditional-INR case."""
 
 from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3
 from yadof.surrogate import conditional_inr
 
 
 def build_optimization():
-    search = by_objective_count(
-        single=pymoo_ga(),
-        multi=pymoo_nsga3(),
-    )
     return gpsaf(
-        search=search,
+        search=by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3()),
         surrogate=conditional_inr(
             epochs=64,
             ensemble_size=3,
@@ -18,6 +14,7 @@ def build_optimization():
             bootstrap_members=True,
             bootstrap_fraction=1.0,
         ),
-        alpha=1,
-        beta=0,
+        alpha=3,
+        beta=3,
+        exploration_fraction=0.15,
     )

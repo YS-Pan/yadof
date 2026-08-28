@@ -14,6 +14,7 @@ from yadof.optimize import (
     posterior_assisted,
     qnehvi,
 )
+from yadof.optimize import pymoo_nsga3
 from yadof.optimize.posterior_assisted import (
     _fixed_real_pareto_baseline,
     _partition_candidates,
@@ -55,6 +56,18 @@ class _Search:
     def resolve_algorithm(self, objective_count: int) -> str:
         assert objective_count >= 2
         return "nsga3"
+
+    def backend_settings(self, objective_count: int):
+        assert objective_count >= 2
+        return pymoo_nsga3(
+            reference_direction_partitions=1,
+            crossover_probability=0.8,
+            mutation_probability=0.35,
+            crossover_eta=20.0,
+            mutation_eta=20.0,
+            mutated_dimensions_per_individual=1,
+            refill_attempts=4,
+        ).backend_settings(objective_count)
 
     def semantic_identity(self, config, problem):
         del config
@@ -218,14 +231,6 @@ def _config(population_size: int = 2):
     return SimpleNamespace(
         OPTIMIZE_POPULATION_SIZE=population_size,
         OPTIMIZE_ARCHIVE_KEY_DECIMALS=10,
-        OPTIMIZE_REFILL_ATTEMPTS=4,
-        OPTIMIZE_NSGA3_REF_DIR_METHOD="das-dennis",
-        OPTIMIZE_NSGA3_PARTITIONS=1,
-        OPTIMIZE_CROSSOVER_PROBABILITY=0.8,
-        OPTIMIZE_MUTATION_PROBABILITY=0.35,
-        OPTIMIZE_CROSSOVER_ETA=20.0,
-        OPTIMIZE_MUTATION_ETA=20.0,
-        OPTIMIZE_DIM_MUT_PER_INDIVIDUAL=1,
     )
 
 

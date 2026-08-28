@@ -85,7 +85,13 @@
   composition factories, and one active semantic strategy pointer with retained
   namespaces. Private `optimize.gpsaf` owns GPSAF assistance/phases/records and
   private `optimize.pymoo` owns the thin lazy GA/NSGA-III backend adapter. The
-  package has no complete-method selector or registry.
+  package has no complete-method selector or registry. Each selected component
+  carries a private frozen settings snapshot built from explicit keyword-only
+  factory arguments; runtime adapters receive that snapshot rather than consulting
+  ambient algorithm configuration.
+- `config`: one declarative core-setting schema owns defaults, validation kind,
+  reload policy, and path policy for genuine campaign/framework settings. It does
+  not register search, GPSAF, or surrogate implementation parameters.
 - `optimize.posterior_assisted`, `qnehvi_acquisition`: the independent opt-in
   generation orchestrator and acquisition-family component. The strategy owns the
   private-pymoo candidate pool, fixed real Pareto baseline, typed readiness,
