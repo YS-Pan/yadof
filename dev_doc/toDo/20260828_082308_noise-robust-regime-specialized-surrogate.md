@@ -12,7 +12,8 @@
   相关约为 `0.4694`；这些数值只解释工作动机，不是验收阈值，也不能证明 roughness 导致
   cost 变差。
 - 原要求中的工程 MVP 已经并入
-  [hierarchical CAE TODO](20260827_082608_hierarchical-cae-rawdata-surrogate.md)、代码、测试和
+  [archived hierarchical CAE plan](../obsolete/20260827_082608_hierarchical-cae-rawdata-surrogate.md)、
+  代码、测试和
   Gate 0 v2--v5 预注册：版本化 quality/regime policy、design × field 稳健聚合、shared-token
   隔离、gated field-private residual、未校准 applicability head，以及对 calibration/qNEHVI/
   release 的 handoff 都已实现。
@@ -91,8 +92,8 @@ fail closed。后继方案必须同时解决 representation contamination 和独
    样本、改变 cost、泄漏 test、少报失败 arm 或更换统计口径。
 3. 获得一个 performance-accepted checkpoint，并在新的独立 calibration designs 上得到
    exact-state-bound、可迁移的 applicability capability；失败时继续显式 uncalibrated。
-4. 向 082611 提供 typed readiness 所需的真实证据，但不在本文中绕过 qNEHVI 自己的
-   acquisition/optimization gate。
+4. 向[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 提供 typed readiness
+   所需的真实证据，但不在本文中绕过 qNEHVI 自己的 acquisition/optimization gate。
 5. 如果证据表明简单 shared isolation 或其他较简单基线优于 MoE/gated residual，允许选择
    更简单方案并退役无效复杂度；目标是稳健性和可验证性，不是必须保留某种网络结构。
 
@@ -198,8 +199,9 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ### Gate 4：独立 applicability/posterior calibration
 
-- 为 performance-accepted exact checkpoint 建立新的 082609-compatible pre-access plan，使用
-  未参与训练/模型选择的 calibration designs。
+- 按[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 的 exact-state 契约，
+  为 performance-accepted exact checkpoint 建立新的 pre-access plan，使用未参与训练/模型
+  选择的 calibration designs。
 - 证明每 fold/class 支持度、AUPRC、Brier、ECE/reliability、boundary behavior、member pairing
   和 rawData/current-cost posterior metrics。artifact 绑定 state/strategy/schema/policy/label/
   head/loss/training provenance。
@@ -208,10 +210,10 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ### Gate 5：qNEHVI/release handoff
 
-- 向 082611 提供 typed performance/calibration/applicability capability，由其另行冻结
+- 向当前汇总 TODO 提供 typed performance/calibration/applicability capability，由其另行冻结
   threshold、boundary width、低/边界 real exploration 和 acquisition benchmark。
 - 即使本文通过，也不自动改变 default GPSAF + conditional-INR，不自动运行 formal seven-arm
-  suite；082612 仍负责同预算 optimization、总工程成本和 Phase B/C release 决定。
+  suite；当前汇总 TODO 仍负责同预算 optimization、总工程成本和 Phase B/C release 决定。
 
 ## 验证要求
 
@@ -256,17 +258,11 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ## 与其他 TODO 的关系
 
-- [082608](20260827_082608_hierarchical-cae-rawdata-surrogate.md) 继续拥有 hierarchical CAE
-  的整体 representation/coordinate/component gate；本文单独拥有最初未落盘的抗噪声意图、
-  regime-specialized successor 和 clean-vs-abnormal 验收。两者共享证据时必须引用同一 receipt，
-  不能给同一次实验两个矛盾结论。
-- [082609](20260827_082609_coherent-posterior-sampling-calibration.md) 拥有 exact-state posterior/
-  applicability calibration artifact；本文只规定 anti-noise successor 必须提供的前置状态和
-  balanced evidence。
-- [082611](20260827_082611_qnehvi-acquisition-strategy.md) 拥有 applicability gate 如何影响
-  exploitation/exploration；本文不决定 acquisition threshold 或真实探索配额。
-- [082612](20260827_082612_validate-new-surrogate-and-qnehvi.md) 拥有正式同预算矩阵与 release；
-  本文通过只解除其中的 architecture/quality 前置阻塞。
+- [当前 surrogate/qNEHVI 汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 拥有
+  hierarchical CAE 的整体 representation/coordinate gate、exact-state calibration、qNEHVI
+  exploitation/exploration 和正式同预算 release 链。本文单独拥有最初未落盘的抗噪声意图、
+  regime-specialized successor 和 clean-vs-abnormal 验收；两者共享证据时必须引用同一 receipt，
+  不能给同一次实验两个矛盾结论。旧 082608/082609/082611/082612 文件仅是可选历史资料。
 - [PCA/SVD TODO](20260828_081523_pca-svd-baseline-surrogate-module.md) 提供简单表示和 deployable
   predictor 对照，不承担 regime probability 或 posterior 授权。
 
@@ -288,6 +284,6 @@ fail closed。后继方案必须同时解决 representation contamination 和独
   preregistration/validators 和 change records 与最终实现同步；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full package tests
   和 benchmark automation tests；真实/长时间执行另有明确授权与结果记录；
-- 向 082609/082611/082612 的剩余 handoff 已更新。若 anti-noise architecture 已完成但后续
+- 向当前 surrogate/qNEHVI 汇总 TODO 的剩余 handoff 已更新。若 anti-noise architecture 已完成但后续
   acquisition/release 仍未完成，只能在对应 TODO 中保留剩余工作，不能把它们从文档链中
   静默删除。

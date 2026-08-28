@@ -787,9 +787,17 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
             "20260828_020622_qnehvi-posterior-assisted-framework.md"
         ) in wheel_names
         assert (
-            "yadof/_resources/docs/dev_doc/toDo/"
+            "yadof/_resources/docs/dev_doc/obsolete/"
             "20260827_082611_qnehvi-acquisition-strategy.md"
         ) in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/toDo/"
+            "20260828_121904_surrogate-qnehvi-remaining-work.md"
+        ) in wheel_names
+        assert (
+            "yadof/_resources/docs/dev_doc/toDo/"
+            "20260827_082611_qnehvi-acquisition-strategy.md"
+        ) not in wheel_names
         assert (
             "yadof/_resources/docs/dev_doc/toDo/"
             "20260827_082610_conditional-inr-posterior-adapter.md"
