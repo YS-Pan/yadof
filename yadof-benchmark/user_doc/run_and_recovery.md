@@ -18,6 +18,14 @@ workspace, runs it, collects results through public yadof APIs, and publishes
 `results.json`, `results.csv`, and `reports/summary.md`. Declared postprocessors run
 after collection and write to run-local output directories.
 
+Human-readable command and result evidence remains below
+`cells/<cell-id>/attempts/<number>/`. The actual yadof execution workspace is stored
+at a compact run-local `workspaces/<cell-digest>/<number>/` path and is referenced
+by the attempt state. The shorter physical path protects file-oriented Windows
+simulators from avoidable legacy path-length failures without hiding the semantic
+cell ID. A measured command rejects an all-infinite generation, so a cell with no
+finite evaluation is failed and remains eligible for a later `resume` attempt.
+
 Use `inspect --run RUN_PATH` for a read-only status view. Use `resume --run
 RUN_PATH` after interruption or failure. Resume loads the run-owned driver and
 input snapshots. Successful cells and postprocessors are skipped; interrupted or

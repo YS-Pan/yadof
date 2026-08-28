@@ -263,7 +263,14 @@ def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
                 raise BenchmarkError(
                     f"strategy snapshot collision at {cell.strategy_snapshot}"
                 )
-        for name in ("cells", "visualizations", "reports", "temp", "postprocessing"):
+        for name in (
+            "cells",
+            "workspaces",
+            "visualizations",
+            "reports",
+            "temp",
+            "postprocessing",
+        ):
             (staging / name).mkdir()
         spec_data = spec.to_dict()
         spec_data["created_utc"] = utc_now()
@@ -318,7 +325,8 @@ def prepare_attempt(
     number = len(cell_state["attempts"]) + 1
     attempt_root = run_root / "cells" / str(cell["id"]) / "attempts" / f"{number:04d}"
     attempt_root.mkdir(parents=True, exist_ok=False)
-    workspace = attempt_root / "workspace"
+    workspace_token = hashlib.sha256(str(cell["id"]).encode("utf-8")).hexdigest()[:16]
+    workspace = run_root / "workspaces" / workspace_token / f"{number:04d}"
     shutil.copytree(run_root / str(cell["baseline_snapshot"]), workspace)
     strategy_source = run_root / str(cell["strategy_snapshot"])
     strategy_destination = workspace / "submit" / "optimization.py"

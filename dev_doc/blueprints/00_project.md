@@ -102,7 +102,11 @@ hot-change contract; structural dimension changes are future work.
   execution, and resume uses only run-owned files. Public yadof rows become
   arbitrary-arm long results and optional descriptive reference deltas; opaque
   optimization metadata is retained without algorithm-specific interpretation.
-  The distribution depends on yadof's public surface, never the reverse. Root
+  Run-local attempt evidence retains the complete cell ID, while materialized
+  yadof execution workspaces use stable digest directories to keep external-
+  simulator paths compact; an all-infinite generation fails the benchmark cell
+  rather than becoming an empty comparison result. The distribution depends on
+  yadof's public surface, never the reverse. Root
   `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
   records.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with

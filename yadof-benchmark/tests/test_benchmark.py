@@ -260,6 +260,25 @@ def test_recursive_baseline_discovery_and_clean_snapshot(tmp_path: Path) -> None
     assert not (run_root / "driver" / "benchmark_core.py").exists()
 
 
+def test_attempt_workspace_uses_compact_run_local_path(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="compact-workspace")
+    saved, state = load_run(run_root)
+
+    attempt_root, materialized, attempt = prepare_attempt(
+        run_root, saved["cells"][0], state
+    )
+
+    relative = materialized.relative_to(run_root)
+    assert relative.parts[0] == "workspaces"
+    assert len(relative.parts) == 3
+    assert re.fullmatch(r"[0-9a-f]{16}", relative.parts[1])
+    assert relative.parts[2] == "0001"
+    assert attempt["workspace"] == relative.as_posix()
+    assert len(str(materialized)) < len(str(attempt_root / "workspace"))
+
+
 def test_manifest_rejects_escape_and_duplicate_id(tmp_path: Path) -> None:
     baseline = _baseline(tmp_path)
     manifest_path = baseline / "baseline.json"
@@ -281,10 +300,15 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     _workspace(tmp_path / "workspace")
     run_root = create_run(_plan(tmp_path), run_id="execute-three")
     values = {"alpha": 0.2, "beta": 0.35, "gamma": 0.1}
+    commands: list[tuple[str, ...]] = []
+
+    def command(*args, **kwargs):
+        commands.append(tuple(str(item) for item in args[0]))
+        return _successful_command(*args, **kwargs)
 
     state = execution.execute_existing_run(
         run_root,
-        command_runner=_successful_command,
+        command_runner=command,
         collector=lambda _workspace, cell: _cell_result(
             cell, values[cell["strategy"]]
         ),
@@ -301,6 +325,9 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     )
     assert {row["comparison"] for row in results["comparisons"]} == {"main"}
     assert (run_root / "reports" / "summary.md").is_file()
+    run_commands = [item for item in commands if item[2:4] == ("yadof", "run")]
+    assert len(run_commands) == 3
+    assert all("--fail-on-all-infinite" in item for item in run_commands)
 
 
 def test_postprocessor_failure_resumes_without_rerunning_cells(tmp_path: Path) -> None:

@@ -12,6 +12,9 @@ The independent benchmark distribution owns focused tests under
 self-describing baselines, arbitrary complete strategy files, fake child commands,
 and public result fixtures while consuming a regular installed yadof distribution.
 They are not part of yadof's generic test namespace or yadof wheel/sdist contents.
+Their run-layout coverage keeps semantic attempt evidence readable while proving
+that materialized execution workspaces use compact run-local digest paths, and
+their command coverage requires all-infinite yadof generations to fail a cell.
 
 ## Required coverage
 

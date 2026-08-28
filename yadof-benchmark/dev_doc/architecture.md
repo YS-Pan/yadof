@@ -10,8 +10,10 @@ The bounded `benchmark_runtime/` package separates responsibilities:
 - `workflow.py`: small user-facing builder and immutable request construction;
 - `planning.py`: dynamic Python loading, strategy validation, and cell expansion;
 - `baselines.py`: recursive manifests and clean workspace snapshots;
-- `storage.py`: digests, immutable inputs, run layout, and atomic state;
-- `execution.py`: checked subprocess execution, collection, and orchestration;
+- `storage.py`: digests, immutable inputs, readable attempt evidence, compact
+  run-local execution workspaces, and atomic state;
+- `execution.py`: checked subprocess execution, all-infinite-generation rejection,
+  collection, and orchestration;
 - `postprocessing.py`: retryable run-local user callbacks;
 - `results.py`: public-yadof collection and descriptive reports;
 - `progress.py`: read-only active work summaries;

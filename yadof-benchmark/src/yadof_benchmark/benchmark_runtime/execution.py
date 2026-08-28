@@ -297,6 +297,7 @@ def _execute_cell(
             "--generations", str(cell["generations"]),
             "--population-size", str(cell["population"]),
             "--random-seed", str(cell["seed"]), "--no-smoke-test",
+            "--fail-on-all-infinite",
         ]
         mode = cell.get("execution", {}).get("mode")
         if mode:
