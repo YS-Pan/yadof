@@ -23,7 +23,7 @@ from ..surrogate.posterior import (
     project_rawdata_sampler,
     require_rawdata_posterior_surrogate,
 )
-from .qnehvi_acquisition import (
+from .qnehvi.acquisition import (
     DiscreteQNEHVIAcquisition,
     QNEHVIConfigurationError,
     QNEHVIFallback,

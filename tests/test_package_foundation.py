@@ -695,9 +695,10 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/optimize/gpsaf/records.py" in wheel_names
         assert "yadof/optimize/pymoo/__init__.py" in wheel_names
         assert "yadof/optimize/pymoo/backend.py" in wheel_names
-        assert "yadof/optimize/qnehvi_backend.py" in wheel_names
-        assert "yadof/optimize/_qlognehvi_backend.py" in wheel_names
-        assert "yadof/optimize/qnehvi_acquisition.py" in wheel_names
+        assert "yadof/optimize/qnehvi/__init__.py" in wheel_names
+        assert "yadof/optimize/qnehvi/acquisition.py" in wheel_names
+        assert "yadof/optimize/qnehvi/backend.py" in wheel_names
+        assert "yadof/optimize/qnehvi/_botorch_backend.py" in wheel_names
         assert "yadof/optimize/posterior_assisted.py" in wheel_names
         assert "yadof/optimize/state.py" in wheel_names
         assert "yadof/optimize/strategy.py" in wheel_names
@@ -706,6 +707,9 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/optimize/gpsaf_phases.py" not in wheel_names
         assert "yadof/optimize/gpsaf_pymoo.py" not in wheel_names
         assert "yadof/optimize/gpsaf_misc.py" not in wheel_names
+        assert "yadof/optimize/qnehvi_acquisition.py" not in wheel_names
+        assert "yadof/optimize/qnehvi_backend.py" not in wheel_names
+        assert "yadof/optimize/_qlognehvi_backend.py" not in wheel_names
         assert "yadof/surrogate/conditional_inr/__init__.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/runtime.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/modeling.py" in wheel_names

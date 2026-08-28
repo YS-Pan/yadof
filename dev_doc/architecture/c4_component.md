@@ -92,13 +92,14 @@
 - `config`: one declarative core-setting schema owns defaults, validation kind,
   reload policy, and path policy for genuine campaign/framework settings. It does
   not register search, GPSAF, or surrogate implementation parameters.
-- `optimize.posterior_assisted`, `qnehvi_acquisition`: the independent opt-in
+- `optimize.posterior_assisted`, `optimize.qnehvi.acquisition`: the independent
+  opt-in
   generation orchestrator and acquisition-family component. The strategy owns the
   private-pymoo candidate pool, fixed real Pareto baseline, typed readiness,
   streamed projection, explicit real exploration quota, fallback, and common real
   evaluator handoff. The acquisition owns support policy and discrete greedy
   multi-start batch selection.
-- `optimize.qnehvi_backend`: a discrete-only adapter that
+- `optimize.qnehvi.backend`: a discrete-only adapter that
   converts fixed minimization costs and aligned joint objective draws into a
   BoTorch sample-backed ensemble, delegates qLogNEHVI hypervolume/partitioning
   numerics to BoTorch, and returns compact acquisition diagnostics. Its private

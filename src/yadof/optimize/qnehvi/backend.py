@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping, Sequence
 
-from ..job_template.rawdata_projector import JointObjectiveSamples
+from ...job_template.rawdata_projector import JointObjectiveSamples
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +54,7 @@ def score_discrete_qlognehvi(
     if not isinstance(candidate_samples, JointObjectiveSamples):
         raise TypeError("candidate_samples must be JointObjectiveSamples")
     try:
-        from ._qlognehvi_backend import score_discrete_qlognehvi as implementation
+        from ._botorch_backend import score_discrete_qlognehvi as implementation
     except ModuleNotFoundError as exc:
         if (exc.name or "").split(".")[0] in {
             "botorch",

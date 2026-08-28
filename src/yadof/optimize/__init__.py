@@ -1,5 +1,6 @@
 from . import gpsaf as _gpsaf_package
 from . import pymoo as _pymoo_package
+from . import qnehvi as _qnehvi_package
 from .api import (
     AllInfiniteGenerationError,
     run_generations,
@@ -22,7 +23,7 @@ from .posterior_assisted import (
     calibrated_applicability_gate,
     posterior_assisted,
 )
-from .qnehvi_acquisition import (
+from .qnehvi.acquisition import (
     DiscreteQNEHVIAcquisition,
     QNEHVIConfigurationError,
     QNEHVIFallback,
@@ -32,9 +33,9 @@ from .qnehvi_acquisition import (
 )
 from .strategy import OptimizationResult, OptimizationStrategy
 
-# The private ``gpsaf`` package is loaded above before this public factory name is
-# rebound. Later private-module imports therefore cannot replace the public callable
-# on ``yadof.optimize``.
+# The private ``gpsaf`` and ``qnehvi`` packages are loaded above before their
+# public factory names are rebound. Later private-module imports therefore cannot
+# replace those callables on ``yadof.optimize``.
 
 __all__ = [
     "AllInfiniteGenerationError",

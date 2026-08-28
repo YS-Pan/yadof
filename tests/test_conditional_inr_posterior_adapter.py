@@ -14,7 +14,7 @@ from yadof.job_template import Parameter
 from yadof.job_template.rawdata_contract import NamedRawDataItem
 from yadof.job_template.api import CostInterpreter
 from yadof.job_template.rawdata_projector import RawDataCostProjector
-from yadof.optimize.qnehvi_backend import score_discrete_qlognehvi
+from yadof.optimize.qnehvi.backend import score_discrete_qlognehvi
 from yadof.surrogate import (
     RawDataPosteriorSurrogate,
     conditional_inr,

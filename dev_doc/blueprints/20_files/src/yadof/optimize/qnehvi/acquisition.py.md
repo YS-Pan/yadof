@@ -1,4 +1,4 @@
-# File blueprint: src/yadof/optimize/qnehvi_acquisition.py
+# File blueprint: src/yadof/optimize/qnehvi/acquisition.py
 
 ## Intent
 
@@ -11,7 +11,7 @@
   honest finite support policy, unique normalized candidate pools, and unsupported
   pending/outcome inputs.
 - Score all singletons, expand the best configured starts greedily, and choose one
-  deterministic batch; every value comes from `qnehvi_backend`.
+  deterministic batch; every value comes from `qnehvi.backend`.
 - Return only selected indices, one log acquisition value, and bounded backend/
   support/time/memory diagnostics.
 

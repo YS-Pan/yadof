@@ -33,10 +33,11 @@ src/yadof/                 installed framework
   optimize/                campaign engine + public strategy components/state
     gpsaf/                 GPSAF assistance, phases, private settings and records
     pymoo/                 lazy GA/NSGA-III backend adapter + private settings
+    qnehvi/                qNEHVI acquisition and lazy BoTorch scoring internals
+      acquisition.py       discrete greedy multi-start qNEHVI family selector
+      backend.py           lazy discrete qLogNEHVI scoring boundary
+      _botorch_backend.py  optional BoTorch sample-backed numerical adapter
     posterior_assisted.py  independent pool/projection/exploration/real orchestration
-    qnehvi_acquisition.py  discrete greedy multi-start qNEHVI family selector
-    qnehvi_backend.py      lazy discrete qLogNEHVI scoring boundary
-    _qlognehvi_backend.py  optional BoTorch sample-backed numerical adapter
   surrogate/               lightweight public rawData-surrogate API
     posterior.py           backend-neutral persistent function-sampler protocol
     exploitation.py        typed performance/calibration/applicability readiness
@@ -82,7 +83,7 @@ BoTorch, pymoo algorithms, or a concrete surrogate. `job_template` never imports
 `CostInterpreter`. The explicit conditional-INR adapter imports Torch only below
 its lazy factory call. The qLogNEHVI numerical boundary imports BoTorch only when
 scoring is requested; the ordinary optimize parent, GPSAF, and real search remain
-independent. `qnehvi_acquisition` adapts discrete selection without importing the
+independent. `qnehvi.acquisition` adapts discrete selection without importing the
 backend eagerly, while `posterior_assisted` depends only on the posterior and typed
 readiness contracts until an accepted path actually samples. A concrete surrogate
 implements those contracts without optimization importing its runtime.

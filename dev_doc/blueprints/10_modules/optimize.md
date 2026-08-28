@@ -23,14 +23,16 @@ contracts.
   private candidate records.
 - `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
   strategies. Pymoo objects do not cross into the public strategy contract.
-- `qnehvi_acquisition.py` owns the public qNEHVI-family controls and discrete greedy
-  multi-start selection. `qnehvi_backend.py` owns the scoring boundary and
-  `_qlognehvi_backend.py` owns its optional Torch/BoTorch numerics.
+- `qnehvi/` owns the public qNEHVI-family component implementation:
+  `acquisition.py` provides controls and discrete greedy multi-start selection,
+  `backend.py` provides the lightweight scoring boundary, and
+  `_botorch_backend.py` owns the optional Torch/BoTorch numerics.
 - `posterior_assisted.py` owns only the independent generation orchestration around
   injected search, posterior surrogate, and acquisition components. It reuses the
   private pymoo mechanics but does not modify GPSAF.
-- The public `gpsaf()` factory remains at `yadof.optimize`; loading private
-  `optimize.gpsaf.*` modules must not replace that callable with the subpackage.
+- The public `gpsaf()` and `qnehvi()` factories remain at `yadof.optimize`;
+  loading their same-named private implementation packages must not replace those
+  callables with subpackage modules.
 
 ## Candidate and objective handling
 

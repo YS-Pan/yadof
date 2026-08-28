@@ -11,8 +11,8 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from ..job_template.rawdata_projector import JointObjectiveSamples
-from .qnehvi_backend import score_discrete_qlognehvi
+from ...job_template.rawdata_projector import JointObjectiveSamples
+from .backend import score_discrete_qlognehvi
 
 
 class QNEHVIFallback(RuntimeError):

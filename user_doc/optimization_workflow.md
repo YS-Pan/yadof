@@ -338,7 +338,7 @@ whole, and retains only compact acquisition diagnostics. The public acquisition
 selects a discrete batch with explicit greedy restarts; it still does not own
 candidate generation, pending state, outcome constraints, evaluation, or recording.
 Those generation responsibilities belong only to `posterior_assisted()`. Do not
-return `qnehvi_backend` directly from `build_optimization()`.
+return a qNEHVI backend scorer directly from `build_optimization()`.
 
 Every objective in that tuple must normally be a dimensionless minimization cost
 in `[0, 1]`, independently normalized from its physical metric: `0` is best and `1`

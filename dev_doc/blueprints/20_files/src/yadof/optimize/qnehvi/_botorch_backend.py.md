@@ -1,4 +1,4 @@
-# File blueprint: src/yadof/optimize/_qlognehvi_backend.py
+# File blueprint: src/yadof/optimize/qnehvi/_botorch_backend.py
 
 ## Intent
 

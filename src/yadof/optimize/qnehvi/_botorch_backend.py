@@ -15,7 +15,7 @@ from botorch.acquisition.multi_objective.logei import (
 from botorch.models.ensemble import EnsembleModel
 from botorch.sampling.base import MCSampler
 
-from ..job_template.rawdata_projector import JointObjectiveSamples
+from ...job_template.rawdata_projector import JointObjectiveSamples
 
 
 _QLOGNEHVI_CLASS = qLogNoisyExpectedHypervolumeImprovement

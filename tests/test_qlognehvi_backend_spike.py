@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from yadof.job_template import JointObjectiveSamples
-from yadof.optimize.qnehvi_backend import score_discrete_qlognehvi
+from yadof.optimize.qnehvi.backend import score_discrete_qlognehvi
 
 
 pytestmark = pytest.mark.filterwarnings("ignore:Failed to compile fused qLogEHVI")
@@ -68,7 +68,7 @@ def test_qlognehvi_uses_botorch_core_and_scores_q1_q2(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pytest.importorskip("botorch")
-    from yadof.optimize import _qlognehvi_backend as backend
+    from yadof.optimize.qnehvi import _botorch_backend as backend
 
     calls = []
     original = backend._QLOGNEHVI_CLASS
@@ -104,7 +104,7 @@ def test_zero_noise_fixed_baseline_matches_qlogehvi_limit() -> None:
     from botorch.utils.multi_objective.box_decompositions.non_dominated import (
         FastNondominatedPartitioning,
     )
-    from yadof.optimize._qlognehvi_backend import (
+    from yadof.optimize.qnehvi._botorch_backend import (
         _EnumerateSampler,
         _LookupEnsembleModel,
     )
@@ -254,7 +254,7 @@ def test_backend_validation_covers_objectives_empty_duplicates_and_seed() -> Non
 def test_missing_optional_backend_has_actionable_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    private_name = "yadof.optimize._qlognehvi_backend"
+    private_name = "yadof.optimize.qnehvi._botorch_backend"
     saved = sys.modules.pop(private_name, None)
     real_import = builtins.__import__
 

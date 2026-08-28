@@ -21,14 +21,14 @@ from yadof.optimize.posterior_assisted import (
 )
 from yadof.optimize.problem_info import ProblemInfo
 from yadof.optimize.pymoo.backend import CandidateRecord
-from yadof.optimize.qnehvi_acquisition import (
+from yadof.optimize.qnehvi.acquisition import (
     DiscreteQNEHVIAcquisition,
     QNEHVIConfigurationError,
     QNEHVIFallback,
     QNEHVISelection,
     QNEHVISupportRejected,
 )
-from yadof.optimize.qnehvi_backend import DiscreteQLogNEHVIResult
+from yadof.optimize.qnehvi.backend import DiscreteQLogNEHVIResult
 from yadof.optimize.strategy import HistoryRecord
 from yadof.surrogate import conditional_inr_posterior, hierarchical_cae
 from yadof.surrogate.exploitation import (
@@ -314,7 +314,7 @@ def test_qnehvi_rejects_pending_outcomes_and_single_objective() -> None:
 def test_qnehvi_greedy_multistart_delegates_every_numeric_score(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import yadof.optimize.qnehvi_acquisition as module
+    module = importlib.import_module("yadof.optimize.qnehvi.acquisition")
 
     calls = []
 
@@ -365,7 +365,7 @@ def test_qnehvi_greedy_multistart_delegates_every_numeric_score(
 def test_qnehvi_empty_duplicate_and_support_policies_fail_explicitly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import yadof.optimize.qnehvi_acquisition as module
+    module = importlib.import_module("yadof.optimize.qnehvi.acquisition")
 
     empty = JointObjectiveSamples.from_arrays(
         cost_samples=np.empty((2, 0, 2)),
