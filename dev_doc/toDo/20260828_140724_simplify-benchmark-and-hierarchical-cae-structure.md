@@ -2,13 +2,13 @@
 
 ## 本文的角色
 
-- 本文是一次只读结构审查的执行计划，不授权立即修改产品代码、重跑 benchmark/仿真、
-  改写冻结 preregistration/receipt，或改变 hierarchical CAE 的科学结论。
+- 本文是一次只读结构审查的执行计划，不授权立即修改产品代码、重跑 benchmark/仿真，
+  或改变 hierarchical CAE 已记录的科学结论。
 - 后续实施必须由用户明确选中本文，并遵守届时 `dev_doc/README.md` 的构建、安装、测试、
   change record、提交和推送流程。
 - 本文承接
   [surrogate/qNEHVI 剩余工作](20260828_121904_surrogate-qnehvi-remaining-work.md)
-  中“共享不可变 engine + 薄 version adapter”的工程建议，但范围只限代码组织、重复消除和
+  中“共享 versioned engine + 薄 adapter”的工程建议，但范围只限代码组织、重复消除和
   可维护性；它不能把 Gate 0 v5/v8 的失败改写成接受。
 - 背景判断来自 Codex 任务
   `codex://threads/01a045a2-5fe4-7992-9932-4c35cd3382ad`，并定向核对了其中明确关联的
@@ -17,6 +17,23 @@
   `01a04242-14f1-7162-8c38-c44a8b02fe12`，以及抗噪声证据任务
   `01a04151-bc16-7ff0-84d5-16eef2e1b5c6`。本文件已经包含继续实施所需的结构结论，
   实施者不应默认重读完整历史任务。
+
+### 用户关于哈希锁的最新决定
+
+- 用户于 2026-08-28 明确要求移除本文范围内的**所有哈希锁**。这里的哈希锁是指：因为
+  SHA-256、fingerprint、content digest 或 source digest 不相等，就拒绝源码修改、移动、
+  合并、删除、resume、replay、state/evidence 使用或验收。
+- hash/fingerprint 字段可以作为非权威 provenance 保留在旧记录中，也可以由新工具输出供
+  诊断；它们不得再成为 admission、compatibility、scientific validity 或 completion gate。
+- 历史 plan、threshold、receipt 和结果仍然描述当时发生过的实验，不应倒改数值或结论；
+  但它们记录的旧源码 hash 不锁定当前工作树，也不要求最新 HEAD 继续通过旧的当前路径
+  hash validator。
+- 可复现性改由普通 Git 历史、明确 revision、run-local implementation/task snapshot、保存的
+  输入与结果承担。旧实验若只能在旧 revision 运行，应在该 revision 的独立 checkout 中重放，
+  不能为了让旧 validator 在最新 HEAD 通过而永久保留重复源码。
+- 同一 benchmark run 的一致性也不得依赖比较当前工作树 hash。新 run 必须携带并使用自己的
+  execution snapshot；旧 run 缺少可执行 snapshot 时应明确要求 restart/migration 决策，而
+  不是把当前源码差异解释成证据损坏。
 
 ## 审查基线与事实纠正
 
@@ -73,20 +90,20 @@
 
 | 当前文件 | 实际职责 | 功能是否需要 | 处理决定 |
 | --- | --- | --- | --- |
-| `hierarchical_cae_dataset.py` | 密封/校验三段 dataset，解析 locator，加载 selected records/rawData，建立 rank-3 layout | 证据隔离与 schema 一致性需要 | 旧文件冻结；新实验只使用共享 dataset contract，不复制 I/O/helper |
-| `hierarchical_cae_validation_v1.py` | 第一次失败 runner 的完整源快照 | 仅历史复现需要，不是活动实现 | 必须原字节、原路径保留；标为 frozen evidence，不允许新代码 import |
-| `hierarchical_cae_validation.py` | case 装载、quality、资源监控、CAE/conditional/PCA arms、rawData/cost/Pareto 指标与总编排 | 科学语义需要，但不应集中 1,226 行 | 旧文件冻结；未来语义拆进共享 engine + declarative plan + 薄 adapter |
-| `hierarchical_cae_gate4_assessment.py` | 汇总 representation/quality/resource 指标并执行冻结阈值 | 旧决定复现需要 | 冻结；未来复用统一 assessment reducer，阈值留在 plan/policy |
-| `hierarchical_cae_experimental_offline.py` | v6 固定 offline-test、coordinate 指标、CAE/conditional 比较 | 旧机制证据需要，不是通用 runtime | 冻结；未来只写薄 experiment adapter |
-| `hierarchical_cae_experimental_assessment.py` | v7 对 v6 evidence 做后访问汇总 | 旧 receipt 复现需要 | 冻结；未来并入统一 assessment reducer |
-| `hierarchical_cae_calibration_checkpoint.py` | 按精确身份训练并发布 development checkpoints | checkpoint 机制需要 | 冻结；未来成为调用共享 train/publish service 的薄命令 |
-| `hierarchical_cae_calibration.py` | calibration case/fold、field distribution、cost/Pareto/HV、qNEHVI proxy、applicability、gate、artifact 输出 | 科学评估需要，但 1,828 行混合过多职责 | 冻结；未来拆成 calibration metrics、decision proxy、gate policy 与 orchestration |
+| `hierarchical_cae_dataset.py` | 密封/校验三段 dataset，解析 locator，加载 selected records/rawData，建立 rank-3 layout | 证据隔离与 schema 一致性需要 | 把仍需逻辑迁入共享 dataset contract，然后删除旧文件 |
+| `hierarchical_cae_validation_v1.py` | 第一次失败 runner 的当时实现 | 当前实现不需要；Git 历史足以定位 | 删除；需要重放时使用原提交的独立 checkout，不在当前树保留副本 |
+| `hierarchical_cae_validation.py` | case 装载、quality、资源监控、CAE/conditional/PCA arms、rawData/cost/Pareto 指标与总编排 | 科学语义需要，但不应集中 1,226 行 | 把仍需语义拆进共享 engine + declarative plan，然后删除旧文件 |
+| `hierarchical_cae_gate4_assessment.py` | 汇总 representation/quality/resource 指标并执行当时阈值 | reducer 机制仍有用 | 并入统一 assessment reducer；历史阈值只作旧结果上下文 |
+| `hierarchical_cae_experimental_offline.py` | v6 固定 offline-test、coordinate 指标、CAE/conditional 比较 | 当前通用 runtime 不需要完整脚本 | 迁移可复用机制后删除；未来只写薄 experiment adapter |
+| `hierarchical_cae_experimental_assessment.py` | v7 对 v6 evidence 做后访问汇总 | 当前无需独立脚本 | 并入统一 assessment reducer 后删除 |
+| `hierarchical_cae_calibration_checkpoint.py` | 按实验身份训练并发布 development checkpoints | train/publish 机制需要 | 改为调用共享 service 的薄命令，或由 workflow 直接替代后删除 |
+| `hierarchical_cae_calibration.py` | calibration case/fold、field distribution、cost/Pareto/HV、qNEHVI proxy、applicability、gate、artifact 输出 | 科学评估机制需要，但 1,828 行混合过多职责 | 拆成 calibration metrics、decision proxy、gate policy 与 orchestration，随后删除旧文件 |
 
-这 8 个文件当前全部被 v4--v8 的 plan/amendment/validator 以原相对路径和 SHA-256 绑定。
-例如 v4 同时固定 v1/current runner hashes，v5 固定 gate assessment，v6/v7 固定 offline 与
-assessment，v8 固定 calibration、checkpoint、dataset 和 validation。直接修改、删除或搬动会
-让已有 validator 报 source drift，破坏冻结证据。它们的 7,254 行必须计为“历史证据负担”，
-不能通过改写 validator 或 receipt 冒充代码精简。
+这 8 个文件当前确实被 v4--v8 的 plan/amendment/validator 以当前路径和 SHA-256 绑定，但这是
+需要移除的遗留实现，不是继续保留它们的理由。实施时应先把旧 validator 从当前验收入口
+退役，或删除其中针对当前源码/artifact digest 的拒绝逻辑；旧 plan/receipt 里的 hash 字段
+可以保留为当时的 provenance。之后可正常修改、移动、合并或删除这 8 个文件。历史代码由
+Git revision 提供，最新 HEAD 无需伪装成旧实验环境。
 
 ### hierarchical CAE package 文件
 
@@ -105,8 +122,8 @@ assessment，v8 固定 calibration、checkpoint、dataset 和 validation。直�
 
 关联的 `src/yadof/surrogate/quality.py`、`calibration.py`、`posterior.py` 是后端中立契约，不应
 为了减少文件数并入 CAE。`api.py` 仍只拥有 lazy public factory。相关 tests 需要按新模块边界
-重组，但 preregistration 目录、receipts、plans 和 validators 是不可变证据，不属于待清理的
-活动源码。
+重组。旧 plans/receipts 是历史记录；旧 validators 若仍把 digest mismatch 当成拒绝条件，
+必须退役、删除或改为纯诊断工具，不得继续约束活动源码结构。
 
 ## 目标架构
 
@@ -116,10 +133,10 @@ assessment，v8 固定 calibration、checkpoint、dataset 和 validation。直�
 ```text
 benchmark_automation/
   benchmark.py                     # 仅 CLI 参数与呈现
-  benchmark_core.py                # <=250 行兼容 facade；旧 validator 仍可导入 task_fingerprint
+  benchmark_core.py                # <=250 行临时 facade；只服务当前 CLI/调用者
   benchmark_runtime/
     contracts.py                   # BenchmarkError、Paths、内部 dataclasses/JSON codecs
-    storage.py                     # path confinement、canonical JSON、hash、atomic/new writes、manifests
+    storage.py                     # path confinement、canonical JSON、atomic/new writes、manifests
     planning.py                    # config、selection、plan、preflight、run spec
     state.py                       # run/attempt state 与 input materialization/sealing
     execution.py                   # subprocess、cell execution、resume/fail-fast
@@ -133,11 +150,10 @@ benchmark_automation/
     workflow.py                    # cell matrix、resource measurement、bounded artifact output
     calibration.py                 # folds/spread/applicability/decision proxy；不拥有 CLI
     assessment.py                  # plan-driven reducer；阈值不硬编码在 engine
-  hierarchical_cae_*.py            # 八个原路径冻结文件；只作历史证据，不再增长/被新代码导入
   preregistrations/
     <future-version>/
       plan.json
-      run.py                        # <=120 行薄 adapter，绑定内容寻址 engine artifact/hash
+      run.py                        # <=120 行薄 adapter，调用普通 versioned engine API
 
 src/yadof/surrogate/
   _shared/
@@ -162,7 +178,7 @@ src/yadof/surrogate/
 
 ### 依赖规则
 
-- CLI/薄 adapter 可以依赖 runtime；runtime 不得 import CLI、preregistration 或 frozen runner。
+- CLI/薄 adapter 可以依赖 runtime；runtime 不得 import CLI、preregistration 或 legacy runner。
 - scientific metrics 必须是显式输入/输出的纯函数，不读取全局 plan，也不从另一个 runner 的
   `_private_helper` 借实现。
 - plan/threshold/policy 负责“本次实验测什么、门槛是什么”；engine 只负责可版本化算法。
@@ -170,23 +186,25 @@ src/yadof/surrogate/
   import workspace、recorder、task 或 benchmark。
 - shared primitive 只抽取两个现有组件都通过行为等价测试的稳定机制。禁止为了复用而建立
   callback soup、全局 registry、万能 base class 或新的组件 selector。
-- 新 run spec 必须记录整个 `benchmark_runtime`/`experiment_runtime` 的规范化文件 manifest
-  与组合 hash，不能继续只 hash `benchmark_core.py` facade，否则拆包后实现漂移不可见。
+- 新 run 必须复制并使用完整的 `benchmark_runtime`/`experiment_runtime` execution snapshot；
+  run spec 可以记录 revision 和来源作为 provenance，但不得比较当前工作树 digest 来拒绝
+  resume 或验收。
 
 ## 可量化目标
 
-历史冻结源与活动可维护源必须分账：
+全部当前源码都进入可维护和可删除范围：
 
-- 八个 frozen runner：保持 274,942 bytes / 7,254 行逐字不变；这部分不计入活动维护 LOC，
-  但继续计入 repository evidence footprint。
+- 八个 legacy runner 的可复用行为迁移后，从当前树删除 274,942 bytes / 7,254 行；不在
+  `archive/`、改后缀文件或重复目录中保留源码副本。
 - `benchmark_core.py`：4,887 行降到不超过 250 行；只保留稳定 facade/re-export 与过渡说明。
 - generic benchmark runner（facade + `benchmark_runtime`）：物理行数不超过 3,450，较当前
   4,887 至少减少 29%；任何模块不超过 700 行。
 - hierarchical CAE package：5,042 行降到不超过 4,200 行；任何模块不超过 700 行；
   `modeling.py` 和独立 `metadata.py` 不再存在。
-- 当前两块活动实现合计从 9,929 行降到不超过 7,650 行，至少减少 22.9%；包含 frozen
-  evidence 后的上述 repository subtotal 从 17,183 行降到不超过 14,904 行。未来实验 engine
-  是新能力，必须单列预算，第一版上限 2,400 行，不能把它伪装成本次删减成果。
+- generic runner 与 hierarchical CAE package 合计从 9,929 行降到不超过 7,650 行；如需建立
+  新 experiment engine，其第一版上限 2,400 行。包含该 engine 时，上述 repository subtotal
+  从 17,183 行降到不超过 10,050 行，至少减少 41.5%；暂不需要 engine 时应降到不超过
+  7,650 行，至少减少 55.5%。
 - 新 version adapter/CLI 文件不超过 120 行；普通函数不超过 100 行。确属单一数学 kernel
   可放宽到 150 行，但必须在 blueprint 解释；不得再出现 300+ 行 orchestration function。
 - 活动 benchmark 模块间不允许 import 对方下划线符号；AST duplication check 不允许新增
@@ -198,24 +216,30 @@ src/yadof/surrogate/
 
 ### Phase 0：建立不运行 simulator 的行为保护网
 
-- [ ] 冻结基线规模、AST symbols、import graph、八个历史 runner 的路径/SHA-256，并新增
-  明确的 frozen-source index；index 可以新增，旧 plan/validator/receipt 不得修改。
+- [ ] 记录基线规模、AST symbols、import graph，以及八个 legacy runner 对应的 Git revisions；
+  这些信息只作迁移 provenance，不形成当前源码锁。
+- [ ] 盘点 benchmark/preregistration 中所有 `SHA-256`、fingerprint、digest comparison 及
+  `source drift` 分支；标出哪些只是显示字段，哪些会拒绝执行。所有拒绝型 hash lock 必须
+  在后续 phase 删除，旧 validator 不再是最新 HEAD 的 completion gate。
 - [ ] 为 `benchmark.py` 实际使用的 facade surface 建清单；至少覆盖 plan、preflight、
-  run/resume、collect、report、inspect、ETA、`task_fingerprint` 和 JSON/hash helpers。
+  run/resume、collect、report、inspect、ETA 和 JSON/storage helpers。现有 fingerprint helper
+  只有在仍有非阻塞 provenance 调用者时才保留。
 - [ ] 从现有 unit fixtures 生成稳定 golden expectations：plan/spec/state/collection/report 的
-  schema、排序、hash 输入、错误类型和摘要字段。fixture 不得包含真实 simulator 输出的新
+  schema、排序、错误类型和摘要字段。fixture 不得包含真实 simulator 输出的新
   访问。
-- [ ] 给 current core 的整模块 automation identity 写失败测试：拆包后若任一 runtime 文件
-  漂移，resume verification 必须 fail closed。
-- [ ] 记录旧 run 的兼容矩阵：允许 inspect/collect/report 已完成 run；任何实现 hash 变化后
-  继续拒绝 resume。不得为了“兼容”绕过 fingerprint。
+- [ ] 为新 run-local execution snapshot 写隔离测试：创建 run 后修改当前源码，run/resume 仍
+  使用自己的 snapshot，不混入新旧模块。
+- [ ] 记录旧 run 的兼容矩阵：已完成 run 可 inspect/collect/report；带完整 execution snapshot
+  的未完成 run 从 snapshot resume；缺少 snapshot 的旧 run 需要显式 restart/migration，不能
+  单凭当前源码 digest 不同而宣称历史证据损坏。
 
 验收：现有 benchmark automation unit tests 全通过；新增 characterization tests 全通过；
-八个 frozen hashes 与当前值一致；未执行 benchmark、仿真或受保护 dataset 访问。
+hash-lock inventory 完整且每项都有删除/退役去向；未执行 benchmark、仿真或受保护 dataset
+访问。
 
 ### Phase 1：直接切分 `benchmark_core.py`
 
-- [ ] 先抽 `storage.py` 与 `contracts.py`，统一 canonical JSON、atomic/new write、hash、路径
+- [ ] 先抽 `storage.py` 与 `contracts.py`，统一 canonical JSON、atomic/new write、路径
   containment 和 manifest；保留错误文字与 JSON bytes 语义。
 - [ ] 抽 `progress.py`、`execution.py`、`state.py`，把 stream/process 与状态转移分开；将
   `_run_one_cell` 拆成 prepare、execute、verify、seal 四个显式步骤。
@@ -223,33 +247,37 @@ src/yadof/surrogate/
   record 五段，并保持结构/性能报告输入 schema 不变。
 - [ ] 抽 `timing.py`，把 exact/compatible signature、history selection、active progress 和 ETA
   composition 分开；不得改变 matched-history fallback 顺序。
-- [ ] 最后抽 `planning.py`，让 `benchmark_core.py` 只做受控 re-export。因为旧
-  preregistration validator 会 `from benchmark_core import task_fingerprint`，在确认所有冻结
-  validator 仍可导入前不能删除 facade。
+- [ ] 最后抽 `planning.py`，让 `benchmark_core.py` 只做当前调用者所需的受控 re-export。
+  不得为了让已退役的历史 validator 继续 import `task_fingerprint` 而永久保留 facade；当前
+  CLI/tests 切换完成后可直接删除它。
 - [ ] 同步 nested benchmark architecture、runner blueprint、tests blueprint 和文件 blueprints；
   明确废止“所有 orchestration 保持一个 module”的旧结论。
 
-验收：不跑 simulator；现有 benchmark unit suite、golden schema/hash/error tests、CLI
+验收：不跑 simulator；现有 benchmark unit suite、golden schema/error tests、CLI
 `--help` 与 structural no-write plan/preflight tests 全通过；旧完成 run 可 inspect/collect/report；
-旧未完成 run 因 automation fingerprint 变化明确拒绝 resume；LOC/模块/函数上限达标。
+新 run 可从 run-local execution snapshot resume；旧 run 缺 snapshot 时给出明确迁移/重启
+说明；LOC/模块/函数上限达标。
 
-### Phase 2：停止复制实验 runner
+### Phase 2：迁移并删除 legacy 实验 runner
 
-- [ ] 八个现存 `hierarchical_cae_*.py` 全部保持原字节，不在其中“抽 helper”，也不让新代码
-  继续 import 它们。
+- [ ] 退役把当前路径/source digest 当成执行前提的 v4--v8 validator；保留的旧 plan/receipt
+  只作历史记录，其 hash 字段不再参与当前验收。
+- [ ] 从八个 `hierarchical_cae_*.py` 只迁移仍需的 dataset、metric、assessment、calibration、
+  arm 和 orchestration 行为；建立等价测试后删除全部八个旧文件，不在当前树保留 archival
+  source copy。
 - [ ] 只在 successor/PCA 等下一项真实实验需要时建立 `experiment_runtime`；先从 plan 声明、
   case/dataset contract、arm protocol、pure metrics、artifact writer 六个最小边界开始。
 - [ ] 将 shared quality/field/cost/Pareto/resource metrics 各保留一个实现；calibration 和
   assessment 组合这些 primitives，不复制 case loading、cost projection 或 JSON utilities。
-- [ ] 每个新 preregistration 只携带 declarative plan 和不超过 120 行 adapter。engine 必须以
-  内容寻址 wheel/zip/tree artifact 固定；plan 同时记录 adapter hash、engine manifest hash、
-  package wheel hash和 policy/threshold hashes。
-- [ ] 新 validator 从显式 artifact 参数或不可变内容寻址位置验证，不依赖会被同版本 build
-  覆盖的 `dist/yadof-<version>.whl`。
+- [ ] 每个新 experiment 只携带 declarative plan 和不超过 120 行 adapter。plan 可记录 Git
+  revision、package version、环境和来源字段，但它们都是 provenance，不锁定当前源文件。
+- [ ] 新 experiment 使用 run-local implementation/package snapshot；validator 只校验声明的
+  schema、输入授权、结果完整性和科学规则，不比较当前源码、wheel 或 adapter digest。
 
 验收：用 synthetic fixtures 跑同一 plan 的 arm ordering、metric values、gate reduction、
-failure semantics 与 artifact hashes；不同 chunk/order 不改变结果；篡改任一 engine/plan/
-adapter 文件必须 fail closed；不得访问 offline/calibration locator 或启动 simulator。
+failure semantics 与 artifact schema；不同 chunk/order 不改变结果；当前工作树源码变化不影响
+已创建 run 的 snapshot 执行，且不会触发 hash-based refusal；不得访问 offline/calibration
+locator 或启动 simulator。
 
 ### Phase 3：整理 hierarchical CAE package，而不是合并回巨型文件
 
@@ -274,29 +302,31 @@ round-trip、lazy-import test、完整 installed-wheel suite 全通过；LOC 和
 
 ### Phase 4：清理活动入口并量化收尾
 
-- [ ] `rg` 确认除 frozen sources/receipts/docs 外，没有活动代码 import 旧
-  `hierarchical_cae_*.py` 或依赖另一个模块的私有函数。
-- [ ] 生成 before/after 机器可读规模报告，分别列 active source、frozen evidence、tests、
-  preregistration validators；不得用移动到另一个目录、压缩或改后缀伪造 LOC 降幅。
+- [ ] `rg` 确认八个 legacy `hierarchical_cae_*.py` 已删除，活动代码不依赖另一个模块的私有
+  函数。
+- [ ] 生成 before/after 机器可读规模报告，分别列 active source、tests、historical
+  plans/receipts 与 validators；不得用移动到另一个目录、压缩或改后缀伪造
+  LOC 降幅。
 - [ ] 更新 root/nested architecture、project/module/file blueprints、术语、适用 user docs 和
-  change record；记录旧 validator 仍可复验，及新 engine artifact 的定位方式。
+  change record；明确 source hash 只作 provenance、旧 hash validator 已退役，以及 run-local
+  execution snapshot 的定位方式。
 - [ ] 只有用户明确授权且存在科学实验需求时，才运行 benchmark/仿真；结构重构本身只做
   unit/installed-wheel/structural no-write acceptance。
 
-验收：目标目录、LOC、最大文件/函数、duplicate/private-import gates 全通过；所有 frozen
-hashes 不变；构建 wheel、force reinstall、import-origin、focused/full tests 按届时开发指南
-完成；最终 diff 不含实验结果、生成物、受保护数据或阈值变化。
+验收：目标目录、LOC、最大文件/函数、duplicate/private-import gates 全通过；活动代码、
+validator、resume 和 completion rules 中不存在 hash-based lock；构建 wheel、force reinstall、
+import-origin、focused/full tests 按届时开发指南完成；最终 diff 不含实验结果、生成物、
+受保护数据或阈值变化。
 
 ## 兼容性与风险
 
-- **冻结证据风险最高。** 八个 runner 不能直接删除/搬动/格式化；“把 v1 合并进 current”会
-  立即破坏 v4 hash。推荐做法是把它们从活动维护面隔离，而不是篡改历史。
-- **resume 不能透明跨实现。** 当前 run spec 直接 hash `benchmark_core.py`；拆包后必须 hash
-  全 runtime manifest。旧完成 run 继续支持只读 inspect/collect/report，旧未完成 run 按现有
-  fail-closed 规则拒绝 resume，不提供绕过开关。
-- **内部 import 也可能被历史 validator 使用。** `benchmark_core.task_fingerprint` 已被旧
-  validator 直接 import，因此需要小 facade；其他 re-export 只按调用清单保留，不建立无限期
-  wildcard compatibility layer。
+- **历史实验与当前源码必须解耦。** 删除 legacy runner 不改变旧数值、阈值或结论；旧代码
+  通过 Git revision 查阅/重放。最新 HEAD 不再承担让旧 current-path validator 通过的责任。
+- **resume snapshot 迁移。** 新 run 使用完整 execution snapshot。旧 run 若没有该 snapshot，
+  不能安全自动补造当时实现；应保留其完成证据，并要求显式 restart/migration 决定。不得用
+  当前源码 hash mismatch 代替这个能力判断。
+- **历史 validator import 不构成 API。** `benchmark_core.task_fingerprint` 被旧 validator import
+  过，不足以要求永久 facade。退役旧 validator 后按当前 CLI/tests 的真实调用面直接切换。
 - **拆文件不会自动减代码。** Phase 1/3 必须在行为等价后删除重复 dict choreography、I/O、
   event、member selection 与状态样板；达不到总 LOC 目标就不能把“模块化完成”当成精简完成。
 - **过度抽象风险。** conditional-INR 和 CAE 的 runtime/types 差异很大。共享层只接受稳定
@@ -311,7 +341,8 @@ hashes 不变；构建 wheel、force reinstall、import-origin、focused/full te
 
 - 不把失败的 hierarchical CAE 设为默认、不放宽 threshold、不重解释 v5/v8 结果。
 - 不借结构清理实现 successor/MoE、PCA/SVD、真实 qNEHVI exploitation 或七臂 formal run。
-- 不修改 old plans、validators、receipts、hashes，亦不删除 ignored runtime evidence。
+- 不倒改旧实验的数值、阈值、数据访问时间线或失败结论；可以退役/删除旧 validator，也可以
+  让旧 hash 字段作为非权威历史数据留存。
 - 不为减少文件数把 package 的 schema/checkpoint/scheduler/posterior 边界重新塞回一个文件。
 - 不新增 Pydantic、service container、plugin registry、全局 algorithm selector 或自动 discovery。
 
@@ -320,11 +351,13 @@ hashes 不变；构建 wheel、force reinstall、import-origin、focused/full te
 只有同时满足以下条件，本文才可移入 `dev_doc/obsolete/`：
 
 - `benchmark_core.py`、generic runner、hierarchical CAE package 和活动总 LOC 均达到量化目标；
-- 八个 frozen runner 原路径、原内容、原 SHA-256 与全部既有 validator/receipt 仍有效；
-- 新 runtime manifest 能检测任一拆分模块漂移，旧 run 的只读/拒绝-resume 边界有测试；
+- 八个 legacy runner 已从当前树删除，所需行为只在新的共享实现中保留；
+- 所有 source/artifact/wheel/runner hash lock 已从活动 validator、resume、compatibility 和
+  completion rules 移除；任何保留 digest 都仅用于显示 provenance；
+- 新 run-local execution snapshot 隔离当前源码修改，旧 run 的只读与迁移边界有测试；
 - 活动代码不存在跨模块私有 helper 耦合或大段完全重复实现；
 - 最大模块/函数上限、依赖方向、lazy import、checkpoint/recovery、posterior coherence、
   current-cost 与 schema invariants 全部通过；
 - architecture、blueprints、术语、tests 和 change record 与实现同步；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full tests 和最终
-  Git 工作流，并如实报告 frozen evidence footprint 没有被当作可删除的活动代码。
+  Git 工作流，并如实报告 legacy source 的实际删除量与新 runtime 的实际新增量。
