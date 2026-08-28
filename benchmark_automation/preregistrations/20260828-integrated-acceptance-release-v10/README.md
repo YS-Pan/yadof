@@ -48,3 +48,9 @@ formal plan. `validate_result.py` rechecks those bounded artifacts and returns
 `valid-complete-integrated-framework-structural-release-performance-not-accepted`.
 The result does not activate exploitation, recommend the opt-in composition, or
 permit any of TODOs 082608, 082609, 082611, and 082612 to be archived.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validators were retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

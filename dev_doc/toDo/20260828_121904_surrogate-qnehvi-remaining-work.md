@@ -35,7 +35,8 @@
   它们具备 fixed real Pareto baseline、chunked projection、显式 real exploration、common real
   evaluator、typed readiness、soft full-real fallback 与 hard-stop 边界；BoTorch 只拥有
   qLogNEHVI 数值循环。
-- integrated preregistration/validator/release framework 已完成。结构化验收 run 完成 9/9
+- integrated preregistration/release historical framework 已完成；其可执行 hash validators
+  已退役，计划/回执仍记录原结论。结构化验收 run 完成 9/9
   cells、99/99 attempts、96 completed records、3 个显式 Chrono error-cost records，结构
   contract 通过；它只证明机制和记录链，没有形成 optimization-performance 接受结论。
 - 当前组件专用配置已经迁移到 workspace `submit/optimization.py` 的显式 factory kwargs 与
@@ -149,11 +150,11 @@
 
 ## 工程与证据改进
 
-- `hierarchical_cae_validation_v1.py` 与当前 runner 存在大量重复。后续修改 runner 时，在不
-  改写冻结版本的前提下抽取共享不可变 engine，由薄 versioned adapters 固定旧语义。
-- 历史 validator 当前可能因同版本 wheel 被后续 build 覆盖而报告 wheel-hash drift。新的
-  evidence 使用内容寻址、不可变 wheel/artifact 路径或显式 artifact 参数，避免覆盖
-  `dist/yadof-<same-version>.whl` 后无法重放旧验证。
+- 八个 legacy `hierarchical_cae_*.py` runner 与 v1-v10 可执行 hash validators 已从当前树
+  退役；历史实现通过对应 Git revision 查阅，冻结 plans/receipts 保持原结论。
+- 新 benchmark run 使用完整 run-local execution/baseline/strategy/history snapshot；源码、
+  wheel、runner 与 artifact digest 只作 provenance。未来实验只在确有新科学需求时建立
+  普通 experiment runtime 与不超过 120 行的薄 versioned adapter。
 - 大型权威 evidence 目前主要在 ignored `temp/`，tracked receipts 保存 hashes。正式 release
   前建立内容寻址、只读、可跨身份读取的 artifact export；不要把全部原始数据提交进 Git。
 - acquisition soft fallback 保持安全，但开发/preflight 诊断应持久记录 exception type、阶段和
@@ -189,7 +190,7 @@
   soft fallback 和 hard-stop 边界；
 - 七臂同预算 formal benchmark 完成并通过预注册的科学与总工程成本门槛；
 - release decision、默认策略决定和所有失败/限制如实记录，未通过结构测试替代科学验收；
-- architecture、blueprints、terminology、适用 user docs、benchmark validators、tests 和 change
+- architecture、blueprints、terminology、适用 user docs、benchmark plans/adapters、tests 和 change
   records 与最终实现同步；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full package 与
   benchmark automation 验收；

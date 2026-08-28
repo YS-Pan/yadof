@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime
-import time
 from typing import Mapping
 
-from ...recorded_data import api as recorded_api
 from ...workspace import WorkspaceContext
+from .._shared.training_events import (
+    failure_metadata,
+    monotonic_time,
+    now_text,
+    record_training_event,
+)
 from .types import SurrogateState
-
-
-def now_text() -> str:
-    return datetime.now().astimezone().isoformat(timespec="milliseconds")
-
-
-def monotonic_time() -> float:
-    return time.monotonic()
 
 
 def training_success_metadata(
@@ -68,26 +63,19 @@ def training_failure_metadata(
     ended_at: str | None = None,
     strategy_signature: str = "",
 ) -> dict[str, object]:
-    ended = now_text() if ended_at is None else str(ended_at)
-    return {
-        "record_type": "surrogate_training",
-        "status": "error",
-        "generation_index": int(generation_index),
-        "started_at": "" if started_at is None else str(started_at),
-        "ended_at": ended,
-        "error_type": type(exc).__name__,
-        "error_message": str(exc),
-        "strategy_signature": str(strategy_signature),
-    }
+    return failure_metadata(
+        generation_index=generation_index,
+        exc=exc,
+        started_at=started_at,
+        ended_at=ended_at,
+        strategy_signature=strategy_signature,
+    )
 
 
 def record_surrogate_metadata(
     workspace: WorkspaceContext, metadata: Mapping[str, object]
 ) -> dict[str, object] | None:
-    try:
-        return recorded_api.record_surrogate_metadata(workspace, dict(metadata))
-    except Exception:
-        return None
+    return record_training_event(workspace, metadata)
 
 
 def record_training_success(

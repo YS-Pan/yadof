@@ -38,6 +38,10 @@ stderr rendering; full evidence stays on disk.
 ## Non-obvious techniques
 
 - Mutable templates become immutable run-local snapshots.
+- The complete execution runtime and selected strategy/history inputs also become
+  run-local snapshots. Existing runs never mix current and snapshotted modules.
+- Source, wheel, runner, and artifact hashes are provenance only, not resume or
+  historical-completion gates.
 - New runs shallow-scan a bounded set of earlier immediate run directories and
   freeze completed matched-cell durations into an immutable operational timing
   snapshot; later inspection never rescans the runs root.

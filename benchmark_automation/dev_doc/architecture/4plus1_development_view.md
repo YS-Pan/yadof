@@ -5,11 +5,13 @@
 ```text
 benchmark_automation/
   benchmark.py                 thin CLI
-  benchmark_core.py            planning, state, execution, ETA, collection, report
+  benchmark_core.py            <=250-line compatibility facade/re-exports
+  benchmark_runtime/           contracts/storage/planning/state/execution/
+                               progress/results/timing services
   benchmark.toml               cases, arms, suites, budgets, resources
   baselines/                   editable semantic task templates
-  preregistrations/            versioned schema/experiment freezes and validators;
-                                not executable suites or result evidence
+  preregistrations/            historical declarative plans/receipts; retired
+                               validator digests are provenance only
   strategy_templates/          complete optimization.py arm/case definitions with component kwargs
   tests/                       focused runner and postprocessor tests
   README.md                    operator contract
@@ -29,8 +31,9 @@ directories or local toDo/change-record contracts.
 
 ## Dependency direction
 
-The CLI depends on core; core never depends on CLI. Core may use standard library,
-Rich, and installed yadof public surfaces selected for collection. Baseline tasks
+The CLI depends on the facade, which depends on runtime services; runtime never
+depends on CLI. Runtime may use standard library, Rich, and installed yadof public
+surfaces selected for collection. Baseline tasks
 and strategy templates are inputs, not import-time runner dependencies. Tests may
 mock subprocess/public surfaces but must preserve state and output shapes.
 
@@ -49,8 +52,8 @@ mock subprocess/public surfaces but must preserve state and output shapes.
   launches a real performance run.
 - Benchmark code remains outside wheel/sdist. Tests use the matching regularly
   installed yadof distribution without repository-source injection.
-- A preregistration validator may read current tracked baselines/configuration and
-  prove a deliberately blocked state, but it never launches a simulator, creates a
-  run, treats smoke shapes as rows, or changes the runner matrix. Data and numeric
-  threshold seals are later versioned inputs rather than edits that rewrite the
-  original Gate 0 claim.
+- Future preregistration adapters validate declared schema, authorization, result
+  completeness, and scientific rules against run-owned snapshots. They do not
+  compare current source/wheel/artifact digests or rewrite an original Gate 0 claim.
+- Active runtime modules import only public sibling service names; private helpers
+  do not cross module boundaries.

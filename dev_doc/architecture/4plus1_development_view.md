@@ -225,3 +225,10 @@ Installed command routing lives under `src/yadof/cli/`; workspace context,
 initialization, marker, and checking live under `src/yadof/workspace/`. Packaged
 documentation commands list, show, or bundle audience-relative resources without
 requiring an agent to locate site-packages.
+
+The surrogate source tree includes `_shared/{artifacts,training_events,finite_members}`
+and split hierarchical CAE network/objective/training/inference/data/state/
+projection services. `modeling.py` and hierarchical `metadata.py` are retired.
+The source-checkout benchmark is a <=250-line facade plus `benchmark_runtime`
+services; new runs snapshot that package. Active benchmark siblings import only
+public service names, and current hashes never gate existing runs.

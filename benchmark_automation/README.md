@@ -12,9 +12,10 @@ separate purposes:
 
 Baseline templates are editable in place under
 `baselines/<provider>/<baseline-id>`; the directory name is semantic and contains
-no fingerprint suffix. Creating a run copies the current declared inputs into an
-immutable run-local snapshot. Every cell starts with `yadof init`, receives inputs
-only from that snapshot, and has its own workspace, history, optimizer state,
+no fingerprint suffix. Creating a run copies the complete execution runtime and
+selected baseline, strategy, and history inputs into immutable run-local snapshots.
+Every cell starts with `yadof init`, receives inputs only from those snapshots, and
+has its own workspace, history, optimizer state,
 checkpoint namespace, logs, and lock. Later baseline edits affect only later runs.
 
 This is a source-checkout tool. It is tracked beside yadof so a user who clones or
@@ -73,13 +74,13 @@ shortening. Historical run specifications remain immutable.
 
 [`preregistrations/20260827-new-surrogate-qnehvi/`](preregistrations/20260827-new-surrogate-qnehvi/README.md)
 freezes the Gate 0 schema inventory and future acceptance plan for a hierarchical
-rawData surrogate, joint posterior, and qNEHVI. A preregistration is a tracked
-experiment input and validator, not a runner suite or a result. It cannot add arms
+rawData surrogate, joint posterior, and qNEHVI. A preregistration is retained as a
+tracked historical plan/receipt, not a runner suite or a result. It cannot add arms
 that are not implemented, authorize a simulator campaign, or turn baseline smoke
 shapes into design rows.
 
-The current Gate 0 validator intentionally reports that the source schemas match
-while `formal_test_ready` is false: all three baseline templates contain zero
+Its recorded Gate 0 conclusion keeps `formal_test_ready` false: all three baseline
+templates contained zero
 records, no tracked history snapshot is selected, and numeric thresholds remain
 unsealed until legal frozen train/validation/calibration evidence exists. Later
 dataset and threshold seals are versioned inputs; formal runs must snapshot their
@@ -115,15 +116,15 @@ The runner preflights all selected resources without starting a simulator:
 
 The selected Python executable, Python version, installed yadof origin/version,
 module hash, distribution `RECORD` hash, Torch/CUDA/device facts, baseline hashes,
-history identity, strategy hashes, and fully expanded commands are frozen in each
-`run_spec.json`.
+history identity, strategy hashes, and fully expanded commands are recorded in each
+`run_spec.json` as provenance. They are not compared with current files for resume.
 
 A baseline manifest's `yadof_version` and `task_fingerprint` are creation
 provenance, not locks on current template content or the exact execution patch.
-Preflight requires the version provenance, checks runtime cleanliness, and runs the
+Preflight records the version provenance, checks runtime cleanliness, and runs the
 current installed `yadof check`. Run creation then records the current task
-fingerprint, snapshots declared inputs, and freezes the actual execution package
-identity. A template created by 0.4.0 can therefore be edited and executed under
+fingerprint and snapshots declared inputs plus the executable runtime. A template
+created by 0.4.0 can therefore be edited and executed under
 compatible 0.4.2 without fingerprint-derived directories.
 
 ## Commands
@@ -278,9 +279,11 @@ python ".\benchmark_automation\benchmark.py" run `
 ```
 
 The equivalent `resume --run-id <existing-id>` command is also available. Resume
-refuses config, installed-package, run-local baseline snapshot, history, strategy,
-or execution-runner fingerprint drift; edits to the source baseline do not affect
-it. Completed cells are skipped. A workspace that stopped inside a
+imports the run-owned `inputs/execution/benchmark_runtime` package and consumes its
+run-local baseline/history/strategy snapshots. Current config, package, source, or
+artifact hash changes do not reject it. An unfinished legacy run without a complete
+execution snapshot requires explicit restart/migration; completed legacy evidence
+remains readable. Completed cells are skipped. A workspace that stopped inside a
 generation is sealed and retained; retry creates a new attempt workspace with an
 explicit `replacement_for` link. It never reruns that generation in the failed
 workspace.
@@ -389,8 +392,12 @@ temp/<run-id>/
   matrix.json                immutable selected cell/command expansion
   timing_history.json        immutable bounded prior-run cell-duration snapshot
   run_state.json             atomically advanced execution state
+  inputs/execution/benchmark_runtime/
+                             complete execution package used by resume
   inputs/baselines/<case>/workspace/
                              immutable declared-input snapshot for all cells/resume
+  inputs/strategies/<arm>/   immutable selected optimization templates
+  inputs/histories/<case>/   immutable selected starting evidence, when configured
   metrics.json               latest derived public-API collection
   report.json                latest derived report
   report.md                  latest concise report

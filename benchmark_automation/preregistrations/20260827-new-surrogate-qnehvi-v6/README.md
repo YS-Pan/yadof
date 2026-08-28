@@ -34,3 +34,9 @@ The validator is read-only and preserves `offline_test_locator_accessed=false`.
 Only the hash-bound experimental runner may subsequently open that locator. Any
 changed source, seed, split, setting, or metric requires a new preregistration
 version and cannot alter v5.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validator was retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

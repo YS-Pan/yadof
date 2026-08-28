@@ -103,3 +103,12 @@ remains in the viewer subtree's own `dev_doc/`.
 For implementation-level current state, continue with
 `../blueprints/10_modules/`. Historical decisions live in `../change_records/` and
 must not be treated as the current contract when architecture or blueprints differ.
+
+## 2026-08-28 structural boundary
+
+Hierarchical CAE is separated into networks, objectives, training, inference, data
+adaptation, state repository, projection, checkpoint policy, scheduler, and
+posterior adapter. Conditional-INR and CAE share only atomic artifact, bounded
+training-event, and deterministic finite-member primitives. The source-checkout
+benchmark uses a small facade plus run-owned execution snapshots; hashes are
+provenance only, never resume or historical-completion locks.

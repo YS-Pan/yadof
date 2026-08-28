@@ -8,8 +8,9 @@ import threading
 from ...config import LoadedConfig, load_config
 from ...task_snapshot import create_generation_snapshot
 from ...workspace import WorkspaceContext
-from . import metadata as surrogate_metadata
+from .._shared.training_events import failure_metadata, now_text, record_training_event
 from . import runtime
+from .networks import MODEL_NAME
 
 
 WorkspaceLike = WorkspaceContext | str | Path
@@ -296,7 +297,7 @@ def _train_blocking(
     random_seed: int | None,
     training_data=None,
 ) -> TrainingScheduleStatus:
-    started_at = surrogate_metadata.now_text()
+    started_at = now_text()
     try:
         state = runtime.train_with_config(
             config,
@@ -307,13 +308,16 @@ def _train_blocking(
             random_seed=random_seed,
         )
     except Exception as exc:  # noqa: BLE001 - optimizer may use real evaluation.
-        surrogate_metadata.record_training_failure(
+        record_training_event(
             config.workspace,
-            generation_index=int(generation_index),
-            exc=exc,
-            started_at=started_at,
-            strategy_signature=runtime.strategy_signature_for_workspace(
-                config.workspace, component=component
+            failure_metadata(
+                generation_index=int(generation_index),
+                exc=exc,
+                model=MODEL_NAME,
+                started_at=started_at,
+                strategy_signature=runtime.strategy_signature_for_workspace(
+                    config.workspace, component=component
+                ),
             ),
         )
         error = f"{exc.__class__.__name__}: {exc}"
@@ -353,7 +357,7 @@ def _train_in_background(
         config,
         generation_index=int(generation_index),
         component=component,
-        started_at=surrogate_metadata.now_text(),
+        started_at=now_text(),
         training_data=training_data,
         random_seed=random_seed,
     )
@@ -383,12 +387,15 @@ def _training_done(
     try:
         state = future.result()
     except Exception as exc:  # noqa: BLE001 - preserve failure diagnostics.
-        surrogate_metadata.record_training_failure(
+        record_training_event(
             config.workspace,
-            generation_index=int(generation_index),
-            exc=exc,
-            strategy_signature=runtime.strategy_signature_for_workspace(
-                config.workspace, component=component
+            failure_metadata(
+                generation_index=int(generation_index),
+                exc=exc,
+                model=MODEL_NAME,
+                strategy_signature=runtime.strategy_signature_for_workspace(
+                    config.workspace, component=component
+                ),
             ),
         )
         error = f"{exc.__class__.__name__}: {exc}"

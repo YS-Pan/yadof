@@ -3,12 +3,13 @@
 ```mermaid
 flowchart LR
     Operator --> CLI[benchmark.py CLI]
-    CLI --> Core[benchmark_core.py]
-    Config[benchmark.toml] --> Core
-    Inputs[baselines + strategies] --> Core
-    Core --> Spec[run_spec + matrix + input snapshots]
-    Core --> TimingHistory[bounded prior-run timing snapshot]
-    Core --> Cells[isolated cell attempts]
+    CLI --> Facade[benchmark_core.py facade]
+    Facade --> Runtime[benchmark_runtime services]
+    Config[benchmark.toml] --> Runtime
+    Inputs[baselines + strategies + histories] --> Runtime
+    Runtime --> Spec[run_spec + matrix + owned execution/input snapshots]
+    Runtime --> TimingHistory[bounded prior-run timing snapshot]
+    Runtime --> Cells[isolated cell attempts]
     Cells --> Yadof[installed yadof]
     Yadof --> Logs[command logs + timestamped progress events + workspace evidence]
     Logs --> Progress[Rich live progress]
@@ -29,10 +30,9 @@ window. It contains no planning, state, ETA, or reporting algorithm.
 
 ## Core runner
 
-`benchmark_core.py` validates TOML, creates plans/specs, preflights dependencies,
-snapshots inputs, advances attempts, logs subprocesses, adapts yadof progress,
-freezes a bounded shallow prior-run timing sample, estimates completion, collects
-public observations, and builds reports.
+`benchmark_core.py` is a compatibility facade. `benchmark_runtime` separates
+contracts, storage, planning, state, execution, progress, results, and timing.
+New runs copy that complete package and execute/resume from their own copy.
 
 ## Inputs and generated state
 

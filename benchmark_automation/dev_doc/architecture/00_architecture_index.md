@@ -6,7 +6,7 @@ yadof distribution. Its invariant chain is:
 ```text
 editable declared inputs
   -> no-write plan and preflight
-  -> immutable run spec, matrix, and baseline snapshots
+  -> immutable run spec, matrix, execution/baseline/strategy/history snapshots
   -> sequential isolated cell attempts
   -> public-yadof collection
   -> descriptive report
@@ -24,6 +24,11 @@ The runner never changes algorithm meaning, reads yadof private state, ranks arm
 or treats an ETA as scientific evidence. A run may continue while another process
 calls `inspect`; inspection reads atomically published state and append-only command
 artifacts without taking execution ownership.
+
+Resume imports the run-owned `benchmark_runtime` snapshot. Current source,
+package, wheel, and artifact digests are provenance only. An unfinished legacy
+run without a complete execution snapshot requires explicit restart or migration;
+completed legacy evidence remains inspectable and reportable.
 
 A versioned acceptance/release preregistration may additionally close the path
 from planning to formal execution. It binds inherited scientific evidence, the

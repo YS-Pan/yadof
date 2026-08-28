@@ -4,11 +4,11 @@
 
 1. Parse selectors and build a no-write plan.
 2. Preflight current baselines, package, strategies, resources, and storage.
-3. Freeze run spec and matrix, snapshot each selected baseline, and shallow-scan a
-   bounded set of prior run directories into the new run's timing-history snapshot.
+3. Freeze run spec and matrix; snapshot the complete runtime, selected baselines,
+   strategies, histories, and bounded prior timing evidence.
 4. Publish initial state and execute cells sequentially.
 5. For each attempt: init, materialize inputs, check, optimize/smoke, postprocess,
-   view cost, verify fingerprints, seal, and atomically advance state.
+   view cost, record diagnostic fingerprints, seal, and atomically advance state.
 6. Remove the live region, print bounded final JSON, and wait for Enter only in an
    interactive foreground window.
 
@@ -49,13 +49,15 @@ write state, or wait on the benchmark process.
 ## Interruption and resume
 
 Completed boundaries remain immutable. An interrupted in-generation attempt is
-sealed and replaced. Resume refuses identity drift, skips completed cells, and
-continues the selected immutable matrix. It never edits an old attempt to make it
-appear complete.
+sealed and replaced. Resume imports `inputs/execution/benchmark_runtime`, skips
+completed cells, and continues the selected immutable matrix. Source drift does
+not reject execution. A missing snapshot on an unfinished legacy run requires
+explicit restart/migration. It never edits an old attempt to make it appear complete.
 
 ## Failure flow
 
 Command timeout/nonzero exit, missing generation, postprocess failure, cost-view
-failure, or input drift fails the attempt with targeted metadata. Performance runs
+failure fails the attempt with targeted metadata. Input drift is retained as
+diagnostic before/after provenance. Performance runs
 continue independent cells unless fail-fast is selected. Structural runs normally
 stop. Collection may still preserve partial public evidence.

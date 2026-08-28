@@ -189,3 +189,10 @@ Task workflow/cost modules contain task-variable callbacks and definitions only:
 they invoke copied `worker_misc` or installed `yadof.job_template` helpers for
 invariant behavior. The viewer's package-internal checkpoint/rawData dependencies
 remain isolated below its backend and never leak into UI modules or core runtime.
+
+Hierarchical CAE keeps model structure in `networks`, pure loss/split behavior in
+`objectives`, staged fitting in `training`, serialization/member prediction in
+`inference`, recorded/session adaptation in `data_adapter`, recovery/publication in
+`state_repository`, and rawData/cost/applicability/coordinate output in
+`projection`. `runtime` is only the lifecycle facade. Shared artifact/event/member
+primitives contain no component selector or policy.

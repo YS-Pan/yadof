@@ -723,12 +723,22 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/hierarchical_cae/__init__.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/types.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/schema.py" in wheel_names
-        assert "yadof/surrogate/hierarchical_cae/modeling.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/networks.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/objectives.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/training.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/inference.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/runtime.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/data_adapter.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/state_repository.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/projection.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/checkpoints.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/scheduler.py" in wheel_names
-        assert "yadof/surrogate/hierarchical_cae/metadata.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/posterior_adapter.py" in wheel_names
+        assert "yadof/surrogate/_shared/artifacts.py" in wheel_names
+        assert "yadof/surrogate/_shared/training_events.py" in wheel_names
+        assert "yadof/surrogate/_shared/finite_members.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/modeling.py" not in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/metadata.py" not in wheel_names
         assert "yadof/surrogate/runtime.py" not in wheel_names
         assert "yadof/surrogate/scheduler.py" not in wheel_names
         assert "yadof/tools/view_cost.py" in wheel_names

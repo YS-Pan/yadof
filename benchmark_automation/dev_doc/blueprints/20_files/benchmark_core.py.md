@@ -1,21 +1,20 @@
 # File Blueprint: benchmark_core.py
 
-## Why this file is exceptional
+## Intent
 
-The core is intentionally one testable orchestration module, but it crosses many
-contracts: identity, filesystem publication, subprocess streams, progress, ETA,
-collection, and reporting. Recreating it requires preserving section boundaries
-and dependency direction rather than splitting stateful behavior arbitrarily.
+Provide a temporary, no-policy compatibility facade over `benchmark_runtime` for
+the CLI and current tests/callers. The file remains below 250 physical lines.
 
-## Expected section order
+## Responsibilities
 
-1. Imports, constants, errors, path types, Rich/progress parsing.
-2. Canonical JSON/hash/path/file helpers and configuration loading.
-3. Planning, preflight, package/resource fingerprints, and run creation/loading.
-4. State/attempt/snapshot/materialization helpers.
-5. Logged subprocess execution, cell execution, progress, resume.
-6. Public-yadof collection and metric/report transformations.
-7. Bounded summaries, read-only timing estimation, inspect.
+- Import and re-export the stable current call surface from owned runtime modules.
+- Load an existing run's execution module from
+  `inputs/execution/benchmark_runtime` under a unique package name.
+- Translate the snapshotted runtime's `BenchmarkError` into the current facade
+  error type without falling back to live execution code.
+
+Planning, storage, state, subprocess, collection, report, progress, and ETA logic
+do not belong here.
 
 ## Invariants easy to lose
 
@@ -29,11 +28,8 @@ and dependency direction rather than splitting stateful behavior arbitrarily.
 - A true TTY cannot remain classified by Rich as dumb solely because its launcher
   exported `TERM=dumb`/`unknown`; normalize only the console-local environment.
 - A positive large-cell count is visibly nonzero.
-- New-run creation shallow-scans at most the declared prior-run limit and freezes a
-  bounded timing snapshot. ETA reads that run-local file and at most the active
-  command's bounded progress-event tail; completed-cell duration uses state
-  timestamps rather than successful log scanning. Older runs without a sidecar may
-  use the bounded stderr tail.
+- New-run creation is delegated to `benchmark_runtime.state`, which copies the
+  complete execution package and all selected input snapshots.
 - ETA never pools another arm merely because its case matches. Exact/compatible
   matched-cell medians precede current same-arm and declared lower bounds; active
   generation trends require at least three complete timestamped intervals.
@@ -42,8 +38,8 @@ and dependency direction rather than splitting stateful behavior arbitrarily.
   replacement.
 - Collection uses public yadof surfaces and retains validity/exclusion context.
 
-## Refactoring boundary
+## Compatibility boundary
 
-Extract a module only when it gains a stable independent contract and reduces
-coupling without duplicating JSON/state/path helpers. Do not add wrappers merely to
-shorten this file or keep compatibility with an obsolete internal name.
+Private aliases exist only for current facade callers. Active runtime modules use
+public sibling service names. Current source/package/artifact digests are never
+compared to decide resume or historical completion.

@@ -192,3 +192,8 @@ full real search.
   explicit version-matched task assessment wins, declarative diagnostics come next,
   and task-declared shape features are only a missing-diagnostic fallback. RawData
   remains authoritative for current cost and future reinterpretation.
+
+Hierarchical lifecycle identity remains component-owned while implementation
+responsibilities are separated. Shared publication/event/member primitives do not
+alter semantic state signatures, checkpoint namespaces, quality policy, draw
+identity, or zero-observation-noise behavior.

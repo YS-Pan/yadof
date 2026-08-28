@@ -46,8 +46,9 @@ The yadof repository tracks this runner, configuration, tests, strategy template
 developer/user documentation, and editable baseline task templates below top-level
 `benchmark_automation/`. This tree is downloadable with a yadof source checkout but
 is not an installed `yadof` package or runtime resource. Baselines may be edited in
-place at any time. Reproducibility belongs to the immutable baseline snapshot copied
-into each new run, not to the live source template.
+place at any time. Reproducibility belongs to the complete run-local execution,
+baseline, strategy, and history snapshots copied into each new run, not to the live
+source tree. Current hashes remain provenance and never gate resume.
 
 The following directories are local generated state and are intentionally ignored
 by Git:
@@ -148,3 +149,7 @@ Maintain these disclosure layers when adding fields:
 Do not put raw rows, full command output, fingerprints, or multi-cell diagnostic
 payloads into the default summary. Update `AGENTS.md` whenever the safe reading
 route changes.
+
+Execution/resume changes require isolation coverage proving current-source edits do
+not alter an existing run, plus explicit missing-snapshot migration tests. Active
+runtime modules import only public sibling service names.

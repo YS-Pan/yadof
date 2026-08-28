@@ -28,11 +28,11 @@
 
 ## Identity rules
 
-Run ID names the directory, while `spec_sha256` proves resolved content identity.
-Semantic baseline IDs do not contain fingerprints. Resume verifies the frozen spec,
-package, runner, strategies, task snapshots, and scientific history rather than
-trusting the name. The operational timing snapshot is fixed at creation but is not
-an execution-identity input.
+Run ID names the directory, while `spec_sha256` records resolved provenance.
+Semantic baseline IDs do not contain fingerprints. Resume verifies that the run
+owns complete execution, strategy, task, and history snapshots; it does not compare
+current checkout/package/runner/artifact digests. The operational timing snapshot
+is fixed at creation but is not an execution-identity input.
 
 ## State rules
 

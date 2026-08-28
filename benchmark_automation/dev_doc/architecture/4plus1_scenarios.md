@@ -1,5 +1,12 @@
 # 4+1 Scenarios
 
+## Resume after checkout changes
+
+A run created before a checkout edit resumes through its own execution, strategy,
+history, and baseline snapshots. Current hashes may differ without invalidating the
+run. An unfinished legacy run without a complete execution snapshot stops with an
+explicit restart/migration diagnostic; completed legacy evidence stays readable.
+
 ## Plan and preflight
 
 An agent runs bounded `plan`, confirms full performance scale and risk, then runs

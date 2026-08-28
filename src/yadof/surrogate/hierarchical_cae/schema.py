@@ -196,6 +196,81 @@ def _axes_for_field(
     return names, tuple(values)
 
 
+def _model_layout(
+    selector: RawDataFieldSelector,
+    shape: tuple[int, ...],
+    axis_names: tuple[str, ...],
+    declared: Mapping[str, tuple[str, ...]] | None,
+) -> tuple[str, tuple[str, ...], tuple[str, ...], tuple[int, ...], int, tuple[int, ...]]:
+    rank = len(shape)
+    if rank == 0:
+        if declared:
+            raise ValueError(f"scalar field {selector!r} cannot declare axes")
+        return "scalar-mlp", (), (), (), 1, ()
+    if rank == 1:
+        if declared and (declared["channel_axes"] or declared["spatial_axes"] not in {(), axis_names}):
+            raise ValueError(f"rank-1 field {selector!r} uses its sole axis as Conv1d spatial axis")
+        return "conv1d", (), axis_names, (0,), 1, shape
+    if rank == 2:
+        if declared and (declared["channel_axes"] or declared["spatial_axes"] not in {(), axis_names}):
+            raise ValueError(f"rank-2 field {selector!r} uses both axes as Conv2d spatial axes")
+        return "conv2d", (), axis_names, (0, 1), 1, shape
+    if declared is None:
+        raise ValueError(f"rank-3 field {selector!r} requires explicit field_layouts with channel_axes and exactly two spatial_axes")
+    channel_axes = declared["channel_axes"]
+    spatial_axes = declared["spatial_axes"]
+    if not channel_axes or len(spatial_axes) != 2:
+        raise ValueError(f"rank-3 field {selector!r} requires at least one channel axis and exactly two spatial axes")
+    ordered_roles = channel_axes + spatial_axes
+    if len(ordered_roles) != rank or set(ordered_roles) != set(axis_names):
+        raise ValueError(f"rank-3 layout for {selector!r} must cover each axis exactly once; axes={axis_names!r}, roles={ordered_roles!r}")
+    permutation = tuple(axis_names.index(name) for name in ordered_roles)
+    model_channels = int(np.prod([shape[index] for index in permutation[:-2]]))
+    spatial_shape = tuple(shape[index] for index in permutation[-2:])
+    return "conv2d", channel_axes, spatial_axes, permutation, model_channels, spatial_shape
+
+
+def _field_layout(
+    field,
+    layout_config: Mapping[RawDataFieldSelector, Mapping[str, tuple[str, ...]]],
+    encoding_config: Mapping[RawDataFieldSelector, Mapping[str, AxisEncoding]],
+) -> FieldLayout:
+    array = np.asarray(field.payload[field.main_key])
+    if np.iscomplexobj(array):
+        raise ValueError(f"hierarchical CAE v1 does not support complex main array {field.selector!r}")
+    if not np.issubdtype(array.dtype, np.floating):
+        raise ValueError(f"hierarchical CAE v1 requires floating main array {field.selector!r}; got {array.dtype}")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"hierarchical CAE v1 requires finite main array {field.selector!r}")
+    shape = tuple(int(value) for value in array.shape)
+    if len(shape) > 3:
+        raise ValueError(f"hierarchical CAE v1 supports scalar through rank-3 fields; {field.selector!r} has rank {len(shape)}")
+    axis_names, axis_values = _axes_for_field(field.payload, shape)
+    codec_kind, channel_axes, spatial_axes, permutation, model_channels, spatial_shape = _model_layout(
+        field.selector, shape, axis_names, layout_config.get(field.selector)
+    )
+    inverse = tuple(int(value) for value in np.argsort(permutation)) if permutation else ()
+    per_axis = encoding_config.get(field.selector, {})
+    unknown_axes = set(per_axis).difference(axis_names)
+    if unknown_axes:
+        raise ValueError(f"axis encodings for {field.selector!r} reference unknown axes: {tuple(sorted(unknown_axes))!r}")
+    return FieldLayout(
+        selector=field.selector,
+        shape=shape,
+        dtype=str(array.dtype),
+        axis_names=axis_names,
+        codec_kind=codec_kind,
+        channel_axes=channel_axes,
+        spatial_axes=spatial_axes,
+        model_permutation=permutation,
+        inverse_permutation=inverse,
+        model_channels=model_channels,
+        model_spatial_shape=spatial_shape,
+        axis_values=axis_values,
+        axis_encodings=tuple(per_axis.get(name, AxisEncoding()) for name in axis_names),
+    )
+
+
 def build_schema(
     first_sample: StructuredRawDataSample,
     *,
@@ -218,128 +293,10 @@ def build_schema(
             f"from the schema: {tuple(sorted(unknown))!r}"
         )
 
-    layouts = []
-    for field in template.fields:
-        array = np.asarray(field.payload[field.main_key])
-        if np.iscomplexobj(array):
-            raise ValueError(
-                f"hierarchical CAE v1 does not support complex main array "
-                f"{field.selector!r}"
-            )
-        if not np.issubdtype(array.dtype, np.floating):
-            raise ValueError(
-                f"hierarchical CAE v1 requires floating main array "
-                f"{field.selector!r}; got {array.dtype}"
-            )
-        if not np.all(np.isfinite(array)):
-            raise ValueError(
-                f"hierarchical CAE v1 requires finite main array {field.selector!r}"
-            )
-        shape = tuple(int(value) for value in array.shape)
-        rank = len(shape)
-        if rank > 3:
-            raise ValueError(
-                "hierarchical CAE v1 supports scalar through rank-3 fields; "
-                f"{field.selector!r} has rank {rank}"
-            )
-        axis_names, axis_values = _axes_for_field(field.payload, shape)
-        declared = layout_config.get(field.selector)
-        if rank == 0:
-            if declared:
-                raise ValueError(f"scalar field {field.selector!r} cannot declare axes")
-            codec_kind = "scalar-mlp"
-            channel_axes = ()
-            spatial_axes = ()
-            permutation = ()
-            model_channels = 1
-            spatial_shape = ()
-        elif rank == 1:
-            if declared and (
-                declared["channel_axes"]
-                or declared["spatial_axes"] not in {(), axis_names}
-            ):
-                raise ValueError(
-                    f"rank-1 field {field.selector!r} uses its sole axis as "
-                    "Conv1d spatial axis"
-                )
-            codec_kind = "conv1d"
-            channel_axes = ()
-            spatial_axes = axis_names
-            permutation = (0,)
-            model_channels = 1
-            spatial_shape = shape
-        elif rank == 2:
-            if declared and (
-                declared["channel_axes"]
-                or declared["spatial_axes"] not in {(), axis_names}
-            ):
-                raise ValueError(
-                    f"rank-2 field {field.selector!r} uses both axes as Conv2d "
-                    "spatial axes"
-                )
-            codec_kind = "conv2d"
-            channel_axes = ()
-            spatial_axes = axis_names
-            permutation = (0, 1)
-            model_channels = 1
-            spatial_shape = shape
-        else:
-            if declared is None:
-                raise ValueError(
-                    f"rank-3 field {field.selector!r} requires explicit "
-                    "field_layouts with channel_axes and exactly two spatial_axes"
-                )
-            channel_axes = declared["channel_axes"]
-            spatial_axes = declared["spatial_axes"]
-            if not channel_axes or len(spatial_axes) != 2:
-                raise ValueError(
-                    f"rank-3 field {field.selector!r} requires at least one "
-                    "channel axis and exactly two spatial axes"
-                )
-            ordered_roles = channel_axes + spatial_axes
-            if len(ordered_roles) != rank or set(ordered_roles) != set(axis_names):
-                raise ValueError(
-                    f"rank-3 layout for {field.selector!r} must cover each axis "
-                    f"exactly once; axes={axis_names!r}, roles={ordered_roles!r}"
-                )
-            permutation = tuple(axis_names.index(name) for name in ordered_roles)
-            model_channels = int(
-                np.prod([shape[index] for index in permutation[:-2]])
-            )
-            spatial_shape = tuple(shape[index] for index in permutation[-2:])
-            codec_kind = "conv2d"
-        inverse = (
-            tuple(int(value) for value in np.argsort(permutation))
-            if permutation
-            else ()
-        )
-        per_axis = encoding_config.get(field.selector, {})
-        unknown_axes = set(per_axis).difference(axis_names)
-        if unknown_axes:
-            raise ValueError(
-                f"axis encodings for {field.selector!r} reference unknown axes: "
-                f"{tuple(sorted(unknown_axes))!r}"
-            )
-        encodings = tuple(
-            per_axis.get(name, AxisEncoding()) for name in axis_names
-        )
-        layouts.append(
-            FieldLayout(
-                selector=field.selector,
-                shape=shape,
-                dtype=str(array.dtype),
-                axis_names=axis_names,
-                codec_kind=codec_kind,
-                channel_axes=channel_axes,
-                spatial_axes=spatial_axes,
-                model_permutation=permutation,
-                inverse_permutation=inverse,
-                model_channels=model_channels,
-                model_spatial_shape=spatial_shape,
-                axis_values=axis_values,
-                axis_encodings=encodings,
-            )
-        )
+    layouts = [
+        _field_layout(field, layout_config, encoding_config)
+        for field in template.fields
+    ]
     return HierarchicalSchema(template, tuple(layouts), normalized_groups)
 
 

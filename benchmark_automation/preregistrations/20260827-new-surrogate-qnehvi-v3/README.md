@@ -16,3 +16,9 @@ the complete parent chain, policy semantics, committed receipt, and external
 sealed dataset. A passing validator does not authorize offline-test access;
 numeric acceptance thresholds remain unsealed until legal validation evidence
 exists.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validator was retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

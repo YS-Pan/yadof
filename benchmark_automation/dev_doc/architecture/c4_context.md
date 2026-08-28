@@ -27,6 +27,8 @@ recorder, surrogate, and viewer mechanism.
 - The filesystem stores immutable inputs, bounded timing-history snapshots,
   attempts, logs/timestamped progress events, state, visualizations, collection
   snapshots, and reports.
+- Each new run owns its complete execution package. The live checkout supplies new
+  runs only and is not a resume authority for existing runs.
 - A later Codex automation or another agent turn may invoke `inspect` as an
   unattended read-only status/ETA probe.
 

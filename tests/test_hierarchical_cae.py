@@ -20,7 +20,13 @@ from yadof.surrogate import (
     ShapeQualityRule,
     hierarchical_cae,
 )
-from yadof.surrogate.hierarchical_cae import modeling
+from yadof.surrogate.hierarchical_cae import (
+    data_adapter,
+    inference,
+    networks,
+    objectives,
+    training,
+)
 from yadof.surrogate.hierarchical_cae import runtime
 from yadof.surrogate.hierarchical_cae.coordinates import (
     coordinate_grid,
@@ -129,11 +135,11 @@ def test_schema_round_trip_mixed_rank_and_field_macro_scaling() -> None:
 
     targets = (torch.zeros(2), torch.zeros(2, 1000))
     predictions = (torch.ones(2), torch.ones(2, 1000))
-    design_fields = modeling.design_field_losses(predictions, targets)
+    design_fields = objectives.design_field_losses(predictions, targets)
     assert design_fields.shape == (2, 2)
     torch.testing.assert_close(design_fields[:, 0], design_fields[:, 1])
     torch.testing.assert_close(
-        modeling.field_macro_loss(predictions, targets),
+        objectives.field_macro_loss(predictions, targets),
         torch.tensor(0.5),
     )
 
@@ -376,7 +382,7 @@ def test_shared_teacher_masks_noisy_token_and_clean_gate_blocks_private_residual
         regime_head=True,
         mixed_precision=False,
     )
-    model = modeling.HierarchicalCAEModel(2, schema, cfg)
+    model = networks.HierarchicalCAEModel(2, schema, cfg)
     torch.manual_seed(17)
     tokens = tuple(torch.randn(2, cfg.token_dim) for _ in schema.layouts)
     changed = list(tokens)
@@ -432,7 +438,7 @@ def test_antinoise_ablation_switches_control_independent_paths() -> None:
             mixed_precision=False,
             **switches,
         )
-        return modeling._quality_batch(quality, rows, device, cfg)
+        return objectives._quality_batch(quality, rows, device, cfg)
 
     no_gating = batch(
         quality_weighted_loss=False,
@@ -489,7 +495,7 @@ def test_antinoise_ablation_switches_control_independent_paths() -> None:
         gated_private_residual=False,
         mixed_precision=False,
     )
-    model = modeling.HierarchicalCAEModel(2, schema, ungated_cfg)
+    model = networks.HierarchicalCAEModel(2, schema, ungated_cfg)
     parameters = torch.randn(2, 2)
     latent, _applicability, residual_logits = model.predictor_output(
         0, parameters
@@ -508,18 +514,18 @@ def test_design_field_loss_cap_and_weights_do_not_drop_other_fields() -> None:
         torch.tensor([[0.0], [10.0]]),
         torch.tensor([[2.0], [1.0]]),
     )
-    losses = modeling.design_field_losses(predictions, targets)
+    losses = objectives.design_field_losses(predictions, targets)
     torch.testing.assert_close(
         losses,
         torch.tensor([[0.0, 1.5], [9.5, 0.5]]),
     )
     torch.testing.assert_close(
-        modeling.field_macro_loss(predictions, targets),
+        objectives.field_macro_loss(predictions, targets),
         torch.tensor(2.875),
     )
     weights = torch.tensor([[1.0, 0.5], [0.25, 0.0]])
     torch.testing.assert_close(
-        modeling.field_macro_loss(
+        objectives.field_macro_loss(
             predictions,
             targets,
             field_weights=weights,
@@ -597,7 +603,7 @@ def test_tiny_staged_fit_predicts_every_field_with_one_joint_member_identity() -
         regime_head=True,
         mixed_precision=False,
     )
-    model, history = modeling.fit_hierarchical_cae(
+    model, history = training.fit_hierarchical_cae(
         input_dim=2,
         schema=schema,
         parameters=parameters,
@@ -607,7 +613,7 @@ def test_tiny_staged_fit_predicts_every_field_with_one_joint_member_identity() -
         train_cfg=cfg,
         seed=73,
     )
-    fields, applicability, residual = modeling.predict_hierarchical_members(
+    fields, applicability, residual = inference.predict_hierarchical_members(
         model=model,
         parameters=parameters[:3],
         device=torch.device("cpu"),
@@ -710,7 +716,7 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     assert len(predicted) == 2
     assert predicted[0].field_selectors == samples[0].field_selectors
 
-    monkeypatch.setattr(runtime, "_load_training_data", lambda _workspace: data)
+    monkeypatch.setattr(data_adapter, "_load_training_data", lambda _workspace: data)
     runtime.reset_workspace_state(workspace, component=component)
     assert runtime.has_trained_state(workspace, component=component)
     recovered = runtime._require_state(config, component=component)

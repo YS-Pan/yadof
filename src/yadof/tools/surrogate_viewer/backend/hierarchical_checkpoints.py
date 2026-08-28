@@ -28,7 +28,7 @@ from yadof.surrogate.hierarchical_cae.coordinates import (
     coordinate_grid,
     interpolate_stored_values,
 )
-from yadof.surrogate.hierarchical_cae.modeling import (
+from yadof.surrogate.hierarchical_cae.inference import (
     load_model_bundle,
     predict_hierarchical_coordinate_members,
     predict_hierarchical_members,

@@ -7,8 +7,12 @@ filesystem/state behavior directly testable without a simulator.
 
 ## Responsibilities
 
-- Configuration/path/schema validation and canonical fingerprints.
-- Plan, preflight, spec/matrix creation, baseline snapshots, and state publication.
+- `contracts` owns errors, paths, constants, and JSON-compatible contract types.
+- `storage` owns confinement, JSON writes, manifests, and provenance digests.
+- `planning` owns validation, plan/preflight, and run-spec construction.
+- `state` owns run/attempt state and execution/baseline/strategy/history snapshots.
+- `execution` and `progress` own subprocess/cell lifecycle and stream visibility.
+- `results` owns collection/reports; `timing` owns bounded histories and ETA.
 - Attempt materialization, subprocess logging, timeout/failure translation,
   progress rendering, postprocessing, visualization, sealing, and resume.
 - Per-arm single templates or complete per-case template mappings. Materialization
@@ -26,6 +30,10 @@ Functions consume mappings and explicit `Paths`; durable writes use new-file or
 atomic-replace helpers according to ownership. Child commands are argument lists.
 Public dictionaries remain JSON-safe: finite numbers, strings, booleans, null,
 lists, and string-keyed objects.
+
+Existing runs execute the complete runtime copy they own. Hashes identify
+provenance only; unfinished runs without a snapshot require explicit migration or
+restart, while completed legacy evidence remains readable.
 
 ## Non-obvious techniques
 
@@ -54,6 +62,9 @@ lists, and string-keyed objects.
 Invalid inputs raise `BenchmarkError`. Command failures seal attempts. ETA parsing
 failure lowers availability/confidence but cannot mutate or fail the run. Collection
 keeps invalid/incomplete evidence visible.
+
+Input before/after fingerprints are diagnostic fields and cannot turn a successful
+attempt into failure.
 
 ## Mutability
 

@@ -35,10 +35,13 @@ production artifact.
   protocol. It accepts explicit task assessments, declarative diagnostic rules, or
   task-declared shape fallback thresholds; it contains no task field names,
   simulator thresholds, cost filter, or arbitrary callback.
-- `hierarchical_cae/` owns fixed-schema adaptation; scalar, Conv1d, and Conv2d
-  codecs; global/optional-group/field-private teacher latents; predictor members;
-  robust loss and applicability heads; checkpoint/runtime/scheduler state; and its
-  persistent finite-member posterior adapter.
+- `_shared/` owns only behavior-equivalent atomic artifact publication, bounded
+  training-event recording, and deterministic finite-member selection. It owns no
+  model/schema/namespace/quality/scheduler/selector policy.
+- `hierarchical_cae/` separates schema/types, networks, pure objectives, staged
+  training, bundle inference, data adaptation, state repository, projection,
+  checkpoint policy, scheduler, and persistent posterior adapter behind a narrow
+  lifecycle facade.
 - Importing the parent package must not load Torch. The public
   `conditional_inr()` factory remains callable even after private
   concrete packages are loaded.
@@ -226,3 +229,10 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   `experimental-performance-not-accepted` and non-transferable; it is probability
   capability evidence for one exact state, not architecture acceptance or full
   qNEHVI strategy authorization.
+
+Hierarchical and conditional checkpoints call the same atomic write/publication
+primitive but keep distinct component namespaces and semantic payloads. Their
+training success/failure events share a bounded writer, and their posterior
+adapters share seeded permutation-cycle member selection. Scheduler extraction was
+deliberately rejected because workspace freshness/deactivation/callback policy is
+not behavior-equivalent without a callback-heavy abstraction.

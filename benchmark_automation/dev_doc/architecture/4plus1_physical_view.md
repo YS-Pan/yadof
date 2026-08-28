@@ -7,7 +7,7 @@ state uses `.assembled/` and `.staging/`. Default generated runs live directly
 under checkout `temp/<run-id>/`; an explicit `--runs-dir` may select another root.
 Versioned experiment contracts live under `preregistrations/<registration-id>/`.
 They may contain schema inventories, data-availability audits, unsealed threshold
-templates, plans, and read-only validators, but no generated run or design-row
+templates and historical plans/receipts, but no generated run or design-row
 evidence. Their committed files remain reviewable independently of ignored runtime
 trees.
 
@@ -19,7 +19,10 @@ trees.
   matrix.json
   timing_history.json
   run_state.json
+  inputs/execution/benchmark_runtime/
   inputs/baselines/<case>/workspace/
+  inputs/strategies/<arm>/...
+  inputs/histories/<case>/...
   cells/<cell-id>/attempts/<NNNN>/
     input_manifest.json
     workspace/
@@ -44,6 +47,9 @@ latest derived reports are atomically replaced. Inspection reads these files
 without a lock; atomic publication and append-only command logs/events make that
 safe. Run creation alone shallow-scans earlier immediate run directories;
 inspection consumes only the frozen run-local timing snapshot.
+
+The v1-v10 executable validators were deleted. Their recorded hash fields remain
+non-authoritative historical provenance.
 
 ## Processes and streams
 

@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
 import benchmark_core as core
+from benchmark_runtime import execution, planning, results, state as state_runtime
 
 
 TASK_FINGERPRINT = "1" * 64
@@ -148,6 +150,20 @@ def test_repository_config_defaults_to_checkout_temp() -> None:
     assert paths.runs == automation_root.parent / "temp"
 
 
+def test_collector_identity_tracks_the_facade_and_entrypoint() -> None:
+    automation_root = Path(__file__).resolve().parents[1]
+
+    identity = results._collector_identity()
+
+    core_path = automation_root / "benchmark_core.py"
+    entrypoint_path = automation_root / "benchmark.py"
+    assert identity["core_path"] == str(core_path)
+    assert identity["core_sha256"] == hashlib.sha256(core_path.read_bytes()).hexdigest()
+    assert identity["entrypoint_sha256"] == hashlib.sha256(
+        entrypoint_path.read_bytes()
+    ).hexdigest()
+
+
 def test_preflight_accepts_baseline_created_by_prior_yadof_patch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -158,7 +174,7 @@ def test_preflight_accepts_baseline_created_by_prior_yadof_patch(
     manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
     config, paths = core.load_config(config_path)
     monkeypatch.setattr(
-        core,
+        planning,
         "_package_identity",
         lambda: {
             "version": "0.4.1",
@@ -168,7 +184,7 @@ def test_preflight_accepts_baseline_created_by_prior_yadof_patch(
         },
     )
     monkeypatch.setattr(
-        core,
+        planning,
         "_run_read_only",
         lambda *args, **kwargs: {"returncode": 0, "stdout": "", "stderr": ""},
     )
@@ -467,7 +483,7 @@ def test_default_run_id_starts_with_numeric_utc_date_and_time(
     )
 
 
-def test_run_spec_is_immutable_and_state_is_separate(tmp_path: Path) -> None:
+def test_run_spec_is_run_owned_and_state_is_separate(tmp_path: Path) -> None:
     paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path / "strategies", tmp_path / "history")
     spec = _minimal_spec(tmp_path)
     run_id, run_root = core.create_run(paths, spec, run_id="fixture")
@@ -479,13 +495,11 @@ def test_run_spec_is_immutable_and_state_is_separate(tmp_path: Path) -> None:
     tampered = json.loads((run_root / "run_spec.json").read_text(encoding="utf-8"))
     tampered["suite"] = "changed"
     (run_root / "run_spec.json").write_text(json.dumps(tampered), encoding="utf-8")
-    with pytest.raises(core.BenchmarkError, match="fingerprint mismatch"):
-        core.load_run(paths, run_id)
+    _loaded_root, loaded_spec, _state = core.load_run(paths, run_id)
+    assert loaded_spec["suite"] == "changed"
 
 
-def test_new_run_snapshots_mutable_baseline_inputs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_new_run_snapshots_mutable_baseline_inputs(tmp_path: Path) -> None:
     source = tmp_path / "editable baseline"
     source.mkdir()
     config = source / "config.py"
@@ -526,8 +540,6 @@ def test_new_run_snapshots_mutable_baseline_inputs(
         tmp_path / "strategies",
         tmp_path / "history",
     )
-    monkeypatch.setattr(core, "_package_identity", lambda: identity)
-
     run_id, run_root = core.create_run(paths, spec, run_id="fixture")
     config.write_text("VALUE = 2\n", encoding="utf-8")
     _loaded_root, loaded_spec, _state = core.load_run(paths, run_id)
@@ -535,6 +547,69 @@ def test_new_run_snapshots_mutable_baseline_inputs(
     snapshot = run_root / "inputs/baselines/case/workspace/config.py"
     assert snapshot.read_text(encoding="utf-8") == "VALUE = 1\n"
     core.verify_run_inputs(paths, run_root, loaded_spec)
+
+
+def test_new_run_executes_from_its_runtime_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    spec = _minimal_spec(tmp_path)
+    spec["plan"]["cells"] = []
+    spec["spec_sha256"] = core.object_sha256(
+        {key: value for key, value in spec.items() if key != "spec_sha256"}
+    )
+    run_id, _run_root = core.create_run(paths, spec, run_id="snapshot-owned")
+
+    def changed_current_runtime(*_args, **_kwargs):
+        raise AssertionError("current runtime must not execute an existing run")
+
+    monkeypatch.setattr(execution, "execute_run", changed_current_runtime)
+    state = core.execute_run({}, paths, run_id)
+
+    assert state["status"] == "completed"
+
+
+def test_unfinished_run_without_snapshot_requires_restart_or_migration(
+    tmp_path: Path,
+) -> None:
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    spec = _minimal_spec(tmp_path)
+    _run_id, run_root = core.create_run(paths, spec, run_id="legacy-unfinished")
+    shutil.rmtree(run_root / "inputs" / "execution" / "benchmark_runtime")
+
+    with pytest.raises(core.BenchmarkError, match="restart or migration"):
+        core.verify_run_inputs(paths, run_root, spec)
+
+
+def test_completed_run_without_snapshot_remains_readable(tmp_path: Path) -> None:
+    paths = core.Paths(
+        tmp_path,
+        tmp_path / "benchmark.toml",
+        tmp_path / "runs",
+        tmp_path / "strategies",
+        tmp_path / "history",
+    )
+    spec = _minimal_spec(tmp_path)
+    run_id, run_root = core.create_run(paths, spec, run_id="legacy-completed")
+    _loaded_root, _loaded_spec, state = core.load_run(paths, run_id)
+    state["status"] = "completed"
+    state["cells"]["smoke__case__seed-1"]["status"] = "completed"
+    core._save_state(run_root, state)
+    shutil.rmtree(run_root / "inputs" / "execution" / "benchmark_runtime")
+
+    core.verify_run_inputs(paths, run_root, spec)
 
 
 def test_same_run_id_is_isolated_by_runs_dir(tmp_path: Path) -> None:
@@ -675,8 +750,8 @@ def test_suite_failure_policy_controls_independent_cells(
         core._save_state(run_root, state)
         return True
 
-    monkeypatch.setattr(core, "_run_one_cell", fake_run_one)
-    state = core.execute_run({}, paths, run_id)
+    monkeypatch.setattr(execution, "_run_one_cell", fake_run_one)
+    state = execution.execute_run({}, paths, run_id)
     assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
 
 
@@ -740,10 +815,10 @@ def test_measured_cell_groups_postprocess_results_by_baseline_and_shares_viewcos
             Path(attempt["workspace"]), ["config.py"]
         )
 
-    monkeypatch.setattr(core, "_execute_logged", fake_execute)
-    monkeypatch.setattr(core, "_materialize_attempt_inputs", fake_materialize)
-    monkeypatch.setattr(core, "_has_completed_generation_prefix", lambda *_args: (True, [0]))
-    assert core._run_one_cell({}, paths, run_root, spec, state, cell)
+    monkeypatch.setattr(execution, "_execute_logged", fake_execute)
+    monkeypatch.setattr(state_runtime, "materialize_attempt_inputs", fake_materialize)
+    monkeypatch.setattr(execution, "_has_completed_generation_prefix", lambda *_args: (True, [0]))
+    assert execution._run_one_cell({}, paths, run_root, spec, state, cell)
     assert [label for label, _command in commands] == [
         "init",
         "check",
@@ -923,7 +998,7 @@ def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path
     assert manifest["starting_evidence_fingerprint"] == "empty"
 
 
-def test_seal_marks_mutated_declared_inputs_failed(tmp_path: Path) -> None:
+def test_seal_records_mutated_declared_inputs_as_provenance(tmp_path: Path) -> None:
     run_root = tmp_path / "run"
     workspace = run_root / "workspace"
     workspace.mkdir(parents=True)
@@ -953,6 +1028,7 @@ def test_seal_marks_mutated_declared_inputs_failed(tmp_path: Path) -> None:
         status="completed",
         include_paths=["config.py"],
     )
-    assert attempt["status"] == "failed"
-    assert "changed during execution" in attempt["error"]
-    assert state["cells"]["cell"]["status"] == "failed"
+    assert attempt["status"] == "completed"
+    assert attempt["input_fingerprint"] != attempt["post_input_fingerprint"]
+    assert attempt["error"] is None
+    assert state["cells"]["cell"]["status"] == "completed"

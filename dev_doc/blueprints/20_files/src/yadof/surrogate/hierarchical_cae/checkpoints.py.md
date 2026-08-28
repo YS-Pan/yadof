@@ -11,6 +11,8 @@
   quality policy, head/loss semantics, backend version, and strategy identity.
 - Stage the minimal model/scaler/schema bundle, atomically publish its artifact tree,
   and commit a namespace manifest and convenience pointer.
+- Delegate component-neutral namespace/path allocation and atomic JSON replacement
+  to `surrogate._shared.artifacts` while retaining CAE payload/identity policy.
 - Recover only complete compatible publications; retain incompatible/interrupted
   artifacts without activating them.
 

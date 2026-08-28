@@ -28,3 +28,9 @@ v2 在任何未来 offline test/formal result 被读取前，新增以下冻结�
 
 validator 会先执行 v1 validator，再检查 v2 完整性、policy/metrics/ablations、全部 threshold
 仍为 null，以及没有 formal dataset/test access 声明；不会启动 simulator。
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validator was retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

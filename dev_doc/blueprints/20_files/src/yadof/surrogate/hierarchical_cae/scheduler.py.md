@@ -16,3 +16,5 @@
 - A pending process is always joined rather than duplicated.
 - Owned generation snapshots and training bundles isolate background work from task
   edits during a generation.
+- The scheduler remains component-local: conditional-INR freshness/deactivation
+  behavior is not equivalent enough to justify callback-heavy shared machinery.

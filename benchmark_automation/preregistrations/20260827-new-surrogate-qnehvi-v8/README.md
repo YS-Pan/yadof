@@ -64,3 +64,9 @@ only identity field scales, no applicability slope/intercept, and explicit
 state/provenance bindings, failed checks, access state, and unchanged v5 boundary.
 `validate_result.py` rechecks the external result and all six self-verifying typed
 artifacts through the installed wheel without reopening protected data.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validators were retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

@@ -82,3 +82,9 @@ function-sampler protocol, chunk/permutation invariance, structured fake rawData
 and a thin current-`CostInterpreter` projector. It does not require the missing
 2,800-design datasets and must make no fitting, calibration, or optimization
 performance claim.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validator was retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

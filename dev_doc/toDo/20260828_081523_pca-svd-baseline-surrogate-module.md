@@ -10,13 +10,15 @@
   中“只有后续用户单独批准才增加 PCA surrogate factory”条件所要求的单独批准。该批准只
   允许实现显式 opt-in 模块，不代表允许把它设为生产默认、宣称性能通过或打开 posterior
   exploitation。
-- 当前仓库只有 `benchmark_automation/hierarchical_cae_validation.py:_pca_cell()` 内的
-  `pca-svd-reconstruction` 诊断臂。它逐字段使用训练集均值和
+- 历史 `pca-svd-reconstruction` 诊断臂位于 Git revision
+  `318963356882b0e9805d4e5aa8d9c7a5bdb71d72` 的
+  `benchmark_automation/hierarchical_cae_validation.py:_pca_cell()`；该 legacy runner 已从
+  当前树退役，必要时只用 `git show` 查阅。它逐字段使用训练集均值和
   `torch.pca_lowrank(..., center=False)` 建立 rank-32 子空间，再把**验证样本自身的 rawData**
   投影和重建。它适合回答“该字段是否可低秩压缩”和“schema/metric 管线是否合理”，但没有
   学习 `parameters -> coefficients`，因此不是可部署 surrogate，也不能用于给未评估候选生成
   rawData。
-- 上述实现已经参与冻结的 Gate 0 v4/v5 证据。不得移动、重写或重新解释旧预注册及结果；
+- 上述历史实现已经参与冻结的 Gate 0 v4/v5 证据。不得重写或重新解释旧预注册及结果；
   package 模块必须在新的预注册中做数值 parity，并由新 arm identity 产生后续证据。
 - [当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 承接的七臂矩阵要求
   `pca-svd-reconstruction`，但 Gate 0 v10 记录它仍没有 current runner arm。新增模块应补齐

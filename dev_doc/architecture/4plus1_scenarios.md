@@ -191,3 +191,8 @@ deadline. Workflow, timeout, and non-resource holds do not follow this path.
 Build wheel/sdist, reject example/workspace/runtime/model members, install wheel
 into a clean external environment, make site-packages read-only, and run help/version,
 init/check/smoke/run/resume/view/history plus mocked distributed tests.
+
+For hierarchical CAE recovery, the state repository selects a compatible
+component-owned manifest, inference restores the bundle, and projection applies
+the current task cost interpreter. Shared artifact primitives never select a
+component or change semantic identity.

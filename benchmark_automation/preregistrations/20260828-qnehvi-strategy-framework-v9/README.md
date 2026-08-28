@@ -41,3 +41,9 @@ benchmark boundary. `validate_result.py` rechecks the final wheel plus public
 record/optimization metadata. Its terminal status is
 `valid-complete-framework-mechanism-performance-not-accepted`; no qNEHVI
 performance arm ran and TODO 082611 remains active.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validators were retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

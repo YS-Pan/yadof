@@ -142,3 +142,7 @@ prevents that transfer, the submit host may persist a separate
 `condor_execute_machine` fallback parsed from the job-local `condor.log`, together
 with its slot and `condor_user_log` source. Submit-side ClassAds do not override
 either provenance path.
+
+The wheel carries `yadof/surrogate/_shared/` and the split hierarchical CAE
+modules. It does not carry the retired hierarchical `modeling.py` or `metadata.py`.
+Checkpoint artifacts retain their existing workspace/run/component namespaces.

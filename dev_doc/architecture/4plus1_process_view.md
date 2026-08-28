@@ -269,3 +269,9 @@ stay distinct and converge on normal per-individual failure isolation.
   completion order.
 - Fast workers never write recorded data. The parent is the only finalizer and the
   campaign writer is the only segment publisher.
+
+Hierarchical CAE training flows data adapter -> schema/objectives -> training ->
+state repository/checkpoint publication. Prediction flows state repository ->
+inference/projection -> current task cost interpreter. The runtime facade exposes
+the lifecycle but does not implement these phases. Training events and persistent
+member selection use the component-neutral shared primitives.

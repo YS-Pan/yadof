@@ -21,3 +21,9 @@ implement it or relax thresholds to make the current model pass.
 Run `validate.py --dataset-manifest <sealed_dataset_manifest.json>` to verify
 the full v1--v5 chain and external evidence hashes. The validator is read-only
 and does not start a simulator or load the offline-test locator.
+# Historical preregistration
+
+This directory is retained as historical plan/evidence only. Its executable
+validator was retired on 2026-08-28 because current source, wheel, and artifact
+digests are provenance—not gates on historical conclusions. Commands below
+describe the former workflow and are no longer available at current HEAD.

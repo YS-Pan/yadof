@@ -8,15 +8,17 @@
   lower-bound evaluation/storage estimates without writing.
 - Preflight validates baselines, installed package identity, strategies, resources,
   disk, and Python/CUDA facts without launching a simulator.
-- Run creation fingerprints and snapshots configuration, runner modules, package,
-  strategies, baselines, histories, host facts, and expanded cells. It also
+- Run creation snapshots the complete runtime plus selected strategies, baselines,
+  and histories. Configuration, package, source, and artifact digests remain
+  provenance and are not compared with current files to reject resume. It also
   shallow-scans at most 64 immediate prior run directories and freezes at most 512
   completed-cell timing observations in `timing_history.json`.
 
 ## Execution and recovery
 
-- Attempt materialization starts from the run-local baseline snapshot, applies
-  runner configuration and strategy content, then seals input fingerprints.
+- Attempt materialization starts from run-local baseline/history/strategy
+  snapshots, applies runner configuration, and records before/after input
+  fingerprints diagnostically without changing terminal status.
 - Logged execution writes started metadata first, drains stdout/stderr concurrently
   into separate append-only logs, queues timestamped parsed snapshots, and lets the
   foreground owner append command lifecycle/progress JSON lines to `progress.jsonl`.
@@ -27,7 +29,11 @@
 
 ## Progress rendering
 
-- `_parse_yadof_progress` is the single parser for complete piped yadof snapshots.
+- `progress.parse_yadof_progress` is the single service boundary for complete
+  piped yadof snapshots; the facade temporarily retains the former private alias.
+
+The active dependency direction is facade/CLI -> runtime services. Runtime
+modules import only public cross-module service names; private helpers stay local.
 - Stream-drain threads write their own append-only logs and enqueue display events;
   they never call Rich. The foreground subprocess-wait loop drains that queue and
   owns all terminal writes and refreshes.

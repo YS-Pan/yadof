@@ -281,7 +281,8 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 - successor 的 public component/state/checkpoint/identity、lazy dependency、rawData round trip、
   posterior coherence（若提供）、recovery 和 recorder non-entry 已通过 generic tests；
 - architecture、surrogate/project/test blueprints、terminology、适用 user docs、benchmark
-  preregistration/validators 和 change records 与最终实现同步；
+  preregistration plans/thin adapters 和 change records 与最终实现同步；validator 不得比较
+  当前 source/wheel/artifact digest；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full package tests
   和 benchmark automation tests；真实/长时间执行另有明确授权与结果记录；
 - 向当前 surrogate/qNEHVI 汇总 TODO 的剩余 handoff 已更新。若 anti-noise architecture 已完成但后续

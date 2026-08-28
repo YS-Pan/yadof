@@ -107,3 +107,11 @@ pymoo pool, fixed real baseline, explicit real exploration, qNEHVI selection, an
 the existing common evaluator/finalizer/recorder handoff. Current components are
 statically blocked and take its full-real fallback. GPSAF/conditional-INR behavior
 and state remain unchanged.
+
+## Surrogate internal containers
+
+The hierarchical CAE lifecycle facade delegates to separate data-adapter,
+state-repository, and projection services. Network/objective/training/inference
+modules sit below them. `surrogate._shared` supplies only atomic publication,
+bounded training-event recording, and finite-member selection; component identity,
+schema, quality, checkpoint namespace, and scheduler policy stay local.

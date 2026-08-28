@@ -7,7 +7,8 @@
 
 ## Functionalities
 
-- Fix seeded permutation-cycle member/source IDs when the sampler is created.
+- Fix seeded permutation-cycle member/source IDs through the shared finite-member
+  primitive when the sampler is created.
 - Evaluate each selected member across complete candidate batches and reconstruct
   every frozen named field before returning protocol draw objects.
 - Report nominal/effective finite support, component/state/schema identities,
