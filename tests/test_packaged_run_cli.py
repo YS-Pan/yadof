@@ -103,7 +103,7 @@ def test_run_cli_direct_start_and_resume_use_workspace_metadata(tmp_path, capsys
 def test_run_cli_smoke_default_and_both_explicit_overrides(
     tmp_path, monkeypatch, capsys
 ):
-    from yadof import run_command
+    from yadof.cli import run as run_command
 
     workspace = _workspace(tmp_path, smoke=True)
     events: list[str] = []
@@ -144,7 +144,7 @@ def test_run_cli_smoke_default_and_both_explicit_overrides(
 def test_run_cli_stops_before_generation_when_smoke_has_no_finite_cost(
     tmp_path, monkeypatch, capsys
 ):
-    from yadof import run_command
+    from yadof.cli import run as run_command
 
     workspace = _workspace(tmp_path, smoke=True)
     monkeypatch.setattr(
@@ -165,7 +165,7 @@ def test_run_cli_stops_before_generation_when_smoke_has_no_finite_cost(
 def test_run_cli_passes_mode_progress_and_strict_failure_options(
     tmp_path, monkeypatch
 ):
-    from yadof import run_command
+    from yadof.cli import run as run_command
 
     workspace = _workspace(tmp_path)
     seen = {}

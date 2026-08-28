@@ -11,6 +11,9 @@ errors.
 
 Heavy optimization/simulator/tool dependencies are loaded lazily behind their
 commands. `version`, help, and documentation stay lightweight and read-only.
+`main.py` owns parser construction and narrow lazy dispatch. `run.py` owns run
+configuration, progress scoping, summaries, and recent failure presentation;
+`smoke.py` owns the exact-starter safety assessment and standalone smoke handler.
 
 ## Workspace and execution commands
 

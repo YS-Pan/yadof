@@ -644,6 +644,8 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/cli/__init__.py" in wheel_names
         assert "yadof/cli/main.py" in wheel_names
         assert "yadof/cli/docs.py" in wheel_names
+        assert "yadof/cli/run.py" in wheel_names
+        assert "yadof/cli/smoke.py" in wheel_names
         assert "yadof/workspace/__init__.py" in wheel_names
         assert "yadof/workspace/context.py" in wheel_names
         assert "yadof/config.py" in wheel_names
@@ -651,7 +653,6 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/workspace/manifest.py" in wheel_names
         assert "yadof/workspace/init.py" in wheel_names
         assert "yadof/workspace/check.py" in wheel_names
-        assert "yadof/smoke_test.py" in wheel_names
         assert "yadof/evaluate_manager/__init__.py" in wheel_names
         assert "yadof/evaluate_manager/api.py" in wheel_names
         assert "yadof/evaluate_manager/job_files.py" in wheel_names
@@ -766,7 +767,6 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/tools/view_error.py" not in wheel_names
         assert "yadof/tools/history.py" in wheel_names
         assert "yadof/tools/hfss/parameter_extraction.py" in wheel_names
-        assert "yadof/run_command.py" in wheel_names
         assert "yadof/_resources/templates/default/README.md" in wheel_names
         assert "yadof/_resources/templates/default/template.json" in wheel_names
         assert "yadof/_resources/templates/default/workspace/config.py" in wheel_names

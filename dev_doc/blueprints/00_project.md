@@ -128,7 +128,10 @@ hot-change contract; structural dimension changes are future work.
   modeling, scheduling, metadata, and checkpoints. Its independent
   `linear_subspace/` package owns deterministic per-field PCA/SVD, ridge
   parameter prediction, oracle diagnostics, and a separate checkpoint namespace.
-- `tools` and `cli` are optional user-facing orchestration/inspection layers.
+- `tools` and `cli` are optional user-facing orchestration/inspection layers. The
+  CLI keeps parser/routing in `main.py` and isolates standalone smoke safety and
+  optimization-run presentation in `smoke.py` and `run.py`; tiny lazy dispatchers
+  keep help, version, and documentation commands independent of runtime imports.
   `tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf
   with its own nested developer documentation and a compatibility facade.
   `tools.surrogate_viewer` is an explicitly launched, read-only GUI/text inspection

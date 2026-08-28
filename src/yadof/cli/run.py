@@ -10,12 +10,12 @@ from pathlib import Path
 import sys
 from typing import Iterator
 
-from .config import ConfigError, load_config
-from .evaluate_manager import run_smoke_test
-from .optimize import AllInfiniteGenerationError, run_generations
+from ..config import ConfigError, load_config
+from ..evaluate_manager import run_smoke_test
+from ..optimize import AllInfiniteGenerationError, run_generations
 
 
-def run_from_args(args) -> int:
+def run_command(args) -> int:
     overrides = {}
     if args.mode is not None:
         overrides["EVALUATION_MODE"] = args.mode
@@ -210,7 +210,7 @@ def _print_recent_evaluation_failures(config, limit: int = 8) -> None:
         _print_recent_job_failures(config.workspace.jobs_dir, limit=limit)
         return
     try:
-        from .recorded_data import api as recorded_api
+        from ..recorded_data import api as recorded_api
 
         records = tuple(recorded_api.list_records(config.workspace))
     except (OSError, TypeError, ValueError):
@@ -259,4 +259,4 @@ def _progress_environment(enabled: bool) -> Iterator[None]:
             os.environ[name] = previous
 
 
-__all__ = ["run_from_args"]
+__all__ = ["run_command"]

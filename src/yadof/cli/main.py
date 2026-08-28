@@ -50,76 +50,15 @@ def _check_workspace_command(args: argparse.Namespace) -> int:
 
 
 def _smoke_test_command(args: argparse.Namespace) -> int:
-    from ..config import ConfigError, load_config
-    from ..evaluate_manager import JobPreparationError, run_smoke_test
-    from ..smoke_test import assess_smoke_task
+    from .smoke import smoke_command
 
-    try:
-        config = load_config(
-            args.workspace,
-            overrides={"EVALUATION_MODE": args.mode},
-        )
-        assessment = assess_smoke_task(config.workspace)
-        if not assessment.is_unchanged_generic_starter and not args.real_task:
-            print(
-                "yadof: error: refusing to execute an edited or external task "
-                f"without --real-task ({assessment.reason}). This command runs "
-                "workflow.py and may launch expensive external software.",
-                file=sys.stderr,
-            )
-            return 1
-        print(
-            f"Starting smoke test in {config.workspace.root} "
-            f"(mode={config.EVALUATION_MODE}).",
-            flush=True,
-        )
-        print(
-            "Exactly one midpoint individual will run with no timeout; "
-            + (
-                "fast mode creates no durable per-job folder; ephemeral scratch is "
-                f"under {config.workspace.fast_evaluation_scratch_dir}."
-                if str(config.EVALUATION_MODE) == "fast"
-                else f"live job files are under {config.workspace.jobs_dir}."
-            ),
-            flush=True,
-        )
-        costs = run_smoke_test(config.workspace, mode=args.mode)
-    except (
-        ConfigError,
-        JobPreparationError,
-        ImportError,
-        OSError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        print(f"yadof: error: smoke test could not run: {exc}", file=sys.stderr)
-        return 1
-
-    finite = any(math.isfinite(value) for row in costs for value in row)
-    if not finite:
-        diagnostic_location = (
-            "inspect workspace recorded history"
-            if str(config.EVALUATION_MODE) == "fast"
-            else f"inspect recent jobs under {config.workspace.jobs_dir}"
-        )
-        print(
-            "yadof: error: smoke test failed: no finite objective cost was returned; "
-            f"{diagnostic_location}",
-            file=sys.stderr,
-        )
-        return 1
-    write_text(
-        f"Smoke test succeeded for exactly one individual in {config.workspace.root}: "
-        f"costs={costs[0]!r}"
-    )
-    return 0
+    return smoke_command(args)
 
 
 def _run_optimization_command(args: argparse.Namespace) -> int:
-    from ..run_command import run_from_args
+    from .run import run_command
 
-    return run_from_args(args)
+    return run_command(args)
 
 
 def _positive_int(value: str) -> int:
