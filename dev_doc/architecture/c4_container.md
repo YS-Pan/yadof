@@ -2,116 +2,69 @@
 
 ```mermaid
 flowchart LR
-    User["User"] --> Agent["Installed AI coding agent"]
-    Agent --> Package["Installed yadof package / CLI / API"]
-    Agent --> Workspace["Explicit writable workspace"]
-    User -. direct advanced use .-> Package
+    User["User or AI agent"] --> Package["Installed yadof package"]
+    User --> Workspace["Explicit writable workspace"]
     Package --> Workspace
-    Package --> Local["Local workflow subprocess"]
-    Package --> Fast["Reusable fast worker processes"]
-    Package --> Schedd["HTCondor submit side"]
-    Schedd --> Worker["Windows slot-user execute node"]
-    Workspace --> Local
-    Workspace --> Schedd
-    Local --> Result["JobResult"]
-    Fast --> Memory["Named in-memory rawData"]
-    Memory --> Result
-    Worker --> Zip["rawData.zip + individual metadata"]
-    Zip --> Schedd
-    Schedd --> Result
-    Result --> Finalizer["Common current-cost finalizer"]
-    Finalizer --> Optimizer["Optimizer and surrogate"]
-    Finalizer -->|backpressured owned envelope| Records["Reliable segment recorder"]
-    Workspace --> SurrogateState["Compatible surrogate state"]
-    SurrogateState --> Posterior["Persistent joint rawData sampler"]
-    Posterior --> Projector["Frozen current-cost projector"]
-    Projector --> Optimizer
+    Workspace --> Fast["Fast worker processes"]
+    Workspace --> Local["Prepared local workflow"]
+    Workspace --> Submit["HTCondor submit side"]
+    Submit --> Execute["Execute node"]
+    Fast --> Result["Backend-neutral result"]
+    Local --> Result
+    Execute --> Result
+    Result --> Finalizer["Current-cost finalizer"]
+    Finalizer --> Records["Durable recorder"]
+    Finalizer --> Strategy["Optimization strategy"]
+    Records --> Surrogate["Derived surrogate state"]
+    Surrogate --> Strategy
 ```
-
-## Agent interaction
-
-The AI coding agent is the normal task-authoring interface. It consumes the
-version-matched installed user documentation under a human user's direction, edits
-only the selected workspace files, and invokes the same package CLI/API that direct
-users can invoke. It does not become a runtime dependency of prepared jobs or
-execute nodes.
 
 ## Installed package
 
-The package owns defaults, config validation, workspace handling, task loading, job
-composition, evaluation backends, optimization, rawData-first persistence and
-surrogate logic, tools, invariant worker lifecycle support, templates, adapters,
-and docs. The optional `tools/cost_viewer/` subtree provides reusable read-only
-history analysis, terminal reporting, and static rendering for CLI, Python, and
-future GUI callers. The optional `tools/surrogate_viewer/` subtree reads workspace evidence
-and checkpoints through either the desktop process or the `summary`/`audit`
-terminal modes selected below `yadof view surrogate`; it does not enter the
-execution or persistence pipeline. The package is read-only at runtime and never
-stores user state below site-packages.
+The package owns workspace handling, configuration, task loading, job composition,
+evaluation backends, current-cost interpretation support, persistence, optimization
+components, surrogate components, CLI routing, tools, templates, adapters, and
+installed documentation. It never stores user state below site-packages.
 
 ## Workspace
 
-Each workspace owns root `config.py`, fixed submit-only `submit/`, evaluate-side
-`job_template/`, prepared jobs, recorded evidence, checkpoints, logs, and tool
-output. `submit/calc_cost.py`, `submit/optimization.py`, canonical parameters,
-workflow, copied adapters, models, and assets are task-owned.
-Their executable logic is limited to behavior that changes with the optimization
-task; they call package support for invariant behavior. Relative configured paths
-are resolved from this explicit root.
+A workspace owns configuration, submit-side task interpretation and optimization
+composition, evaluate-side task code and assets, prepared jobs, recorded evidence,
+component state, logs, and tool output. Relative configured paths resolve from this
+explicit root.
 
-## Prepared job
+## Evaluation containers
 
-A job is the execution boundary. It contains the copied task payload, one assigned
-self-contained parameter snapshot, package-provided `worker_misc.py` owning the
-fixed worker lifecycle, preparation metadata, an initially empty `rawData/`, and
-later runtime artifacts. It contains no
-copied framework config tree, any `submit/` source, yadof wheel/archive/package, or
-authoritative `cost.json`.
+- **Fast evaluation** runs task-owned evaluators in reusable isolated local worker
+  processes and returns named memory-backed rawData. It creates no durable
+  per-candidate job directory.
+- **Local evaluation** creates a prepared job and launches its task workflow on the
+  submit host.
+- **Distributed evaluation** transfers the same prepared task boundary through
+  HTCondor and returns file-backed evidence and diagnostics.
 
-## Execution and persistence
+Prepared jobs contain task inputs, one assigned parameter snapshot, and the small
+package-owned worker support needed for invariant execute-side lifecycle. They do
+not contain the yadof package or submit-side cost/optimization code.
 
-Fast mode runs an explicit task-owned `evaluation.py:evaluate_rawdata()` kernel in
-reusable, replaceable local worker processes. It creates no durable per-candidate
-job folder. Optional candidate scratch lives only below the configured fast scratch
-root and is reclaimed by the parent. Local mode runs the copied `workflow.py` with the selected Python. Distributed mode
-uses HTCondor to run the same `workflow.py` directly. Execute nodes need installed
-task dependencies such as NumPy/PyAEDT, but do not receive or import yadof. The
-workflow packages direct `.npz` files into top-level `rawData.zip`; Condor returns
-that archive rather than the `rawData/` directory. Submit-side code validates and
-restores it before recording.
+## Finalization and persistence
 
-Prepared jobs merge a current workspace task payload with package worker resources.
-Fast results instead carry validated named memory payloads and explicitly set
-`job_dir=None`. All three backends converge on one `JobResult` finalizer for rawData
-ownership, current-cost derivation, worker release, failure isolation, and
-tuple-shape contracts. Only afterward does the owned envelope enter the campaign's
-bounded segment writer. Admission waits when the unpublished budget is full, and
-the population boundary waits until every admitted envelope is atomically
-published. Exhausted write retries stop the campaign before later evaluation can
-proceed.
+All backends produce the same logical result shape. The common finalizer validates
+owned rawData, applies the current task cost policy, preserves ordered failure
+rows, and hands accepted evidence to the campaign recorder. The recorder publishes
+immutable segments under bounded backpressure; later evaluation cannot pass the
+population boundary until accepted evidence is durable.
 
-The listed `chrono_com.py` resource implements the PyChrono subprocess protocol.
-Its task-side parent/child pair remains inside the local, fast, or execute-node
-boundary: one absolute external interpreter, one task-owned child entry, one
-candidate scratch, and versioned JSON/NPZ artifacts. Only validated rawData crosses
-from that pair into the existing result container.
+Surrogate prediction and posterior projection are derived submit-side computation,
+not additional evaluation backends. They consume recorded evidence and current task
+interpretation, may help select candidates, and never publish predicted rawData.
 
-The posterior/projector branch is derived submit-side computation rather than a
-fourth evaluation backend. A persistent sampler keeps draw identity across
-candidate chunks and emits complete named rawData samples. The projector validates
-them against the frozen schema template, reuses the generation snapshot's
-`CostInterpreter`, and retains only joint objective samples plus validity and
-bounded diagnostics. Neither node calls the finalizer or recorder. The opt-in
-posterior-assisted strategy surrounds this branch with typed readiness, a private-
-pymoo pool, fixed real baseline, explicit real exploration, qNEHVI selection, and
-the existing common evaluator/finalizer/recorder handoff. Current components are
-statically blocked and take its full-real fallback. GPSAF/conditional-INR behavior
-and state remain unchanged.
+## Container invariants
 
-## Surrogate internal containers
-
-The hierarchical CAE lifecycle facade delegates to separate data-adapter,
-state-repository, and projection services. Network/objective/training/inference
-modules sit below them. `surrogate._shared` supplies only atomic publication,
-bounded training-event recording, and finite-member selection; component identity,
-schema, quality, checkpoint namespace, and scheduler policy stay local.
+- A task or external simulator may write only within its assigned execution or
+  scratch boundary.
+- Execute nodes need task dependencies but never need yadof importability.
+- Costs are calculated on the submit side from validated evidence.
+- The recorder is the only durable candidate-evidence publisher.
+- Tools are read-only consumers unless their command explicitly owns a separate
+  user-selected output artifact.

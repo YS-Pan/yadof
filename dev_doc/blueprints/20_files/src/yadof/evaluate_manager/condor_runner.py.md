@@ -109,5 +109,5 @@
   minimal orchestration needed to query, remove, reset, and resubmit so native
   Condor retry support can replace it cleanly later.
 - Keep direct workflow execution and explicit zip-only rawData transfer aligned with
-  `admin_tool/htcondor_doc/deployment_contract.md`. Do not insert an intermediary
+  `admin_tool/admin_doc/htcondor/deployment_contract.md`. Do not insert an intermediary
   launcher unless that administrator contract is intentionally revised.

@@ -23,8 +23,8 @@ use a consistent hosts mapping or DHCP address reservation on every node.
 `CONDOR_HOST` is the manager's reachable name.  It is not a local interface
 selection.  The tool writes `NETWORK_INTERFACE = *` by default so HTCondor follows
 active interfaces instead of retaining a DHCP address.  Do not put the manager
-hostname into `NETWORK_INTERFACE`.  See
-[`temp/HTCondor_collector_主机名网络配置总结.md`](../../temp/HTCondor_collector_主机名网络配置总结.md)
+hostname into `NETWORK_INTERFACE`. See the
+[pool naming and network-interface guidance](../admin_doc/htcondor/windows_pool_debug.md#pool-naming-and-network-interface)
 for the reasoning and verification commands.
 
 The firewall and HTCondor allow scope are derived from the route-selected IPv4
@@ -133,6 +133,6 @@ load_profile = True
 ```
 
 Do not use owner execution as a general cluster repair path.  See
-[`../htcondor_doc/deployment_contract.md`](../htcondor_doc/deployment_contract.md)
-and [`../htcondor_doc/windows_pool_debug.md`](../htcondor_doc/windows_pool_debug.md)
+[`../admin_doc/htcondor/deployment_contract.md`](../admin_doc/htcondor/deployment_contract.md)
+and [`../admin_doc/htcondor/windows_pool_debug.md`](../admin_doc/htcondor/windows_pool_debug.md)
 for the deployment and debugging policy.

@@ -14,14 +14,14 @@ worker resources, and execution directories.
 
 ## Contents
 
-- `htcondor_doc/`: deployment policy, operational guidance, investigations, and
-  historical evidence for the HTCondor environment.
+- `admin_doc/`: administrator deployment, configuration, troubleshooting, and
+  historical reference documentation. Start with `admin_doc/README.md`.
 - `htcondor_pool/`: executable Windows scripts for setting up, configuring, and
   diagnosing HTCondor manager and worker machines. Start with
   `htcondor_pool/README.md`.
-- `pychrono_runtime/`: the pinned, auditable all-users Miniforge and PyChrono
-  installation workflow. It requires a separately verified official installer and
-  an explicit UAC-elevated run.
+- `pychrono_runtime/`: executable scripts for the pinned, auditable all-users
+  Miniforge and PyChrono installation workflow. The canonical procedure is in
+  `admin_doc/pychrono/README.md`.
 
 Users must not use these scripts to create or repair an environment. They should
 use the already-configured environment through the user workflow and the tools in

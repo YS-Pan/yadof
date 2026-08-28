@@ -26,8 +26,9 @@ the system environment.
 An **administrator** configures and maintains the environment in which yadof runs.
 This includes installing the package and its dependencies, and configuring or
 maintaining the HTCondor cluster's software and hardware. Administrator-only
-documents and tools live in `../admin_tool/`; they must not be placed in
-the installed yadof CLI/tools.
+documents live in `../admin_tool/admin_doc/`; executable administrator resources
+remain in sibling directories under `../admin_tool/`. Neither belongs in the
+installed yadof CLI/tools.
 
 The documents in this folder are not all read with the same priority. Use the rules
 below before changing code or documentation. The canonical entry point is
@@ -76,9 +77,9 @@ package integration.
 The repository also carries source-checkout-only benchmark automation outside the
 installed package. Its developer entry point is
 [benchmark_automation/dev_doc/README.md](../benchmark_automation/dev_doc/README.md).
-Read the nested [agent instructions](../benchmark_automation/AGENTS.md) first when
-changing its runner, schemas, frozen inputs, tests, or evidence policy. The
-directory is downloadable with the repository but excluded from wheel and sdist.
+That compact tree owns current architecture, study/run formats, self-describing
+baselines, and focused tests. The directory is downloadable with the repository
+but excluded from wheel and sdist.
 
 ## Installed Development Environment
 

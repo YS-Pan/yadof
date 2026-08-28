@@ -29,7 +29,7 @@ Keep `COLLECTOR_HOST = $(CONDOR_HOST):9618` and use `NETWORK_INTERFACE = *` unle
 an administrator has a deliberate multi-interface policy. `NETWORK_INTERFACE`
 selects a local network interface; it is not the collector hostname. A full Windows
 service restart is required after correcting a stale interface binding. The pool
-tool implements this policy; see `../htcondor_pool/README.md`.
+tool implements this policy; see `../../htcondor_pool/README.md`.
 
 ## Keep Three Questions Separate
 

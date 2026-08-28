@@ -22,6 +22,12 @@ blueprints, terminology, and operator routing. Repository-wide pending-work and
 history lifecycle remains centralized here: nested developer trees do not add
 their own toDo, obsolete, or change-record contracts/directories.
 
+Administrator documentation is a separate source-checkout tree at
+`admin_tool/admin_doc/`, organized by administered system. Executable administrator
+tools remain in sibling directories under `admin_tool/` and link to the canonical
+procedures instead of duplicating them. Neither administrator documentation nor
+tools are installed yadof documentation audiences.
+
 ## Developer document roles
 
 - `README.md`: entry point for mandatory reading order, environment, validation,
@@ -91,7 +97,9 @@ are affected.
   code; they are not duplicated into the root documentation lifecycle.
 - Current architecture/blueprints override historical change records.
 - User docs contain task-authoring/runtime instructions written primarily for the
-  user's AI agent; administrator deployment remains in `admin_tool/`.
+  user's AI agent; administrator deployment guidance remains in
+  `admin_tool/admin_doc/` and executable administrator tools remain beside it under
+  `admin_tool/`.
 - Generic agent-host and Git permission troubleshooting remains in its standalone
   user reference and is explicitly identified as external to yadof behavior.
 - Automatic toDos are always evaluated within established task scope; they neither

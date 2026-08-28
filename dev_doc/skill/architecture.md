@@ -18,6 +18,14 @@ Write architecture as current-view maps. Documents may describe the current
 implementation, but should emphasize stable relationships and invariants instead of
 line-by-line details.
 
+Architecture is part of every full developer context pass, so keep it compact.
+Exact protocol schemas and limits, component algorithms, CLI/UI behavior, test
+matrices, administrator procedures, experiment outcomes, release gates, dated
+status, and retired implementation names belong in user/admin documentation,
+blueprints, tests, toDos, or change records as appropriate. Retain a concrete fact
+here only when it defines a cross-module boundary, durable format/topology, recovery
+rule, or core invariant needed to understand the system as a whole.
+
 ## Reading Contract
 
 Read every file in `../architecture/` in full during the first `dev_doc/` context
@@ -35,9 +43,6 @@ c4_component.md               important internal components
 4plus1_development_view.md    source layout, dependency rules, doc rules
 4plus1_physical_view.md       filesystem and deployment layout
 4plus1_scenarios.md           concrete use cases
-pychrono_subprocess_contract.md
-                              normative external-runtime protocol defined before
-                              the packaged Project Chrono adapter
 ```
 
 Recommended section shape:

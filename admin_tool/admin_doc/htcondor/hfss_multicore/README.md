@@ -30,7 +30,7 @@ The 09 Direct Solver control works under HTCondor with multiple cores.
 
 - Reapply the worker node configuration with
   `-ExcludeStarterThreadVariable OMP_THREAD_LIMIT` on every affected execute
-  worker. See `../../htcondor_pool/README.md`; the setup tool reads the installed
+  worker. See `../../../htcondor_pool/README.md`; the setup tool reads the installed
   HTCondor list rather than embedding a fixed version-specific list.
 - Verify `condor_config_val STARTER_NUM_THREADS_ENV_VARS` does not contain
   `OMP_THREAD_LIMIT`.

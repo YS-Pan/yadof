@@ -12,13 +12,13 @@ catch-all log.
 
 1. `deployment_contract.md` - durable deployment and identity policy.
 2. `windows_pool_debug.md` - Windows HTCondor bring-up and debugging checklist.
-3. `../htcondor_pool/README.md` - one-node configuration and diagnostic tool.
+3. `../../htcondor_pool/README.md` - one-node configuration and diagnostic tool.
 4. `hfss_multicore/README.md` - optional HFSS multicore compatibility policy.
 
 ## Structure
 
 ```text
-admin_tool/htcondor_doc/
+admin_tool/admin_doc/htcondor/
   README.md
   20260712_official_docs_review.md
   20260712_official_docs_deep_dive.md

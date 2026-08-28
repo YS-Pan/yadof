@@ -2,147 +2,74 @@
 
 ## Submit host
 
-The submit host has the installed yadof environment, one or more writable
-workspaces, and HTCondor client tools when distributed mode is used. Workspace
-`jobs/` is submit-side staging and must never point at an execute node's scratch
-directory. Local evaluation uses the installed environment to launch job-local
-`workflow.py` files.
+The submit host contains the installed yadof distribution and one or more writable
+workspaces. Local and fast evaluation run on this host. Distributed evaluation also
+requires HTCondor client access, but scheduler deployment remains outside yadof.
 
-Local planning reads the submit host's physical/logical CPU counts, currently
-available memory, and free space on the jobs volume through the core psutil
-dependency. A configured reserve fraction protects host headroom. These snapshots
-are ephemeral planning inputs; durable records contain only the chosen plan and
-per-job process-tree measurements.
+Submit-side workspace job staging is distinct from execute-host scratch. Local
+capacity observations may influence concurrency, but they are planning inputs rather
+than task evidence.
 
-## External PyChrono runtime
+## Execute hosts
 
-`YADOF_PYCHRONO_PYTHON` names one absolute, administrator-provisioned interpreter
-file on the machine that executes the task. Yadof does not activate its Conda
-environment, use PATH to select it, mutate the parent/user/machine PATH, import
-PyChrono, or install itself into that environment. On Windows, the adapter prepends
-the selected prefix's standard Conda DLL directories only to each child environment
-copy. The shared prefix is read-only and contains no candidate data, cache,
-bytecode, or log output. A matching absolute string on another execute host is not
-proof that the runtime exists or is accessible there.
+HTCondor execute hosts receive self-contained prepared jobs and run them under
+administrator-defined identity, profile, software, license, network, and scratch
+policy. They need the task's runtime dependencies but do not receive or import the
+yadof package.
 
-Every PyChrono invocation has a distinct writable candidate scratch holding only
-its request, result, temporary content, and child rawData. The child working
-directory and TEMP/TMP point there, inherited PYTHONPATH is absent, and user-site
-and bytecode writes are disabled. Local/distributed publication moves only fully
-validated direct NPZ files into the prepared job's final rawData; fast publication
-copies their arrays into memory before deleting scratch.
+Current administrator procedures and troubleshooting material live in
+`admin_tool/admin_doc/htcondor/`; the executable node tool remains in
+`admin_tool/htcondor_pool/`.
 
-On Windows, a candidate also has one unique short launch junction in the parent
-temporary directory. The child sees that alias as its working/temp directory and
-in request/result arguments, while the junction targets the original physical
-scratch below the caller-owned root. The adapter removes the junction before
-scratch cleanup. This alias is neither evidence nor durable state and prevents the
-Windows process current-directory limit from depending on workspace depth.
+## External simulator runtimes
 
-Fast planning uses its own configured worker cap and declared CPU, memory, and
-scratch-disk requirement per worker; it does not reinterpret HTCondor requests.
-Reusable fast workers run only on this host. Each active candidate may own one
-temporary scratch directory below `FAST_EVALUATION_SCRATCH_DIR` (default
-`.yadof/fast_scratch`), never below `jobs/` or `recorded_data/`. Scratch carries no
-job, evidence, or recovery semantics and is removed after success, error, timeout,
-or crash cleanup. A pure/API task may leave it physically unused.
+A simulator-specific Python environment is a separately provisioned executable
+runtime on each host that may evaluate the task. It is selected explicitly and
+remains read-only to ordinary task execution. Yadof does not activate that
+environment, install itself into it, or share live Python objects with it.
+
+Each invocation receives unique writable candidate scratch disjoint from the
+shared runtime and final workspace evidence. The adapter publishes only complete,
+validated rawData into the normal backend result. PyChrono provisioning and
+validation procedures live in `admin_tool/admin_doc/pychrono/`; adapter use belongs
+in `user_doc/adapters/chrono_com.md`.
 
 ## Prepared job contents
 
-Every job places required task inputs directly below its own directory (including
-task-owned subdirectories when necessary). Framework composition adds only
-`worker_misc.py`; it owns invariant execute-side paths, lifecycle metadata,
-execute-machine provenance, rawData preparation, and flat output transport.
-Assigned `parameters_constraints.py` is self-contained. No yadof
-package directory, wheel, zip archive, compatibility bootstrap, generated worker
-config, copied global config package, or `calc_cost.py` is sent to execute nodes.
-Direct `job_template/` children ending case-insensitively with `.aedtresults` or
-`.aedt.lock` are excluded before copying; the rule deliberately does not inspect
-task-owned subdirectories.
-The job static hash covers task/support definitions while ignoring runtime metadata
-and candidate assignment values.
+A prepared local/distributed job contains the assigned task inputs and the small
+package-owned worker support required for lifecycle and evidence transport. It does
+not contain submit-side cost or optimization code, a yadof distribution, or an
+implicit copy of unrelated workspace content.
 
-## HTCondor transport
-
-The Windows submit contract is:
-
-```text
-universe = vanilla
-executable = workflow.py
-transfer_executable = True
-getenv = False
-load_profile = True
-run_as_owner = False
-should_transfer_files = YES
-when_to_transfer_output = ON_EXIT
-transfer_output_files = rawData.zip,individual_metadata.json
-```
-
-`workflow.py` and other task inputs are already in the prepared job folder. Condor
-transfers the executable plus selected direct inputs, and does not transfer runtime
-directories or old outputs. Package worker support invoked by the execute workflow
-creates `rawData.zip`; its archive members are direct `.npz` files such as
-`response.npz`, never
-`rawData/response.npz`. Condor returns the zip instead of the `rawData/` directory.
-The submit host restores validated files into its job-local `rawData/`.
-
-Worker Python and installed third-party software provide task dependencies such as
-NumPy, PyAEDT, and HFSS. They do not need yadof importability. Consequently a
-distributed task workflow may import only job-local files, Python standard library,
-and dependencies deliberately installed on workers.
-
-Windows execution uses low-privilege slot users with `run_as_owner = False` and
-`load_profile = True`. Per-job sandbox home/temp directories are transferred inputs.
-HTCondor deployment, permissions, credentials, licensing, and machine policy remain
-under the administrator boundary in `admin_tool/` documentation.
-
-The redirected environment uses job-local home/appdata/temp names. The workflow
-creates runtime directories before starting external software. Worker scratch
-placement and capacity are configured and advertised by administrators, never by a
-workspace path setting.
+The job owns runtime artifacts and diagnostics only until accepted evidence is
+copied under recorder ownership. Execute scratch and fast candidate scratch are
+ephemeral and carry no durable history meaning.
 
 ## Durable workspace layout
 
-- user-created task/debug/export directories may coexist with the reserved layout;
-  core workspace discovery/checking ignores them unless configuration or task code
-  explicitly references them, and they are not implicit prepared-job payload;
-- `jobs/<job>/metadata.json`: submit-side aggregate job state and diagnostics.
-- `jobs/<job>/individual_metadata.json`: workflow-owned lifecycle state.
-- `jobs/<job>/rawData.zip`: distributed transport artifact.
-- `jobs/<job>/rawData/*.npz`: restored/direct evidence used by framework code.
-- fast logical evaluations have none of the `jobs/<job>/...` paths above; named
-  memory payloads cross the same owned-envelope finalizer as file-backed results.
-- `recorded_data/segments/<run>/<generation>/segment_*.zip`: immutable,
-  candidate-scoped metadata plus stored NPZ members and a manifest.
-- `recorded_data/metadata/<type>/event_*.json`: immutable optimization and
-  surrogate event files.
-- `.yadof/campaign.lock`: persistent lock identity whose byte-range lock is held by
-  the one active campaign writer; the file's mere presence does not mean stale work.
-- configured checkpoint/log/tool-output directories: workspace-local mutable state.
+```text
+<workspace>/
+  config.py
+  submit/                  task cost and optimization composition
+  job_template/            evaluate-side task definition and assets
+  jobs/                    prepared local/distributed executions
+  recorded_data/           immutable candidate evidence and metadata events
+  .yadof/                  workspace identity and campaign lock
+  <configured state>       checkpoints, logs, and tool output
+```
 
-Each segment is written through one same-directory temporary standard ZIP, closed,
-and atomically renamed. It is never reopened for append, index repair, compaction,
-or metadata updates, and no per-candidate durability flush occurs. Temporary or
-unrelated files are ignored, while corrupt segments are isolated by the reader.
-Package resources remain read-only even when site-packages itself is read-only.
+User-created task, debugging, and export directories may coexist with reserved
+framework paths. They become task inputs only when explicitly referenced.
 
-The wheel also carries `yadof/tools/cost_viewer/` and
-`yadof/tools/surrogate_viewer/`, including their independent developer-
-documentation subtrees. Cost-view rendering uses the package's normal numerical
-and plotting dependencies only when selected. Surrogate-viewer Torch and
-Matplotlib dependencies are exposed
-through the `viewer` extra and are used only on the submit/user desktop. Viewer code
-and dependencies are never copied into a prepared job or transferred to execute
-nodes.
+Recorded segments are immutable and atomically published. Temporary, unrelated, or
+corrupt files are not treated as successful evidence. Fast evaluations have no
+durable candidate directory but enter the same recorder through owned memory-backed
+rawData.
 
-The task workflow calls package worker support, which samples `execute_machine` in
-the workflow process and writes it into `individual_metadata.json`. It is
-transferred back with normal job outputs and remains authoritative. If timeout
-prevents that transfer, the submit host may persist a separate
-`condor_execute_machine` fallback parsed from the job-local `condor.log`, together
-with its slot and `condor_user_log` source. Submit-side ClassAds do not override
-either provenance path.
+## Package artifacts
 
-The wheel carries `yadof/surrogate/_shared/` and the split hierarchical CAE
-modules. It does not carry the retired hierarchical `modeling.py` or `metadata.py`.
-Checkpoint artifacts retain their existing workspace/run/component namespaces.
+The wheel contains installed framework code and declared package resources. Package
+resources remain read-only and are never copied wholesale into jobs. Optional
+viewer dependencies and source stay on the user/submit host. Source-checkout-only
+examples, benchmark automation, administrator resources, and generated runtime
+artifacts are excluded from installed runtime behavior.

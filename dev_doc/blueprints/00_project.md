@@ -134,7 +134,8 @@ hot-change contract; structural dimension changes are future work.
   wide toDos, obsolete handoffs, and change records; the benchmark does not
   duplicate those lifecycle facilities.
   Final cumulative HV remains a compact algorithm-labeled table outside JSON stdout.
-- Admin: HTCondor pool/slot-user/deployment material under `admin_tool/`.
+- Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with
+  executable administrator resources in sibling directories under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
 
 ## Package module map
