@@ -9,7 +9,7 @@ code, generic templates/adapters, and version-matched documentation. The top-lev
 `benchmark_automation/` directory is a source-checkout tool, not an installed
 package resource, console entry point, or implicit workspace.
 
-The current package version is 0.4.1. Recorded history uses immutable standard-ZIP
+The current package version is 0.4.2. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Workspace contract

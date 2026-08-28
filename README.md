@@ -1,7 +1,7 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.4.1**. Evaluation
+or HTCondor workflows. The current packaged release is **0.4.2**. Evaluation
 history uses immutable standard-ZIP segments plus immutable metadata events.
 
 Its durable modeling contract is:
@@ -38,8 +38,8 @@ ready for additional examples.
 Install the wheel into the Python environment used on the submit machine:
 
 ```powershell
-python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[surrogate]"
-python -m pip install ".\dist\yadof-0.4.1-py3-none-any.whl[viewer]"
+python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[surrogate]"
+python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[viewer]"
 ```
 
 The default workspace composes conditional INR, so `init`, `check`, and `run`

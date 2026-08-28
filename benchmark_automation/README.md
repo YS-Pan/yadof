@@ -124,7 +124,7 @@ Preflight requires the version provenance, checks runtime cleanliness, and runs 
 current installed `yadof check`. Run creation then records the current task
 fingerprint, snapshots declared inputs, and freezes the actual execution package
 identity. A template created by 0.4.0 can therefore be edited and executed under
-compatible 0.4.1 without fingerprint-derived directories.
+compatible 0.4.2 without fingerprint-derived directories.
 
 ## Commands
 
