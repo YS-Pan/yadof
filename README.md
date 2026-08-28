@@ -110,23 +110,25 @@ detection details, and the package's declared compatibility boundary.
 ## Source-checkout benchmark
 
 The repository includes a downloadable, user-runnable comparison tool under
-[benchmark_automation](benchmark_automation/README.md). It is deliberately outside
-`src/yadof`: a Git clone or repository download contains the runner, editable
-baseline templates, and its focused tests, while `pip install yadof`, wheel, and
-sdist do not. Each new run snapshots the selected baseline content before executing
-cells, so later template edits do not change that run.
+[benchmark_automation](benchmark_automation/dev_doc/README.md). It is deliberately
+outside `src/yadof`: a Git clone or repository download contains the runner,
+self-describing baseline templates, and focused tests, while `pip install yadof`,
+wheel, and sdist do not. Complete `submit/optimization.py` files are supplied by an
+external study; adding an algorithm requires no benchmark source change.
 
 Use a Python environment containing the matching installed yadof distribution and
 start with the no-write plan:
 
 ```powershell
-python ".\benchmark_automation\benchmark.py" plan --suite structural-canary
+python ".\benchmark_automation\benchmark.py" baselines
+python ".\benchmark_automation\benchmark.py" plan --study D:\studies\comparison.toml
 ```
 
-Read the suite's prerequisite and cost/risk policy before starting real work.
-The configured default places every run directly below the checkout's ignored
-`temp/` directory as `temp/<run-id>/`. An explicit `--runs-dir` may select another
-root, but callers must reuse that same root for every command addressing the run.
+The study selects baseline IDs, strategies, seeds, one uniform budget, an optional
+reference, and its run root. `plan` writes nothing. `run` snapshots the complete
+driver, baselines, and strategy inputs; `resume --run PATH` executes only that
+run-owned snapshot. Read [the study format](benchmark_automation/dev_doc/study_format.md)
+and apply the normal cost/risk policy before starting real work.
 
 ## Package and workspace boundary
 

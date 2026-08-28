@@ -1,45 +1,81 @@
 from __future__ import annotations
 
-import hashlib
+import ast
 import json
+import re
+import subprocess
+import sys
 from pathlib import Path
-import shutil
+from types import MappingProxyType
 
 import pytest
 
 import benchmark_core as core
-from benchmark_runtime import execution, planning, results, state as state_runtime
+from benchmark_runtime import execution, results as result_runtime
+from benchmark_runtime.baselines import discover_baselines, load_baseline
+from benchmark_runtime.contracts import (
+    BASELINE_FORMAT,
+    STUDY_FORMAT,
+    CommandResult,
+)
+from benchmark_runtime.planning import load_study, plan_study
+from benchmark_runtime.results import inspect_run
+from benchmark_runtime.storage import (
+    create_run,
+    load_run,
+    prepare_attempt,
+    read_json,
+    save_state,
+)
 
 
-TASK_FINGERPRINT = "1" * 64
-
-
-def _write_baseline(
-    root: Path,
-    *,
-    case_id: str = "case",
-    provider_id: str = "adapter",
-    task_id: str = "task",
-    baseline_id: str | None = None,
-) -> Path:
-    identity = baseline_id or task_id
-    baseline = root / "baselines" / provider_id / identity
+def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
+    baseline = root / "baselines" / "provider" / "task"
     workspace = baseline / "workspace"
-    (workspace / "submit").mkdir(parents=True)
+    (workspace / ".yadof").mkdir(parents=True)
+    (workspace / ".yadof" / "workspace.json").write_text(
+        '{"workspace": "."}\n', encoding="utf-8"
+    )
+    (workspace / ".yadof" / "logs").mkdir()
+    (workspace / ".yadof" / "logs" / "ignored.log").write_text(
+        "runtime\n", encoding="utf-8"
+    )
+    (workspace / "jobs").mkdir()
+    (workspace / "jobs" / "ignored.txt").write_text("runtime\n", encoding="utf-8")
+    (workspace / "submit").mkdir()
+    (workspace / "submit" / "calc_cost.py").write_text(
+        "def calculate_cost(*args): return (0.5,)\n", encoding="utf-8"
+    )
+    (workspace / "submit" / "optimization.py").write_text(
+        "def build_optimization(): return 'baseline'\n", encoding="utf-8"
+    )
     (workspace / "job_template").mkdir()
-    (workspace / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
-    (workspace / "postprocess.py").write_text(
-        "raise SystemExit(0)\n", encoding="utf-8"
+    (workspace / "job_template" / "workflow.py").write_text(
+        "VALUE = 1\n", encoding="utf-8"
+    )
+    (workspace / "config.py").write_text(
+        'EVALUATION_MODE = "fast"\n', encoding="utf-8"
     )
     (baseline / "baseline.json").write_text(
         json.dumps(
             {
-                "baseline_id": identity,
-                "case_id": case_id,
-                "provider_id": provider_id,
-                "task_id": task_id,
-                "task_fingerprint": TASK_FINGERPRINT,
-            }
+                "format": BASELINE_FORMAT,
+                "id": baseline_id,
+                "name": "Task",
+                "description": "Tiny contract fixture.",
+                "workspace": "workspace",
+                "execution": {"mode": "fast", "timeout_seconds": 30},
+                "contract": {
+                    "objective_count": 1,
+                    "rawdata_shapes": {"value": [1]},
+                },
+                "estimates": {
+                    "evaluation_seconds": 0.01,
+                    "record_mib": 0.001,
+                },
+                "snapshot_excludes": [],
+            },
+            indent=2,
         )
         + "\n",
         encoding="utf-8",
@@ -47,988 +83,484 @@ def _write_baseline(
     return baseline
 
 
-def test_task_fingerprint_matches_path_tab_hash_manifest(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    (workspace / "submit").mkdir(parents=True)
-    (workspace / "config.py").write_bytes(b"VALUE = 1\n")
-    (workspace / "submit" / "optimization.py").write_bytes(b"STRATEGY = 'real'\n")
-    entries = []
-    for relative in ("config.py", "submit/optimization.py"):
-        digest = hashlib.sha256((workspace / relative).read_bytes()).hexdigest()
-        entries.append(f"{relative}\t{digest}")
-    expected = hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
-    assert core.task_fingerprint(workspace, ["config.py", "submit"]) == expected
-
-
-def test_task_fingerprint_ignores_interpreter_bytecode_cache(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    task = workspace / "job_template" / "task.py"
-    task.parent.mkdir(parents=True)
-    task.write_text("VALUE = 1\n", encoding="utf-8")
-    before = core.task_fingerprint(workspace, ["job_template"])
-    cache = task.parent / "__pycache__"
-    cache.mkdir()
-    (cache / "task.cpython-313.pyc").write_bytes(b"transient bytecode")
-    assert core.task_fingerprint(workspace, ["job_template"]) == before
-
-
-def test_resolve_inside_rejects_escape(tmp_path: Path) -> None:
-    with pytest.raises(core.BenchmarkError, match="escapes benchmark root"):
-        core.resolve_inside(tmp_path, "../outside", label="fixture")
-
-
-def _write_loadable_config(root: Path) -> Path:
-    baseline = _write_baseline(root)
-    (root / "strategies").mkdir()
-    (root / "strategies" / "real.py").write_text(
-        "def build_optimization(): return object()\n", encoding="utf-8"
-    )
-    (root / "history").mkdir()
-    config = root / "benchmark.toml"
-    config.write_text(
-        """schema_version = 1
-
-[runner]
-runs_dir = "runs"
-strategy_template_dir = "strategies"
-history_snapshot_dir = "history"
-
-[cases.case]
-baseline = "{baseline}"
-include_paths = ["config.py", "submit", "job_template", "postprocess.py"]
-history_policy = "empty"
-mode = "fast"
-
-[arms.real]
-strategy_template = "real.py"
-
-[suites.structural]
-purpose = "structural"
-cases = ["case"]
-arms = ["real"]
-seeds = [1]
-
-[budgets.structural.case.real]
-population = 1
-generations = 1
-""".format(baseline=baseline.relative_to(root).as_posix()),
+def _strategy(root: Path, name: str) -> Path:
+    path = root / "strategies" / f"{name}.py"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"def build_optimization():\n    return {name!r}\n",
         encoding="utf-8",
     )
-    return config
+    return path
 
 
-def test_runs_dir_override_resolves_from_invocation_directory(tmp_path: Path) -> None:
-    benchmark_root = tmp_path / "benchmark source"
-    config_path = _write_loadable_config(benchmark_root)
-    invocation_cwd = tmp_path / "调用 目录"
-    invocation_cwd.mkdir()
-
-    _config, default_paths = core.load_config(config_path)
-    assert default_paths.runs == benchmark_root / "runs"
-
-    _config, override_paths = core.load_config(
-        config_path,
-        runs_dir_override=Path("temp") / "结果",
-        invocation_cwd=invocation_cwd,
-    )
-    assert override_paths.runs == invocation_cwd / "temp" / "结果"
-
-    absolute = tmp_path / "absolute outputs"
-    _config, absolute_paths = core.load_config(
-        config_path,
-        runs_dir_override=absolute,
-        invocation_cwd=invocation_cwd,
-    )
-    assert absolute_paths.runs == absolute
-
-
-def test_repository_config_defaults_to_checkout_temp() -> None:
-    automation_root = Path(__file__).resolve().parents[1]
-
-    _config, paths = core.load_config(automation_root / "benchmark.toml")
-
-    assert paths.runs == automation_root.parent / "temp"
-
-
-def test_collector_identity_tracks_the_facade_and_entrypoint() -> None:
-    automation_root = Path(__file__).resolve().parents[1]
-
-    identity = results._collector_identity()
-
-    core_path = automation_root / "benchmark_core.py"
-    entrypoint_path = automation_root / "benchmark.py"
-    assert identity["core_path"] == str(core_path)
-    assert identity["core_sha256"] == hashlib.sha256(core_path.read_bytes()).hexdigest()
-    assert identity["entrypoint_sha256"] == hashlib.sha256(
-        entrypoint_path.read_bytes()
-    ).hexdigest()
-
-
-def test_preflight_accepts_baseline_created_by_prior_yadof_patch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    config_path = _write_loadable_config(tmp_path)
-    manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["yadof_version"] = "0.4.0"
-    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
-    config, paths = core.load_config(config_path)
-    monkeypatch.setattr(
-        planning,
-        "_package_identity",
-        lambda: {
-            "version": "0.4.1",
-            "python": "python",
-            "distribution_version": "0.4.1",
-            "distribution_record_sha256": "1" * 64,
-        },
-    )
-    monkeypatch.setattr(
-        planning,
-        "_run_read_only",
-        lambda *args, **kwargs: {"returncode": 0, "stdout": "", "stderr": ""},
-    )
-
-    result = core.preflight(config, paths, "structural")
-
-    baseline_check = next(
-        check for check in result["checks"] if check["name"] == "baseline:case"
-    )
-    assert result["ok"] is True
-    assert baseline_check["ok"] is True
-    assert baseline_check["details"]["yadof_version"] == "0.4.0"
-    assert baseline_check["details"]["execution_yadof_version"] == "0.4.1"
-    assert baseline_check["details"]["creation_version_matches_execution"] is False
-
-
-def test_runs_dir_rejects_protected_input_overlap(tmp_path: Path) -> None:
-    config_path = _write_loadable_config(tmp_path)
-    with pytest.raises(core.BenchmarkError, match="overlaps case 'case' baseline"):
-        core.load_config(config_path, runs_dir_override=tmp_path / "baselines")
-
-
-def test_load_config_requires_declared_postprocess(tmp_path: Path) -> None:
-    config_path = _write_loadable_config(tmp_path)
-    text = config_path.read_text(encoding="utf-8")
-    config_path.write_text(
-        text.replace(
-            ', "postprocess.py"',
-            "",
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(core.BenchmarkError, match="must declare 'postprocess.py'"):
-        core.load_config(config_path)
-
-
-def test_load_config_requires_baseline_postprocess_script(tmp_path: Path) -> None:
-    config_path = _write_loadable_config(tmp_path)
-    postprocess = next((tmp_path / "baselines").glob("*/*/workspace/postprocess.py"))
-    postprocess.unlink()
-    with pytest.raises(core.BenchmarkError, match="baseline has no postprocess.py"):
-        core.load_config(config_path)
-
-
-def test_load_config_rejects_legacy_date_baseline_identity(tmp_path: Path) -> None:
-    root = tmp_path / "benchmark"
-    config_path = _write_loadable_config(root)
-    valid_baseline = next((root / "baselines").glob("*/*"))
-    baseline = valid_baseline.with_name(f"20260823-{TASK_FINGERPRINT[:12]}")
-    valid_baseline.rename(baseline)
-    text = config_path.read_text(encoding="utf-8")
-    config_path.write_text(
-        text.replace(
-            valid_baseline.relative_to(root).as_posix(),
-            baseline.relative_to(root).as_posix(),
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(core.BenchmarkError, match="must use baselines"):
-        core.load_config(config_path)
-
-
-def test_load_config_rejects_baseline_provider_metadata_mismatch(tmp_path: Path) -> None:
-    config_path = _write_loadable_config(tmp_path)
-    manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["provider_id"] = "different-adapter"
-    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
-    with pytest.raises(core.BenchmarkError, match="metadata provider_id"):
-        core.load_config(config_path)
-
-
-def test_load_config_accepts_stale_baseline_creation_fingerprint(tmp_path: Path) -> None:
-    config_path = _write_loadable_config(tmp_path)
-    manifest_path = next((tmp_path / "baselines").glob("*/*/baseline.json"))
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["task_fingerprint"] = "2" * 64
-    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
-
-    _config, paths = core.load_config(config_path)
-
-    assert paths.root == tmp_path
-
-
-def test_plan_has_disposable_smoke_and_independent_measured_cells() -> None:
-    config = {
-        "cases": {
-            "case-a": {
-                "baseline": "baselines/provider/task-111111111111",
-                "mode": "fast",
-                "observed_eval_sec": 2.0,
-                "estimated_record_mib": 1.5,
-                "max_workers": 2,
-            }
-        },
-        "arms": {"real": {}, "surrogate": {}},
-        "suites": {
-            "structural": {
-                "purpose": "structural",
-                "cases": ["case-a"],
-                "arms": ["real", "surrogate"],
-                "seeds": [17],
-                "smoke": True,
-                "fail_fast": True,
-            }
-        },
-        "budgets": {
-            "structural": {
-                "case-a": {
-                    "real": {"population": 4, "generations": 1, "max_generations": 1},
-                    "surrogate": {"population": 4, "generations": 2, "max_generations": 3},
-                }
-            }
-        },
-    }
-    paths = core.Paths(Path("."), Path("benchmark.toml"), Path("runs"), Path("strategies"), Path("history"))
-    plan = core.build_plan(config, paths, "structural")
-    assert plan["cell_count"] == 3
-    assert plan["cells"][0]["kind"] == "smoke"
-    assert plan["cells"][0]["disposable"] is True
-    assert {cell["cell_id"] for cell in plan["cells"]} == {
-        "smoke__case-a__seed-17",
-        "case-a__real__seed-17",
-        "case-a__surrogate__seed-17",
-    }
-    assert all(cell["planned_commands"][0][3] == "init" for cell in plan["cells"])
-    measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
-    assert all(
-        cell["planned_commands"][-2][1].endswith("postprocess.py")
-        for cell in measured
-    )
-    assert all(
-        cell["planned_commands"][-1][3:5] == ["view", "cost"]
-        for cell in measured
-    )
-    assert all(
-        cell["planned_commands"][-2][-3]
-        == "<run-root>/visualizations/task-111111111111"
-        for cell in measured
-    )
-    assert all(
-        cell["planned_commands"][-2][-1]
-        == f"{cell['cell_id']}__attempt-<attempt>__"
-        for cell in measured
-    )
-    assert all(
-        cell["planned_commands"][-1][-1]
-        == (
-            f"<run-root>/visualizations/viewcost/"
-            f"{cell['cell_id']}__attempt-<attempt>__benchmark-cost.png"
-        )
-        for cell in measured
-    )
-    assert all("--progress" in cell["planned_commands"][2] for cell in measured)
-    filtered = core.build_plan(
-        config,
-        paths,
-        "structural",
-        case_ids=["case-a"],
-        arm_ids=["real"],
-        seeds=[17],
-    )
-    assert [cell["arm"] for cell in filtered["cells"]] == [None, "real"]
-
-
-def test_performance_config_requires_equal_planned_attempted_budget(tmp_path: Path) -> None:
-    baseline = _write_baseline(tmp_path)
-    strategies = tmp_path / "strategies"
-    strategies.mkdir()
-    for name in ("real.py", "surrogate.py"):
-        (strategies / name).write_text("def build_optimization(): return object()\n", encoding="utf-8")
-    config = {
-        "cases": {
-            "case": {
-                "baseline": baseline.relative_to(tmp_path).as_posix(),
-                "include_paths": [
-                    "config.py",
-                    "submit",
-                    "job_template",
-                    "postprocess.py",
-                ],
-                "history_policy": "empty",
-            }
-        },
-        "arms": {
-            "real": {"strategy_template": "real.py"},
-            "surrogate": {"strategy_template": "surrogate.py"},
-        },
-        "suites": {
-            "performance": {
-                "purpose": "performance",
-                "cases": ["case"],
-                "arms": ["real", "surrogate"],
-                "seeds": [1, 2, 3],
-            }
-        },
-        "budgets": {
-            "performance": {
-                "case": {
-                    "real": {"population": 4, "generations": 2},
-                    "surrogate": {"population": 3, "generations": 2},
-                }
-            }
-        },
-    }
-    paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", strategies, tmp_path / "history")
-    with pytest.raises(core.BenchmarkError, match="unequal planned attempted budgets"):
-        core.validate_config(config, paths)
-
-
-def test_repository_performance_suite_uses_substantial_budget() -> None:
-    benchmark_root = Path(__file__).resolve().parents[1]
-    config, paths = core.load_config(benchmark_root / "benchmark.toml")
-    plan = core.build_plan(config, paths, "performance")
-    measured = [cell for cell in plan["cells"] if cell["kind"] == "measured"]
-    assert len(measured) == 6
-    assert all(cell["population"] >= 100 for cell in measured)
-    assert all(cell["generations"] >= 20 for cell in measured)
-    assert all(cell["max_generations"] == cell["generations"] for cell in measured)
-    assert sum(cell["planned_attempted_evaluations"] for cell in measured) == 12_000
-    assert plan["selection"]["arms"] == ["nsga3", "gpsaf-conditional-inr"]
-    assert all(config["cases"][case_id]["max_workers"] == 32 for case_id in config["cases"])
-    baseline_result_dirs = {
-        cell["planned_commands"][-2][-3]
-        for cell in measured
-    }
-    assert baseline_result_dirs == {
-        f"<run-root>/visualizations/{Path(config['cases'][case_id]['baseline']).name}"
-        for case_id in plan["selection"]["cases"]
-    }
-    assert len(baseline_result_dirs) == 3
-    assert config["runner"]["measured_config_overrides"] == {
-        "HISTORY_SEGMENT_MAX_CANDIDATES": 100,
-        "HISTORY_UNPUBLISHED_MAX_CANDIDATES": 128,
-        "FAST_RESOURCE_AUTODETECT_ENABLED": False,
-    }
-
-
-def _minimal_spec(tmp_path: Path) -> dict:
-    spec = {
-        "schema_version": 1,
-        "created_utc": "2026-08-23T00:00:00.000Z",
-        "suite": "fixture",
-        "purpose": "structural",
-        "label": None,
-        "config": {"path": str(tmp_path / "benchmark.toml"), "sha256": "0" * 64},
-        "package": {"python": "python", "version": "0", "origin": "fixture"},
-        "host": {},
-        "runner": {"command_timeout_sec": 1, "audit_sample_percent": 10, "audit_random_seed": 1, "fail_fast": True},
-        "cases": {},
-        "arms": {},
-        "plan": {
-            "cells": [
-                {
-                    "cell_id": "smoke__case__seed-1",
-                    "kind": "smoke",
-                    "case": "case",
-                    "arm": None,
-                    "seed": 1,
-                }
+def _study(
+    root: Path,
+    strategies: tuple[str, ...] = ("alpha", "beta", "gamma"),
+) -> Path:
+    paths = {name: _strategy(root, name) for name in strategies}
+    lines = [
+        f'format = "{STUDY_FORMAT}"',
+        'name = "comparison"',
+        'baselines = ["provider/task"]',
+        "seeds = [7]",
+        "population = 2",
+        "generations = 3",
+        'reference = "alpha"',
+        "fail_fast = false",
+        f'runs_dir = "{(root / "runs").as_posix()}"',
+        f'python = "{Path(sys.executable).as_posix()}"',
+    ]
+    for name in strategies:
+        lines.extend(
+            [
+                "",
+                "[[strategies]]",
+                f'id = "{name}"',
+                f'name = "{name.title()}"',
+                f'source = "{paths[name].as_posix()}"',
             ]
+        )
+    path = root / "study.toml"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _plan(root: Path):
+    baseline_root = root / "baselines"
+    request = load_study(_study(root), default_runs_dir=root / "runs")
+    return plan_study(request, discover_baselines(baseline_root))
+
+
+def _cell_result(cell: dict, value: float) -> dict:
+    return {
+        "cell": cell["id"],
+        "baseline": cell["baseline"],
+        "strategy": cell["strategy"],
+        "seed": cell["seed"],
+        "budget": {
+            "population": cell["population"],
+            "generations": cell["generations"],
+            "planned_evaluations": cell["planned_evaluations"],
         },
-    }
-    spec["spec_sha256"] = core.object_sha256(spec)
-    return spec
-
-
-def test_default_run_id_starts_with_numeric_utc_date_and_time(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    real_datetime = core.dt.datetime
-
-    class FixedDateTime(real_datetime):
-        @classmethod
-        def now(cls, tz=None):
-            assert tz is core.dt.UTC
-            return cls(2026, 8, 24, 12, 34, 56, tzinfo=tz)
-
-    monkeypatch.setattr(core.dt, "datetime", FixedDateTime)
-    spec = _minimal_spec(tmp_path)
-    suffix = spec["spec_sha256"][:12]
-    expected = f"20260824_123456-{suffix}"
-    paths = core.Paths(
-        tmp_path,
-        tmp_path / "benchmark.toml",
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
-    )
-
-    run_id, run_root = core.create_run(paths, spec)
-    assert run_id == expected
-    assert run_root.name == expected
-    assert core.make_run_id(spec, "full benchmark") == (
-        f"20260824_123456-full-benchmark-{suffix}"
-    )
-
-
-def test_run_spec_is_run_owned_and_state_is_separate(tmp_path: Path) -> None:
-    paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path / "strategies", tmp_path / "history")
-    spec = _minimal_spec(tmp_path)
-    run_id, run_root = core.create_run(paths, spec, run_id="fixture")
-    assert run_id == "fixture"
-    loaded_root, loaded_spec, state = core.load_run(paths, run_id)
-    assert loaded_root == run_root
-    assert loaded_spec == spec
-    assert state["cells"]["smoke__case__seed-1"]["status"] == "pending"
-    tampered = json.loads((run_root / "run_spec.json").read_text(encoding="utf-8"))
-    tampered["suite"] = "changed"
-    (run_root / "run_spec.json").write_text(json.dumps(tampered), encoding="utf-8")
-    _loaded_root, loaded_spec, _state = core.load_run(paths, run_id)
-    assert loaded_spec["suite"] == "changed"
-
-
-def test_new_run_snapshots_mutable_baseline_inputs(tmp_path: Path) -> None:
-    source = tmp_path / "editable baseline"
-    source.mkdir()
-    config = source / "config.py"
-    config.write_text("VALUE = 1\n", encoding="utf-8")
-    config_path = tmp_path / "benchmark.toml"
-    config_path.write_text("schema_version = 1\n", encoding="utf-8")
-    identity = {
-        "version": "0.4.1",
-        "origin": "installed",
-        "module_sha256": "1" * 64,
-        "python": "python",
-    }
-    spec = _minimal_spec(tmp_path)
-    spec["config"] = {
-        "path": str(config_path),
-        "sha256": core.file_sha256(config_path),
-    }
-    spec["package"] = identity
-    spec["cases"] = {
-        "case": {
-            "baseline": {
-                "source_workspace": str(source),
-                "snapshot_workspace": "inputs/baselines/case/workspace",
-                "include_paths": ["config.py"],
-                "actual_task_fingerprint": core.task_fingerprint(
-                    source, ["config.py"]
-                ),
+        "status_counts": {"completed": cell["planned_evaluations"]},
+        "completed_evaluations": cell["planned_evaluations"],
+        "success_rate": 1.0,
+        "objective_names": ["score"],
+        "final_hypervolume": value,
+        "contract": {
+            "objective_count": {"expected": 1, "observed": 1, "matches": True},
+            "rawdata_shapes": {
+                "expected": {"value": [1]},
+                "observed": {"value": [1]},
+                "matches": True,
             },
-            "starting_evidence": {"policy": "empty"},
-        }
+        },
+        "rows": [
+            {
+                "baseline": cell["baseline"],
+                "strategy": cell["strategy"],
+                "seed": cell["seed"],
+                "population": cell["population"],
+                "generations": cell["generations"],
+                "job": f"{cell['strategy']}-job",
+                "generation": 0,
+                "objectives": {"score": 1.0 - value},
+                "average_objective": 1.0 - value,
+                "metadata": {},
+            }
+        ],
+        "extensions": {"yadof.optimization": [{"custom": cell["strategy"]}]},
+        "issues": [],
     }
-    spec.pop("spec_sha256")
-    spec["spec_sha256"] = core.object_sha256(spec)
-    paths = core.Paths(
-        tmp_path,
-        config_path,
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
+
+
+def _successful_command(
+    command, *, cwd, command_root, label, timeout_seconds, event_sink=None
+):
+    del cwd, label, timeout_seconds, event_sink
+    command_root.mkdir(parents=True)
+    stdout = command_root / "stdout.log"
+    stderr = command_root / "stderr.log"
+    stdout.write_text("", encoding="utf-8")
+    stderr.write_text("", encoding="utf-8")
+    return CommandResult(
+        tuple(str(item) for item in command), 0, 0.01, False, stdout, stderr
     )
-    run_id, run_root = core.create_run(paths, spec, run_id="fixture")
-    config.write_text("VALUE = 2\n", encoding="utf-8")
-    _loaded_root, loaded_spec, _state = core.load_run(paths, run_id)
-
-    snapshot = run_root / "inputs/baselines/case/workspace/config.py"
-    assert snapshot.read_text(encoding="utf-8") == "VALUE = 1\n"
-    core.verify_run_inputs(paths, run_root, loaded_spec)
 
 
-def test_new_run_executes_from_its_runtime_snapshot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    paths = core.Paths(
-        tmp_path,
-        tmp_path / "benchmark.toml",
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
-    )
-    spec = _minimal_spec(tmp_path)
-    spec["plan"]["cells"] = []
-    spec["spec_sha256"] = core.object_sha256(
-        {key: value for key, value in spec.items() if key != "spec_sha256"}
-    )
-    run_id, _run_root = core.create_run(paths, spec, run_id="snapshot-owned")
+def test_recursive_baseline_discovery_and_clean_snapshot(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    discovered = discover_baselines(tmp_path / "baselines")
 
-    def changed_current_runtime(*_args, **_kwargs):
-        raise AssertionError("current runtime must not execute an existing run")
+    assert list(discovered) == ["provider/task"]
+    assert discovered["provider/task"].root == baseline
 
-    monkeypatch.setattr(execution, "execute_run", changed_current_runtime)
-    state = core.execute_run({}, paths, run_id)
-
-    assert state["status"] == "completed"
+    spec = _plan(tmp_path)
+    run_root = create_run(spec, run_id="clean-snapshot")
+    snapshot = run_root / "inputs" / "baselines" / "provider-task" / "workspace"
+    assert (snapshot / ".yadof" / "workspace.json").is_file()
+    assert not (snapshot / ".yadof" / "logs").exists()
+    assert not (snapshot / "jobs").exists()
 
 
-def test_unfinished_run_without_snapshot_requires_restart_or_migration(
+def test_manifest_rejects_workspace_escape_and_duplicate_id(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    manifest_path = baseline / "baseline.json"
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data["workspace"] = "../../outside"
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(core.BenchmarkError, match="escapes"):
+        load_baseline(manifest_path)
+
+    data["workspace"] = "workspace"
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+    _baseline(tmp_path / "second")
+    with pytest.raises(core.BenchmarkError, match="duplicate baseline id"):
+        discover_baselines(tmp_path)
+
+
+def test_manifest_missing_contract_field_has_context(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    manifest_path = baseline / "baseline.json"
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del data["contract"]["objective_count"]
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(core.BenchmarkError, match="objective_count"):
+        load_baseline(manifest_path)
+
+
+def test_manifest_cannot_exclude_behavioral_workspace_input(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    manifest_path = baseline / "baseline.json"
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data["snapshot_excludes"] = ["submit"]
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(core.BenchmarkError, match="behavioral input"):
+        load_baseline(manifest_path)
+
+
+def test_study_accepts_unknown_complete_strategies_and_arbitrary_arms(
     tmp_path: Path,
 ) -> None:
-    paths = core.Paths(
-        tmp_path,
-        tmp_path / "benchmark.toml",
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
-    )
-    spec = _minimal_spec(tmp_path)
-    _run_id, run_root = core.create_run(paths, spec, run_id="legacy-unfinished")
-    shutil.rmtree(run_root / "inputs" / "execution" / "benchmark_runtime")
+    _baseline(tmp_path)
+    spec = _plan(tmp_path)
 
-    with pytest.raises(core.BenchmarkError, match="restart or migration"):
-        core.verify_run_inputs(paths, run_root, spec)
+    assert [item.id for item in spec.study.strategies] == [
+        "alpha",
+        "beta",
+        "gamma",
+    ]
+    assert len(spec.cells) == 3
+    assert {cell.planned_evaluations for cell in spec.cells} == {6}
+    assert all(cell.strategy_source.is_file() for cell in spec.cells)
 
 
-def test_completed_run_without_snapshot_remains_readable(tmp_path: Path) -> None:
-    paths = core.Paths(
-        tmp_path,
-        tmp_path / "benchmark.toml",
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
-    )
-    spec = _minimal_spec(tmp_path)
-    run_id, run_root = core.create_run(paths, spec, run_id="legacy-completed")
-    _loaded_root, _loaded_spec, state = core.load_run(paths, run_id)
-    state["status"] = "completed"
-    state["cells"]["smoke__case__seed-1"]["status"] = "completed"
-    core._save_state(run_root, state)
-    shutil.rmtree(run_root / "inputs" / "execution" / "benchmark_runtime")
-
-    core.verify_run_inputs(paths, run_root, spec)
-
-
-def test_same_run_id_is_isolated_by_runs_dir(tmp_path: Path) -> None:
-    spec = _minimal_spec(tmp_path)
-    roots = [tmp_path / "first outputs", tmp_path / "第二 输出"]
-    created = []
-    for runs in roots:
-        paths = core.Paths(
-            tmp_path,
-            tmp_path / "benchmark.toml",
-            runs,
-            tmp_path / "strategies",
-            tmp_path / "history",
+def test_strategy_requires_complete_build_function(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    study = _study(tmp_path, ("alpha",))
+    source = _strategy(tmp_path, "alpha")
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+    with pytest.raises(core.BenchmarkError, match="build_optimization"):
+        load_study(
+            study,
+            default_runs_dir=tmp_path / "runs",
         )
-        _run_id, run_root = core.create_run(paths, spec, run_id="same-id")
-        created.append(run_root)
-    assert created == [roots[0] / "same-id", roots[1] / "same-id"]
-    assert all(path.is_dir() for path in created)
 
 
-def test_load_run_rejects_run_id_escape(tmp_path: Path) -> None:
-    paths = core.Paths(
-        tmp_path,
-        tmp_path / "benchmark.toml",
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
-    )
-    with pytest.raises(core.BenchmarkError, match="escapes benchmark root"):
-        core.load_run(paths, "../outside")
+def test_saved_spec_is_the_plan_and_inputs_are_immutable(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    spec = _plan(tmp_path)
+    run_root = create_run(spec, run_id="same-plan")
+    saved, _state = load_run(run_root)
+
+    assert saved["digest"] == spec.digest
+    assert saved["cells"] == [cell.to_dict() for cell in spec.cells]
+    external = spec.cells[0].strategy_source
+    snapshot = run_root / spec.cells[0].strategy_snapshot
+    before = snapshot.read_text(encoding="utf-8")
+    external.write_text("def build_optimization(): return 'changed'\n", encoding="utf-8")
+    assert snapshot.read_text(encoding="utf-8") == before
 
 
-def test_sequence_directories_are_append_only(tmp_path: Path) -> None:
-    first = core._new_sequence_dir(tmp_path, "collect")
-    second = core._new_sequence_dir(tmp_path, "collect")
-    assert first.name == "collect-0001"
-    assert second.name == "collect-0002"
-    assert first.is_dir() and second.is_dir()
-
-
-def test_declared_clone_excludes_runtime_and_replaces_starter_roots(tmp_path: Path) -> None:
-    source = tmp_path / "source"
-    destination = tmp_path / "destination"
-    (source / "submit").mkdir(parents=True)
-    (source / "job_template").mkdir()
-    (source / "recorded_data").mkdir()
-    (source / "config.py").write_text("SOURCE = True\n", encoding="utf-8")
-    (source / "submit" / "optimization.py").write_text("ARM = 'source'\n", encoding="utf-8")
-    (source / "job_template" / "workflow.py").write_text("pass\n", encoding="utf-8")
-    (source / "recorded_data" / "row.json").write_text("{}", encoding="utf-8")
-    (destination / "submit").mkdir(parents=True)
-    (destination / "job_template").mkdir()
-    (destination / "submit" / "starter.py").write_text("pass\n", encoding="utf-8")
-    core._copy_declared_inputs(source, destination, ["config.py", "submit", "job_template"])
-    assert (destination / "config.py").read_text(encoding="utf-8") == "SOURCE = True\n"
-    assert not (destination / "submit" / "starter.py").exists()
-    assert not (destination / "recorded_data").exists()
-
-
-def test_managed_config_override_is_single_use(tmp_path: Path) -> None:
-    config = tmp_path / "config.py"
-    config.write_text("VALUE = 1\n", encoding="utf-8")
-    core._apply_config_overrides(config, {"OPTIMIZE_SMOKE_TEST_ENABLED": False})
-    text = config.read_text(encoding="utf-8")
-    assert text.count(core.CONFIG_BLOCK_START) == 1
-    with pytest.raises(core.BenchmarkError, match="already exists"):
-        core._apply_config_overrides(config, {"OPTIMIZE_SMOKE_TEST_ENABLED": False})
-
-
-def test_attempt_replacement_links_to_sealed_predecessor(tmp_path: Path) -> None:
-    paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path / "strategies", tmp_path / "history")
-    run_root = tmp_path / "runs" / "run"
-    cell_plan = {"cell_id": "case__real__seed-1", "case": "case", "arm": "real", "seed": 1}
-    cell_state = {"status": "pending", "attempts": []}
-    spec = {
-        "cases": {"case": {"baseline": {"baseline_id": "task-111111111111"}}}
-    }
-    _root1, attempt1 = core._prepare_attempt({}, paths, run_root, spec, cell_plan, cell_state)
-    attempt1["status"] = "failed"
-    cell_state["status"] = "failed"
-    _root2, attempt2 = core._prepare_attempt({}, paths, run_root, spec, cell_plan, cell_state)
-    assert attempt1["attempt"] == 1
-    assert attempt2["attempt"] == 2
-    assert attempt2["replacement_for"] == 1
-    assert Path(attempt1["workspace"]).parent != Path(attempt2["workspace"]).parent
-    assert attempt1["visualization_output_dir"] == attempt2["visualization_output_dir"]
-    assert attempt1["visualization_file_prefix"] != attempt2["visualization_file_prefix"]
-
-
-def test_candidate_budget_uses_public_generation_population_sizes() -> None:
-    metadata = [
-        {"record_type": "generation", "generation_index": 0, "population_size": 4},
-        {"record_type": "generation", "generation_index": 1, "population_size": 4},
-    ]
-    assert core._attempted_count(metadata) == 8
-
-
-@pytest.mark.parametrize(
-    ("fail_fast", "expected"),
-    [
-        (True, ["failed", "skipped"]),
-        (False, ["failed", "completed"]),
-    ],
-)
-def test_suite_failure_policy_controls_independent_cells(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_fast: bool, expected: list[str]
+def test_execution_checks_the_materialized_strategy_and_reports_three_arms(
+    tmp_path: Path,
 ) -> None:
-    paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path / "strategies", tmp_path / "history")
-    cells = [
-        {"cell_id": "first", "kind": "measured", "case": "case", "arm": "real", "seed": 1},
-        {"cell_id": "second", "kind": "measured", "case": "case", "arm": "real", "seed": 2},
-    ]
-    spec = _minimal_spec(tmp_path)
-    spec["plan"]["cells"] = cells
-    spec["runner"]["fail_fast"] = fail_fast
-    spec["spec_sha256"] = core.object_sha256({key: value for key, value in spec.items() if key != "spec_sha256"})
-    run_id, _run_root = core.create_run(paths, spec, run_id=f"policy-{fail_fast}")
+    _baseline(tmp_path)
+    spec = _plan(tmp_path)
+    run_root = create_run(spec, run_id="execute-three")
+    checked: list[str] = []
 
-    def fake_run_one(
-        _config,
-        _paths,
-        run_root,
-        _spec,
-        state,
-        cell_plan,
+    def fake_command(
+        command,
         *,
-        stream_subprocess_output=False,
-        progress=None,
+        cwd,
+        command_root,
+        label,
+        timeout_seconds,
+        event_sink=None,
     ):
-        assert stream_subprocess_output is False
-        assert isinstance(progress, core.CellProgress)
-        cell_state = state["cells"][cell_plan["cell_id"]]
-        if cell_plan["cell_id"] == "first":
-            cell_state["status"] = "failed"
-            core._save_state(run_root, state)
-            return False
-        cell_state["status"] = "completed"
-        core._save_state(run_root, state)
-        return True
-
-    monkeypatch.setattr(execution, "_run_one_cell", fake_run_one)
-    state = execution.execute_run({}, paths, run_id)
-    assert [state["cells"][cell["cell_id"]]["status"] for cell in cells] == expected
-
-
-def test_measured_cell_groups_postprocess_results_by_baseline_and_shares_viewcost(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    run_root = tmp_path / "run"
-    run_root.mkdir()
-    visualization_dir = run_root / "visualizations"
-    visualization_dir.mkdir()
-    result_dir = visualization_dir / "task-111111111111"
-    result_dir.mkdir()
-    (result_dir / "prior-cell.png").write_bytes(b"prior")
-    paths = core.Paths(
-        tmp_path,
-        tmp_path / "benchmark.toml",
-        tmp_path / "runs",
-        tmp_path / "strategies",
-        tmp_path / "history",
-    )
-    cell = {
-        "cell_id": "case__nsga3__seed-1",
-        "kind": "measured",
-        "case": "case",
-        "arm": "nsga3",
-        "seed": 1,
-        "population": 4,
-        "generations": 1,
-        "max_generations": 1,
-    }
-    spec = {
-        "package": {"python": "python"},
-        "runner": {"command_timeout_sec": 30},
-        "cases": {
-            "case": {
-                "baseline": {
-                    "baseline_id": "task-111111111111",
-                    "include_paths": ["config.py"],
-                },
-                "mode": "fast",
-            }
-        },
-        "arms": {"nsga3": {"surrogate": False}},
-    }
-    state = {
-        "schema_version": 1,
-        "updated_utc": "",
-        "events": [],
-        "cells": {cell["cell_id"]: {"status": "pending", "attempts": []}},
-    }
-    commands: list[tuple[str, list[str]]] = []
-
-    def fake_execute(command, **kwargs):
-        commands.append((kwargs["label"], list(command)))
-        return {"returncode": 0, "timed_out": False}
-
-    def fake_materialize(_paths, _run_root, _spec, _cell, _attempt_root, attempt):
-        Path(attempt["workspace"]).mkdir(parents=True)
-        (Path(attempt["workspace"]) / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
-        attempt["input_fingerprint"] = core.task_fingerprint(
-            Path(attempt["workspace"]), ["config.py"]
+        del timeout_seconds, event_sink
+        selected = (cwd / "submit" / "optimization.py").read_text(encoding="utf-8")
+        if label == "check":
+            checked.append(selected)
+            assert "baseline" not in selected
+        command_root.mkdir(parents=True)
+        stdout = command_root / "stdout.log"
+        stderr = command_root / "stderr.log"
+        stdout.write_text("", encoding="utf-8")
+        stderr.write_text("", encoding="utf-8")
+        return CommandResult(
+            tuple(str(item) for item in command),
+            0,
+            0.01,
+            False,
+            stdout,
+            stderr,
         )
 
-    monkeypatch.setattr(execution, "_execute_logged", fake_execute)
-    monkeypatch.setattr(state_runtime, "materialize_attempt_inputs", fake_materialize)
-    monkeypatch.setattr(execution, "_has_completed_generation_prefix", lambda *_args: (True, [0]))
-    assert execution._run_one_cell({}, paths, run_root, spec, state, cell)
-    assert [label for label, _command in commands] == [
-        "init",
-        "check",
-        "optimize",
-        "postprocess",
-        "view-cost",
-    ]
-    attempt = state["cells"][cell["cell_id"]]["attempts"][0]
-    visualization_prefix = f"{cell['cell_id']}__attempt-0001__"
-    viewcost_dir = visualization_dir / "viewcost"
-    assert Path(attempt["visualization_output_dir"]) == result_dir
-    assert attempt["visualization_file_prefix"] == visualization_prefix
-    assert Path(attempt["cost_visualization_output"]) == (
-        viewcost_dir / f"{visualization_prefix}benchmark-cost.png"
-    )
-    assert visualization_dir.is_dir()
-    assert result_dir.is_dir()
-    assert viewcost_dir.is_dir()
-    assert (result_dir / "prior-cell.png").read_bytes() == b"prior"
-    assert commands[-2][1][-3] == str(result_dir)
-    assert commands[-2][1][-1] == visualization_prefix
-    assert commands[-1][1][-1] == str(
-        viewcost_dir / f"{visualization_prefix}benchmark-cost.png"
-    )
-    assert state["cells"][cell["cell_id"]]["status"] == "completed"
+    values = {"alpha": 0.2, "beta": 0.35, "gamma": 0.1}
 
+    def fake_collect(_workspace: Path, cell: dict) -> dict:
+        return _cell_result(cell, values[cell["strategy"]])
 
-def _cell(
-    case: str,
-    arm: str,
-    seed: int,
-    *,
-    complete: bool,
-    fingerprint: str | None,
-    attempted: int,
-    hv: float,
-) -> dict:
-    return {
-        "cell_id": f"{case}-{arm}-{seed}",
-        "kind": "measured",
-        "case": case,
-        "arm": arm,
-        "seed": seed,
-        "execution_status": "completed" if complete else "failed",
-        "eligible_for_primary_performance_aggregate": complete,
-        "metrics": {
-            "initial_population_fingerprint": fingerprint,
-            "attempted_real_evaluations": attempted,
-            "hypervolume": {"final_cumulative": hv},
-            "evaluator_elapsed_sec_sum": 4.0 if arm == "real" else 3.0,
-            "cell_command_wall_sec": 5.0 if arm == "real" else 4.0,
-            "finite_objective_rows": attempted,
-            "invalid_objective_rows": 0,
-            "evaluation_normalized_hv_auc": {"value": None},
-            "surrogate": {"training_duration_sec": 1.25} if arm == "surrogate" else None,
-        },
-    }
-
-
-def test_performance_report_pairs_only_complete_equal_population_cells() -> None:
-    spec = {"arms": {"real": {"surrogate": False}, "surrogate": {"surrogate": True}}}
-    cells = [
-        _cell("case", "real", 1, complete=True, fingerprint="same", attempted=8, hv=0.2),
-        _cell("case", "surrogate", 1, complete=True, fingerprint="same", attempted=8, hv=0.3),
-        _cell("case", "real", 2, complete=True, fingerprint="other", attempted=8, hv=0.4),
-        _cell("case", "surrogate", 2, complete=False, fingerprint=None, attempted=4, hv=0.1),
-    ]
-    collection = {"cells": {cell["cell_id"]: cell for cell in cells}, "tool_gaps": {}}
-    report = core._performance_report(spec, collection)
-    assert len(report["included_pairs"]) == 1
-    assert len(report["excluded_pairs_retained"]) == 1
-    difference = report["included_pairs"][0]["differences"]["surrogate_minus_real"]
-    assert difference["final_cumulative_hypervolume"] == pytest.approx(0.1)
-    assert report["descriptive_aggregate_by_case"]["case"][
-        "surrogate_minus_real.final_cumulative_hypervolume"
-    ]["count"] == 1
-
-
-def test_json_safe_replaces_nonfinite_values() -> None:
-    assert core._json_safe({"finite": 1.0, "nan": float("nan"), "inf": float("inf")}) == {
-        "finite": 1.0,
-        "nan": None,
-        "inf": None,
-    }
-
-
-def test_initial_population_is_fingerprinted_in_population_index_order() -> None:
-    generations = [
-        {
-            "record_type": "generation",
-            "generation_index": 0,
-            "created_job_names": ["finished-second", "finished-first"],
-        }
-    ]
-    records = [
-        {"job_name": "finished-second", "population_index": 1},
-        {"job_name": "finished-first", "population_index": 0},
-    ]
-    normalized = {"finished-first": (0.1, 0.2), "finished-second": (0.3, 0.4)}
-    fingerprint, count, gap = core._initial_population_fingerprint(
-        generations, normalized, records
-    )
-    assert fingerprint == core.object_sha256([[0.1, 0.2], [0.3, 0.4]])
-    assert count == 2
-    assert gap is None
-
-
-def test_utf8_io_and_space_non_ascii_path(tmp_path: Path) -> None:
-    root = tmp_path / "含 空格"
-    path = root / "状态.json"
-    core.atomic_write_json(path, {"message": "结构验证 ✓"})
-    assert core.read_json(path) == {"message": "结构验证 ✓"}
-    text_path = root / "日志.log"
-    core._write_new_text(text_path, "第一行\n第二行 ✓\n")
-    assert text_path.read_text(encoding="utf-8") == "第一行\n第二行 ✓\n"
-
-
-def test_materialization_selects_strategy_and_records_starting_evidence(tmp_path: Path) -> None:
-    baseline = tmp_path / "inputs" / "baselines" / "case" / "workspace"
-    workspace = tmp_path / "attempt" / "workspace"
-    attempt_root = workspace.parent
-    for root in (baseline, workspace):
-        (root / "submit").mkdir(parents=True)
-        (root / "job_template").mkdir()
-        (root / "config.py").write_text("VALUE = 1\n", encoding="utf-8")
-        (root / "submit" / "optimization.py").write_text("ARM = 'starter'\n", encoding="utf-8")
-        (root / "job_template" / "workflow.py").write_text("pass\n", encoding="utf-8")
-    strategy = tmp_path / "surrogate.py"
-    strategy.write_text("ARM = 'surrogate'\n", encoding="utf-8")
-    include = ["config.py", "submit", "job_template"]
-    spec = {
-        "runner": {
-            "measured_config_overrides": {
-                "HISTORY_SEGMENT_MAX_CANDIDATES": 100,
-                "HISTORY_UNPUBLISHED_MAX_CANDIDATES": 128,
-            }
-        },
-        "cases": {
-            "case": {
-                "baseline": {
-                    "snapshot_workspace": "inputs/baselines/case/workspace",
-                    "include_paths": include,
-                    "actual_task_fingerprint": core.task_fingerprint(baseline, include),
-                },
-                "history_policy": "empty",
-                "starting_evidence": {"policy": "empty", "fingerprint": "empty"},
-                "max_workers": 2,
-            }
-        },
-        "arms": {
-            "surrogate": {
-                "template": None,
-                "sha256": None,
-                "case_strategy_templates": {
-                    "case": {
-                        "path": str(strategy),
-                        "sha256": core.file_sha256(strategy),
-                    }
-                },
-                "config_overrides": {},
-            }
-        },
-    }
-    cell = {"kind": "measured", "case": "case", "arm": "surrogate", "seed": 1}
-    attempt = {
-        "workspace": str(workspace),
-        "input_fingerprint": None,
-    }
-    paths = core.Paths(tmp_path, tmp_path / "benchmark.toml", tmp_path / "runs", tmp_path, tmp_path / "history")
-    core._materialize_attempt_inputs(paths, tmp_path, spec, cell, attempt_root, attempt)
-    assert (workspace / "submit" / "optimization.py").read_text(encoding="utf-8") == "ARM = 'surrogate'\n"
-    config_text = (workspace / "config.py").read_text(encoding="utf-8")
-    assert "HISTORY_SEGMENT_MAX_CANDIDATES = 100" in config_text
-    assert "HISTORY_UNPUBLISHED_MAX_CANDIDATES = 128" in config_text
-    assert "ARM = 'surrogate'" not in config_text
-    manifest = core.read_json(attempt_root / "input_manifest.json")
-    assert manifest["starting_evidence_fingerprint"] == "empty"
-
-
-def test_seal_records_mutated_declared_inputs_as_provenance(tmp_path: Path) -> None:
-    run_root = tmp_path / "run"
-    workspace = run_root / "workspace"
-    workspace.mkdir(parents=True)
-    config = workspace / "config.py"
-    config.write_text("VALUE = 1\n", encoding="utf-8")
-    before = core.task_fingerprint(workspace, ["config.py"])
-    attempt = {
-        "attempt": 1,
-        "workspace": str(workspace),
-        "input_fingerprint": before,
-        "post_input_fingerprint": None,
-        "status": "running",
-        "error": None,
-        "sealed_utc": None,
-    }
-    state = {
-        "updated_utc": "",
-        "events": [],
-        "cells": {"cell": {"status": "running"}},
-    }
-    config.write_text("VALUE = 2\n", encoding="utf-8")
-    core._seal_attempt(
+    state = execution.execute_existing_run(
         run_root,
-        state,
-        {"cell_id": "cell"},
-        attempt,
-        status="completed",
-        include_paths=["config.py"],
+        command_runner=fake_command,
+        collector=fake_collect,
     )
-    assert attempt["status"] == "completed"
-    assert attempt["input_fingerprint"] != attempt["post_input_fingerprint"]
-    assert attempt["error"] is None
-    assert state["cells"]["cell"]["status"] == "completed"
+
+    assert state["status"] == "completed"
+    assert len(checked) == 3
+    results = read_json(run_root / "results.json")
+    assert len(results["rows"]) == 3
+    by_strategy = {
+        row["strategy"]: row["reference_delta"]
+        for row in results["comparisons"]
+    }
+    assert by_strategy == pytest.approx(
+        {"alpha": 0.0, "beta": 0.15, "gamma": -0.1}
+    )
+    assert results["cells"][next(iter(results["cells"]))]["extensions"][
+        "yadof.optimization"
+    ]
+    assert "Evaluations" in (run_root / "report.md").read_text(encoding="utf-8")
+
+
+def test_three_arm_report_is_complete_without_reference(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    study = _study(tmp_path)
+    study.write_text(
+        study.read_text(encoding="utf-8").replace('reference = "alpha"\n', ""),
+        encoding="utf-8",
+    )
+    request = load_study(study, default_runs_dir=tmp_path / "runs")
+    spec = plan_study(request, discover_baselines(tmp_path / "baselines"))
+    run_root = create_run(spec, run_id="no-reference")
+    execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+    )
+
+    comparisons = read_json(run_root / "results.json")["comparisons"]
+    assert len(comparisons) == 3
+    assert all(row["reference"] is None for row in comparisons)
+    assert all(row["reference_delta"] is None for row in comparisons)
+
+
+def test_failed_cell_retries_and_interrupted_attempt_is_sealed(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    request = load_study(
+        _study(tmp_path, ("alpha",)), default_runs_dir=tmp_path / "runs"
+    )
+    spec = plan_study(request, discover_baselines(tmp_path / "baselines"))
+    run_root = create_run(spec, run_id="recover")
+    saved, state = load_run(run_root)
+    cell = saved["cells"][0]
+    _attempt_root, _workspace, attempt = prepare_attempt(run_root, cell, state)
+    attempt["status"] = "running"
+    state["cells"][cell["id"]]["status"] = "running"
+    save_state(run_root, state)
+
+    resumed = execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=lambda _workspace, item: _cell_result(item, 0.2),
+    )
+
+    attempts = resumed["cells"][cell["id"]]["attempts"]
+    assert resumed["status"] == "completed"
+    assert [item["status"] for item in attempts] == ["interrupted", "collected"]
+
+
+def test_failed_cell_gets_a_new_attempt_on_resume(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    request = load_study(
+        _study(tmp_path, ("alpha",)), default_runs_dir=tmp_path / "runs"
+    )
+    spec = plan_study(request, discover_baselines(tmp_path / "baselines"))
+    run_root = create_run(spec, run_id="retry-failure")
+    fail_once = [True]
+
+    def command(*args, **kwargs):
+        result = _successful_command(*args, **kwargs)
+        if kwargs["label"] == "check" and fail_once.pop():
+            return CommandResult(
+                result.command, 9, result.duration_seconds, False,
+                result.stdout, result.stderr,
+            )
+        return result
+
+    failed = execution.execute_existing_run(
+        run_root, command_runner=command,
+        collector=lambda _workspace, item: _cell_result(item, 0.2),
+    )
+    resumed = execution.execute_existing_run(
+        run_root, command_runner=_successful_command,
+        collector=lambda _workspace, item: _cell_result(item, 0.2),
+    )
+
+    attempts = next(iter(resumed["cells"].values()))["attempts"]
+    assert failed["status"] == "failed"
+    assert resumed["status"] == "completed"
+    assert [item["status"] for item in attempts] == ["failed", "collected"]
+
+
+def test_truncated_state_fails_closed_with_path_context(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    run_root = create_run(_plan(tmp_path), run_id="truncated-state")
+    (run_root / "state.json").write_text("{", encoding="utf-8")
+
+    with pytest.raises(core.BenchmarkError, match=r"state\.json"):
+        result_runtime.inspect_run(run_root)
+
+
+def test_resume_uses_run_driver_and_inspect_is_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _baseline(tmp_path)
+    spec = _plan(tmp_path)
+    run_root = create_run(spec, run_id="snapshot-resume")
+    saved, state = load_run(run_root)
+    for cell_id, cell in state["cells"].items():
+        cell["status"] = "collected"
+        attempt_root = run_root / "cells" / cell_id / "attempts" / "0001"
+        attempt_root.mkdir(parents=True)
+        workspace = attempt_root / "workspace"
+        workspace.mkdir()
+        result_path = attempt_root / "result.json"
+        cell_plan = next(item for item in saved["cells"] if item["id"] == cell_id)
+        result_path.write_text(
+            json.dumps(_cell_result(cell_plan, 0.2)) + "\n",
+            encoding="utf-8",
+        )
+        cell["attempts"] = [
+            {
+                "number": 1,
+                "path": attempt_root.relative_to(run_root).as_posix(),
+                "workspace": workspace.relative_to(run_root).as_posix(),
+                "status": "collected",
+                "result": result_path.relative_to(run_root).as_posix(),
+            }
+        ]
+    state["status"] = "completed"
+    from benchmark_runtime.storage import atomic_write_json
+
+    atomic_write_json(run_root / "state.json", state)
+    state_path = run_root / "state.json"
+    before = state_path.stat().st_mtime_ns
+    monkeypatch.setattr(
+        execution,
+        "execute_existing_run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("current execution module was used")
+        ),
+    )
+
+    result = core.resume_run(run_root)
+    inspected = inspect_run(run_root)
+
+    assert result["status"] == "completed"
+    assert inspected["status"] == "completed"
+    assert state_path.stat().st_mtime_ns == before
+
+
+def test_missing_run_driver_fails_closed(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    run_root = create_run(_plan(tmp_path), run_id="missing-driver")
+    (run_root / "driver" / "benchmark_runtime" / "__init__.py").unlink()
+
+    with pytest.raises(core.BenchmarkError, match="driver snapshot is incomplete"):
+        core.resume_run(run_root)
+
+
+def test_core_exports_only_explicit_public_surface() -> None:
+    assert core.__all__ == [
+        "BaselineManifest",
+        "BenchmarkError",
+        "RunSpec",
+        "StudyRequest",
+        "discover_baselines",
+        "inspect_run",
+        "load_study",
+        "plan_study",
+        "resume_run",
+        "run_study",
+    ]
+    assert not any(name.startswith("_") for name in core.__all__)
+
+
+def test_cli_has_only_the_current_command_surface(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    command = [sys.executable, str(root / "benchmark.py"), "--help"]
+    result = subprocess.run(command, cwd=root.parent, text=True, capture_output=True)
+
+    assert result.returncode == 0
+    assert "{baselines,plan,run,resume,inspect}" in result.stdout
+    for removed in ("preflight", "collect", "report", "--suite"):
+        assert removed not in result.stdout
+
+
+def test_product_tree_and_runtime_complexity_guards() -> None:
+    root = Path(__file__).resolve().parents[1]
+    ignored = {"__pycache__", ".pytest_cache"}
+    assert {item.name for item in root.iterdir()} - ignored == {
+        "benchmark.py", "benchmark_core.py", "baselines", "benchmark_runtime",
+        "dev_doc", "tests",
+    }
+    runtime = sorted((root / "benchmark_runtime").glob("*.py"))
+    sources = [root / "benchmark.py", root / "benchmark_core.py", *runtime]
+    assert sum(len(path.read_text(encoding="utf-8").splitlines()) for path in sources) <= 2000
+    assert all(len(path.read_text(encoding="utf-8").splitlines()) <= 450 for path in runtime)
+    forbidden_algorithms = re.compile(
+        r"qnehvi|gpsaf|pca|svd|hierarchical|conditional|pymoo", re.IGNORECASE
+    )
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        assert not forbidden_algorithms.search(text), path
+        tree = ast.parse(text)
+        functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+        assert all(node.end_lineno - node.lineno + 1 <= 80 for node in functions)
+        assert not any(
+            isinstance(node, ast.ImportFrom)
+            and node.level
+            and any(alias.name.startswith("_") for alias in node.names)
+            for node in ast.walk(tree)
+        )
+        assert not any(
+            isinstance(node, ast.ImportFrom)
+            and any(alias.name == "*" for alias in node.names)
+            for node in ast.walk(tree)
+        )
+
+
+def test_current_surface_has_no_incidental_generation_markers() -> None:
+    root = Path(__file__).resolve().parents[1]
+    paths = [root / "benchmark.py", root / "benchmark_core.py"]
+    paths += list((root / "benchmark_runtime").glob("*.py"))
+    paths += list((root / "dev_doc").glob("*.md"))
+    marker = re.compile(r"(?<![A-Za-z0-9])v\d+", re.IGNORECASE)
+    assert not [path for path in paths if marker.search(path.read_text(encoding="utf-8"))]

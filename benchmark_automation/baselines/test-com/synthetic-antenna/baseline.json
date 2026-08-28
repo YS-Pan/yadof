@@ -1,19 +1,14 @@
 {
-  "schema_version": 1,
-  "baseline_id": "synthetic-antenna",
-  "case_id": "test-com",
-  "provider_id": "test-com",
-  "task_id": "synthetic-antenna",
-  "created_utc": "2026-08-24T12:11:58.186Z",
-  "created_by": "yadof benchmark maintainers",
-  "yadof_version": "0.4.0",
-  "task_fingerprint": "0b64f13b9f0b209f5dd23ce4d7f841119580f47885536db2184cb661d6c088f8",
-  "include_paths": ["config.py", "submit", "job_template", "postprocess.py"],
-  "source": "Frozen synthetic test_com benchmark workspace derived from synthetic-antenna-29b314e9304e; its common diagnostic postprocessor supports collision-safe filename prefixes in one flat run visualization directory.",
-  "validation": {
-    "check_errors": 0,
-    "check_warnings": 0,
-    "smoke_costs": [0.25742364157735514, 0.2574236415773551, 0.46674049473811335, 0.7645994776503036],
+  "format": "yadof.benchmark.baseline",
+  "id": "test-com/synthetic-antenna",
+  "name": "Synthetic antenna",
+  "description": "Fast deterministic antenna-shaped task with four normalized objectives.",
+  "workspace": "workspace",
+  "execution": {
+    "mode": "fast",
+    "timeout_seconds": 7200
+  },
+  "contract": {
     "objective_count": 4,
     "rawdata_shapes": {
       "s11_pinState1": [5],
@@ -25,8 +20,11 @@
       "axial_ratio_pinState1": [5, 73, 73],
       "axial_ratio_pinState2": [5, 73, 73],
       "axial_ratio_pinState3": [5, 73, 73]
-    },
-    "baseline_record_rows": 0,
-    "baseline_checkpoint_files": 0
-  }
+    }
+  },
+  "estimates": {
+    "evaluation_seconds": 0.6,
+    "record_mib": 0.5
+  },
+  "snapshot_excludes": []
 }

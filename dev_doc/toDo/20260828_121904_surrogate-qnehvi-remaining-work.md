@@ -155,9 +155,9 @@
 
 - 八个 legacy `hierarchical_cae_*.py` runner 与 v1-v10 可执行 hash validators 已从当前树
   退役；历史实现通过对应 Git revision 查阅，冻结 plans/receipts 保持原结论。
-- 新 benchmark run 使用完整 run-local execution/baseline/strategy/history snapshot；源码、
-  wheel、runner 与 artifact digest 只作 provenance。未来实验只在确有新科学需求时建立
-  普通 experiment runtime 与不超过 120 行的薄 versioned adapter。
+- 新 benchmark run 使用完整 run-local driver、baseline 与 strategy snapshot；源码、wheel 与
+  artifact digest 只作 provenance。未来算法作为 benchmark 目录外的完整
+  `submit/optimization.py` 输入，不建立专项 runner、算法注册点或薄 adapter。
 - 大型权威 evidence 目前主要在 ignored `temp/`，tracked receipts 保存 hashes。正式 release
   前建立内容寻址、只读、可跨身份读取的 artifact export；不要把全部原始数据提交进 Git。
 - acquisition soft fallback 保持安全，但开发/preflight 诊断应持久记录 exception type、阶段和
@@ -193,7 +193,7 @@
   soft fallback 和 hard-stop 边界；
 - 七臂同预算 formal benchmark 完成并通过预注册的科学与总工程成本门槛；
 - release decision、默认策略决定和所有失败/限制如实记录，未通过结构测试替代科学验收；
-- architecture、blueprints、terminology、适用 user docs、benchmark plans/adapters、tests 和 change
+- architecture、blueprints、terminology、适用 user docs、外部 benchmark studies/strategies、tests 和 change
   records 与最终实现同步；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full package 与
   benchmark automation 验收；

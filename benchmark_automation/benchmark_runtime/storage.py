@@ -1,237 +1,352 @@
-"""Storage services for benchmark automation."""
+"""Persistence, provenance, and run-layout services."""
 from __future__ import annotations
-import contextlib
-import dataclasses
+
 import datetime as dt
 import hashlib
-import importlib.metadata
-import importlib.util
 import json
 import math
 import os
-import platform
-import queue
 import re
 import shutil
-import statistics
-import subprocess
-import sys
-import threading
-import time
-import tomllib
-from collections import defaultdict
+import uuid
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
-from rich.console import Console
-from rich.progress import Progress, ProgressColumn, Task, TextColumn
-from rich.table import Column
-from rich.text import Text
-from .contracts import *
+from typing import Any, Mapping
+
+from .baselines import snapshot_baseline
+from .contracts import (
+    RUN_FORMAT,
+    STATE_FORMAT,
+    BenchmarkError,
+    RunSpec,
+)
+
+_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+_IGNORED_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "jobs",
+    "recorded_data",
+    "visualization_outputs",
+}
+
 
 def utc_now() -> str:
-    return dt.datetime.now(dt.UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+    return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
-def canonical_json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
 
-def object_sha256(value: object) -> str:
-    return hashlib.sha256(canonical_json(value).encode('utf-8')).hexdigest()
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-def atomic_write_json(path: Path, value: object) -> None:
-    """Atomically replace a derived JSON index or mutable state file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
-    payload = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n'
-    with temporary.open('x', encoding='utf-8', newline='\n') as stream:
-        stream.write(payload)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
-
-def atomic_write_text(path: Path, value: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
-    with temporary.open('x', encoding='utf-8', newline='\n') as stream:
-        stream.write(value)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
-
-def write_new_json(path: Path, value: object) -> None:
-    """Create immutable JSON evidence and refuse accidental replacement."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n'
-    with path.open('x', encoding='utf-8', newline='\n') as stream:
-        stream.write(payload)
-
-def read_json(path: Path) -> dict[str, Any]:
-    try:
-        value = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise BenchmarkError(f'cannot read JSON {path}: {exc}') from exc
-    if not isinstance(value, dict):
-        raise BenchmarkError(f'expected a JSON object in {path}')
-    return value
-
-def _baseline_identity(paths: Paths, baseline: Path, manifest: Mapping[str, Any], case_id: str) -> dict[str, str]:
-    layout = 'baselines/<provider>/<baseline-id>'
-    try:
-        relative = baseline.resolve().relative_to((paths.root / 'baselines').resolve())
-    except ValueError as exc:
-        raise BenchmarkError(f'case {case_id!r} baseline must use {layout}') from exc
-    if len(relative.parts) != 2:
-        raise BenchmarkError(f'case {case_id!r} baseline must use {layout}')
-    provider_id, baseline_id = relative.parts
-    if BASELINE_NAME_PATTERN.fullmatch(provider_id) is None or BASELINE_NAME_PATTERN.fullmatch(baseline_id) is None:
-        raise BenchmarkError(f'case {case_id!r} baseline must use {layout}')
-    task_id = manifest.get('task_id')
-    if not isinstance(task_id, str) or BASELINE_NAME_PATTERN.fullmatch(task_id) is None:
-        raise BenchmarkError(f'case {case_id!r} baseline has an invalid task_id')
-    expected = {'baseline_id': baseline_id, 'case_id': case_id, 'provider_id': provider_id}
-    for field, value in expected.items():
-        if manifest.get(field) != value:
-            raise BenchmarkError(f'case {case_id!r} baseline metadata {field} must be {value!r}')
-    return {'provider_id': provider_id, 'task_id': task_id}
-
-def resolve_inside(root: Path, value: str | Path, *, label: str) -> Path:
-    root = root.resolve()
-    candidate = (root / value).resolve() if not Path(value).is_absolute() else Path(value).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise BenchmarkError(f'{label} escapes benchmark root: {value}') from exc
-    return candidate
-
-def resolve_runs_dir(benchmark_root: Path, configured_value: str | Path, *, override: str | Path | None=None, invocation_cwd: Path | None=None) -> Path:
-    """Resolve mutable run output without weakening immutable-input containment."""
-    if override is None:
-        base = benchmark_root.resolve()
-        value = Path(configured_value)
-    else:
-        base = (invocation_cwd or Path.cwd()).resolve()
-        value = Path(override)
-    value = value.expanduser()
-    return value.resolve() if value.is_absolute() else (base / value).resolve()
-
-def _is_within(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-    except ValueError:
-        return False
-    return True
-
-def _paths_overlap(left: Path, right: Path) -> bool:
-    return _is_within(left, right) or _is_within(right, left)
-
-def _existing_disk_root(path: Path) -> Path:
-    candidate = path.resolve()
-    while not candidate.exists():
-        parent = candidate.parent
-        if parent == candidate:
-            raise BenchmarkError(f'cannot find an existing parent for runs_dir: {path}')
-        candidate = parent
-    return candidate
-
-def _declared_files(workspace: Path, include_paths: Sequence[str]) -> list[Path]:
-    workspace = workspace.resolve()
-    files: list[Path] = []
-    seen: set[Path] = set()
-    for raw in include_paths:
-        target = resolve_inside(workspace, raw, label='declared input')
-        if not target.exists():
-            raise BenchmarkError(f'declared input does not exist: {target}')
-        candidates = [target] if target.is_file() else sorted((path for path in target.rglob('*') if path.is_file() and '__pycache__' not in path.parts and (path.suffix.lower() not in {'.pyc', '.pyo'})), key=lambda path: path.as_posix().casefold())
-        for path in candidates:
-            resolved = path.resolve()
-            try:
-                resolved.relative_to(workspace)
-            except ValueError as exc:
-                raise BenchmarkError(f'declared input resolves outside workspace: {path}') from exc
-            if resolved not in seen:
-                seen.add(resolved)
-                files.append(resolved)
-    return sorted(files, key=lambda path: path.as_posix().casefold())
-
-def task_manifest(workspace: Path, include_paths: Sequence[str]) -> list[dict[str, str]]:
-    workspace = workspace.resolve()
-    return [{'path': path.relative_to(workspace).as_posix(), 'sha256': file_sha256(path)} for path in _declared_files(workspace, include_paths)]
-
-def task_fingerprint(workspace: Path, include_paths: Sequence[str]) -> str:
-    """Match the frozen-baseline path-tab-file-hash manifest algorithm."""
-    lines = [f"{entry['path']}\t{entry['sha256']}" for entry in task_manifest(workspace, include_paths)]
-    return hashlib.sha256('\n'.join(lines).encode('utf-8')).hexdigest()
-
-def directory_manifest(root: Path) -> list[dict[str, str]]:
-    root = root.resolve()
-    if not root.is_dir():
-        raise BenchmarkError(f'directory does not exist: {root}')
-    files = sorted((path.resolve() for path in root.rglob('*') if path.is_file()), key=lambda path: path.as_posix().casefold())
-    return [{'path': path.relative_to(root).as_posix(), 'sha256': file_sha256(path)} for path in files]
-
-def directory_fingerprint(root: Path) -> str:
-    manifest = directory_manifest(root)
-    lines = [f"{item['path']}\t{item['sha256']}" for item in manifest]
-    return hashlib.sha256('\n'.join(lines).encode('utf-8')).hexdigest()
-
-def _load_toml(path: Path) -> dict[str, Any]:
-    try:
-        with path.open('rb') as stream:
-            value = tomllib.load(stream)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise BenchmarkError(f'cannot load benchmark config {path}: {exc}') from exc
-    if not isinstance(value, dict):
-        raise BenchmarkError('benchmark config root must be a table')
-    return value
-
-def _json_safe(value: Any) -> Any:
-    if value is None or isinstance(value, (str, bool, int)):
-        return value
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
+def json_safe(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
     if isinstance(value, Path):
         return str(value)
-    if dataclasses.is_dataclass(value):
-        return _json_safe(dataclasses.asdict(value))
-    if isinstance(value, Mapping):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [_json_safe(item) for item in value]
-    if hasattr(value, 'tolist'):
-        return _json_safe(value.tolist())
-    if hasattr(value, 'item'):
-        with contextlib.suppress(Exception):
-            return _json_safe(value.item())
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
     return str(value)
 
-def _new_sequence_dir(parent: Path, prefix: str) -> Path:
-    parent.mkdir(parents=True, exist_ok=True)
-    for number in range(1, 1000000):
-        candidate = parent / f'{prefix}-{number:04d}'
-        try:
-            candidate.mkdir()
-            return candidate
-        except FileExistsError:
+
+def canonical_json(value: Any) -> bytes:
+    return json.dumps(
+        json_safe(value),
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def object_digest(value: Any) -> str:
+    return hashlib.sha256(canonical_json(value)).hexdigest()
+
+
+def file_digest(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def directory_digest(root: str | Path, *, excludes: tuple[str, ...] = ()) -> str:
+    directory = Path(root).resolve()
+    entries: list[dict[str, str]] = []
+    normalized_excludes = tuple(Path(item).as_posix().rstrip("/") for item in excludes)
+    for path in sorted(item for item in directory.rglob("*") if item.is_file()):
+        relative = path.relative_to(directory).as_posix()
+        parts = Path(relative).parts
+        if any(part in _IGNORED_PARTS for part in parts):
             continue
-    raise BenchmarkError(f'could not allocate a new {prefix} evidence directory')
+        if len(parts) > 1 and parts[0] == ".yadof" and parts[1] != "workspace.json":
+            continue
+        if relative.endswith((".pyc", ".pyo")):
+            continue
+        if any(relative == item or relative.startswith(item + "/") for item in normalized_excludes):
+            continue
+        entries.append({"path": relative, "sha256": file_digest(path)})
+    return object_digest(entries)
 
-def _write_new_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('x', encoding='utf-8', newline='\n') as stream:
-        stream.write(text)
+
+def read_json(path: str | Path) -> dict[str, Any]:
+    source = Path(path)
+    try:
+        value = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BenchmarkError(f"cannot read JSON {source}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise BenchmarkError(f"JSON root must be an object: {source}")
+    return value
 
 
-baseline_identity = _baseline_identity
-is_within = _is_within
-paths_overlap = _paths_overlap
-existing_disk_root = _existing_disk_root
-load_toml = _load_toml
-json_safe = _json_safe
-new_sequence_dir = _new_sequence_dir
-write_new_text = _write_new_text
+def _serialized(value: Any, *, indent: int | None = 2) -> str:
+    return json.dumps(
+        json_safe(value),
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        indent=indent,
+    ) + "\n"
+
+
+def write_new_text(path: str | Path, text: str) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with target.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+    except FileExistsError as exc:
+        raise BenchmarkError(f"immutable output already exists: {target}") from exc
+
+
+def write_new_json(path: str | Path, value: Any) -> None:
+    write_new_text(path, _serialized(value))
+
+
+def atomic_write_text(path: str | Path, text: str) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    os.replace(temporary, target)
+
+
+def atomic_write_json(path: str | Path, value: Any) -> None:
+    atomic_write_text(path, _serialized(value))
+
+
+def safe_id(value: str, *, label: str) -> str:
+    if not _ID_PATTERN.fullmatch(value):
+        raise BenchmarkError(f"{label} must match {_ID_PATTERN.pattern!r}: {value!r}")
+    return value
+
+
+def slug(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-._")
+    if not normalized:
+        raise BenchmarkError(f"cannot derive a path name from {value!r}")
+    return normalized
+
+
+def make_run_id(spec: RunSpec) -> str:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return f"{stamp}-{slug(spec.study.name)}-{spec.digest[:12]}"
+
+
+def driver_digest(root: str | Path | None = None) -> str:
+    driver_root = (Path(root).resolve() if root else Path(__file__).resolve().parents[1])
+    paths = [driver_root / "benchmark.py", driver_root / "benchmark_core.py"]
+    paths.extend(sorted((driver_root / "benchmark_runtime").glob("*.py")))
+    entries = [{"path": path.relative_to(driver_root).as_posix(),
+                "sha256": file_digest(path)} for path in paths]
+    return object_digest(entries)
+
+
+def _copy_driver(destination: Path) -> None:
+    automation_root = Path(__file__).resolve().parents[1]
+    destination.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(automation_root / "benchmark.py", destination / "benchmark.py")
+    shutil.copy2(automation_root / "benchmark_core.py", destination / "benchmark_core.py")
+    shutil.copytree(
+        automation_root / "benchmark_runtime",
+        destination / "benchmark_runtime",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+    )
+
+
+def _initial_state(run_id: str, spec: RunSpec) -> dict[str, Any]:
+    now = utc_now()
+    return {
+        "format": STATE_FORMAT,
+        "run_id": run_id,
+        "status": "planned",
+        "created_utc": now,
+        "updated_utc": now,
+        "cells": {
+            cell.id: {
+                "status": "planned",
+                "attempts": [],
+                "error": None,
+            }
+            for cell in spec.cells
+        },
+    }
+
+
+def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
+    selected_id = safe_id(run_id or make_run_id(spec), label="run id")
+    runs_dir = spec.study.runs_dir.resolve()
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    run_root = runs_dir / selected_id
+    if run_root.exists():
+        raise BenchmarkError(f"run already exists: {run_root}")
+    staging = runs_dir / f".{selected_id}.creating-{uuid.uuid4().hex}"
+    staging.mkdir(parents=False, exist_ok=False)
+    try:
+        _copy_driver(staging / "driver")
+        if driver_digest(staging / "driver") != spec.driver_digest:
+            raise BenchmarkError("driver changed after the study was planned")
+        manifests = {item.id: item for item in spec.baselines}
+        copied_baselines: set[str] = set()
+        copied_strategies: dict[str, str] = {}
+        for cell in spec.cells:
+            if cell.baseline_id not in copied_baselines:
+                baseline_destination = staging / cell.baseline_snapshot
+                snapshot_baseline(
+                    manifests[cell.baseline_id], baseline_destination.parent
+                )
+                copied_baselines.add(cell.baseline_id)
+            strategy_destination = staging / cell.strategy_snapshot
+            strategy_destination.parent.mkdir(parents=True, exist_ok=True)
+            current = copied_strategies.get(cell.strategy_snapshot)
+            if current is None:
+                shutil.copy2(cell.strategy_source, strategy_destination)
+                copied_strategies[cell.strategy_snapshot] = cell.strategy_digest
+            elif current != cell.strategy_digest:
+                raise BenchmarkError(
+                    f"strategy snapshot collision at {cell.strategy_snapshot}"
+                )
+        (staging / "cells").mkdir()
+        (staging / "visualizations").mkdir()
+        spec_data = spec.to_dict()
+        spec_data["created_utc"] = utc_now()
+        write_new_json(staging / "spec.json", spec_data)
+        write_new_json(staging / "state.json", _initial_state(selected_id, spec))
+        os.replace(staging, run_root)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return run_root
+
+
+def load_run(run_root: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    root = Path(run_root).resolve()
+    spec = read_json(root / "spec.json")
+    state = read_json(root / "state.json")
+    if spec.get("format") != RUN_FORMAT:
+        raise BenchmarkError(f"not a benchmark run: {root}")
+    if state.get("format") != STATE_FORMAT:
+        raise BenchmarkError(f"invalid run state: {root / 'state.json'}")
+    payload = dict(spec)
+    expected = str(payload.pop("digest", ""))
+    payload.pop("created_utc", None)
+    if object_digest(payload) != expected:
+        raise BenchmarkError(f"run specification digest mismatch: {root}")
+    if state.get("run_id") != root.name:
+        raise BenchmarkError(f"run state identity does not match directory {root.name!r}")
+    return spec, state
+
+
+def save_state(run_root: Path, state: dict[str, Any]) -> None:
+    state["updated_utc"] = utc_now()
+    atomic_write_json(run_root / "state.json", state)
+
+
+def latest_attempt(run_root: Path, cell_state: Mapping[str, Any]) -> tuple[Path, dict[str, Any]]:
+    attempts = cell_state.get("attempts")
+    if not isinstance(attempts, list) or not attempts:
+        raise BenchmarkError("cell has no attempt")
+    attempt = attempts[-1]
+    if not isinstance(attempt, dict):
+        raise BenchmarkError("cell attempt is invalid")
+    return run_root / str(attempt["path"]), attempt
+
+
+def prepare_attempt(
+    run_root: Path,
+    cell: Mapping[str, Any],
+    state: dict[str, Any],
+) -> tuple[Path, Path, dict[str, Any]]:
+    cell_state = state["cells"][str(cell["id"])]
+    number = len(cell_state["attempts"]) + 1
+    attempt_root = (
+        run_root / "cells" / str(cell["id"]) / "attempts" / f"{number:04d}"
+    )
+    attempt_root.mkdir(parents=True, exist_ok=False)
+    workspace = attempt_root / "workspace"
+    shutil.copytree(run_root / str(cell["baseline_snapshot"]), workspace)
+    strategy_source = run_root / str(cell["strategy_snapshot"])
+    strategy_destination = workspace / "submit" / "optimization.py"
+    strategy_destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(strategy_source, strategy_destination)
+    attempt = {
+        "number": number,
+        "path": attempt_root.relative_to(run_root).as_posix(),
+        "workspace": workspace.relative_to(run_root).as_posix(),
+        "status": "planned",
+        "created_utc": utc_now(),
+        "finished_utc": None,
+        "commands": [],
+        "runtime_seconds": 0.0,
+        "error": None,
+    }
+    cell_state["attempts"].append(attempt)
+    cell_state["status"] = "planned"
+    cell_state["error"] = None
+    save_state(run_root, state)
+    return attempt_root, workspace, attempt
+
+
+def mark_interrupted(run_root: Path, state: dict[str, Any]) -> None:
+    changed = False
+    for cell_state in state["cells"].values():
+        if cell_state.get("status") not in {"checked", "running"}:
+            continue
+        if cell_state.get("attempts"):
+            attempt = cell_state["attempts"][-1]
+            attempt["status"] = "interrupted"
+            attempt["finished_utc"] = utc_now()
+            attempt["error"] = "execution ended before a terminal command record"
+        cell_state["status"] = "planned"
+        cell_state["error"] = None
+        changed = True
+    if changed:
+        save_state(run_root, state)
+
+
+__all__ = [
+    "atomic_write_json",
+    "atomic_write_text",
+    "canonical_json",
+    "create_run",
+    "directory_digest",
+    "driver_digest",
+    "file_digest",
+    "json_safe",
+    "latest_attempt",
+    "load_run",
+    "make_run_id",
+    "mark_interrupted",
+    "object_digest",
+    "prepare_attempt",
+    "read_json",
+    "safe_id",
+    "save_state",
+    "slug",
+    "utc_now",
+    "write_new_json",
+    "write_new_text",
+]

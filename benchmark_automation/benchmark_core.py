@@ -1,52 +1,112 @@
-"""Compatibility facade for the split benchmark runtime."""
+"""Public API for the source-checkout benchmark."""
 from __future__ import annotations
-import datetime as dt
+
 import importlib
 import importlib.util
-from pathlib import Path
 import sys
 import uuid
-_BASE = f"{__package__ + '.' if __package__ else ''}benchmark_runtime"
-_EXPORTS = {'contracts': ['BenchmarkError', 'Paths'], 'progress': ['_AsciiBarColumn', '_parse_yadof_progress', 'CellProgress'], 'storage': ['utc_now', 'canonical_json', 'object_sha256', 'file_sha256', 'atomic_write_json', 'atomic_write_text', 'write_new_json', 'read_json', '_baseline_identity', 'resolve_inside', 'resolve_runs_dir', '_is_within', '_paths_overlap', '_existing_disk_root', '_declared_files', 'task_manifest', 'task_fingerprint', 'directory_manifest', 'directory_fingerprint', '_load_toml', '_json_safe', '_new_sequence_dir', '_write_new_text'], 'planning': ['load_config', 'validate_config', '_safe_id', '_config_overrides', '_cell_id', '_select_values', '_cost_view_command', '_postprocess_command', '_visualization_file_prefix', '_baseline_visualization_directory_name', '_planned_commands', 'build_plan', '_package_identity', '_baseline_details', '_strategy_details', '_run_read_only', 'preflight', 'build_run_spec', 'make_run_id', 'summarize_plan', '_tail_text', 'summarize_preflight'], 'state': ['_initial_state', 'create_run', 'load_run', 'verify_run_inputs', '_save_state', '_copy_declared_inputs', '_apply_config_overrides', '_copy_history_snapshot', '_attempt_directory', '_prepare_attempt', '_materialize_attempt_inputs'], 'execution': ['_stream_pipe', '_render_stream_events', '_execute_logged', '_completed_generation_indices', '_has_completed_generation_prefix', '_surrogate_has_been_used', '_cell_command', '_seal_attempt', '_run_one_cell', 'execute_run'], 'results': ['_capture_json_cli', '_generation_metadata', '_attempted_count', '_initial_population_fingerprint', '_rawdata_shapes', '_command_validity', '_finite_cost_row', '_collect_cell', 'collect_run', '_latest_collection', '_metric', '_population_pair_rows', '_structural_report', '_descriptive', '_performance_report', '_format_value', '_markdown_cell', 'format_hypervolume_table', '_report_markdown', 'report_run', 'summarize_report', '_artifact_entry', 'inspect_run'], 'timing': ['_parse_utc', '_format_utc', '_attempt_duration_sec', '_timing_signature_payload', '_timing_signatures', '_snapshot_cross_run_timing', '_load_timing_history', '_duration_observations', '_cell_duration_estimate', '_tail_yadof_progress', '_tail_progress_events', '_active_command', '_generation_phase_estimate', 'estimate_run_timing', 'summarize_run_state']}
-for _module_name, _names in _EXPORTS.items():
-    _module = importlib.import_module(f"{_BASE}.{_module_name}")
-    for _name in _names:
-        globals()[_name] = getattr(_module, _name)
-_contracts = importlib.import_module(f"{_BASE}.contracts")
-for _name in _contracts.__all__:
-    globals()[_name] = getattr(_contracts, _name)
-def _snapshot_execution_module(run_root: Path, spec: dict):
-    snapshot = run_root / spec.get("automation", {}).get(
-        "execution_snapshot", "inputs/execution/benchmark_runtime"
-    )
-    if not (snapshot / "__init__.py").is_file():
-        raise BenchmarkError(
-            "unfinished run has no complete execution snapshot; choose an explicit restart or migration"
-        )
-    package_name = f"_benchmark_execution_{uuid.uuid4().hex}"
-    package_spec = importlib.util.spec_from_file_location(
+from pathlib import Path
+from typing import Any, Callable, Mapping
+
+from benchmark_runtime.baselines import discover_baselines as _discover_baselines
+from benchmark_runtime.contracts import (
+    BaselineManifest,
+    BenchmarkError,
+    RunSpec,
+    StudyRequest,
+)
+from benchmark_runtime.execution import execute_existing_run
+from benchmark_runtime.planning import (
+    load_study as _load_study,
+    plan_study as _plan_study,
+)
+from benchmark_runtime.results import inspect_run as _inspect_run
+from benchmark_runtime.storage import create_run
+
+_AUTOMATION_ROOT = Path(__file__).resolve().parent
+_BASELINES_ROOT = _AUTOMATION_ROOT / "baselines"
+_DEFAULT_RUNS_ROOT = _AUTOMATION_ROOT.parent / "temp"
+
+
+def discover_baselines(
+    root: str | Path | None = None,
+) -> dict[str, BaselineManifest]:
+    return _discover_baselines(root or _BASELINES_ROOT)
+
+
+def load_study(path: str | Path) -> StudyRequest:
+    return _load_study(path, default_runs_dir=_DEFAULT_RUNS_ROOT)
+
+
+def plan_study(study: str | Path | StudyRequest) -> RunSpec:
+    request = load_study(study) if isinstance(study, (str, Path)) else study
+    return _plan_study(request, discover_baselines())
+
+
+def run_study(
+    study: str | Path | StudyRequest,
+    *,
+    run_id: str | None = None,
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    request = load_study(study) if isinstance(study, (str, Path)) else study
+    spec = _plan_study(request, discover_baselines())
+    run_root = create_run(spec, run_id=run_id)
+    execute_existing_run(run_root, event_sink=event_sink)
+    return _inspect_run(run_root)
+
+
+def _snapshot_runtime(run_root: Path):
+    package_root = run_root / "driver" / "benchmark_runtime"
+    init_path = package_root / "__init__.py"
+    if not init_path.is_file():
+        raise BenchmarkError(f"run driver snapshot is incomplete: {package_root}")
+    package_name = f"_benchmark_driver_{uuid.uuid4().hex}"
+    module_spec = importlib.util.spec_from_file_location(
         package_name,
-        snapshot / "__init__.py",
-        submodule_search_locations=[str(snapshot)],
+        init_path,
+        submodule_search_locations=[str(package_root)],
     )
-    if package_spec is None or package_spec.loader is None:
-        raise BenchmarkError("run-local execution snapshot cannot be loaded")
-    package = importlib.util.module_from_spec(package_spec)
+    if module_spec is None or module_spec.loader is None:
+        raise BenchmarkError(f"cannot load run driver: {package_root}")
+    package = importlib.util.module_from_spec(module_spec)
     sys.modules[package_name] = package
-    package_spec.loader.exec_module(package)
-    return importlib.import_module(f"{package_name}.execution")
+    module_spec.loader.exec_module(package)
+    return (
+        importlib.import_module(f"{package_name}.execution"),
+        importlib.import_module(f"{package_name}.results"),
+    )
 
 
-def execute_run(config, paths, run_id, **kwargs):
-    run_root, spec, _state = load_run(paths, run_id)
-    verify_run_inputs(paths, run_root, spec)
-    module = _snapshot_execution_module(run_root, spec)
+def resume_run(
+    run: str | Path,
+    *,
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    run_root = Path(run).resolve()
+    execution, results = _snapshot_runtime(run_root)
     try:
-        return module.execute_run(config, paths, run_id, **kwargs)
+        execution.execute_existing_run(run_root, event_sink=event_sink)
     except Exception as exc:
         if exc.__class__.__name__ == "BenchmarkError":
             raise BenchmarkError(str(exc)) from exc
         raise
+    return results.inspect_run(run_root)
 
 
-del _module, _module_name, _name, _names, _contracts
+def inspect_run(run: str | Path) -> dict[str, Any]:
+    return _inspect_run(run)
+
+
+__all__ = [
+    "BaselineManifest",
+    "BenchmarkError",
+    "RunSpec",
+    "StudyRequest",
+    "discover_baselines",
+    "inspect_run",
+    "load_study",
+    "plan_study",
+    "resume_run",
+    "run_study",
+]

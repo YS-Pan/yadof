@@ -8,7 +8,7 @@
   是 `6ad22a58dfe09b5bb04683e903f6c0d4e4efa9da`。
 - 该提交同时修改 package runtime、scheduler、identity、workspace template、editable
   benchmark inputs、测试、architecture、blueprints、terminology 和 user docs，共跨 68 个
-  文件。installed-wheel 聚焦及全量测试、benchmark plan/preflight 均通过，但如此宽的
+  文件。installed-wheel 聚焦及全量测试、benchmark 无写入 plan 均通过，但如此宽的
   一次性 cutover 仍可能在以后正常工作触及某个边缘路径时暴露遗漏。
 - 用户明确要求：未来一旦在正常任务范围内发现这种漏迁移，应直接完成修复，而不是只做
   分析或另留兼容层。
@@ -29,7 +29,7 @@
 下列任一项时，本 auto TODO 的一次修复触发：
 
 - 已删除的 algorithm/surrogate uppercase key 仍被活动代码、workspace config、template、
-  editable benchmark input 或当前说明当作有效配置使用；
+  外部 benchmark strategy 或当前说明当作有效配置使用；
 - component、backend、scheduler、posterior adapter 或 viewer 仍从完整 `LoadedConfig` 读取
   本应属于 Pymoo、GPSAF、conditional-INR 或 hierarchical CAE 的专用参数；
 - factory 之外仍存在 `settings=`、unrestricted `**kwargs`、hidden temporary override、
@@ -38,7 +38,7 @@
   training/recovery，或 runtime/scheduler 又定义了一套会漂移的算法默认值；
 - `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` 被复制进 component settings，或其他经 owner inventory
   证明属于 core 的 population、seed、smoke、archive/recording/path policy 被误迁走；
-- package starter、示例、editable benchmark strategy、architecture、blueprint、terminology、
+- package starter、示例、外部 benchmark strategy、architecture、blueprint、terminology、
   user docs 或测试描述的当前入口与实现不一致；
 - 新增 algorithm/surrogate 时仍需要在中央 `config.py` 注册其专用字段。
 

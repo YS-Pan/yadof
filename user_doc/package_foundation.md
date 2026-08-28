@@ -82,27 +82,26 @@ remains authoritative for Python and dependency requirements.
 ## Source-checkout benchmark
 
 A Git clone or repository download includes `benchmark_automation/`, a
-user-runnable comparison of editable baseline task templates and strategy arms. It
-is deliberately not installed by `pip install yadof` and is absent from
-wheel/sdist; it uses the matching yadof distribution already installed in the
-selected Python environment. Each new run snapshots the selected baseline inputs,
-so later template edits affect only later runs. A wheel-only installation therefore
-does not include this repository tool.
+user-runnable comparison of editable, self-describing baseline task templates and
+complete optimization strategies supplied by an external study. It is deliberately
+not installed by `pip install yadof` and is absent from wheel/sdist; it uses the
+matching yadof distribution already installed in the selected Python environment.
+A wheel-only installation therefore does not include this repository tool.
 
-From the source-checkout root, start with the bounded no-write plan:
+From the source-checkout root, list baselines and start with the no-write plan:
 
 ```powershell
-python ".\benchmark_automation\benchmark.py" plan --suite structural-canary
+python ".\benchmark_automation\benchmark.py" baselines
+python ".\benchmark_automation\benchmark.py" plan --study D:\studies\comparison.toml
 ```
 
-`preflight` validates selected resources without launching a simulator. Before a
-smoke, optimization, resume, or collection command, read
-`benchmark_automation/README.md` for external prerequisites and the applicable
-cost/risk authorization. The configured default creates each run directly below
-the checkout's ignored `temp/` directory as `temp/<run-id>/`. If a caller supplies
-an explicit `--runs-dir`, it must reuse that same root for later `inspect`,
-`resume`, `collect`, and `report` commands. Start result interpretation with bounded
-`inspect` output and expand one artifact or failed cell at a time.
+The study file lives outside `benchmark_automation/` and selects baseline IDs,
+complete `submit/optimization.py` sources, seeds, a uniform population/generation
+budget, an optional reference, and an output root. Relative paths resolve from the
+study. Each run snapshots its complete driver, baseline workspaces, and strategies;
+later edits affect only later runs. `run` and `resume` may launch the selected task
+software and remain subject to the execution authority in `config_and_run.md`.
+Use `inspect --run PATH` as the read-only first view of a run.
 
 ## Initialize and inspect
 

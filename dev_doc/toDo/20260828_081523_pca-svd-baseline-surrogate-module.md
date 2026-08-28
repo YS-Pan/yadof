@@ -3,7 +3,7 @@
 ## 状态与起因
 
 - 2026-08-28 工程实现已完成：package 现提供显式 opt-in `pca_svd()`、分离的 oracle codec 与
-  deployable ridge predictor、GPSAF 生命周期、原子恢复、v11 四臂 recorded-data runner、测试和
+  deployable ridge predictor、GPSAF 生命周期、原子恢复、可组合的完整 optimization strategy、测试和
   文档。本文仍保留在 active TODO，因为权限边界不授权启动 simulator、正式 benchmark 或
   长时间训练，三个代表性 case 的合法 1000/2000-design measured results 尚未产生。
 - 已封存的 solver audit 只使用 seeded synthetic `1000/2000 x 26645` 矩阵选择实现 backend，
@@ -15,16 +15,13 @@
   中“只有后续用户单独批准才增加 PCA surrogate factory”条件所要求的单独批准。该批准只
   允许实现显式 opt-in 模块，不代表允许把它设为生产默认、宣称性能通过或打开 posterior
   exploitation。
-- 历史 `pca-svd-reconstruction` 诊断臂位于 Git revision
-  `318963356882b0e9805d4e5aa8d9c7a5bdb71d72` 的
-  `benchmark_automation/hierarchical_cae_validation.py:_pca_cell()`；该 legacy runner 已从
-  当前树退役，必要时只用 `git show` 查阅。它逐字段使用训练集均值和
+- 冻结证据中的 `pca-svd-reconstruction` 诊断逐字段使用训练集均值和
   `torch.pca_lowrank(..., center=False)` 建立 rank-32 子空间，再把**验证样本自身的 rawData**
   投影和重建。它适合回答“该字段是否可低秩压缩”和“schema/metric 管线是否合理”，但没有
   学习 `parameters -> coefficients`，因此不是可部署 surrogate，也不能用于给未评估候选生成
   rawData。
-- 上述历史实现已经参与冻结的 Gate 0 v4/v5 证据。不得重写或重新解释旧预注册及结果；
-  package 模块必须在新的预注册中做数值 parity，并由新 arm identity 产生后续证据。
+- 上述诊断已经参与冻结的先前证据。不得重写或重新解释旧计划及结果；package 模块必须在
+  新的外部研究计划中做数值 parity，并由新 strategy identity 产生后续证据。
 - [当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 承接的七臂矩阵要求
   `pca-svd-reconstruction`，但 Gate 0 v10 记录它仍没有 current runner arm。新增模块应补齐
   这个可执行缺口，同时把 oracle reconstruction 与真实参数预测的结论严格分开。
@@ -189,10 +186,13 @@
   surface；不改变 template 默认。
 - 普通 import、未选择组件、缺少 optional backend、切换策略和回切恢复全部通过测试。
 
-### Gate 4：benchmark runner arm 与科学比较
+### Gate 4：外部 benchmark study 与科学比较
 
-- 在新的 preregistration/runner 中加入可执行 oracle PCA、oracle SVD、deployable PCA-ridge、
-  deployable SVD-ridge；如加入 GPSAF composition，使用单独 arm ID 和相同真实评估预算。
+- 在 benchmark 目录之外冻结一个 study request；每个比较项提供独立、完整的
+  `submit/optimization.py`，分别覆盖 oracle PCA、oracle SVD、deployable PCA-ridge 和
+  deployable SVD-ridge。如加入 GPSAF composition，使用独立 strategy ID 和相同真实评估预算。
+- study 只引用 baseline semantic ID 与这些外部 strategy 文件；不得向 benchmark runtime
+  增加算法注册表、角色判断、专项 adapter 或算法特有报告字段。
 - 在 SAW、Chrono、synthetic antenna 的相同 design split、1000/2000 train size、current cost
   和预登记 seeds 上报告：
   - 每字段 physical/standardized MAE、RMSE 与 field-macro aggregate；
@@ -208,8 +208,8 @@
 - 更新 architecture、surrogate/project/test blueprints、terminology、user docs/API examples、
   artifact membership 和 change record，使其描述已实现状态而不是引用本 TODO 作为 current
   truth。
-- 将新 runner arm 接入[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
-  后续重新预注册的正式矩阵；一个 PCA/SVD arm 可执行只消除
+- 将新 strategy 接入[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  后续冻结的正式 study；一个 PCA/SVD strategy 可执行只消除
   该结构缺口，不会解除 CAE performance、posterior calibration、qNEHVI 或其他阈值 blocker。
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused tests、benchmark
   automation tests 和 full installed-wheel suite。需要 simulator/长时间 measured suite 时另行
@@ -244,10 +244,10 @@
 
 - parent import 不加载未选择的 Torch backend；缺 extra 时给出可操作错误；wheel/sdist 成员
   与 blueprint 一致。
-- benchmark oracle report 带 `diagnostic_only=true`，deployable report 带独立 state/split
-  identity；汇总器拒绝把两者混为一个性能均值。
-- 旧 v4/v5 preregistration、hash、receipt 和失败结论不变；新证据只进入新版本目录。
-- source-checkout benchmark focused tests、bounded plan/preflight 和 installed-wheel package
+- oracle 与 deployable 语义由各自完整 strategy 的 identity 和命名空间元数据表达；benchmark
+  原样保存扩展元数据，但不解释、分类或据此改变比较流程。
+- 已冻结的计划、hash、receipt 和失败结论不变；新证据进入独立 run。
+- source-checkout benchmark focused tests、无写入 plan 和 installed-wheel package
   suite 全部通过；真实 measured run 的权限和结果单独记录。
 
 ## 非目标
@@ -288,7 +288,7 @@
   完整 rawData、经 current cost 解释，并显式组合进 GPSAF；
 - rank/solver/centering/predictor/schema/parameter identity、checkpoint 原子性、恢复、workspace
   隔离、lazy dependency 和 failure behavior 已由 generic tests 覆盖；
-- 新预注册 benchmark 的 oracle PCA/SVD 和 deployable PCA/SVD arms 可执行，且旧冻结 evidence
+- 外部 benchmark study 中的 oracle PCA/SVD 和 deployable PCA/SVD strategies 可执行，且冻结 evidence
   未被修改；
 - 三个代表性 cases 的合法 benchmark 结果清楚报告 representation ceiling、deployable gap
   和资源成本；未达到的性能门槛保留为失败结果，不能通过改名归档；

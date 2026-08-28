@@ -1,1 +1,1 @@
-"""Versioned benchmark execution runtime."""
+"""Run-snapshottable services for modular benchmark studies."""

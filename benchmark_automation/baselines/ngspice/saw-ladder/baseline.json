@@ -1,22 +1,27 @@
 {
-  "schema_version": 1,
-  "baseline_id": "saw-ladder",
-  "case_id": "saw",
-  "provider_id": "ngspice",
-  "task_id": "saw-ladder",
-  "created_utc": "2026-08-24T12:11:58.186Z",
-  "created_by": "yadof benchmark maintainers",
-  "yadof_version": "0.4.0",
-  "task_fingerprint": "3d2025426a976aa03cf720757bd37314004db8d29b5a922dcfc36c2d0d753c10",
-  "include_paths": ["config.py", "submit", "job_template", "postprocess.py"],
-  "source": "Frozen ngspice SAW ladder benchmark workspace derived from saw-ladder-b736a99a7dc1; its common response postprocessor supports collision-safe filename prefixes in one flat run visualization directory.",
-  "validation": {
-    "check_errors": 0,
-    "check_warnings": 0,
-    "smoke_costs": [0.23614886445544214, 0.876200337969137, 0.7422218562855797, 0.9478822312139636, 0.4898880600135683],
+  "format": "yadof.benchmark.baseline",
+  "id": "ngspice/saw-ladder",
+  "name": "SAW ladder",
+  "description": "Fast ngspice task for a ninth-order one-gigahertz ladder filter.",
+  "workspace": "workspace",
+  "execution": {
+    "mode": "fast",
+    "timeout_seconds": 7200,
+    "resource": {
+      "kind": "environment_executable",
+      "variable": "YADOF_NGSPICE_EXE"
+    }
+  },
+  "contract": {
     "objective_count": 5,
-    "rawdata_shapes": {"s21_db": [1201], "s11_db": [1201]},
-    "baseline_record_rows": 0,
-    "baseline_checkpoint_files": 0
-  }
+    "rawdata_shapes": {
+      "s21_db": [1201],
+      "s11_db": [1201]
+    }
+  },
+  "estimates": {
+    "evaluation_seconds": 0.7,
+    "record_mib": 0.08
+  },
+  "snapshot_excludes": []
 }

@@ -8,11 +8,10 @@ temporary workspaces. Default tests require no live pool, simulator, concrete mo
 license, machine identity, or credential.
 
 The source-checkout benchmark is a separate repository tool and owns focused
-runner tests under `benchmark_automation/tests/`. Those tests may name its frozen
-cases and schemas but still consume a regular installed yadof distribution. They
-are not part of the package's generic test namespace or wheel/sdist contents. They
-lock automatically generated run-directory names to a digits-only UTC
-`YYYYMMDD_HHMMSS` prefix while preserving explicit run IDs.
+runner tests under `benchmark_automation/tests/`. They use temporary
+self-describing baselines, arbitrary complete strategy files, fake child commands,
+and public result fixtures while consuming a regular installed yadof distribution.
+They are not part of the package's generic test namespace or wheel/sdist contents.
 
 ## Required coverage
 
@@ -144,6 +143,6 @@ part of generic pytest; whether an agent may start it autonomously follows the u
 documentation's concrete cost/risk policy.
 
 For benchmark-runner changes, run its focused unit suite with a fresh absolute
-`--basetemp` and disabled pytest cache, then exercise bounded `plan` and `preflight`
-from the repository root with an explicit temporary runs directory. Do not launch
-a measured suite as generic acceptance.
+`--basetemp` and disabled pytest cache, then use an external temporary study to
+exercise the no-write `plan` from the repository root. Do not launch a measured
+study as generic acceptance.

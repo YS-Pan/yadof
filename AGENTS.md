@@ -17,15 +17,13 @@ changed.
 ## Source-checkout benchmark tasks
 
 - For any task below `benchmark_automation/`, read
-  `benchmark_automation/AGENTS.md` first, then only the benchmark documentation or
-  evidence it routes to.
+  `benchmark_automation/dev_doc/README.md` and follow its targeted links.
 - Run benchmark commands from this repository root with a Python environment that
   contains the matching installed yadof distribution.
-- The configured default writes each run directly to `temp/<run-id>/`; do not add
-  another task-specific container layer. If `--runs-dir` overrides that root, reuse
-  the same path for every command addressing the run. Do not recursively scan run
-  trees: start with bounded `plan`, `preflight`, or `inspect` output and expand one
-  artifact or failed cell at a time.
-- Benchmark execution, resume, and collection remain subject to the cost/risk
-  policy in `benchmark_automation/README.md`. Baseline templates may be edited for
-  future runs; preserve existing run-local snapshots and runtime evidence.
+- The external study request chooses the run directory. Preserve run directories
+  by default and diagnose or resume one explicit run at a time.
+- `plan` and `inspect` are read-only. `run` and `resume` may invoke the task
+  declared by a baseline, so apply the installed user guide's execution and cost
+  policy before using them.
+- Baseline templates may be edited for future runs; preserve existing run-local
+  driver and input snapshots together with runtime evidence.

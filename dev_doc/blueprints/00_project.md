@@ -91,49 +91,20 @@ hot-change contract; structural dimension changes are future work.
   directories are not implicit prepared-job inputs.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
-- Source-checkout benchmark: Git-tracked runner, editable baselines, strategy
-  templates, versioned preregistration contracts, bounded reports, and focused tests
-  under `benchmark_automation/`;
+- Source-checkout benchmark: Git-tracked generic runner, self-describing baselines,
+  current developer documents, and focused tests under `benchmark_automation/`;
   downloadable with the repository, outside `src/yadof`, and never a wheel/sdist
-  member. Baselines are addressed as `baselines/<provider>/<baseline-id>` without
-  fingerprint-derived directory names and may be changed in place. A new run
-  snapshots the selected declared inputs below its own `inputs/baselines/` tree;
-  all cells and resume use that immutable snapshot rather than the live template.
-  A tracked preregistration may freeze a source-derived schema inventory, legal
-  data-provenance contract, design-level split, metrics, comparison matrix, seeds,
-  resource block, threshold-sealing rule, and stop conditions before test access.
-  It is not an executable suite or evidence: zero-record baseline templates remain
-  zero-row schema sources, and missing datasets or unsealed thresholds keep formal
-  execution explicitly blocked.
-  Generated runs use the checkout's ignored `temp/` root or an explicit disjoint output root;
-  every run ID is directly below that root with no benchmark/task container layer,
-  and automatically named run directories begin with a digits-only UTC
-  `YYYYMMDD_HHMMSS` date/time prefix. The current non-surrogate
-  arm is named for its concrete NSGA-III algorithm. Measured cells deliberately
-  permit 32-way fast oversubscription, run the baseline's common `postprocess.py`
-  and one cost view after optimization, place each attempt's collision-prefixed
-  task artifacts in the directory shared by its baseline workspace, group prefixed
-  cost plots under `visualizations/viewcost/`, and use Rich to retain an active-cell
-  evaluation bar above the bottom global cell bar in interactive terminals. Rich
-  updates both task states before one event-driven refresh; any positive evaluation
-  count visibly advances the ASCII bar, low percentages retain one decimal, and
-  pipe-drain threads only log/enqueue while the foreground wait loop owns every Rich
-  refresh. A true interactive stream removes inherited `TERM=dumb`/`unknown` only
-  from the Rich console environment so live refreshes remain enabled without
-  changing child environments. Compact rows keep complete counts/status without a
-  fixed detail cap.
-  Read-only `inspect` exposes active progress/inactivity and a confidence-qualified
-  ETA from immutable plan data, a bounded run-local snapshot of matched prior-run
-  cell timings, arm-safe current completions, and the active command's bounded
-  timestamped progress-event tail. Generation-duration trends can raise the active
-  estimate, while cross-arm same-case durations are not point estimates, so later
-  unattended turns need not keep the original run turn alive.
-  The benchmark's nested `dev_doc/` provides local operator, architecture,
-  blueprint, and terminology contracts plus split architecture views and
-  generative module/file blueprints. Root `dev_doc/` exclusively owns repository-
-  wide toDos, obsolete handoffs, and change records; the benchmark does not
-  duplicate those lifecycle facilities.
-  Final cumulative HV remains a compact algorithm-labeled table outside JSON stdout.
+  member. External studies select baseline IDs, complete optimization strategy
+  files, seeds, a uniform budget, an optional reference, failure policy, interpreter,
+  and output root. Adding an algorithm requires no benchmark source, documentation,
+  or test change. A new run snapshots the complete driver, selected clean baseline
+  workspaces, and strategy inputs. Every exact materialized cell passes `yadof
+  check` before execution, and resume uses only run-owned files. Public yadof rows
+  become arbitrary-arm long results and optional descriptive reference deltas;
+  opaque optimization metadata is retained without algorithm-specific interpretation.
+  Digests record provenance but never compare current files to reject recovery.
+  Root `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and
+  change records.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with
   executable administrator resources in sibling directories under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
@@ -250,8 +221,8 @@ concrete physical assertions remain integration tests outside the default packag
 suite and follow the user workflow's cost- and risk-based execution policy.
 
 The source-checkout benchmark has a separate focused unit suite below
-`benchmark_automation/tests/`. Its planning and preflight acceptance paths are
-bounded and do not start a simulator; measured suites require the benchmark's
-explicit prerequisite and cost/risk authorization. The package artifact allowlist
-keeps the benchmark absent from wheel and sdist even though it is tracked in the
-repository.
+`benchmark_automation/tests/`. Its baseline discovery, planning, snapshot,
+execution, recovery, report, and CLI tests use fake commands and do not start a
+simulator. Real `run` and `resume` operations remain subject to the user workflow's
+cost/risk authorization. The package artifact allowlist keeps the benchmark absent
+from wheel and sdist even though it is tracked in the repository.

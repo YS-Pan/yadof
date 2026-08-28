@@ -37,7 +37,6 @@ viewer = [
     "matplotlib>=3.8",
     "torch>=2.2,<3",
 ]
-benchmark = ["rich>=13.7,<16"]
 hfss = ["ansys-aedt-core>=0.18"]
 dev = [
     "build>=1.2",
