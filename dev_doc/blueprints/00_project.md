@@ -105,8 +105,12 @@ hot-change contract; structural dimension changes are future work.
   Run-local attempt evidence retains the complete cell ID, while materialized
   yadof execution workspaces use stable digest directories to keep external-
   simulator paths compact; an all-infinite generation fails the benchmark cell
-  rather than becoming an empty comparison result. The distribution depends on
-  yadof's public surface, never the reverse. Root
+  rather than becoming an empty comparison result. Measured CLI runs use a visible
+  process window by default for both humans and AI agents: foreground execution in
+  an existing visible terminal or a separate normal console for a detached long
+  run. Hidden launch is reserved for an explicit user request, while the Python API
+  remains synchronous and window-neutral. The distribution depends on yadof's
+  public surface, never the reverse. Root
   `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
   records.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with

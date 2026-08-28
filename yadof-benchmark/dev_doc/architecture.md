@@ -31,3 +31,10 @@ Planning deliberately executes arbitrary user Python. Its safety boundary is
 documentary and operational: `benchmark.py` is trusted workspace code, `check` and
 `plan` are advertised as run-read-only rather than code-sandboxed, and expensive or
 external side effects are forbidden by the authoring contract.
+
+Process-window ownership stays at the caller boundary rather than inside the
+runtime driver. Measured CLI `run` and `resume` operations default to a visible
+terminal: a caller may use its current visible terminal, while an agent detaching a
+long Windows run creates a separate normal console. Hidden launch flags are used
+only when the user explicitly requests that exception. Python API calls remain
+synchronous and do not create an operating-system console.

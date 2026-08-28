@@ -1,5 +1,33 @@
 # Run, evidence, and recovery
 
+## Visible execution is the default
+
+Every measured `run` or `resume` should have a visible process window, regardless
+of whether a human or an AI agent starts it. Run directly in the foreground when
+the caller already owns a visible terminal. When an AI agent must detach a long
+Windows run from its own task process, start a separate normal console and report
+the returned process ID. For example:
+
+```powershell
+$benchmarkExe = (Get-Command yadof-benchmark).Source
+$workspace = (Resolve-Path -LiteralPath "PATH").Path
+$process = Start-Process -FilePath $benchmarkExe `
+  -ArgumentList @(
+    "run", "--workspace", ('"' + $workspace + '"'),
+    "--run-id", "RUN_ID"
+  ) `
+  -WorkingDirectory $workspace `
+  -WindowStyle Normal `
+  -PassThru
+$process.Id
+```
+
+Use the equivalent visible terminal or terminal-multiplexer pane on other systems.
+Do not use `-WindowStyle Hidden`, `CREATE_NO_WINDOW`, `SW_HIDE`, or another hidden
+launcher unless the user explicitly requests a hidden run. Output redirection is
+also not the default because it removes live progress from the process window;
+durable per-command logs, state, and results remain inside the run directory.
+
 Run `yadof-benchmark check --workspace PATH` before committing compute. It imports
 `benchmark.py`, validates every complete strategy module and baseline ID, expands
 all comparison cells, calculates input digests, and writes nothing.
