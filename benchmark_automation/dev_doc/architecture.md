@@ -64,7 +64,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | Path | Role |
 |---|---|
 | `benchmark.py` | Thin command-line entry point. |
-| `benchmark_core.py` | Runner implementation and stable data transformations. |
+| `benchmark_core.py` | Compatibility facade over the run-snapshottable `benchmark_runtime/` services. |
 | `AGENTS.md` | Token-bounded reading route and execution guidance for coding agents. |
 | `benchmark.toml` | Declared cases, arms, suites, seeds, budgets, paths, measured-cell core-config overrides, per-case strategy-template selection, and resource requirements. |
 | `strategy_templates/` | Complete arm/case-specific `submit/optimization.py` replacements carrying explicit component factory kwargs; the non-surrogate arm is explicitly identified as NSGA-III. |
@@ -73,7 +73,7 @@ Keeping the CLI thin makes core behavior directly testable.
 | `tests/` | Unit coverage for validation, identity, state, I/O, and materialization contracts. |
 | configured runs directory | Generated immutable specs/attempts/evidence plus atomically updated latest state; default checkout `temp/<run-id>/`, Git-ignored, with each run ID directly below the root. |
 | `.staging/`, `.assembled/` | Local baseline construction evidence; Git-ignored and never runner inputs. |
-| `verification/`, `tool_gaps/` | Human-readable historical verification and reusable-yadof issue records. |
+| `verification/` | Human-readable historical verification still cited by current operator or baseline documentation. |
 
 ## Core invariants
 
@@ -215,6 +215,8 @@ Keeping the CLI thin makes core behavior directly testable.
 - New public output field: define its stable JSON meaning, validity behavior, and
   derivation; decide which disclosure layer owns it, then update tests, agent
   routing, and operator documentation.
-- Missing reusable single-workspace observation: record the gap in `tool_gaps/`
-  and implement the reusable capability in yadof rather than adding private-state
-  scraping here.
+- Missing reusable single-workspace observation: retain it in the report's bounded
+  `tool_gaps` field, create a root `dev_doc/toDo/` handoff when implementation work
+  remains, and implement the reusable capability in yadof rather than adding
+  private-state scraping here. Resolved gaps belong in the root change history,
+  not in a parallel benchmark issue archive.

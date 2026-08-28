@@ -51,8 +51,6 @@ provenance only; the templates and semantic directory names may change in place.
 | selected hard `test-com` baseline `synthetic-antenna` | Preserves the accepted scientific task and common diagnostic plot while adding collision-safe flat-output filenames; the underlying three real-only NSGA-III validations each recorded 10,000/10,000 rows, reached HV 0.4347-0.4409, and still gained 5.13%-5.94% over their final ten generations |
 | v10 `structural-full` run `20260827_192319-082612-v10-structural-release-5762ec48fe39` | Candidate installed wheel passed preflight 13/13 and the run completed 9/9 cells, 82/82 structural checks, and all 99 attempted evaluations with 96 completed records plus three explicit Chrono error-cost records; this is non-performance release evidence only |
 
-The resolved viewer gap and its historical failure evidence are documented in
-[`tool_gaps/20260823-surrogate-viewer-raw-variables.md`](tool_gaps/20260823-surrogate-viewer-raw-variables.md).
 The synthetic-task difficulty diagnosis and 30,000-row acceptance evidence are in
 [`verification/20260824-test-com-difficulty-recalibration.md`](verification/20260824-test-com-difficulty-recalibration.md).
 No benchmark-only checkpoint scraping or monkey patch was used. Generated runs are
