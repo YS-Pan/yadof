@@ -2,7 +2,7 @@
 
 ## Intent
 - Keep `yadof.surrogate` public calls behind one small API surface.
-- Expose lazy conditional-INR and opt-in hierarchical-CAE components plus direct
+- Expose lazy conditional-INR, deterministic PCA/SVD, and opt-in hierarchical-CAE components plus direct
   rawData-first model operations without importing Torch at parent-package import.
 - Re-export the lightweight joint rawData posterior protocol, diagnostics,
   semantic-capability helper, signature-bound calibration adjunct, and streaming
@@ -16,6 +16,10 @@
 - Construct `conditional_inr_posterior()` as a separate semantic wrapper that
   delegates legacy lifecycle/prediction calls and lazily creates a persistent
   finite-member rawData sampler.
+- Construct `pca_svd()` from one authoritative keyword-only settings path. Its
+  low-level codec/oracle methods are diagnostic-only; its GPSAF lifecycle trains
+  a parameter-to-coefficient ridge predictor, reconstructs full named rawData,
+  returns zero-width cost intervals, and exposes no posterior/readiness methods.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
   an optional versioned `RawDataQualityPolicy`, explicit device/training kwargs,
   and an internal `CAETrainConfig`. The component
@@ -42,7 +46,7 @@
   projection returns `[draw,candidate,objective]` costs and `[draw,candidate]`
   validity without recording predicted evidence.
 - Scheduler functions return status objects with action, pending generation, latest completed generation, and optional error text.
-- Global deactivation also drains/releases hierarchical-CAE state while preserving
+- Global deactivation also drains/releases PCA/SVD and hierarchical-CAE state while preserving
   the conditional-INR return contract used by existing callers.
 
 ## Non-Obvious Techniques

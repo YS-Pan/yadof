@@ -400,6 +400,38 @@ file affects the next generation; the current generation continues with its froz
 component values. Removed uppercase algorithm/model names in `config.py` fail as
 unknown settings instead of being translated or ignored.
 
+For a deterministic low-rank baseline, explicitly replace only the surrogate
+component. PCA centers each recorded field on its training mean; SVD is
+uncentered. Both fit fields independently, map normalized parameters to low-rank
+coefficients with ridge regression, reconstruct complete named rawData, and let
+the current `calc_cost.py` derive candidate costs:
+
+```python
+from yadof.optimize import gpsaf, pymoo_nsga3
+from yadof.surrogate import pca_svd
+
+
+def build_optimization():
+    return gpsaf(
+        search=pymoo_nsga3(),
+        surrogate=pca_svd(
+            decomposition="pca",
+            rank=16,
+            ridge_alpha=1e-6,
+            device="cpu",
+        ),
+    )
+```
+
+This is opt-in diagnostic machinery, not the starter default or a production
+recommendation. It is deterministic and reports zero-width cost intervals; it
+does not expose a posterior, applicability probability, or qNEHVI readiness. The
+same component offers `fit_codec()` plus `evaluate_oracle()` for offline
+reconstruction diagnostics. That oracle is explicitly marked `diagnostic_only`
+because it encodes known validation rawData; never use its output for candidate
+selection or report it as deployable prediction quality. Torch is loaded only
+when this component is validated or fitted and comes from the `surrogate` extra.
+
 For a real multi-objective NSGA-III-only campaign with no GPSAF or surrogate:
 
 ```python

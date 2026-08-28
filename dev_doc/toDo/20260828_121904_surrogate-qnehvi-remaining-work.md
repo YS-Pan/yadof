@@ -73,11 +73,13 @@
 - shipped `HierarchicalCAEComponent` 与 `ConditionalINRPosteriorAdapter` 都返回 blocked typed
   exploitation readiness。真实组件进入 `posterior_assisted()` 时只能走可见的 full-real
   fallback；eligible exploitation path 目前只由 fake/mechanism tests 覆盖。
-- 正式七臂 runner 当前只有 real NSGA-III 和 conditional-INR + GPSAF。仍缺：
+- 正式七臂 runner 当前仍只有 real NSGA-III 和 conditional-INR + GPSAF。独立 v11
+  recorded-data runner 已补齐 PCA/SVD oracle 与 deployable ridge 的可执行结构，但尚未接入
+  formal suite，也没有权限执行三个 case 的 measured cells。formal matrix 仍缺：
   - hierarchical-CAE mean；
   - hierarchical-CAE + qNEHVI；
   - conditional-INR adapter + qNEHVI；
-  - PCA/SVD reconstruction；
+  - PCA/SVD reconstruction 的 formal-suite 接入与合法 measured evidence；
   - hierarchical-CAE + GPSAF。
 - formal optimization/posterior-decision/总工程成本阈值尚未全部封印，formal benchmark start
   仍为 false。Phase A 只允许冻结证据上的实验/诊断；Phase B public opt-in 必须 full-real
@@ -101,8 +103,9 @@
 
 ### 2. 补齐 PCA/SVD 基线和可复用模块
 
-- 执行
-  [PCA/SVD baseline/module TODO](20260828_081523_pca-svd-baseline-surrogate-module.md)。
+- [PCA/SVD baseline/module TODO](20260828_081523_pca-svd-baseline-surrogate-module.md)
+  的工程部分已完成；其 active remainder 仅为需单独授权的三 case measured evidence 和
+  formal-suite 接入。
 - 必须区分 oracle reconstruction 与 deployable
   `normalized parameters -> coefficients -> complete rawData` predictor；oracle validation/test
   projection 不能冒充 candidate prediction 或 optimization arm。

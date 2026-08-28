@@ -25,6 +25,9 @@ default output small enough for repeated agent decisions.
 8. Collect only through public yadof observations.
 9. Produce structural validity or paired descriptive performance evidence without
    ranking algorithms.
+10. Keep the separate PCA/SVD recorded-data diagnostic runner outside the formal
+    suite: it consumes only an explicit disjoint design partition, distinguishes
+    oracle from deployable arms, and requires a separate measured-run guard.
 
 ## I/O
 

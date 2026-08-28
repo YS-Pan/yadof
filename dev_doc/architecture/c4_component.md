@@ -114,7 +114,9 @@
   boundary. It deliberately exposes no variance/loss shortcut.
 - `surrogate`: lightweight public component/API over that protocol and separate
   private `surrogate.conditional_inr` and experimental
-  `surrogate.hierarchical_cae` models, strategy/component-keyed schedules and
+  `surrogate.hierarchical_cae` models, plus the deterministic opt-in
+  `surrogate.linear_subspace` PCA/SVD codec and ridge predictor;
+  strategy/component-keyed schedules and
   state, rawData prediction, dynamic cost conversion, and atomic recoverable
   checkpoints scoped to the active strategy. `surrogate.quality` owns only the
   JSON-safe assessment/policy protocol and generic weights/labels; task diagnostic
@@ -122,6 +124,9 @@
   The explicit `conditional_inr_posterior()` adapter fixes one ensemble member per
   draw, reconstructs every selected member on the full stored grid, and reports
   nominal and effective finite support without changing `conditional_inr()`.
+  `pca_svd()` instead returns zero-width GPSAF intervals and deliberately exposes
+  no posterior or exploitation readiness; its rawData-encoding oracle is a
+  separate diagnostic-only type and cannot enter candidate selection.
   `hierarchical_cae()` shares field codecs across independent parameter-predictor
   members and exposes an uncalibrated applicability score with zero observation
   noise. Its initial full-grid candidate failed Gate 0 v5. A v6/v7 experimental

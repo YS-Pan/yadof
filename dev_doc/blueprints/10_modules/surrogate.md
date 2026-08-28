@@ -16,6 +16,13 @@ Gate 0 v8 subsequently exercised exact-signature held-out calibration, but every
 rawData/applicability capability failed closed; this did not change v5 or create a
 production artifact.
 
+The independent opt-in `pca_svd()` component is a deterministic baseline rather
+than a posterior model. It fits centered PCA or uncentered truncated SVD per exact
+named field, then fits one multi-output ridge map from normalized parameters to
+the concatenated coefficients. A separate codec/oracle API may encode known
+validation rawData and always labels that output diagnostic-only. GPSAF receives
+only deployable parameter predictions and zero-width cost intervals.
+
 ## Source structure
 
 - Parent `__init__.py` and `api.py` own only the lightweight public component,
@@ -31,6 +38,10 @@ production artifact.
 - `conditional_inr/` owns model construction/training, rawData adaptation,
   runtime state, staggered scheduling, checkpoint publication, metadata, the
   private finite-member posterior adapter, and private in-memory types.
+- `linear_subspace/` owns validated immutable settings, per-field PCA/SVD codecs,
+  diagnostic-only oracle reconstruction, deployable ridge prediction, named-schema
+  adaptation, atomic no-pickle checkpoint recovery, and an independent one-worker
+  scheduler. Its namespace is `pca-svd`; it exposes no posterior/readiness method.
 - `quality.py` owns the generic, versioned, JSON-safe quality/regime assessment
   protocol. It accepts explicit task assessments, declarative diagnostic rules, or
   task-declared shape fallback thresholds; it contains no task field names,

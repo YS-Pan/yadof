@@ -278,6 +278,7 @@ def get_surrogate_training_data(
         get_record_metadata(storage, job_names=wanted, status="completed")
     )
     variables = []
+    job_names = []
     raw_data = []
     rawdata_filenames = []
     record_metadata = []
@@ -285,12 +286,14 @@ def get_surrogate_training_data(
         sample = named_samples.get(name)
         if sample is None:
             continue
+        job_names.append(name)
         variables.append(normalized)
         raw_data.append(tuple(dict(item.payload) for item in sample))
         rawdata_filenames.append(tuple(item.filename for item in sample))
         record_metadata.append(metadata_by_name.get(name, {}))
     return {
         "parameter_names": tuple(job_template_api.get_parameter_names(workspace)),
+        "job_names": tuple(job_names),
         "normalized_variables": tuple(variables),
         "raw_data": tuple(raw_data),
         "rawdata_filenames": tuple(rawdata_filenames),

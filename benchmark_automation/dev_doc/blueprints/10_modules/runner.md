@@ -23,6 +23,10 @@ filesystem/state behavior directly testable without a simulator.
   bounded progress-event tail.
 - Public-yadof collection, structural checks, performance pairing, reports, and
   bounded summaries.
+- `experiment_runtime.linear_subspace` independently plans, preflights, and—only
+  with explicit authority—measures four offline recorded-data arms;
+  `pca_svd_validation.py` is its thin CLI adapter. Neither materializes a simulator
+  workspace nor feeds oracle rows into the formal optimizer runner.
 
 ## I/O
 

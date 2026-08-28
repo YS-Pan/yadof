@@ -108,6 +108,14 @@ The default freshness bound is one generation: candidate selection waits when th
 latest usable state would be older, while a workspace may choose another
 non-negative lag when its real-evaluation/training timing warrants it.
 
+The PCA/SVD baseline follows the same generation-snapshot and freshness boundary
+with its own scheduler/state key. Fitting freezes exact named rawData schema and
+training-design provenance, publishes per-field bases plus ridge weights atomically
+below `components/pca-svd`, and recovers only when strategy, parameter definition,
+schema, settings, NumPy/Torch version, and recorded design evidence still match.
+Candidate inference reconstructs transient full rawData and applies current task
+cost code; it never publishes predicted rawData as evidence.
+
 One writer belongs to one campaign, not to a backend or generation. Its candidate
 and byte reservations include queued and in-flight envelopes. It flushes at
 evaluation/population/generation boundaries into count/byte-bounded immutable

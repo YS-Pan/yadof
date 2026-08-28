@@ -48,6 +48,10 @@ lock automatically generated run-directory names to a digits-only UTC
   synthetic 100,000-row catalog scale;
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
+- PCA/SVD centered-versus-uncentered per-field mathematics, rank clamp and
+  mean-only cases, schema/dtype round trips, validation-oracle labeling,
+  parameter-only ridge prediction, zero-width cost intervals, no posterior,
+  atomic exact-state recovery, and lazy Torch imports;
 - joint rawData posterior protocol through a neutral sample-backed backend with at
   least two candidates, different-shaped named fields, and two objectives: stable
   seed/draw/source identity, repeated candidates, empty populations, candidate

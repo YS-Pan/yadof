@@ -792,6 +792,7 @@ def test_global_deactivation_preserves_conditional_inr_return_contract(
     from yadof.surrogate import api as surrogate_api
     from yadof.surrogate.conditional_inr import scheduler as conditional_scheduler
     from yadof.surrogate.hierarchical_cae import scheduler as hierarchical_scheduler
+    from yadof.surrogate.linear_subspace import scheduler as linear_subspace_scheduler
 
     expected = object()
     calls = []
@@ -806,5 +807,14 @@ def test_global_deactivation_preserves_conditional_inr_return_contract(
         "deactivate_workspace",
         lambda *args, **kwargs: calls.append(("hierarchical", args, kwargs)),
     )
+    monkeypatch.setattr(
+        linear_subspace_scheduler,
+        "deactivate_workspace",
+        lambda *args, **kwargs: calls.append(("linear-subspace", args, kwargs)),
+    )
     assert surrogate_api.deactivate_workspace("workspace") is expected
-    assert [call[0] for call in calls] == ["conditional", "hierarchical"]
+    assert [call[0] for call in calls] == [
+        "conditional",
+        "hierarchical",
+        "linear-subspace",
+    ]

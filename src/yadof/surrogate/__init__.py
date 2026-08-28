@@ -1,5 +1,6 @@
 from . import conditional_inr as _conditional_inr_package
 from . import hierarchical_cae as _hierarchical_cae_package
+from . import linear_subspace as _linear_subspace_package
 from .api import (
     APPLICABILITY_CALIBRATED,
     APPLICABILITY_NOT_APPLICABLE,
@@ -29,6 +30,8 @@ from .api import (
     DiagnosticRegimeRule,
     FieldSpreadCalibration,
     HierarchicalCAEComponent,
+    PCASVDComponent,
+    PCASVDSettings,
     MaterializedRawDataPosterior,
     PosteriorCalibrationArtifact,
     PosteriorExploitationReadiness,
@@ -47,6 +50,7 @@ from .api import (
     conditional_inr,
     conditional_inr_posterior,
     hierarchical_cae,
+    pca_svd,
     deactivate_workspace,
     assess_spread_scale,
     calibrated_applicability_prediction,
@@ -81,6 +85,8 @@ __all__ = [
     "EXPERIMENTAL_PERFORMANCE_STATUS",
     "FIELD_SPREAD_METHOD",
     "HierarchicalCAEComponent",
+    "PCASVDComponent",
+    "PCASVDSettings",
     "NOT_APPLICABLE",
     "POSTERIOR_CALIBRATION_PROTOCOL",
     "POSTERIOR_CALIBRATION_PROTOCOL_VERSION",
@@ -117,6 +123,7 @@ __all__ = [
     "conditional_inr",
     "conditional_inr_posterior",
     "hierarchical_cae",
+    "pca_svd",
     "deactivate_workspace",
     "assess_spread_scale",
     "calibrated_applicability_prediction",

@@ -8,6 +8,11 @@
   lower-bound evaluation/storage estimates without writing.
 - Preflight validates baselines, installed package identity, strategies, resources,
   disk, and Python/CUDA facts without launching a simulator.
+- The PCA/SVD diagnostic CLI validates an external explicit design partition and
+  public recorded-data availability without fitting during `plan` or `preflight`.
+  Its four arm identities keep truth-encoding reconstruction oracle results apart
+  from parameter-only ridge prediction; `run` requires a separate authorization
+  flag and is not part of the current formal suite.
 - Run creation snapshots the complete runtime plus selected strategies, baselines,
   and histories. Configuration, package, source, and artifact digests remain
   provenance and are not compared with current files to reject resume. It also

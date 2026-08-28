@@ -93,6 +93,16 @@ fallback/hard-stop contract, and nine formal re-entry conditions. The current
 reports six cells/12,000 attempts but the formal-start gate remains closed. The v10
 structural run above cannot be interpreted as qNEHVI performance evidence.
 
+[`preregistrations/20260828-pca-svd-linear-subspace-v11/`](preregistrations/20260828-pca-svd-linear-subspace-v11/README.md)
+freezes four separate offline arm identities: centered-PCA and uncentered-SVD
+truth-encoding reconstruction oracles, plus their deployable normalized-parameter
+ridge predictors. The source-checkout `pca_svd_validation.py` thin adapter and
+`experiment_runtime/linear_subspace.py` service consume only an
+explicit disjoint recorded-design partition. Its `plan` is no-write, `preflight`
+does not fit or simulate, and `run` additionally requires
+`--allow-measured-run` plus manifest authority and sealed thresholds. The gate is currently closed, so generic acceptance
+must not invoke `run`.
+
 ## Prerequisites
 
 Run commands from the yadof source-checkout root with the Python environment in

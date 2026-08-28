@@ -18,6 +18,10 @@ from .conditional_inr.settings import (
     DEFAULT_CONDITIONAL_INR_SETTINGS,
     create_settings as create_conditional_inr_settings,
 )
+from .linear_subspace.settings import (
+    DEFAULT_PCA_SVD_SETTINGS,
+    PCASVDSettings,
+)
 from .quality import (
     ApplicabilityPrediction,
     DiagnosticCondition,
@@ -80,6 +84,123 @@ from .exploitation import (
 
 
 DEFAULT_CAE_TRAIN_CONFIG = CAETrainConfig()
+
+
+@dataclass(frozen=True, slots=True)
+class PCASVDComponent:
+    """Deterministic per-field PCA/SVD component consumed by GPSAF.
+
+    The low-level methods deliberately keep oracle reconstruction separate from
+    the deployable normalized-parameter predictor while sharing these settings.
+    """
+
+    settings: PCASVDSettings
+
+    def validate(self, config, problem) -> None:
+        del config, problem
+        try:
+            metadata.version("torch")
+        except metadata.PackageNotFoundError as exc:
+            raise RuntimeError(
+                "pca_svd requires the yadof surrogate extra (torch); "
+                "install yadof[surrogate]"
+            ) from exc
+
+    def semantic_identity(self, config, problem) -> Mapping[str, object]:
+        del config, problem
+        return {
+            "component": "pca-svd-rawdata-surrogate",
+            "component_version": 1,
+            "backend_distribution": "torch",
+            "backend_version": metadata.version("torch"),
+            "training_policy": "per-field-lowrank-ridge",
+            "posterior_capability": False,
+            "controlled_parameters": self.settings.semantic_parameters(),
+        }
+
+    def fit_codec(self, samples):
+        from .linear_subspace.codec import fit_codec
+
+        return fit_codec(_structured_samples(samples), settings=self.settings)
+
+    def evaluate_oracle(self, codec, samples):
+        from .linear_subspace.codec import evaluate_oracle
+
+        return evaluate_oracle(codec, _structured_samples(samples))
+
+    def fit_oracle(self, samples):
+        """Fit and project the same samples for reconstruction diagnostics only."""
+
+        selected = _structured_samples(samples)
+        return self.evaluate_oracle(self.fit_codec(selected), selected)
+
+    def fit_deployable(self, normalized_parameters, samples, *, parameter_names):
+        from .linear_subspace.codec import fit_deployable
+
+        return fit_deployable(
+            normalized_parameters,
+            _structured_samples(samples),
+            parameter_names=parameter_names,
+            settings=self.settings,
+        )
+
+    def predict_rawdata(self, model, normalized_parameters):
+        from .linear_subspace.codec import predict_rawdata
+
+        return predict_rawdata(model, normalized_parameters)
+
+    def ensure_fresh_enough(self, context):
+        from .linear_subspace import runtime, scheduler
+
+        return scheduler.ensure_fresh_enough(
+            context.config.workspace,
+            context.generation_index,
+            _config=context.config,
+            _settings=self.settings,
+            _max_training_lag=int(context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG),
+            _training_data=runtime.training_data_from_session(
+                context.session, context.snapshot
+            ),
+        )
+
+    def has_trained_state(self, context) -> bool:
+        from .linear_subspace import runtime
+
+        return runtime.has_trained_state(
+            context.config.workspace, _settings=self.settings
+        )
+
+    def start_training(self, context):
+        from .linear_subspace import runtime, scheduler
+
+        return scheduler.start_training(
+            context.config.workspace,
+            context.generation_index,
+            block=False,
+            _config=context.config,
+            _settings=self.settings,
+            _training_data=runtime.training_data_from_session(
+                context.session, context.snapshot
+            ),
+        )
+
+    def predict_population(self, context, population):
+        from .linear_subspace import runtime
+
+        return runtime.predict_population(
+            context.config.workspace, population, _settings=self.settings
+        )
+
+
+def _structured_samples(samples):
+    from .linear_subspace.types import StructuredRawDataSample
+
+    return tuple(
+        sample
+        if isinstance(sample, StructuredRawDataSample)
+        else StructuredRawDataSample.from_items(sample)
+        for sample in samples
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -506,6 +627,43 @@ class HierarchicalCAEComponent:
         )
 
 
+def pca_svd(
+    *,
+    decomposition: str = DEFAULT_PCA_SVD_SETTINGS.decomposition,
+    rank: int = DEFAULT_PCA_SVD_SETTINGS.rank,
+    predictor: str = DEFAULT_PCA_SVD_SETTINGS.predictor,
+    ridge_alpha: float = DEFAULT_PCA_SVD_SETTINGS.ridge_alpha,
+    field_mode: str = DEFAULT_PCA_SVD_SETTINGS.field_mode,
+    rank_policy: str = DEFAULT_PCA_SVD_SETTINGS.rank_policy,
+    solver: str = DEFAULT_PCA_SVD_SETTINGS.solver,
+    dtype: str = DEFAULT_PCA_SVD_SETTINGS.dtype,
+    device: str = DEFAULT_PCA_SVD_SETTINGS.device,
+    power_iterations: int = DEFAULT_PCA_SVD_SETTINGS.power_iterations,
+    seed: int = DEFAULT_PCA_SVD_SETTINGS.seed,
+    fit_intercept: bool = DEFAULT_PCA_SVD_SETTINGS.fit_intercept,
+    constant_atol: float = DEFAULT_PCA_SVD_SETTINGS.constant_atol,
+) -> PCASVDComponent:
+    """Build the opt-in deterministic PCA/SVD rawData surrogate."""
+
+    return PCASVDComponent(
+        PCASVDSettings(
+            decomposition=decomposition,
+            rank=rank,
+            predictor=predictor,
+            ridge_alpha=ridge_alpha,
+            field_mode=field_mode,
+            rank_policy=rank_policy,
+            solver=solver,
+            dtype=dtype,
+            device=device,
+            power_iterations=power_iterations,
+            seed=seed,
+            fit_intercept=fit_intercept,
+            constant_atol=constant_atol,
+        )
+    )
+
+
 def conditional_inr(
     *,
     constant_atol: float = DEFAULT_CONDITIONAL_INR_SETTINGS.constant_atol,
@@ -753,9 +911,11 @@ def wait_for_pending_training(*args, **kwargs):
 def deactivate_workspace(*args, **kwargs):
     from .conditional_inr.scheduler import deactivate_workspace as conditional
     from .hierarchical_cae.scheduler import deactivate_workspace as hierarchical
+    from .linear_subspace.scheduler import deactivate_workspace as linear_subspace
 
     conditional_status = conditional(*args, **kwargs)
     hierarchical(*args, **kwargs)
+    linear_subspace(*args, **kwargs)
     return conditional_status
 
 __all__ = [
@@ -769,6 +929,8 @@ __all__ = [
     "EXPERIMENTAL_PERFORMANCE_STATUS",
     "FIELD_SPREAD_METHOD",
     "HierarchicalCAEComponent",
+    "PCASVDComponent",
+    "PCASVDSettings",
     "NOT_APPLICABLE",
     "POSTERIOR_CALIBRATION_PROTOCOL",
     "POSTERIOR_CALIBRATION_PROTOCOL_VERSION",
@@ -805,6 +967,7 @@ __all__ = [
     "conditional_inr",
     "conditional_inr_posterior",
     "hierarchical_cae",
+    "pca_svd",
     "deactivate_workspace",
     "ensure_fresh_enough",
     "assess_spread_scale",

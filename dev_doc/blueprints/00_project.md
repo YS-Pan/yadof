@@ -53,6 +53,9 @@ local/distributed remain file-backed prepared-job transports.
    through the current workspace task definition.
 10. Train/recover workspace-local rawData-first surrogate models and use predictions
     only to screen candidates that still receive real evaluation.
+    The opt-in PCA/SVD baseline keeps its truth-encoding reconstruction oracle
+    outside this path; deployable use maps normalized parameters through ridge
+    coefficients and reports no uncertainty capability.
 11. For an explicitly composed posterior-assisted consumer, require typed
     performance/calibration/transferability readiness, create one persistent
     schema-bearing function sampler, stream complete named rawData draws by
@@ -150,7 +153,9 @@ hot-change contract; structural dimension changes are future work.
 - `surrogate` owns a lightweight public component API plus a backend-neutral joint
   rawData function-sampler protocol; its `conditional_inr/`
   subpackage physically isolates rawData prediction, uncertainty intervals,
-  modeling, scheduling, metadata, and checkpoints.
+  modeling, scheduling, metadata, and checkpoints. Its independent
+  `linear_subspace/` package owns deterministic per-field PCA/SVD, ridge
+  parameter prediction, oracle diagnostics, and a separate checkpoint namespace.
 - `tools` and `cli` are optional user-facing orchestration/inspection layers.
   `tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf
   with its own nested developer documentation and a compatibility facade.

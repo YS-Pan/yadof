@@ -153,6 +153,7 @@ def test_named_rawdata_and_record_metadata_align_in_live_and_durable_views(
     assert named[0][1][0].filename == "response.npz"
     assert metadata[0][1]["engine"] == "fast"
     bundle = recorded_api.get_surrogate_training_data(root)
+    assert bundle["job_names"] == ("candidate_0_0",)
     assert bundle["rawdata_filenames"] == (("response.npz",),)
     assert bundle["record_metadata"][0]["engine"] == "fast"
 

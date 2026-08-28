@@ -42,6 +42,7 @@ src/yadof/                 installed framework
     posterior.py           backend-neutral persistent function-sampler protocol
     exploitation.py        typed performance/calibration/applicability readiness
     conditional_inr/       model, runtime, scheduling, checkpoint and posterior adapter
+    linear_subspace/       per-field PCA/SVD, ridge prediction, runtime and checkpoints
   tools/                   optional user-launched utilities
     cost_viewer/           reusable cost analysis/rendering and dev_doc
     surrogate_viewer/      optional read-only GUI/text inspection and dev_doc
@@ -81,7 +82,8 @@ and the task-neutral named rawData/projector types. It must not import Torch,
 BoTorch, pymoo algorithms, or a concrete surrogate. `job_template` never imports
 `surrogate`; the projector accepts structured named samples and reuses an injected
 `CostInterpreter`. The explicit conditional-INR adapter imports Torch only below
-its lazy factory call. The qLogNEHVI numerical boundary imports BoTorch only when
+its lazy factory call. PCA/SVD settings and types are also lightweight; the
+low-rank solver imports Torch only when a nonzero basis is fitted. The qLogNEHVI numerical boundary imports BoTorch only when
 scoring is requested; the ordinary optimize parent, GPSAF, and real search remain
 independent. `qnehvi.acquisition` adapts discrete selection without importing the
 backend eagerly, while `posterior_assisted` depends only on the posterior and typed

@@ -2,8 +2,13 @@
 
 ## 状态与起因
 
-- 本文是待执行的手动 TODO，不代表当前 package 已经提供 PCA/SVD surrogate，也不授权启动
-  simulator、正式 benchmark 或长时间训练。
+- 2026-08-28 工程实现已完成：package 现提供显式 opt-in `pca_svd()`、分离的 oracle codec 与
+  deployable ridge predictor、GPSAF 生命周期、原子恢复、v11 四臂 recorded-data runner、测试和
+  文档。本文仍保留在 active TODO，因为权限边界不授权启动 simulator、正式 benchmark 或
+  长时间训练，三个代表性 case 的合法 1000/2000-design measured results 尚未产生。
+- 已封存的 solver audit 只使用 seeded synthetic `1000/2000 x 26645` 矩阵选择实现 backend，
+  不属于科学 case evidence。`plan`/`preflight` 可安全运行；measured `run` 仍要求单独权限和
+  合法的显式 design partition。
 - 用户于 2026-08-28 明确要求：添加 PCA/SVD 基线，并把它们作为可复用算法模块加入 yadof。
   这构成
   [archived hierarchical CAE plan](../obsolete/20260827_082608_hierarchical-cae-rawdata-surrogate.md)
