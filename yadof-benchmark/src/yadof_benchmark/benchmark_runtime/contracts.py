@@ -69,6 +69,10 @@ class BenchmarkError(RuntimeError):
     """A user-actionable benchmark contract error."""
 
 
+class BenchmarkStorageError(BenchmarkError):
+    """A campaign-fatal failure to persist benchmark evidence."""
+
+
 def freeze_json(value: Any) -> Any:
     """Recursively freeze a JSON-compatible value."""
 
@@ -318,6 +322,7 @@ __all__ = [
     "WORKSPACE_FORMAT",
     "BaselineManifest",
     "BenchmarkError",
+    "BenchmarkStorageError",
     "CellSpec",
     "CommandResult",
     "ComparisonSpec",

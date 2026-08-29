@@ -34,7 +34,8 @@ def build_benchmark(benchmark: Benchmark) -> None:
     # benchmark.configure(
     #     name="saw-algorithm-comparison",
     #     evidence="structural",
-    #     fail_fast=False,
+    #     # Structural workflows default to fail-fast; performance workflows default
+    #     # to continuing independent cells while retaining a nonzero final status.
     #     # Optional external reference for descriptive surrogate-training context.
     #     # Use an expensive representative generation, not this cheap cell runtime.
     #     representative_generation_seconds=7200.0,

@@ -15,6 +15,11 @@ They are not part of yadof's generic test namespace or yadof wheel/sdist content
 Their run-layout coverage keeps semantic attempt evidence readable while proving
 that materialized execution workspaces use compact run-local digest paths, and
 their command coverage requires all-infinite yadof generations to fail a cell.
+Recovery coverage injects aggregate publication failure and proves no later cell
+starts; verifies structural fail-fast and performance continue-with-final-failure
+defaults; seals interrupted evidence with independent immutable attempt metadata;
+and proves retries use a new compact workspace while external editable sources do
+not affect a run-owned, digest-verified snapshot.
 Initialization coverage also treats the generated `benchmark.py` authoring
 scaffold as public output, and baseline discovery proves that manifest IDs and
 editable provider/task source paths agree before a run can snapshot them.

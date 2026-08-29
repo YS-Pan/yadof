@@ -51,6 +51,13 @@ performance score. Surrogate-training time is separate from optimizer wall time
 and may be contextualized only against an explicitly configured representative
 expensive generation.
 
+Structural runs fail fast by default. Performance runs default to continuing
+independent cells to retain costly evidence, but every invalid or incomplete cell
+still makes the overall status and CLI exit nonzero. The next cell starts only
+after aggregate publication succeeds; storage failure stops the campaign and
+retains diagnostics. Failed/interrupted attempt workspaces and logs are sealed,
+never overwritten, and retried in a new attempt.
+
 Both planning commands return bounded summaries by default; request their complete
 expanded JSON with `--json`. Child stdout/stderr is kept in separate command logs
 during `run` and `resume`; raw streaming is an explicit

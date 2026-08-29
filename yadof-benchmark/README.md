@@ -24,6 +24,11 @@ population match. Reports retain raw invalid/incomplete evidence, exclude affect
 seeds from aggregates, and publish planned/attempted/completed/finite counts plus
 final HV and attempted-evaluation-aligned HV trajectory/AUC. They never turn
 failures into a performance score or use optimizer wall time as the main metric.
+Structural workflows fail fast by default. Performance workflows default to
+continuing independent cells so expensive evidence is retained, but any invalid or
+incomplete cell still makes the run non-successful and the CLI exit nonzero.
+Aggregate publication is a barrier before the next cell; a storage failure stops
+the campaign and is retained in run diagnostics.
 
 ```powershell
 $workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
@@ -44,6 +49,12 @@ replace them and do not constitute performance evidence.
 complete expanded cell plan is needed. Measured child stdout/stderr always has
 separate per-command logs and is not copied to the terminal unless
 `--stream-child-output` is explicitly selected.
+
+Each execution attempt has its own `attempt.json`. Interrupted or failed attempts
+are sealed incomplete, retain their compact execution workspace and logs, and are
+never reused; `resume` creates a new attempt/workspace. A run also verifies its
+frozen workflow, resources, baseline, strategy, and driver snapshots before
+execution, so editing the reusable sources affects only a later run.
 
 Foreground runs show a Rich active-cell row followed by a global benchmark row.
 For an agent-owned long Windows run, add `--detach`: it opens a normal visible

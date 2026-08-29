@@ -129,6 +129,13 @@ outputs are grouped into one semantic directory per baseline, such as
 The cell is collected only when both required visualization stages exit
 successfully and create non-empty artifacts.
 
+Structural workflows stop after the first failed or invalid cell by default.
+Performance workflows continue independent cells by default so an expensive
+failure does not erase the chance to retain other evidence. `fail_fast=` may override that
+scheduling choice, but it never weakens completion: any failed, incomplete,
+all-infinite, or collected-but-invalid cell leaves the overall status unsuccessful
+and makes the CLI exit nonzero.
+
 The run publishes `results.json` and detailed `results.csv` at its root. Its
 `reports/` directory contains:
 
@@ -165,6 +172,15 @@ After each publication, timestamp-prefixed index directories below the benchmark
 workspace's top-level `reports/` and `visualizations/` point back to this one
 authoritative run root. Declared workflow postprocessors then run after every cell
 has been collected and write additional run-local artifacts.
+
+Publication is a hard boundary between cells. The next simulation does not start
+until aggregate results, reports, and available indexes have returned from atomic
+publication. A storage/publication exception stops the campaign immediately and is
+recorded in `state.json` when state storage remains available. Use that diagnostic
+and immutable attempt results on resume; a storage error is never converted into a
+cell score or ignored for throughput. Inside yadof, the campaign recorder applies
+the same stronger rule to candidate evidence: bounded backpressure delays later
+simulation until accepted evidence is published, and `RecordingError` is fatal.
 
 Run-level lifecycle/progress/final-status evidence is appended to
 `benchmark.log`. Human-readable command and result evidence remains below
@@ -218,6 +234,16 @@ Use `resume --run RUN_PATH` after interruption or failure. Resume loads the
 run-owned driver and input snapshots. Successful cells and postprocessors are
 skipped; interrupted or failed work receives a new attempt. External edits to the
 original workspace do not change an existing run.
+
+Each attempt has a separate `attempt.json`; every command keeps separate
+`stdout.log` and `stderr.log`. Interrupted/failed execution is sealed with
+`completeness=incomplete`, keeps its old compact workspace and raw files, and is
+retried in a new numbered attempt/workspace. A collected attempt is sealed
+complete. A collection-only failure after successful simulator execution retries
+collection on that same open attempt rather than rerunning the simulator. Resume
+revalidates the run-owned driver, workflow/resources, baseline, and strategy
+digests; mutation inside an old run fails closed, while editing reusable baseline
+or workflow sources remains valid for a new run.
 
 The generated comparison table is descriptive evidence. The package does not rank
 strategies, apply significance tests, or make acceptance decisions.

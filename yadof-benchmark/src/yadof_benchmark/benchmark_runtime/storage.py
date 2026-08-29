@@ -13,7 +13,13 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .baselines import snapshot_baseline
-from .contracts import RUN_FORMAT, STATE_FORMAT, BenchmarkError, RunSpec
+from .contracts import (
+    RUN_FORMAT,
+    STATE_FORMAT,
+    BenchmarkError,
+    BenchmarkStorageError,
+    RunSpec,
+)
 from .naming import slug, timestamped_name
 from .timing import build_timing_history, host_identity
 
@@ -79,8 +85,10 @@ def directory_digest(root: str | Path, *, excludes: tuple[str, ...] = ()) -> str
         parts = Path(relative).parts
         if any(part in _IGNORED_PARTS for part in parts):
             continue
-        if len(parts) > 1 and parts[0] == ".yadof" and parts[1] != "workspace.json":
-            continue
+        if ".yadof" in parts:
+            marker = parts.index(".yadof")
+            if marker + 1 < len(parts) and parts[marker + 1] != "workspace.json":
+                continue
         if relative.endswith((".pyc", ".pyo")):
             continue
         if any(relative == item or relative.startswith(item + "/") for item in normalized_excludes):
@@ -128,12 +136,14 @@ def _serialized(value: Any, *, indent: int | None = 2) -> str:
 
 def write_new_text(path: str | Path, text: str) -> None:
     target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
     try:
+        target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("x", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
     except FileExistsError as exc:
         raise BenchmarkError(f"immutable output already exists: {target}") from exc
+    except OSError as exc:
+        raise BenchmarkStorageError(f"cannot publish immutable output {target}: {exc}") from exc
 
 
 def write_new_json(path: str | Path, value: Any) -> None:
@@ -142,10 +152,17 @@ def write_new_json(path: str | Path, value: Any) -> None:
 
 def atomic_write_text(path: str | Path, text: str) -> None:
     target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
-    temporary.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(temporary, target)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(text, encoding="utf-8", newline="\n")
+        os.replace(temporary, target)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise BenchmarkStorageError(f"cannot atomically publish {target}: {exc}") from exc
 
 
 def atomic_write_json(path: str | Path, value: Any) -> None:
@@ -202,6 +219,7 @@ def _initial_state(run_id: str, spec: RunSpec) -> dict[str, Any]:
         "updated_utc": now,
         "started_utc": None,
         "finished_utc": None,
+        "publication_failures": [],
         "host": host_identity(spec),
         "cells": {
             cell.id: {"status": "planned", "attempts": [], "error": None}
@@ -303,8 +321,68 @@ def load_run(run_root: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return spec, state
 
 
+def validate_run_snapshots(run_root: Path, spec: Mapping[str, Any]) -> None:
+    """Reject mutation of the immutable inputs owned by a started run."""
+
+    expected_driver = str(spec.get("driver_digest", ""))
+    if driver_digest(run_root / "driver") != expected_driver:
+        raise BenchmarkError(f"run driver snapshot digest mismatch: {run_root}")
+    workflow_root = run_root / "inputs" / "workflow"
+    expected_workflow = str(spec.get("workflow_digest", ""))
+    if workflow_digest(
+        workflow_root / "benchmark.py", workflow_root / "resources"
+    ) != expected_workflow:
+        raise BenchmarkError(f"run workflow snapshot digest mismatch: {run_root}")
+    verified_baselines: set[tuple[str, str]] = set()
+    verified_strategies: set[tuple[str, str]] = set()
+    for cell in spec.get("cells", []):
+        baseline = run_root / str(cell["baseline_snapshot"])
+        baseline_key = (str(baseline.parent), str(cell["baseline_digest"]))
+        if baseline_key not in verified_baselines:
+            if directory_digest(baseline.parent) != baseline_key[1]:
+                raise BenchmarkError(
+                    f"run baseline snapshot digest mismatch: {baseline.parent}"
+                )
+            verified_baselines.add(baseline_key)
+        strategy = run_root / str(cell["strategy_snapshot"])
+        strategy_key = (str(strategy), str(cell["strategy_digest"]))
+        if strategy_key not in verified_strategies:
+            if file_digest(strategy) != strategy_key[1]:
+                raise BenchmarkError(
+                    f"run strategy snapshot digest mismatch: {strategy}"
+                )
+            verified_strategies.add(strategy_key)
+
+
+def _publish_attempt_metadata(run_root: Path, state: Mapping[str, Any]) -> None:
+    groups = (state.get("cells", {}), state.get("postprocessors", {}))
+    for group in groups:
+        if not isinstance(group, Mapping):
+            continue
+        for owner in group.values():
+            if not isinstance(owner, Mapping):
+                continue
+            attempts = owner.get("attempts", [])
+            if not isinstance(attempts, list):
+                continue
+            for attempt in attempts:
+                if not isinstance(attempt, Mapping) or not attempt.get("path"):
+                    continue
+                target = run_root / str(attempt["path"]) / "attempt.json"
+                existing = read_json(target) if target.is_file() else None
+                payload = dict(attempt)
+                if existing is not None and bool(existing.get("sealed")):
+                    if canonical_json(existing) != canonical_json(payload):
+                        raise BenchmarkError(
+                            f"sealed attempt metadata is immutable: {target}"
+                        )
+                    continue
+                atomic_write_json(target, payload)
+
+
 def save_state(run_root: Path, state: dict[str, Any]) -> None:
     state["updated_utc"] = utc_now()
+    _publish_attempt_metadata(run_root, state)
     atomic_write_json(run_root / "state.json", state)
 
 
@@ -339,6 +417,9 @@ def prepare_attempt(
         "path": attempt_root.relative_to(run_root).as_posix(),
         "workspace": workspace.relative_to(run_root).as_posix(),
         "status": "planned",
+        "sealed": False,
+        "sealed_utc": None,
+        "completeness": "incomplete",
         "created_utc": utc_now(),
         "finished_utc": None,
         "commands": [],
@@ -361,6 +442,10 @@ def mark_interrupted(run_root: Path, state: dict[str, Any]) -> None:
             attempt = cell_state["attempts"][-1]
             attempt["status"] = "interrupted"
             attempt["finished_utc"] = utc_now()
+            attempt["active_command"] = None
+            attempt["sealed"] = True
+            attempt["sealed_utc"] = attempt["finished_utc"]
+            attempt["completeness"] = "incomplete"
             attempt["error"] = "execution ended before a terminal command record"
         cell_state["status"] = "planned"
         cell_state["error"] = None
@@ -372,6 +457,9 @@ def mark_interrupted(run_root: Path, state: dict[str, Any]) -> None:
             attempt = item["attempts"][-1]
             attempt["status"] = "interrupted"
             attempt["finished_utc"] = utc_now()
+            attempt["sealed"] = True
+            attempt["sealed_utc"] = attempt["finished_utc"]
+            attempt["completeness"] = "incomplete"
             attempt["error"] = "postprocessor ended without a terminal record"
         item["status"] = "planned"
         item["error"] = None
@@ -399,6 +487,7 @@ __all__ = [
     "safe_id",
     "save_state",
     "utc_now",
+    "validate_run_snapshots",
     "workflow_digest",
     "write_new_json",
     "write_new_text",

@@ -32,7 +32,7 @@
 
 ## 必须恢复的有效要求
 
-实施进度：2026-08-29 已完成第 1--7 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
+实施进度：2026-08-29 已完成第 1--8 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
 strategy、baseline、seed/budget 和 postprocess；baseline discovery 强制 editable source 的
 相对目录等于 `provider/task` semantic ID，run 仍负责 digest 与不可变 snapshot。人类可见
 workspace/run/output-index 现由 benchmark 统一添加秒级时间前缀；每个 cell 强制生成 cost 图与
@@ -61,8 +61,13 @@ generation-0 normalized-population fingerprint；cell 明确发布 planned/attem
 计数，final HV 与 HV trajectory/AUC 以 attempted real evaluations 对齐。无效或不完整 evidence
 保留在 run 中但显式从跨 seed 描述性 aggregate 排除，失败不再包装为 performance score，主比较
 表不以 optimizer wall time 排名。surrogate training duration 单独发布，并只在 workflow 显式给出
-代表性昂贵 generation 时生成描述性比值。第 8--9 小节仍保持 active；本进度不代表更丰富的恢复
-或并行要求已经完成。
+代表性昂贵 generation 时生成描述性比值。structural workflow 现默认 fail-fast，performance 默认
+继续独立 cell 以保全昂贵 evidence，但任一 invalid/incomplete cell 仍使最终状态和 CLI 退出非零；
+cell aggregate publication 是下一 cell 前的 campaign-fatal barrier，失败会保留 state diagnostics。
+执行中断/失败 attempt 现以独立 `attempt.json` 封存为 incomplete，stdout/stderr 分离保留，resume 新建
+编号 attempt 与 compact workspace；collection-only failure 则复用成功但尚未封存的执行 evidence。
+每次执行还会重新校验 run-owned driver、workflow/resources、baseline、strategy digest，外部可编辑源只
+影响后续新 run。第 9 小节仍保持 active；本进度不代表并行要求已经完成。
 
 ### 1. 工具边界和工作区体验
 

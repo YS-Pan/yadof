@@ -24,6 +24,7 @@ from yadof_benchmark.benchmark_runtime.baselines import (
 from yadof_benchmark.benchmark_runtime.contracts import (
     BASELINE_FORMAT,
     WORKSPACE_FORMAT,
+    BenchmarkStorageError,
     CommandResult,
 )
 from yadof_benchmark.benchmark_runtime.launch import launch_detached
@@ -119,6 +120,7 @@ def _workspace(
     population: int = 2,
     generations: int = 3,
     postprocess: str = "",
+    fail_fast: bool | None = False,
 ) -> Path:
     root = Path(api.init_workspace(root)["workspace"])
     for name in strategies:
@@ -131,7 +133,9 @@ def _workspace(
         "from yadof_benchmark import Benchmark\n\n"
         + postprocess
         + "\ndef build_benchmark(benchmark: Benchmark) -> None:\n"
-        + f"    benchmark.configure(name=\"comparison\", evidence={evidence!r}, fail_fast=False)\n"
+        + f"    benchmark.configure(name=\"comparison\", evidence={evidence!r}"
+        + ("" if fail_fast is None else f", fail_fast={fail_fast!r}")
+        + ")\n"
         + declarations
         + "\n    benchmark.compare(\n"
         + f"        \"main\", baselines={list(baselines)!r},\n"
@@ -813,7 +817,8 @@ def test_invalid_pair_is_retained_but_excluded_from_cross_seed_aggregate(
         collector=collector,
     )
 
-    assert state["status"] == "completed"
+    assert state["status"] == "failed"
+    assert "invalid" in state["validity_error"]
     results = read_json(run_root / "results.json")
     pairing_by_seed = {row["seed"]: row for row in results["pairings"]}
     assert pairing_by_seed[7]["valid"] is False
@@ -996,6 +1001,10 @@ def test_interrupted_cell_is_sealed_and_retried(tmp_path: Path) -> None:
     attempt["status"] = "running"
     state["cells"][cell["id"]]["status"] = "running"
     save_state(run_root, state)
+    first_workspace = run_root / attempt["workspace"]
+    (first_workspace / "partial-evidence.txt").write_text(
+        "retained", encoding="utf-8"
+    )
 
     resumed = execution.execute_existing_run(
         run_root,
@@ -1005,6 +1014,217 @@ def test_interrupted_cell_is_sealed_and_retried(tmp_path: Path) -> None:
 
     attempts = resumed["cells"][cell["id"]]["attempts"]
     assert [item["status"] for item in attempts] == ["interrupted", "collected"]
+    assert [item["sealed"] for item in attempts] == [True, True]
+    assert [item["completeness"] for item in attempts] == ["incomplete", "complete"]
+    assert attempts[0]["workspace"] != attempts[1]["workspace"]
+    assert (first_workspace / "partial-evidence.txt").read_text() == "retained"
+    for item in attempts:
+        assert read_json(run_root / item["path"] / "attempt.json") == item
+    command_root = run_root / attempts[1]["commands"][0]
+    assert (command_root / "stdout.log").is_file()
+    assert (command_root / "stderr.log").is_file()
+
+    attempts[0]["error"] = "attempted overwrite"
+    with pytest.raises(benchmark.BenchmarkError, match="sealed attempt metadata"):
+        save_state(run_root, resumed)
+    persisted = read_json(run_root / attempts[0]["path"] / "attempt.json")
+    assert persisted["error"] == "execution ended before a terminal command record"
+
+
+@pytest.mark.recovery
+def test_evidence_class_defaults_and_invalid_performance_exit_status(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    _workspace(
+        tmp_path / "structural",
+        strategies=("alpha", "beta"),
+        fail_fast=None,
+    )
+    structural = _plan(tmp_path)
+    assert structural.workflow.fail_fast is True
+    structural_run = create_run(structural, run_id="structural-default")
+    run_calls: list[str] = []
+
+    def record_run(command, **kwargs):
+        result = _successful_command(command, **kwargs)
+        if kwargs["label"] == "run":
+            run_calls.append(str(kwargs["cwd"]))
+        return result
+
+    def collect_invalid_structural(_workspace: Path, cell: dict) -> dict:
+        result = _cell_result(cell, 0.2)
+        result["counts"]["finite"] -= 1
+        result["finite_evaluations"] -= 1
+        return result
+
+    structural_state = execution.execute_existing_run(
+        structural_run,
+        command_runner=record_run,
+        collector=collect_invalid_structural,
+    )
+    assert structural_state["status"] == "failed"
+    assert len(run_calls) == 1
+    assert sum(
+        bool(item["attempts"]) for item in structural_state["cells"].values()
+    ) == 1
+
+    separate = tmp_path / "performance-root"
+    _baseline(separate)
+    _workspace(
+        separate / "performance",
+        strategies=("alpha", "beta"),
+        evidence="performance",
+        population=100,
+        generations=20,
+        fail_fast=None,
+    )
+    performance = _plan(separate)
+    assert performance.workflow.fail_fast is False
+    performance_run = create_run(performance, run_id="performance-default")
+
+    def collect_invalid(_workspace: Path, cell: dict) -> dict:
+        result = _cell_result(cell, 0.2)
+        if cell["strategy"] == "alpha":
+            result["counts"]["finite"] -= 1
+            result["finite_evaluations"] -= 1
+        return result
+
+    performance_state = execution.execute_existing_run(
+        performance_run,
+        command_runner=_successful_command,
+        collector=collect_invalid,
+    )
+    assert performance_state["status"] == "failed"
+    assert "invalid" in performance_state["validity_error"]
+    assert all(
+        item["status"] == "collected"
+        for item in performance_state["cells"].values()
+    )
+    report = read_json(performance_run / "reports" / "descriptive-results.json")
+    assert [item["valid"] for item in report["cells"]] == [False, True]
+
+
+@pytest.mark.recovery
+def test_publication_failure_is_fatal_before_the_next_cell(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _baseline(tmp_path)
+    _workspace(
+        tmp_path / "performance",
+        strategies=("alpha", "beta"),
+        fail_fast=False,
+    )
+    run_root = create_run(_plan(tmp_path), run_id="publication-failure")
+    commands: list[str] = []
+
+    def command(*args, **kwargs):
+        commands.append(kwargs["label"])
+        return _successful_command(*args, **kwargs)
+
+    monkeypatch.setattr(
+        execution,
+        "publish_results",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("injected storage failure")
+        ),
+    )
+    with pytest.raises(
+        benchmark.BenchmarkError,
+        match="campaign stopped before another cell.*injected storage failure",
+    ):
+        execution.execute_existing_run(
+            run_root,
+            command_runner=command,
+            collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+        )
+
+    _spec, persisted = load_run(run_root)
+    assert persisted["status"] == "failed"
+    assert persisted["publication_failures"][-1]["boundary"].startswith("cell:")
+    assert "injected storage failure" in persisted["publication_failures"][-1]["error"]
+    assert commands == ["check", "run", "view-cost", "baseline-postprocess"]
+    assert sum(bool(item["attempts"]) for item in persisted["cells"].values()) == 1
+
+
+@pytest.mark.recovery
+def test_state_storage_failure_is_not_downgraded_to_a_cell_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _baseline(tmp_path)
+    _workspace(
+        tmp_path / "performance",
+        strategies=("alpha", "beta"),
+        fail_fast=False,
+    )
+    run_root = create_run(_plan(tmp_path), run_id="state-storage-failure")
+    real_save_state = execution.save_state
+    commands: list[str] = []
+
+    def fail_active_attempt(run: Path, state: dict) -> None:
+        active = any(
+            attempt.get("active_command")
+            for cell in state["cells"].values()
+            for attempt in cell["attempts"]
+        )
+        if active:
+            raise BenchmarkStorageError("injected state storage failure")
+        real_save_state(run, state)
+
+    monkeypatch.setattr(execution, "save_state", fail_active_attempt)
+    with pytest.raises(BenchmarkStorageError, match="injected state storage failure"):
+        execution.execute_existing_run(
+            run_root,
+            command_runner=lambda *args, **kwargs: (
+                commands.append(kwargs["label"])
+                or _successful_command(*args, **kwargs)
+            ),
+            collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+        )
+
+    assert commands == []
+    _spec, persisted = load_run(run_root)
+    assert sum(bool(item["attempts"]) for item in persisted["cells"].values()) == 1
+
+
+@pytest.mark.recovery
+def test_run_snapshots_ignore_external_edits_and_reject_internal_mutation(
+    tmp_path: Path,
+) -> None:
+    baseline = _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="frozen-inputs")
+    workspace.joinpath("benchmark.py").write_text(
+        "raise RuntimeError('external workflow edit')\n", encoding="utf-8"
+    )
+    workspace.joinpath(
+        "resources", "strategies", "alpha", "optimization.py"
+    ).write_text("raise RuntimeError('external strategy edit')\n", encoding="utf-8")
+    baseline.joinpath("workspace", "config.py").write_text(
+        "raise RuntimeError('external baseline edit')\n", encoding="utf-8"
+    )
+
+    state = execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+    )
+    assert state["status"] == "completed"
+    attempt = next(iter(state["cells"].values()))["attempts"][0]
+    materialized = run_root / attempt["workspace"]
+    assert "external baseline edit" not in (
+        materialized / "config.py"
+    ).read_text(encoding="utf-8")
+    assert "external strategy edit" not in (
+        materialized / "submit" / "optimization.py"
+    ).read_text(encoding="utf-8")
+
+    snapshotted_strategy = next(
+        (run_root / "inputs" / "strategies").rglob("optimization.py")
+    )
+    snapshotted_strategy.write_text("tampered = True\n", encoding="utf-8")
+    with pytest.raises(benchmark.BenchmarkError, match="strategy snapshot digest"):
+        execution.execute_existing_run(run_root)
 
 
 @pytest.mark.recovery

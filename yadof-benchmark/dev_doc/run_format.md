@@ -9,7 +9,9 @@ RUN/
 │   ├── workflow/{benchmark.py,resources/...}
 │   ├── baselines/.../workspace/
 │   └── strategies/.../optimization.py
-├── cells/CELL/attempts/NNNN/       # readable command/result evidence
+├── cells/CELL/attempts/NNNN/
+│   ├── attempt.json                # independent lifecycle/completeness metadata
+│   └── commands/.../{stdout.log,stderr.log,...}
 ├── workspaces/CELL_DIGEST/NNNN/    # materialized yadof execution workspace
 ├── postprocessing/ID/attempts/NNNN/
 ├── visualizations/
@@ -37,6 +39,8 @@ Every command attempt keeps immutable `started.json`/`finished.json`, separate
 `stdout.log`/`stderr.log`, and append-only `progress.jsonl`. The progress stream
 timestamps command activity and parsed generation snapshots; raw child lines remain
 only in their stream logs unless explicit CLI/API streaming is requested.
+`attempt.json` is atomically refreshed while the attempt is active. Once it records
+`sealed=true`, any later metadata change fails closed instead of rewriting evidence.
 
 The specification digest excludes only the creation timestamp and includes the
 workflow and driver digests. Loading fails closed on format, identity, JSON, or
@@ -82,9 +86,12 @@ inspect repeat the scope and its fixed notice so a single-seed result cannot be
 detached from its exploratory boundary.
 
 A cell progresses through planned, checked, running, succeeded, and collected.
-Interrupted checked/running attempts are sealed and the cell returns to planned.
-Failed cells receive a new attempt. Collection failure preserves successful
-execution so resume retries collection without rerunning the simulator.
+Interrupted checked/running attempts are sealed with `completeness=incomplete` and
+the cell returns to planned. Failed attempts are sealed incomplete; collected
+attempts are sealed complete. Failed cells receive a new numbered attempt and a
+new compact execution workspace without deleting or reusing the old path.
+Collection failure preserves a successful, not-yet-sealed execution so resume
+retries collection without rerunning the simulator.
 
 After successful measured execution, collection is followed by two mandatory
 run-owned commands: an explicit-output `yadof view cost` and the snapshotted
@@ -105,7 +112,17 @@ After all cells are collected, the current descriptive result set is published a
 the run enters postprocessing. Each callback gets a fresh attempt and a
 `PostprocessContext`. Successful callbacks are skipped on resume; failed or
 interrupted callbacks retry without touching collected cells. The run is complete
-only when every cell is collected and every declared postprocessor succeeds.
+only when every cell is collected, every cell validity contract passes, and every
+declared postprocessor succeeds. Structural workflows default to fail-fast;
+performance workflows default to continuing independent cells, but either class
+finishes non-successfully when any cell is invalid or incomplete.
+
+Publication after each cell is a synchronous recovery boundary: another cell is
+not started until aggregate results, reports, and available workspace indexes have
+been atomically refreshed. A publication exception stops the campaign immediately,
+records its UTC/boundary/error in `state.json` when possible, and remains a raised
+error rather than an ordinary cell failure. Resume may republish from immutable
+attempt results; no accepted raw evidence is discarded for aggregate throughput.
 
 Each result publication also refreshes the timestamped workspace-level report and
 visualization index directories while the originating benchmark workspace remains
@@ -113,7 +130,10 @@ available. They contain paths/status only and always lead back to this single
 authoritative run root; recovery correctness does not depend on them.
 
 Run-owned recovery dynamically loads `driver/benchmark_runtime`; it never replans
-the original workspace or depends on current package implementation details.
+the original workspace or depends on current package implementation details. Each
+execution also revalidates run-owned driver, workflow/resources, baseline, and
+strategy digests. External edits affect a later snapshot only; mutation inside an
+existing run fails closed.
 
 `benchmark.log` is append-only presentation evidence for foreground and detached
 launches. Per-command stdout/stderr remain separated below the relevant attempt.

@@ -16,7 +16,6 @@ def build_benchmark(benchmark: Benchmark) -> None:
     benchmark.configure(
         name="antenna-comparison",
         evidence="structural",
-        fail_fast=False,
         # Optional external expensive-generation reference for training-time context.
         representative_generation_seconds=7200.0,
     )
@@ -57,8 +56,12 @@ accepts only `"structural"` or `"performance"`. Structural means integration-onl
 smoke/canary evidence and forbids algorithm performance conclusions. Performance
 means descriptive performance evidence; it still does not authorize execution or
 permit the package to rank strategies or make acceptance decisions. Relative paths
-resolve from the workspace. Other defaults are the workspace name,
-continue-on-cell-failure, `runs/`, and the current Python interpreter.
+resolve from the workspace. Other defaults are the workspace name, evidence-aware
+failure scheduling, `runs/`, and the current Python interpreter. When `fail_fast`
+is omitted, structural workflows stop after the first failed or invalid cell and
+performance workflows continue independent cells to preserve expensive evidence.
+An explicit boolean overrides scheduling only: every invalid or incomplete cell still makes
+the final run status non-successful and the CLI exit nonzero.
 
 `representative_generation_seconds`, when supplied, must be positive and finite.
 It is the externally chosen duration of one representative expensive generation

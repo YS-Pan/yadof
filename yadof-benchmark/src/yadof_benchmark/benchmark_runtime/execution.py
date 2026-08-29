@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from .contracts import BenchmarkError, CommandResult
+from .contracts import BenchmarkError, BenchmarkStorageError, CommandResult
 from .postprocessing import execute_postprocessors
 from .results import collect_cell, publish_results
 from .naming import slug
@@ -22,6 +22,7 @@ from .storage import (
     prepare_attempt,
     save_state,
     utc_now,
+    validate_run_snapshots,
     write_new_json,
 )
 
@@ -664,13 +665,19 @@ def _execute_cell(
             raise _command_failure("yadof run", measured)
         attempt["status"] = "succeeded"
         attempt["finished_utc"] = utc_now()
+        attempt["completeness"] = "awaiting-collection"
         cell_state["status"] = "succeeded"
         save_state(run_root, state)
         return True
+    except BenchmarkStorageError:
+        raise
     except Exception as exc:
         attempt["active_command"] = None
         attempt["status"] = "failed"
         attempt["finished_utc"] = utc_now()
+        attempt["sealed"] = True
+        attempt["sealed_utc"] = attempt["finished_utc"]
+        attempt["completeness"] = "incomplete"
         attempt["error"] = str(exc)
         cell_state["status"] = "failed"
         cell_state["error"] = str(exc)
@@ -721,6 +728,9 @@ def _collect_succeeded(
         attempt["result"] = result_path.relative_to(run_root).as_posix()
         attempt["status"] = "collected"
         attempt["collected_utc"] = utc_now()
+        attempt["sealed"] = True
+        attempt["sealed_utc"] = attempt["collected_utc"]
+        attempt["completeness"] = "complete"
         cell_state["status"] = "collected"
         cell_state["error"] = None
         save_state(run_root, state)
@@ -731,6 +741,8 @@ def _collect_succeeded(
             **_state_progress(state),
         )
         return True
+    except BenchmarkStorageError:
+        raise
     except Exception as exc:
         if result is not None:
             issues = result.setdefault("issues", [])
@@ -743,6 +755,9 @@ def _collect_succeeded(
             attempt["active_command"] = None
             attempt["status"] = "failed"
             attempt["finished_utc"] = utc_now()
+            attempt["sealed"] = True
+            attempt["sealed_utc"] = attempt["finished_utc"]
+            attempt["completeness"] = "incomplete"
             attempt["error"] = f"required visualization failed: {exc}"
             cell_state["status"] = "failed"
             cell_state["error"] = attempt["error"]
@@ -762,6 +777,83 @@ def _collect_succeeded(
         return False
 
 
+def _publish_or_fail(
+    run_root: Path,
+    spec: Mapping[str, Any],
+    state: dict[str, Any],
+    *,
+    boundary: str,
+    event_sink: EventSink | None,
+) -> dict[str, Any]:
+    """Make aggregate publication a campaign-fatal cell boundary."""
+
+    try:
+        return publish_results(run_root, spec, state)
+    except Exception as exc:
+        failure = {
+            "utc": utc_now(),
+            "boundary": boundary,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+        failures = state.setdefault("publication_failures", [])
+        if isinstance(failures, list):
+            failures.append(failure)
+        state["status"] = "failed"
+        state["finished_utc"] = failure["utc"]
+        state_error: Exception | None = None
+        try:
+            save_state(run_root, state)
+        except Exception as persistence_exc:
+            state_error = persistence_exc
+        _emit(
+            event_sink,
+            event="publication-failed",
+            boundary=boundary,
+            error=failure["error"],
+        )
+        detail = (
+            "benchmark result publication failed; campaign stopped before another "
+            f"cell at {boundary}: {failure['error']}"
+        )
+        if state_error is not None:
+            detail += (
+                "; publication-failure state could not be persisted: "
+                f"{type(state_error).__name__}: {state_error}"
+            )
+        raise BenchmarkError(detail) from exc
+
+
+def _publication_cells_valid(
+    publication: Mapping[str, Any], state: Mapping[str, Any]
+) -> bool:
+    summaries = publication.get("cell_summaries", [])
+    return (
+        isinstance(summaries, list)
+        and len(summaries) == len(state.get("cells", {}))
+        and all(
+            isinstance(item, Mapping)
+            and bool(item.get("completed"))
+            and bool(item.get("valid"))
+            for item in summaries
+        )
+    )
+
+
+def _publication_cell_valid(
+    publication: Mapping[str, Any], cell_id: str
+) -> bool:
+    summaries = publication.get("cell_summaries", [])
+    if not isinstance(summaries, list):
+        return False
+    return any(
+        isinstance(item, Mapping)
+        and str(item.get("cell")) == cell_id
+        and bool(item.get("completed"))
+        and bool(item.get("valid"))
+        for item in summaries
+    )
+
+
 def execute_existing_run(
     run: str | Path,
     *,
@@ -774,6 +866,7 @@ def execute_existing_run(
     spec, state = load_run(run_root)
     if not (run_root / "driver" / "benchmark_runtime" / "__init__.py").is_file():
         raise BenchmarkError(f"run driver snapshot is incomplete: {run_root}")
+    validate_run_snapshots(run_root, spec)
     if state["status"] == "completed":
         return state
     mark_interrupted(run_root, state)
@@ -831,23 +924,50 @@ def execute_existing_run(
             stream_child_output=stream_child_output,
         ) and fail_fast:
             break
-        publish_results(run_root, spec, state)
+        publication = _publish_or_fail(
+            run_root,
+            spec,
+            state,
+            boundary=f"cell:{cell_id}",
+            event_sink=event_sink,
+        )
+        if fail_fast and not _publication_cell_valid(publication, cell_id):
+            break
     cells_complete = bool(state["cells"]) and all(
         item["status"] == "collected" for item in state["cells"].values()
     )
     if cells_complete:
         state["status"] = "postprocessing"
         save_state(run_root, state)
-        publish_results(run_root, spec, state)
+        publication = _publish_or_fail(
+            run_root,
+            spec,
+            state,
+            boundary="pre-postprocessing",
+            event_sink=event_sink,
+        )
         processed = execute_postprocessors(
             run_root, spec, state, event_sink=event_sink
         )
-        state["status"] = "completed" if processed else "failed"
+        cells_valid = _publication_cells_valid(publication, state)
+        state["status"] = "completed" if processed and cells_valid else "failed"
+        if not cells_valid:
+            state["validity_error"] = (
+                "one or more collected cells are invalid; see cell validity reports"
+            )
+        else:
+            state.pop("validity_error", None)
     else:
         state["status"] = "failed"
     state["finished_utc"] = utc_now()
     save_state(run_root, state)
-    publish_results(run_root, spec, state)
+    _publish_or_fail(
+        run_root,
+        spec,
+        state,
+        boundary="final",
+        event_sink=event_sink,
+    )
     _emit(
         event_sink,
         event="run-finished",

@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from .contracts import BenchmarkError, PostprocessContext
+from .contracts import BenchmarkError, BenchmarkStorageError, PostprocessContext
 from .storage import json_safe, save_state, utc_now, write_new_json
 
 EventSink = Callable[[Mapping[str, Any]], None]
@@ -30,6 +30,8 @@ def _load_workflow(run_root: Path) -> Any:
     sys.path.insert(0, str(workflow_root))
     try:
         spec.loader.exec_module(module)
+    except BenchmarkStorageError:
+        raise
     except Exception as exc:
         raise BenchmarkError(f"run workflow snapshot import failed: {exc}") from exc
     finally:
@@ -53,6 +55,9 @@ def _run_one(
         "number": number,
         "path": attempt_root.relative_to(run_root).as_posix(),
         "status": "running",
+        "sealed": False,
+        "sealed_utc": None,
+        "completeness": "incomplete",
         "created_utc": utc_now(),
         "finished_utc": None,
         "result": None,
@@ -85,13 +90,21 @@ def _run_one(
         attempt["result"] = result_path.relative_to(run_root).as_posix()
         attempt["status"] = "succeeded"
         attempt["finished_utc"] = utc_now()
+        attempt["sealed"] = True
+        attempt["sealed_utc"] = attempt["finished_utc"]
+        attempt["completeness"] = "complete"
         item_state["status"] = "succeeded"
         save_state(run_root, state)
         _emit(event_sink, event="postprocessor-finished", postprocessor=item_id)
         return True
+    except BenchmarkStorageError:
+        raise
     except Exception as exc:
         attempt["status"] = "failed"
         attempt["finished_utc"] = utc_now()
+        attempt["sealed"] = True
+        attempt["sealed_utc"] = attempt["finished_utc"]
+        attempt["completeness"] = "incomplete"
         attempt["error"] = str(exc)
         item_state["status"] = "failed"
         item_state["error"] = str(exc)

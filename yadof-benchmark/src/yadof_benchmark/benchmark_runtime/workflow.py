@@ -54,7 +54,7 @@ class Benchmark:
         fallback = re.sub(r"[^A-Za-z0-9._-]+", "-", self.workspace.name).strip("-._")
         self._name = fallback or "benchmark"
         self._evidence: str | None = None
-        self._fail_fast = False
+        self._fail_fast: bool | None = None
         self._representative_generation_seconds: float | None = None
         self._runs_dir = self.workspace / "runs"
         self._python = Path(sys.executable).resolve()
@@ -246,7 +246,11 @@ class Benchmark:
             strategies=tuple(self._strategies),
             comparisons=tuple(self._comparisons),
             postprocessors=tuple(self._postprocessors),
-            fail_fast=self._fail_fast,
+            fail_fast=(
+                self._evidence == "structural"
+                if self._fail_fast is None
+                else self._fail_fast
+            ),
             representative_generation_seconds=(
                 self._representative_generation_seconds
             ),

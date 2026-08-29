@@ -112,12 +112,21 @@ hot-change contract; structural dimension changes are future work.
   complete ordered generation-0 normalized-population fingerprints. Invalid or
   incomplete cell evidence is retained but excluded explicitly from aggregates;
   failures remain validity facts instead of a performance score.
+  Structural workflows fail fast by default. Performance workflows may continue
+  independent cells to retain expensive evidence, but every invalid/incomplete
+  cell keeps the final status non-successful. Aggregate publication is a
+  campaign-fatal barrier before another cell starts. Each terminal attempt owns
+  immutable `attempt.json` plus separate stdout/stderr evidence; interrupted or
+  failed execution is sealed incomplete and retries in a new numbered compact
+  workspace rather than overwriting old evidence.
   Workspace `benchmark.py` files select complete optimization strategies and
   declare any number of comparison matrices plus postprocessors. Adding an
   algorithm requires no runner registry or source change. A new run snapshots the
   complete Python workflow/resources, driver, selected clean baseline workspaces,
   and strategy inputs. Every exact materialized cell passes `yadof check` before
-  execution, and resume uses only run-owned files. Public yadof rows become
+  execution, and resume uses only digest-verified run-owned files. External source
+  edits therefore affect new runs without changing old snapshots. Public yadof
+  rows become
   arbitrary-arm long results and optional descriptive reference deltas; opaque
   optimization metadata is retained without algorithm-specific interpretation.
   Run-local attempt evidence retains the complete cell ID, while materialized

@@ -81,6 +81,31 @@ Final HV and trapezoidal HV-AUC use cumulative attempted real evaluations as the
 axis. Failures, non-finite objectives, and incomplete counts remain validity facts;
 the runtime does not turn them into a performance score.
 
+Failure policy is evidence-aware by default. Structural workflows stop at the
+first failed or invalid cell. Performance workflows continue independent cells to
+preserve expensive evidence, but collection is not success: every collected cell
+must also satisfy its validity contract for the final run status to be `completed`. Thus any
+failed, incomplete, all-infinite, or collected-but-invalid cell produces a nonzero
+CLI outcome. An explicit `fail_fast` override changes scheduling only, never this
+final validity boundary.
+
+Cell completion has a synchronous publication barrier. The driver atomically
+refreshes run results/reports/indexes after a cell and does not start the next cell
+until that publication returns successfully. Any publication/storage exception is
+campaign-fatal, records a bounded entry in `state.json` when state storage remains
+available, emits a diagnostic event, and propagates as `BenchmarkError`. Immutable
+per-attempt raw results and command logs remain the recovery source even if an
+aggregate publication was only partially refreshed.
+
+Every attempt publishes independent `attempt.json`, `stdout.log`, and `stderr.log`
+evidence. Failed or interrupted execution is sealed `incomplete`; collection seals
+the attempt `complete`. Resume never mutates a sealed attempt and materializes a
+new compact workspace for an execution retry. A collection-only failure leaves a
+successful simulator attempt open for collection retry, avoiding a scientifically
+different rerun. Before execution, driver, workflow/resources, baseline, and
+strategy snapshot digests are revalidated; external editable sources are never
+consulted by resume.
+
 Optimizer wall time remains operational evidence rather than a primary algorithm
 metric. Public surrogate-training metadata is summarized separately. An optional
 positive `representative_generation_seconds` workflow value supplies an external
