@@ -27,10 +27,11 @@
   `pca-svd-reconstruction`，但 Gate 0 v10 记录它仍没有 current runner arm。新增模块应补齐
   这个可执行缺口，同时把 oracle reconstruction 与真实参数预测的结论严格分开。
 - 2026-08-29 用户决定暂时搁置
-  [抗噪声 Surrogate TODO](20260828_082308_noise-robust-regime-specialized-surrogate.md)。
-  该决定不暂停本 TODO：PCA/SVD 的合法 measured evidence、formal-suite 接入和独立基线结论
-  仍可按其自身权限继续。它不再是近期抗噪声 successor 的执行前置，但仍为 Hierarchical CAE
-  提供 representation ceiling 与 parameter-to-latent 难度诊断。
+  [抗噪声扩展 TODO](20260828_082308_noise-robust-regime-specialized-surrogate.md)，并进一步明确
+  抗噪声路线只是扩展能力，不是 Hierarchical CAE 的验收指标或 blocker。该决定不暂停本
+  TODO：PCA/SVD 的合法 measured evidence、formal-suite 接入和独立基线结论仍可按其自身权限
+  继续；PCA/SVD 仍可为基础 Hierarchical CAE 提供 representation ceiling 与
+  parameter-to-latent 难度诊断。
 
 ## 目标
 
@@ -284,8 +285,9 @@
   中的 exact-state/readiness
   契约并建立新预注册，不能从 reconstruction residual 直接推导授权。旧 082609/082611 计划
   仅保留在 `obsolete/` 作为可选历史细节。
-- 抗噪声 Surrogate 的暂停既不阻塞 PCA/SVD 本身，也不允许用 PCA/SVD 完成来替代
-  Hierarchical CAE 的 performance acceptance、posterior calibration 或 qNEHVI readiness。
+- 抗噪声扩展的暂停、失败或通过都不阻塞 PCA/SVD，也不参与基础 Hierarchical CAE 的
+  performance acceptance。PCA/SVD 完成仍不能替代基础 Hierarchical CAE 自己的
+  representation/prediction gate、posterior calibration 或 qNEHVI readiness。
 - 模块配置直接遵循当前 component-owned settings/factory 边界；低层 codec/parity 与公开
   component 使用同一权威参数来源，不再安排二次配置迁移。
 

@@ -27,20 +27,24 @@
 ### 当前用户优先级决定
 
 - 2026-08-29 用户明确决定暂时搁置
-  [抗噪声 Hierarchical CAE successor](20260828_082308_noise-robust-regime-specialized-surrogate.md)。
+  [抗噪声 Hierarchical CAE 扩展](20260828_082308_noise-robust-regime-specialized-surrogate.md)。
   该 TODO 保持 `PARKED`，不执行其 regime-specialized/MoE、simulator、blind evidence、
   calibration 或 formal qNEHVI gates。
+- 用户进一步明确：抗噪声路线只考察扩展性，不是基础 Hierarchical CAE 的验收指标或
+  blocker。其暂停、失败、缺少 evidence、通过或取消都不改变基础 Hierarchical CAE 的
+  performance、posterior、qNEHVI 或发布 gate。
 - 当前 Hierarchical CAE 的数据筛选接口已经独立收敛：`hierarchical_cae()` 默认
   `data_filter_mode="none"`；频率筛选只通过显式
   `data_filter_mode="frequency"` 与 `frequency_filter=FrequencyFilter(...)` 启用。这是已验收的
-  组件接口事实，不是抗噪声 successor 的性能证据或重新激活。
-- 暂停没有反转 v5/v8 失败，也不创建 performance-accepted checkpoint、transferable
-  calibration artifact 或 typed exploitation readiness。Hierarchical CAE 仍是
+  组件接口事实，不是抗噪声扩展的性能证据或重新激活。
+- 暂停没有反转抗噪声扩展的 v5/v8 失败，也不为该变体创建接受结论、transferable
+  calibration artifact 或 typed exploitation readiness。基础 Hierarchical CAE 当前仍是
   `experimental / performance-not-accepted`，真实 qNEHVI 仍只能 fail closed 到 full-real
-  fallback。
+  fallback，但原因是基础路线自己的 representation/prediction、worst-field、coordinate、
+  resource 和 posterior 证据尚未通过，而不是抗噪声扩展未完成。
 - 当前可独立推进的是 PCA/SVD 三 case measured evidence、formal-suite 结构接入和不依赖新
-  Hierarchical CAE 科学结论的工程改进。Hierarchical CAE performance/calibration/eligible
-  qNEHVI/完整发布链保持有意阻塞，直到用户明确恢复抗噪声路线或批准另一条具体 successor。
+  Hierarchical CAE 科学结论的工程改进。基础 Hierarchical CAE 的科学验收也可以在适当权限、
+  新预注册和自己的非抗噪声指标下独立继续，无需恢复或批准任何抗噪声扩展。
 
 ### 已完成并可依赖的基础设施
 
@@ -75,14 +79,18 @@
 - 当前 Hierarchical CAE 已提供默认关闭的 component-local 数据筛选接口及显式 `frequency`
   模式。历史 quality/regime 抗噪声 MVP 已包含 versioned task policy、design × field robust
   aggregation、shared-token isolation、gated field-private residual 和 uncalibrated applicability
-  head；后者的 successor 现已暂停。
-- Gate 0 v5 冻结的结论仍为：
+  head；后者现在只作为已暂停的扩展能力。
+- Gate 0 v5 冻结的历史结论仍为：
   - `representation_passed=false`；
   - `quality_regime_passed=false`；
   - `full_grid_gate_passed=false`。
 - 代表性失败包括：Chrono clean-target leakage `0.37714/0.36857` 高于 `0.35` guard，smooth
   roughness inflation `2.4013/2.3137` 高于 `2.0`，gated residual 的泄漏比 shared isolation
   高 `5.60%/2.38%`，Chrono 最差字段 RMSE ratio 达 `2.64995/3.85268`。
+- 上述 clean leakage、roughness、quality/regime、classification 和 class-balance 结果继续作为
+  抗噪声扩展的冻结失败证据，但不再进入基础 Hierarchical CAE 的验收矩阵。基础路线仍须用
+  独立的 representation/prediction、current-cost、worst-field、coordinate 和 resource evidence
+  证明性能，不能因移除抗噪声 gate 而把尚未通过的基础证据视为成功。
 - v6/v7 coordinate/viewer/offline path 只获得 `experimental / performance-not-accepted` 的机制
   结论，不能反转 v5，也不能成为生产 recommendation。
 
@@ -94,7 +102,9 @@
   失败一个冻结 gate，最终均为 `uncalibrated`、identity scaling、`transferable=false`。
 - Chrono labels 为 19 smooth / 181 chatter-or-failure，不能满足预注册两折 minimum-class
   support；两个 applicability fits 均失败。当前没有可供 qNEHVI 使用的 calibrated
-  probability capability。
+  抗噪声 probability capability。这个 class-support 失败只阻塞抗噪声变体的 applicability，
+  不阻塞基础 Hierarchical CAE；基础路线仍因 rawData/current-cost posterior calibration 未通过
+  而保持 blocked。
 - shipped `HierarchicalCAEComponent` 与 `ConditionalINRPosteriorAdapter` 都返回 blocked typed
   exploitation readiness。真实组件进入 `posterior_assisted()` 时只能走可见的 full-real
   fallback；eligible exploitation path 目前只由 fake/mechanism tests 覆盖。
@@ -110,7 +120,7 @@
   仍为 false。Phase A 只允许冻结证据上的实验/诊断；Phase B public opt-in 必须 full-real
   fallback；Phase C 仍是 `blocked-not-recommended-no-default-change`。
 
-## 当前活动范围与未来恢复顺序
+## 当前活动范围与依赖顺序
 
 ### 1. 补齐 PCA/SVD 基线和可复用模块（当前 active）
 
@@ -124,46 +134,53 @@
   不设为默认、不伪造 posterior readiness。
 - 这一步补齐 formal matrix 的 PCA/SVD 结构缺口，同时帮助判断 Hierarchical CAE 的问题位于
   表示空间还是 parameter-to-latent mapping。
-- 抗噪声 Hierarchical CAE successor 的暂停不阻塞这一步；但 PCA/SVD 通过也不能替代
-  Hierarchical CAE performance、posterior calibration 或 qNEHVI readiness。
+- 抗噪声 Hierarchical CAE 扩展的状态不阻塞这一步，也不参与基础 Hierarchical CAE 验收；
+  但 PCA/SVD 通过仍不能替代 Hierarchical CAE performance、posterior calibration 或 qNEHVI
+  readiness。
 
 ### 2. 保持 Hierarchical CAE 当前状态与 fail-closed 边界（当前 active）
 
 - 不再继续调旧 v5 checkpoint，也不把默认 `none` 或显式 `frequency` 筛选接口当作性能改善。
-  旧结果已经被查看并冻结，任何 architecture/routing/rank/threshold 变化都需要用户批准的
-  successor、独立 preregistration 和新 semantic namespace。
-- 抗噪声 Hierarchical CAE successor 暂停期间，不运行其 Gate 0--5，不访问新的 blind test 或
-  calibration locator，不把失败的 v8 artifact 迁移到当前 checkpoint。
+  旧结果已经被查看并冻结。任何基础 architecture/rank/threshold 变化都需要独立
+  preregistration 和新 semantic namespace；只有达到运行权限边界时再取得相应用户授权。
+  基础路线不得把抗噪声 routing/regime 指标作为隐含前置。
+- 抗噪声 Hierarchical CAE 扩展暂停期间，不运行其 Gate 0--5，不访问该扩展新的 blind test
+  或 calibration locator，不把失败的 v8 artifact 迁移到当前 checkpoint。
 - `HierarchicalCAEComponent` 和 `ConditionalINRPosteriorAdapter` 继续返回 blocked readiness；
   `posterior_assisted()` 的安全 full-real fallback 保持当前可用行为。
 
-### 3. 建立 performance-accepted Hierarchical CAE（等待用户重新授权）
+### 3. 建立 performance-accepted 基础 Hierarchical CAE（独立 active remainder）
 
-- 用户如果恢复抗噪声路线，按 PARKED TODO 重新审计当前 `frequency` API、冻结新计划，并比较
-  simple shared isolation、一个有界 regime-specialized/MoE 主候选、conditional-INR 和必要的
-  PCA/SVD 简单对照。
-- 用户如果批准不同的 Hierarchical CAE successor，先建立独立、自足的 TODO 和预注册，再把
-  它接回本文；不得默认继承抗噪声 TODO 的 architecture、阈值或授权。
-- 任何路线都必须保持 rawData-first、zero observation noise、field-macro、最差字段 guard 和
-  适用的 clean leakage/roughness 约束。只有新的 blind evidence 同时通过 representation、
-  quality/regime（若适用）、worst-field、coordinate 和资源 gate，精确 checkpoint 才可标记
-  `performance_accepted=true`。
+- 该工作不依赖抗噪声扩展恢复。先为基础 `HierarchicalCAEComponent` 建立新的独立预注册，
+  冻结 architecture/state、train/validation/test partition、seeds、指标、阈值、资源限制和停止
+  规则；需要 simulator、长训练或 blind evidence 时仍按权限边界单独申请。
+- 基础验收矩阵只包含 rawData representation/prediction、current-cost prediction/ranking、
+  field-macro 与 worst-field、all-axis coordinate、资源和可复现性指标。clean leakage、smooth
+  roughness、quality/regime classification、applicability class balance、MoE/router 指标和
+  `frequency` filter 效果均不属于基础 acceptance gate。
+- 保持 rawData-first、zero observation noise、完整字段、当前 cost 解释、独立 blind evidence
+  和资源边界。只有基础指标同时通过，精确 checkpoint 才可标记
+  `performance_accepted=true`；抗噪声扩展的任何结果既不能促成也不能否决该结论。
+- 若基础 architecture 需要实质变化，建立自足的新预注册/必要 TODO 并接回本文；不得默认
+  继承抗噪声 TODO 的 architecture、阈值、数据用途或授权。
 
 ### 4. 对接受的 Hierarchical CAE exact checkpoint 重新校准并验证 qNEHVI
 
 - performance gate 通过后，再建立新的 pre-access calibration plan。旧 v8 artifact 只绑定
-  失败的 experimental state，不能迁移给 successor。
-- calibration/test 按 design row 独立；Chrono 需通过预先声明的 stratified/boundary design
-  acquisition 改善 19/181 类别失衡，不能事后按 outcome 删除样本或把 oversampling 当成新增
+  失败的 experimental state，不能迁移给新的基础 checkpoint。
+- calibration/test 按 design row 独立，不能事后按 outcome 删除样本或把 oversampling 当成新增
   独立证据。
-- 必须通过 rawData coverage/energy、current-cost coverage/ranking/Pareto、bounded acquisition
-  decision proxy、AUPRC/Brier/ECE/reliability、minimum-class support 和 exact-signature checks。
+- 基础 checkpoint 必须通过 rawData coverage/energy、current-cost coverage/ranking/Pareto、
+  bounded acquisition decision proxy 和 exact-signature checks。AUPRC/Brier/ECE/reliability、
+  minimum-class support 只在基础路线独立声明并使用某种 applicability capability 时适用；
+  不得从抗噪声扩展继承为必需 gate。
 - 失败继续发布 `uncalibrated`、`transferable=false`，不暴露概率系数，不允许 exploitation。
 - 将 performance acceptance、exact transferable calibration、zero observation noise、state/
-  artifact signatures 和 calibrated/not-applicable applicability 组合为真实
+  artifact signatures 和明确的 `not-applicable` 或独立 calibrated applicability 组合为真实
   `PosteriorExploitationReadiness`；member variance、training loss 或 residual 不是替代条件。
-- 在新 preregistration 中冻结 applicability threshold、boundary width、低/边界 real exploration
-  顺序、support policy、candidate pool、draw/chunk、q/restart、seed、fallback 和 hard stops。
+- 在新 preregistration 中冻结 candidate pool、draw/chunk、q/restart、seed、fallback 和 hard
+  stops；只有基础路线独立启用 applicability capability 时，才额外冻结 applicability
+  threshold、boundary width、低/边界 real exploration 顺序和 support policy。
 - 先运行 bounded eligible-path integration/canary，证明真实 sampler/projection/qNEHVI selection/
   common evaluator/recorder 全链；再申请同预算正式实验权限。
 - 当前只有一个真实 acquisition，实现工作不应提前触发
@@ -182,7 +199,8 @@
   预计时间与风险并取得授权。结构 preflight 或单元测试不能替代科学结果。
 - PCA/SVD arm 可在自身 TODO 和权限下先取得 measured evidence；完整七臂 formal benchmark
   仍等待 performance-accepted、exact-calibrated Hierarchical CAE 与 eligible typed readiness，
-  不能把抗噪声路线暂停解释为允许省略 Hierarchical CAE arms。
+  但不等待抗噪声扩展。基础 Hierarchical CAE arms 不能省略；抗噪声变体若将来被批准加入，
+  只能作为七臂之外的额外扩展 arm，不改变基础 matrix 的完成条件。
 - 只有完整 matrix 通过预注册 gate，才可推荐 Phase B opt-in；默认 GPSAF + conditional-INR
   的 Phase C 迁移需要独立、明确的用户决定。不得自动修改 template default。
 
@@ -220,13 +238,15 @@
 
 ## 完成规则
 
-抗噪声路线暂停本身不是本文完成条件。只有同时满足以下条件，本文才可移入
-`dev_doc/obsolete/`：
+抗噪声扩展不是本文的完成条件，也不影响本文能否归档。只有同时满足以下基础路线条件，本文
+才可移入 `dev_doc/obsolete/`：
 
-- 一个用户明确批准的 Hierarchical CAE successor 在新的 blind evidence 上通过
-  representation、适用的 quality/regime、worst-field、coordinate 和资源 gate；
+- 一个具体的基础 Hierarchical CAE exact checkpoint 在新的 blind evidence 上通过
+  representation/prediction、current-cost、worst-field、coordinate 和资源 gate；不要求
+  clean leakage、smooth roughness、quality/regime、class-balance 或 MoE/router gate；
 - 该 exact Hierarchical CAE checkpoint 获得独立、可迁移的 posterior/applicability
-  calibration artifact；
+  calibration artifact；若基础路线不使用 applicability，artifact/typed readiness 必须明确
+  记录 `not-applicable`，而不是继承抗噪声扩展的 classifier；
 - `HierarchicalCAEComponent` 通过 typed readiness 进入 eligible qNEHVI 路径，并保留明确
   real exploration、
   soft fallback 和 hard-stop 边界；
@@ -238,3 +258,4 @@
   benchmark automation 验收；
 - 如果其中一部分被拆到新的独立活动 TODO，本文必须更新成仍然自足的剩余状态，确认没有
   遗漏后才能归档，不能仅因六份旧计划已进 obsolete 而宣称工作完成。
+- 抗噪声扩展 TODO 可在本文之前、之后或独立归档；其状态不得改变上述任何完成判断。
