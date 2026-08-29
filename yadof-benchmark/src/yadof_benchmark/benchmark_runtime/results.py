@@ -16,12 +16,12 @@ from .contracts import (
     replication_notice,
     replication_scope,
 )
-from .progress import active_progress, estimate_run_timing
+from .progress import active_progress, estimate_workspace_timing
 from .storage import (
     atomic_write_json,
     atomic_write_text,
     json_safe,
-    load_run,
+    load_execution,
     object_digest,
     read_json,
     utc_now,
@@ -466,16 +466,13 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _latest_result(
-    run_root: Path,
+    workspace: Path,
     cell_state: Mapping[str, Any],
 ) -> dict[str, Any] | None:
-    attempts = cell_state.get("attempts", [])
-    if not attempts:
-        return None
-    value = attempts[-1].get("result")
+    value = cell_state.get("result")
     if not value:
         return None
-    path = run_root / str(value)
+    path = workspace / str(value)
     return read_json(path) if path.is_file() else None
 
 
@@ -515,7 +512,7 @@ def _pairing_summaries(
                 {
                     "cell": cell_id,
                     "strategy": cell["strategy"],
-                    "task_snapshot": cell.get("baseline_digest"),
+                    "baseline_input_digest": cell.get("baseline_digest"),
                     "planned_evaluations": cell.get("planned_evaluations"),
                     "attempted_evaluations": (
                         counts.get("attempted")
@@ -535,15 +532,15 @@ def _pairing_summaries(
                 }
             )
 
-        task_snapshots = {item["task_snapshot"] for item in arms}
+        baseline_inputs = {item["baseline_input_digest"] for item in arms}
         planned_budgets = {item["planned_evaluations"] for item in arms}
         attempted_budgets = {item["attempted_evaluations"] for item in arms}
         population_fingerprints = {
             item["generation_zero_population_fingerprint"] for item in arms
         }
         checks = {
-            "task_snapshot_matches": (
-                len(task_snapshots) == 1 and None not in task_snapshots
+            "baseline_input_matches": (
+                len(baseline_inputs) == 1 and None not in baseline_inputs
             ),
             "planned_budget_matches": (
                 len(planned_budgets) == 1 and None not in planned_budgets
@@ -823,10 +820,25 @@ def _cell_summaries(
             counts.get("completed") if isinstance(counts, Mapping) else None
         )
         finite = counts.get("finite") if isinstance(counts, Mapping) else None
-        counts_complete = (
-            attempted == planned
-            and completed_evaluations == attempted
-            and finite == completed_evaluations
+        attempt_count_complete = attempted == planned
+        finite_results_available = (
+            isinstance(finite, int) and not isinstance(finite, bool) and finite > 0
+        )
+        metric_available = bool(
+            isinstance(result, Mapping)
+            and result.get("final_hypervolume") is not None
+        )
+        failed_evaluations = (
+            None
+            if not isinstance(attempted, int)
+            or not isinstance(completed_evaluations, int)
+            else max(0, attempted - completed_evaluations)
+        )
+        nonfinite_evaluations = (
+            None
+            if not isinstance(completed_evaluations, int)
+            or not isinstance(finite, int)
+            else max(0, completed_evaluations - finite)
         )
         generation_zero = (
             result.get("generation_zero_population", {})
@@ -837,6 +849,28 @@ def _cell_summaries(
             isinstance(generation_zero, Mapping)
             and generation_zero.get("complete")
         )
+        valid = (
+            completed
+            and objective_match
+            and rawdata_match
+            and attempt_count_complete
+            and finite_results_available
+            and metric_available
+            and generation_zero_complete
+        )
+        validity_issues = [
+            label
+            for label, passed in (
+                ("cell collection incomplete", completed),
+                ("objective contract mismatch", objective_match),
+                ("rawData contract mismatch", rawdata_match),
+                ("attempted evaluation count differs from plan", attempt_count_complete),
+                ("no finite simulation result is available", finite_results_available),
+                ("final hypervolume is unavailable", metric_available),
+                ("generation-0 population is incomplete", generation_zero_complete),
+            )
+            if not passed
+        ]
         output.append(
             {
                 "evidence": evidence,
@@ -850,17 +884,17 @@ def _cell_summaries(
                 "seed": cell["seed"],
                 "status": cell_state.get("status"),
                 "completed": completed,
-                "valid": (
-                    completed
-                    and objective_match
-                    and rawdata_match
-                    and counts_complete
-                    and generation_zero_complete
-                    and not issues
-                ),
+                "valid": valid,
                 "objective_contract_matches": objective_match,
                 "rawdata_contract_matches": rawdata_match,
-                "counts_complete": counts_complete,
+                "attempt_count_complete": attempt_count_complete,
+                "finite_results_available": finite_results_available,
+                "metric_available": metric_available,
+                "failed_evaluations": failed_evaluations,
+                "nonfinite_evaluations": nonfinite_evaluations,
+                "simulation_errors_tolerated": bool(
+                    valid and ((failed_evaluations or 0) + (nonfinite_evaluations or 0))
+                ),
                 "generation_zero_population_complete": generation_zero_complete,
                 "generation_zero_population_fingerprint": (
                     generation_zero.get("fingerprint")
@@ -871,6 +905,7 @@ def _cell_summaries(
                 "completed_evaluations": completed_evaluations,
                 "finite_evaluations": finite,
                 "planned_evaluations": planned,
+                "validity_issues": validity_issues,
                 "issues": issues,
                 "error": cell_state.get("error"),
             }
@@ -879,7 +914,7 @@ def _cell_summaries(
 
 
 def _markdown(
-    run_id: str,
+    workflow_name: str,
     evidence: str,
     replication: Mapping[str, Any],
     state: Mapping[str, Any],
@@ -889,7 +924,7 @@ def _markdown(
     aggregates: list[Mapping[str, Any]],
 ) -> str:
     lines = [
-        f"# Benchmark run {run_id}",
+        f"# Benchmark {workflow_name}",
         "",
         f"Status: `{state['status']}`",
         "",
@@ -967,7 +1002,7 @@ def _markdown(
             "",
             "## Paired fairness",
             "",
-            "| Comparison | Baseline | Seed | Valid | Task snapshot | Planned budget | Attempted budget | Generation-0 population | All cells valid |",
+            "| Comparison | Baseline | Seed | Valid | Baseline input | Planned budget | Attempted budget | Generation-0 population | All cells valid |",
             "| --- | --- | ---: | --- | --- | --- | --- | --- | --- |",
         ]
     )
@@ -979,7 +1014,7 @@ def _markdown(
                 baseline=str(row["baseline"]).replace("|", "\\|"),
                 seed=row["seed"],
                 valid="yes" if row.get("valid") else "no",
-                task="match" if checks.get("task_snapshot_matches") else "mismatch",
+                task="match" if checks.get("baseline_input_matches") else "mismatch",
                 planned="match" if checks.get("planned_budget_matches") else "mismatch",
                 attempted="match" if checks.get("attempted_budget_matches") else "mismatch",
                 population=(
@@ -1074,65 +1109,15 @@ def _markdown(
     return "\n".join(lines)
 
 
-def _publish_workspace_indexes(
-    run_root: Path,
-    spec: Mapping[str, Any],
-    state: Mapping[str, Any],
-) -> None:
-    workspace = Path(str(spec["workflow"]["workspace"])).resolve()
-    if not (workspace / ".benchmark" / "workspace.json").is_file():
-        return
-    run_id = str(state["run_id"])
-    payload = {
-        "format": "yadof.benchmark.workspace-run-index",
-        "run_id": run_id,
-        "status": state["status"],
-        "evidence": _evidence(spec),
-        "replication": _replication_summary(spec),
-        "updated_utc": state["updated_utc"],
-        "run": str(run_root),
-        "reports": str(run_root / "reports"),
-        "visualizations": str(run_root / "visualizations"),
-    }
-    report_index = workspace / "reports" / run_id
-    visualization_index = workspace / "visualizations" / run_id
-    report_index.mkdir(parents=True, exist_ok=True)
-    visualization_index.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(report_index / "index.json", payload)
-    atomic_write_text(
-        report_index / "README.md",
-        "\n".join(
-            [
-                f"# Benchmark run {run_id}",
-                "",
-                f"Status: `{state['status']}`",
-                "",
-                f"Evidence class: `{payload['evidence']}`",
-                "",
-                f"> {evidence_notice(payload['evidence'])}",
-                "",
-                "Seed replication scopes: "
-                f"`{', '.join(payload['replication']['scopes'])}`",
-                "",
-                f"Authoritative run root: `{run_root}`",
-                "",
-                f"Run report: `{run_root / 'reports' / 'summary.md'}`",
-                "",
-            ]
-        ),
-    )
-    atomic_write_json(visualization_index / "index.json", payload)
-
-
 def publish_results(
-    run_root: Path,
+    workspace: Path,
     spec: Mapping[str, Any],
     state: Mapping[str, Any],
 ) -> dict[str, Any]:
     cells = {
         cell_id: result
         for cell_id, cell_state in state["cells"].items()
-        if (result := _latest_result(run_root, cell_state)) is not None
+        if (result := _latest_result(workspace, cell_state)) is not None
     }
     rows = [
         row
@@ -1148,7 +1133,7 @@ def publish_results(
     replication = _replication_summary(spec)
     result = {
         "format": "yadof.benchmark.results",
-        "run_id": state["run_id"],
+        "workspace": str(workspace),
         "generated_utc": utc_now(),
         "execution_status": state["status"],
         "evidence": {
@@ -1171,11 +1156,11 @@ def publish_results(
         "pairings": pairings,
         "cross_seed_aggregates": aggregates,
     }
-    atomic_write_json(run_root / "results.json", result)
-    atomic_write_text(run_root / "results.csv", _csv_text(rows))
-    reports = run_root / "reports"
+    atomic_write_json(workspace / "results.json", result)
+    atomic_write_text(workspace / "results.csv", _csv_text(rows))
+    reports = workspace / "reports"
     atomic_write_text(reports / "summary.md", _markdown(
-        str(state["run_id"]), evidence, replication, state, comparisons,
+        str(spec["workflow"]["name"]), evidence, replication, state, comparisons,
         cell_summaries, pairings, aggregates
     ))
     atomic_write_text(
@@ -1186,7 +1171,10 @@ def publish_results(
                 "evidence", "replication_scope", "cell", "comparison", "baseline",
                 "strategy", "seed", "status", "completed", "valid",
                 "planned_evaluations", "attempted_evaluations",
-                "completed_evaluations", "finite_evaluations", "counts_complete",
+                "completed_evaluations", "finite_evaluations",
+                "attempt_count_complete", "finite_results_available",
+                "metric_available", "failed_evaluations", "nonfinite_evaluations",
+                "simulation_errors_tolerated", "validity_issues",
                 "generation_zero_population_complete",
                 "generation_zero_population_fingerprint",
                 "objective_contract_matches", "rawdata_contract_matches", "issues",
@@ -1264,7 +1252,7 @@ def publish_results(
             [
                 "evidence", "replication_scope", "comparison", "baseline",
                 "seed", "valid",
-                "task_snapshot_matches", "planned_budget_matches",
+                "baseline_input_matches", "planned_budget_matches",
                 "attempted_budget_matches", "generation_zero_population_matches",
                 "all_cells_valid", "issues", "arms",
             ],
@@ -1314,7 +1302,7 @@ def publish_results(
         reports / "descriptive-results.json",
         {
             "format": "yadof.benchmark.descriptive-results",
-            "run_id": state["run_id"],
+            "workspace": str(workspace),
             "status": state["status"],
             "evidence": result["evidence"],
             "replication": replication,
@@ -1327,14 +1315,15 @@ def publish_results(
             "surrogate_training": training_rows,
         },
     )
-    _publish_workspace_indexes(run_root, spec, state)
     return result
 
 
-def inspect_run(run: str | Path) -> dict[str, Any]:
-    run_root = Path(run).resolve()
-    spec, state = load_run(run_root)
-    counts = Counter(str(cell.get("status", "unknown")) for cell in state["cells"].values())
+def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
+    root = Path(workspace).resolve()
+    spec, state = load_execution(root)
+    counts = Counter(
+        str(cell.get("status", "unknown")) for cell in state["cells"].values()
+    )
     errors = {
         cell_id: cell.get("error")
         for cell_id, cell in state["cells"].items()
@@ -1347,106 +1336,61 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
             if item.get("error")
         }
     )
-    report_path = run_root / "reports" / "descriptive-results.json"
+    report_path = root / "reports" / "descriptive-results.json"
     report = read_json(report_path) if report_path.is_file() else {}
-    legacy_results_path = run_root / "results.json"
-    report_source_path = (
-        report_path
-        if report_path.is_file()
-        else legacy_results_path
-        if legacy_results_path.is_file()
-        else report_path
-    )
     reported_cells = (
         list(report.get("cells", []))
         if isinstance(report.get("cells"), list)
         else []
     )
+    completed_count = sum(bool(item.get("completed")) for item in reported_cells)
     validity = {
-        "completed": sum(bool(item.get("completed")) for item in reported_cells),
+        "completed": completed_count,
         "valid": sum(bool(item.get("valid")) for item in reported_cells),
         "invalid": sum(
             bool(item.get("completed")) and not bool(item.get("valid"))
             for item in reported_cells
         ),
-        "incomplete": max(0, len(state["cells"]) - sum(
-            bool(item.get("completed")) for item in reported_cells
-        )),
+        "incomplete": max(0, len(state["cells"]) - completed_count),
+        "simulation_errors_tolerated": sum(
+            bool(item.get("simulation_errors_tolerated"))
+            for item in reported_cells
+        ),
     }
     comparison_rows = (
         list(report.get("final_hypervolume", []))
         if isinstance(report.get("final_hypervolume"), list)
         else []
     )
-    if not reported_cells or not comparison_rows:
-        legacy_results = (
-            read_json(legacy_results_path) if legacy_results_path.is_file() else {}
-        )
-        legacy_cells = legacy_results.get("cells", {})
-        if not reported_cells and isinstance(legacy_cells, Mapping):
-            reported_cells = _cell_summaries(spec, state, legacy_cells)
-            validity = {
-                "completed": sum(
-                    bool(item.get("completed")) for item in reported_cells
-                ),
-                "valid": sum(bool(item.get("valid")) for item in reported_cells),
-                "invalid": sum(
-                    bool(item.get("completed")) and not bool(item.get("valid"))
-                    for item in reported_cells
-                ),
-                "incomplete": max(
-                    0,
-                    len(state["cells"])
-                    - sum(bool(item.get("completed")) for item in reported_cells),
-                ),
-            }
-        legacy_comparisons = legacy_results.get("comparisons", [])
-        if not comparison_rows and isinstance(legacy_comparisons, list):
-            comparison_rows = legacy_comparisons
     anomalies: list[dict[str, Any]] = [
         {"scope": key, "message": str(value)}
         for key, value in sorted(errors.items())
     ]
     for item in reported_cells:
-        issues = item.get("issues", [])
-        if isinstance(issues, list):
-            anomalies.extend(
-                {
-                    "scope": str(item.get("cell", "unknown")),
-                    "message": str(issue),
-                }
-                for issue in issues
-            )
-        if item.get("completed") and not item.get("valid") and not issues:
-            anomalies.append(
-                {
-                    "scope": str(item.get("cell", "unknown")),
-                    "message": "collected cell did not satisfy its validity contract",
-                }
-            )
-    active = active_progress(run_root, state)
+        for field in ("validity_issues", "issues"):
+            issues = item.get(field, [])
+            if isinstance(issues, list):
+                anomalies.extend(
+                    {
+                        "scope": str(item.get("cell", "unknown")),
+                        "message": str(issue),
+                    }
+                    for issue in issues
+                )
+    active = active_progress(root, state)
     inspect_command = [
-        "yadof-benchmark", "inspect", "--run", str(run_root)
+        "yadof-benchmark",
+        "inspect",
+        "--workspace",
+        str(root),
     ]
-    next_commands: dict[str, list[str]] = {"inspect_later": inspect_command}
-    if state["status"] in {"failed", "planned"} and active is None:
-        next_commands["resume"] = [
-            "yadof-benchmark", "resume", "--run", str(run_root)
-        ]
     progressive = [
         {"step": "inspect", "path": None},
         {
             "step": "report_markdown",
-            "path": str(run_root / "reports" / "summary.md"),
+            "path": str(root / "reports" / "summary.md"),
         },
-        {
-            "step": (
-                "report_json"
-                if report_source_path == report_path
-                else "legacy_results_json"
-            ),
-            "path": str(report_source_path),
-        },
+        {"step": "report_json", "path": str(report_path)},
     ]
     if active is not None:
         logs = active.get("logs", {})
@@ -1456,13 +1400,6 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
                     progressive.append(
                         {"step": f"active_cell_{name}", "path": logs[name]}
                     )
-    if legacy_results_path != report_source_path:
-        progressive.append(
-            {
-                "step": "targeted_metrics_fields",
-                "path": str(legacy_results_path),
-            }
-        )
     postprocessor_counts = Counter(
         str(item.get("status", "unknown"))
         for item in state.get("postprocessors", {}).values()
@@ -1471,8 +1408,7 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
     replication = _replication_summary(spec)
     return {
         "format": "yadof.benchmark.inspect",
-        "run_id": state["run_id"],
-        "run": str(run_root),
+        "workspace": str(root),
         "workflow": spec["workflow"]["name"],
         "evidence": {
             "class": evidence,
@@ -1484,7 +1420,7 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
         "cell_counts": dict(sorted(counts.items())),
         "postprocessor_counts": dict(sorted(postprocessor_counts.items())),
         "active": active,
-        "timing": estimate_run_timing(run_root, spec, state),
+        "timing": estimate_workspace_timing(root, spec, state),
         "validity": validity,
         "comparison": {
             "rows": len(comparison_rows),
@@ -1506,29 +1442,34 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
             "aggregate_eligible_rows": sum(
                 bool(item.get("aggregate_eligible")) for item in comparison_rows
             ),
-            "report": str(report_source_path),
+            "report": str(report_path),
         },
         "anomalies": anomalies[:8],
         "anomalies_truncated": max(0, len(anomalies) - 8),
-        "next_commands": next_commands,
+        "next_commands": {"inspect_later": inspect_command},
         "progressive_disclosure": progressive,
         "artifacts": {
-            name: str(run_root / name)
+            name: str(root / name)
             for name in (
-                "spec.json", "state.json", "results.json", "results.csv",
-                "reports/summary.md", "reports/cell-validity.csv",
+                "runtime.json",
+                "spec.json",
+                "state.json",
+                "results.json",
+                "results.csv",
+                "reports/summary.md",
+                "reports/cell-validity.csv",
                 "reports/final-hypervolume.csv",
                 "reports/hypervolume-trajectory.csv",
                 "reports/pairing-validity.csv",
                 "reports/cross-seed-aggregates.csv",
                 "reports/surrogate-training.csv",
                 "reports/descriptive-results.json",
-                "visualizations", "benchmark.log", "timing_history.json",
+                "visualizations",
+                "benchmark.log",
             )
-            if (run_root / name).is_file()
-            or (run_root / name).is_dir()
+            if (root / name).is_file() or (root / name).is_dir()
         },
     }
 
 
-__all__ = ["collect_cell", "inspect_run", "publish_results"]
+__all__ = ["collect_cell", "inspect_workspace", "publish_results"]

@@ -1,37 +1,31 @@
-"""Read-only progress, inactivity, and matched-history ETA reporting."""
+"""Read-only progress and bounded timing estimates for one workspace."""
 from __future__ import annotations
 
 import datetime as dt
 import json
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from .storage import read_json
-from .timing import TIMING_HISTORY_FORMAT, matched_prior, timing_record
 
 
 def _parse_utc(value: Any) -> dt.datetime | None:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or not value:
         return None
     try:
-        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return parsed.astimezone(dt.timezone.utc)
 
 
 def _iso(value: dt.datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    return None if value is None else value.isoformat().replace("+00:00", "Z")
 
 
 def _jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
     output: list[dict[str, Any]] = []
     try:
-        with path.open("r", encoding="utf-8", errors="replace") as stream:
+        with path.open("r", encoding="utf-8") as stream:
             for line in stream:
                 try:
                     item = json.loads(line)
@@ -54,27 +48,23 @@ def _latest_progress(command_root: Path) -> dict[str, Any] | None:
 
 
 def _cell_progress(
-    run_root: Path,
+    root: Path,
     cell_id: str,
     cell: Mapping[str, Any],
     *,
     now: dt.datetime,
 ) -> dict[str, Any]:
-    attempts = cell.get("attempts", [])
-    attempt = attempts[-1] if attempts else {}
-    attempt_started = _parse_utc(attempt.get("created_utc"))
-    active_value = attempt.get("active_command")
+    created = _parse_utc(cell.get("created_utc"))
+    active_value = cell.get("active_command")
     if not active_value:
         return {
             "cell": cell_id,
             "phase": cell.get("status"),
             "cell_elapsed_seconds": (
-                None
-                if attempt_started is None
-                else max(0.0, (now - attempt_started).total_seconds())
+                None if created is None else max(0.0, (now - created).total_seconds())
             ),
         }
-    command_root = run_root / str(active_value)
+    command_root = root / str(active_value)
     started_path = command_root / "started.json"
     started = read_json(started_path) if started_path.is_file() else {}
     started_time = _parse_utc(started.get("started_utc"))
@@ -97,7 +87,7 @@ def _cell_progress(
         "phase": (
             latest_progress.get("phase")
             if latest_progress is not None
-            else attempt.get("status", cell.get("status"))
+            else cell.get("status")
         ),
         "command": started.get("label"),
         "command_elapsed_seconds": (
@@ -106,9 +96,7 @@ def _cell_progress(
             else max(0.0, (now - started_time).total_seconds())
         ),
         "cell_elapsed_seconds": (
-            None
-            if attempt_started is None
-            else max(0.0, (now - attempt_started).total_seconds())
+            None if created is None else max(0.0, (now - created).total_seconds())
         ),
         "last_activity_utc": _iso(latest),
         "inactivity_seconds": (
@@ -121,95 +109,56 @@ def _cell_progress(
         },
     }
     if latest_progress is not None:
-        output["generation"] = latest_progress.get("generation_number")
-        output["generations"] = latest_progress.get("generations")
-        output["evaluations"] = latest_progress.get("evaluations")
-        output["planned_evaluations"] = latest_progress.get(
-            "planned_evaluations"
-        )
-        output["successful"] = latest_progress.get("successful")
-        output["errors"] = latest_progress.get("errors")
+        for source, target in (
+            ("generation_number", "generation"),
+            ("generations", "generations"),
+            ("evaluations", "evaluations"),
+            ("planned_evaluations", "planned_evaluations"),
+            ("successful", "successful"),
+            ("errors", "errors"),
+        ):
+            output[target] = latest_progress.get(source)
     return output
 
 
 def active_progresses(
-    run_root: Path,
+    root: Path,
     state: Mapping[str, Any],
     *,
     now: dt.datetime | None = None,
 ) -> list[dict[str, Any]]:
-    current_time = now or dt.datetime.now(dt.timezone.utc)
-    output: list[dict[str, Any]] = []
-    for cell_id, cell in state.get("cells", {}).items():
-        if cell.get("status") not in {"checked", "running"}:
-            continue
-        output.append(
-            _cell_progress(run_root, str(cell_id), cell, now=current_time)
-        )
-    return output
+    current = now or dt.datetime.now(dt.timezone.utc)
+    return [
+        _cell_progress(root, str(cell_id), cell, now=current)
+        for cell_id, cell in state.get("cells", {}).items()
+        if cell.get("status") in {"checked", "running"}
+    ]
 
 
 def active_progress(
-    run_root: Path,
+    root: Path,
     state: Mapping[str, Any],
     *,
     now: dt.datetime | None = None,
 ) -> dict[str, Any] | None:
-    current_time = now or dt.datetime.now(dt.timezone.utc)
-    active = active_progresses(run_root, state, now=current_time)
+    current = now or dt.datetime.now(dt.timezone.utc)
+    active = active_progresses(root, state, now=current)
     if active:
         return active[0]
     for item_id, item in state.get("postprocessors", {}).items():
         if item.get("status") == "running":
-            attempts = item.get("attempts", [])
-            attempt = attempts[-1] if attempts else {}
-            started = _parse_utc(attempt.get("created_utc"))
+            started = _parse_utc(item.get("created_utc"))
             return {
                 "postprocessor": item_id,
                 "phase": "running",
                 "elapsed_seconds": (
                     None
                     if started is None
-                    else max(0.0, (current_time - started).total_seconds())
+                    else max(0.0, (current - started).total_seconds())
                 ),
                 "last_activity_utc": state.get("updated_utc"),
             }
     return None
-
-
-def _history_records(
-    run_root: Path,
-    spec: Mapping[str, Any],
-    state: Mapping[str, Any],
-) -> list[dict[str, Any]]:
-    history_path = run_root / "timing_history.json"
-    history = read_json(history_path) if history_path.is_file() else {}
-    records = (
-        [
-            dict(item)
-            for item in history.get("records", [])
-            if isinstance(item, Mapping)
-        ]
-        if history.get("format") == TIMING_HISTORY_FORMAT
-        else []
-    )
-    cells = {str(item.get("id")): item for item in spec.get("cells", [])}
-    for cell_id, cell_state in state.get("cells", {}).items():
-        if cell_state.get("status") != "collected" or cell_id not in cells:
-            continue
-        attempts = cell_state.get("attempts", [])
-        if not attempts:
-            continue
-        record = timing_record(
-            run_id=str(state.get("run_id", run_root.name)),
-            spec=spec,
-            state=state,
-            cell=cells[cell_id],
-            attempt=attempts[-1],
-        )
-        if record is not None:
-            records.append(record)
-    return records
 
 
 def _generation_trend(
@@ -231,8 +180,6 @@ def _generation_trend(
         and isinstance(item.get("generation"), int)
         and _parse_utc(item.get("utc")) is not None
     ]
-    if not events:
-        return None
     completed: dict[int, dt.datetime] = {}
     for item in events:
         if int(item.get("remaining", 1)) <= 0:
@@ -240,7 +187,7 @@ def _generation_trend(
             if ended is not None:
                 completed[int(item["generation"])] = ended
     ordered = sorted(completed)
-    if len(ordered) < 3:
+    if len(ordered) < 3 or not events:
         return None
     durations: list[tuple[int, float]] = []
     previous = started
@@ -278,9 +225,7 @@ def _generation_trend(
         previous_end = completed.get(current_generation - 1, started)
         current_elapsed = max(0.0, (now - previous_end).total_seconds())
         total = max(1, int(latest.get("total", 1)))
-        fraction = min(
-            1.0, max(0.0, int(latest.get("finished", 0)) / total)
-        )
+        fraction = min(1.0, max(0.0, int(latest.get("finished", 0)) / total))
         expected = predicted(current_generation)
         current_remaining = max(
             0.0,
@@ -302,15 +247,10 @@ def _lower_bound_seconds(
     *,
     remaining_evaluations: int | None = None,
 ) -> float:
-    baselines = spec.get("baselines", {})
-    baseline = baselines.get(str(cell.get("baseline")), {})
-    estimates = (
-        baseline.get("estimates", {}) if isinstance(baseline, Mapping) else {}
-    )
+    baseline = spec.get("baselines", {}).get(str(cell.get("baseline")), {})
+    estimates = baseline.get("estimates", {}) if isinstance(baseline, Mapping) else {}
     try:
-        per_evaluation = max(
-            0.0, float(estimates.get("evaluation_seconds", 0.0))
-        )
+        per_evaluation = max(0.0, float(estimates.get("evaluation_seconds", 0.0)))
     except (TypeError, ValueError):
         per_evaluation = 0.0
     count = (
@@ -321,59 +261,44 @@ def _lower_bound_seconds(
     return per_evaluation * count
 
 
-def _confidence(values: Iterable[str]) -> str:
-    ranking = {"unavailable": 0, "low": 1, "medium": 2, "high": 3}
-    selected = list(values)
-    if not selected:
-        return "unavailable"
-    return min(selected, key=lambda item: ranking.get(item, 0))
-
-
-def estimate_run_timing(
-    run_root: Path,
+def estimate_workspace_timing(
+    root: Path,
     spec: Mapping[str, Any],
     state: Mapping[str, Any],
     *,
     now: dt.datetime | None = None,
 ) -> dict[str, Any]:
-    """Estimate terminal time without writing or substituting another strategy."""
+    """Estimate remaining time from this workspace only."""
 
-    current_time = now or dt.datetime.now(dt.timezone.utc)
+    current = now or dt.datetime.now(dt.timezone.utc)
     started = _parse_utc(state.get("started_utc"))
-    if "started_utc" not in state:
-        started = _parse_utc(state.get("created_utc"))
     finished = _parse_utc(state.get("finished_utc"))
-    if finished is None and str(state.get("status")) in {"completed", "failed"}:
-        finished = _parse_utc(state.get("updated_utc"))
-    elapsed_end = finished or current_time
-    if started is None:
-        elapsed = 0.0 if str(state.get("status")) == "planned" else None
-    else:
-        elapsed = max(0.0, (elapsed_end - started).total_seconds())
-    actives = active_progresses(run_root, state, now=current_time)
-    active = actives[0] if actives else None
+    elapsed_end = finished or current
+    elapsed = (
+        0.0
+        if started is None and state.get("status") == "planned"
+        else None
+        if started is None
+        else max(0.0, (elapsed_end - started).total_seconds())
+    )
+    actives = active_progresses(root, state, now=current)
     recent_candidates = [
         parsed
         for item in actives
         if (parsed := _parse_utc(item.get("last_activity_utc"))) is not None
     ]
-    fallback_recent = _parse_utc(state.get("updated_utc"))
-    if fallback_recent is not None:
-        recent_candidates.append(fallback_recent)
+    updated = _parse_utc(state.get("updated_utc"))
+    if updated is not None:
+        recent_candidates.append(updated)
     recent = max(recent_candidates) if recent_candidates else None
     base = {
         "elapsed_seconds": elapsed,
-        "active_cell_runtime_seconds": (
-            None if active is None else active.get("cell_elapsed_seconds")
-        ),
         "active_cell_count": len(actives),
         "active_cells": [str(item["cell"]) for item in actives[:8]],
         "active_cells_truncated": max(0, len(actives) - 8),
         "recent_activity_utc": _iso(recent),
         "inactivity_seconds": (
-            None
-            if recent is None
-            else max(0.0, (current_time - recent).total_seconds())
+            None if recent is None else max(0.0, (current - recent).total_seconds())
         ),
     }
     status = str(state.get("status", "unknown"))
@@ -381,7 +306,7 @@ def estimate_run_timing(
         return {
             **base,
             "estimated_remaining_seconds": 0.0,
-            "estimated_completion_utc": _iso(finished or current_time),
+            "estimated_completion_utc": _iso(finished or current),
             "confidence": "high",
             "evidence": [{"kind": "terminal-state", "status": "completed"}],
         }
@@ -391,152 +316,55 @@ def estimate_run_timing(
             "estimated_remaining_seconds": None,
             "estimated_completion_utc": None,
             "confidence": "unavailable",
-            "evidence": [
-                {
-                    "kind": "terminal-state",
-                    "status": "failed",
-                    "note": (
-                        "resume creates new attempts, so no completion ETA is asserted"
-                    ),
-                }
-            ],
+            "evidence": [{"kind": "terminal-state", "status": "failed"}],
         }
 
-    records = _history_records(run_root, spec, state)
-    cell_specs = {str(item.get("id")): item for item in spec.get("cells", [])}
-    remaining_by_cell: dict[str, float] = {}
-    confidences: list[str] = []
-    evidence: list[dict[str, Any]] = []
-    match_counts = {"exact": 0, "compatible": 0, "none": 0}
+    cell_specs = {str(item["id"]): item for item in spec.get("cells", [])}
     active_by_cell = {str(item["cell"]): item for item in actives}
+    remaining_by_cell: dict[str, float] = {}
+    evidence: list[dict[str, Any]] = []
     for cell_id, cell in cell_specs.items():
         cell_state = state.get("cells", {}).get(cell_id, {})
         cell_status = str(cell_state.get("status", "planned"))
         if cell_status in {"collected", "failed"}:
             continue
-        prior = matched_prior(cell, spec, state, records)
-        if prior is not None:
-            match_counts[str(prior["match"])] += 1
-        else:
-            match_counts["none"] += 1
-        if cell_id in active_by_cell:
-            cell_active = active_by_cell[cell_id]
-            active_elapsed = float(cell_active.get("cell_elapsed_seconds") or 0.0)
-            prior_remaining = (
-                None
-                if prior is None
-                else max(0.0, float(prior["median_seconds"]) - active_elapsed)
+        active_cell = active_by_cell.get(cell_id)
+        trend = None
+        if active_cell is not None and cell_state.get("active_command"):
+            trend = _generation_trend(
+                root / str(cell_state["active_command"]),
+                generations=max(1, int(cell.get("generations", 1))),
+                now=current,
             )
-            attempts = cell_state.get("attempts", [])
-            attempt = attempts[-1] if attempts else {}
-            active_command = attempt.get("active_command")
-            trend = (
-                None
-                if not active_command
-                else _generation_trend(
-                    run_root / str(active_command),
-                    generations=max(1, int(cell.get("generations", 1))),
-                    now=current_time,
-                )
-            )
-            if trend is not None:
-                stage_remaining = float(trend["remaining_seconds"])
-                selected = (
-                    stage_remaining
-                    if prior_remaining is None
-                    else max(prior_remaining, stage_remaining)
-                )
-                remaining_by_cell[cell_id] = selected
-                confidence = (
-                    "medium" if prior is None else str(prior["confidence"])
-                )
-                confidences.append(confidence)
-                evidence.append(
-                    {
-                        "kind": "generation-trend",
-                        "cell": cell_id,
-                        **trend,
-                        "matched_history": prior,
-                    }
-                )
-            elif prior_remaining is not None:
-                remaining_by_cell[cell_id] = prior_remaining
-                confidences.append(str(prior["confidence"]))
-                evidence.append(
-                    {"kind": "matched-cell", "cell": cell_id, **prior}
-                )
-            else:
-                planned = int(cell.get("planned_evaluations", 0))
-                observed = int(cell_active.get("evaluations") or 0)
-                lower = _lower_bound_seconds(
-                    spec, cell, remaining_evaluations=max(0, planned - observed)
-                )
-                remaining_by_cell[cell_id] = lower
-                confidences.append("low")
-                evidence.append(
-                    {
-                        "kind": "evaluation-lower-bound",
-                        "cell": cell_id,
-                        "seconds": lower,
-                        "note": (
-                            "does not include optimizer or surrogate-training overhead"
-                        ),
-                    }
-                )
+        if trend is not None:
+            remaining_by_cell[cell_id] = float(trend["remaining_seconds"])
+            evidence.append({"kind": "generation-trend", "cell": cell_id, **trend})
             continue
-        if cell_status == "succeeded":
-            confidences.append("low")
-            evidence.append(
-                {
-                    "kind": "collection-pending",
-                    "cell": cell_id,
-                    "note": (
-                        "measured execution finished; postprocessing time is not inferred"
-                    ),
-                }
-            )
-        elif prior is not None:
-            remaining_by_cell[cell_id] = float(prior["median_seconds"])
-            confidences.append(str(prior["confidence"]))
-            evidence.append({"kind": "matched-cell", "cell": cell_id, **prior})
-        else:
-            lower = _lower_bound_seconds(spec, cell)
-            remaining_by_cell[cell_id] = lower
-            confidences.append("low")
-            evidence.append(
-                {
-                    "kind": "evaluation-lower-bound",
-                    "cell": cell_id,
-                    "seconds": lower,
-                    "note": (
-                        "does not include optimizer or surrogate-training overhead"
-                    ),
-                }
-            )
-
-    running_postprocessors = [
-        item_id
-        for item_id, item in state.get("postprocessors", {}).items()
-        if item.get("status") == "running"
-    ]
-    if running_postprocessors:
-        confidences.append("low")
+        observed = 0 if active_cell is None else int(active_cell.get("evaluations") or 0)
+        lower = _lower_bound_seconds(
+            spec,
+            cell,
+            remaining_evaluations=max(
+                0, int(cell.get("planned_evaluations", 0)) - observed
+            ),
+        )
+        remaining_by_cell[cell_id] = lower
         evidence.append(
             {
-                "kind": "postprocessor-running",
-                "ids": running_postprocessors[:3],
-                "note": "no cross-run point estimate is available",
+                "kind": "evaluation-lower-bound",
+                "cell": cell_id,
+                "seconds": lower,
+                "note": "does not include optimizer or surrogate-training overhead",
             }
         )
-    configured_concurrency = max(
-        1, int(spec.get("workflow", {}).get("cell_concurrency", 1))
-    )
-    lane_count = max(configured_concurrency, len(actives), 1)
+
+    configured = max(1, int(spec.get("workflow", {}).get("cell_concurrency", 1)))
+    lane_count = max(configured, len(actives), 1)
     lane_loads = [0.0 for _ in range(lane_count)]
     active_ids = [str(item["cell"]) for item in actives]
     for index, cell_id in enumerate(active_ids):
         lane_loads[index] = max(0.0, remaining_by_cell.get(cell_id, 0.0))
-    queued_cells = 0
+    queued = 0
     for cell_id in cell_specs:
         if cell_id in active_by_cell:
             continue
@@ -547,33 +375,35 @@ def estimate_run_timing(
             continue
         lane = min(range(lane_count), key=lambda index: (lane_loads[index], index))
         lane_loads[lane] += max(0.0, remaining_by_cell.get(cell_id, 0.0))
-        queued_cells += 1
+        queued += 1
     remaining = max(lane_loads, default=0.0)
     evidence.insert(
         0,
         {
             "kind": "cell-concurrency-schedule",
-            "configured": configured_concurrency,
+            "configured": configured,
             "active": len(actives),
-            "queued": queued_cells,
+            "queued": queued,
             "lane_remaining_seconds": lane_loads[:8],
             "lanes_truncated": max(0, len(lane_loads) - 8),
-            "note": (
-                "FIFO cells fill the earliest available lane only after terminal "
-                "cell publication succeeds"
-            ),
         },
     )
-    completion = current_time + dt.timedelta(seconds=remaining)
     return {
         **base,
         "estimated_remaining_seconds": remaining,
-        "estimated_completion_utc": _iso(completion),
-        "confidence": _confidence(confidences),
-        "matched_history": match_counts,
+        "estimated_completion_utc": _iso(
+            current + dt.timedelta(seconds=remaining)
+        ),
+        "confidence": "medium" if any(
+            item.get("kind") == "generation-trend" for item in evidence
+        ) else "low",
         "evidence": evidence[:12],
         "evidence_truncated": max(0, len(evidence) - 12),
     }
 
 
-__all__ = ["active_progress", "active_progresses", "estimate_run_timing"]
+__all__ = [
+    "active_progress",
+    "active_progresses",
+    "estimate_workspace_timing",
+]

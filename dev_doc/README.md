@@ -77,8 +77,9 @@ package integration.
 The repository also develops the independent `yadof-benchmark` distribution. Its
 developer entry point is
 [yadof-benchmark/dev_doc/README.md](../yadof-benchmark/dev_doc/README.md).
-That package owns its code-first workspace/API contract, self-describing packaged
-baselines, run/recovery format, user documents, and focused tests. Keep benchmark
+That package owns its code-first single-execution workspace/API contract,
+self-describing packaged baselines, direct output format, user documents, and
+focused tests. Keep benchmark
 orchestration outside `src/yadof`; communicate through public installed yadof APIs.
 
 ## Installed Development Environment

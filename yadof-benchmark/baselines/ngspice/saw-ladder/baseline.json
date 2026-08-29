@@ -27,5 +27,5 @@
     "evaluation_seconds": 0.7,
     "record_mib": 0.08
   },
-  "snapshot_excludes": []
+  "materialize_excludes": []
 }

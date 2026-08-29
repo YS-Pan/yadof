@@ -9,14 +9,14 @@ from typing import Any, Mapping
 BASELINE_FORMAT = "yadof.benchmark.baseline"
 WORKSPACE_FORMAT = "yadof.benchmark.workspace"
 WORKFLOW_FORMAT = "yadof.benchmark.workflow"
-RUN_FORMAT = "yadof.benchmark.workflow-run"
+SPEC_FORMAT = "yadof.benchmark.spec"
 STATE_FORMAT = "yadof.benchmark.state"
 EVIDENCE_CLASSES = ("structural", "performance")
-PERFORMANCE_MIN_POPULATION = 100
-PERFORMANCE_MIN_GENERATIONS = 20
-PERFORMANCE_MIN_PLANNED_EVALUATIONS = (
-    PERFORMANCE_MIN_POPULATION * PERFORMANCE_MIN_GENERATIONS
-)
+DEFAULT_SEED = 101
+DEFAULT_SEEDS = (DEFAULT_SEED,)
+DEFAULT_POPULATION = 200
+DEFAULT_GENERATIONS = 50
+SLOW_SURROGATE_GENERATIONS = 15
 
 
 def evidence_notice(value: str) -> str:
@@ -24,7 +24,7 @@ def evidence_notice(value: str) -> str:
 
     if value == "structural":
         return (
-            "Structural-only evidence: this run validates workflow and integration "
+            "Structural-only evidence: this benchmark validates workflow and integration "
             "behavior and must not support algorithm performance conclusions."
         )
     if value == "performance":
@@ -32,7 +32,7 @@ def evidence_notice(value: str) -> str:
             "Performance evidence is descriptive only: the benchmark does not rank "
             "strategies or make scientific acceptance decisions."
         )
-    return "Unclassified historical evidence; do not use it for performance conclusions."
+    return "Unclassified evidence; do not use it for performance conclusions."
 
 
 def replication_scope(evidence: str, seed_count: int) -> str:
@@ -107,7 +107,7 @@ class BaselineManifest:
     execution: Mapping[str, Any]
     contract: Mapping[str, Any]
     estimates: Mapping[str, Any]
-    snapshot_excludes: tuple[str, ...] = ()
+    materialize_excludes: tuple[str, ...] = ()
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -120,7 +120,7 @@ class BaselineManifest:
             "execution": thaw_json(self.execution),
             "contract": thaw_json(self.contract),
             "estimates": thaw_json(self.estimates),
-            "snapshot_excludes": list(self.snapshot_excludes),
+            "materialize_excludes": list(self.materialize_excludes),
         }
 
 
@@ -130,6 +130,7 @@ class StrategySpec:
     name: str
     source: Path | None
     sources: Mapping[str, Path]
+    slow_surrogate: bool = False
 
     def source_for(self, baseline_id: str) -> Path:
         selected = self.sources.get(baseline_id, self.source)
@@ -146,9 +147,10 @@ class ComparisonSpec:
     baseline_ids: tuple[str, ...]
     strategy_ids: tuple[str, ...]
     seeds: tuple[int, ...]
-    population: int
-    generations: int
+    population: int | None
+    generations: int | None
     reference: str | None
+    contains_slow_surrogate: bool = False
 
 
 @dataclass(frozen=True)
@@ -167,7 +169,6 @@ class WorkflowRequest:
     fail_fast: bool
     cell_concurrency: int
     representative_generation_seconds: float | None
-    runs_dir: Path
     python: Path
     workspace: Path
     source: Path
@@ -184,9 +185,8 @@ class CellSpec:
     generations: int
     evidence: str
     replication_scope: str
+    contains_slow_surrogate: bool
     representative_generation_seconds: float | None
-    baseline_snapshot: str
-    strategy_snapshot: str
     baseline_digest: str
     strategy_digest: str
     strategy_source: Path
@@ -208,12 +208,11 @@ class CellSpec:
             "generations": self.generations,
             "evidence": self.evidence,
             "replication_scope": self.replication_scope,
+            "contains_slow_surrogate": self.contains_slow_surrogate,
             "representative_generation_seconds": (
                 self.representative_generation_seconds
             ),
             "planned_evaluations": self.planned_evaluations,
-            "baseline_snapshot": self.baseline_snapshot,
-            "strategy_snapshot": self.strategy_snapshot,
             "baseline_digest": self.baseline_digest,
             "strategy_digest": self.strategy_digest,
             "strategy_source": str(self.strategy_source),
@@ -224,12 +223,11 @@ class CellSpec:
 
 @dataclass(frozen=True)
 class RunSpec:
+    """The complete, expanded plan for the workspace's single execution."""
+
     workflow: WorkflowRequest
     baselines: tuple[BaselineManifest, ...]
     cells: tuple[CellSpec, ...]
-    workflow_digest: str
-    driver_digest: str
-    digest: str
 
     def to_dict(self) -> dict[str, Any]:
         strategies = [
@@ -240,11 +238,14 @@ class RunSpec:
                 "sources": {
                     key: str(value) for key, value in sorted(item.sources.items())
                 },
+                "slow_surrogate": item.slow_surrogate,
             }
             for item in self.workflow.strategies
         ]
         comparisons = []
         for item in self.workflow.comparisons:
+            if item.population is None or item.generations is None:
+                raise BenchmarkError(f"comparison {item.id!r} budget is unresolved")
             scope = replication_scope(self.workflow.evidence, len(item.seeds))
             comparisons.append(
                 {
@@ -254,16 +255,14 @@ class RunSpec:
                     "seeds": list(item.seeds),
                     "population": item.population,
                     "generations": item.generations,
+                    "contains_slow_surrogate": item.contains_slow_surrogate,
                     "replication_scope": scope,
                     "replication_notice": replication_notice(scope),
                     "reference": item.reference,
                 }
             )
         return {
-            "format": RUN_FORMAT,
-            "digest": self.digest,
-            "workflow_digest": self.workflow_digest,
-            "driver_digest": self.driver_digest,
+            "format": SPEC_FORMAT,
             "workflow": {
                 "format": WORKFLOW_FORMAT,
                 "name": self.workflow.name,
@@ -281,7 +280,6 @@ class RunSpec:
                 "representative_generation_seconds": (
                     self.workflow.representative_generation_seconds
                 ),
-                "runs_dir": str(self.workflow.runs_dir),
                 "python": str(self.workflow.python),
             },
             "baselines": {
@@ -293,13 +291,13 @@ class RunSpec:
 
 @dataclass(frozen=True)
 class PostprocessContext:
-    run: Path
-    inputs: Path
+    workspace: Path
+    resources: Path
     results: Path
     visualizations: Path
     reports: Path
     temp: Path
-    attempt: Path
+    output: Path
 
 
 @dataclass(frozen=True)
@@ -314,11 +312,13 @@ class CommandResult:
 
 __all__ = [
     "BASELINE_FORMAT",
+    "DEFAULT_GENERATIONS",
+    "DEFAULT_POPULATION",
+    "DEFAULT_SEED",
+    "DEFAULT_SEEDS",
     "EVIDENCE_CLASSES",
-    "PERFORMANCE_MIN_GENERATIONS",
-    "PERFORMANCE_MIN_PLANNED_EVALUATIONS",
-    "PERFORMANCE_MIN_POPULATION",
-    "RUN_FORMAT",
+    "SLOW_SURROGATE_GENERATIONS",
+    "SPEC_FORMAT",
     "STATE_FORMAT",
     "WORKFLOW_FORMAT",
     "WORKSPACE_FORMAT",

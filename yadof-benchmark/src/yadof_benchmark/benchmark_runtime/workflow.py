@@ -5,6 +5,7 @@ import inspect
 import math
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Mapping, Sequence
@@ -12,11 +13,12 @@ from typing import Callable, Mapping, Sequence
 from .contracts import (
     BenchmarkError,
     ComparisonSpec,
+    DEFAULT_GENERATIONS,
+    DEFAULT_POPULATION,
+    DEFAULT_SEEDS,
     EVIDENCE_CLASSES,
-    PERFORMANCE_MIN_GENERATIONS,
-    PERFORMANCE_MIN_PLANNED_EVALUATIONS,
-    PERFORMANCE_MIN_POPULATION,
     PostprocessorSpec,
+    SLOW_SURROGATE_GENERATIONS,
     StrategySpec,
     WorkflowRequest,
 )
@@ -57,7 +59,6 @@ class Benchmark:
         self._fail_fast: bool | None = None
         self._cell_concurrency = 1
         self._representative_generation_seconds: float | None = None
-        self._runs_dir = self.workspace / "runs"
         self._python = Path(sys.executable).resolve()
         self._strategies: list[StrategySpec] = []
         self._comparisons: list[ComparisonSpec] = []
@@ -77,7 +78,6 @@ class Benchmark:
         fail_fast: bool | None = None,
         cell_concurrency: int | None = None,
         representative_generation_seconds: float | None = None,
-        runs_dir: str | Path | None = None,
         python: str | Path | None = None,
     ) -> "Benchmark":
         if name is not None:
@@ -111,8 +111,6 @@ class Benchmark:
             self._representative_generation_seconds = float(
                 representative_generation_seconds
             )
-        if runs_dir is not None:
-            self._runs_dir = self._path(runs_dir)
         if python is not None:
             self._python = self._path(python)
         return self
@@ -124,6 +122,7 @@ class Benchmark:
         *,
         name: str | None = None,
         sources: Mapping[str, str | Path] | None = None,
+        slow_surrogate: bool = False,
     ) -> "Benchmark":
         selected_id = _id(strategy_id, label="strategy id")
         selected_name = str(name or selected_id).strip()
@@ -135,12 +134,15 @@ class Benchmark:
         }
         if source is None and not mapped:
             raise BenchmarkError(f"strategy {selected_id!r} has no source")
+        if not isinstance(slow_surrogate, bool):
+            raise BenchmarkError("slow_surrogate must be boolean")
         self._strategies.append(
             StrategySpec(
                 id=selected_id,
                 name=selected_name,
                 source=None if source is None else self._path(source),
                 sources=MappingProxyType(mapped),
+                slow_surrogate=slow_surrogate,
             )
         )
         return self
@@ -151,13 +153,13 @@ class Benchmark:
         *,
         baselines: Sequence[str],
         strategies: Sequence[str],
-        seeds: Sequence[int],
-        population: int,
-        generations: int,
+        seeds: Sequence[int] | None = None,
+        population: int | None = None,
+        generations: int | None = None,
         reference: str | None = None,
     ) -> "Benchmark":
         selected_strategies = _items(strategies, label="comparison strategies")
-        selected_seeds = tuple(seeds)
+        selected_seeds = tuple(DEFAULT_SEEDS if seeds is None else seeds)
         if not selected_seeds or any(
             isinstance(value, bool) or not isinstance(value, int)
             for value in selected_seeds
@@ -175,8 +177,14 @@ class Benchmark:
                 baseline_ids=_items(baselines, label="comparison baselines"),
                 strategy_ids=selected_strategies,
                 seeds=selected_seeds,
-                population=_positive(population, label="population"),
-                generations=_positive(generations, label="generations"),
+                population=(
+                    None if population is None else _positive(population, label="population")
+                ),
+                generations=(
+                    None
+                    if generations is None
+                    else _positive(generations, label="generations")
+                ),
                 reference=reference,
             )
         )
@@ -219,24 +227,9 @@ class Benchmark:
                 "benchmark.configure(evidence=...) must explicitly classify this "
                 "workflow as 'structural' or 'performance'"
             )
-        if self._evidence == "performance":
-            for comparison in self._comparisons:
-                if (
-                    comparison.population < PERFORMANCE_MIN_POPULATION
-                    or comparison.generations < PERFORMANCE_MIN_GENERATIONS
-                ):
-                    raise BenchmarkError(
-                        f"performance comparison {comparison.id!r} has "
-                        f"population={comparison.population}, "
-                        f"generations={comparison.generations}; every performance "
-                        "cell requires population >= "
-                        f"{PERFORMANCE_MIN_POPULATION}, generations >= "
-                        f"{PERFORMANCE_MIN_GENERATIONS}, and at least "
-                        f"{PERFORMANCE_MIN_PLANNED_EVALUATIONS} planned real "
-                        "evaluations. Use evidence='structural' for smaller "
-                        "smoke or canary budgets."
-                    )
         known = set(strategy_ids)
+        strategy_by_id = {item.id: item for item in self._strategies}
+        resolved_comparisons: list[ComparisonSpec] = []
         for comparison in self._comparisons:
             missing = sorted(set(comparison.strategy_ids) - known)
             if missing:
@@ -244,13 +237,36 @@ class Benchmark:
                     f"comparison {comparison.id!r} uses unknown strategies: "
                     f"{', '.join(missing)}"
                 )
+            contains_slow_surrogate = any(
+                strategy_by_id[item].slow_surrogate
+                for item in comparison.strategy_ids
+            )
+            resolved_comparisons.append(
+                replace(
+                    comparison,
+                    population=(
+                        DEFAULT_POPULATION
+                        if comparison.population is None
+                        else comparison.population
+                    ),
+                    generations=(
+                        SLOW_SURROGATE_GENERATIONS
+                        if comparison.generations is None
+                        and contains_slow_surrogate
+                        else DEFAULT_GENERATIONS
+                        if comparison.generations is None
+                        else comparison.generations
+                    ),
+                    contains_slow_surrogate=contains_slow_surrogate,
+                )
+            )
         if not self._python.is_file():
             raise BenchmarkError(f"python executable does not exist: {self._python}")
         return WorkflowRequest(
             name=_id(self._name, label="workflow name"),
             evidence=self._evidence,
             strategies=tuple(self._strategies),
-            comparisons=tuple(self._comparisons),
+            comparisons=tuple(resolved_comparisons),
             postprocessors=tuple(self._postprocessors),
             fail_fast=(
                 self._evidence == "structural"
@@ -261,7 +277,6 @@ class Benchmark:
             representative_generation_seconds=(
                 self._representative_generation_seconds
             ),
-            runs_dir=self._runs_dir,
             python=self._python,
             workspace=self.workspace,
             source=source.resolve(),

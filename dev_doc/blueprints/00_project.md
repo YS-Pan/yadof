@@ -92,84 +92,28 @@ hot-change contract; structural dimension changes are future work.
 - Examples: Git-tracked reference workspaces under `examples/`; never runtime write
   targets or distribution members.
 - Benchmark distribution: independent `yadof-benchmark/` project with its own
-  `yadof_benchmark` package, console command, code-first workspace API,
-  self-describing packaged baselines, user/developer documents, and focused tests.
-  Initialized workspaces expose the whole authoring surface in the single
-  `benchmark.py` scaffold: policy, semantically named algorithms, baseline IDs,
-  seeds, budgets, and postprocessors. Within a selected editable baseline root,
-  each source directory exactly matches its provider/task semantic ID; run-owned
-  digests and snapshots provide immutability without fingerprinting source names.
-  Human-visible workspace/run names and workspace-level report/visualization index
-  directories begin with local `YYYYMMDD_HHMMSS`; compact materialized cell paths
-  retain digest names for Windows safety. Every collected cell automatically
-  publishes a cost-history plot plus a non-empty artifact from the baseline's
-  uniform `postprocess.py` into run-local cost and baseline-semantic categories.
-  Cell validity, pairing validity, final-HV, attempted-evaluation-aligned
-  HV-trajectory/AUC, cross-seed aggregate, and separate surrogate-training reports
-  are available as Markdown, CSV, and bounded JSON, while top-level workspace
-  indexes lead back to the single run root. Same-baseline/same-seed arms require
-  matching frozen task snapshots, planned/attempted real-evaluation budgets, and
-  complete ordered generation-0 normalized-population fingerprints. Invalid or
-  incomplete cell evidence is retained but excluded explicitly from aggregates;
-  failures remain validity facts instead of a performance score.
-  Structural workflows fail fast by default. Performance workflows may continue
-  independent cells to retain expensive evidence, but every invalid/incomplete
-  cell keeps the final status non-successful. Workflow cell concurrency is a
-  positive frozen FIFO limit with safe default one; fast/local baselines separately
-  freeze yadof simulation-worker caps and resource-autodetection. A terminal cell's
-  aggregate publication is a campaign-fatal barrier before its freed slot admits
-  another cell, without stopping independent cells already active. Explicit
-  oversubscription must review combined simulator, memory, license, recorder, and
-  host constraints and never changes budgets or persistence. Each terminal attempt owns
-  immutable `attempt.json` plus separate stdout/stderr evidence; interrupted or
-  failed execution is sealed incomplete and retries in a new numbered compact
-  workspace rather than overwriting old evidence.
-  Workspace `benchmark.py` files select complete optimization strategies and
-  declare any number of comparison matrices plus postprocessors. Adding an
-  algorithm requires no runner registry or source change. A new run snapshots the
-  complete Python workflow/resources, driver, selected clean baseline workspaces,
-  and strategy inputs. Every exact materialized cell passes `yadof check` before
-  execution, and resume uses only digest-verified run-owned files. External source
-  edits therefore affect new runs without changing old snapshots. Public yadof
-  rows become
-  arbitrary-arm long results and optional descriptive reference deltas; opaque
-  optimization metadata is retained without algorithm-specific interpretation.
-  Run-local attempt evidence retains the complete cell ID, while materialized
-  yadof execution workspaces use stable digest directories to keep external-
-  simulator paths compact; an all-infinite generation fails the benchmark cell
-  rather than becoming an empty comparison result. Measured CLI runs use a visible
-  process window by default for both humans and AI agents: foreground execution in
-  an existing visible terminal or `--detach` into a separate normal Windows
-  console for a long run. Detached launch immediately reports PID/run/log/inspect
-  details and never polls. Hidden launch is reserved for explicit
-  `--detach --hidden` with a user request. Rich is owned by the foreground caller
-  and shows active-cell then global rows fed by real queued child-generation
-  snapshots; lifecycle output stays above them. The Python API remains synchronous,
-  window-neutral, and input-free. Plan/check summaries remain bounded unless full
-  JSON is explicit; child output stays in separate logs unless streaming is
-  explicit. Inspect is a bounded read-only first view over status, validity,
-  comparison readiness, anomalies, next steps, activity, and ETA. Each run freezes
-  bounded earlier cell timing evidence; ETA prefers exact then compatible matches
-  with the same semantic baseline/strategy, budget, task/resource/host/config,
-  never substitutes another strategy, and uses timestamped generation-duration
-  trends to represent nonlinear late phases. Each workflow explicitly freezes
-  `structural` or `performance` evidence into cells, plan/inspect, JSON/CSV,
-  Markdown, and indexes. Structural package/CLI tests, separately marked recovery
-  fault injection, adapter smoke, and bounded same-path canaries prove engineering
-  behavior only and cannot support algorithm-performance conclusions. Performance
-  results remain descriptive; a long run follows plan/check, adapter smoke, and a
-  structural canary under the applicable simulator authority. A yadof-root defect
-  blocks the affected full campaign and receives a root toDo instead of a benchmark
-  workaround. Performance workflow freeze rejects population below 100 or fewer
-  than 20 generations per cell; structural work retains smaller positive budgets.
-  A one-seed performance comparison is propagated as exploratory, while arbitrary
-  explicit multi-seed lists remain descriptive rather than automatically robust.
-  Baseline difficulty stays task-owned and is calibrated with a complete
-  non-surrogate reference rather than inferred from the 2000-evaluation guard.
-  The distribution depends on yadof's public surface, never the
-  reverse. Root
-  `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
-  records.
+  installed package, console command, code-first workspace, self-describing
+  baselines, documents, and focused tests. One timestamped workspace owns one
+  `benchmark.py` and one direct execution. Another execution uses another
+  workspace; there is no run container, resume, attempt array, or copied code
+  snapshot. Runtime/package/account provenance is recorded once before cell work.
+  Planning expands semantic comparisons into short ordinal `cells/cNNNN`.
+  Omitted budgets resolve to seed 101, population 200, and 50 generations, or 15
+  generations when any selected strategy declares `slow_surrogate=True`.
+  Explicit budgets are preserved. Individual simulation failures are counted and
+  may be tolerated when attempted budget, finite evidence, task contracts,
+  generation-0 pairing, and final metric remain valid. Same-case paired
+  comparisons require matching baseline input digest, planned/attempted budget,
+  and initial normalized population. A terminal cell publishes aggregate evidence
+  before FIFO refill. Cell concurrency and baseline worker concurrency remain
+  separate. Results/reports/visualizations are direct workspace outputs with
+  short filenames. Inspect is bounded/read-only and uses current-workspace timing
+  only. Windows AI-agent launches require host execution under the interactive
+  human account because detach cannot change a sandbox process's session.
+  Structural evidence is integration-only; performance output is descriptive and
+  single-seed performance remains exploratory. The distribution depends on
+  yadof's public surface, never the reverse. Root `dev_doc/` exclusively owns
+  repository-wide toDos, obsolete handoffs, and change records.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with
   executable administrator resources in sibling directories under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
@@ -288,15 +232,12 @@ concurrency semantics without a PyChrono installation. Live pools/simulators and
 concrete physical assertions remain integration tests outside the default package
 suite and follow the user workflow's cost- and risk-based execution policy.
 
-The independent benchmark distribution has a focused unit suite below
-`yadof-benchmark/tests/`. Its initialization, Python workflow loading, baseline
-discovery, planning, snapshot, execution, postprocessing, recovery, report, and CLI
-tests use fake commands and do not start a simulator. Deterministic scheduling
-coverage proves bounded overlap, FIFO admission, publication-before-refill,
-foreground event delivery, frozen simulation caps, and unchanged budgets.
-Timing replay covers exact/compatible same-arm matching, cross-arm exclusion,
-increasing generation cost, concurrency lanes, terminal confidence, and bounded
-inspect/plan output. Real `run` and `resume`
-operations remain subject to the user workflow's cost/risk authorization. Separate
-artifact allowlists keep benchmark resources out of the yadof wheel and include
-them in the `yadof-benchmark` wheel.
+The independent benchmark distribution has a focused structural suite below
+`yadof-benchmark/tests/`. Temporary workspaces, fake commands, and public result
+fixtures verify initialization, default budget resolution, slow-surrogate
+generation limits, short paths, direct cell/postprocessor output, one-time runtime
+provenance, installed-driver execution, simulation-error tolerance, report
+validity, read-only inspection, CLI surface, and visible detach receipts without a
+simulator. Real benchmark execution remains subject to user workflow cost/risk and
+host-account authority. Separate artifact allowlists keep benchmark resources out
+of the yadof wheel and include them in the yadof-benchmark wheel.

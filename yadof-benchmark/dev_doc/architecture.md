@@ -1,143 +1,100 @@
 # Architecture
 
-`src/yadof_benchmark/cli.py` owns argument parsing, bounded default summaries,
-explicit complete-JSON presentation, and opt-in child-output streaming.
-`src/yadof_benchmark/api.py` is the explicit public facade. Workspace
-`benchmark.py` is the only editable workflow program.
+## Boundary
 
-One workflow has one explicit frozen evidence class. `structural` covers package,
-CLI, adapter-smoke, and bounded canary validation without permitting algorithm
-performance conclusions. `performance` covers descriptive measured campaigns
-without winner/acceptance logic. Recovery and fault-injection tests are separately
-marked engineering evidence: they prove resume semantics, not optimizer quality.
-The runtime propagates the class through plans, cells, run reports, indexes, and
-inspect instead of inferring it from budget size.
+`yadof-benchmark` is a separate distribution and console script. It calls public
+installed yadof APIs and commands. The yadof package has no dependency on the
+benchmark runner.
 
-Explicit classification does not permit an internally inconsistent performance
-plan. Workflow freeze rejects any performance comparison below population 100 or
-20 generations, a 2000-real-evaluation hard floor. Structural workflows retain
-small budgets. Performance comparisons derive a separate replication scope from
-their explicit seed list: one seed is exploratory, while two or more are
-multi-seed without an automatic robustness or significance claim.
-
-The bounded `benchmark_runtime/` package separates responsibilities:
-
-- `workspace.py` and `naming.py`: workspace identity, timestamped human-visible
-  names, and non-overwriting initialization;
-- `workflow.py`: small user-facing builder and immutable request construction;
-- `planning.py`: dynamic Python loading, strategy validation, and cell expansion;
-- `baselines.py`: recursive manifests and clean workspace snapshots;
-- `storage.py`: digests, immutable inputs, readable attempt evidence, compact
-  run-local execution workspaces, frozen matched-timing history, host identity,
-  and atomic state;
-- `execution.py`: FIFO bounded cell scheduling, checked subprocess execution,
-  all-infinite-generation rejection, foreground-thread progress event delivery,
-  collection, mandatory per-cell cost/domain visualization, and orchestration;
-- `terminal.py`: caller-thread Rich ownership, fixed cell/global rows, bounded
-  plain-terminal snapshots, and durable run-level lifecycle logging;
-- `launch.py`: Windows visible-by-default detached launch and immediate
-  PID/run/log/inspect receipt; hidden launch is an explicit exception;
-- `postprocessing.py`: retryable run-local user callbacks;
-- `results.py`: public-yadof collection, four-way evaluation accounting,
-  generation-0 population fingerprinting, paired-fairness validation,
-  attempted-evaluation-aligned HV trajectory/AUC and cross-seed descriptive
-  reports, bounded inspect summaries, and workspace-level run indexes;
-- `progress.py` and `timing.py`: read-only activity/ETA calculation, exact versus
-  compatible same-arm matching, timestamped-generation trend replay, and bounded
-  timing-history construction;
-- `contracts.py`: dependency-free frozen and serialized contracts.
-
-The dependency direction is:
+The core lifecycle is linear:
 
 ```text
-workspace benchmark.py -> public yadof_benchmark API -> bounded runtime
-bounded runtime -> public installed yadof APIs and CLI
-yadof core -X-> yadof_benchmark
+benchmark.py
+    ↓ load + freeze
+expanded RunSpec
+    ↓ initialize once
+runtime.json + spec.json + state.json
+    ↓ FIFO cells
+cells/cNNNN/{workspace,commands,result.json}
+    ↓ publication after each terminal cell
+results + reports + visualizations
+    ↓ optional workflow postprocessors
+final state
 ```
 
-Planning deliberately executes arbitrary user Python. Its safety boundary is
-documentary and operational: `benchmark.py` is trusted workspace code, `check` and
-`plan` are advertised as run-read-only rather than code-sandboxed, and expensive or
-external side effects are forbidden by the authoring contract.
+There is no execution container below the workspace and no recovery branch.
 
-A long performance run follows a documented ladder: bounded plan/check, real
-adapter smoke, then a bounded structural canary using the same baseline/strategy/
-configuration paths. These measured steps retain normal simulator authority. A
-benchmark incompatibility is repaired and structurally revalidated before full
-execution; a yadof framework defect becomes a separate root toDo and blocks the
-affected full campaign rather than acquiring a benchmark-local workaround.
+## Components
 
-Difficulty remains task-owned rather than a generic validator property. The user
-contract requires a complete non-surrogate reference calibration toward roughly
-10000 evaluations to convergence when the 2000-evaluation floor solves a baseline
-too easily; the runtime cannot infer scientific task difficulty from budget alone.
+- `workspace.py` creates and identifies timestamped code-first workspaces.
+- `workflow.py` implements the small authoring builder and resolves defaults.
+- `planning.py` expands comparisons into deterministic short ordinal cells.
+- `baselines.py` discovers task adapters and materializes clean cell workspaces.
+- `storage.py` owns direct JSON publication, one-time runtime provenance, state,
+  and cell materialization.
+- `execution.py` owns subprocess logs, FIFO cell scheduling, collection, and
+  publication barriers.
+- `results.py` owns public-yadof collection, validity, descriptive pairing,
+  reports, and bounded inspection.
+- `progress.py` reads active command evidence and estimates timing from the
+  current workspace only.
+- `postprocessing.py` invokes live workspace callbacks once into
+  `postprocessing/<id>/`.
+- `launch.py` creates an optional Windows console process for the same installed
+  CLI.
+- `terminal.py` presents foreground progress and appends `benchmark.log`.
 
-Pairing is validity, not optimizer scoring. Arms in the same baseline/seed group
-must share the frozen baseline digest, planned and attempted real-evaluation
-budgets, and the fingerprint of the complete ordered normalized generation-0
-population. Any mismatch invalidates the pair, suppresses its reference delta, and
-excludes that seed from cross-seed aggregates while preserving its cell evidence.
-Final HV and trapezoidal HV-AUC use cumulative attempted real evaluations as their
-axis. Failures, non-finite objectives, and incomplete counts remain validity facts;
-the runtime does not turn them into a performance score.
+The retained `RunSpec` name denotes the expanded single-execution plan; it does
+not imply a `runs/` storage abstraction.
 
-Failure policy is evidence-aware by default. Structural workflows stop at the
-first failed or invalid cell. Performance workflows continue independent cells to
-preserve expensive evidence, but collection is not success: every collected cell
-must also satisfy its validity contract for the final run status to be `completed`. Thus any
-failed, incomplete, all-infinite, or collected-but-invalid cell produces a nonzero
-CLI outcome. An explicit `fail_fast` override changes scheduling only, never this
-final validity boundary.
+## Budget resolution
 
-Concurrency has two independently frozen layers. `Benchmark.configure` supplies
-the workflow-wide number of concurrently active cells and defaults to one. Each
-fast/local baseline manifest supplies the yadof simulation-worker cap and whether
-yadof resource autodetection remains enabled; materialization writes those values
-into the attempt's run-owned `config.py`. A cap may intentionally exceed physical
-cores only when the author disables autodetection and has reviewed simulator,
-memory, license, recorder, and host limits. The package never derives a universal
-oversubscription value from the historical 8-core/32-simulation example.
+`Benchmark.compare` stores omitted values until the workflow is frozen. Freeze
+checks selected strategy declarations and resolves:
 
-Cells enter the scheduler in frozen plan order. Initial free slots may start
-together; whenever a cell becomes terminal, the driver atomically refreshes run
-results/reports/indexes before that freed slot admits the next FIFO cell. Any
-publication/storage exception is
-campaign-fatal, records a bounded entry in `state.json` when state storage remains
-available, emits a diagnostic event, and propagates as `BenchmarkError`. Immutable
-per-attempt raw results and command logs remain the recovery source even if an
-aggregate publication was only partially refreshed.
+- seeds → `(101,)`;
+- population → `200`;
+- generations → `15` if any selected strategy is slow, otherwise `50`.
 
-The shared state writer is serialized, while command execution, collection, and
-cell-local artifacts may overlap. Worker events cross a queue and only the caller
-thread invokes the external sink. Fail-fast cancels active default subprocesses
-and prevents further admission; continue-on-failure still publishes the terminal
-state before refill. Cell budgets, accounting, sealing, and recorder durability do
-not change with concurrency.
+An explicit value is never rewritten. If a comparison mixes slow and standard
+strategies, every arm receives the same resolved 15-generation default so pairing
+budgets remain equal.
 
-Every attempt publishes independent `attempt.json`, `stdout.log`, and `stderr.log`
-evidence. Failed or interrupted execution is sealed `incomplete`; collection seals
-the attempt `complete`. Resume never mutates a sealed attempt and materializes a
-new compact workspace for an execution retry. A collection-only failure leaves a
-successful simulator attempt open for collection retry, avoiding a scientifically
-different rerun. Before execution, driver, workflow/resources, baseline, and
-strategy snapshot digests are revalidated; external editable sources are never
-consulted by resume.
+## Validity
 
-Optimizer wall time remains operational evidence rather than a primary algorithm
-metric. Public surrogate-training metadata is summarized separately. An optional
-positive `representative_generation_seconds` workflow value supplies an external
-expensive real-evaluation-generation reference for descriptive ratios; the cheap
-benchmark generation runtime is never substituted for it.
+Collection distinguishes planned, attempted, completed, and finite evaluation
+counts. Validity requires:
 
-Process-window ownership stays at the caller boundary rather than inside the
-runtime driver. Measured CLI `run` and `resume` operations default to a visible
-terminal: a caller may use its current visible terminal, while `--detach` creates
-a separate normal Windows console and immediately returns inspection details.
-`--hidden` is valid only with explicit detach and user authority. Drain threads
-write child logs and enqueue parsed snapshots; only the foreground command owner
-emits events and creates, refreshes, prints above, or stops the Rich presentation.
-The Windows child explicitly breaks away from a caller job so Codex command-host
-cleanup cannot terminate the long run after the receipt returns. Visible launch
-also leaves all three standard handles console-owned; redirecting even stdin would
-cause Windows to preserve the short-lived automation host's pipe handles instead.
-Python API calls remain synchronous, window-neutral, and input-free.
+```text
+collected
+∧ attempted == planned
+∧ finite > 0
+∧ objective contract matches
+∧ rawData contract matches
+∧ generation-0 population complete
+∧ final hypervolume available
+```
+
+It deliberately does not require `completed == attempted` or
+`finite == completed`. The differences are published as failed and non-finite
+evaluation counts, and valid affected cells carry
+`simulation_errors_tolerated=true`. Diagnostics do not by themselves invalidate
+a cell.
+
+## Persistence
+
+All mutable lifecycle state is atomically written to `state.json`. Command logs
+and cell results are append/new-file evidence. Aggregate publication after each
+terminal cell is a fatal boundary: a persistence failure stops further admission
+rather than losing which evidence was considered complete.
+
+The runner does not preserve alternate versions of code. `runtime.json` records
+the installed versions and execution account once before the scheduler starts.
+A per-cell baseline copy is merely the isolated yadof execution workspace.
+
+## Process identity
+
+`--detach` changes Windows console/process lifetime but cannot change the caller
+account or session. Documentation therefore makes the host-account launch
+requirement an agent responsibility rather than embedding account-switching
+machinery in the package.

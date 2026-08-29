@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from . import api
-from .benchmark_runtime.launch import launch_detached
 from .benchmark_runtime.contracts import evidence_notice, replication_notice
+from .benchmark_runtime.launch import launch_detached
 from .benchmark_runtime.terminal import BenchmarkTerminal
 
 
@@ -103,6 +103,9 @@ def _plan_summary(
             "population_max": max(populations, default=0),
             "generations_min": min(generations, default=0),
             "generations_max": max(generations, default=0),
+            "contains_slow_surrogate": any(
+                cell.contains_slow_surrogate for cell in cells
+            ),
         },
         "concurrency": {
             "cells": spec.workflow.cell_concurrency,
@@ -135,15 +138,16 @@ def _parser() -> argparse.ArgumentParser:
         help="print the complete expanded plan instead of the bounded summary",
     )
     plan = _workspace_command(
-        commands, "plan", "print a deterministic plan without creating a run"
+        commands, "plan", "print a deterministic plan without writing outputs"
     )
     plan.add_argument(
         "--json",
         action="store_true",
         help="print the complete expanded plan instead of the bounded summary",
     )
-    run = _workspace_command(commands, "run", "snapshot and execute a workspace")
-    run.add_argument("--run-id")
+    run = _workspace_command(
+        commands, "run", "execute the workspace's single benchmark"
+    )
     run.add_argument(
         "--detach",
         action="store_true",
@@ -157,33 +161,13 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--stream-child-output",
         action="store_true",
-        help="explicitly echo raw child stdout/stderr in addition to separate logs",
-    )
-
-    resume = commands.add_parser(
-        "resume", help="continue a run from its own driver and input snapshots"
-    )
-    resume.add_argument("--run", type=Path, required=True)
-    resume.add_argument(
-        "--detach",
-        action="store_true",
-        help="continue in a separate console and immediately return a launch receipt",
-    )
-    resume.add_argument(
-        "--hidden",
-        action="store_true",
-        help="explicitly hide a detached console (requires --detach)",
-    )
-    resume.add_argument(
-        "--stream-child-output",
-        action="store_true",
-        help="explicitly echo raw child stdout/stderr in addition to separate logs",
+        help="echo raw child stdout/stderr in addition to separate command logs",
     )
 
     inspect = commands.add_parser(
-        "inspect", help="read current run state and result locations without writing"
+        "inspect", help="read workspace state and result locations without writing"
     )
-    inspect.add_argument("--run", type=Path, required=True)
+    inspect.add_argument("--workspace", type=Path, default=Path("."))
 
     docs = commands.add_parser("docs", help="read version-matched user documentation")
     doc_commands = docs.add_subparsers(dest="docs_command", required=True)
@@ -222,9 +206,9 @@ def _docs(args: argparse.Namespace) -> None:
 def _foreground(
     action: Callable[[Callable[[Mapping[str, Any]], None]], dict[str, Any]],
     *,
-    run: str | Path | None = None,
+    workspace: str | Path,
 ) -> dict[str, Any]:
-    terminal = BenchmarkTerminal(run)
+    terminal = BenchmarkTerminal(workspace)
     terminal.start()
     try:
         result = action(terminal.handle)
@@ -276,14 +260,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "run":
             _require_detach_for_hidden(args)
             if args.detach:
-                run_root = api._prepare_workspace_run(
-                    args.workspace,
-                    run_id=args.run_id,
-                    baselines_root=args.baselines_root,
+                spec = api.plan_workspace(
+                    args.workspace, baselines_root=args.baselines_root
                 )
                 _json(
                     launch_detached(
-                        run_root,
+                        args.workspace,
+                        baselines_root=args.baselines_root,
+                        evidence=spec.workflow.evidence,
                         hidden=bool(args.hidden),
                         stream_child_output=bool(args.stream_child_output),
                     )
@@ -292,37 +276,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = _foreground(
                 lambda event_sink: api.run_workspace(
                     args.workspace,
-                    run_id=args.run_id,
                     baselines_root=args.baselines_root,
                     event_sink=event_sink,
                     stream_child_output=bool(args.stream_child_output),
-                )
-            )
-            _json(result)
-            return 0 if result["status"] == "completed" else 1
-        if args.command == "resume":
-            _require_detach_for_hidden(args)
-            if args.detach:
-                _json(
-                    launch_detached(
-                        args.run,
-                        hidden=bool(args.hidden),
-                        stream_child_output=bool(args.stream_child_output),
-                    )
-                )
-                return 0
-            result = _foreground(
-                lambda event_sink: api.resume_run(
-                    args.run,
-                    event_sink=event_sink,
-                    stream_child_output=bool(args.stream_child_output),
                 ),
-                run=args.run,
+                workspace=args.workspace,
             )
             _json(result)
             return 0 if result["status"] == "completed" else 1
         if args.command == "inspect":
-            _json(api.inspect_run(args.run))
+            _json(api.inspect_workspace(args.workspace))
             return 0
         if args.command == "docs":
             _docs(args)

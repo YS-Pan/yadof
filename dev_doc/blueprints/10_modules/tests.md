@@ -7,51 +7,35 @@ import the wheel force-installed into the sibling `.venv`. Tests create neutral
 temporary workspaces. Default tests require no live pool, simulator, concrete model,
 license, machine identity, or credential.
 
-The independent benchmark distribution owns focused tests under
-`yadof-benchmark/tests/`. They use temporary code-first benchmark workspaces,
-self-describing baselines, arbitrary complete strategy files, fake child commands,
-and public result fixtures while consuming a regular installed yadof distribution.
-They are not part of yadof's generic test namespace or yadof wheel/sdist contents.
-Their run-layout coverage keeps semantic attempt evidence readable while proving
-that materialized execution workspaces use compact run-local digest paths, and
-their command coverage requires all-infinite yadof generations to fail a cell.
-Recovery coverage injects aggregate publication failure and proves no freed slot
-admits a later cell; verifies structural fail-fast and performance continue-with-final-failure
-defaults; seals interrupted evidence with independent immutable attempt metadata;
-and proves retries use a new compact workspace while external editable sources do
-not affect a run-owned, digest-verified snapshot.
-Concurrency coverage freezes separate cell and simulation-worker controls, proves
-two cells overlap within a bounded FIFO scheduler, requires terminal aggregate
-publication before the next slot refill, keeps event callbacks on the foreground
-owner, preserves evaluation budgets, and replays lane-aware ETA without a
-simulator. Baseline validation requires explicit fast/local worker caps and
-resource-autodetection choices; materialized attempt evidence records both.
-Initialization coverage also treats the generated `benchmark.py` authoring
-scaffold as public output, and baseline discovery proves that manifest IDs and
-editable provider/task source paths agree before a run can snapshot them.
-It verifies local timestamp prefixes for human-visible workspaces/runs/output
-indexes independently of compact digest cell paths. A fake three-baseline pipeline
-must produce non-empty workspace indexes, run-local cell/HV reports, one grouped
-cost plot per cell, and one domain artifact in each baseline-semantic directory;
-missing or empty required postprocess output fails the run.
-Terminal coverage uses a fake child that emits separated generation snapshots and
-proves every sink callback stays on the foreground owner thread. Rich rendering is
-checked for fixed cell/global ordering, its first nonzero update, narrow critical
-fields, inherited `TERM=dumb`, `NO_COLOR`, cleanup, and final failure evidence.
-Windows launch tests require visible detach by default plus an immediate
-PID/run/log/inspect receipt; hidden mode must be explicit. These structural tests
-do not launch a simulator or claim performance evidence.
-Plan/check coverage proves bounded defaults and explicit full JSON. Event replay
-proves timestamped command/generation evidence, exact versus compatible same-arm
-history, exclusion of cross-arm point estimates, non-negative late-generation
-duration trends, terminal confidence, explicit raw-child streaming, and bounded
-inspect anomalies/next steps without simulator execution.
-The entire focused suite carries the `structural` pytest marker; fault-injection
-and resume tests additionally carry `recovery`. The former proves package and
-integration contracts, while the latter proves recovery semantics. Neither marker,
-nor a fake/cheap runner result, is algorithm-performance evidence. Real structural
-adapter smoke/canary and performance campaigns remain separately classified and
-subject to execution authority.
+The independent benchmark distribution owns focused structural tests under
+`yadof-benchmark/tests/`. They consume an installed yadof distribution and use
+temporary code-first workspaces, self-describing baselines, complete strategy
+files, fake commands, and public result fixtures. They do not launch simulators or
+claim performance evidence.
+
+Coverage requires:
+
+- initialization creates direct single-execution roots without `runs/`;
+- standard and slow-surrogate omitted budgets resolve to 200x50 and 200x15,
+  respectively, with one default seed;
+- explicit budgets and arbitrary explicit seed lists remain unchanged;
+- cells use `cNNNN` paths and artifact filenames remain short while semantic
+  identity stays in the spec;
+- initialization records installed versions and process account once, with no
+  driver/workflow/strategy snapshot tree;
+- cell and workflow postprocessing outputs are direct and have no attempt layer;
+- complete attempted budgets with individual failed/non-finite simulations remain
+  valid when finite contract-valid metrics exist;
+- missing attempts and all other hard validity failures remain non-successful;
+- FIFO publication/storage boundaries, concurrency controls, progress ownership,
+  and required visualizations retain focused fault tests proportional to changes;
+- inspect is bounded/read-only and has no resume command;
+- Windows detach runs the installed `run --workspace` command, defaults visible,
+  returns PID/workspace/log/inspect, and never claims to switch process identity;
+- public API/CLI and distribution entry points contain no run ID or resume surface.
+
+Installed-wheel acceptance uses a fresh pytest base temp and does not substitute
+for separately authorized real adapter smoke or performance work.
 
 ## Required coverage
 

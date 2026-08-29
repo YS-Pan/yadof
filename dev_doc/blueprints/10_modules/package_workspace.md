@@ -46,10 +46,10 @@ or `job_template/` root in temporary namespaces and supports
 same-directory helpers/packages without lasting `sys.path` or module-cache
 pollution. Two workspaces may use identical helper module names safely. Package
 resources are read-only and accessed through `importlib.resources`; repository
-examples and benchmark automation are tracked source-checkout resources, not
-packaged resources or package runtime write locations. Benchmark output resolves
-only from its explicit/default runs-root contract and must remain disjoint from
-frozen inputs and package source.
+examples and benchmark resources are tracked source-checkout concerns, not yadof
+package runtime write locations. The independent benchmark package writes one
+execution directly into its explicitly selected benchmark workspace, never into
+yadof package source or site-packages.
 
 Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 `init`, and `check` separate the public path value from creation and diagnostics.

@@ -81,30 +81,35 @@ remains authoritative for Python and dependency requirements.
 
 ## Independent benchmark package
 
-`yadof-benchmark` is a separate distribution developed beside this package. It
-depends on the public yadof API, but yadof does not import benchmark orchestration
-or include concrete benchmark baselines. Install the companion distribution when
-comparison work is required; its wheel contains its own API, console command,
-self-describing baseline resources, and version-matched user documentation.
-
-Create a workspace and start with the no-write plan:
+`yadof-benchmark` is a separate distribution developed beside yadof. It depends
+on public yadof behavior; yadof does not import benchmark orchestration or include
+concrete baselines. Its wheel owns the API, console command, baseline resources,
+and version-matched documents.
 
 ```powershell
-yadof-benchmark init D:\benchmarks\comparison
+$workspace = (yadof-benchmark init D:\benchmarks\comparison |
+  ConvertFrom-Json).workspace
 yadof-benchmark baselines
-yadof-benchmark plan --workspace D:\benchmarks\comparison
+yadof-benchmark plan --workspace $workspace
 ```
 
-The workspace's `benchmark.py` declares complete strategy sources, any number of
-comparison matrices, execution policy, and postprocessing. Relative paths resolve
-from that workspace. Strategy IDs describe the actual algorithm composition.
-Editable baseline collections use semantic `provider/task` source paths matching
-their manifest IDs; select one with `--baselines-root`. Each run snapshots its
-complete Python workflow, resources, driver, baseline workspaces, and strategies;
-later edits affect only later runs.
-`run` and `resume` may launch selected task software and remain subject to the
-execution authority in `config_and_run.md`.
-Use `inspect --run PATH` as the read-only first view of a run.
+One benchmark workspace owns one `benchmark.py` and one execution. Another
+execution uses another initialized workspace. There is no `runs/`, run ID,
+resume path, numbered attempt hierarchy, or copied code-driver snapshot. The
+installed package records its and yadof's versions once in `runtime.json` before
+cell work.
+
+Strategies may declare `slow_surrogate=True`. Comparisons default to one seed,
+population 200, and 50 generations; a comparison containing a slow surrogate
+defaults to 15 generations. Explicit values override defaults. Individual
+simulation errors are retained without invalidating a cell when the planned
+attempt count is complete and finite, contract-valid metric evidence remains.
+
+Measured `run` may launch task software and remains subject to
+`config_and_run.md`. On Windows an AI agent must launch through host execution
+under the signed-in human account; a sandbox-owned detached process cannot display
+a console in the user's session. Use
+`inspect --workspace PATH` as the read-only first view.
 
 ## Initialize and inspect
 

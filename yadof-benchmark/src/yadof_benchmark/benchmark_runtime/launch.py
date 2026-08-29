@@ -1,4 +1,4 @@
-"""Visible-by-default detached launcher for long Windows benchmark runs."""
+"""Visible-by-default detached launcher for one benchmark workspace."""
 from __future__ import annotations
 
 import os
@@ -8,36 +8,39 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from .contracts import BenchmarkError, evidence_notice
-from .storage import read_json, utc_now
+from .storage import utc_now
 from .terminal import CONSOLE_LOG_NAME
 
 ProcessFactory = Callable[..., subprocess.Popen[Any]]
 
 
-def _inspect_command(run_root: Path) -> list[str]:
+def _inspect_command(workspace: Path) -> list[str]:
     return [
         sys.executable,
         "-m",
         "yadof_benchmark",
         "inspect",
-        "--run",
-        str(run_root),
+        "--workspace",
+        str(workspace),
     ]
 
 
-def _resume_command(
-    run_root: Path,
+def _run_command(
+    workspace: Path,
     *,
-    stream_child_output: bool = False,
+    baselines_root: Path | None,
+    stream_child_output: bool,
 ) -> list[str]:
     command = [
         sys.executable,
         "-m",
         "yadof_benchmark",
-        "resume",
-        "--run",
-        str(run_root),
+        "run",
+        "--workspace",
+        str(workspace),
     ]
+    if baselines_root is not None:
+        command.extend(["--baselines-root", str(baselines_root)])
     if stream_child_output:
         command.append("--stream-child-output")
     return command
@@ -52,41 +55,36 @@ def _command_text(command: Sequence[str]) -> str:
 
 
 def launch_detached(
-    run: str | Path,
+    workspace: str | Path,
     *,
+    baselines_root: str | Path | None = None,
+    evidence: str = "unclassified",
     hidden: bool = False,
     stream_child_output: bool = False,
     process_factory: ProcessFactory = subprocess.Popen,
 ) -> dict[str, Any]:
-    """Start a run in a new console and return an immediate inspection receipt."""
+    """Start the workspace in a new console and return an inspection receipt."""
 
-    run_root = Path(run).resolve()
-    if not run_root.is_dir():
-        raise BenchmarkError(f"run does not exist: {run_root}")
-    spec_path = run_root / "spec.json"
-    spec = read_json(spec_path) if spec_path.is_file() else {}
-    workflow = spec.get("workflow", {})
-    evidence = (
-        str(workflow.get("evidence", "unclassified"))
-        if isinstance(workflow, dict)
-        else "unclassified"
-    )
+    root = Path(workspace).resolve()
+    if not root.is_dir():
+        raise BenchmarkError(f"workspace does not exist: {root}")
     if os.name != "nt":
         raise BenchmarkError(
             "detached launch requires a caller-owned visible terminal or terminal "
             "multiplexer on this platform; run in the foreground instead"
         )
-    log_path = run_root / CONSOLE_LOG_NAME
-    stdout_path = run_root / "detached.stdout.log"
-    stderr_path = run_root / "detached.stderr.log"
-    command = _resume_command(
-        run_root,
+    selected_baselines = (
+        None if baselines_root is None else Path(baselines_root).resolve()
+    )
+    log_path = root / CONSOLE_LOG_NAME
+    stdout_path = root / "detached.stdout.log"
+    stderr_path = root / "detached.stderr.log"
+    command = _run_command(
+        root,
+        baselines_root=selected_baselines,
         stream_child_output=stream_child_output,
     )
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    # Codex and other automation hosts commonly place the caller in a
-    # kill-on-close job. A new console alone does not leave that job, so the
-    # benchmark would be terminated as soon as the launch command returned.
     flags |= getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0)
     flags |= (
         getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -95,7 +93,7 @@ def launch_detached(
     )
     handles: list[Any] = []
     kwargs: dict[str, Any] = {
-        "cwd": run_root,
+        "cwd": root,
         "creationflags": flags,
         "close_fds": True,
     }
@@ -126,7 +124,6 @@ def launch_detached(
     finally:
         for handle in handles:
             handle.close()
-    inspect_command = _inspect_command(run_root)
     receipt = {
         "format": "yadof.benchmark.detached-launch",
         "pid": int(process.pid),
@@ -136,9 +133,9 @@ def launch_detached(
             "class": evidence,
             "notice": evidence_notice(evidence),
         },
-        "run": str(run_root),
+        "workspace": str(root),
         "log": str(log_path),
-        "inspect": _command_text(inspect_command),
+        "inspect": _command_text(_inspect_command(root)),
     }
     if hidden:
         receipt["stdout"] = str(stdout_path)

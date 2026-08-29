@@ -30,5 +30,5 @@
     "evaluation_seconds": 0.6,
     "record_mib": 0.5
   },
-  "snapshot_excludes": []
+  "materialize_excludes": []
 }

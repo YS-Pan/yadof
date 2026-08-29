@@ -1,159 +1,122 @@
-# Workflow API
+# Python and command-line API
 
-Every workspace `benchmark.py` defines one function:
+## `Benchmark.configure`
 
 ```python
-from yadof_benchmark import Benchmark, PostprocessContext
-
-
-def create_plots(context: PostprocessContext) -> dict[str, str]:
-    output = context.visualizations / "comparison.txt"
-    output.write_text("created from results.json", encoding="utf-8")
-    return {"output": output.name}
-
-
-def build_benchmark(benchmark: Benchmark) -> None:
-    benchmark.configure(
-        name="antenna-comparison",
-        evidence="structural",
-        # FIFO benchmark cells; review simulator/license/memory capacity first.
-        cell_concurrency=1,
-        # Optional external expensive-generation reference for training-time context.
-        representative_generation_seconds=7200.0,
-    )
-    benchmark.strategy(
-        "nsga3",
-        "resources/strategies/nsga3/optimization.py",
-        name="NSGA-III",
-    )
-    benchmark.strategy(
-        "gpsaf-conditional-inr",
-        name="GPSAF + conditional INR",
-        sources={
-            "test-com/synthetic-antenna":
-                "resources/strategies/gpsaf/antenna/optimization.py",
-            "ngspice/saw-ladder":
-                "resources/strategies/gpsaf/circuit/optimization.py",
-        },
-    )
-    benchmark.compare(
-        "main",
-        baselines=["test-com/synthetic-antenna", "ngspice/saw-ladder"],
-        strategies=["nsga3", "gpsaf-conditional-inr"],
-        # This deliberately small comparison is structural-only.
-        seeds=[101, 102, 103],
-        population=12,
-        generations=3,
-        reference="nsga3",
-    )
-    benchmark.postprocess("plots", create_plots)
+benchmark.configure(
+    name=None,
+    evidence=None,
+    fail_fast=None,
+    cell_concurrency=None,
+    representative_generation_seconds=None,
+    python=None,
+)
 ```
 
-## `Benchmark.configure()`
+`evidence` is required and must be `"structural"` or `"performance"`.
+`python` defaults to the interpreter running yadof-benchmark and should normally
+remain unchanged.
 
-`configure(name=None, evidence=None, fail_fast=None, cell_concurrency=None,
-representative_generation_seconds=None, runs_dir=None, python=None)`
-sets run-level policy. `evidence` is mandatory before the workflow can freeze and
-accepts only `"structural"` or `"performance"`. Structural means integration-only
-smoke/canary evidence and forbids algorithm performance conclusions. Performance
-means descriptive performance evidence; it still does not authorize execution or
-permit the package to rank strategies or make acceptance decisions. Relative paths
-resolve from the workspace. Other defaults are the workspace name, evidence-aware
-failure scheduling, `runs/`, and the current Python interpreter. When `fail_fast`
-is omitted, structural workflows stop after the first failed or invalid cell and
-performance workflows continue independent cells to preserve expensive evidence.
-An explicit boolean overrides scheduling only: every invalid or incomplete cell still makes
-the final run status non-successful and the CLI exit nonzero.
+## `Benchmark.strategy`
 
-`cell_concurrency` is a positive integer and defaults to `1`. It controls how many
-independent benchmark cells may be active together; cells enter in frozen plan
-order and a freed slot is refilled only after that terminal cell's aggregate
-publication succeeds. It is separate from the simulation-worker cap declared by
-each baseline. Increasing it never changes a cell's population, generations,
-seed, pairing, or evaluation accounting.
+```python
+benchmark.strategy(
+    "surrogate-nsga3",
+    "resources/strategies/surrogate/optimization.py",
+    name="Surrogate NSGA-III",
+    slow_surrogate=True,
+)
+```
 
-`representative_generation_seconds`, when supplied, must be positive and finite.
-It is the externally chosen duration of one representative expensive generation
-of real evaluations, used only to contextualize separately recorded surrogate
-training time. Do not use the cheap benchmark cell's own generation runtime; the
-comparison is descriptive and does not decide acceptance.
+A strategy is one complete Python module defining `build_optimization()`.
+`sources={baseline_id: path}` may select baseline-specific complete modules.
+`slow_surrogate=True` declares repeated expensive model training such as a
+neural network. It affects only the default generation count of comparisons that
+select the strategy; the strategy remains otherwise opaque to the runner.
 
-## `Benchmark.strategy()`
+## `Benchmark.compare`
 
-`strategy(id, source=None, *, name=None, sources=None)` registers an opaque,
-complete `optimization.py`. `source` applies to every baseline. `sources` maps
-individual baseline IDs to different complete modules and overrides `source`.
-Every selected module must define `build_optimization()`; the benchmark package
-does not maintain an algorithm registry or interpret algorithm-specific settings.
-Choose an ID and display name that state the actual algorithm composition, such as
-`nsga3` or `gpsaf-conditional-inr`. Role-only names such as `reference`,
-`candidate`, or `real-search` hide what was executed and are not valid authoring
-practice. `reference=` below expresses the comparison role separately.
+```python
+benchmark.compare(
+    "main",
+    baselines=["ngspice/saw-ladder"],
+    strategies=["nsga3", "surrogate-nsga3"],
+    reference="nsga3",
+)
+```
 
-## `Benchmark.compare()`
+Optional budget arguments are:
 
-`compare(id, *, baselines, strategies, seeds, population, generations,
-reference=None)` declares one Cartesian comparison matrix. Call it more than once
-to express different baselines, strategy subsets, seeds, or budgets. IDs are stable
-evidence identifiers. A reference is optional and must be selected by that
-comparison.
+```python
+seeds=[101]       # default
+population=200    # default
+generations=50    # default without a slow surrogate
+generations=15    # default when any selected strategy is slow
+```
 
-For `evidence="performance"`, every comparison requires `population >= 100` and
-`generations >= 20`, so every cell plans at least 2000 real evaluations. Smaller
-budgets belong to an explicitly structural smoke/canary workflow. The 2000 floor
-is not a difficulty goal: use a complete non-surrogate reference run to tune a
-baseline toward roughly 10000 evaluations to convergence (for example 200 × 50)
-when 2000 evaluations solve it easily.
+Omitting an argument selects the applicable default. Passing an explicit positive
+population or generation count, or an explicit unique integer seed list, always
+wins. No evidence-class scale floor is imposed. A performance comparison with one
+seed is labeled exploratory; pass multiple seeds for multi-seed descriptive
+evidence.
 
-`seeds` is always an explicit, non-empty, unique integer sequence. One seed is
-allowed for a fast algorithm-debugging loop, but a performance comparison with one
-seed is serialized and reported as `exploratory`. Use multiple explicit seeds for
-a stronger descriptive campaign. The package never fixes the number at three and
-does not infer statistical significance or robustness from a multi-seed list.
+All arms in one comparison use the same population, generations, and seeds so
+paired evidence has equal planned and attempted budgets.
 
-Within each baseline/seed group, all strategy arms must share the frozen task
-snapshot, planned and attempted real-evaluation budgets, and complete ordered
-generation-0 normalized-population fingerprint. A mismatch invalidates the paired
-comparison and suppresses its reference delta. The raw cell evidence is retained,
-but that seed is explicitly excluded from cross-seed aggregates.
+## Workflow postprocessors
 
-## `Benchmark.postprocess()`
+Register a top-level named function:
 
-`postprocess(id, callback)` registers a named top-level function from the same
-`benchmark.py`. It runs after all cells are collected and the descriptive result
-set has been published. The callback receives a
-`PostprocessContext` with `run`, `inputs`, `results`, `visualizations`, `reports`,
-`temp`, and the current `attempt` directory. It may return any JSON-compatible
-summary. A failed callback is retried in a new attempt during `resume`; collected
-cells are not rerun.
+```python
+def summarize(context: PostprocessContext):
+    # Read context.results.
+    # Write durable output under context.reports, context.visualizations,
+    # or the postprocessor-specific context.output.
+    return {"status": "ok"}
 
-This workflow-level callback is separate from the required baseline-local
-`postprocess.py`. The runtime invokes the baseline script after each optimization,
-alongside the automatic cost-history plot, before that cell is accepted as
-collected.
+benchmark.postprocess("summary", summarize)
+```
 
-## Other public functions
+`PostprocessContext` provides:
 
-- `init_workspace(path)` creates the timestamp-prefixed workspace skeleton and
-  returns its resolved path.
-- `discover_baselines(root=None)` returns validated baseline manifests.
-- `load_workflow(workspace)` executes and freezes `benchmark.py`.
-- `plan_workspace(workspace, baselines_root=None)` returns the complete immutable
-  `RunSpec`; only the CLI presentation defaults to a bounded summary.
-- `run_workspace(...)` and `resume_run(...)` accept
-  `stream_child_output=False`. When it is explicitly true, raw child lines are
-  delivered as `child-output` events to the caller's `event_sink`; per-command
-  stdout/stderr logs are written in either mode.
-- `inspect_run(...)` returns a bounded, read-only summary with status, validity,
-  comparison readiness, anomalies, next commands, active-cell activity, and
-  matched-history ETA evidence.
-- `user_doc_root()` locates this installed documentation.
+- `workspace`
+- `resources`
+- `results`
+- `visualizations`
+- `reports`
+- `temp`
+- `output` (directly `postprocessing/<id>/`)
 
-All public imports are available from `yadof_benchmark`; `yadof_benchmark.api`
-provides the same explicit surface.
+There is no attempt field.
 
-Python `run_workspace()` and `resume_run()` are synchronous and window-neutral.
-They never launch a console or wait for input. A caller may pass `event_sink=` to
-receive lifecycle and real intermediate cell-progress mappings on the caller's
-foreground thread. The Rich terminal and visible-by-default Windows `--detach`
-launcher belong to the CLI boundary, not the public Python API.
+## Public Python functions
+
+- `init_workspace(path)`
+- `discover_baselines(root=None)`
+- `load_workflow(workspace)`
+- `plan_workspace(workspace, baselines_root=None)`
+- `run_workspace(workspace, baselines_root=None, event_sink=None,
+  stream_child_output=False)`
+- `inspect_workspace(workspace)`
+- `user_doc_root()`
+
+`run_workspace` is synchronous and window-neutral. Use the CLI `--detach`
+option when a visible independent Windows console is desired. The functions above
+are the complete current public surface.
+
+## CLI
+
+```text
+yadof-benchmark init PATH
+yadof-benchmark baselines [--root PATH]
+yadof-benchmark check --workspace PATH [--baselines-root PATH] [--json]
+yadof-benchmark plan --workspace PATH [--baselines-root PATH] [--json]
+yadof-benchmark run --workspace PATH [--baselines-root PATH]
+                    [--detach] [--hidden] [--stream-child-output]
+yadof-benchmark inspect --workspace PATH
+yadof-benchmark docs list
+yadof-benchmark docs show [PATH]
+```
+
+`--hidden` requires `--detach`. An AI-agent launch must also follow the host
+account rule in [execution.md](execution.md).

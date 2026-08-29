@@ -1,4 +1,4 @@
-"""Exact-cell materialization, subprocess logging, and resume."""
+"""Cell materialization, subprocess logging, and workspace execution."""
 from __future__ import annotations
 
 import json
@@ -16,15 +16,11 @@ from typing import Any, Callable, Mapping, Sequence
 from .contracts import BenchmarkError, BenchmarkStorageError, CommandResult
 from .postprocessing import execute_postprocessors
 from .results import collect_cell, publish_results
-from .naming import slug
 from .storage import (
-    latest_attempt,
-    load_run,
-    mark_interrupted,
-    prepare_attempt,
+    load_execution,
+    prepare_cell,
     save_state,
     utc_now,
-    validate_run_snapshots,
     write_new_json,
 )
 
@@ -474,14 +470,14 @@ def _resource_check(execution: Mapping[str, Any]) -> None:
 
 
 def _record_command(
-    run_root: Path,
-    attempt: dict[str, Any],
+    root: Path,
+    cell_state: dict[str, Any],
     command_root: Path,
     result: CommandResult,
 ) -> None:
-    attempt["commands"].append(command_root.relative_to(run_root).as_posix())
-    attempt["runtime_seconds"] += result.duration_seconds
-    attempt["active_command"] = None
+    cell_state["commands"].append(command_root.relative_to(root).as_posix())
+    cell_state["runtime_seconds"] += result.duration_seconds
+    cell_state["active_command"] = None
 
 
 def _run_command(
@@ -524,10 +520,10 @@ def _require_nonempty_file(path: Path, *, label: str) -> None:
 
 
 def _render_cell_outputs(
-    run_root: Path,
-    attempt_root: Path,
+    root: Path,
+    cell_root: Path,
     workspace: Path,
-    attempt: dict[str, Any],
+    cell_state: dict[str, Any],
     cell: Mapping[str, Any],
     state: dict[str, Any],
     *,
@@ -539,14 +535,13 @@ def _render_cell_outputs(
     cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     cell_id = str(cell["id"])
-    cost_dir = run_root / "visualizations" / "cost"
+    cost_dir = root / "visualizations" / "cost"
     cost_dir.mkdir(parents=True, exist_ok=True)
-    attempt_number = int(attempt["number"])
-    cost_path = cost_dir / f"{cell_id}--attempt-{attempt_number:04d}.png"
-    cost_root = attempt_root / "commands" / "03-view-cost"
+    cost_path = cost_dir / f"{cell_id}.png"
+    cost_root = cell_root / "commands" / "03-view-cost"
     with _state_guard(state_lock):
-        attempt["active_command"] = cost_root.relative_to(run_root).as_posix()
-        save_state(run_root, state)
+        cell_state["active_command"] = cost_root.relative_to(root).as_posix()
+        save_state(root, state)
     cost = _run_command(
         command_runner,
         [
@@ -569,7 +564,7 @@ def _render_cell_outputs(
         cancel_event=cancel_event,
     )
     with _state_guard(state_lock):
-        _record_command(run_root, attempt, cost_root, cost)
+        _record_command(root, cell_state, cost_root, cost)
     if cost.returncode:
         raise _command_failure("yadof view cost", cost)
     _require_nonempty_file(cost_path, label="yadof view cost")
@@ -577,13 +572,13 @@ def _render_cell_outputs(
     postprocessor = workspace / "postprocess.py"
     if not postprocessor.is_file():
         raise BenchmarkError(f"baseline postprocessor does not exist: {postprocessor}")
-    baseline_dir = run_root / "visualizations" / slug(str(cell["baseline"]))
-    baseline_dir.mkdir(parents=True, exist_ok=True)
-    prefix = f"{cell_id}--attempt-{attempt_number:04d}--"
-    postprocess_root = attempt_root / "commands" / "04-postprocess"
+    domain_dir = root / "visualizations" / "domain"
+    domain_dir.mkdir(parents=True, exist_ok=True)
+    prefix = f"{cell_id}--"
+    postprocess_root = cell_root / "commands" / "04-postprocess"
     with _state_guard(state_lock):
-        attempt["active_command"] = postprocess_root.relative_to(run_root).as_posix()
-        save_state(run_root, state)
+        cell_state["active_command"] = postprocess_root.relative_to(root).as_posix()
+        save_state(root, state)
     domain = _run_command(
         command_runner,
         [
@@ -592,7 +587,7 @@ def _render_cell_outputs(
             "--workspace",
             str(workspace),
             "--output-dir",
-            str(baseline_dir),
+            str(domain_dir),
             "--output-prefix",
             prefix,
         ],
@@ -605,25 +600,28 @@ def _render_cell_outputs(
         cancel_event=cancel_event,
     )
     with _state_guard(state_lock):
-        _record_command(run_root, attempt, postprocess_root, domain)
+        _record_command(root, cell_state, postprocess_root, domain)
     if domain.returncode:
         raise _command_failure("baseline postprocess", domain)
     domain_outputs = sorted(
-        path for path in baseline_dir.iterdir()
-        if path.is_file() and path.name.startswith(prefix) and path.stat().st_size > 0
+        path
+        for path in domain_dir.iterdir()
+        if path.is_file()
+        and path.name.startswith(prefix)
+        and path.stat().st_size > 0
     )
     if not domain_outputs:
         raise BenchmarkError(
             f"baseline postprocess created no non-empty artifact with prefix {prefix!r}"
         )
     return {
-        "cost": cost_path.relative_to(run_root).as_posix(),
-        "domain": [path.relative_to(run_root).as_posix() for path in domain_outputs],
+        "cost": cost_path.relative_to(root).as_posix(),
+        "domain": [path.relative_to(root).as_posix() for path in domain_outputs],
     }
 
 
 def _execute_cell(
-    run_root: Path,
+    root: Path,
     spec: Mapping[str, Any],
     state: dict[str, Any],
     cell: Mapping[str, Any],
@@ -635,16 +633,15 @@ def _execute_cell(
     cancel_event: threading.Event | None = None,
 ) -> bool:
     with _state_guard(state_lock):
-        cell_state = state["cells"][str(cell["id"])]
-        attempt_root, workspace, attempt = prepare_attempt(run_root, cell, state)
+        cell_root, workspace, cell_state = prepare_cell(root, spec, cell, state)
     timeout = int(cell.get("execution", {}).get("timeout_seconds", 7200))
     python = str(spec["workflow"]["python"])
     try:
         _resource_check(cell.get("execution", {}))
-        check_root = attempt_root / "commands" / "01-check"
+        check_root = cell_root / "commands" / "01-check"
         with _state_guard(state_lock):
-            attempt["active_command"] = check_root.relative_to(run_root).as_posix()
-            save_state(run_root, state)
+            cell_state["active_command"] = check_root.relative_to(root).as_posix()
+            save_state(root, state)
         check = _run_command(
             command_runner,
             [python, "-m", "yadof", "check", "--workspace", str(workspace)],
@@ -657,30 +654,37 @@ def _execute_cell(
             cancel_event=cancel_event,
         )
         with _state_guard(state_lock):
-            _record_command(run_root, attempt, check_root, check)
+            _record_command(root, cell_state, check_root, check)
         if check.returncode:
             raise _command_failure("yadof check", check)
         with _state_guard(state_lock):
-            attempt["status"] = "checked"
             cell_state["status"] = "checked"
-            save_state(run_root, state)
+            save_state(root, state)
 
         command = [
-            python, "-m", "yadof", "run", "--workspace", str(workspace),
-            "--generations", str(cell["generations"]),
-            "--population-size", str(cell["population"]),
-            "--random-seed", str(cell["seed"]), "--no-smoke-test",
+            python,
+            "-m",
+            "yadof",
+            "run",
+            "--workspace",
+            str(workspace),
+            "--generations",
+            str(cell["generations"]),
+            "--population-size",
+            str(cell["population"]),
+            "--random-seed",
+            str(cell["seed"]),
+            "--no-smoke-test",
             "--fail-on-all-infinite",
         ]
         mode = cell.get("execution", {}).get("mode")
         if mode:
             command.extend(["--mode", str(mode)])
-        run_command_root = attempt_root / "commands" / "02-run"
+        run_command_root = cell_root / "commands" / "02-run"
         with _state_guard(state_lock):
-            attempt["active_command"] = run_command_root.relative_to(run_root).as_posix()
-            attempt["status"] = "running"
+            cell_state["active_command"] = run_command_root.relative_to(root).as_posix()
             cell_state["status"] = "running"
-            save_state(run_root, state)
+            save_state(root, state)
         measured = _run_command(
             command_runner,
             command,
@@ -693,30 +697,23 @@ def _execute_cell(
             cancel_event=cancel_event,
         )
         with _state_guard(state_lock):
-            _record_command(run_root, attempt, run_command_root, measured)
+            _record_command(root, cell_state, run_command_root, measured)
         if measured.returncode:
             raise _command_failure("yadof run", measured)
         with _state_guard(state_lock):
-            attempt["status"] = "succeeded"
-            attempt["finished_utc"] = utc_now()
-            attempt["completeness"] = "awaiting-collection"
             cell_state["status"] = "succeeded"
-            save_state(run_root, state)
+            cell_state["finished_utc"] = utc_now()
+            save_state(root, state)
         return True
     except BenchmarkStorageError:
         raise
     except Exception as exc:
         with _state_guard(state_lock):
-            attempt["active_command"] = None
-            attempt["status"] = "failed"
-            attempt["finished_utc"] = utc_now()
-            attempt["sealed"] = True
-            attempt["sealed_utc"] = attempt["finished_utc"]
-            attempt["completeness"] = "incomplete"
-            attempt["error"] = str(exc)
+            cell_state["active_command"] = None
             cell_state["status"] = "failed"
+            cell_state["finished_utc"] = utc_now()
             cell_state["error"] = str(exc)
-            save_state(run_root, state)
+            save_state(root, state)
             progress = _state_progress(state)
         _emit(
             event_sink,
@@ -729,7 +726,7 @@ def _execute_cell(
 
 
 def _collect_succeeded(
-    run_root: Path,
+    root: Path,
     spec: Mapping[str, Any],
     state: dict[str, Any],
     cell: Mapping[str, Any],
@@ -743,17 +740,17 @@ def _collect_succeeded(
 ) -> bool:
     with _state_guard(state_lock):
         cell_state = state["cells"][str(cell["id"])]
-        attempt_root, attempt = latest_attempt(run_root, cell_state)
-        workspace = run_root / str(attempt["workspace"])
+        cell_root = root / str(cell_state["path"])
+        workspace = root / str(cell_state["workspace"])
     result: dict[str, Any] | None = None
     try:
         result = collector(workspace, cell)
-        result["runtime_seconds"] = attempt.get("runtime_seconds", 0.0)
-        visualizations = _render_cell_outputs(
-            run_root,
-            attempt_root,
+        result["runtime_seconds"] = cell_state.get("runtime_seconds", 0.0)
+        result["visualizations"] = _render_cell_outputs(
+            root,
+            cell_root,
             workspace,
-            attempt,
+            cell_state,
             cell,
             state,
             python=str(spec["workflow"]["python"]),
@@ -763,19 +760,14 @@ def _collect_succeeded(
             state_lock=state_lock,
             cancel_event=cancel_event,
         )
-        result["visualizations"] = visualizations
-        result_path = attempt_root / "result.json"
+        result_path = cell_root / "result.json"
         write_new_json(result_path, result)
         with _state_guard(state_lock):
-            attempt["result"] = result_path.relative_to(run_root).as_posix()
-            attempt["status"] = "collected"
-            attempt["collected_utc"] = utc_now()
-            attempt["sealed"] = True
-            attempt["sealed_utc"] = attempt["collected_utc"]
-            attempt["completeness"] = "complete"
+            cell_state["result"] = result_path.relative_to(root).as_posix()
             cell_state["status"] = "collected"
+            cell_state["finished_utc"] = utc_now()
             cell_state["error"] = None
-            save_state(run_root, state)
+            save_state(root, state)
             progress = _state_progress(state)
         _emit(
             event_sink,
@@ -792,25 +784,20 @@ def _collect_succeeded(
                 issues = result.setdefault("issues", [])
                 if isinstance(issues, list):
                     issues.append(f"required visualization failed: {exc}")
-                result_path = attempt_root / "result.json"
+                result_path = cell_root / "result.json"
                 if not result_path.exists():
                     write_new_json(result_path, result)
-                    attempt["result"] = result_path.relative_to(run_root).as_posix()
-                attempt["active_command"] = None
-                attempt["status"] = "failed"
-                attempt["finished_utc"] = utc_now()
-                attempt["sealed"] = True
-                attempt["sealed_utc"] = attempt["finished_utc"]
-                attempt["completeness"] = "incomplete"
-                attempt["error"] = f"required visualization failed: {exc}"
+                    cell_state["result"] = result_path.relative_to(root).as_posix()
                 cell_state["status"] = "failed"
-                cell_state["error"] = attempt["error"]
+                cell_state["error"] = f"required visualization failed: {exc}"
                 event = "visualization-failed"
             else:
-                cell_state["status"] = "succeeded"
+                cell_state["status"] = "failed"
                 cell_state["error"] = f"collection failed: {exc}"
                 event = "collection-failed"
-            save_state(run_root, state)
+            cell_state["active_command"] = None
+            cell_state["finished_utc"] = utc_now()
+            save_state(root, state)
             progress = _state_progress(state)
         _emit(
             event_sink,
@@ -823,17 +810,15 @@ def _collect_succeeded(
 
 
 def _publish_or_fail(
-    run_root: Path,
+    root: Path,
     spec: Mapping[str, Any],
     state: dict[str, Any],
     *,
     boundary: str,
     event_sink: EventSink | None,
 ) -> dict[str, Any]:
-    """Make aggregate publication a campaign-fatal cell boundary."""
-
     try:
-        return publish_results(run_root, spec, state)
+        return publish_results(root, spec, state)
     except Exception as exc:
         failure = {
             "utc": utc_now(),
@@ -847,7 +832,7 @@ def _publish_or_fail(
         state["finished_utc"] = failure["utc"]
         state_error: Exception | None = None
         try:
-            save_state(run_root, state)
+            save_state(root, state)
         except Exception as persistence_exc:
             state_error = persistence_exc
         _emit(
@@ -857,7 +842,7 @@ def _publish_or_fail(
             error=failure["error"],
         )
         detail = (
-            "benchmark result publication failed; campaign stopped before another "
+            "benchmark result publication failed; execution stopped before another "
             f"cell at {boundary}: {failure['error']}"
         )
         if state_error is not None:
@@ -900,7 +885,7 @@ def _publication_cell_valid(
 
 
 def _process_cell(
-    run_root: Path,
+    root: Path,
     spec: Mapping[str, Any],
     state: dict[str, Any],
     cell: Mapping[str, Any],
@@ -912,11 +897,8 @@ def _process_cell(
     state_lock: threading.RLock,
     cancel_event: threading.Event,
 ) -> bool:
-    cell_id = str(cell["id"])
-    with state_lock:
-        status = str(state["cells"][cell_id]["status"])
-    if status != "succeeded" and not _execute_cell(
-        run_root,
+    if not _execute_cell(
+        root,
         spec,
         state,
         cell,
@@ -928,7 +910,7 @@ def _process_cell(
     ):
         return False
     return _collect_succeeded(
-        run_root,
+        root,
         spec,
         state,
         cell,
@@ -941,41 +923,30 @@ def _process_cell(
     )
 
 
-def execute_existing_run(
-    run: str | Path,
+def execute_workspace(
+    workspace: str | Path,
     *,
     command_runner: CommandRunner = run_logged,
     collector: Collector = collect_cell,
     event_sink: EventSink | None = None,
     stream_child_output: bool = False,
 ) -> dict[str, Any]:
-    run_root = Path(run).resolve()
-    spec, state = load_run(run_root)
-    if not (run_root / "driver" / "benchmark_runtime" / "__init__.py").is_file():
-        raise BenchmarkError(f"run driver snapshot is incomplete: {run_root}")
-    validate_run_snapshots(run_root, spec)
-    if state["status"] == "completed":
-        return state
-    mark_interrupted(run_root, state)
+    root = Path(workspace).resolve()
+    spec, state = load_execution(root)
     state["status"] = "running"
-    state.setdefault("started_utc", None)
-    if state["started_utc"] is None:
-        state["started_utc"] = utc_now()
+    state["started_utc"] = utc_now()
     state["finished_utc"] = None
-    save_state(run_root, state)
+    save_state(root, state)
     _emit(
         event_sink,
-        event="run-started",
-        run=str(run_root),
+        event="workspace-started",
+        workspace=str(root),
         **_state_progress(state),
     )
     cell_by_id = {str(cell["id"]): cell for cell in spec["cells"]}
     fail_fast = bool(spec["workflow"].get("fail_fast", False))
     cell_order = [str(cell["id"]) for cell in spec["cells"]]
-    pending = [
-        cell_id for cell_id in cell_order
-        if state["cells"][cell_id]["status"] != "collected"
-    ]
+    pending = list(cell_order)
     cell_concurrency = min(
         max(1, int(spec["workflow"].get("cell_concurrency", 1))),
         max(1, len(pending)),
@@ -1002,24 +973,15 @@ def execute_existing_run(
             thread_name_prefix="yadof-benchmark-cell",
         ) as executor:
             while pending or active:
-                while (
-                    pending
-                    and len(active) < cell_concurrency
-                    and not stop_admission
-                ):
+                while pending and len(active) < cell_concurrency and not stop_admission:
                     cell_id = pending.pop(0)
                     cell = cell_by_id[cell_id]
                     with state_lock:
-                        cell_state = state["cells"][cell_id]
-                        previous_status = cell_state.get("status")
-                        previous_error = cell_state.get("error")
                         progress = _state_progress(state)
                     _emit(
                         event_sink,
                         event="cell-started",
                         cell=cell_id,
-                        previous_status=previous_status,
-                        previous_error=previous_error,
                         population=int(cell["population"]),
                         generations=int(cell["generations"]),
                         planned_evaluations=int(cell["planned_evaluations"]),
@@ -1027,7 +989,7 @@ def execute_existing_run(
                     )
                     future = executor.submit(
                         _process_cell,
-                        run_root,
+                        root,
                         spec,
                         state,
                         cell,
@@ -1061,7 +1023,7 @@ def execute_existing_run(
                     try:
                         with state_lock:
                             publication = _publish_or_fail(
-                                run_root,
+                                root,
                                 spec,
                                 state,
                                 boundary=f"cell:{cell_id}",
@@ -1081,21 +1043,22 @@ def execute_existing_run(
         cancel_event.set()
         drain_events()
         raise
+
     cells_complete = bool(state["cells"]) and all(
         item["status"] == "collected" for item in state["cells"].values()
     )
     if cells_complete:
         state["status"] = "postprocessing"
-        save_state(run_root, state)
+        save_state(root, state)
         publication = _publish_or_fail(
-            run_root,
+            root,
             spec,
             state,
             boundary="pre-postprocessing",
             event_sink=event_sink,
         )
         processed = execute_postprocessors(
-            run_root, spec, state, event_sink=event_sink
+            root, spec, state, event_sink=event_sink
         )
         cells_valid = _publication_cells_valid(publication, state)
         state["status"] = "completed" if processed and cells_valid else "failed"
@@ -1108,9 +1071,9 @@ def execute_existing_run(
     else:
         state["status"] = "failed"
     state["finished_utc"] = utc_now()
-    save_state(run_root, state)
+    save_state(root, state)
     _publish_or_fail(
-        run_root,
+        root,
         spec,
         state,
         boundary="final",
@@ -1118,12 +1081,12 @@ def execute_existing_run(
     )
     _emit(
         event_sink,
-        event="run-finished",
+        event="workspace-finished",
         status=state["status"],
-        run=str(run_root),
+        workspace=str(root),
         **_state_progress(state),
     )
     return state
 
 
-__all__ = ["execute_existing_run", "run_logged"]
+__all__ = ["execute_workspace", "run_logged"]

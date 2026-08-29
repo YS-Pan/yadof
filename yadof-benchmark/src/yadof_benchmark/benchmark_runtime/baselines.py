@@ -1,4 +1,4 @@
-"""Discovery and clean snapshot handling for self-describing baselines."""
+"""Discovery and clean cell materialization for self-describing baselines."""
 from __future__ import annotations
 
 import json
@@ -29,7 +29,7 @@ _YADOF_RUNTIME_NAMES = {
 }
 _MANIFEST_FIELDS = {
     "format", "id", "name", "description", "workspace", "execution",
-    "contract", "estimates", "snapshot_excludes",
+    "contract", "estimates", "materialize_excludes",
 }
 _SIMULATION_CONCURRENCY_FIELDS = {"max_workers", "resource_autodetect"}
 
@@ -147,9 +147,11 @@ def load_baseline(path: str | Path) -> BaselineManifest:
             "external scheduler"
         )
 
-    excludes = data.get("snapshot_excludes", [])
+    excludes = data.get("materialize_excludes", [])
     if not isinstance(excludes, list) or not all(isinstance(item, str) for item in excludes):
-        raise BenchmarkError(f"baseline {baseline_id!r} snapshot_excludes must be strings")
+        raise BenchmarkError(
+            f"baseline {baseline_id!r} materialize_excludes must be strings"
+        )
     normalized_excludes: list[str] = []
     for item in excludes:
         candidate = _inside(workspace, workspace / item, label="snapshot exclusion")
@@ -176,7 +178,7 @@ def load_baseline(path: str | Path) -> BaselineManifest:
         execution=freeze_json(execution),
         contract=freeze_json(contract),
         estimates=freeze_json(estimates),
-        snapshot_excludes=tuple(sorted(set(normalized_excludes))),
+        materialize_excludes=tuple(sorted(set(normalized_excludes))),
     )
 
 
@@ -211,15 +213,15 @@ def _ignore_for(manifest: BaselineManifest, source: str, names: list[str]) -> se
         relative = Path(relative_root, name).as_posix()
         if relative.startswith("./"):
             relative = relative[2:]
-        if relative in manifest.snapshot_excludes:
+        if relative in manifest.materialize_excludes:
             ignored.add(name)
     if source_path.name == ".yadof":
         ignored.update(name for name in names if name in _YADOF_RUNTIME_NAMES)
     return ignored
 
 
-def snapshot_baseline(manifest: BaselineManifest, destination: Path) -> None:
-    """Copy one manifest and its complete clean workspace."""
+def materialize_baseline(manifest: BaselineManifest, destination: Path) -> None:
+    """Copy one baseline into a cell's short-lived execution directory."""
 
     destination.mkdir(parents=True, exist_ok=False)
     shutil.copy2(manifest.root / "baseline.json", destination / "baseline.json")
@@ -230,4 +232,4 @@ def snapshot_baseline(manifest: BaselineManifest, destination: Path) -> None:
     )
 
 
-__all__ = ["discover_baselines", "load_baseline", "snapshot_baseline"]
+__all__ = ["discover_baselines", "load_baseline", "materialize_baseline"]

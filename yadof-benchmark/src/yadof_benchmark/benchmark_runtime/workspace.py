@@ -1,20 +1,39 @@
 """Benchmark workspace creation and identity checks."""
 from __future__ import annotations
 
+import datetime as dt
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from .contracts import BenchmarkError, WORKSPACE_FORMAT
-from .naming import timestamped_name
 
-_DIRECTORIES = ("resources", "runs", "visualizations", "reports", "temp")
+_TIMESTAMP_PREFIX = re.compile(r"\d{8}_\d{6}(?:[-_]|$)")
+
+
+def _timestamped_name(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value)).strip("-._")
+    if not normalized:
+        raise BenchmarkError(f"cannot derive a workspace name from {value!r}")
+    if _TIMESTAMP_PREFIX.match(normalized):
+        return normalized
+    return f"{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}-{normalized}"
+
+_DIRECTORIES = (
+    "resources",
+    "cells",
+    "postprocessing",
+    "visualizations",
+    "reports",
+    "temp",
+)
 _TEMPLATE = '''"""Describe this benchmark's complete workflow."""
 from yadof_benchmark import Benchmark, PostprocessContext
 
 
 def summarize_results(context: PostprocessContext) -> dict[str, str]:
-    """Create optional run-local reports or visualizations after collection."""
+    """Create optional workspace reports or visualizations after collection."""
     # Read context.results, then write durable artifacts below context.reports or
     # context.visualizations. Return a small JSON-compatible summary.
     return {}
@@ -28,9 +47,10 @@ def build_benchmark(benchmark: Benchmark) -> None:
     # "structural" is for smoke/canary integration evidence only. It must not be
     # presented as algorithm performance evidence. Use "performance" only for a
     # deliberately authorized performance campaign after plan and bounded smoke.
-    # Every performance comparison requires population >= 100 and generations >= 20.
-    # A single-seed performance comparison is marked exploratory; use an explicit,
-    # configurable multi-seed list when a stronger conclusion is required.
+    # Comparisons default to one seed, population=200, and generations=50. If any
+    # selected strategy declares slow_surrogate=True, the default is 15 generations.
+    # Pass explicit values when the benchmark needs a different budget or multiple
+    # seeds. Single-seed performance evidence is reported as exploratory.
     # benchmark.configure(
     #     name="saw-algorithm-comparison",
     #     evidence="structural",
@@ -47,12 +67,14 @@ def build_benchmark(benchmark: Benchmark) -> None:
     #     "nsga3",
     #     "resources/strategies/nsga3/optimization.py",
     #     name="NSGA-III",
+    #     # Set True for strategies that repeatedly train a slow surrogate such as
+    #     # a neural network. This changes only the default generation count.
+    #     slow_surrogate=False,
     # )
     # benchmark.compare(
     #     "main",
     #     baselines=["ngspice/saw-ladder"],
     #     strategies=["nsga3"],
-    #     seeds=[1],
     #     # This intentionally small budget is structural-only.
     #     population=12,
     #     generations=3,
@@ -72,7 +94,7 @@ def _write_new(path: Path, text: str) -> None:
 
 def init_workspace(path: str | Path) -> dict[str, Any]:
     requested = Path(path).resolve()
-    root = requested.with_name(timestamped_name(requested.name))
+    root = requested.with_name(_timestamped_name(requested.name))
     if root.exists() and any(root.iterdir()):
         raise BenchmarkError(f"workspace directory is not empty: {root}")
     root.mkdir(parents=True, exist_ok=True)

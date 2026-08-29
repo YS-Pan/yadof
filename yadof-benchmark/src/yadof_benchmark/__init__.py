@@ -11,10 +11,9 @@ from .api import (
     WorkflowRequest,
     discover_baselines,
     init_workspace,
-    inspect_run,
+    inspect_workspace,
     load_workflow,
     plan_workspace,
-    resume_run,
     run_workspace,
     user_doc_root,
 )
@@ -30,10 +29,9 @@ __all__ = [
     "__version__",
     "discover_baselines",
     "init_workspace",
-    "inspect_run",
+    "inspect_workspace",
     "load_workflow",
     "plan_workspace",
-    "resume_run",
     "run_workspace",
     "user_doc_root",
 ]

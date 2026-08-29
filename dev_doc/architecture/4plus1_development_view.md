@@ -21,52 +21,38 @@ outside package source. Root `dev_doc/` and `user_doc/` are authoritative source
 mapped into installed read-only resources. Administrator resources, examples, and
 benchmark automation remain source-checkout concerns.
 
-The independent benchmark distribution exposes one editable workflow program per
-benchmark workspace. Its baseline collections use exact semantic
-`provider/task` source paths and freeze content only when a run is created; source
-directory names do not carry provenance digests. Human-visible workspace, run, and
-workspace output-index names use local `YYYYMMDD_HHMMSS` prefixes, while internal
-cell execution paths remain compact digests. Each collected cell owns one cost
-plot and one uniformly invoked baseline-domain postprocess result below its single
-authoritative run root; workspace top-level output roots contain run indexes. Its
-CLI owns Rich presentation on the foreground thread, receives real child
-generation snapshots through a queue, and keeps active-cell/global rows in that
-order. Windows detach opens a normal console and returns PID/run/log/inspect
-details; hidden detach is explicit, while Python calls stay synchronous and
-window-neutral. Planning/check output is bounded unless complete JSON is explicit;
-child stdout/stderr stays in per-command logs unless explicit streaming is
-selected. Read-only inspect bounds anomalies and exposes validity, comparison
-readiness, next steps, activity, and ETA. ETA freezes bounded earlier same-arm
-timing records, distinguishes exact from compatible task/resource/host/config
-matches, excludes cross-arm point estimates, and models a non-negative
-generation-duration trend once enough timestamped phases exist. Every benchmark
-workflow also freezes one explicit evidence class. Structural package/CLI tests,
-recovery fault injection, real adapter smoke, and bounded canaries prove engineering
-behavior only and cannot support algorithm performance conclusions. Performance
-campaigns remain descriptive and follow bounded plan/check, adapter smoke, and a
-same-path structural canary before separately authorized full execution. The class
-is carried through plan, cells, reports, indexes, and inspect rather than inferred
-from budget.
+The independent benchmark distribution exposes one `benchmark.py` per
+timestamped workspace. One workspace owns one direct execution; another execution
+uses another workspace. Runtime provenance, expanded plan, mutable state, results,
+reports, visualizations, and short `cells/cNNNN` directories all live directly
+under that root. The runner uses the installed packages and records their versions
+once before execution; it has no `runs/`, resume, numbered attempts, copied code
+driver, or cross-workspace timing history.
 
-Benchmark result publication validates same-baseline/same-seed pairing from the
-frozen task snapshot, matching planned/attempted budgets, and the complete ordered
-generation-0 normalized-population fingerprint. It publishes
-planned/attempted/completed/finite counts plus final HV and
-attempted-evaluation-aligned HV trajectory/AUC. Invalid or incomplete cell evidence
-is preserved but excluded explicitly from cross-seed descriptive aggregates;
-failures are validity facts rather than a performance score. Surrogate-training
-duration is reported separately from optimizer wall time and may use only an
-explicit external representative expensive-generation reference.
+Workflow freeze resolves omitted comparison budgets to seed 101, population 200,
+and 50 generations, or 15 generations when any selected strategy declares a slow
+surrogate. Explicit budgets remain unchanged. Structural evidence is integration
+only; performance evidence is descriptive and a single performance seed is
+exploratory.
 
-Benchmark concurrency is a frozen two-layer plan: workspace policy limits active
-FIFO cells (safe default one), while each fast/local baseline declares its yadof
-simulation-worker cap and resource-autodetection choice. A terminal cell must
-publish aggregate evidence before its freed slot admits another cell; active cells
-may overlap, shared state writes are serialized, and external progress events stay
-on the foreground owner. ETA packs active and queued work into the configured cell
-lanes. Oversubscription remains explicit and must account for simulator, memory,
-license, recorder, and current yadof resource limits rather than treating 32 as a
-universal default.
+Result publication validates same-baseline/same-seed pairing from baseline input
+digest, planned/attempted budgets, and the complete ordered generation-0
+normalized population. Planned, attempted, completed, and finite counts stay
+distinct. Individual simulation failures and non-finite completions are reported
+but can be tolerated when every planned attempt exists and finite contract-valid
+metric evidence remains. Invalid evidence is retained and excluded from paired
+aggregates.
+
+Cell and simulation concurrency remain separate explicit controls. FIFO admission
+waits for terminal aggregate publication; storage failure is fatal. Foreground
+Rich presentation receives real child generation snapshots and command output
+stays in per-cell logs unless explicitly streamed. Inspect is bounded/read-only
+and estimates timing only from current-workspace generation trends and baseline
+lower bounds.
+
+On Windows detach opens a new console but does not change the process account.
+AI-agent guidance therefore requires host execution under the interactive human
+account; a sandbox-owned detached console is not presented as visible.
 
 ## Package dependency discipline
 

@@ -48,7 +48,7 @@ class BenchmarkTerminal:
 
     def __init__(
         self,
-        run: str | Path | None = None,
+        workspace: str | Path | None = None,
         *,
         stream: Any | None = None,
         environ: Mapping[str, str] | None = None,
@@ -133,8 +133,8 @@ class BenchmarkTerminal:
         self._plain_bucket = -1
         self._last_progress_log = 0.0
         self._log_path: Path | None = None
-        if run is not None:
-            self._bind_run(run)
+        if workspace is not None:
+            self._bind_workspace(workspace)
 
     @property
     def log_path(self) -> Path | None:
@@ -144,8 +144,8 @@ class BenchmarkTerminal:
         if threading.get_ident() != self._owner_thread:
             raise RuntimeError("benchmark terminal updates must use the owner thread")
 
-    def _bind_run(self, run: str | Path) -> None:
-        root = Path(run).resolve()
+    def _bind_workspace(self, workspace: str | Path) -> None:
+        root = Path(workspace).resolve()
         self._log_path = root / CONSOLE_LOG_NAME
 
     def _append_log(self, text: str) -> None:
@@ -284,8 +284,8 @@ class BenchmarkTerminal:
     def handle(self, event: Mapping[str, Any]) -> None:
         self._check_owner()
         kind = str(event.get("event", ""))
-        if event.get("run"):
-            self._bind_run(str(event["run"]))
+        if event.get("workspace"):
+            self._bind_workspace(str(event["workspace"]))
         self._apply_global(event)
         if kind == "cell-started":
             if event.get("previous_status") == "failed" or event.get("previous_error"):
@@ -326,7 +326,7 @@ class BenchmarkTerminal:
             self.phase = "collected"
         elif kind in {"cell-failed", "collection-failed", "visualization-failed"}:
             self.phase = "failed"
-        elif kind == "run-finished":
+        elif kind == "workspace-finished":
             self.phase = str(event.get("status", "finished"))
 
         message = _event_message(event)
@@ -353,13 +353,13 @@ class BenchmarkTerminal:
                 self._plain_bucket = bucket
                 self._write_plain_snapshot()
         elif kind in {
-            "run-started",
+            "workspace-started",
             "cell-started",
             "cell-collected",
             "cell-failed",
             "collection-failed",
             "visualization-failed",
-            "run-finished",
+            "workspace-finished",
         }:
             self._write_plain_snapshot()
 
@@ -380,7 +380,7 @@ class BenchmarkTerminal:
         elif result is not None:
             message = (
                 f"benchmark finished: status={result.get('status')} "
-                f"run={result.get('run')}"
+                f"workspace={result.get('workspace')}"
             )
         else:
             message = "benchmark terminal stopped"
@@ -391,10 +391,13 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
     kind = str(event.get("event", ""))
     utc = str(event.get("utc", ""))
     prefix = f"{utc} " if utc else ""
-    if kind == "run-created":
-        return f"{prefix}[benchmark] run created; run={event.get('run')}"
-    if kind == "run-started":
-        return f"{prefix}[benchmark] started; run={event.get('run')}"
+    if kind == "workspace-created":
+        return (
+            f"{prefix}[benchmark] workspace initialized; "
+            f"workspace={event.get('workspace')}"
+        )
+    if kind == "workspace-started":
+        return f"{prefix}[benchmark] started; workspace={event.get('workspace')}"
     if kind == "cell-started":
         return f"{prefix}[cell] {event.get('cell')} started"
     if kind == "command-started":
@@ -423,7 +426,7 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
             f"{prefix}[postprocess] {event.get('postprocessor')} failed; "
             f"{event.get('error')}"
         )
-    if kind == "run-finished":
+    if kind == "workspace-finished":
         return f"{prefix}[benchmark] finished; status={event.get('status')}"
     return None
 

@@ -19,12 +19,8 @@ from .contracts import (
 )
 from .storage import (
     directory_digest,
-    driver_digest,
     file_digest,
-    object_digest,
-    workflow_digest,
 )
-from .naming import slug
 from .workflow import Benchmark
 from .workspace import load_workspace
 
@@ -103,7 +99,7 @@ def load_workflow(workspace: str | Path) -> WorkflowRequest:
 
 
 def _baseline_digest(manifest: BaselineManifest) -> str:
-    excludes = tuple(f"workspace/{item}" for item in manifest.snapshot_excludes)
+    excludes = tuple(f"workspace/{item}" for item in manifest.materialize_excludes)
     return directory_digest(manifest.root, excludes=excludes)
 
 
@@ -124,26 +120,18 @@ def plan_workflow(
     baseline_by_id = {item.id: item for item in selected}
     strategy_by_id = {item.id: item for item in request.strategies}
     cells: list[CellSpec] = []
-    cell_ids: set[str] = set()
     for comparison in request.comparisons:
-        comparison_slug = slug(comparison.id)
+        if comparison.population is None or comparison.generations is None:
+            raise BenchmarkError(f"comparison {comparison.id!r} budget is unresolved")
         for baseline_id in comparison.baseline_ids:
             baseline = baseline_by_id[baseline_id]
-            baseline_slug = slug(baseline.id)
             for strategy_id in comparison.strategy_ids:
                 strategy = strategy_by_id[strategy_id]
                 source = strategy.source_for(baseline.id)
                 _validate_strategy_source(source, strategy_id=strategy.id)
-                strategy_slug = slug(strategy.id)
                 strategy_digest = file_digest(source)
                 for seed in comparison.seeds:
-                    cell_id = (
-                        f"{comparison_slug}__{baseline_slug}__"
-                        f"{strategy_slug}__seed-{seed}"
-                    )
-                    if cell_id in cell_ids:
-                        raise BenchmarkError(f"cell path collision: {cell_id}")
-                    cell_ids.add(cell_id)
+                    cell_id = f"c{len(cells) + 1:04d}"
                     cells.append(
                         CellSpec(
                             id=cell_id,
@@ -157,15 +145,11 @@ def plan_workflow(
                             replication_scope=replication_scope(
                                 request.evidence, len(comparison.seeds)
                             ),
+                            contains_slow_surrogate=(
+                                comparison.contains_slow_surrogate
+                            ),
                             representative_generation_seconds=(
                                 request.representative_generation_seconds
-                            ),
-                            baseline_snapshot=(
-                                f"inputs/baselines/{baseline_slug}/workspace"
-                            ),
-                            strategy_snapshot=(
-                                "inputs/strategies/"
-                                f"{strategy_slug}/{baseline_slug}/optimization.py"
                             ),
                             baseline_digest=baseline_digests[baseline.id],
                             strategy_digest=strategy_digest,
@@ -174,26 +158,10 @@ def plan_workflow(
                             contract=freeze_json(baseline.contract),
                         )
                     )
-    input_digest = workflow_digest(
-        request.source, request.workspace / "resources"
-    )
-    provisional = RunSpec(
-        workflow=request,
-        baselines=selected,
-        cells=tuple(cells),
-        workflow_digest=input_digest,
-        driver_digest=driver_digest(),
-        digest="",
-    )
-    payload = provisional.to_dict()
-    payload.pop("digest")
     return RunSpec(
         workflow=request,
         baselines=selected,
         cells=tuple(cells),
-        workflow_digest=input_digest,
-        driver_digest=provisional.driver_digest,
-        digest=object_digest(payload),
     )
 
 

@@ -1,51 +1,39 @@
 # yadof-benchmark developer guide
 
-This directory describes the current independent package only. Start with
-[architecture.md](architecture.md), then read [workspace_format.md](workspace_format.md)
-for authoring/loading and [run_format.md](run_format.md) for persistence/recovery.
-User-facing behavior is normative in `../user_doc/` and must change with the code.
+This directory describes the independent `yadof-benchmark` package. Read
+[architecture.md](architecture.md), [workspace_format.md](workspace_format.md),
+and [run_format.md](run_format.md). User-facing behavior in `../user_doc/` is
+normative and must change with the code.
 
-The package boundary is intentional: `yadof-benchmark` depends on the public
-installed `yadof` API, while `yadof` does not import benchmark orchestration or
-ship simulator baselines. The source repository may develop both projects
-together, but each has its own distribution, console script, wheel, tests, version,
-and documentation resources.
+The package depends only on public installed yadof behavior. yadof does not import
+benchmark orchestration or ship simulator baselines.
 
-Any change must preserve these invariants:
+Current invariants are:
 
-- the only editable workflow program is workspace `benchmark.py`;
-- every workflow explicitly freezes `structural` or `performance` evidence;
-  structural smoke/canary and recovery evidence cannot support algorithm
-  performance conclusions, while performance output remains descriptive;
-- every performance comparison rejects population below 100 or generations below
-  20; single-seed performance remains allowed but is frozen as exploratory, while
-  any stronger seed count stays explicitly user-configurable;
-- same-baseline/same-seed arms must share their frozen task snapshot, planned and
-  attempted real-evaluation budgets, and complete ordered generation-0 normalized
-  population fingerprint before paired deltas or cross-seed aggregates;
-- cell validity distinguishes planned, attempted, completed, and finite counts;
-  final HV and attempted-evaluation-aligned HV trajectory/AUC are descriptive,
-  while incomplete evidence is retained but excluded from aggregates;
-- planning executes Python but performs no simulator work or run writes;
-- strategies are opaque complete `optimization.py` files;
-- runs freeze their workflow, resources, baselines, strategies, driver, and plan;
-- resume uses only the run-owned driver and snapshots;
-- structural workflows fail fast by default; performance workflows may continue
-  independent cells, but any invalid/incomplete cell keeps final status nonzero;
-- workflow cell concurrency and baseline simulation concurrency are separate,
-  explicit, frozen controls; the safe workflow default is one cell and baseline
-  worker limits remain subject to yadof resource autodetection unless deliberately
-  disabled;
-- cells enter a FIFO scheduler, and each terminal result publication is a
-  campaign-fatal barrier before a newly freed slot admits later cell work;
-- terminal execution attempts publish separate metadata/log evidence, seal failed
-  or interrupted evidence incomplete, and retry in a new attempt/workspace;
-- human-visible workspaces, runs, and workspace output indexes start with
-  `YYYYMMDD_HHMMSS`, while compact cell workspaces remain digest-named;
-- every collected cell has a non-empty cost visualization and one uniformly
-  invoked baseline-domain postprocess result;
-- postprocessing is durable attempt-based work after cell collection;
-- planning/check output is bounded unless complete JSON is explicitly requested;
-- inspect is read-only and bounded, and ETA never substitutes a different strategy
-  as timing evidence;
-- algorithm-specific registries and acceptance decisions stay outside the runner.
+- `benchmark.py` is the only editable workflow program;
+- one workspace owns one execution and direct outputs;
+- another execution means another workspace;
+- execution uses installed packages and records their versions once in
+  `runtime.json`;
+- there is no run ID, `runs/`, resume command, attempt hierarchy, cross-run
+  timing history, or copied driver/workflow/strategy snapshot;
+- strategy modules are complete, opaque `optimization.py` files;
+- default seeds are `[101]`;
+- default standard budget is population 200 x 50 generations;
+- a comparison containing `slow_surrogate=True` defaults to 15 generations;
+- explicit positive budgets and explicit seed lists override defaults;
+- cell IDs are short ordinals and semantic identity stays in `spec.json`;
+- individual simulation failures/non-finite completions do not invalidate a cell
+  when attempts are complete and finite contract-valid metric evidence remains;
+- missing attempts, no finite evidence, contract failure, initial-population
+  failure, or missing metric does invalidate a cell;
+- same-baseline/same-seed arms require matching baseline input digest, planned and
+  attempted budget, and generation-0 normalized population before pairing;
+- planning performs no simulator work and writes no execution evidence;
+- cell concurrency and baseline simulation concurrency are separate controls;
+- terminal result publication is a fatal persistence boundary before FIFO refill;
+- every collected cell owns a cost plot and baseline domain output;
+- inspect is bounded, read-only, and uses only current-workspace timing evidence;
+- algorithm rankings and acceptance decisions remain outside the runner.
+
+Version `0.2.0` intentionally makes no old-workspace compatibility promise.

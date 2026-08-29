@@ -1,88 +1,61 @@
 # yadof-benchmark
 
-`yadof-benchmark` is an independent Python package for reproducible,
-code-first comparisons of complete yadof optimization strategies. A benchmark
-workspace owns one `benchmark.py`; that Python file declares the whole workflow,
-including an explicit `structural` or `performance` evidence class, strategies,
-comparison matrices, execution policy, and postprocessing. Structural runs are
-smoke/canary integration evidence only and must never be presented as algorithm
-performance evidence. Performance runs publish descriptive measurements without
-ranking strategies or making acceptance decisions.
+`yadof-benchmark` is an independent, code-first runner for descriptive
+comparisons of complete yadof optimization strategies.
 
-Every performance cell must plan at least 100 individuals per generation and at
-least 20 generations, for a hard minimum of 2000 real evaluations. This minimum
-prevents structural-scale runs from being mislabeled; it is not a task-difficulty
-target. Calibrate each baseline so a complete non-surrogate NSGA-III reference is
-closer to roughly 10000 evaluations (historically 200 × 50) before expecting a
-meaningful surrogate comparison. A single-seed performance comparison is carried
-through plans and reports as exploratory; stronger campaigns use an explicit,
-configurable multi-seed list rather than a package-fixed seed count.
+The execution model is deliberately small:
 
-Same-baseline/same-seed arms are paired only when their frozen task snapshot,
-planned/attempted real-evaluation budgets, and complete generation-0 normalized
-population match. Reports retain raw invalid/incomplete evidence, exclude affected
-seeds from aggregates, and publish planned/attempted/completed/finite counts plus
-final HV and attempted-evaluation-aligned HV trajectory/AUC. They never turn
-failures into a performance score or use optimizer wall time as the main metric.
-Structural workflows fail fast by default. Performance workflows default to
-continuing independent cells so expensive evidence is retained, but any invalid or
-incomplete cell still makes the run non-successful and the CLI exit nonzero.
-Cell concurrency is an explicit positive FIFO limit with safe default one;
-fast/local baselines separately declare their simulation-worker cap and normal
-resource-autodetection choice. A terminal cell publishes before its freed slot
-admits the next waiting cell. A storage failure stops the campaign and is retained
-in run diagnostics.
+- one benchmark workspace contains one `benchmark.py` and one execution;
+- a second execution uses a newly initialized workspace;
+- execution uses the currently installed `yadof-benchmark` and `yadof` packages;
+- package versions, Python, host, and account are recorded once in `runtime.json`
+  immediately before execution;
+- there is no `runs/` layer, resume interface, attempt numbering, or copied
+  benchmark-driver/workflow/strategy code snapshot.
+
+`benchmark.py` explicitly classifies evidence as `structural` or
+`performance`. Structural evidence validates integration only. Performance
+evidence remains descriptive: the runner reports measurements and validity but
+does not rank strategies or make acceptance decisions.
+
+Comparisons default to seed `101`, population `200`, and `50` generations.
+Mark a strategy `slow_surrogate=True` when it repeatedly trains a slow model such
+as a neural network; a comparison containing such a strategy defaults to `15`
+generations. Explicit seeds and budgets always take precedence. A single-seed
+performance result is labeled exploratory.
+
+A cell remains valid when all planned evaluations were attempted, at least one
+finite result exists, the task contracts and generation-0 pairing contract match,
+and the descriptive metric is available. Individual failed or non-finite
+simulations are retained in counts and diagnostics but do not invalidate the
+whole cell. Missing attempts, all-infinite output, or broken task/metric contracts
+still invalidate it.
 
 ```powershell
 $workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
   ConvertFrom-Json).workspace
-yadof-benchmark baselines
 yadof-benchmark check --workspace $workspace
+yadof-benchmark plan --workspace $workspace
 yadof-benchmark run --workspace $workspace
+yadof-benchmark inspect --workspace $workspace
 ```
 
-Before a long performance campaign, run bounded `check`/`plan`, smoke every
-selected real adapter through its yadof workspace, and complete a bounded
-`evidence="structural"` canary that uses the same baseline IDs and complete
-strategy/configuration paths. These measured steps remain subject to simulator
-execution authority; package pytest and recovery fault-injection tests do not
-replace them and do not constitute performance evidence.
+On Windows, an AI agent must launch a long benchmark through host execution under
+the interactive human user's account. A process started as the Codex sandbox user
+belongs to a non-interactive session, so `--detach` cannot make its console
+visible. Use host execution plus `--detach` for a visible independent console.
+`--hidden` is only an explicit user-selected exception.
 
-`check` and `plan` print bounded summaries, including both concurrency layers, by
-default. Add `--json` only when the complete expanded cell plan is needed.
-Measured child stdout/stderr always has
-separate per-command logs and is not copied to the terminal unless
-`--stream-child-output` is explicitly selected.
+Each cell has a short path such as `cells/c0001`. Semantic IDs remain in
+`spec.json` and reports. Results, reports, and visualizations are direct
+workspace outputs, so long comparison/baseline/strategy names no longer expand
+artifact filenames.
 
-Each execution attempt has its own `attempt.json`. Interrupted or failed attempts
-are sealed incomplete, retain their compact execution workspace and logs, and are
-never reused; `resume` creates a new attempt/workspace. A run also verifies its
-frozen workflow, resources, baseline, strategy, and driver snapshots before
-execution, so editing the reusable sources affects only a later run.
-
-Foreground runs show a Rich active-cell row followed by a global benchmark row.
-For an agent-owned long Windows run, add `--detach`: it opens a normal visible
-console and immediately returns PID/run/log/inspect details. Hidden execution is
-available only as the explicit `--detach --hidden` exception. The receipt repeats
-the frozen evidence class and its scope notice.
-
-`inspect --run RUN_PATH` is read-only and bounded. It reports status, validity,
-comparison readiness, anomalies, active-cell activity, elapsed time, and an ETA
-with exact/compatible matched-history evidence. The suggested review order is the
-inspect summary, `reports/summary.md`, selected fields from the bounded descriptive
-JSON report, then one cell log or targeted `results.json` fields.
-
-`init` prints the actual `YYYYMMDD_HHMMSS-...` workspace path, and automatic or
-explicit run names use the same local timestamp prefix. Each run keeps its complete
-reports and grouped cost/domain visualizations under one run root; timestamped
-indexes in the workspace's top-level `reports/` and `visualizations/` lead to it.
-
-`benchmark.py` is the only workflow-definition surface. Distribution metadata in
-`pyproject.toml` is not a benchmark workflow input. Read the installed
-documentation with:
+Read the installed documentation with:
 
 ```powershell
 yadof-benchmark docs show README.md
+yadof-benchmark docs show execution.md
 yadof-benchmark docs show api.md
 ```
 
