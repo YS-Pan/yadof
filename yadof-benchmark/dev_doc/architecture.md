@@ -1,8 +1,8 @@
 # Architecture
 
 `src/yadof_benchmark/cli.py` owns argument parsing and JSON presentation.
-`src/yadof_benchmark/api.py` is the explicit public facade. The files are the
-direct successors of the former root entry files; no aliases remain.
+`src/yadof_benchmark/api.py` is the explicit public facade. Workspace
+`benchmark.py` is the only editable workflow program.
 
 The bounded `benchmark_runtime/` package separates responsibilities:
 

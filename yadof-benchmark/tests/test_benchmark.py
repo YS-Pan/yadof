@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import os
 import re
@@ -196,7 +195,17 @@ def test_init_creates_code_first_workspace_without_overwrite(tmp_path: Path) -> 
     assert json.loads((root / ".benchmark" / "workspace.json").read_text())[
         "format"
     ] == WORKSPACE_FORMAT
-    assert (root / "benchmark.py").is_file()
+    workflow = root / "benchmark.py"
+    assert workflow.is_file()
+    source = workflow.read_text(encoding="utf-8")
+    assert 'benchmark.configure(name="saw-algorithm-comparison"' in source
+    assert 'benchmark.strategy(\n    #     "nsga3"' in source
+    assert 'baselines=["ngspice/saw-ladder"]' in source
+    assert 'strategies=["nsga3"]' in source
+    assert "seeds=[1]" in source
+    assert "population=12" in source
+    assert "generations=20" in source
+    assert 'benchmark.postprocess("summary", summarize_results)' in source
     for name in ("resources", "runs", "visualizations", "reports", "temp"):
         assert (root / name).is_dir()
         assert not any((root / name).iterdir())
@@ -279,7 +288,7 @@ def test_attempt_workspace_uses_compact_run_local_path(tmp_path: Path) -> None:
     assert len(str(materialized)) < len(str(attempt_root / "workspace"))
 
 
-def test_manifest_rejects_escape_and_duplicate_id(tmp_path: Path) -> None:
+def test_manifest_rejects_escape_and_nonsemantic_source_path(tmp_path: Path) -> None:
     baseline = _baseline(tmp_path)
     manifest_path = baseline / "baseline.json"
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -290,9 +299,10 @@ def test_manifest_rejects_escape_and_duplicate_id(tmp_path: Path) -> None:
 
     data["workspace"] = "workspace"
     manifest_path.write_text(json.dumps(data), encoding="utf-8")
-    _baseline(tmp_path / "second")
-    with pytest.raises(benchmark.BenchmarkError, match="duplicate baseline id"):
-        discover_baselines(tmp_path)
+    misplaced = tmp_path / "baselines" / "provider" / "opaque-source"
+    baseline.rename(misplaced)
+    with pytest.raises(benchmark.BenchmarkError, match="semantic id"):
+        discover_baselines(tmp_path / "baselines")
 
 
 def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
@@ -492,21 +502,11 @@ def test_public_surface_and_cli_have_only_code_first_contract() -> None:
     assert "--study" not in result.stdout
 
 
-def test_product_tree_and_no_legacy_configuration_surface() -> None:
+def test_distribution_entrypoints_match_code_first_contract() -> None:
     project = Path(__file__).resolve().parents[1]
     package = project / "src" / "yadof_benchmark"
     assert (package / "cli.py").is_file()
     assert (package / "api.py").is_file()
-    assert not (project / "benchmark.py").exists()
-    assert not (project / "benchmark_core.py").exists()
-    sources = list(package.rglob("*.py"))
-    forbidden = re.compile(
-        r"tomllib|load_study|plan_study|run_study|StudyRequest|--study"
-    )
-    for path in sources:
-        text = path.read_text(encoding="utf-8")
-        assert not forbidden.search(text), path
-        ast.parse(text)
     assert 'name = "yadof-benchmark"' in (project / "pyproject.toml").read_text()
     assert 'yadof-benchmark = "yadof_benchmark.cli:main"' in (
         project / "pyproject.toml"

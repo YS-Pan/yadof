@@ -94,6 +94,11 @@ hot-change contract; structural dimension changes are future work.
 - Benchmark distribution: independent `yadof-benchmark/` project with its own
   `yadof_benchmark` package, console command, code-first workspace API,
   self-describing packaged baselines, user/developer documents, and focused tests.
+  Initialized workspaces expose the whole authoring surface in the single
+  `benchmark.py` scaffold: policy, semantically named algorithms, baseline IDs,
+  seeds, budgets, and postprocessors. Within a selected editable baseline root,
+  each source directory exactly matches its provider/task semantic ID; run-owned
+  digests and snapshots provide immutability without fingerprinting source names.
   Workspace `benchmark.py` files select complete optimization strategies and
   declare any number of comparison matrices plus postprocessors. Adding an
   algorithm requires no runner registry or source change. A new run snapshots the

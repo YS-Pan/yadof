@@ -9,21 +9,36 @@ from .contracts import BenchmarkError, WORKSPACE_FORMAT
 
 _DIRECTORIES = ("resources", "runs", "visualizations", "reports", "temp")
 _TEMPLATE = '''"""Describe this benchmark's complete workflow."""
-from yadof_benchmark import Benchmark
+from yadof_benchmark import Benchmark, PostprocessContext
+
+
+def summarize_results(context: PostprocessContext) -> dict[str, str]:
+    """Create optional run-local reports or visualizations after collection."""
+    # Read context.results, then write durable artifacts below context.reports or
+    # context.visualizations. Return a small JSON-compatible summary.
+    return {}
 
 
 def build_benchmark(benchmark: Benchmark) -> None:
-    """Register strategies, comparisons, and optional postprocessors."""
-    # Add complete optimization.py implementations below, then compare them.
-    # benchmark.strategy("reference", "resources/reference/optimization.py")
+    """Register this workflow's strategies, comparisons, and postprocessors."""
+    # Keep the complete workflow discoverable here. Strategy IDs and names describe
+    # their actual algorithm, not a temporary role such as "reference" or
+    # "real-search". Each source is a complete submit/optimization.py module.
+    # benchmark.configure(name="saw-algorithm-comparison", fail_fast=False)
+    # benchmark.strategy(
+    #     "nsga3",
+    #     "resources/strategies/nsga3/optimization.py",
+    #     name="NSGA-III",
+    # )
     # benchmark.compare(
     #     "main",
-    #     baselines=["provider/task"],
-    #     strategies=["reference"],
+    #     baselines=["ngspice/saw-ladder"],
+    #     strategies=["nsga3"],
     #     seeds=[1],
     #     population=12,
     #     generations=20,
     # )
+    # benchmark.postprocess("summary", summarize_results)
     pass
 '''
 

@@ -15,6 +15,9 @@ They are not part of yadof's generic test namespace or yadof wheel/sdist content
 Their run-layout coverage keeps semantic attempt evidence readable while proving
 that materialized execution workspaces use compact run-local digest paths, and
 their command coverage requires all-infinite yadof generations to fail a cell.
+Initialization coverage also treats the generated `benchmark.py` authoring
+scaffold as public output, and baseline discovery proves that manifest IDs and
+editable provider/task source paths agree before a run can snapshot them.
 
 ## Required coverage
 

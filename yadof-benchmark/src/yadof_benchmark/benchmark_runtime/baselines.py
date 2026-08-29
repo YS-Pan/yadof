@@ -144,10 +144,12 @@ def discover_baselines(root: str | Path) -> dict[str, BaselineManifest]:
     discovered: dict[str, BaselineManifest] = {}
     for manifest_path in sorted(baseline_root.rglob("baseline.json")):
         manifest = load_baseline(manifest_path)
-        if manifest.id in discovered:
-            other = discovered[manifest.id].root / "baseline.json"
+        source_id = manifest_path.parent.relative_to(baseline_root).as_posix()
+        if source_id != manifest.id:
             raise BenchmarkError(
-                f"duplicate baseline id {manifest.id!r}: {other} and {manifest_path}"
+                "baseline source directory must match its semantic id: "
+                f"expected {baseline_root / Path(*manifest.id.split('/'))}, "
+                f"found {manifest_path.parent}"
             )
         discovered[manifest.id] = manifest
     if not discovered:

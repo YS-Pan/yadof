@@ -50,7 +50,7 @@ Human-readable command and result evidence remains below
 `cells/<cell-id>/attempts/<number>/`. The actual yadof execution workspace is stored
 at a compact run-local `workspaces/<cell-digest>/<number>/` path and is referenced
 by the attempt state. The shorter physical path protects file-oriented Windows
-simulators from avoidable legacy path-length failures without hiding the semantic
+simulators from avoidable path-length failures without hiding the semantic
 cell ID. A measured command rejects an all-infinite generation, so a cell with no
 finite evaluation is failed and remains eligible for a later `resume` attempt.
 

@@ -97,8 +97,11 @@ yadof-benchmark plan --workspace D:\benchmarks\comparison
 
 The workspace's `benchmark.py` declares complete strategy sources, any number of
 comparison matrices, execution policy, and postprocessing. Relative paths resolve
-from that workspace. Each run snapshots its complete Python workflow, resources,
-driver, baseline workspaces, and strategies; later edits affect only later runs.
+from that workspace. Strategy IDs describe the actual algorithm composition.
+Editable baseline collections use semantic `provider/task` source paths matching
+their manifest IDs; select one with `--baselines-root`. Each run snapshots its
+complete Python workflow, resources, driver, baseline workspaces, and strategies;
+later edits affect only later runs.
 `run` and `resume` may launch selected task software and remain subject to the
 execution authority in `config_and_run.md`.
 Use `inspect --run PATH` as the read-only first view of a run.

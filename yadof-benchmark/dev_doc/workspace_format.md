@@ -21,6 +21,17 @@ expanding a fixed schema. Deterministic expansion order is comparison declaratio
 baseline declaration, strategy declaration, then seed declaration. Cell IDs include
 all four identities and collision-check before any write.
 
+An initialized `benchmark.py` visibly scaffolds run policy, one semantically named
+algorithm strategy, baseline selection, seeds, budget, and a top-level
+postprocessor. The scaffold remains inert until the author supplies complete
+strategy resources and deliberately enables the declarations. Strategy IDs and
+display names describe algorithms, not comparison roles.
+
+Within a selected baseline collection, each manifest directory relative to the
+collection root must exactly equal its semantic ID, such as
+`ngspice/saw-ladder`. Editable source directories never append provenance digests;
+run creation records digests and freezes the complete selected source instead.
+
 The workflow input digest covers `benchmark.py` and every non-cache file below
 `resources/`. Planning also digests each selected strategy, baseline clean input,
 and driver. The resulting `RunSpec` is the only execution plan.

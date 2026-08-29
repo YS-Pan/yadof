@@ -21,6 +21,11 @@ outside package source. Root `dev_doc/` and `user_doc/` are authoritative source
 mapped into installed read-only resources. Administrator resources, examples, and
 benchmark automation remain source-checkout concerns.
 
+The independent benchmark distribution exposes one editable workflow program per
+benchmark workspace. Its baseline collections use exact semantic
+`provider/task` source paths and freeze content only when a run is created; source
+directory names do not carry provenance digests.
+
 ## Package dependency discipline
 
 - Core modules communicate through public exports or narrow APIs.

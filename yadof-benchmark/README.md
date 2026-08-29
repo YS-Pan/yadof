@@ -12,8 +12,9 @@ yadof-benchmark check --workspace D:\benchmarks\my-comparison
 yadof-benchmark run --workspace D:\benchmarks\my-comparison
 ```
 
-The package accepts only the Python workspace contract. It has no alternate study
-configuration parser or migration path. Read the installed documentation with:
+`benchmark.py` is the only workflow-definition surface. Distribution metadata in
+`pyproject.toml` is not a benchmark workflow input. Read the installed
+documentation with:
 
 ```powershell
 yadof-benchmark docs show README.md

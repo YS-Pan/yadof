@@ -23,5 +23,17 @@ lives in that run's own `visualizations/`, `reports/`, and `temp/` directories.
 The marker is tool-owned identity metadata, not a workflow configuration file.
 Do not hand-edit it. The complete editable workflow is `benchmark.py`.
 
+The generated `benchmark.py` is an inert but complete authoring scaffold. Its
+comments show run policy, a semantically named algorithm strategy, baseline IDs,
+seed and budget fields, and a top-level postprocessor. Replace those examples with
+the intended workflow and complete `resources/.../optimization.py` modules before
+running `check`.
+
+Packaged baselines are version-matched read-only resources. To edit a task, copy
+its complete semantic source directory into a separate baseline collection, keep
+the `provider/task` directory equal to the manifest ID, and select that collection
+with `--baselines-root` or `baselines_root=`. A new run snapshots the edited source;
+later edits affect only later runs.
+
 After editing, use `check` or `plan`. Both are read-only with respect to benchmark
 runs, but both execute top-level Python imports and `build_benchmark()`.

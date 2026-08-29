@@ -15,27 +15,28 @@ def create_plots(context: PostprocessContext) -> dict[str, str]:
 def build_benchmark(benchmark: Benchmark) -> None:
     benchmark.configure(name="antenna-comparison", fail_fast=False)
     benchmark.strategy(
-        "reference",
-        "resources/reference/optimization.py",
-        name="Reference strategy",
+        "nsga3",
+        "resources/strategies/nsga3/optimization.py",
+        name="NSGA-III",
     )
     benchmark.strategy(
-        "candidate",
+        "gpsaf-conditional-inr",
+        name="GPSAF + conditional INR",
         sources={
             "test-com/synthetic-antenna":
-                "resources/candidate/antenna/optimization.py",
+                "resources/strategies/gpsaf/antenna/optimization.py",
             "ngspice/saw-ladder":
-                "resources/candidate/circuit/optimization.py",
+                "resources/strategies/gpsaf/circuit/optimization.py",
         },
     )
     benchmark.compare(
         "main",
         baselines=["test-com/synthetic-antenna", "ngspice/saw-ladder"],
-        strategies=["reference", "candidate"],
+        strategies=["nsga3", "gpsaf-conditional-inr"],
         seeds=[101, 102, 103],
         population=12,
         generations=20,
-        reference="reference",
+        reference="nsga3",
     )
     benchmark.postprocess("plots", create_plots)
 ```
@@ -53,6 +54,10 @@ complete `optimization.py`. `source` applies to every baseline. `sources` maps
 individual baseline IDs to different complete modules and overrides `source`.
 Every selected module must define `build_optimization()`; the benchmark package
 does not maintain an algorithm registry or interpret algorithm-specific settings.
+Choose an ID and display name that state the actual algorithm composition, such as
+`nsga3` or `gpsaf-conditional-inr`. Role-only names such as `reference`,
+`candidate`, or `real-search` hide what was executed and are not valid authoring
+practice. `reference=` below expresses the comparison role separately.
 
 ## `Benchmark.compare()`
 
