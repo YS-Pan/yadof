@@ -16,6 +16,8 @@ def build_benchmark(benchmark: Benchmark) -> None:
     benchmark.configure(
         name="antenna-comparison",
         evidence="structural",
+        # FIFO benchmark cells; review simulator/license/memory capacity first.
+        cell_concurrency=1,
         # Optional external expensive-generation reference for training-time context.
         representative_generation_seconds=7200.0,
     )
@@ -49,7 +51,7 @@ def build_benchmark(benchmark: Benchmark) -> None:
 
 ## `Benchmark.configure()`
 
-`configure(name=None, evidence=None, fail_fast=None,
+`configure(name=None, evidence=None, fail_fast=None, cell_concurrency=None,
 representative_generation_seconds=None, runs_dir=None, python=None)`
 sets run-level policy. `evidence` is mandatory before the workflow can freeze and
 accepts only `"structural"` or `"performance"`. Structural means integration-only
@@ -62,6 +64,13 @@ is omitted, structural workflows stop after the first failed or invalid cell and
 performance workflows continue independent cells to preserve expensive evidence.
 An explicit boolean overrides scheduling only: every invalid or incomplete cell still makes
 the final run status non-successful and the CLI exit nonzero.
+
+`cell_concurrency` is a positive integer and defaults to `1`. It controls how many
+independent benchmark cells may be active together; cells enter in frozen plan
+order and a freed slot is refilled only after that terminal cell's aggregate
+publication succeeds. It is separate from the simulation-worker cap declared by
+each baseline. Increasing it never changes a cell's population, generations,
+seed, pairing, or evaluation accounting.
 
 `representative_generation_seconds`, when supplied, must be positive and finite.
 It is the externally chosen duration of one representative expensive generation

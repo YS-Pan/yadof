@@ -6,7 +6,11 @@
   "workspace": "workspace",
   "execution": {
     "mode": "fast",
-    "timeout_seconds": 7200
+    "timeout_seconds": 7200,
+    "simulation_concurrency": {
+      "max_workers": 32,
+      "resource_autodetect": true
+    }
   },
   "contract": {
     "objective_count": 4,

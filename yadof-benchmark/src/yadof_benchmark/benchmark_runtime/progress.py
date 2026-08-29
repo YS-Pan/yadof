@@ -53,6 +53,102 @@ def _latest_progress(command_root: Path) -> dict[str, Any] | None:
     return events[-1] if events else None
 
 
+def _cell_progress(
+    run_root: Path,
+    cell_id: str,
+    cell: Mapping[str, Any],
+    *,
+    now: dt.datetime,
+) -> dict[str, Any]:
+    attempts = cell.get("attempts", [])
+    attempt = attempts[-1] if attempts else {}
+    attempt_started = _parse_utc(attempt.get("created_utc"))
+    active_value = attempt.get("active_command")
+    if not active_value:
+        return {
+            "cell": cell_id,
+            "phase": cell.get("status"),
+            "cell_elapsed_seconds": (
+                None
+                if attempt_started is None
+                else max(0.0, (now - attempt_started).total_seconds())
+            ),
+        }
+    command_root = run_root / str(active_value)
+    started_path = command_root / "started.json"
+    started = read_json(started_path) if started_path.is_file() else {}
+    started_time = _parse_utc(started.get("started_utc"))
+    latest_progress = _latest_progress(command_root)
+    activity_times = [started_time] if started_time else []
+    progress_time = _parse_utc(
+        None if latest_progress is None else latest_progress.get("utc")
+    )
+    if progress_time is not None:
+        activity_times.append(progress_time)
+    for name in ("stdout.log", "stderr.log"):
+        path = command_root / name
+        if path.is_file():
+            activity_times.append(
+                dt.datetime.fromtimestamp(path.stat().st_mtime, tz=dt.timezone.utc)
+            )
+    latest = max(activity_times) if activity_times else None
+    output = {
+        "cell": cell_id,
+        "phase": (
+            latest_progress.get("phase")
+            if latest_progress is not None
+            else attempt.get("status", cell.get("status"))
+        ),
+        "command": started.get("label"),
+        "command_elapsed_seconds": (
+            None
+            if started_time is None
+            else max(0.0, (now - started_time).total_seconds())
+        ),
+        "cell_elapsed_seconds": (
+            None
+            if attempt_started is None
+            else max(0.0, (now - attempt_started).total_seconds())
+        ),
+        "last_activity_utc": _iso(latest),
+        "inactivity_seconds": (
+            None if latest is None else max(0.0, (now - latest).total_seconds())
+        ),
+        "logs": {
+            name.removesuffix(".log"): str(command_root / name)
+            for name in ("stdout.log", "stderr.log")
+            if (command_root / name).is_file()
+        },
+    }
+    if latest_progress is not None:
+        output["generation"] = latest_progress.get("generation_number")
+        output["generations"] = latest_progress.get("generations")
+        output["evaluations"] = latest_progress.get("evaluations")
+        output["planned_evaluations"] = latest_progress.get(
+            "planned_evaluations"
+        )
+        output["successful"] = latest_progress.get("successful")
+        output["errors"] = latest_progress.get("errors")
+    return output
+
+
+def active_progresses(
+    run_root: Path,
+    state: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> list[dict[str, Any]]:
+    current_time = now or dt.datetime.now(dt.timezone.utc)
+    output: list[dict[str, Any]] = []
+    for cell_id, cell in state.get("cells", {}).items():
+        if cell.get("status") not in {"checked", "running"}:
+            continue
+        output.append(
+            _cell_progress(run_root, str(cell_id), cell, now=current_time)
+        )
+    return output
+
+
 def active_progress(
     run_root: Path,
     state: Mapping[str, Any],
@@ -60,81 +156,9 @@ def active_progress(
     now: dt.datetime | None = None,
 ) -> dict[str, Any] | None:
     current_time = now or dt.datetime.now(dt.timezone.utc)
-    for cell_id, cell in state.get("cells", {}).items():
-        if cell.get("status") not in {"checked", "running"}:
-            continue
-        attempts = cell.get("attempts", [])
-        attempt = attempts[-1] if attempts else {}
-        attempt_started = _parse_utc(attempt.get("created_utc"))
-        active_value = attempt.get("active_command")
-        if not active_value:
-            return {
-                "cell": cell_id,
-                "phase": cell.get("status"),
-                "cell_elapsed_seconds": (
-                    None
-                    if attempt_started is None
-                    else max(0.0, (current_time - attempt_started).total_seconds())
-                ),
-            }
-        command_root = run_root / str(active_value)
-        started_path = command_root / "started.json"
-        started = read_json(started_path) if started_path.is_file() else {}
-        started_time = _parse_utc(started.get("started_utc"))
-        latest_progress = _latest_progress(command_root)
-        activity_times = [started_time] if started_time else []
-        progress_time = _parse_utc(
-            None if latest_progress is None else latest_progress.get("utc")
-        )
-        if progress_time is not None:
-            activity_times.append(progress_time)
-        for name in ("stdout.log", "stderr.log"):
-            path = command_root / name
-            if path.is_file():
-                activity_times.append(
-                    dt.datetime.fromtimestamp(path.stat().st_mtime, tz=dt.timezone.utc)
-                )
-        latest = max(activity_times) if activity_times else None
-        output = {
-            "cell": cell_id,
-            "phase": (
-                latest_progress.get("phase")
-                if latest_progress is not None
-                else attempt.get("status", cell.get("status"))
-            ),
-            "command": started.get("label"),
-            "command_elapsed_seconds": (
-                None
-                if started_time is None
-                else max(0.0, (current_time - started_time).total_seconds())
-            ),
-            "cell_elapsed_seconds": (
-                None
-                if attempt_started is None
-                else max(0.0, (current_time - attempt_started).total_seconds())
-            ),
-            "last_activity_utc": _iso(latest),
-            "inactivity_seconds": (
-                None
-                if latest is None
-                else max(0.0, (current_time - latest).total_seconds())
-            ),
-            "logs": {
-                name.removesuffix(".log"): str(command_root / name)
-                for name in ("stdout.log", "stderr.log")
-                if (command_root / name).is_file()
-            },
-        }
-        if latest_progress is not None:
-            output["generation"] = latest_progress.get("generation_number")
-            output["generations"] = latest_progress.get("generations")
-            output["evaluations"] = latest_progress.get("evaluations")
-            output["planned_evaluations"] = latest_progress.get(
-                "planned_evaluations"
-            )
-            output["successful"] = latest_progress.get("successful")
-            output["errors"] = latest_progress.get("errors")
-        return output
+    active = active_progresses(run_root, state, now=current_time)
+    if active:
+        return active[0]
     for item_id, item in state.get("postprocessors", {}).items():
         if item.get("status") == "running":
             attempts = item.get("attempts", [])
@@ -326,15 +350,25 @@ def estimate_run_timing(
         elapsed = 0.0 if str(state.get("status")) == "planned" else None
     else:
         elapsed = max(0.0, (elapsed_end - started).total_seconds())
-    active = active_progress(run_root, state, now=current_time)
-    recent = _parse_utc(
-        active.get("last_activity_utc") if active else state.get("updated_utc")
-    )
+    actives = active_progresses(run_root, state, now=current_time)
+    active = actives[0] if actives else None
+    recent_candidates = [
+        parsed
+        for item in actives
+        if (parsed := _parse_utc(item.get("last_activity_utc"))) is not None
+    ]
+    fallback_recent = _parse_utc(state.get("updated_utc"))
+    if fallback_recent is not None:
+        recent_candidates.append(fallback_recent)
+    recent = max(recent_candidates) if recent_candidates else None
     base = {
         "elapsed_seconds": elapsed,
         "active_cell_runtime_seconds": (
             None if active is None else active.get("cell_elapsed_seconds")
         ),
+        "active_cell_count": len(actives),
+        "active_cells": [str(item["cell"]) for item in actives[:8]],
+        "active_cells_truncated": max(0, len(actives) - 8),
         "recent_activity_utc": _iso(recent),
         "inactivity_seconds": (
             None
@@ -370,11 +404,11 @@ def estimate_run_timing(
 
     records = _history_records(run_root, spec, state)
     cell_specs = {str(item.get("id")): item for item in spec.get("cells", [])}
-    remaining = 0.0
+    remaining_by_cell: dict[str, float] = {}
     confidences: list[str] = []
     evidence: list[dict[str, Any]] = []
     match_counts = {"exact": 0, "compatible": 0, "none": 0}
-    active_cell = None if active is None else active.get("cell")
+    active_by_cell = {str(item["cell"]): item for item in actives}
     for cell_id, cell in cell_specs.items():
         cell_state = state.get("cells", {}).get(cell_id, {})
         cell_status = str(cell_state.get("status", "planned"))
@@ -385,8 +419,9 @@ def estimate_run_timing(
             match_counts[str(prior["match"])] += 1
         else:
             match_counts["none"] += 1
-        if cell_id == active_cell:
-            active_elapsed = float(active.get("cell_elapsed_seconds") or 0.0)
+        if cell_id in active_by_cell:
+            cell_active = active_by_cell[cell_id]
+            active_elapsed = float(cell_active.get("cell_elapsed_seconds") or 0.0)
             prior_remaining = (
                 None
                 if prior is None
@@ -411,7 +446,7 @@ def estimate_run_timing(
                     if prior_remaining is None
                     else max(prior_remaining, stage_remaining)
                 )
-                remaining += selected
+                remaining_by_cell[cell_id] = selected
                 confidence = (
                     "medium" if prior is None else str(prior["confidence"])
                 )
@@ -425,18 +460,18 @@ def estimate_run_timing(
                     }
                 )
             elif prior_remaining is not None:
-                remaining += prior_remaining
+                remaining_by_cell[cell_id] = prior_remaining
                 confidences.append(str(prior["confidence"]))
                 evidence.append(
                     {"kind": "matched-cell", "cell": cell_id, **prior}
                 )
             else:
                 planned = int(cell.get("planned_evaluations", 0))
-                observed = int(active.get("evaluations") or 0)
+                observed = int(cell_active.get("evaluations") or 0)
                 lower = _lower_bound_seconds(
                     spec, cell, remaining_evaluations=max(0, planned - observed)
                 )
-                remaining += lower
+                remaining_by_cell[cell_id] = lower
                 confidences.append("low")
                 evidence.append(
                     {
@@ -461,12 +496,12 @@ def estimate_run_timing(
                 }
             )
         elif prior is not None:
-            remaining += float(prior["median_seconds"])
+            remaining_by_cell[cell_id] = float(prior["median_seconds"])
             confidences.append(str(prior["confidence"]))
             evidence.append({"kind": "matched-cell", "cell": cell_id, **prior})
         else:
             lower = _lower_bound_seconds(spec, cell)
-            remaining += lower
+            remaining_by_cell[cell_id] = lower
             confidences.append("low")
             evidence.append(
                 {
@@ -493,6 +528,42 @@ def estimate_run_timing(
                 "note": "no cross-run point estimate is available",
             }
         )
+    configured_concurrency = max(
+        1, int(spec.get("workflow", {}).get("cell_concurrency", 1))
+    )
+    lane_count = max(configured_concurrency, len(actives), 1)
+    lane_loads = [0.0 for _ in range(lane_count)]
+    active_ids = [str(item["cell"]) for item in actives]
+    for index, cell_id in enumerate(active_ids):
+        lane_loads[index] = max(0.0, remaining_by_cell.get(cell_id, 0.0))
+    queued_cells = 0
+    for cell_id in cell_specs:
+        if cell_id in active_by_cell:
+            continue
+        cell_status = str(
+            state.get("cells", {}).get(cell_id, {}).get("status", "planned")
+        )
+        if cell_status in {"collected", "failed"}:
+            continue
+        lane = min(range(lane_count), key=lambda index: (lane_loads[index], index))
+        lane_loads[lane] += max(0.0, remaining_by_cell.get(cell_id, 0.0))
+        queued_cells += 1
+    remaining = max(lane_loads, default=0.0)
+    evidence.insert(
+        0,
+        {
+            "kind": "cell-concurrency-schedule",
+            "configured": configured_concurrency,
+            "active": len(actives),
+            "queued": queued_cells,
+            "lane_remaining_seconds": lane_loads[:8],
+            "lanes_truncated": max(0, len(lane_loads) - 8),
+            "note": (
+                "FIFO cells fill the earliest available lane only after terminal "
+                "cell publication succeeds"
+            ),
+        },
+    )
     completion = current_time + dt.timedelta(seconds=remaining)
     return {
         **base,
@@ -505,4 +576,4 @@ def estimate_run_timing(
     }
 
 
-__all__ = ["active_progress", "estimate_run_timing"]
+__all__ = ["active_progress", "active_progresses", "estimate_run_timing"]

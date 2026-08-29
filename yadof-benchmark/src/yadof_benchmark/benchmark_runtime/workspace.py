@@ -34,6 +34,9 @@ def build_benchmark(benchmark: Benchmark) -> None:
     # benchmark.configure(
     #     name="saw-algorithm-comparison",
     #     evidence="structural",
+    #     # Cells enter a FIFO scheduler. Keep one cell active unless independent
+    #     # simulator/license/memory capacity has been reviewed for this host.
+    #     cell_concurrency=1,
     #     # Structural workflows default to fail-fast; performance workflows default
     #     # to continuing independent cells while retaining a nonzero final status.
     #     # Optional external reference for descriptive surrogate-training context.

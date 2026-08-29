@@ -32,7 +32,12 @@ Any change must preserve these invariants:
 - resume uses only the run-owned driver and snapshots;
 - structural workflows fail fast by default; performance workflows may continue
   independent cells, but any invalid/incomplete cell keeps final status nonzero;
-- each result publication is a campaign-fatal barrier before later cell work;
+- workflow cell concurrency and baseline simulation concurrency are separate,
+  explicit, frozen controls; the safe workflow default is one cell and baseline
+  worker limits remain subject to yadof resource autodetection unless deliberately
+  disabled;
+- cells enter a FIFO scheduler, and each terminal result publication is a
+  campaign-fatal barrier before a newly freed slot admits later cell work;
 - terminal execution attempts publish separate metadata/log evidence, seal failed
   or interrupted evidence incomplete, and retry in a new attempt/workspace;
 - human-visible workspaces, runs, and workspace output indexes start with

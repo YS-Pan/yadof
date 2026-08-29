@@ -27,8 +27,11 @@ failures into a performance score or use optimizer wall time as the main metric.
 Structural workflows fail fast by default. Performance workflows default to
 continuing independent cells so expensive evidence is retained, but any invalid or
 incomplete cell still makes the run non-successful and the CLI exit nonzero.
-Aggregate publication is a barrier before the next cell; a storage failure stops
-the campaign and is retained in run diagnostics.
+Cell concurrency is an explicit positive FIFO limit with safe default one;
+fast/local baselines separately declare their simulation-worker cap and normal
+resource-autodetection choice. A terminal cell publishes before its freed slot
+admits the next waiting cell. A storage failure stops the campaign and is retained
+in run diagnostics.
 
 ```powershell
 $workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
@@ -45,8 +48,9 @@ strategy/configuration paths. These measured steps remain subject to simulator
 execution authority; package pytest and recovery fault-injection tests do not
 replace them and do not constitute performance evidence.
 
-`check` and `plan` print bounded summaries by default. Add `--json` only when the
-complete expanded cell plan is needed. Measured child stdout/stderr always has
+`check` and `plan` print bounded summaries, including both concurrency layers, by
+default. Add `--json` only when the complete expanded cell plan is needed.
+Measured child stdout/stderr always has
 separate per-command logs and is not copied to the terminal unless
 `--stream-child-output` is explicitly selected.
 

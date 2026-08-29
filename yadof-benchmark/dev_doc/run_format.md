@@ -117,9 +117,11 @@ declared postprocessor succeeds. Structural workflows default to fail-fast;
 performance workflows default to continuing independent cells, but either class
 finishes non-successfully when any cell is invalid or incomplete.
 
-Publication after each cell is a synchronous recovery boundary: another cell is
-not started until aggregate results, reports, and available workspace indexes have
-been atomically refreshed. A publication exception stops the campaign immediately,
+Publication after each terminal cell is a synchronous recovery boundary: a newly
+free scheduler slot does not admit the next FIFO cell until aggregate results,
+reports, and available workspace indexes have been atomically refreshed. Other
+already-active cells may continue. A publication exception stops admission,
+cancels active default subprocesses, and fails the campaign immediately,
 records its UTC/boundary/error in `state.json` when possible, and remains a raised
 error rather than an ordinary cell failure. Resume may republish from immutable
 attempt results; no accepted raw evidence is discarded for aggregate throughput.
@@ -150,5 +152,8 @@ adds completed cells from the current run in memory, selects at most five recent
 same-baseline/same-strategy/same-budget matches, distinguishes exact snapshot/config
 identity from compatible identity, and never uses another strategy as a point
 estimate. Three or more timestamped completed generations enable a non-negative
-generation-duration trend for nonlinear late-stage ETA. Inspect itself writes
-nothing and bounds anomaly/evidence disclosure.
+generation-duration trend for nonlinear late-stage ETA. Remaining durations are
+packed into the frozen cell-concurrency lanes, preloading every active cell and
+then assigning queued cells in FIFO order to the earliest available lane. The
+bounded evidence states the configured/active/queued counts and lane loads.
+Inspect itself writes nothing and bounds anomaly/evidence disclosure.

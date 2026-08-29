@@ -165,6 +165,7 @@ class WorkflowRequest:
     comparisons: tuple[ComparisonSpec, ...]
     postprocessors: tuple[PostprocessorSpec, ...]
     fail_fast: bool
+    cell_concurrency: int
     representative_generation_seconds: float | None
     runs_dir: Path
     python: Path
@@ -276,6 +277,7 @@ class RunSpec:
                     for item in self.workflow.postprocessors
                 ],
                 "fail_fast": self.workflow.fail_fast,
+                "cell_concurrency": self.workflow.cell_concurrency,
                 "representative_generation_seconds": (
                     self.workflow.representative_generation_seconds
                 ),

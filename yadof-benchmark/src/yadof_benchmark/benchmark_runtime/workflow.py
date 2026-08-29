@@ -55,6 +55,7 @@ class Benchmark:
         self._name = fallback or "benchmark"
         self._evidence: str | None = None
         self._fail_fast: bool | None = None
+        self._cell_concurrency = 1
         self._representative_generation_seconds: float | None = None
         self._runs_dir = self.workspace / "runs"
         self._python = Path(sys.executable).resolve()
@@ -74,6 +75,7 @@ class Benchmark:
         name: str | None = None,
         evidence: str | None = None,
         fail_fast: bool | None = None,
+        cell_concurrency: int | None = None,
         representative_generation_seconds: float | None = None,
         runs_dir: str | Path | None = None,
         python: str | Path | None = None,
@@ -92,6 +94,10 @@ class Benchmark:
             if not isinstance(fail_fast, bool):
                 raise BenchmarkError("fail_fast must be boolean")
             self._fail_fast = fail_fast
+        if cell_concurrency is not None:
+            self._cell_concurrency = _positive(
+                cell_concurrency, label="cell_concurrency"
+            )
         if representative_generation_seconds is not None:
             if (
                 isinstance(representative_generation_seconds, bool)
@@ -251,6 +257,7 @@ class Benchmark:
                 if self._fail_fast is None
                 else self._fail_fast
             ),
+            cell_concurrency=self._cell_concurrency,
             representative_generation_seconds=(
                 self._representative_generation_seconds
             ),

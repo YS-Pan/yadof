@@ -26,6 +26,26 @@ estimates, and optional task-neutral snapshot exclusions. Behavioral inputs belo
 `submit/` and `job_template/`, `config.py`, `postprocess.py`, and the workspace
 marker cannot be excluded.
 
+Fast/local manifests also require an explicit per-cell worker contract:
+
+```json
+"execution": {
+  "mode": "fast",
+  "timeout_seconds": 7200,
+  "simulation_concurrency": {
+    "max_workers": 32,
+    "resource_autodetect": true
+  }
+}
+```
+
+The number is a task/baseline choice, not a package-wide default. With
+`resource_autodetect: true`, current yadof CPU, memory, disk, population, and
+recorder constraints may lower the cap. Deliberate oversubscription (including a
+cap above physical cores) requires `false` plus an explicit simulator, memory,
+license, recorder, and host-capacity review. A run freezes and materializes these
+values; editing the source workspace afterward cannot change an existing attempt.
+
 Every baseline workspace must provide the uniformly named `postprocess.py` script.
 The benchmark runtime calls it after each completed optimization with:
 

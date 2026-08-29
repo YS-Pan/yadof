@@ -8,6 +8,8 @@ import re
 import subprocess
 import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -36,6 +38,10 @@ _YADOF_PROGRESS = re.compile(
     r"successful=(?P<successful>\d+) errors=(?P<errors>\d+) "
     r"remaining=(?P<remaining>\d+)\s*$"
 )
+
+
+def _state_guard(lock: threading.RLock | None):
+    return nullcontext() if lock is None else lock
 
 
 def _emit(sink: EventSink | None, **event: Any) -> None:
@@ -256,10 +262,14 @@ def _watch(
     progress_path: Path,
     output_lines: queue.Queue[tuple[str, str]] | None,
     event_sink: EventSink | None,
+    cancel_event: threading.Event | None,
 ) -> bool:
     next_update = started
     while process.poll() is None:
         now = time.monotonic()
+        if cancel_event is not None and cancel_event.is_set():
+            _stop_process_tree(process)
+            return False
         if now - started >= timeout_seconds:
             _stop_process_tree(process)
             return True
@@ -348,6 +358,7 @@ def run_logged(
     timeout_seconds: int,
     event_sink: EventSink | None = None,
     stream_child_output: bool = False,
+    cancel_event: threading.Event | None = None,
 ) -> CommandResult:
     command_root.mkdir(parents=True, exist_ok=False)
     started_utc = utc_now()
@@ -419,6 +430,7 @@ def run_logged(
             progress_path=command_root / "progress.jsonl",
             output_lines=output_lines,
             event_sink=event_sink,
+            cancel_event=cancel_event,
         )
     except BaseException:
         _stop_process_tree(process)
@@ -482,6 +494,7 @@ def _run_command(
     timeout_seconds: int,
     event_sink: EventSink | None,
     stream_child_output: bool,
+    cancel_event: threading.Event | None = None,
 ) -> CommandResult:
     kwargs: dict[str, Any] = {
         "cwd": cwd,
@@ -492,6 +505,8 @@ def _run_command(
     }
     if stream_child_output:
         kwargs["stream_child_output"] = True
+    if cancel_event is not None and command_runner is run_logged:
+        kwargs["cancel_event"] = cancel_event
     return command_runner(command, **kwargs)
 
 
@@ -520,6 +535,8 @@ def _render_cell_outputs(
     command_runner: CommandRunner,
     event_sink: EventSink | None,
     stream_child_output: bool,
+    state_lock: threading.RLock | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     cell_id = str(cell["id"])
     cost_dir = run_root / "visualizations" / "cost"
@@ -527,8 +544,9 @@ def _render_cell_outputs(
     attempt_number = int(attempt["number"])
     cost_path = cost_dir / f"{cell_id}--attempt-{attempt_number:04d}.png"
     cost_root = attempt_root / "commands" / "03-view-cost"
-    attempt["active_command"] = cost_root.relative_to(run_root).as_posix()
-    save_state(run_root, state)
+    with _state_guard(state_lock):
+        attempt["active_command"] = cost_root.relative_to(run_root).as_posix()
+        save_state(run_root, state)
     cost = _run_command(
         command_runner,
         [
@@ -548,8 +566,10 @@ def _render_cell_outputs(
         timeout_seconds=600,
         event_sink=event_sink,
         stream_child_output=stream_child_output,
+        cancel_event=cancel_event,
     )
-    _record_command(run_root, attempt, cost_root, cost)
+    with _state_guard(state_lock):
+        _record_command(run_root, attempt, cost_root, cost)
     if cost.returncode:
         raise _command_failure("yadof view cost", cost)
     _require_nonempty_file(cost_path, label="yadof view cost")
@@ -561,8 +581,9 @@ def _render_cell_outputs(
     baseline_dir.mkdir(parents=True, exist_ok=True)
     prefix = f"{cell_id}--attempt-{attempt_number:04d}--"
     postprocess_root = attempt_root / "commands" / "04-postprocess"
-    attempt["active_command"] = postprocess_root.relative_to(run_root).as_posix()
-    save_state(run_root, state)
+    with _state_guard(state_lock):
+        attempt["active_command"] = postprocess_root.relative_to(run_root).as_posix()
+        save_state(run_root, state)
     domain = _run_command(
         command_runner,
         [
@@ -581,8 +602,10 @@ def _render_cell_outputs(
         timeout_seconds=600,
         event_sink=event_sink,
         stream_child_output=stream_child_output,
+        cancel_event=cancel_event,
     )
-    _record_command(run_root, attempt, postprocess_root, domain)
+    with _state_guard(state_lock):
+        _record_command(run_root, attempt, postprocess_root, domain)
     if domain.returncode:
         raise _command_failure("baseline postprocess", domain)
     domain_outputs = sorted(
@@ -608,16 +631,20 @@ def _execute_cell(
     command_runner: CommandRunner,
     event_sink: EventSink | None,
     stream_child_output: bool,
+    state_lock: threading.RLock | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> bool:
-    cell_state = state["cells"][str(cell["id"])]
-    attempt_root, workspace, attempt = prepare_attempt(run_root, cell, state)
+    with _state_guard(state_lock):
+        cell_state = state["cells"][str(cell["id"])]
+        attempt_root, workspace, attempt = prepare_attempt(run_root, cell, state)
     timeout = int(cell.get("execution", {}).get("timeout_seconds", 7200))
     python = str(spec["workflow"]["python"])
     try:
         _resource_check(cell.get("execution", {}))
         check_root = attempt_root / "commands" / "01-check"
-        attempt["active_command"] = check_root.relative_to(run_root).as_posix()
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            attempt["active_command"] = check_root.relative_to(run_root).as_posix()
+            save_state(run_root, state)
         check = _run_command(
             command_runner,
             [python, "-m", "yadof", "check", "--workspace", str(workspace)],
@@ -627,13 +654,16 @@ def _execute_cell(
             timeout_seconds=min(timeout, 600),
             event_sink=event_sink,
             stream_child_output=stream_child_output,
+            cancel_event=cancel_event,
         )
-        _record_command(run_root, attempt, check_root, check)
+        with _state_guard(state_lock):
+            _record_command(run_root, attempt, check_root, check)
         if check.returncode:
             raise _command_failure("yadof check", check)
-        attempt["status"] = "checked"
-        cell_state["status"] = "checked"
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            attempt["status"] = "checked"
+            cell_state["status"] = "checked"
+            save_state(run_root, state)
 
         command = [
             python, "-m", "yadof", "run", "--workspace", str(workspace),
@@ -646,10 +676,11 @@ def _execute_cell(
         if mode:
             command.extend(["--mode", str(mode)])
         run_command_root = attempt_root / "commands" / "02-run"
-        attempt["active_command"] = run_command_root.relative_to(run_root).as_posix()
-        attempt["status"] = "running"
-        cell_state["status"] = "running"
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            attempt["active_command"] = run_command_root.relative_to(run_root).as_posix()
+            attempt["status"] = "running"
+            cell_state["status"] = "running"
+            save_state(run_root, state)
         measured = _run_command(
             command_runner,
             command,
@@ -659,35 +690,40 @@ def _execute_cell(
             timeout_seconds=timeout,
             event_sink=event_sink,
             stream_child_output=stream_child_output,
+            cancel_event=cancel_event,
         )
-        _record_command(run_root, attempt, run_command_root, measured)
+        with _state_guard(state_lock):
+            _record_command(run_root, attempt, run_command_root, measured)
         if measured.returncode:
             raise _command_failure("yadof run", measured)
-        attempt["status"] = "succeeded"
-        attempt["finished_utc"] = utc_now()
-        attempt["completeness"] = "awaiting-collection"
-        cell_state["status"] = "succeeded"
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            attempt["status"] = "succeeded"
+            attempt["finished_utc"] = utc_now()
+            attempt["completeness"] = "awaiting-collection"
+            cell_state["status"] = "succeeded"
+            save_state(run_root, state)
         return True
     except BenchmarkStorageError:
         raise
     except Exception as exc:
-        attempt["active_command"] = None
-        attempt["status"] = "failed"
-        attempt["finished_utc"] = utc_now()
-        attempt["sealed"] = True
-        attempt["sealed_utc"] = attempt["finished_utc"]
-        attempt["completeness"] = "incomplete"
-        attempt["error"] = str(exc)
-        cell_state["status"] = "failed"
-        cell_state["error"] = str(exc)
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            attempt["active_command"] = None
+            attempt["status"] = "failed"
+            attempt["finished_utc"] = utc_now()
+            attempt["sealed"] = True
+            attempt["sealed_utc"] = attempt["finished_utc"]
+            attempt["completeness"] = "incomplete"
+            attempt["error"] = str(exc)
+            cell_state["status"] = "failed"
+            cell_state["error"] = str(exc)
+            save_state(run_root, state)
+            progress = _state_progress(state)
         _emit(
             event_sink,
             event="cell-failed",
             cell=cell["id"],
             error=str(exc),
-            **_state_progress(state),
+            **progress,
         )
         return False
 
@@ -702,10 +738,13 @@ def _collect_succeeded(
     collector: Collector,
     event_sink: EventSink | None,
     stream_child_output: bool,
+    state_lock: threading.RLock | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> bool:
-    cell_state = state["cells"][str(cell["id"])]
-    attempt_root, attempt = latest_attempt(run_root, cell_state)
-    workspace = run_root / str(attempt["workspace"])
+    with _state_guard(state_lock):
+        cell_state = state["cells"][str(cell["id"])]
+        attempt_root, attempt = latest_attempt(run_root, cell_state)
+        workspace = run_root / str(attempt["workspace"])
     result: dict[str, Any] | None = None
     try:
         result = collector(workspace, cell)
@@ -721,58 +760,64 @@ def _collect_succeeded(
             command_runner=command_runner,
             event_sink=event_sink,
             stream_child_output=stream_child_output,
+            state_lock=state_lock,
+            cancel_event=cancel_event,
         )
         result["visualizations"] = visualizations
         result_path = attempt_root / "result.json"
         write_new_json(result_path, result)
-        attempt["result"] = result_path.relative_to(run_root).as_posix()
-        attempt["status"] = "collected"
-        attempt["collected_utc"] = utc_now()
-        attempt["sealed"] = True
-        attempt["sealed_utc"] = attempt["collected_utc"]
-        attempt["completeness"] = "complete"
-        cell_state["status"] = "collected"
-        cell_state["error"] = None
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            attempt["result"] = result_path.relative_to(run_root).as_posix()
+            attempt["status"] = "collected"
+            attempt["collected_utc"] = utc_now()
+            attempt["sealed"] = True
+            attempt["sealed_utc"] = attempt["collected_utc"]
+            attempt["completeness"] = "complete"
+            cell_state["status"] = "collected"
+            cell_state["error"] = None
+            save_state(run_root, state)
+            progress = _state_progress(state)
         _emit(
             event_sink,
             event="cell-collected",
             cell=cell["id"],
-            **_state_progress(state),
+            **progress,
         )
         return True
     except BenchmarkStorageError:
         raise
     except Exception as exc:
-        if result is not None:
-            issues = result.setdefault("issues", [])
-            if isinstance(issues, list):
-                issues.append(f"required visualization failed: {exc}")
-            result_path = attempt_root / "result.json"
-            if not result_path.exists():
-                write_new_json(result_path, result)
-                attempt["result"] = result_path.relative_to(run_root).as_posix()
-            attempt["active_command"] = None
-            attempt["status"] = "failed"
-            attempt["finished_utc"] = utc_now()
-            attempt["sealed"] = True
-            attempt["sealed_utc"] = attempt["finished_utc"]
-            attempt["completeness"] = "incomplete"
-            attempt["error"] = f"required visualization failed: {exc}"
-            cell_state["status"] = "failed"
-            cell_state["error"] = attempt["error"]
-            event = "visualization-failed"
-        else:
-            cell_state["status"] = "succeeded"
-            cell_state["error"] = f"collection failed: {exc}"
-            event = "collection-failed"
-        save_state(run_root, state)
+        with _state_guard(state_lock):
+            if result is not None:
+                issues = result.setdefault("issues", [])
+                if isinstance(issues, list):
+                    issues.append(f"required visualization failed: {exc}")
+                result_path = attempt_root / "result.json"
+                if not result_path.exists():
+                    write_new_json(result_path, result)
+                    attempt["result"] = result_path.relative_to(run_root).as_posix()
+                attempt["active_command"] = None
+                attempt["status"] = "failed"
+                attempt["finished_utc"] = utc_now()
+                attempt["sealed"] = True
+                attempt["sealed_utc"] = attempt["finished_utc"]
+                attempt["completeness"] = "incomplete"
+                attempt["error"] = f"required visualization failed: {exc}"
+                cell_state["status"] = "failed"
+                cell_state["error"] = attempt["error"]
+                event = "visualization-failed"
+            else:
+                cell_state["status"] = "succeeded"
+                cell_state["error"] = f"collection failed: {exc}"
+                event = "collection-failed"
+            save_state(run_root, state)
+            progress = _state_progress(state)
         _emit(
             event_sink,
             event=event,
             cell=cell["id"],
             error=str(exc),
-            **_state_progress(state),
+            **progress,
         )
         return False
 
@@ -854,6 +899,48 @@ def _publication_cell_valid(
     )
 
 
+def _process_cell(
+    run_root: Path,
+    spec: Mapping[str, Any],
+    state: dict[str, Any],
+    cell: Mapping[str, Any],
+    *,
+    command_runner: CommandRunner,
+    collector: Collector,
+    event_sink: EventSink | None,
+    stream_child_output: bool,
+    state_lock: threading.RLock,
+    cancel_event: threading.Event,
+) -> bool:
+    cell_id = str(cell["id"])
+    with state_lock:
+        status = str(state["cells"][cell_id]["status"])
+    if status != "succeeded" and not _execute_cell(
+        run_root,
+        spec,
+        state,
+        cell,
+        command_runner=command_runner,
+        event_sink=event_sink,
+        stream_child_output=stream_child_output,
+        state_lock=state_lock,
+        cancel_event=cancel_event,
+    ):
+        return False
+    return _collect_succeeded(
+        run_root,
+        spec,
+        state,
+        cell,
+        command_runner=command_runner,
+        collector=collector,
+        event_sink=event_sink,
+        stream_child_output=stream_child_output,
+        state_lock=state_lock,
+        cancel_event=cancel_event,
+    )
+
+
 def execute_existing_run(
     run: str | Path,
     *,
@@ -884,55 +971,116 @@ def execute_existing_run(
     )
     cell_by_id = {str(cell["id"]): cell for cell in spec["cells"]}
     fail_fast = bool(spec["workflow"].get("fail_fast", False))
-    for cell_id in [str(cell["id"]) for cell in spec["cells"]]:
-        cell = cell_by_id[cell_id]
-        cell_state = state["cells"][cell_id]
-        if cell_state["status"] == "collected":
-            continue
-        _emit(
-            event_sink,
-            event="cell-started",
-            cell=cell_id,
-            previous_status=cell_state.get("status"),
-            previous_error=cell_state.get("error"),
-            population=int(cell["population"]),
-            generations=int(cell["generations"]),
-            planned_evaluations=int(cell["planned_evaluations"]),
-            **_state_progress(state),
-        )
-        if cell_state["status"] != "succeeded":
-            if not _execute_cell(
-                run_root,
-                spec,
-                state,
-                cell,
-                command_runner=command_runner,
-                event_sink=event_sink,
-                stream_child_output=stream_child_output,
-            ):
-                if fail_fast:
+    cell_order = [str(cell["id"]) for cell in spec["cells"]]
+    pending = [
+        cell_id for cell_id in cell_order
+        if state["cells"][cell_id]["status"] != "collected"
+    ]
+    cell_concurrency = min(
+        max(1, int(spec["workflow"].get("cell_concurrency", 1))),
+        max(1, len(pending)),
+    )
+    state_lock = threading.RLock()
+    cancel_event = threading.Event()
+    event_queue: queue.Queue[Mapping[str, Any]] = queue.Queue()
+    worker_sink: EventSink | None = event_queue.put if event_sink is not None else None
+
+    def drain_events() -> None:
+        if event_sink is None:
+            return
+        while True:
+            try:
+                event_sink(event_queue.get_nowait())
+            except queue.Empty:
+                return
+
+    active: dict[Future[bool], str] = {}
+    stop_admission = False
+    try:
+        with ThreadPoolExecutor(
+            max_workers=cell_concurrency,
+            thread_name_prefix="yadof-benchmark-cell",
+        ) as executor:
+            while pending or active:
+                while (
+                    pending
+                    and len(active) < cell_concurrency
+                    and not stop_admission
+                ):
+                    cell_id = pending.pop(0)
+                    cell = cell_by_id[cell_id]
+                    with state_lock:
+                        cell_state = state["cells"][cell_id]
+                        previous_status = cell_state.get("status")
+                        previous_error = cell_state.get("error")
+                        progress = _state_progress(state)
+                    _emit(
+                        event_sink,
+                        event="cell-started",
+                        cell=cell_id,
+                        previous_status=previous_status,
+                        previous_error=previous_error,
+                        population=int(cell["population"]),
+                        generations=int(cell["generations"]),
+                        planned_evaluations=int(cell["planned_evaluations"]),
+                        **progress,
+                    )
+                    future = executor.submit(
+                        _process_cell,
+                        run_root,
+                        spec,
+                        state,
+                        cell,
+                        command_runner=command_runner,
+                        collector=collector,
+                        event_sink=worker_sink,
+                        stream_child_output=stream_child_output,
+                        state_lock=state_lock,
+                        cancel_event=cancel_event,
+                    )
+                    active[future] = cell_id
+                if not active:
                     break
-                continue
-        if not _collect_succeeded(
-            run_root,
-            spec,
-            state,
-            cell,
-            command_runner=command_runner,
-            collector=collector,
-            event_sink=event_sink,
-            stream_child_output=stream_child_output,
-        ) and fail_fast:
-            break
-        publication = _publish_or_fail(
-            run_root,
-            spec,
-            state,
-            boundary=f"cell:{cell_id}",
-            event_sink=event_sink,
-        )
-        if fail_fast and not _publication_cell_valid(publication, cell_id):
-            break
+                finished, _ = wait(
+                    active,
+                    timeout=0.05,
+                    return_when=FIRST_COMPLETED,
+                )
+                drain_events()
+                for future in sorted(
+                    finished,
+                    key=lambda item: cell_order.index(active[item]),
+                ):
+                    cell_id = active.pop(future)
+                    try:
+                        succeeded = future.result()
+                    except Exception:
+                        cancel_event.set()
+                        raise
+                    drain_events()
+                    try:
+                        with state_lock:
+                            publication = _publish_or_fail(
+                                run_root,
+                                spec,
+                                state,
+                                boundary=f"cell:{cell_id}",
+                                event_sink=event_sink,
+                            )
+                    except Exception:
+                        cancel_event.set()
+                        raise
+                    if fail_fast and (
+                        not succeeded
+                        or not _publication_cell_valid(publication, cell_id)
+                    ):
+                        stop_admission = True
+                        cancel_event.set()
+            drain_events()
+    except Exception:
+        cancel_event.set()
+        drain_events()
+        raise
     cells_complete = bool(state["cells"]) and all(
         item["status"] == "collected" for item in state["cells"].values()
     )

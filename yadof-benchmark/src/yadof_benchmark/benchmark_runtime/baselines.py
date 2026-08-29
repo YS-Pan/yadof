@@ -31,6 +31,7 @@ _MANIFEST_FIELDS = {
     "format", "id", "name", "description", "workspace", "execution",
     "contract", "estimates", "snapshot_excludes",
 }
+_SIMULATION_CONCURRENCY_FIELDS = {"max_workers", "resource_autodetect"}
 
 
 def _read_json(path: Path) -> Mapping[str, Any]:
@@ -114,6 +115,37 @@ def load_baseline(path: str | Path) -> BaselineManifest:
     mode = execution.get("mode")
     if mode is not None and (not isinstance(mode, str) or not mode.strip()):
         raise BenchmarkError(f"baseline {baseline_id!r} execution.mode is invalid")
+    selected_mode = None if mode is None else str(mode).strip().lower()
+    concurrency = execution.get("simulation_concurrency")
+    if selected_mode in {"fast", "local"}:
+        if not isinstance(concurrency, Mapping):
+            raise BenchmarkError(
+                f"baseline {baseline_id!r} execution.simulation_concurrency "
+                "must explicitly configure fast/local worker limits"
+            )
+        unknown_concurrency = sorted(
+            set(concurrency) - _SIMULATION_CONCURRENCY_FIELDS
+        )
+        if unknown_concurrency:
+            raise BenchmarkError(
+                f"unknown execution.simulation_concurrency fields in "
+                f"{baseline_id!r}: {', '.join(unknown_concurrency)}"
+            )
+        _positive_int(
+            concurrency.get("max_workers"),
+            label="execution.simulation_concurrency.max_workers",
+        )
+        if not isinstance(concurrency.get("resource_autodetect"), bool):
+            raise BenchmarkError(
+                "execution.simulation_concurrency.resource_autodetect must be boolean"
+            )
+    elif concurrency is not None:
+        raise BenchmarkError(
+            f"baseline {baseline_id!r} configures simulation_concurrency for "
+            f"unsupported execution mode {selected_mode!r}; fast/local worker caps "
+            "are enforced by yadof, while distributed concurrency belongs to the "
+            "external scheduler"
+        )
 
     excludes = data.get("snapshot_excludes", [])
     if not isinstance(excludes, list) or not all(isinstance(item, str) for item in excludes):

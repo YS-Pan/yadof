@@ -82,7 +82,14 @@ def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
                 "name": "Task",
                 "description": "Tiny contract fixture.",
                 "workspace": "workspace",
-                "execution": {"mode": "fast", "timeout_seconds": 30},
+                "execution": {
+                    "mode": "fast",
+                    "timeout_seconds": 30,
+                    "simulation_concurrency": {
+                        "max_workers": 4,
+                        "resource_autodetect": True,
+                    },
+                },
                 "contract": {
                     "objective_count": 1,
                     "rawdata_shapes": {"value": [1]},
@@ -121,6 +128,7 @@ def _workspace(
     generations: int = 3,
     postprocess: str = "",
     fail_fast: bool | None = False,
+    cell_concurrency: int = 1,
 ) -> Path:
     root = Path(api.init_workspace(root)["workspace"])
     for name in strategies:
@@ -135,6 +143,7 @@ def _workspace(
         + "\ndef build_benchmark(benchmark: Benchmark) -> None:\n"
         + f"    benchmark.configure(name=\"comparison\", evidence={evidence!r}"
         + ("" if fail_fast is None else f", fail_fast={fail_fast!r}")
+        + f", cell_concurrency={cell_concurrency}"
         + ")\n"
         + declarations
         + "\n    benchmark.compare(\n"
@@ -296,6 +305,7 @@ def test_init_creates_code_first_workspace_without_overwrite(tmp_path: Path) -> 
     source = workflow.read_text(encoding="utf-8")
     assert 'name="saw-algorithm-comparison"' in source
     assert 'evidence="structural"' in source
+    assert "cell_concurrency=1" in source
     assert 'benchmark.strategy(\n    #     "nsga3"' in source
     assert 'baselines=["ngspice/saw-ladder"]' in source
     assert 'strategies=["nsga3"]' in source
@@ -547,6 +557,56 @@ def test_attempt_workspace_uses_compact_run_local_path(tmp_path: Path) -> None:
     assert relative.parts[2] == "0001"
     assert attempt["workspace"] == relative.as_posix()
     assert len(str(materialized)) < len(str(attempt_root / "workspace"))
+
+
+def test_concurrency_plan_is_validated_frozen_and_materialized(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    workspace = _workspace(
+        tmp_path / "workspace",
+        strategies=("alpha",),
+        cell_concurrency=2,
+    )
+
+    spec = _plan(tmp_path)
+    serialized = spec.to_dict()
+    assert serialized["workflow"]["cell_concurrency"] == 2
+    assert serialized["cells"][0]["execution"]["simulation_concurrency"] == {
+        "max_workers": 4,
+        "resource_autodetect": True,
+    }
+
+    run_root = create_run(spec, run_id="frozen-concurrency")
+    saved, state = load_run(run_root)
+    _attempt_root, materialized, attempt = prepare_attempt(
+        run_root, saved["cells"][0], state
+    )
+    config = (materialized / "config.py").read_text(encoding="utf-8")
+    assert "FAST_EVALUATION_MAX_WORKERS = 4" in config
+    assert "FAST_RESOURCE_AUTODETECT_ENABLED = True" in config
+    assert attempt["simulation_concurrency"] == {
+        "mode": "fast",
+        "max_workers": 4,
+        "resource_autodetect": True,
+    }
+
+    workflow = workspace / "benchmark.py"
+    source = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        source.replace("cell_concurrency=2", "cell_concurrency=False"),
+        encoding="utf-8",
+    )
+    with pytest.raises(benchmark.BenchmarkError, match="cell_concurrency"):
+        api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+
+    manifest_path = baseline / "baseline.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["execution"]["simulation_concurrency"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        benchmark.BenchmarkError,
+        match="simulation_concurrency.*explicitly configure",
+    ):
+        load_baseline(manifest_path)
 
 
 def test_run_and_workspace_outputs_use_timestamped_human_names(tmp_path: Path) -> None:
@@ -1147,6 +1207,83 @@ def test_publication_failure_is_fatal_before_the_next_cell(
     assert sum(bool(item["attempts"]) for item in persisted["cells"].values()) == 1
 
 
+def test_cell_scheduler_is_fifo_bounded_and_publishes_before_refill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _baseline(tmp_path)
+    _workspace(
+        tmp_path / "parallel",
+        strategies=("alpha", "beta", "gamma"),
+        cell_concurrency=2,
+        fail_fast=False,
+    )
+    plan = _plan(tmp_path)
+    assert plan.workflow.cell_concurrency == 2
+    assert {cell.planned_evaluations for cell in plan.cells} == {6}
+    run_root = create_run(plan, run_id="parallel-fifo")
+    owner = threading.get_ident()
+    observed: list[tuple[int, dict]] = []
+    barrier = threading.Barrier(2)
+    guard = threading.Lock()
+    active_runs = 0
+    maximum_active_runs = 0
+    run_order: list[str] = []
+    refill_publication_counts: list[int] = []
+    publications = 0
+    real_publish = execution.publish_results
+
+    def publish(*args, **kwargs):
+        nonlocal publications
+        result = real_publish(*args, **kwargs)
+        with guard:
+            publications += 1
+        return result
+
+    def command(command, **kwargs):
+        nonlocal active_runs, maximum_active_runs
+        if kwargs["label"] == "run":
+            source = (Path(kwargs["cwd"]) / "submit" / "optimization.py").read_text(
+                encoding="utf-8"
+            )
+            strategy = next(
+                name for name in ("alpha", "beta", "gamma") if repr(name) in source
+            )
+            with guard:
+                run_order.append(strategy)
+                refill_publication_counts.append(publications)
+                active_runs += 1
+                maximum_active_runs = max(maximum_active_runs, active_runs)
+            if strategy in {"alpha", "beta"}:
+                barrier.wait(timeout=5)
+            try:
+                return _successful_command(command, **kwargs)
+            finally:
+                with guard:
+                    active_runs -= 1
+        return _successful_command(command, **kwargs)
+
+    monkeypatch.setattr(execution, "publish_results", publish)
+    state = execution.execute_existing_run(
+        run_root,
+        command_runner=command,
+        collector=lambda _workspace_path, cell: _cell_result(cell, 0.4),
+        event_sink=lambda event: observed.append(
+            (threading.get_ident(), dict(event))
+        ),
+    )
+
+    assert state["status"] == "completed"
+    assert set(run_order[:2]) == {"alpha", "beta"}
+    assert run_order[2] == "gamma"
+    assert refill_publication_counts[:2] == [0, 0]
+    assert refill_publication_counts[2] >= 1
+    assert maximum_active_runs == 2
+    assert {thread for thread, _event in observed} == {owner}
+    assert all(item["status"] == "collected" for item in state["cells"].values())
+    results = read_json(run_root / "results.json")
+    assert {row["planned_evaluations"] for row in results["comparisons"]} == {6}
+
+
 @pytest.mark.recovery
 def test_state_storage_failure_is_not_downgraded_to_a_cell_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1423,6 +1560,11 @@ def test_plan_defaults_to_bounded_summary_and_full_json_is_explicit(
 ) -> None:
     _baseline(tmp_path)
     workspace = _workspace(tmp_path / "workspace")
+    before = {
+        path.relative_to(workspace).as_posix(): path.read_bytes()
+        for path in workspace.rglob("*")
+        if path.is_file()
+    }
 
     assert cli.main(
         [
@@ -1461,6 +1603,12 @@ def test_plan_defaults_to_bounded_summary_and_full_json_is_explicit(
     assert {cell["evidence"] for cell in full["cells"]} == {"structural"}
     assert len(full["cells"]) == 3
     assert len(summary_text) < len(full_text)
+    after = {
+        path.relative_to(workspace).as_posix(): path.read_bytes()
+        for path in workspace.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
 
 
 def _complete_timing_run(run_root: Path, durations: dict[str, float]) -> None:
@@ -1569,7 +1717,7 @@ def test_eta_prefers_exact_same_arm_history_and_excludes_cross_arm(
     cross_task_alpha = next(
         item
         for item in without_same_task["evidence"]
-        if item["cell"] == str(spec["cells"][0]["id"])
+        if item.get("cell") == str(spec["cells"][0]["id"])
     )
     assert cross_task_alpha["kind"] == "evaluation-lower-bound"
 
@@ -1588,7 +1736,7 @@ def test_eta_prefers_exact_same_arm_history_and_excludes_cross_arm(
     compatible_alpha = next(
         item
         for item in compatible["evidence"]
-        if item["cell"] == str(spec["cells"][0]["id"])
+        if item.get("cell") == str(spec["cells"][0]["id"])
     )
     assert compatible_alpha["match"] == "compatible"
     assert compatible_alpha["confidence"] == "low"
@@ -1601,10 +1749,38 @@ def test_eta_prefers_exact_same_arm_history_and_excludes_cross_arm(
     alpha_evidence = next(
         item
         for item in without_alpha["evidence"]
-        if item["cell"] == str(spec["cells"][0]["id"])
+        if item.get("cell") == str(spec["cells"][0]["id"])
     )
     assert alpha_evidence["kind"] == "evaluation-lower-bound"
     assert alpha_evidence["seconds"] < 1.0
+
+
+def test_eta_uses_cell_concurrency_lanes_without_changing_budgets(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    _workspace(
+        tmp_path / "workspace",
+        strategies=("alpha", "beta", "gamma"),
+        cell_concurrency=1,
+    )
+    run_root = create_run(_plan(tmp_path), run_id="lane-eta")
+    spec, state = load_run(run_root)
+    now = dt.datetime(2026, 8, 29, tzinfo=dt.timezone.utc)
+
+    serial = estimate_run_timing(run_root, spec, state, now=now)
+    spec["workflow"]["cell_concurrency"] = 2
+    parallel = estimate_run_timing(run_root, spec, state, now=now)
+
+    assert parallel["estimated_remaining_seconds"] < serial[
+        "estimated_remaining_seconds"
+    ]
+    schedule = parallel["evidence"][0]
+    assert schedule["kind"] == "cell-concurrency-schedule"
+    assert schedule["configured"] == 2
+    assert schedule["queued"] == 3
+    assert len(schedule["lane_remaining_seconds"]) == 2
+    assert {cell["planned_evaluations"] for cell in spec["cells"]} == {6}
 
 
 def test_eta_replay_models_increasing_generation_cost(tmp_path: Path) -> None:

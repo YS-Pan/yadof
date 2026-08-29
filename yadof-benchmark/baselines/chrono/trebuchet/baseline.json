@@ -7,6 +7,10 @@
   "execution": {
     "mode": "fast",
     "timeout_seconds": 7200,
+    "simulation_concurrency": {
+      "max_workers": 4,
+      "resource_autodetect": true
+    },
     "resource": {
       "kind": "environment_executable",
       "variable": "YADOF_PYCHRONO_PYTHON"

@@ -89,6 +89,9 @@ def timing_record(
         "baseline_digest": str(cell.get("baseline_digest", "")),
         "strategy_digest": str(cell.get("strategy_digest", "")),
         "execution": cell.get("execution", {}),
+        "cell_concurrency": int(
+            spec.get("workflow", {}).get("cell_concurrency", 1)
+        ),
         "workflow_digest": str(spec.get("workflow_digest", "")),
         "driver_digest": str(spec.get("driver_digest", "")),
         "python": str(spec.get("workflow", {}).get("python", "")),
@@ -174,6 +177,9 @@ def _match_fields(
         "generations": cell.get("generations"),
         "baseline_digest": cell.get("baseline_digest"),
         "execution": cell.get("execution", {}),
+        "cell_concurrency": int(
+            spec.get("workflow", {}).get("cell_concurrency", 1)
+        ),
         "python": spec.get("workflow", {}).get("python"),
         "host": state.get("host"),
     }

@@ -53,8 +53,11 @@ expensive generation.
 
 Structural runs fail fast by default. Performance runs default to continuing
 independent cells to retain costly evidence, but every invalid or incomplete cell
-still makes the overall status and CLI exit nonzero. The next cell starts only
-after aggregate publication succeeds; storage failure stops the campaign and
+still makes the overall status and CLI exit nonzero. Cell concurrency defaults to
+one and is explicitly configurable; fast/local simulation-worker limits are
+separately explicit in each baseline and normally remain resource-autodetected. A
+newly freed FIFO slot refills only after terminal aggregate publication succeeds;
+storage failure stops the campaign and
 retains diagnostics. Failed/interrupted attempt workspaces and logs are sealed,
 never overwritten, and retried in a new attempt.
 

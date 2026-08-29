@@ -59,6 +59,35 @@ seeds used by earlier three-baseline campaigns are historical practice, not a
 scientific constant enforced by the tool. Multi-seed output remains descriptive
 and does not automatically claim significance or robustness.
 
+## Concurrency and resource review
+
+Benchmark concurrency has two explicit layers:
+
+- `Benchmark.configure(cell_concurrency=N)` limits simultaneous benchmark cells,
+  defaults to one, and admits cells in frozen plan order;
+- each fast/local `baseline.json` supplies
+  `execution.simulation_concurrency.max_workers` plus `resource_autodetect`, which
+  becomes that cell attempt's yadof worker configuration.
+
+Review both values in the bounded `check`/`plan` output before measured work. Keep
+resource autodetection enabled for the normal baseline default: current yadof may
+reduce the cap for CPU, per-worker memory, scratch disk, population, and recorder
+capacity. A worker cap above physical cores is supported only as an explicit
+oversubscription decision after reviewing simulator process behavior, memory,
+licenses, recorder throughput, and total host load. The historical example of 32
+simulations on 8 cores is permission to configure such a plan, not a universal
+safe default. Cell concurrency multiplies the concurrently active worker pools, so
+review their combined worst case rather than either number alone.
+
+The scheduler initially fills available slots in FIFO order. When a cell becomes
+terminal, its state and aggregate results/reports/indexes must publish before that
+slot admits the next waiting cell; already-active cells may continue. Storage
+failure stops admission and is campaign-fatal. Fail-fast also requests cancellation
+of active default subprocesses. Continue-on-failure preserves independent evidence
+but cannot hide a failed cell. Population, generations, seeds, planned/attempted/
+completed/finite accounting, pairing validity, immutable attempt evidence, and
+yadof recorder backpressure are identical at every concurrency setting.
+
 ## Visible execution is the default
 
 Every measured `run` or `resume` should have a visible process window, regardless
@@ -104,7 +133,8 @@ Run `yadof-benchmark check --workspace PATH` before committing compute. It impor
 all comparison cells, calculates input digests, and writes nothing.
 
 `check` and `plan` print a bounded overview of comparison/cell/evaluation counts,
-selected semantic IDs, and budget ranges. Add `--json` to either command to print
+selected semantic IDs, budget ranges, and the cell/simulation concurrency plan.
+Add `--json` to either command to print
 the complete expanded `RunSpec`, including every cell. The default is intended for
 both people and agents and does not grow in proportion to a large comparison
 matrix.
@@ -173,9 +203,11 @@ workspace's top-level `reports/` and `visualizations/` point back to this one
 authoritative run root. Declared workflow postprocessors then run after every cell
 has been collected and write additional run-local artifacts.
 
-Publication is a hard boundary between cells. The next simulation does not start
-until aggregate results, reports, and available indexes have returned from atomic
-publication. A storage/publication exception stops the campaign immediately and is
+Publication is a hard boundary at each terminal cell. A newly freed scheduler slot
+does not start its next waiting cell until aggregate results, reports, and available
+indexes have returned from atomic publication; other already-active cells may
+continue. A storage/publication exception stops admission and the campaign
+immediately and is
 recorded in `state.json` when state storage remains available. Use that diagnostic
 and immutable attempt results on resume; a storage error is never converted into a
 cell score or ignored for throughput. Inside yadof, the campaign recorder applies
@@ -221,6 +253,11 @@ represent later surrogate training becoming slower. Baseline
 `evaluation_seconds × remaining evaluations` is only a low-confidence lower bound
 and explicitly excludes optimizer or surrogate-training overhead. A failed terminal
 run has no asserted completion ETA because resume creates new attempts.
+
+ETA uses the frozen cell concurrency: all active cells preload separate lanes and
+queued FIFO cells are assigned to the earliest available lane. Inspect exposes the
+bounded configured/active/queued counts and lane loads rather than reporting a
+serial sum for a parallel run.
 
 Follow this progressive disclosure order:
 

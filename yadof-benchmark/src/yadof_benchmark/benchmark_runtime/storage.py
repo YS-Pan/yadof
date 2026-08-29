@@ -396,6 +396,44 @@ def latest_attempt(run_root: Path, cell_state: Mapping[str, Any]) -> tuple[Path,
     return run_root / str(attempt["path"]), attempt
 
 
+def _apply_simulation_concurrency(
+    workspace: Path, execution: Mapping[str, Any]
+) -> dict[str, Any] | None:
+    """Freeze one baseline's yadof worker policy into a materialized cell."""
+
+    value = execution.get("simulation_concurrency")
+    if not isinstance(value, Mapping):
+        return None
+    mode = str(execution.get("mode", "")).strip().lower()
+    prefix = {"fast": "FAST", "local": "LOCAL"}.get(mode)
+    if prefix is None:
+        raise BenchmarkError(
+            f"simulation concurrency cannot be applied to execution mode {mode!r}"
+        )
+    max_workers = int(value["max_workers"])
+    resource_autodetect = bool(value["resource_autodetect"])
+    config_path = workspace / "config.py"
+    try:
+        source = config_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise BenchmarkError(
+            f"cannot read materialized yadof config for concurrency: {config_path}: {exc}"
+        ) from exc
+    if source and not source.endswith("\n"):
+        source += "\n"
+    source += (
+        "\n# Frozen by yadof-benchmark from baseline simulation_concurrency.\n"
+        f"{prefix}_EVALUATION_MAX_WORKERS = {max_workers}\n"
+        f"{prefix}_RESOURCE_AUTODETECT_ENABLED = {resource_autodetect!r}\n"
+    )
+    atomic_write_text(config_path, source)
+    return {
+        "mode": mode,
+        "max_workers": max_workers,
+        "resource_autodetect": resource_autodetect,
+    }
+
+
 def prepare_attempt(
     run_root: Path,
     cell: Mapping[str, Any],
@@ -408,6 +446,9 @@ def prepare_attempt(
     workspace_token = hashlib.sha256(str(cell["id"]).encode("utf-8")).hexdigest()[:16]
     workspace = run_root / "workspaces" / workspace_token / f"{number:04d}"
     shutil.copytree(run_root / str(cell["baseline_snapshot"]), workspace)
+    simulation_concurrency = _apply_simulation_concurrency(
+        workspace, cell.get("execution", {})
+    )
     strategy_source = run_root / str(cell["strategy_snapshot"])
     strategy_destination = workspace / "submit" / "optimization.py"
     strategy_destination.parent.mkdir(parents=True, exist_ok=True)
@@ -424,6 +465,7 @@ def prepare_attempt(
         "finished_utc": None,
         "commands": [],
         "runtime_seconds": 0.0,
+        "simulation_concurrency": simulation_concurrency,
         "error": None,
     }
     cell_state["attempts"].append(attempt)

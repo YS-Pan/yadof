@@ -15,11 +15,17 @@ They are not part of yadof's generic test namespace or yadof wheel/sdist content
 Their run-layout coverage keeps semantic attempt evidence readable while proving
 that materialized execution workspaces use compact run-local digest paths, and
 their command coverage requires all-infinite yadof generations to fail a cell.
-Recovery coverage injects aggregate publication failure and proves no later cell
-starts; verifies structural fail-fast and performance continue-with-final-failure
+Recovery coverage injects aggregate publication failure and proves no freed slot
+admits a later cell; verifies structural fail-fast and performance continue-with-final-failure
 defaults; seals interrupted evidence with independent immutable attempt metadata;
 and proves retries use a new compact workspace while external editable sources do
 not affect a run-owned, digest-verified snapshot.
+Concurrency coverage freezes separate cell and simulation-worker controls, proves
+two cells overlap within a bounded FIFO scheduler, requires terminal aggregate
+publication before the next slot refill, keeps event callbacks on the foreground
+owner, preserves evaluation budgets, and replays lane-aware ETA without a
+simulator. Baseline validation requires explicit fast/local worker caps and
+resource-autodetection choices; materialized attempt evidence records both.
 Initialization coverage also treats the generated `benchmark.py` authoring
 scaffold as public output, and baseline discovery proves that manifest IDs and
 editable provider/task source paths agree before a run can snapshot them.

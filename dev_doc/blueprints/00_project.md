@@ -114,8 +114,13 @@ hot-change contract; structural dimension changes are future work.
   failures remain validity facts instead of a performance score.
   Structural workflows fail fast by default. Performance workflows may continue
   independent cells to retain expensive evidence, but every invalid/incomplete
-  cell keeps the final status non-successful. Aggregate publication is a
-  campaign-fatal barrier before another cell starts. Each terminal attempt owns
+  cell keeps the final status non-successful. Workflow cell concurrency is a
+  positive frozen FIFO limit with safe default one; fast/local baselines separately
+  freeze yadof simulation-worker caps and resource-autodetection. A terminal cell's
+  aggregate publication is a campaign-fatal barrier before its freed slot admits
+  another cell, without stopping independent cells already active. Explicit
+  oversubscription must review combined simulator, memory, license, recorder, and
+  host constraints and never changes budgets or persistence. Each terminal attempt owns
   immutable `attempt.json` plus separate stdout/stderr evidence; interrupted or
   failed execution is sealed incomplete and retries in a new numbered compact
   workspace rather than overwriting old evidence.
@@ -286,9 +291,12 @@ suite and follow the user workflow's cost- and risk-based execution policy.
 The independent benchmark distribution has a focused unit suite below
 `yadof-benchmark/tests/`. Its initialization, Python workflow loading, baseline
 discovery, planning, snapshot, execution, postprocessing, recovery, report, and CLI
-tests use fake commands and do not start a simulator. Deterministic timing replay
-covers exact/compatible same-arm matching, cross-arm exclusion, increasing
-generation cost, terminal confidence, and bounded inspect/plan output. Real `run` and `resume`
+tests use fake commands and do not start a simulator. Deterministic scheduling
+coverage proves bounded overlap, FIFO admission, publication-before-refill,
+foreground event delivery, frozen simulation caps, and unchanged budgets.
+Timing replay covers exact/compatible same-arm matching, cross-arm exclusion,
+increasing generation cost, concurrency lanes, terminal confidence, and bounded
+inspect/plan output. Real `run` and `resume`
 operations remain subject to the user workflow's cost/risk authorization. Separate
 artifact allowlists keep benchmark resources out of the yadof wheel and include
 them in the `yadof-benchmark` wheel.

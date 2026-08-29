@@ -58,15 +58,15 @@ failures are validity facts rather than a performance score. Surrogate-training
 duration is reported separately from optimizer wall time and may use only an
 explicit external representative expensive-generation reference.
 
-Benchmark result publication validates same-baseline/same-seed pairing from the
-frozen task snapshot, matching planned/attempted budgets, and the complete ordered
-generation-0 normalized-population fingerprint. It publishes
-planned/attempted/completed/finite counts plus final HV and
-attempted-evaluation-aligned HV trajectory/AUC. Invalid or incomplete cell evidence
-is preserved but excluded explicitly from cross-seed descriptive aggregates;
-failures are validity facts rather than a performance score. Surrogate-training
-duration is reported separately from optimizer wall time and may use only an
-explicit external representative expensive-generation reference.
+Benchmark concurrency is a frozen two-layer plan: workspace policy limits active
+FIFO cells (safe default one), while each fast/local baseline declares its yadof
+simulation-worker cap and resource-autodetection choice. A terminal cell must
+publish aggregate evidence before its freed slot admits another cell; active cells
+may overlap, shared state writes are serialized, and external progress events stay
+on the foreground owner. ETA packs active and queued work into the configured cell
+lanes. Oversubscription remains explicit and must account for simulator, memory,
+license, recorder, and current yadof resource limits rather than treating 32 as a
+universal default.
 
 ## Package dependency discipline
 

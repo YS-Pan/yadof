@@ -53,6 +53,16 @@ def _plan_summary(
     populations = [cell.population for cell in cells]
     generations = [cell.generations for cell in cells]
     replication_scopes = sorted({cell.replication_scope for cell in cells})
+    simulation_concurrency = [
+        (
+            f"{cell.baseline_id}:max_workers="
+            f"{cell.execution.get('simulation_concurrency', {}).get('max_workers')}:"
+            f"resource_autodetect="
+            f"{cell.execution.get('simulation_concurrency', {}).get('resource_autodetect')}"
+        )
+        for cell in cells
+        if isinstance(cell.execution.get("simulation_concurrency"), Mapping)
+    ]
     full_json = [
         "yadof-benchmark",
         command,
@@ -93,6 +103,10 @@ def _plan_summary(
             "population_max": max(populations, default=0),
             "generations_min": min(generations, default=0),
             "generations_max": max(generations, default=0),
+        },
+        "concurrency": {
+            "cells": spec.workflow.cell_concurrency,
+            "simulations": _bounded_values(simulation_concurrency),
         },
         "next_commands": {"full_json": full_json},
     }

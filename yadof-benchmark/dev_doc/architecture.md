@@ -30,9 +30,9 @@ The bounded `benchmark_runtime/` package separates responsibilities:
 - `storage.py`: digests, immutable inputs, readable attempt evidence, compact
   run-local execution workspaces, frozen matched-timing history, host identity,
   and atomic state;
-- `execution.py`: checked subprocess execution, all-infinite-generation rejection,
-  foreground-thread progress event delivery, collection, mandatory per-cell
-  cost/domain visualization, and orchestration;
+- `execution.py`: FIFO bounded cell scheduling, checked subprocess execution,
+  all-infinite-generation rejection, foreground-thread progress event delivery,
+  collection, mandatory per-cell cost/domain visualization, and orchestration;
 - `terminal.py`: caller-thread Rich ownership, fixed cell/global rows, bounded
   plain-terminal snapshots, and durable run-level lifecycle logging;
 - `launch.py`: Windows visible-by-default detached launch and immediate
@@ -89,13 +89,30 @@ failed, incomplete, all-infinite, or collected-but-invalid cell produces a nonze
 CLI outcome. An explicit `fail_fast` override changes scheduling only, never this
 final validity boundary.
 
-Cell completion has a synchronous publication barrier. The driver atomically
-refreshes run results/reports/indexes after a cell and does not start the next cell
-until that publication returns successfully. Any publication/storage exception is
+Concurrency has two independently frozen layers. `Benchmark.configure` supplies
+the workflow-wide number of concurrently active cells and defaults to one. Each
+fast/local baseline manifest supplies the yadof simulation-worker cap and whether
+yadof resource autodetection remains enabled; materialization writes those values
+into the attempt's run-owned `config.py`. A cap may intentionally exceed physical
+cores only when the author disables autodetection and has reviewed simulator,
+memory, license, recorder, and host limits. The package never derives a universal
+oversubscription value from the historical 8-core/32-simulation example.
+
+Cells enter the scheduler in frozen plan order. Initial free slots may start
+together; whenever a cell becomes terminal, the driver atomically refreshes run
+results/reports/indexes before that freed slot admits the next FIFO cell. Any
+publication/storage exception is
 campaign-fatal, records a bounded entry in `state.json` when state storage remains
 available, emits a diagnostic event, and propagates as `BenchmarkError`. Immutable
 per-attempt raw results and command logs remain the recovery source even if an
 aggregate publication was only partially refreshed.
+
+The shared state writer is serialized, while command execution, collection, and
+cell-local artifacts may overlap. Worker events cross a queue and only the caller
+thread invokes the external sink. Fail-fast cancels active default subprocesses
+and prevents further admission; continue-on-failure still publishes the terminal
+state before refill. Cell budgets, accounting, sealing, and recorder durability do
+not change with concurrency.
 
 Every attempt publishes independent `attempt.json`, `stdout.log`, and `stderr.log`
 evidence. Failed or interrupted execution is sealed `incomplete`; collection seals

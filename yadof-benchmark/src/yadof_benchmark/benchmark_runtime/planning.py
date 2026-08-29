@@ -56,11 +56,14 @@ def _load_module(source: Path, workspace: Path) -> Any:
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     sys.path.insert(0, str(workspace))
+    previous_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     try:
         spec.loader.exec_module(module)
     except Exception as exc:
         raise BenchmarkError(f"benchmark.py import failed: {exc}") from exc
     finally:
+        sys.dont_write_bytecode = previous_dont_write_bytecode
         sys.path.remove(str(workspace))
         sys.modules.pop(module_name, None)
     return module

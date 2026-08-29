@@ -32,7 +32,7 @@
 
 ## 必须恢复的有效要求
 
-实施进度：2026-08-29 已完成第 1--8 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
+实施进度：2026-08-29 已完成第 1--9 小节的工程实现。初始化 scaffold 现在从唯一入口展示 policy、算法语义
 strategy、baseline、seed/budget 和 postprocess；baseline discovery 强制 editable source 的
 相对目录等于 `provider/task` semantic ID，run 仍负责 digest 与不可变 snapshot。人类可见
 workspace/run/output-index 现由 benchmark 统一添加秒级时间前缀；每个 cell 强制生成 cost 图与
@@ -63,11 +63,20 @@ generation-0 normalized-population fingerprint；cell 明确发布 planned/attem
 表不以 optimizer wall time 排名。surrogate training duration 单独发布，并只在 workflow 显式给出
 代表性昂贵 generation 时生成描述性比值。structural workflow 现默认 fail-fast，performance 默认
 继续独立 cell 以保全昂贵 evidence，但任一 invalid/incomplete cell 仍使最终状态和 CLI 退出非零；
-cell aggregate publication 是下一 cell 前的 campaign-fatal barrier，失败会保留 state diagnostics。
+cell aggregate publication 是其释放 slot 补入下一 cell 前的 campaign-fatal barrier，失败会保留
+state diagnostics，其他已经 active 的 cell 可以继续到停止边界。
 执行中断/失败 attempt 现以独立 `attempt.json` 封存为 incomplete，stdout/stderr 分离保留，resume 新建
 编号 attempt 与 compact workspace；collection-only failure 则复用成功但尚未封存的执行 evidence。
 每次执行还会重新校验 run-owned driver、workflow/resources、baseline、strategy digest，外部可编辑源只
-影响后续新 run。第 9 小节仍保持 active；本进度不代表并行要求已经完成。
+影响后续新 run。第 9 小节现把 workflow `cell_concurrency`（安全默认 1）与 fast/local baseline
+`simulation_concurrency` 分层冻结；FIFO scheduler 允许多个 cell 重叠，但每个 terminal cell 必须先完成
+aggregate publication 才补入下一 cell。baseline worker cap 默认继续受 yadof CPU/内存/磁盘/recorder
+autodetection 约束，超过物理 core 只作为显式配置能力而非硬编码默认。状态写入被序列化，worker event
+回到前台 owner，fail-fast 取消 active default subprocess，ETA 按并发 lane 估算，并发不改变任何 cell
+预算、配对、有效性或 attempt durability。相应 fake structural tests 不启动 simulator，已覆盖并行重叠、
+FIFO、公平补位、publication-fatal、配置物化、前台事件、预算不变和 lane-aware ETA。工程实现及清单
+1--7 可安装态验收；本文仍保持 active，因为清单 8 的正式 simulator campaign 及清单 9 的 campaign
+后审计需要另行权限与真实运行证据，本次没有获得也没有推定该权限。
 
 ### 1. 工具边界和工作区体验
 
