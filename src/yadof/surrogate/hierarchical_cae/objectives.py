@@ -1,20 +1,12 @@
 """Hierarchical CAE objectives."""
 from __future__ import annotations
-from contextlib import nullcontext
-from copy import deepcopy
-from dataclasses import asdict
 import hashlib
-import math
-from pathlib import Path
-import time
 from typing import Iterable, Sequence
 import numpy as np
 import torch
-from torch import nn
 from torch.nn import functional as F
 from .data_filtering import DataFilterAssessment
-from .coordinates import coordinate_feature_count, encode_coordinate_points, stored_coordinate_points
-from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
+from .types import CAETrainConfig
 
 def design_field_losses(predictions: Sequence[torch.Tensor], targets: Sequence[torch.Tensor], *, beta: float=1.0) -> torch.Tensor:
     if len(predictions) != len(targets) or not predictions:

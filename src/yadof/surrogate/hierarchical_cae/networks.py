@@ -1,19 +1,11 @@
 """Hierarchical CAE networks."""
 from __future__ import annotations
-from contextlib import nullcontext
-from copy import deepcopy
-from dataclasses import asdict
-import hashlib
-import math
-from pathlib import Path
-import time
-from typing import Iterable, Sequence
-import numpy as np
+from typing import Sequence
 import torch
 from torch import nn
 from torch.nn import functional as F
-from .coordinates import coordinate_feature_count, encode_coordinate_points, stored_coordinate_points
-from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
+from .coordinates import coordinate_feature_count
+from .types import CAETrainConfig, HierarchicalSchema
 MODEL_NAME = 'hierarchical_cae_rawdata_predictor_ensemble'
 
 def _activation() -> nn.Module:

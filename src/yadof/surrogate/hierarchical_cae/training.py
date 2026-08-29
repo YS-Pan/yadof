@@ -1,19 +1,15 @@
 """Hierarchical CAE training."""
 from __future__ import annotations
 from contextlib import nullcontext
-from copy import deepcopy
-from dataclasses import asdict
-import hashlib
 import math
-from pathlib import Path
 import time
-from typing import Iterable, Sequence
+from typing import Sequence
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 from .data_filtering import DataFilterAssessment
-from .coordinates import coordinate_feature_count, encode_coordinate_points, stored_coordinate_points
+from .coordinates import encode_coordinate_points, stored_coordinate_points
 from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
 
 def _autocast(device: torch.device, enabled: bool):

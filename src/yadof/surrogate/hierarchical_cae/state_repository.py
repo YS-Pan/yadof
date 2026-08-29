@@ -5,29 +5,22 @@ import hashlib
 import json
 from pathlib import Path
 import threading
-from typing import Mapping, Sequence
+from typing import Mapping
 import numpy as np
 import psutil
 import torch
 from ...config import LoadedConfig, load_config
 from ...job_template import api as job_template_api
-from ...job_template.rawdata_contract import NamedRawDataItem
-from ...job_template.rawdata_template import StructuredRawDataSample
 from ...optimize.state import active_strategy_signature
-from ...recorded_data import api as recorded_api
-from ...recorded_data.session import CampaignSession
-from ...task_snapshot import GenerationTaskSnapshot
 from ...workspace import WorkspaceContext
 from .data_filtering import assess_data_filter
 from .._shared.training_events import monotonic_time, now_text, record_training_event
 from .checkpoints import COMPONENT_NAMESPACE, new_publication_paths, resolve_artifact_dir, resolve_namespace_manifest_path, run_namespace_for_signature, schema_payload, semantic_state_signature, validate_manifest_identity, write_checkpoint
-from .coordinates import coordinate_grid, interpolate_stored_values
-from .inference import load_model_bundle, predict_hierarchical_coordinate_members, predict_hierarchical_members
+from .inference import load_model_bundle
 from .networks import MODEL_NAME
-from .objectives import unique_design_indices
 from .training import fit_hierarchical_cae
-from .schema import build_schema, field_matrices, fit_scalers, named_sample_from_payloads, reconstruct_samples, standardized_field_matrices
-from .types import CoordinatePrediction, FieldScaler, HierarchicalSchema, HierarchicalState, NamedTrainingData, Population
+from .schema import field_matrices, fit_scalers, standardized_field_matrices
+from .types import FieldScaler, HierarchicalSchema, HierarchicalState, NamedTrainingData
 StateKey = tuple[str, str, str, str, str, str]
 _STATE_LOCK = threading.RLock()
 _STATES: dict[StateKey, HierarchicalState] = {}

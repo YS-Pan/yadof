@@ -2,7 +2,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Sequence
-import numpy as np
 from ...job_template.rawdata_template import RawDataSchemaTemplate, StructuredRawDataSample
 from ..posterior import MaterializedRawDataPosterior, RawDataFunctionDraw, RawDataPosteriorDiagnostics, SUPPORT_FINITE
 from . import runtime
