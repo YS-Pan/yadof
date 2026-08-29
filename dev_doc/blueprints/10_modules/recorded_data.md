@@ -44,7 +44,7 @@ Public queries list/filter records, recover raw variables, load segment members,
 derive current normalized variables and costs through `job_template`, and assemble
 training bundles. Named training reads preserve every direct NPZ basename and may
 return a separate JSON-safe `job_metadata` row aligned by stable job name, allowing
-task-owned quality/regime policy to consume recorded diagnostics without altering
+task-owned hierarchical-CAE frequency filter to consume recorded diagnostics without altering
 rawData. The live campaign session exposes the same named sample/metadata views over
 durable plus accepted current rows. The cost-view reader freezes one finalized segment-name snapshot,
 then opens each selected ZIP once to combine manifest checks, NPZ decode/schema

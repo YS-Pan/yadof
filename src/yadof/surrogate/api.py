@@ -22,13 +22,15 @@ from .linear_subspace.settings import (
     DEFAULT_PCA_SVD_SETTINGS,
     PCASVDSettings,
 )
-from .quality import (
+from .hierarchical_cae.data_filtering import (
+    DATA_FILTER_NONE,
+    DATA_FILTER_FREQUENCY,
     ApplicabilityPrediction,
     DiagnosticCondition,
     DiagnosticRegimeRule,
-    RawDataQualityPolicy,
-    ShapeQualityRule,
-    quality_policy_from_mapping,
+    FrequencyFilter,
+    FrequencyFilterRule,
+    resolve_data_filter,
 )
 from .calibration import (
     APPLICABILITY_METHOD,
@@ -373,7 +375,8 @@ class HierarchicalCAEComponent:
     axis_encodings: Mapping[tuple[str, str], Mapping[str, object]] = field(
         default_factory=dict
     )
-    quality_policy: RawDataQualityPolicy | None = None
+    data_filter_mode: str = DATA_FILTER_NONE
+    frequency_filter: FrequencyFilter | None = None
     train_cfg: CAETrainConfig = DEFAULT_CAE_TRAIN_CONFIG
     device: str = "auto"
 
@@ -395,9 +398,15 @@ class HierarchicalCAEComponent:
                 ).items()
             }
         )
-        policy = quality_policy_from_mapping(self.quality_policy)
+        data_filter_mode, frequency_filter = resolve_data_filter(
+            mode=self.data_filter_mode,
+            frequency_filter=self.frequency_filter,
+        )
         train_cfg = self.train_cfg
-        if policy is not None and not train_cfg.regime_head:
+        if (
+            data_filter_mode == DATA_FILTER_FREQUENCY
+            and not train_cfg.regime_head
+        ):
             train_cfg = replace(
                 train_cfg,
                 regime_head=True,
@@ -407,14 +416,16 @@ class HierarchicalCAEComponent:
                     else train_cfg.robust_loss_cap
                 ),
             )
-        if policy is None and train_cfg.regime_head:
+        if data_filter_mode == DATA_FILTER_NONE and train_cfg.regime_head:
             raise ValueError(
-                "hierarchical CAE regime_head requires a versioned quality_policy"
+                "hierarchical CAE regime_head requires "
+                "data_filter_mode='frequency'"
             )
         object.__setattr__(self, "groups", groups)
         object.__setattr__(self, "field_layouts", layouts)
         object.__setattr__(self, "axis_encodings", encodings)
-        object.__setattr__(self, "quality_policy", policy)
+        object.__setattr__(self, "data_filter_mode", data_filter_mode)
+        object.__setattr__(self, "frequency_filter", frequency_filter)
         object.__setattr__(self, "train_cfg", train_cfg)
         object.__setattr__(
             self, "device", text("hierarchical_cae", "device", self.device)
@@ -443,11 +454,14 @@ class HierarchicalCAEComponent:
                 }
                 for selector, per_axis in sorted(self.axis_encodings.items())
             ],
-            "quality_policy": (
-                None
-                if self.quality_policy is None
-                else self.quality_policy.as_dict()
-            ),
+            "data_filter": {
+                "mode": self.data_filter_mode,
+                "frequency_filter": (
+                    None
+                    if self.frequency_filter is None
+                    else self.frequency_filter.as_dict()
+                ),
+            },
             "train_cfg": asdict(self.train_cfg),
         }
 
@@ -476,7 +490,7 @@ class HierarchicalCAEComponent:
             "applicability": {
                 "capability": "yadof.rawdata-applicability",
                 "capability_version": 1,
-                "enabled": self.quality_policy is not None,
+                "enabled": self.data_filter_mode != DATA_FILTER_NONE,
                 "calibrated": False,
                 "observation_noise": "zero",
             },
@@ -501,11 +515,7 @@ class HierarchicalCAEComponent:
                 "member_selection": "seeded-permutation-cycles-v1",
                 "shared_codecs": True,
                 "regime_head": self.train_cfg.regime_head,
-                "quality_policy": (
-                    None
-                    if self.quality_policy is None
-                    else self.quality_policy.as_dict()
-                ),
+                "data_filter": self.configuration_payload()["data_filter"],
                 "observation_noise_included": False,
                 "calibrated": False,
             },
@@ -516,7 +526,7 @@ class HierarchicalCAEComponent:
         return blocked_exploitation_identity(
             applicability_status=(
                 APPLICABILITY_UNCALIBRATED
-                if self.quality_policy is not None
+                if self.data_filter_mode != DATA_FILTER_NONE
                 else APPLICABILITY_NOT_APPLICABLE
             )
         )
@@ -530,7 +540,7 @@ class HierarchicalCAEComponent:
             "082609 posterior calibration is uncalibrated and non-transferable",
         ]
         applicability_status = APPLICABILITY_NOT_APPLICABLE
-        if self.quality_policy is not None:
+        if self.data_filter_mode != DATA_FILTER_NONE:
             applicability_status = APPLICABILITY_UNCALIBRATED
             reasons.append(
                 "082609 applicability calibration exposes no transferable probabilities"
@@ -772,7 +782,8 @@ def hierarchical_cae(
     groups=(),
     field_layouts=None,
     axis_encodings=None,
-    quality_policy: RawDataQualityPolicy | Mapping[str, object] | None = None,
+    data_filter_mode: str = DATA_FILTER_NONE,
+    frequency_filter: FrequencyFilter | Mapping[str, object] | None = None,
     device: str = "auto",
     architecture_version: int = DEFAULT_CAE_TRAIN_CONFIG.architecture_version,
     token_dim: int = DEFAULT_CAE_TRAIN_CONFIG.token_dim,
@@ -800,8 +811,8 @@ def hierarchical_cae(
     applicability_loss_weight: float = DEFAULT_CAE_TRAIN_CONFIG.applicability_loss_weight,
     residual_gate_loss_weight: float = DEFAULT_CAE_TRAIN_CONFIG.residual_gate_loss_weight,
     regime_head: bool = DEFAULT_CAE_TRAIN_CONFIG.regime_head,
-    quality_weighted_loss: bool = DEFAULT_CAE_TRAIN_CONFIG.quality_weighted_loss,
-    shared_quality_isolation: bool = DEFAULT_CAE_TRAIN_CONFIG.shared_quality_isolation,
+    filter_weighted_loss: bool = DEFAULT_CAE_TRAIN_CONFIG.filter_weighted_loss,
+    shared_filter_isolation: bool = DEFAULT_CAE_TRAIN_CONFIG.shared_filter_isolation,
     gated_private_residual: bool = DEFAULT_CAE_TRAIN_CONFIG.gated_private_residual,
     coordinate_readout: bool = DEFAULT_CAE_TRAIN_CONFIG.coordinate_readout,
     coordinate_width: int = DEFAULT_CAE_TRAIN_CONFIG.coordinate_width,
@@ -820,7 +831,8 @@ def hierarchical_cae(
         groups=tuple(tuple(group) for group in groups),
         field_layouts={} if field_layouts is None else dict(field_layouts),
         axis_encodings={} if axis_encodings is None else dict(axis_encodings),
-        quality_policy=quality_policy_from_mapping(quality_policy),
+        data_filter_mode=data_filter_mode,
+        frequency_filter=frequency_filter,
         train_cfg=CAETrainConfig(
             architecture_version=architecture_version,
             token_dim=token_dim,
@@ -848,8 +860,8 @@ def hierarchical_cae(
             applicability_loss_weight=applicability_loss_weight,
             residual_gate_loss_weight=residual_gate_loss_weight,
             regime_head=regime_head,
-            quality_weighted_loss=quality_weighted_loss,
-            shared_quality_isolation=shared_quality_isolation,
+            filter_weighted_loss=filter_weighted_loss,
+            shared_filter_isolation=shared_filter_isolation,
             gated_private_residual=gated_private_residual,
             coordinate_readout=coordinate_readout,
             coordinate_width=coordinate_width,
@@ -948,11 +960,11 @@ __all__ = [
     "DiagnosticCondition",
     "DiagnosticRegimeRule",
     "FieldSpreadCalibration",
-    "RawDataQualityPolicy",
+    "FrequencyFilter",
     "PosteriorCalibrationArtifact",
     "PosteriorExploitationReadiness",
     "PosteriorExploitationSurrogate",
-    "ShapeQualityRule",
+    "FrequencyFilterRule",
     "ApplicabilityPrediction",
     "MaterializedRawDataPosterior",
     "RAWDATA_POSTERIOR_PROTOCOL",

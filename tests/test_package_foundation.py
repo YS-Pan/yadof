@@ -719,7 +719,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/conditional_inr/metadata.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/types.py" in wheel_names
         assert "yadof/surrogate/conditional_inr/posterior_adapter.py" in wheel_names
-        assert "yadof/surrogate/quality.py" in wheel_names
+        assert "yadof/surrogate/quality.py" not in wheel_names
         assert "yadof/surrogate/exploitation.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/__init__.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/types.py" in wheel_names
@@ -735,6 +735,10 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/surrogate/hierarchical_cae/checkpoints.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/scheduler.py" in wheel_names
         assert "yadof/surrogate/hierarchical_cae/posterior_adapter.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/data_filtering/__init__.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/data_filtering/modes.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/data_filtering/frequency.py" in wheel_names
+        assert "yadof/surrogate/hierarchical_cae/data_filtering/types.py" in wheel_names
         assert "yadof/surrogate/_shared/artifacts.py" in wheel_names
         assert "yadof/surrogate/_shared/training_events.py" in wheel_names
         assert "yadof/surrogate/_shared/finite_members.py" in wheel_names

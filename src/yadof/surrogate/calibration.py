@@ -31,7 +31,7 @@ from .posterior import (
     RawDataPosteriorSampler,
     SUPPORT_FINITE,
 )
-from .quality import ApplicabilityPrediction
+from .hierarchical_cae.data_filtering import ApplicabilityPrediction
 
 
 POSTERIOR_CALIBRATION_PROTOCOL = "yadof.posterior-calibration-artifact"

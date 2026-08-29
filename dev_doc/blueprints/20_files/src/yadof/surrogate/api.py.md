@@ -21,12 +21,14 @@
   a parameter-to-coefficient ridge predictor, reconstructs full named rawData,
   returns zero-width cost intervals, and exposes no posterior/readiness methods.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
-  an optional versioned `RawDataQualityPolicy`, explicit device/training kwargs,
-  and an internal `CAETrainConfig`. The component
+  one `data_filter_mode` selector that defaults to `none`, a mode-specific optional
+  versioned `FrequencyFilter`, explicit device/training kwargs, and an internal
+  `CAETrainConfig`. Mode `frequency` requires the filter; the default mode
+  rejects one so filtering cannot be enabled through a second implicit route. The component
   owns full-grid train/recover/predict, finite joint draws, uncalibrated applicability
   prediction, and an optional architecture-v2 all-axis coordinate readout. A selected
-  quality policy enables the regime head and default robust cap; a regime head without
-  a policy is rejected. `predict_field_at_coordinates()` is viewer/off-grid-only,
+  frequency filter enables the regime head and default robust cap; a regime head without
+  that mode is rejected. `predict_field_at_coordinates()` is viewer/off-grid-only,
   returns typed member/mean values, and leaves full-grid output authoritative.
 - Lazily forward `train()`, `predict_population()`, `has_trained_state()`, and
   `latest_state_generation()` to `conditional_inr/runtime.py`.
@@ -55,6 +57,9 @@
   would make retained weights unsafe to reuse.
 - Factory defaults are validated by the same path as explicit values. Nested task
   declarations are copied into tuples/read-only mappings before identity use.
+- Hierarchical data-filter selection is dispatched only inside its private
+  `data_filtering/` package. Future implementations extend that local mode boundary
+  rather than adding ambient config or a package-global registry.
 - Posterior capability identity is separate and must be nested only in a strategy
   that explicitly selects it; the implemented adapter must not cold-invalidate the
   current conditional-INR GPSAF checkpoint identity.

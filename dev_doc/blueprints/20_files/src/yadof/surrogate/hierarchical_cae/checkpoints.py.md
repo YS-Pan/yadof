@@ -8,7 +8,8 @@
 ## Functionalities
 
 - Hash parameter definitions, schema/layout/axes/groups/scalers, full train config,
-  quality policy, head/loss semantics, backend version, and strategy identity.
+  selected data-filter mode and frequency-filter declaration, head/loss semantics, backend
+  version, and strategy identity.
 - Stage the minimal model/scaler/schema bundle, atomically publish its artifact tree,
   and commit a namespace manifest and convenience pointer.
 - Delegate component-neutral namespace/path allocation and atomic JSON replacement
@@ -20,4 +21,4 @@
 
 - Checkpoints never copy training rawData.
 - Conditional-INR paths and signatures are not reused or overwritten.
-- Policy/version or any anti-noise switch change forces a different state signature.
+- Filter/version or any anti-noise switch change forces a different state signature.

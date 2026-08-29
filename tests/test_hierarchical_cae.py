@@ -16,8 +16,8 @@ from yadof.surrogate import (
     CAETrainConfig,
     DiagnosticCondition,
     DiagnosticRegimeRule,
-    RawDataQualityPolicy,
-    ShapeQualityRule,
+    FrequencyFilter,
+    FrequencyFilterRule,
     hierarchical_cae,
 )
 from yadof.surrogate.hierarchical_cae import (
@@ -40,10 +40,11 @@ from yadof.surrogate.hierarchical_cae.schema import (
     reconstruct_samples,
     standardized_field_matrices,
 )
-from yadof.surrogate.quality import (
-    RAWDATA_QUALITY_ASSESSMENT_PROTOCOL,
-    assess_quality,
-    quality_policy_from_mapping,
+from yadof.surrogate.hierarchical_cae.data_filtering import (
+    RAWDATA_FREQUENCY_FILTER_ASSESSMENT_PROTOCOL,
+    assess_data_filter,
+    assess_frequency_filter,
+    frequency_filter_from_mapping,
 )
 from yadof.surrogate.hierarchical_cae.types import NamedTrainingData
 from yadof.workspace.init import init_workspace
@@ -237,8 +238,8 @@ def test_coordinate_readout_requires_architecture_v2() -> None:
         CAETrainConfig(coordinate_readout=True)
 
 
-def _chrono_like_policy() -> RawDataQualityPolicy:
-    return RawDataQualityPolicy(
+def _chrono_like_frequency_filter() -> FrequencyFilter:
+    return FrequencyFilter(
         policy_id="chrono-contact-regime",
         policy_version=1,
         diagnostic_rules=(
@@ -267,21 +268,21 @@ def _chrono_like_policy() -> RawDataQualityPolicy:
     )
 
 
-def test_explicit_and_declarative_quality_assessment_are_versioned_and_field_local() -> None:
-    policy = _chrono_like_policy()
+def test_explicit_and_declarative_frequency_assessment_are_versioned_and_field_local() -> None:
+    frequency_filter = _chrono_like_frequency_filter()
     samples = (_mixed_sample(0.0), _mixed_sample(1.0), _mixed_sample(2.0))
     explicit = {
-        "protocol": RAWDATA_QUALITY_ASSESSMENT_PROTOCOL,
+        "protocol": RAWDATA_FREQUENCY_FILTER_ASSESSMENT_PROTOCOL,
         "protocol_version": 1,
-        "policy_id": policy.policy_id,
-        "policy_version": policy.policy_version,
+        "policy_id": frequency_filter.policy_id,
+        "policy_version": frequency_filter.policy_version,
         "design_regime": "smooth",
         "fields": {},
     }
     metadata = (
         {
             "task_diagnostics": {
-                "yadof_rawdata_quality_assessment": explicit,
+                "yadof_rawdata_frequency_filter_assessment": explicit,
                 "released": False,
             }
         },
@@ -294,8 +295,8 @@ def test_explicit_and_declarative_quality_assessment_are_versioned_and_field_loc
             }
         },
     )
-    assessed = assess_quality(
-        policy=policy, samples=samples, record_metadata=metadata
+    assessed = assess_frequency_filter(
+        frequency_filter=frequency_filter, samples=samples, record_metadata=metadata
     )
     assert assessed.design_regimes == ("smooth", "failure", "chatter")
     assert assessed.explicit_assessment_count == 1
@@ -308,22 +309,24 @@ def test_explicit_and_declarative_quality_assessment_are_versioned_and_field_loc
     assert assessed.field_weights[2, scalar_index] == 1.0
     assert assessed.residual_targets[2, curve_index] == 1.0
     assert assessed.residual_targets[2, scalar_index] == 0.0
-    assert quality_policy_from_mapping(policy.as_dict()) == policy
+    assert frequency_filter_from_mapping(frequency_filter.as_dict()) == frequency_filter
 
 
-def test_quality_assessment_priority_shape_fallback_and_no_policy_behavior() -> None:
+def test_frequency_assessment_priority_shape_fallback_and_no_filter_behavior() -> None:
     samples = (_mixed_sample(0.0), _mixed_sample(1.0))
-    ordinary = assess_quality(policy=None, samples=samples)
+    ordinary = assess_data_filter(
+        mode="none", frequency_filter=None, samples=samples
+    )
     np.testing.assert_array_equal(ordinary.field_weights, 1.0)
     np.testing.assert_array_equal(ordinary.shared_weights, 1.0)
     np.testing.assert_array_equal(ordinary.residual_targets, 0.0)
     np.testing.assert_array_equal(ordinary.applicability_targets, 1.0)
     assert ordinary.design_regimes == ("smooth", "smooth")
 
-    policy = replace(
-        _chrono_like_policy(),
+    frequency_filter = replace(
+        _chrono_like_frequency_filter(),
         shape_fallback_rules=(
-            ShapeQualityRule(
+            FrequencyFilterRule(
                 ("b_curve.npz", "values"),
                 second_difference_rms_max=0.0,
             ),
@@ -331,20 +334,20 @@ def test_quality_assessment_priority_shape_fallback_and_no_policy_behavior() -> 
         missing_assessment="shape-fallback",
     )
     explicit = {
-        "protocol": RAWDATA_QUALITY_ASSESSMENT_PROTOCOL,
+        "protocol": RAWDATA_FREQUENCY_FILTER_ASSESSMENT_PROTOCOL,
         "protocol_version": 1,
-        "policy_id": policy.policy_id,
-        "policy_version": policy.policy_version,
+        "policy_id": frequency_filter.policy_id,
+        "policy_version": frequency_filter.policy_version,
         "design_regime": "smooth",
         "fields": {},
     }
-    assessed = assess_quality(
-        policy=policy,
+    assessed = assess_frequency_filter(
+        frequency_filter=frequency_filter,
         samples=samples,
         record_metadata=(
             {
                 "task_diagnostics": {
-                    "yadof_rawdata_quality_assessment": explicit,
+                    "yadof_rawdata_frequency_filter_assessment": explicit,
                     "released": False,
                 }
             },
@@ -359,6 +362,55 @@ def test_quality_assessment_priority_shape_fallback_and_no_policy_behavior() -> 
     scalar_index = samples[0].field_selectors.index(("a_scalar.npz", "values"))
     assert assessed.field_regimes[1][curve_index] == "chatter"
     assert assessed.field_regimes[1][scalar_index] == "smooth"
+
+
+def test_data_filter_mode_defaults_off_and_dispatches_frequency_rule(
+) -> None:
+    component = hierarchical_cae()
+    assert component.data_filter_mode == "none"
+    assert component.frequency_filter is None
+    assert component.train_cfg.regime_head is False
+    assert component.configuration_payload()["data_filter"] == {
+        "mode": "none",
+        "frequency_filter": None,
+    }
+
+    frequency_filter = FrequencyFilter(
+        policy_id="spectral-chatter",
+        policy_version=1,
+        shape_fallback_rules=(
+            FrequencyFilterRule(
+                ("curve.npz", "values"),
+                high_frequency_energy_ratio_max=0.5,
+            ),
+        ),
+        missing_assessment="shape-fallback",
+    )
+    alternating = StructuredRawDataSample.from_items(
+        (
+            NamedRawDataItem(
+                "curve.npz",
+                _payload(
+                    np.asarray([1.0, -1.0] * 8, dtype=np.float64),
+                    ("frequency",),
+                ),
+            ),
+        )
+    )
+    assessed = assess_data_filter(
+        mode="frequency",
+        frequency_filter=frequency_filter,
+        samples=(alternating,),
+    )
+    assert assessed.design_regimes == ("chatter",)
+    assert assessed.shape_fallback_count == 1
+
+    with pytest.raises(ValueError, match="requires data_filter_mode"):
+        hierarchical_cae(frequency_filter=frequency_filter)
+    with pytest.raises(ValueError, match="requires frequency_filter"):
+        hierarchical_cae(data_filter_mode="frequency")
+    with pytest.raises(ValueError, match="must be one of"):
+        hierarchical_cae(data_filter_mode="quality-regime")
 
 
 def test_shared_teacher_masks_noisy_token_and_clean_gate_blocks_private_residual() -> None:
@@ -412,8 +464,8 @@ def test_shared_teacher_masks_noisy_token_and_clean_gate_blocks_private_residual
 
 def test_antinoise_ablation_switches_control_independent_paths() -> None:
     samples = (_mixed_sample(0.0), _mixed_sample(1.0))
-    quality = assess_quality(
-        policy=_chrono_like_policy(),
+    data_filter = assess_frequency_filter(
+        frequency_filter=_chrono_like_frequency_filter(),
         samples=samples,
         record_metadata=(
             {"task_diagnostics": {"released": True}},
@@ -438,11 +490,11 @@ def test_antinoise_ablation_switches_control_independent_paths() -> None:
             mixed_precision=False,
             **switches,
         )
-        return objectives._quality_batch(quality, rows, device, cfg)
+        return objectives._filter_batch(data_filter, rows, device, cfg)
 
     no_gating = batch(
-        quality_weighted_loss=False,
-        shared_quality_isolation=False,
+        filter_weighted_loss=False,
+        shared_filter_isolation=False,
         gated_private_residual=False,
     )
     torch.testing.assert_close(no_gating[0], torch.ones_like(no_gating[0]))
@@ -450,33 +502,33 @@ def test_antinoise_ablation_switches_control_independent_paths() -> None:
     torch.testing.assert_close(no_gating[2], torch.zeros_like(no_gating[2]))
 
     robust_only = batch(
-        quality_weighted_loss=True,
-        shared_quality_isolation=False,
+        filter_weighted_loss=True,
+        shared_filter_isolation=False,
         gated_private_residual=False,
     )
     torch.testing.assert_close(
-        robust_only[0], torch.as_tensor(quality.field_weights)
+        robust_only[0], torch.as_tensor(data_filter.field_weights)
     )
     torch.testing.assert_close(robust_only[1], torch.ones_like(robust_only[1]))
     torch.testing.assert_close(robust_only[2], torch.zeros_like(robust_only[2]))
 
     isolated = batch(
-        quality_weighted_loss=True,
-        shared_quality_isolation=True,
+        filter_weighted_loss=True,
+        shared_filter_isolation=True,
         gated_private_residual=False,
     )
-    torch.testing.assert_close(isolated[0], torch.as_tensor(quality.field_weights))
-    torch.testing.assert_close(isolated[1], torch.as_tensor(quality.shared_weights))
+    torch.testing.assert_close(isolated[0], torch.as_tensor(data_filter.field_weights))
+    torch.testing.assert_close(isolated[1], torch.as_tensor(data_filter.shared_weights))
     torch.testing.assert_close(isolated[2], torch.zeros_like(isolated[2]))
 
     gated = batch(
-        quality_weighted_loss=True,
-        shared_quality_isolation=True,
+        filter_weighted_loss=True,
+        shared_filter_isolation=True,
         gated_private_residual=True,
     )
-    torch.testing.assert_close(gated[0], torch.as_tensor(quality.field_weights))
-    torch.testing.assert_close(gated[1], torch.as_tensor(quality.shared_weights))
-    torch.testing.assert_close(gated[2], torch.as_tensor(quality.residual_targets))
+    torch.testing.assert_close(gated[0], torch.as_tensor(data_filter.field_weights))
+    torch.testing.assert_close(gated[1], torch.as_tensor(data_filter.shared_weights))
+    torch.testing.assert_close(gated[2], torch.as_tensor(data_filter.residual_targets))
 
     schema = build_schema(samples[0])
     ungated_cfg = CAETrainConfig(
@@ -535,22 +587,24 @@ def test_design_field_loss_cap_and_weights_do_not_drop_other_fields() -> None:
     )
 
 
-def test_component_identity_carries_quality_head_and_zero_observation_noise() -> None:
+def test_component_identity_carries_frequency_filter_and_zero_observation_noise() -> None:
     selector = ("b_curve.npz", "values")
     component = hierarchical_cae(
-        quality_policy=_chrono_like_policy(),
+        data_filter_mode="frequency",
+        frequency_filter=_chrono_like_frequency_filter(),
         field_layouts={selector: {"spatial_axes": ("phase",)}},
         axis_encodings={selector: {"phase": "linear"}},
     )
     assert component.train_cfg.regime_head is True
     assert component.train_cfg.robust_loss_cap == 4.0
     payload = component.configuration_payload()
-    assert payload["quality_policy"]["policy_id"] == "chrono-contact-regime"
+    assert payload["data_filter"]["mode"] == "frequency"
+    assert payload["data_filter"]["frequency_filter"]["policy_id"] == "chrono-contact-regime"
     identity = component.posterior_semantic_identity(None, None)
     assert identity["controlled_parameters"]["observation_noise_included"] is False
     assert identity["controlled_parameters"]["regime_head"] is True
-    assert component.train_cfg.quality_weighted_loss is True
-    assert component.train_cfg.shared_quality_isolation is True
+    assert component.train_cfg.filter_weighted_loss is True
+    assert component.train_cfg.shared_filter_isolation is True
     assert component.train_cfg.gated_private_residual is True
     with pytest.raises(TypeError):
         component.field_layouts[selector] = {}  # type: ignore[index]
@@ -568,7 +622,7 @@ def test_tiny_staged_fit_predicts_every_field_with_one_joint_member_identity() -
         [[index / 15.0, (index % 4) / 3.0] for index in range(16)],
         dtype=np.float32,
     )
-    policy = _chrono_like_policy()
+    frequency_filter = _chrono_like_frequency_filter()
     metadata = tuple(
         {
             "task_diagnostics": {
@@ -579,8 +633,8 @@ def test_tiny_staged_fit_predicts_every_field_with_one_joint_member_identity() -
         }
         for index in range(16)
     )
-    quality = assess_quality(
-        policy=policy, samples=samples, record_metadata=metadata
+    data_filter = assess_frequency_filter(
+        frequency_filter=frequency_filter, samples=samples, record_metadata=metadata
     )
     cfg = CAETrainConfig(
         token_dim=4,
@@ -608,7 +662,7 @@ def test_tiny_staged_fit_predicts_every_field_with_one_joint_member_identity() -
         schema=schema,
         parameters=parameters,
         standardized_fields=standardized,
-        quality=quality,
+        data_filter=data_filter,
         device=torch.device("cpu"),
         train_cfg=cfg,
         seed=73,
@@ -670,7 +724,8 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
         record_metadata=metadata,
     )
     component = hierarchical_cae(
-        quality_policy=_chrono_like_policy(),
+        data_filter_mode="frequency",
+        frequency_filter=_chrono_like_frequency_filter(),
         device="cpu",
         architecture_version=2,
         token_dim=4,

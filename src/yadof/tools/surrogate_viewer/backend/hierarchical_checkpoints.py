@@ -38,7 +38,9 @@ from yadof.surrogate.hierarchical_cae.schema import (
     named_sample_from_payloads,
 )
 from yadof.surrogate.hierarchical_cae.types import FieldScaler
-from yadof.surrogate.quality import quality_policy_from_mapping
+from yadof.surrogate.hierarchical_cae.data_filtering import (
+    frequency_filter_from_mapping,
+)
 
 from .rawdata import (
     copy_template,
@@ -305,14 +307,18 @@ class HierarchicalCAECheckpointPredictor:
             raise ValueError(
                 "checkpoint model training config does not match its manifest"
             )
-        quality_policy = quality_policy_from_mapping(payload.get("quality_policy"))
+        data_filter = dict(payload["data_filter"])
+        frequency_filter = frequency_filter_from_mapping(
+            data_filter.get("frequency_filter")
+        )
         expected_signature = semantic_state_signature(
             strategy_signature=str(payload["strategy_signature"]),
             parameter_names=self.parameter_names,
             parameter_definition_signature=current_parameter_signature,
             schema=self.hierarchical_schema,
             train_cfg=self.train_cfg,
-            quality_policy=quality_policy,
+            data_filter_mode=str(data_filter["mode"]),
+            frequency_filter=frequency_filter,
             torch_version=str(payload["torch_version"]),
         )
         if str(payload["state_signature"]) != expected_signature:

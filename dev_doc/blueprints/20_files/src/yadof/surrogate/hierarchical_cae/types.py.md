@@ -15,5 +15,5 @@
 ## Invariants
 
 - Rank/layout and axis roles are explicit and stable-selector keyed.
-- Every behavior-changing head/loss/quality switch is serializable identity state.
+- Every behavior-changing head/loss/filter switch is serializable identity state.
 - `coordinate_readout` remains false for the Gate 0 v5 failed MVP.

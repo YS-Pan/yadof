@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from ..quality import QualityAssessmentBatch
+from .data_filtering import DataFilterAssessment
 from .coordinates import coordinate_feature_count, encode_coordinate_points, stored_coordinate_points
 from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
 
@@ -76,9 +76,9 @@ def _batch_indices(indices: np.ndarray, batch_size: int, rng=None) -> Iterable[n
 def _field_batch(fields: Sequence[np.ndarray], indices: np.ndarray, device: torch.device) -> tuple[torch.Tensor, ...]:
     return tuple((torch.as_tensor(values[indices], dtype=torch.float32, device=device) for values in fields))
 
-def _quality_batch(quality: QualityAssessmentBatch, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def _filter_batch(data_filter: DataFilterAssessment, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     rows = np.asarray(indices, dtype=np.int64)
-    field_weights = quality.field_weights[rows] if cfg.quality_weighted_loss else np.ones_like(quality.field_weights[rows])
-    shared_weights = quality.shared_weights[rows] if cfg.shared_quality_isolation else np.ones_like(quality.shared_weights[rows])
-    residual_targets = quality.residual_targets[rows] if cfg.gated_private_residual else np.zeros_like(quality.residual_targets[rows])
-    return (torch.as_tensor(field_weights, dtype=torch.float32, device=device), torch.as_tensor(shared_weights, dtype=torch.float32, device=device), torch.as_tensor(residual_targets, dtype=torch.float32, device=device), torch.as_tensor(quality.applicability_targets[rows], dtype=torch.float32, device=device))
+    field_weights = data_filter.field_weights[rows] if cfg.filter_weighted_loss else np.ones_like(data_filter.field_weights[rows])
+    shared_weights = data_filter.shared_weights[rows] if cfg.shared_filter_isolation else np.ones_like(data_filter.shared_weights[rows])
+    residual_targets = data_filter.residual_targets[rows] if cfg.gated_private_residual else np.zeros_like(data_filter.residual_targets[rows])
+    return (torch.as_tensor(field_weights, dtype=torch.float32, device=device), torch.as_tensor(shared_weights, dtype=torch.float32, device=device), torch.as_tensor(residual_targets, dtype=torch.float32, device=device), torch.as_tensor(data_filter.applicability_targets[rows], dtype=torch.float32, device=device))

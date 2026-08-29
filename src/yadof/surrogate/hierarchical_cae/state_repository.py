@@ -18,7 +18,7 @@ from ...recorded_data import api as recorded_api
 from ...recorded_data.session import CampaignSession
 from ...task_snapshot import GenerationTaskSnapshot
 from ...workspace import WorkspaceContext
-from ..quality import ApplicabilityPrediction, assess_quality
+from .data_filtering import assess_data_filter
 from .._shared.training_events import monotonic_time, now_text, record_training_event
 from .checkpoints import COMPONENT_NAMESPACE, new_publication_paths, resolve_artifact_dir, resolve_namespace_manifest_path, run_namespace_for_signature, schema_payload, semantic_state_signature, validate_manifest_identity, write_checkpoint
 from .coordinates import coordinate_grid, interpolate_stored_values
@@ -82,21 +82,26 @@ def train_with_config(config: LoadedConfig, *, generation_index: int, component,
     checkpoint_path, namespace_manifest_path, artifact_dir, staging_dir, run_namespace, component_namespace = new_publication_paths(config.workspace.surrogate_checkpoint_dir, generation_index=int(generation_index), strategy_signature=strategy_signature)
     parameter_definition_signature = job_template_api.get_parameter_definition_signature(config.workspace)
     if len(data.raw_data) < int(component.train_cfg.minimum_samples):
-        state = HierarchicalState(generation_index=int(generation_index), sample_count=len(data.raw_data), checkpoint_path=checkpoint_path, namespace_manifest_path=namespace_manifest_path, artifact_dir=artifact_dir, bundle_path=artifact_dir / 'model.pt', strategy_signature=strategy_signature, state_signature='0' * 64, run_namespace=run_namespace, component_namespace=component_namespace, parameter_names=data.parameter_names, parameter_definition_signature=parameter_definition_signature, schema=None, quality_policy=component.quality_policy, model=None, train_cfg=component.train_cfg, device=None, train_history={'model': MODEL_NAME, 'member_count': 0, 'skipped': True, 'skip_reason': 'fewer than configured minimum unique compatible designs', 'unique_design_count': len(data.raw_data), 'dropped_duplicate_designs': duplicate_count})
+        state = HierarchicalState(generation_index=int(generation_index), sample_count=len(data.raw_data), checkpoint_path=checkpoint_path, namespace_manifest_path=namespace_manifest_path, artifact_dir=artifact_dir, bundle_path=artifact_dir / 'model.pt', strategy_signature=strategy_signature, state_signature='0' * 64, run_namespace=run_namespace, component_namespace=component_namespace, parameter_names=data.parameter_names, parameter_definition_signature=parameter_definition_signature, schema=None, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter, model=None, train_cfg=component.train_cfg, device=None, train_history={'model': MODEL_NAME, 'member_count': 0, 'skipped': True, 'skip_reason': 'fewer than configured minimum unique compatible designs', 'unique_design_count': len(data.raw_data), 'dropped_duplicate_designs': duplicate_count})
         return state
     schema = _build_current_schema(data, component)
     matrices = field_matrices(schema, data.raw_data)
     scalers = fit_scalers(matrices, scale_floor=component.train_cfg.scale_floor)
     schema = replace(schema, scalers=scalers)
     standardized = standardized_field_matrices(schema, matrices)
-    quality = assess_quality(policy=component.quality_policy, samples=data.raw_data, record_metadata=data.record_metadata)
-    state_signature = semantic_state_signature(strategy_signature=strategy_signature, parameter_names=data.parameter_names, parameter_definition_signature=parameter_definition_signature, schema=schema, train_cfg=component.train_cfg, quality_policy=component.quality_policy)
+    data_filter = assess_data_filter(
+        mode=component.data_filter_mode,
+        frequency_filter=component.frequency_filter,
+        samples=data.raw_data,
+        record_metadata=data.record_metadata,
+    )
+    state_signature = semantic_state_signature(strategy_signature=strategy_signature, parameter_names=data.parameter_names, parameter_definition_signature=parameter_definition_signature, schema=schema, train_cfg=component.train_cfg, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter)
     device = _select_device(component.device)
     seed = int(config.OPTIMIZE_RANDOM_SEED if random_seed is None else random_seed) + int(generation_index) * 1009
     host_rss_before = int(psutil.Process().memory_info().rss)
-    model, history = fit_hierarchical_cae(input_dim=x.shape[1], schema=schema, parameters=x, standardized_fields=standardized, quality=quality, device=device, train_cfg=component.train_cfg, seed=seed)
-    history.update({'skipped': False, 'sample_count_before_deduplication': len(raw_data.normalized_variables), 'unique_design_count': len(data.raw_data), 'dropped_duplicate_designs': duplicate_count, 'quality_policy': None if component.quality_policy is None else component.quality_policy.as_dict(), 'host_rss_before_bytes': host_rss_before, 'host_rss_after_bytes': int(psutil.Process().memory_info().rss)})
-    state = HierarchicalState(generation_index=int(generation_index), sample_count=len(data.raw_data), checkpoint_path=checkpoint_path, namespace_manifest_path=namespace_manifest_path, artifact_dir=artifact_dir, bundle_path=artifact_dir / 'model.pt', strategy_signature=strategy_signature, state_signature=state_signature, run_namespace=run_namespace, component_namespace=component_namespace, parameter_names=data.parameter_names, parameter_definition_signature=parameter_definition_signature, schema=schema, quality_policy=component.quality_policy, model=model, train_cfg=component.train_cfg, device=device, train_history=history)
+    model, history = fit_hierarchical_cae(input_dim=x.shape[1], schema=schema, parameters=x, standardized_fields=standardized, data_filter=data_filter, device=device, train_cfg=component.train_cfg, seed=seed)
+    history.update({'skipped': False, 'sample_count_before_deduplication': len(raw_data.normalized_variables), 'unique_design_count': len(data.raw_data), 'dropped_duplicate_designs': duplicate_count, 'data_filter': {'mode': component.data_filter_mode, 'frequency_filter': None if component.frequency_filter is None else component.frequency_filter.as_dict()}, 'host_rss_before_bytes': host_rss_before, 'host_rss_after_bytes': int(psutil.Process().memory_info().rss)})
+    state = HierarchicalState(generation_index=int(generation_index), sample_count=len(data.raw_data), checkpoint_path=checkpoint_path, namespace_manifest_path=namespace_manifest_path, artifact_dir=artifact_dir, bundle_path=artifact_dir / 'model.pt', strategy_signature=strategy_signature, state_signature=state_signature, run_namespace=run_namespace, component_namespace=component_namespace, parameter_names=data.parameter_names, parameter_definition_signature=parameter_definition_signature, schema=schema, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter, model=model, train_cfg=component.train_cfg, device=device, train_history=history)
     write_checkpoint(state, staged_artifact_dir=staging_dir)
     record_training_event(config.workspace, _training_success_metadata(state, started_at=training_started_at, ended_at=now_text(), duration_sec=monotonic_time() - started_monotonic))
     with _STATE_LOCK:
@@ -132,7 +137,7 @@ def _state_for_config(config: LoadedConfig, *, component, recover: bool) -> Hier
         state = _STATES.get(key)
     if state is not None:
         expected_parameter_signature = job_template_api.get_parameter_definition_signature(config.workspace)
-        expected = semantic_state_signature(strategy_signature=strategy_signature_for_workspace(config.workspace, component=component), parameter_names=state.parameter_names, parameter_definition_signature=expected_parameter_signature, schema=state.schema, train_cfg=component.train_cfg, quality_policy=component.quality_policy)
+        expected = semantic_state_signature(strategy_signature=strategy_signature_for_workspace(config.workspace, component=component), parameter_names=state.parameter_names, parameter_definition_signature=expected_parameter_signature, schema=state.schema, train_cfg=component.train_cfg, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter)
         if expected != state.state_signature:
             with _STATE_LOCK:
                 _STATES.pop(key, None)
@@ -156,7 +161,7 @@ def _recover_latest_state(config: LoadedConfig, *, component) -> HierarchicalSta
     schema = _build_current_schema(data, component)
     parameter_signature = job_template_api.get_parameter_definition_signature(config.workspace)
     strategy_signature = strategy_signature_for_workspace(config.workspace, component=component)
-    expected_signature = semantic_state_signature(strategy_signature=strategy_signature, parameter_names=data.parameter_names, parameter_definition_signature=parameter_signature, schema=schema, train_cfg=component.train_cfg, quality_policy=component.quality_policy)
+    expected_signature = semantic_state_signature(strategy_signature=strategy_signature, parameter_names=data.parameter_names, parameter_definition_signature=parameter_signature, schema=schema, train_cfg=component.train_cfg, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter)
     namespace_dir = checkpoint_root / 'runs' / run_namespace_for_signature(strategy_signature) / 'components' / COMPONENT_NAMESPACE
     for path in sorted(namespace_dir.glob('generation_*.json'), reverse=True):
         try:
@@ -178,10 +183,10 @@ def _recover_state_from_checkpoint(config: LoadedConfig, checkpoint_path: Path, 
         raise ValueError('checkpoint rawData schema/layout/group identity changed')
     if dict(payload['train_cfg']) != asdict(component.train_cfg):
         raise ValueError('checkpoint training configuration changed')
-    expected_policy = None if component.quality_policy is None else component.quality_policy.as_dict()
-    if payload.get('quality_policy') != expected_policy:
-        raise ValueError('checkpoint quality policy changed')
-    manifest_signature = semantic_state_signature(strategy_signature=strategy_signature, parameter_names=data.parameter_names, parameter_definition_signature=dict(payload['parameter_definition_signature']), schema=schema, train_cfg=component.train_cfg, quality_policy=component.quality_policy, torch_version=str(payload['torch_version']))
+    expected_filter = {'mode': component.data_filter_mode, 'frequency_filter': None if component.frequency_filter is None else component.frequency_filter.as_dict()}
+    if payload.get('data_filter') != expected_filter:
+        raise ValueError('checkpoint data-filter configuration changed')
+    manifest_signature = semantic_state_signature(strategy_signature=strategy_signature, parameter_names=data.parameter_names, parameter_definition_signature=dict(payload['parameter_definition_signature']), schema=schema, train_cfg=component.train_cfg, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter, torch_version=str(payload['torch_version']))
     if manifest_signature != str(payload['state_signature']):
         raise ValueError('checkpoint semantic signature is inconsistent')
     checkpoint_root = config.workspace.surrogate_checkpoint_dir
@@ -217,7 +222,7 @@ def _recover_state_from_checkpoint(config: LoadedConfig, checkpoint_path: Path, 
             source_path = active_path
     except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
         pass
-    return HierarchicalState(generation_index=generation, sample_count=int(payload['sample_count']), checkpoint_path=source_path, namespace_manifest_path=namespace_manifest, artifact_dir=artifact_dir, bundle_path=bundle_path, strategy_signature=strategy_signature, state_signature=expected_signature, run_namespace=str(payload['run_namespace']), component_namespace=str(payload['component_namespace']), parameter_names=data.parameter_names, parameter_definition_signature=parameter_signature, schema=schema, quality_policy=component.quality_policy, model=model, train_cfg=component.train_cfg, device=device, train_history=dict(payload.get('train_history', {})))
+    return HierarchicalState(generation_index=generation, sample_count=int(payload['sample_count']), checkpoint_path=source_path, namespace_manifest_path=namespace_manifest, artifact_dir=artifact_dir, bundle_path=bundle_path, strategy_signature=strategy_signature, state_signature=expected_signature, run_namespace=str(payload['run_namespace']), component_namespace=str(payload['component_namespace']), parameter_names=data.parameter_names, parameter_definition_signature=parameter_signature, schema=schema, data_filter_mode=component.data_filter_mode, frequency_filter=component.frequency_filter, model=model, train_cfg=component.train_cfg, device=device, train_history=dict(payload.get('train_history', {})))
 
 def _require_state(config: LoadedConfig, *, component) -> HierarchicalState:
     state = _state_for_config(config, component=component, recover=True)

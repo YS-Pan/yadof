@@ -18,7 +18,7 @@ from ...recorded_data import api as recorded_api
 from ...recorded_data.session import CampaignSession
 from ...task_snapshot import GenerationTaskSnapshot
 from ...workspace import WorkspaceContext
-from ..quality import ApplicabilityPrediction, assess_quality
+from .data_filtering import ApplicabilityPrediction
 from .._shared.training_events import monotonic_time, now_text, record_training_event
 from .checkpoints import COMPONENT_NAMESPACE, new_publication_paths, resolve_artifact_dir, resolve_namespace_manifest_path, run_namespace_for_signature, schema_payload, semantic_state_signature, validate_manifest_identity, write_checkpoint
 from .coordinates import coordinate_grid, interpolate_stored_values
@@ -93,7 +93,7 @@ def predict_applicability(workspace: WorkspaceContext | str | Path, population, 
         _fields, probabilities, _residual = _predict_members(state, rows)
         members = tuple((tuple((float(value) for value in row)) for row in probabilities))
         means = tuple((float(value) for value in np.mean(probabilities, axis=0)))
-    policy_identity = {'enabled': False, 'default': 'uniform-smooth'} if state.quality_policy is None else state.quality_policy.as_dict()
+    policy_identity = {'mode': state.data_filter_mode, 'frequency_filter': None if state.frequency_filter is None else state.frequency_filter.as_dict()}
     return ApplicabilityPrediction(population=rows, mean_smooth_probability=means, member_smooth_probabilities=members, policy_identity=policy_identity, state_signature=state.state_signature, strategy_signature=state.strategy_signature, calibrated=False)
 
 def predict_field_at_coordinates(workspace: WorkspaceContext | str | Path, population, *, component, field_selector: tuple[str, str], axis_coordinates: Sequence[np.ndarray]) -> CoordinatePrediction:

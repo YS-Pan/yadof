@@ -62,6 +62,10 @@ account; a sandbox-owned detached console is not presented as visible.
 - Evaluation may depend on task and persistence contracts; optimization may
   coordinate evaluation, history, and surrogate components.
 - Concrete optional numerical backends load only after their component is selected.
+- Hierarchical-CAE training-data filtering is component-local: implementations live
+  below `surrogate/hierarchical_cae/data_filtering/`, and its factory exposes one
+  explicit mode selector that defaults to no filtering; the current opt-in
+  implementation is named `frequency`.
 - Core runtime never imports optional tools, administrator code, benchmark code, or
   concrete workspace projects.
 - Distributed workflows use job-local modules and deliberately provisioned

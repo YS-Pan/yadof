@@ -1,4 +1,4 @@
-"""Typed, declarative rawData quality/regime assessment capability."""
+"""Frequency-based data-filter implementation for the hierarchical CAE."""
 
 from __future__ import annotations
 
@@ -9,32 +9,35 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from ..job_template.rawdata_template import (
+from ....job_template.rawdata_template import (
     RawDataFieldSelector,
     StructuredRawDataSample,
 )
-
-
-RAWDATA_QUALITY_ASSESSMENT_PROTOCOL = "yadof.rawdata-quality-assessment"
-RAWDATA_QUALITY_ASSESSMENT_VERSION = 1
-RAWDATA_QUALITY_POLICY_PROTOCOL = "yadof.rawdata-quality-policy"
-RAWDATA_QUALITY_POLICY_VERSION = 1
-REGIME_SMOOTH = "smooth"
-REGIME_CHATTER = "chatter"
-REGIME_FAILURE = "failure"
-REGIME_UNKNOWN = "unknown"
-_REGIMES = frozenset(
-    {REGIME_SMOOTH, REGIME_CHATTER, REGIME_FAILURE, REGIME_UNKNOWN}
+from .types import (
+    DataFilterAssessment,
+    REGIME_CHATTER,
+    REGIME_FAILURE,
+    REGIME_SMOOTH,
+    REGIME_UNKNOWN,
+    REGIMES,
 )
 
 
+RAWDATA_FREQUENCY_FILTER_ASSESSMENT_PROTOCOL = (
+    "yadof.rawdata-frequency-filter-assessment"
+)
+RAWDATA_FREQUENCY_FILTER_ASSESSMENT_VERSION = 1
+RAWDATA_FREQUENCY_FILTER_PROTOCOL = "yadof.rawdata-frequency-filter"
+RAWDATA_FREQUENCY_FILTER_VERSION = 1
 def _selector(value: object) -> RawDataFieldSelector:
     if (
         not isinstance(value, Sequence)
         or isinstance(value, (str, bytes))
         or len(value) != 2
     ):
-        raise ValueError("quality selector must be ('.npz filename', 'values|data')")
+        raise ValueError(
+            "frequency-filter selector must be ('.npz filename', 'values|data')"
+        )
     selector = (str(value[0]), str(value[1]))
     if (
         not selector[0].lower().endswith(".npz")
@@ -42,7 +45,9 @@ def _selector(value: object) -> RawDataFieldSelector:
         or "\\" in selector[0]
         or selector[1] not in {"values", "data"}
     ):
-        raise ValueError("quality selector must use a direct NPZ basename and main key")
+        raise ValueError(
+            "frequency-filter selector must use a direct NPZ basename and main key"
+        )
     return selector
 
 
@@ -52,8 +57,8 @@ def selector_key(selector: RawDataFieldSelector) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class ShapeQualityRule:
-    """Task-owned declarative fallback when explicit diagnostics are unavailable."""
+class FrequencyFilterRule:
+    """Task-owned spectral fallback when explicit diagnostics are unavailable."""
 
     selector: RawDataFieldSelector
     second_difference_rms_max: float | None = None
@@ -68,7 +73,9 @@ class ShapeQualityRule:
             "derivative_reversal_fraction_max",
         )
         if all(getattr(self, name) is None for name in names):
-            raise ValueError("a shape-quality rule must declare at least one threshold")
+            raise ValueError(
+                "a frequency-filter rule must declare at least one threshold"
+            )
         for name in names:
             raw = getattr(self, name)
             if raw is None:
@@ -156,20 +163,20 @@ class DiagnosticRegimeRule:
 
 
 @dataclass(frozen=True, slots=True)
-class RawDataQualityPolicy:
-    """Versioned, JSON-identity-safe policy; no executable callback is accepted."""
+class FrequencyFilter:
+    """Versioned frequency-filter declaration with no executable callback."""
 
     policy_id: str
     policy_version: int
     assessment_path: tuple[str, ...] = (
         "task_diagnostics",
-        "yadof_rawdata_quality_assessment",
+        "yadof_rawdata_frequency_filter_assessment",
     )
     diagnostic_path: tuple[str, ...] = ("task_diagnostics",)
     diagnostic_rules: tuple[DiagnosticRegimeRule, ...] = ()
     diagnostic_field_selectors: tuple[RawDataFieldSelector, ...] = ()
     diagnostic_default_regime: str = REGIME_SMOOTH
-    shape_fallback_rules: tuple[ShapeQualityRule, ...] = ()
+    shape_fallback_rules: tuple[FrequencyFilterRule, ...] = ()
     missing_assessment: str = "uniform"
     smooth_field_weight: float = 1.0
     chatter_field_weight: float = 0.25
@@ -182,15 +189,19 @@ class RawDataQualityPolicy:
 
     def __post_init__(self) -> None:
         if not str(self.policy_id).strip():
-            raise ValueError("quality policy_id must not be empty")
+            raise ValueError("frequency filter policy_id must not be empty")
         if int(self.policy_version) <= 0:
-            raise ValueError("quality policy_version must be positive")
+            raise ValueError("frequency filter policy_version must be positive")
         path = tuple(str(value) for value in self.assessment_path)
         if not path or any(not value for value in path):
-            raise ValueError("quality assessment_path must contain non-empty keys")
+            raise ValueError(
+                "frequency filter assessment_path must contain non-empty keys"
+            )
         diagnostic_path = tuple(str(value) for value in self.diagnostic_path)
         if not diagnostic_path or any(not value for value in diagnostic_path):
-            raise ValueError("quality diagnostic_path must contain non-empty keys")
+            raise ValueError(
+                "frequency filter diagnostic_path must contain non-empty keys"
+            )
         diagnostic_rules = tuple(self.diagnostic_rules)
         diagnostic_selectors = tuple(
             _selector(selector) for selector in self.diagnostic_field_selectors
@@ -253,8 +264,8 @@ class RawDataQualityPolicy:
 
     def as_dict(self) -> dict[str, object]:
         return {
-            "protocol": RAWDATA_QUALITY_POLICY_PROTOCOL,
-            "protocol_version": RAWDATA_QUALITY_POLICY_VERSION,
+            "protocol": RAWDATA_FREQUENCY_FILTER_PROTOCOL,
+            "protocol_version": RAWDATA_FREQUENCY_FILTER_VERSION,
             "policy_id": self.policy_id,
             "policy_version": self.policy_version,
             "assessment_path": list(self.assessment_path),
@@ -299,82 +310,12 @@ class RawDataQualityPolicy:
         }
 
 
-@dataclass(frozen=True, slots=True)
-class QualityAssessmentBatch:
-    field_weights: np.ndarray
-    shared_weights: np.ndarray
-    residual_targets: np.ndarray
-    applicability_targets: np.ndarray
-    design_regimes: tuple[str, ...]
-    field_regimes: tuple[tuple[str, ...], ...]
-    explicit_assessment_count: int
-    diagnostic_assessment_count: int
-    shape_fallback_count: int
-
-    def diagnostics(self) -> dict[str, object]:
-        design_counts = {
-            regime: self.design_regimes.count(regime) for regime in sorted(_REGIMES)
-        }
-        field_counts = {
-            regime: sum(row.count(regime) for row in self.field_regimes)
-            for regime in sorted(_REGIMES)
-        }
-        return {
-            "design_regime_counts": design_counts,
-            "field_regime_counts": field_counts,
-            "explicit_assessment_count": int(self.explicit_assessment_count),
-            "diagnostic_assessment_count": int(self.diagnostic_assessment_count),
-            "shape_fallback_count": int(self.shape_fallback_count),
-            "mean_field_weight": float(np.mean(self.field_weights)),
-            "mean_shared_weight": float(np.mean(self.shared_weights)),
-            "mean_applicability_target": float(np.mean(self.applicability_targets)),
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class ApplicabilityPrediction:
-    """Uncalibrated predictor-member applicability scores for one population."""
-
-    population: tuple[tuple[float, ...], ...]
-    mean_smooth_probability: tuple[float, ...]
-    member_smooth_probabilities: tuple[tuple[float, ...], ...]
-    policy_identity: Mapping[str, object]
-    state_signature: str
-    strategy_signature: str
-    calibrated: bool = False
-    limitations: tuple[str, ...] = (
-        "uncalibrated predictor-ensemble regime score",
-        "not independent Gaussian observation noise",
-        "not an implicit optimization trust rule",
-    )
-
-    def __post_init__(self) -> None:
-        population = tuple(tuple(float(value) for value in row) for row in self.population)
-        means = tuple(float(value) for value in self.mean_smooth_probability)
-        members = tuple(
-            tuple(float(value) for value in row)
-            for row in self.member_smooth_probabilities
-        )
-        if len(means) != len(population) or any(
-            len(row) != len(population) for row in members
-        ):
-            raise ValueError("applicability prediction rows do not align")
-        if any(not 0.0 <= value <= 1.0 for value in means) or any(
-            not 0.0 <= value <= 1.0 for row in members for value in row
-        ):
-            raise ValueError("applicability probabilities must be in [0, 1]")
-        object.__setattr__(self, "population", population)
-        object.__setattr__(self, "mean_smooth_probability", means)
-        object.__setattr__(self, "member_smooth_probabilities", members)
-        object.__setattr__(self, "policy_identity", dict(self.policy_identity))
-        object.__setattr__(self, "limitations", tuple(str(value) for value in self.limitations))
-
-
 def _regime(value: object) -> str:
     regime = str(value).strip().lower()
-    if regime not in _REGIMES:
+    if regime not in REGIMES:
         raise ValueError(
-            f"quality regime must be one of {tuple(sorted(_REGIMES))!r}, got {value!r}"
+            "frequency-filter regime must be one of "
+            f"{tuple(sorted(REGIMES))!r}, got {value!r}"
         )
     return regime
 
@@ -431,11 +372,11 @@ def _condition_matches(
 
 def _diagnostic_assessment(
     diagnostics: Mapping[str, object],
-    policy: RawDataQualityPolicy,
+    frequency_filter: FrequencyFilter,
     selectors: Sequence[RawDataFieldSelector],
 ) -> tuple[str, tuple[str, ...]]:
-    design = policy.diagnostic_default_regime
-    for rule in policy.diagnostic_rules:
+    design = frequency_filter.diagnostic_default_regime
+    for rule in frequency_filter.diagnostic_rules:
         matches = tuple(
             _condition_matches(diagnostics, condition)
             for condition in rule.conditions
@@ -445,11 +386,11 @@ def _diagnostic_assessment(
         ):
             design = rule.regime
             break
-    scoped = set(policy.diagnostic_field_selectors)
+    scoped = set(frequency_filter.diagnostic_field_selectors)
     if scoped.difference(selectors):
         unknown = tuple(sorted(scoped.difference(selectors)))
         raise ValueError(
-            f"diagnostic policy references unknown rawData fields: {unknown!r}"
+            f"frequency filter references unknown rawData fields: {unknown!r}"
         )
     fields = tuple(
         design if not scoped or selector in scoped else REGIME_SMOOTH
@@ -460,26 +401,27 @@ def _diagnostic_assessment(
 
 def _validate_explicit_assessment(
     payload: Mapping[str, object],
-    policy: RawDataQualityPolicy,
+    frequency_filter: FrequencyFilter,
     selectors: Sequence[RawDataFieldSelector],
 ) -> tuple[str, tuple[str, ...]]:
-    if payload.get("protocol") != RAWDATA_QUALITY_ASSESSMENT_PROTOCOL:
-        raise ValueError("task quality assessment has an unsupported protocol")
-    if int(payload.get("protocol_version", -1)) != RAWDATA_QUALITY_ASSESSMENT_VERSION:
-        raise ValueError("task quality assessment has an unsupported protocol version")
-    if str(payload.get("policy_id", "")) != policy.policy_id or int(
+    if payload.get("protocol") != RAWDATA_FREQUENCY_FILTER_ASSESSMENT_PROTOCOL:
+        raise ValueError("task frequency-filter assessment has an unsupported protocol")
+    if int(payload.get("protocol_version", -1)) != RAWDATA_FREQUENCY_FILTER_ASSESSMENT_VERSION:
+        raise ValueError("task frequency-filter assessment has an unsupported protocol version")
+    if str(payload.get("policy_id", "")) != frequency_filter.policy_id or int(
         payload.get("policy_version", -1)
-    ) != policy.policy_version:
-        raise ValueError("task quality assessment does not match the selected policy")
+    ) != frequency_filter.policy_version:
+        raise ValueError("task frequency-filter assessment does not match the selected filter")
     design = _regime(payload.get("design_regime", REGIME_UNKNOWN))
     raw_fields = payload.get("fields", {})
     if not isinstance(raw_fields, Mapping):
-        raise ValueError("task quality assessment fields must be an object")
+        raise ValueError("task frequency-filter assessment fields must be an object")
     expected = {selector_key(selector) for selector in selectors}
     extra = set(str(key) for key in raw_fields).difference(expected)
     if extra:
         raise ValueError(
-            f"task quality assessment references unknown fields: {tuple(sorted(extra))!r}"
+            "task frequency-filter assessment references unknown fields: "
+            f"{tuple(sorted(extra))!r}"
         )
     fields = []
     for selector in selectors:
@@ -521,10 +463,10 @@ def _shape_features(values: np.ndarray) -> dict[str, float]:
 
 def _shape_fallback(
     sample: StructuredRawDataSample,
-    policy: RawDataQualityPolicy,
+    frequency_filter: FrequencyFilter,
     selectors: Sequence[RawDataFieldSelector],
 ) -> tuple[str, tuple[str, ...]]:
-    rules = {rule.selector: rule for rule in policy.shape_fallback_rules}
+    rules = {rule.selector: rule for rule in frequency_filter.shape_fallback_rules}
     field_regimes = []
     for field, item in zip(sample.items, selectors):
         rule = rules.get(item)
@@ -554,34 +496,19 @@ def _shape_fallback(
     return design, tuple(field_regimes)
 
 
-def assess_quality(
+def assess_frequency_filter(
     *,
-    policy: RawDataQualityPolicy | None,
+    frequency_filter: FrequencyFilter,
     samples: Sequence[StructuredRawDataSample],
     record_metadata: Sequence[Mapping[str, object]] = (),
-) -> QualityAssessmentBatch:
+) -> DataFilterAssessment:
     if not samples:
-        raise ValueError("quality assessment requires design rows")
+        raise ValueError("frequency filtering requires design rows")
     selectors = samples[0].field_selectors
     if any(sample.field_selectors != selectors for sample in samples):
-        raise ValueError("quality assessment requires a fixed field selector set")
+        raise ValueError("frequency filtering requires a fixed field selector set")
     if record_metadata and len(record_metadata) != len(samples):
-        raise ValueError("quality record metadata must align with design rows")
-    if policy is None:
-        row_count = len(samples)
-        field_count = len(selectors)
-        return QualityAssessmentBatch(
-            field_weights=np.ones((row_count, field_count), dtype=np.float32),
-            shared_weights=np.ones((row_count, field_count), dtype=np.float32),
-            residual_targets=np.zeros((row_count, field_count), dtype=np.float32),
-            applicability_targets=np.ones((row_count,), dtype=np.float32),
-            design_regimes=(REGIME_SMOOTH,) * row_count,
-            field_regimes=((REGIME_SMOOTH,) * field_count,) * row_count,
-            explicit_assessment_count=0,
-            diagnostic_assessment_count=0,
-            shape_fallback_count=0,
-        )
-
+        raise ValueError("frequency-filter metadata must align with design rows")
     metadata_rows = (
         tuple(record_metadata)
         if record_metadata
@@ -593,42 +520,42 @@ def assess_quality(
     diagnostic_count = 0
     shape_count = 0
     for row_index, (sample, metadata) in enumerate(zip(samples, metadata_rows)):
-        explicit = _mapping_at_path(metadata, policy.assessment_path)
+        explicit = _mapping_at_path(metadata, frequency_filter.assessment_path)
         if explicit is not None:
             design, fields = _validate_explicit_assessment(
-                explicit, policy, selectors
+                explicit, frequency_filter, selectors
             )
             explicit_count += 1
-        elif policy.diagnostic_rules and (
-            diagnostics := _mapping_at_path(metadata, policy.diagnostic_path)
+        elif frequency_filter.diagnostic_rules and (
+            diagnostics := _mapping_at_path(metadata, frequency_filter.diagnostic_path)
         ) is not None:
             design, fields = _diagnostic_assessment(
-                diagnostics, policy, selectors
+                diagnostics, frequency_filter, selectors
             )
             diagnostic_count += 1
-        elif policy.missing_assessment == "shape-fallback":
-            design, fields = _shape_fallback(sample, policy, selectors)
+        elif frequency_filter.missing_assessment == "shape-fallback":
+            design, fields = _shape_fallback(sample, frequency_filter, selectors)
             shape_count += 1
-        elif policy.missing_assessment == "uniform":
+        elif frequency_filter.missing_assessment == "uniform":
             design = REGIME_UNKNOWN
             fields = (REGIME_UNKNOWN,) * len(selectors)
         else:
             raise ValueError(
-                f"design row {row_index} has no task-owned quality assessment"
+                f"design row {row_index} has no task-owned frequency-filter assessment"
             )
         design_regimes.append(design)
         field_regimes.append(fields)
 
     field_weights = np.asarray(
         [
-            [policy.field_weight(regime) for regime in fields]
+            [frequency_filter.field_weight(regime) for regime in fields]
             for fields in field_regimes
         ],
         dtype=np.float32,
     )
     shared_weights = np.asarray(
         [
-            [policy.shared_weight(regime) for regime in fields]
+            [frequency_filter.shared_weight(regime) for regime in fields]
             for fields in field_regimes
         ],
         dtype=np.float32,
@@ -647,7 +574,7 @@ def assess_quality(
         [1.0 if regime in {REGIME_SMOOTH, REGIME_UNKNOWN} else 0.0 for regime in design_regimes],
         dtype=np.float32,
     )
-    return QualityAssessmentBatch(
+    return DataFilterAssessment(
         field_weights=field_weights,
         shared_weights=shared_weights,
         residual_targets=residual_targets,
@@ -660,10 +587,10 @@ def assess_quality(
     )
 
 
-def quality_policy_from_mapping(
-    value: Mapping[str, object] | RawDataQualityPolicy | None,
-) -> RawDataQualityPolicy | None:
-    if value is None or isinstance(value, RawDataQualityPolicy):
+def frequency_filter_from_mapping(
+    value: Mapping[str, object] | FrequencyFilter | None,
+) -> FrequencyFilter | None:
+    if value is None or isinstance(value, FrequencyFilter):
         return value
     payload = json.loads(json.dumps(dict(value), allow_nan=False))
     payload.pop("protocol", None)
@@ -672,7 +599,7 @@ def quality_policy_from_mapping(
     payload.pop("residual_target_semantics", None)
     payload.pop("applicability_target_semantics", None)
     if regime_weights is not None:
-        for regime in _REGIMES:
+        for regime in REGIMES:
             values = regime_weights.get(regime, {})
             if values:
                 payload[f"{regime}_field_weight"] = values["field"]
@@ -693,7 +620,7 @@ def quality_policy_from_mapping(
         for rule in payload.pop("diagnostic_rules", ())
     )
     rules = tuple(
-        ShapeQualityRule(
+        FrequencyFilterRule(
             selector=_selector(rule["selector"]),
             second_difference_rms_max=rule.get("second_difference_rms_max"),
             high_frequency_energy_ratio_max=rule.get(
@@ -705,7 +632,7 @@ def quality_policy_from_mapping(
         )
         for rule in payload.pop("shape_fallback_rules", ())
     )
-    return RawDataQualityPolicy(
+    return FrequencyFilter(
         diagnostic_rules=diagnostic_rules,
         shape_fallback_rules=rules,
         **payload,
@@ -713,21 +640,15 @@ def quality_policy_from_mapping(
 
 
 __all__ = [
-    "ApplicabilityPrediction",
     "DiagnosticCondition",
     "DiagnosticRegimeRule",
-    "QualityAssessmentBatch",
-    "RAWDATA_QUALITY_ASSESSMENT_PROTOCOL",
-    "RAWDATA_QUALITY_ASSESSMENT_VERSION",
-    "RAWDATA_QUALITY_POLICY_PROTOCOL",
-    "RAWDATA_QUALITY_POLICY_VERSION",
-    "REGIME_CHATTER",
-    "REGIME_FAILURE",
-    "REGIME_SMOOTH",
-    "REGIME_UNKNOWN",
-    "RawDataQualityPolicy",
-    "ShapeQualityRule",
-    "assess_quality",
-    "quality_policy_from_mapping",
+    "RAWDATA_FREQUENCY_FILTER_ASSESSMENT_PROTOCOL",
+    "RAWDATA_FREQUENCY_FILTER_ASSESSMENT_VERSION",
+    "RAWDATA_FREQUENCY_FILTER_PROTOCOL",
+    "RAWDATA_FREQUENCY_FILTER_VERSION",
+    "FrequencyFilter",
+    "FrequencyFilterRule",
+    "assess_frequency_filter",
+    "frequency_filter_from_mapping",
     "selector_key",
 ]

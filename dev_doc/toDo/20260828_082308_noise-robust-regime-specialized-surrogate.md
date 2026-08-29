@@ -57,8 +57,9 @@
 
 以下内容已经实现，是后继工作的对照和复用输入，而不是待重新发明的范围：
 
-- `yadof.surrogate.quality` 的通用 policy/assessment、显式 assessment 优先级、声明式
-  diagnostic rules、可选 morphology fallback、field/shared weights、regime labels 和
+- `yadof.surrogate.hierarchical_cae.data_filtering` 的 component-local
+  `frequency` filter/assessment、显式 assessment 优先级、声明式
+  diagnostic rules、可选 frequency/morphology fallback、field/shared weights、regime labels 和
   applicability 类型；
 - hierarchical CAE 的 design-by-field loss、shared-token masking、field-private base/residual
   decoder、regime-gated residual、predictor applicability head、完整 rawData/current-cost 路径、
@@ -243,7 +244,8 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ## 非目标
 
-- 不做 rawData smoothing、frequency filtering、outlier deletion 或按 current cost 剔除设计。
+- 不做 rawData smoothing、按物理频率轴截取/删除 rawData、outlier deletion 或按 current cost
+  剔除设计。
 - 不把 chatter/failure 当作需要修复的记录错误，也不改变 task `error_cost=1.0` 或 execution
   `inf` 语义。
 - 不在 core 硬编码 Chrono field names、contact physics、release cutoff 或具体 design ranges。

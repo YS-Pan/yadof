@@ -15,7 +15,7 @@
   for schema adapters that must freeze selector identity. This read view neither
   changes persistence nor retains a second evidence store.
 - Expose copied task/runtime record metadata aligned by stable job name so a
-  task-owned quality policy can assess the same durable/current rows without
+  task-owned hierarchical-CAE frequency filter can assess the same durable/current rows without
   embedding executable callbacks or changing rawData.
 - Admit owned envelopes against exact candidate and conservative byte budgets;
   producers wait when capacity is full while one writer batches by run/generation

@@ -11,7 +11,7 @@ from ...job_template.rawdata_template import (
     RawDataSchemaTemplate,
     StructuredRawDataSample,
 )
-from ..quality import RawDataQualityPolicy
+from .data_filtering import FrequencyFilter
 
 
 Population = tuple[tuple[float, ...], ...]
@@ -244,7 +244,7 @@ def _normalize_sharing(config) -> None:
 
 def _validate_boolean_flags(config) -> None:
     names = (
-        "regime_head", "quality_weighted_loss", "shared_quality_isolation",
+        "regime_head", "filter_weighted_loss", "shared_filter_isolation",
         "gated_private_residual", "coordinate_readout", "mixed_precision",
     )
     for name in names:
@@ -280,8 +280,8 @@ class CAETrainConfig:
     applicability_loss_weight: float = 0.25
     residual_gate_loss_weight: float = 0.25
     regime_head: bool = False
-    quality_weighted_loss: bool = True
-    shared_quality_isolation: bool = True
+    filter_weighted_loss: bool = True
+    shared_filter_isolation: bool = True
     gated_private_residual: bool = True
     coordinate_readout: bool = False
     coordinate_width: int = 64
@@ -335,7 +335,8 @@ class HierarchicalState:
     parameter_names: tuple[str, ...]
     parameter_definition_signature: Mapping[str, object]
     schema: HierarchicalSchema | None
-    quality_policy: RawDataQualityPolicy | None
+    data_filter_mode: str
+    frequency_filter: FrequencyFilter | None
     model: object | None
     train_cfg: CAETrainConfig
     device: object | None

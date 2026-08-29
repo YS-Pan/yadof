@@ -50,7 +50,10 @@
   method registry.
 - `surrogate` owns rawData-first component lifecycles, checkpoints, prediction, and
   optional posterior capabilities. Concrete models remain behind lightweight
-  public contracts and lazy optional dependencies.
+  public contracts and lazy optional dependencies. Hierarchical CAE owns its
+  training-data filtering implementations below its private package and selects
+  them through one component-local mode whose default is no filtering; the current
+  opt-in implementation is `frequency`.
 - Posterior and readiness contracts describe derived candidate-selection
   capabilities; they do not bypass real evaluation or persistence.
 

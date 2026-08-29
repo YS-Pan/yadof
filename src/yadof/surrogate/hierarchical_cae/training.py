@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from ..quality import QualityAssessmentBatch
+from .data_filtering import DataFilterAssessment
 from .coordinates import coordinate_feature_count, encode_coordinate_points, stored_coordinate_points
 from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
 
@@ -31,22 +31,22 @@ def _mean_loss(values: list[float]) -> float:
     return float(np.mean(values, dtype=np.float64)) if values else math.inf
 
 @torch.no_grad()
-def _codec_validation_loss(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> float:
+def _codec_validation_loss(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> float:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch, field_macro_loss
+    from .objectives import _batch_indices, _field_batch, _filter_batch, field_macro_loss
     model.eval()
     losses = []
     for batch in _batch_indices(indices, cfg.batch_size):
         targets = _field_batch(fields, batch, device)
-        field_weights, shared_weights, residual_targets, _applicability = _quality_batch(quality, batch, device, cfg)
+        field_weights, shared_weights, residual_targets, _applicability = _filter_batch(data_filter, batch, device, cfg)
         with _autocast(device, cfg.mixed_precision):
             loss = field_macro_loss(model.autoencode(targets, shared_weights=shared_weights, residual_targets=residual_targets), targets, field_weights=field_weights, loss_cap=cfg.robust_loss_cap)
         losses.append(float(loss.detach().cpu()))
     return _mean_loss(losses)
 
-def _train_codecs(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
+def _train_codecs(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch, field_macro_loss
+    from .objectives import _batch_indices, _field_batch, _filter_batch, field_macro_loss
     parameters = [parameter for name, parameter in model.named_parameters() if not name.startswith('predictors.')]
     optimizer = torch.optim.AdamW(parameters, lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     scaler = _make_grad_scaler(device, cfg.mixed_precision)
@@ -61,7 +61,7 @@ def _train_codecs(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], qua
         losses = []
         for batch in _batch_indices(train_indices, cfg.batch_size, rng):
             targets = _field_batch(fields, batch, device)
-            field_weights, shared_weights, residual_targets, _applicability = _quality_batch(quality, batch, device, cfg)
+            field_weights, shared_weights, residual_targets, _applicability = _filter_batch(data_filter, batch, device, cfg)
             optimizer.zero_grad(set_to_none=True)
             with _autocast(device, cfg.mixed_precision):
                 loss = field_macro_loss(model.autoencode(targets, shared_weights=shared_weights, residual_targets=residual_targets), targets, field_weights=field_weights, loss_cap=cfg.robust_loss_cap)
@@ -71,7 +71,7 @@ def _train_codecs(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], qua
             scaler.step(optimizer)
             scaler.update()
             losses.append(float(loss.detach().cpu()))
-        validation = _codec_validation_loss(model, fields, quality, validation_indices, device, cfg)
+        validation = _codec_validation_loss(model, fields, data_filter, validation_indices, device, cfg)
         history.append({'epoch': epoch + 1, 'training_field_macro_loss': _mean_loss(losses), 'validation_field_macro_loss': validation})
         if not math.isfinite(best_loss) or validation < best_loss - max(1e-07, abs(best_loss) * 1e-05):
             best_loss = validation
@@ -85,29 +85,29 @@ def _train_codecs(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], qua
     return {'epochs_completed': len(history), 'best_validation_field_macro_loss': best_loss, 'wall_sec': time.perf_counter() - started, 'history': history}
 
 @torch.no_grad()
-def _teacher_latents(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, device: torch.device, cfg: CAETrainConfig) -> np.ndarray:
+def _teacher_latents(model: HierarchicalCAEModel, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, device: torch.device, cfg: CAETrainConfig) -> np.ndarray:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch
+    from .objectives import _batch_indices, _field_batch, _filter_batch
     model.eval()
     rows = []
     indices = np.arange(fields[0].shape[0], dtype=np.int64)
     for batch in _batch_indices(indices, cfg.batch_size):
         tensors = _field_batch(fields, batch, device)
-        _field_weights, shared_weights, _residual, _applicability = _quality_batch(quality, batch, device, cfg)
+        _field_weights, shared_weights, _residual, _applicability = _filter_batch(data_filter, batch, device, cfg)
         latent = model.teacher_latent(tensors, shared_weights)
         rows.append(latent.detach().float().cpu().numpy())
     return np.ascontiguousarray(np.concatenate(rows, axis=0), dtype=np.float32)
 
 @torch.no_grad()
-def _predictor_validation_loss(model: HierarchicalCAEModel, predictor: ParameterLatentPredictor, parameters: np.ndarray, latents: np.ndarray, quality: QualityAssessmentBatch, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> float:
+def _predictor_validation_loss(model: HierarchicalCAEModel, predictor: ParameterLatentPredictor, parameters: np.ndarray, latents: np.ndarray, data_filter: DataFilterAssessment, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> float:
     from .networks import HierarchicalCAEModel, ParameterLatentPredictor
-    from .objectives import _batch_indices, _quality_batch
+    from .objectives import _batch_indices, _filter_batch
     predictor.eval()
     losses = []
     for batch in _batch_indices(indices, cfg.batch_size):
         x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
         target = torch.as_tensor(latents[batch], dtype=torch.float32, device=device)
-        _field_weights, _shared_weights, residual_targets, applicability = _quality_batch(quality, batch, device, cfg)
+        _field_weights, _shared_weights, residual_targets, applicability = _filter_batch(data_filter, batch, device, cfg)
         with _autocast(device, cfg.mixed_precision):
             predicted_latent, applicability_logit, residual_logits = model.split_predictor_output(predictor(x))
             loss = F.smooth_l1_loss(predicted_latent, target, beta=1.0)
@@ -118,9 +118,9 @@ def _predictor_validation_loss(model: HierarchicalCAEModel, predictor: Parameter
         losses.append(float(loss.detach().cpu()))
     return _mean_loss(losses)
 
-def _train_predictors(model: HierarchicalCAEModel, parameters: np.ndarray, latents: np.ndarray, quality: QualityAssessmentBatch, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
+def _train_predictors(model: HierarchicalCAEModel, parameters: np.ndarray, latents: np.ndarray, data_filter: DataFilterAssessment, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _quality_batch
+    from .objectives import _batch_indices, _filter_batch
     member_histories = []
     started = time.perf_counter()
     for member_index, predictor in enumerate(model.predictors):
@@ -139,7 +139,7 @@ def _train_predictors(model: HierarchicalCAEModel, parameters: np.ndarray, laten
             for batch in _batch_indices(bootstrap, cfg.batch_size, rng):
                 x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
                 target = torch.as_tensor(latents[batch], dtype=torch.float32, device=device)
-                _field_weights, _shared_weights, residual_targets, applicability = _quality_batch(quality, batch, device, cfg)
+                _field_weights, _shared_weights, residual_targets, applicability = _filter_batch(data_filter, batch, device, cfg)
                 optimizer.zero_grad(set_to_none=True)
                 with _autocast(device, cfg.mixed_precision):
                     predicted_latent, applicability_logit, residual_logits = model.split_predictor_output(predictor(x))
@@ -154,7 +154,7 @@ def _train_predictors(model: HierarchicalCAEModel, parameters: np.ndarray, laten
                 scaler.step(optimizer)
                 scaler.update()
                 losses.append(float(loss.detach().cpu()))
-            validation = _predictor_validation_loss(model, predictor, parameters, latents, quality, validation_indices, device, cfg)
+            validation = _predictor_validation_loss(model, predictor, parameters, latents, data_filter, validation_indices, device, cfg)
             history.append({'epoch': epoch + 1, 'training_latent_loss': _mean_loss(losses), 'validation_latent_loss': validation})
             if not math.isfinite(best_loss) or validation < best_loss - max(1e-07, abs(best_loss) * 1e-05):
                 best_loss = validation
@@ -169,24 +169,24 @@ def _train_predictors(model: HierarchicalCAEModel, parameters: np.ndarray, laten
     return {'wall_sec': time.perf_counter() - started, 'members': member_histories}
 
 @torch.no_grad()
-def _predicted_grid_validation_loss(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> float:
+def _predicted_grid_validation_loss(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> float:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch, field_macro_loss
+    from .objectives import _batch_indices, _field_batch, _filter_batch, field_macro_loss
     model.eval()
     losses = []
     for batch in _batch_indices(indices, cfg.batch_size):
         x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
         targets = _field_batch(fields, batch, device)
-        field_weights, _shared_weights, _residual_targets, _applicability = _quality_batch(quality, batch, device, cfg)
+        field_weights, _shared_weights, _residual_targets, _applicability = _filter_batch(data_filter, batch, device, cfg)
         predictions_by_member = [model.predict_member(member_index, x)[0] for member_index in range(len(model.predictors))]
         means = tuple((torch.stack([member[field_index] for member in predictions_by_member], dim=0).mean(dim=0) for field_index in range(len(fields))))
         losses.append(float(field_macro_loss(means, targets, field_weights=field_weights, loss_cap=cfg.robust_loss_cap).detach().cpu()))
     return _mean_loss(losses)
 
-def _fine_tune_gate(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
+def _fine_tune_gate(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch, field_macro_loss
-    baseline = _predicted_grid_validation_loss(model, parameters, fields, quality, validation_indices, device, cfg)
+    from .objectives import _batch_indices, _field_batch, _filter_batch, field_macro_loss
+    baseline = _predicted_grid_validation_loss(model, parameters, fields, data_filter, validation_indices, device, cfg)
     if cfg.fine_tune_epochs <= 0:
         return {'attempted': False, 'accepted': False, 'baseline_validation_field_macro_loss': baseline, 'candidate_validation_field_macro_loss': baseline, 'wall_sec': 0.0}
     original = _state_copy(model)
@@ -210,7 +210,7 @@ def _fine_tune_gate(model: HierarchicalCAEModel, parameters: np.ndarray, fields:
         for batch in _batch_indices(train_indices, cfg.batch_size, rng):
             x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
             targets = _field_batch(fields, batch, device)
-            field_weights, _shared_weights, residual_targets, applicability = _quality_batch(quality, batch, device, cfg)
+            field_weights, _shared_weights, residual_targets, applicability = _filter_batch(data_filter, batch, device, cfg)
             member_index = int(rng.integers(0, len(model.predictors)))
             optimizer.zero_grad(set_to_none=True)
             with _autocast(device, cfg.mixed_precision):
@@ -225,7 +225,7 @@ def _fine_tune_gate(model: HierarchicalCAEModel, parameters: np.ndarray, fields:
             nn.utils.clip_grad_norm_(trainable, cfg.gradient_clip_norm)
             scaler.step(optimizer)
             scaler.update()
-    candidate = _predicted_grid_validation_loss(model, parameters, fields, quality, validation_indices, device, cfg)
+    candidate = _predicted_grid_validation_loss(model, parameters, fields, data_filter, validation_indices, device, cfg)
     accepted = bool(candidate <= baseline * (1.0 - 0.001))
     if not accepted:
         model.load_state_dict(original)
@@ -248,9 +248,9 @@ def _coordinate_tensors(layout: FieldLayout, point_indices: np.ndarray, device: 
     return torch.as_tensor(encoded, dtype=torch.float32, device=device)
 
 @torch.no_grad()
-def _coordinate_validation_loss(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> dict[str, object]:
+def _coordinate_validation_loss(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, indices: np.ndarray, device: torch.device, cfg: CAETrainConfig) -> dict[str, object]:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch
+    from .objectives import _batch_indices, _field_batch, _filter_batch
     model.eval()
     point_indices = tuple((_coordinate_point_indices(layout, cfg.coordinate_validation_points_per_field, rng=None) for layout in model.schema.layouts))
     coordinate_tensors = tuple((_coordinate_tensors(layout, selected, device) for layout, selected in zip(model.schema.layouts, point_indices)))
@@ -260,7 +260,7 @@ def _coordinate_validation_loss(model: HierarchicalCAEModel, parameters: np.ndar
     for batch in _batch_indices(indices, cfg.batch_size):
         x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
         targets = _field_batch(fields, batch, device)
-        field_weights, _shared, _residual, _applicability = _quality_batch(quality, batch, device, cfg)
+        field_weights, _shared, _residual, _applicability = _filter_batch(data_filter, batch, device, cfg)
         for member_index in range(len(model.predictors)):
             latent, _applicability_logit, residual_logits = model.predictor_output(member_index, x)
             residual_gates = torch.sigmoid(residual_logits) if cfg.regime_head and cfg.gated_private_residual else torch.zeros_like(residual_logits)
@@ -280,9 +280,9 @@ def _coordinate_validation_loss(model: HierarchicalCAEModel, parameters: np.ndar
     consistency_loss = consistency_numerator / denominator
     return {'target_field_macro_loss': float(target_loss), 'grid_consistency_field_macro_loss': float(consistency_loss), 'combined_loss': float(target_loss + cfg.coordinate_consistency_weight * consistency_loss), 'sampled_stored_points_per_field': [int(len(values)) for values in point_indices], 'member_count': len(model.predictors)}
 
-def _train_coordinate_readouts(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
+def _train_coordinate_readouts(model: HierarchicalCAEModel, parameters: np.ndarray, fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, train_indices: np.ndarray, validation_indices: np.ndarray, device: torch.device, cfg: CAETrainConfig, seed: int) -> dict[str, object]:
     from .networks import HierarchicalCAEModel
-    from .objectives import _batch_indices, _field_batch, _quality_batch
+    from .objectives import _batch_indices, _field_batch, _filter_batch
     if not cfg.coordinate_readout:
         return {'enabled': False, 'status': 'not-configured', 'wall_sec': 0.0}
     if not model.coordinate_readouts:
@@ -306,7 +306,7 @@ def _train_coordinate_readouts(model: HierarchicalCAEModel, parameters: np.ndarr
         for batch in _batch_indices(train_indices, cfg.batch_size, rng):
             x = torch.as_tensor(parameters[batch], dtype=torch.float32, device=device)
             targets = _field_batch(fields, batch, device)
-            field_weights, _shared, _residual, _applicability = _quality_batch(quality, batch, device, cfg)
+            field_weights, _shared, _residual, _applicability = _filter_batch(data_filter, batch, device, cfg)
             member_index = int(rng.integers(0, len(model.predictors)))
             with torch.no_grad():
                 latent, _applicability_logit, residual_logits = model.predictor_output(member_index, x)
@@ -337,7 +337,7 @@ def _train_coordinate_readouts(model: HierarchicalCAEModel, parameters: np.ndarr
             scaler.step(optimizer)
             scaler.update()
             epoch_losses.append(float(loss.detach().cpu()))
-        validation = _coordinate_validation_loss(model, parameters, fields, quality, validation_indices, device, cfg)
+        validation = _coordinate_validation_loss(model, parameters, fields, data_filter, validation_indices, device, cfg)
         history.append({'epoch': epoch + 1, 'training_combined_loss': _mean_loss(epoch_losses), 'validation': validation})
         candidate = float(validation['combined_loss'])
         if not math.isfinite(best_loss) or candidate < best_loss - max(1e-07, abs(best_loss) * 1e-05):
@@ -349,12 +349,12 @@ def _train_coordinate_readouts(model: HierarchicalCAEModel, parameters: np.ndarr
             if patience >= cfg.early_stopping_patience:
                 break
     model.coordinate_readouts.load_state_dict(best_state)
-    final_validation = _coordinate_validation_loss(model, parameters, fields, quality, validation_indices, device, cfg)
+    final_validation = _coordinate_validation_loss(model, parameters, fields, data_filter, validation_indices, device, cfg)
     for parameter in model.parameters():
         parameter.requires_grad_(True)
     return {'enabled': True, 'status': 'experimental-performance-not-accepted', 'epochs_completed': len(history), 'best_validation_combined_loss': float(best_loss), 'final_validation': final_validation, 'coordinate_parameter_count': int(sum((parameter.numel() for parameter in coordinate_parameters))), 'authority': 'viewer/off-grid-only; full-grid decoder remains authoritative', 'history': history, 'wall_sec': time.perf_counter() - started}
 
-def fit_hierarchical_cae(*, input_dim: int, schema: HierarchicalSchema, parameters: np.ndarray, standardized_fields: Sequence[np.ndarray], quality: QualityAssessmentBatch, device: torch.device, train_cfg: CAETrainConfig, seed: int, train_indices: np.ndarray | None=None, validation_indices: np.ndarray | None=None) -> tuple[HierarchicalCAEModel, dict[str, object]]:
+def fit_hierarchical_cae(*, input_dim: int, schema: HierarchicalSchema, parameters: np.ndarray, standardized_fields: Sequence[np.ndarray], data_filter: DataFilterAssessment, device: torch.device, train_cfg: CAETrainConfig, seed: int, train_indices: np.ndarray | None=None, validation_indices: np.ndarray | None=None) -> tuple[HierarchicalCAEModel, dict[str, object]]:
     from .networks import HierarchicalCAEModel, MODEL_NAME
     from .objectives import design_level_split
     x = np.ascontiguousarray(parameters, dtype=np.float32)
@@ -362,9 +362,9 @@ def fit_hierarchical_cae(*, input_dim: int, schema: HierarchicalSchema, paramete
         raise ValueError(f'expected parameter matrix [N,{int(input_dim)}]')
     if any((values.shape[0] != x.shape[0] for values in standardized_fields)):
         raise ValueError('every hierarchical CAE field must align with parameter rows')
-    expected_quality_shape = (x.shape[0], len(schema.layouts))
-    if quality.field_weights.shape != expected_quality_shape:
-        raise ValueError('quality assessment does not align with design/field rows')
+    expected_filter_shape = (x.shape[0], len(schema.layouts))
+    if data_filter.field_weights.shape != expected_filter_shape:
+        raise ValueError('data-filter assessment does not align with design/field rows')
     if train_indices is None or validation_indices is None:
         train_indices, validation_indices = design_level_split(x, validation_fraction=train_cfg.validation_fraction, seed=int(seed))
     train_indices = np.asarray(train_indices, dtype=np.int64)
@@ -379,13 +379,13 @@ def fit_hierarchical_cae(*, input_dim: int, schema: HierarchicalSchema, paramete
         torch.cuda.reset_peak_memory_stats(device)
     model = HierarchicalCAEModel(input_dim, schema, train_cfg).to(device)
     started = time.perf_counter()
-    codec = _train_codecs(model, standardized_fields, quality, train_indices, validation_indices, device, train_cfg, int(seed))
-    latents = _teacher_latents(model, standardized_fields, quality, device, train_cfg)
-    predictors = _train_predictors(model, x, latents, quality, train_indices, validation_indices, device, train_cfg, int(seed))
-    fine_tune = _fine_tune_gate(model, x, standardized_fields, quality, train_indices, validation_indices, device, train_cfg, int(seed))
-    coordinate = _train_coordinate_readouts(model, x, standardized_fields, quality, train_indices, validation_indices, device, train_cfg, int(seed))
+    codec = _train_codecs(model, standardized_fields, data_filter, train_indices, validation_indices, device, train_cfg, int(seed))
+    latents = _teacher_latents(model, standardized_fields, data_filter, device, train_cfg)
+    predictors = _train_predictors(model, x, latents, data_filter, train_indices, validation_indices, device, train_cfg, int(seed))
+    fine_tune = _fine_tune_gate(model, x, standardized_fields, data_filter, train_indices, validation_indices, device, train_cfg, int(seed))
+    coordinate = _train_coordinate_readouts(model, x, standardized_fields, data_filter, train_indices, validation_indices, device, train_cfg, int(seed))
     model.eval()
     parameter_count = sum((parameter.numel() for parameter in model.parameters()))
     group_parameter_count = sum((parameter.numel() for module in model.group_teachers for parameter in module.parameters()))
-    history = {'model': MODEL_NAME, 'architecture_version': train_cfg.architecture_version, 'training_policy': 'design-split-field-macro-hierarchical-latent', 'member_count': len(model.predictors), 'train_design_count': int(len(train_indices)), 'validation_design_count': int(len(validation_indices)), 'field_count': len(schema.layouts), 'parameter_count': int(parameter_count), 'group_parameter_count': int(group_parameter_count), 'group_count': len(schema.groups), 'sharing': train_cfg.sharing, 'device': str(device), 'torch_version': str(torch.__version__), 'codec_stage': codec, 'predictor_stage': predictors, 'fine_tune_gate': fine_tune, 'coordinate_readout_stage': coordinate, 'quality_assessment': quality.diagnostics(), 'total_wall_sec': time.perf_counter() - started, 'peak_vram_bytes': int(torch.cuda.max_memory_allocated(device)) if device.type == 'cuda' else 0}
+    history = {'model': MODEL_NAME, 'architecture_version': train_cfg.architecture_version, 'training_policy': 'design-split-field-macro-hierarchical-latent', 'member_count': len(model.predictors), 'train_design_count': int(len(train_indices)), 'validation_design_count': int(len(validation_indices)), 'field_count': len(schema.layouts), 'parameter_count': int(parameter_count), 'group_parameter_count': int(group_parameter_count), 'group_count': len(schema.groups), 'sharing': train_cfg.sharing, 'device': str(device), 'torch_version': str(torch.__version__), 'codec_stage': codec, 'predictor_stage': predictors, 'fine_tune_gate': fine_tune, 'coordinate_readout_stage': coordinate, 'data_filter_assessment': data_filter.diagnostics(), 'total_wall_sec': time.perf_counter() - started, 'peak_vram_bytes': int(torch.cuda.max_memory_allocated(device)) if device.type == 'cuda' else 0}
     return (model, history)

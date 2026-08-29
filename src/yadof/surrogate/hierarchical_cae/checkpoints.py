@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Mapping
 import numpy as np
 import torch
-from ..quality import RawDataQualityPolicy
+from .data_filtering import FrequencyFilter
 from .inference import save_model_bundle
 from .networks import MODEL_NAME
 from .types import CAETrainConfig, HierarchicalSchema, HierarchicalState
@@ -31,9 +31,10 @@ def schema_payload(schema: HierarchicalSchema | None) -> dict[str, object]:
         slots.append({'item_index': item_index, 'key': layout.selector[1], 'shape': list(layout.shape), 'dtype': layout.dtype, 'start': start, 'end': offset, 'field_id': item_index, 'selector': list(layout.selector)})
     return {'contract': 'yadof.hierarchical-cae-schema', 'contract_version': 1, 'template_signature': schema.template.signature, 'rawdata_item_count': len(schema.layouts), 'flat_dim': offset, 'modeled_slots': slots, 'layouts': [layout.as_dict() for layout in schema.layouts], 'groups': [[list(selector) for selector in group] for group in schema.groups]}
 
-def semantic_state_signature(*, strategy_signature: str, parameter_names: tuple[str, ...], parameter_definition_signature: Mapping[str, object], schema: HierarchicalSchema | None, train_cfg: CAETrainConfig, quality_policy: RawDataQualityPolicy | None, torch_version: str | None=None) -> str:
+def semantic_state_signature(*, strategy_signature: str, parameter_names: tuple[str, ...], parameter_definition_signature: Mapping[str, object], schema: HierarchicalSchema | None, train_cfg: CAETrainConfig, data_filter_mode: str, frequency_filter: FrequencyFilter | None, torch_version: str | None=None) -> str:
     schema_identity = schema_payload(schema)
-    payload = {'strategy_signature': str(strategy_signature), 'surrogate_method': SURROGATE_METHOD, 'training_policy': TRAINING_POLICY, 'parameter_names': list(parameter_names), 'parameter_definition_signature': dict(parameter_definition_signature), 'schema': schema_identity, 'axis_signatures': [] if schema is None else [[_array_signature(values) for values in layout.axis_values] for layout in schema.layouts], 'train_cfg': asdict(train_cfg), 'quality_policy': None if quality_policy is None else quality_policy.as_dict(), 'torch_version': str(torch.__version__) if torch_version is None else str(torch_version)}
+    data_filter = {'mode': str(data_filter_mode), 'frequency_filter': None if frequency_filter is None else frequency_filter.as_dict()}
+    payload = {'strategy_signature': str(strategy_signature), 'surrogate_method': SURROGATE_METHOD, 'training_policy': TRAINING_POLICY, 'parameter_names': list(parameter_names), 'parameter_definition_signature': dict(parameter_definition_signature), 'schema': schema_identity, 'axis_signatures': [] if schema is None else [[_array_signature(values) for values in layout.axis_values] for layout in schema.layouts], 'train_cfg': asdict(train_cfg), 'data_filter': data_filter, 'torch_version': str(torch.__version__) if torch_version is None else str(torch_version)}
     encoded = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode('utf-8')
     return hashlib.sha256(encoded).hexdigest()
 
@@ -64,8 +65,13 @@ def validate_manifest_identity(payload: object) -> dict[str, object]:
         raise ValueError('checkpoint schema must be an object')
     if not isinstance(payload['train_cfg'], Mapping):
         raise ValueError('checkpoint train_cfg must be an object')
-    if payload.get('quality_policy') is not None and (not isinstance(payload.get('quality_policy'), Mapping)):
-        raise ValueError('checkpoint quality policy must be null or an object')
+    data_filter = payload.get('data_filter')
+    if not isinstance(data_filter, Mapping):
+        raise ValueError('checkpoint data filter must be an object')
+    if not isinstance(data_filter.get('mode'), str):
+        raise ValueError('checkpoint data-filter mode must be a string')
+    if data_filter.get('frequency_filter') is not None and not isinstance(data_filter.get('frequency_filter'), Mapping):
+        raise ValueError('checkpoint frequency filter must be null or an object')
     publication_id = str(payload['publication_id'])
     if not publication_id or any((char not in '0123456789_abcdef' for char in publication_id)):
         raise ValueError('invalid surrogate checkpoint publication id')
@@ -107,7 +113,8 @@ def _checkpoint_payload(state: HierarchicalState, checkpoint_root: Path) -> dict
         raise ValueError('namespace manifest does not encode its generation')
     publication_id = manifest_stem[len(prefix):]
     member_count = int(state.train_history.get('member_count', 0))
-    return {'surrogate_method': SURROGATE_METHOD, 'training_policy': TRAINING_POLICY, 'strategy_signature': state.strategy_signature, 'state_signature': state.state_signature, 'run_namespace': state.run_namespace, 'component_namespace': state.component_namespace, 'publication_id': publication_id, 'torch_version': str(torch.__version__), 'generation_index': int(state.generation_index), 'sample_count': int(state.sample_count), 'parameter_names': list(state.parameter_names), 'parameter_definition_signature': dict(state.parameter_definition_signature), 'model': MODEL_NAME, 'member_count': member_count, 'model_path': state.bundle_path.name, 'scaler_path': 'field_scalers.npz', 'artifact_dir': state.artifact_dir.relative_to(checkpoint_root).as_posix(), 'namespace_manifest': state.namespace_manifest_path.relative_to(checkpoint_root).as_posix(), 'schema': schema_payload(state.schema), 'train_cfg': asdict(state.train_cfg), 'quality_policy': None if state.quality_policy is None else state.quality_policy.as_dict(), 'train_history': state.train_history, 'coordinate_readout': bool(state.train_cfg.coordinate_readout), 'coordinate_capability': {'contract': 'yadof.hierarchical-cae-coordinate-readout-v1', 'enabled': bool(state.train_cfg.coordinate_readout), 'authority': 'viewer/off-grid-only', 'full_grid_decoder_remains_authoritative': True, 'acceptance_status': 'experimental-performance-not-accepted' if state.train_cfg.coordinate_readout else 'not-configured'}, 'note': 'Full-grid rawData is decoded by field-specific convolutional codecs from global/optional-group/private parameter-predicted latents. Predictor-member spread is finite and uncalibrated.'}
+    data_filter = {'mode': state.data_filter_mode, 'frequency_filter': None if state.frequency_filter is None else state.frequency_filter.as_dict()}
+    return {'surrogate_method': SURROGATE_METHOD, 'training_policy': TRAINING_POLICY, 'strategy_signature': state.strategy_signature, 'state_signature': state.state_signature, 'run_namespace': state.run_namespace, 'component_namespace': state.component_namespace, 'publication_id': publication_id, 'torch_version': str(torch.__version__), 'generation_index': int(state.generation_index), 'sample_count': int(state.sample_count), 'parameter_names': list(state.parameter_names), 'parameter_definition_signature': dict(state.parameter_definition_signature), 'model': MODEL_NAME, 'member_count': member_count, 'model_path': state.bundle_path.name, 'scaler_path': 'field_scalers.npz', 'artifact_dir': state.artifact_dir.relative_to(checkpoint_root).as_posix(), 'namespace_manifest': state.namespace_manifest_path.relative_to(checkpoint_root).as_posix(), 'schema': schema_payload(state.schema), 'train_cfg': asdict(state.train_cfg), 'data_filter': data_filter, 'train_history': state.train_history, 'coordinate_readout': bool(state.train_cfg.coordinate_readout), 'coordinate_capability': {'contract': 'yadof.hierarchical-cae-coordinate-readout-v1', 'enabled': bool(state.train_cfg.coordinate_readout), 'authority': 'viewer/off-grid-only', 'full_grid_decoder_remains_authoritative': True, 'acceptance_status': 'experimental-performance-not-accepted' if state.train_cfg.coordinate_readout else 'not-configured'}, 'note': 'Full-grid rawData is decoded by field-specific convolutional codecs from global/optional-group/private parameter-predicted latents. Predictor-member spread is finite and uncalibrated.'}
 
 def write_checkpoint(state: HierarchicalState, *, staged_artifact_dir: Path) -> None:
     checkpoint_root = state.checkpoint_path.parent.resolve()

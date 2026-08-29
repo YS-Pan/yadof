@@ -12,7 +12,6 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from ..quality import QualityAssessmentBatch
 from .coordinates import coordinate_feature_count, encode_coordinate_points, stored_coordinate_points
 from .types import CAETrainConfig, FieldLayout, HierarchicalSchema
 

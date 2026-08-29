@@ -42,9 +42,12 @@ only deployable parameter predictions and zero-width cost intervals.
   diagnostic-only oracle reconstruction, deployable ridge prediction, named-schema
   adaptation, atomic no-pickle checkpoint recovery, and an independent one-worker
   scheduler. Its namespace is `pca-svd`; it exposes no posterior/readiness method.
-- `quality.py` owns the generic, versioned, JSON-safe quality/regime assessment
-  protocol. It accepts explicit task assessments, declarative diagnostic rules, or
-  task-declared shape fallback thresholds; it contains no task field names,
+- `hierarchical_cae/data_filtering/` owns the component-local mode selector and
+  implementations; common assessment/applicability types do not depend on a
+  concrete implementation. Mode `none` is the default and returns the ordinary uniform
+  training view. Mode `frequency` accepts explicit task assessments,
+  declarative diagnostic rules, or task-declared shape fallback thresholds,
+  including spectral high-frequency energy; it contains no task field names,
   simulator thresholds, cost filter, or arbitrary callback.
 - `_shared/` owns only behavior-equivalent atomic artifact publication, bounded
   training-event recording, and deterministic finite-member selection. It owns no
@@ -59,13 +62,19 @@ only deployable parameter predictions and zero-width cost intervals.
 
 ## Hierarchical CAE development component
 
+The factory's one authoritative `data_filter_mode` defaults to `none`. The existing
+frequency-based anti-noise path is selected explicitly as `frequency` and requires
+its versioned `FrequencyFilter`; a frequency filter without that mode is rejected. This local dispatch is
+the extension point for future filtering methods and does not create a package-wide
+registry.
+
 Every design first produces one loss per field, independent of field point count.
-Optional caps and policy weights are applied only after this matrix exists, so a
+Optional caps and filter weights are applied only after this matrix exists, so a
 noisy curve does not discard valid scalar fields from the same design. Without a
-quality policy, weights are one, shared masks are one, residual targets are zero,
+selected filter, weights are one, shared masks are one, residual targets are zero,
 and the behavior is an ordinary equal field macro loss.
 
-With a policy, explicit version/policy-matched assessment has priority over task
+With a frequency filter, explicit version/filter-matched assessment has priority over task
 diagnostics; declarative morphology rules run only when the selected missing-data
 policy allows them. Low-trust tokens are masked before shared teacher fusion. Base
 decoder gradients are similarly masked for those fields, while chatter/failure
@@ -77,7 +86,7 @@ always receives reconstructed full-grid rawData.
 
 Schema identity includes exact selectors, shapes, dtypes, axes, axis encodings,
 rank-3 channel/spatial roles, groups, scalers, training/head/loss switches, and the
-complete quality policy. Checkpoint publication is atomic and separate from
+complete data-filter mode and frequency-filter declaration. Checkpoint publication is atomic and separate from
 conditional-INR namespaces. Predictor members share codecs; each persistent draw
 fixes one member across candidates and fields and reports finite support with zero
 observation noise. Applicability is not calibrated in this module.
@@ -220,8 +229,8 @@ output artifacts cold-train instead of being interpreted with the linear decoder
 - Conditional-INR's old mean-cost/min-max tuple, GPSAF behavior, model architecture
   version, and checkpoint signature remain unchanged by the separately identified
   posterior adapter.
-- Hierarchical quality policy changes activate a different semantic namespace;
-  executable task callbacks cannot bypass that identity.
+- Hierarchical data-filter mode and frequency-filter changes activate the appropriate
+  semantic identity; executable task callbacks cannot bypass that identity.
 - A low-trust field cannot contribute unweighted tokens to shared teacher state,
   and its gated residual never becomes independent Gaussian observation noise.
 - Gate 0 v5's performance failure remains immutable. Gate 0 v6/v7 separately permits

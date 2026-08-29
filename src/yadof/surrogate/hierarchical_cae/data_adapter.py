@@ -18,7 +18,6 @@ from ...recorded_data import api as recorded_api
 from ...recorded_data.session import CampaignSession
 from ...task_snapshot import GenerationTaskSnapshot
 from ...workspace import WorkspaceContext
-from ..quality import ApplicabilityPrediction, assess_quality
 from .._shared.training_events import monotonic_time, now_text, record_training_event
 from .checkpoints import COMPONENT_NAMESPACE, new_publication_paths, resolve_artifact_dir, resolve_namespace_manifest_path, run_namespace_for_signature, schema_payload, semantic_state_signature, validate_manifest_identity, write_checkpoint
 from .coordinates import coordinate_grid, interpolate_stored_values

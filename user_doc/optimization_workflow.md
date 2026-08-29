@@ -175,9 +175,9 @@ Keep these three decisions separate:
 3. Conditional-INR training treats every modeled rawData field equally at the
    field-loss level; task code cannot override that production policy. The
    experimental hierarchical CAE has the same equal-weight behavior when no
-   quality policy is selected. Its optional versioned quality policy may
+   data filter is selected. Its optional versioned frequency filter may
    declaratively downweight a diagnosed chatter/failure field and mask its shared
-   latent contribution without dropping other fields in the design. The policy is
+   latent contribution without dropping other fields in the design. The filter is
    part of strategy/checkpoint identity and cannot be an arbitrary task callback.
 
 Therefore, “include all saved far-field rawData in surrogate training” is a
@@ -256,7 +256,7 @@ complete candidate draw rather than filling fields from another member. Any futu
 strategy must explicitly warn, reject, or fall back when that effective support is
 below its declared policy.
 
-### Experimental hierarchical CAE and quality/regime boundary
+### Experimental hierarchical CAE and data-filter boundary
 
 `hierarchical_cae()` is an explicit development component, not the starter default.
 It freezes direct field selectors, shapes, axes, dtype templates, optional groups,
@@ -266,14 +266,28 @@ all fields, so a persistent posterior draw keeps a coherent member identity acro
 candidates and fields. Complete fixed-grid rawData remains the authoritative
 prediction path and current `calc_cost.py` still produces costs.
 
-Tasks that need chatter/failure handling may supply a `RawDataQualityPolicy` made
-from JSON-safe explicit assessments, declarative record-diagnostic rules, and—only
-when diagnostics are absent—declared morphology thresholds. Yadof core contains no
-Chrono names or release/contact thresholds. Assessment changes only training
-weights, shared-token contribution, private residual labels, and the uncalibrated
-applicability head; it never filters by cost, smooths stored curves, or rewrites
-recorded rawData. With no policy, training is ordinary equal design-by-field macro
-Smooth L1.
+The factory has one explicit screening selector, `data_filter_mode`. Its default is
+`"none"`, which performs ordinary equal design-by-field macro Smooth L1 and does
+not require a filter. The currently available opt-in mode is `"frequency"`:
+
+```python
+hierarchical_cae(
+    data_filter_mode="frequency",
+    frequency_filter=FrequencyFilter(...),
+)
+```
+
+That filter may use JSON-safe explicit assessments, declarative record-diagnostic
+rules, and—only when diagnostics are absent—declared morphology thresholds. The
+frequency fallback can classify chatter from the spectral high-frequency energy
+ratio, second differences, or derivative reversals; it does not select a physical
+frequency-axis band. Yadof core contains no Chrono names or release/contact
+thresholds. The selected mode changes only training weights, shared-token
+contribution, private residual labels, and the uncalibrated applicability head; it
+never deletes a design, filters by cost, smooths stored curves, or rewrites recorded
+rawData. Supplying a frequency filter without explicitly selecting
+`data_filter_mode="frequency"` is rejected so future filtering modes retain
+one unambiguous selection interface.
 
 The applicability API reports each predictor member's uncalibrated `P(smooth)` and
 ensemble spread. This is structural/epistemic regime uncertainty with zero
@@ -310,7 +324,7 @@ The lightweight public surface now includes `PosteriorCalibrationArtifact`,
 `FieldSpreadCalibration`, `ApplicabilityCalibration`, and
 `CalibratedRawDataPosteriorSampler`. A successful artifact is bound to exact
 state/strategy/schema signatures, checkpoint-file hashes, training provenance,
-held-out calibration data, quality policy, and label/head/loss identity. A finite
+held-out calibration data, frequency-filter configuration, and label/head/loss identity. A finite
 calibrated sampler must enumerate each unique member exactly once. Per-field scales
 act around the unchanged empirical member mean and preserve one member/draw axis
 across candidates, chunks, fields, and objectives. Applicability uses one positive-
@@ -510,7 +524,7 @@ release:
   replace the GPSAF plus conditional-INR template default.
 
 Formal re-entry requires a new versioned architecture candidate; passed
-1000/2000-design representation, worst-field, quality/regime, coordinate, and
+1000/2000-design representation, worst-field, frequency/regime, coordinate, and
 resource gates; exact-state transferable rawData calibration; calibrated
 applicability policy where applicable; all seven frozen comparison arms (including
 hierarchical-CAE + GPSAF); pre-access posterior/optimization/engineering thresholds;
