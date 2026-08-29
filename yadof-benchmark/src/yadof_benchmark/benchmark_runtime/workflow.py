@@ -12,6 +12,9 @@ from .contracts import (
     BenchmarkError,
     ComparisonSpec,
     EVIDENCE_CLASSES,
+    PERFORMANCE_MIN_GENERATIONS,
+    PERFORMANCE_MIN_PLANNED_EVALUATIONS,
+    PERFORMANCE_MIN_POPULATION,
     PostprocessorSpec,
     StrategySpec,
     WorkflowRequest,
@@ -194,6 +197,23 @@ class Benchmark:
                 "benchmark.configure(evidence=...) must explicitly classify this "
                 "workflow as 'structural' or 'performance'"
             )
+        if self._evidence == "performance":
+            for comparison in self._comparisons:
+                if (
+                    comparison.population < PERFORMANCE_MIN_POPULATION
+                    or comparison.generations < PERFORMANCE_MIN_GENERATIONS
+                ):
+                    raise BenchmarkError(
+                        f"performance comparison {comparison.id!r} has "
+                        f"population={comparison.population}, "
+                        f"generations={comparison.generations}; every performance "
+                        "cell requires population >= "
+                        f"{PERFORMANCE_MIN_POPULATION}, generations >= "
+                        f"{PERFORMANCE_MIN_GENERATIONS}, and at least "
+                        f"{PERFORMANCE_MIN_PLANNED_EVALUATIONS} planned real "
+                        "evaluations. Use evidence='structural' for smaller "
+                        "smoke or canary budgets."
+                    )
         known = set(strategy_ids)
         for comparison in self._comparisons:
             missing = sorted(set(comparison.strategy_ids) - known)

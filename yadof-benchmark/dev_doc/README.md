@@ -17,6 +17,9 @@ Any change must preserve these invariants:
 - every workflow explicitly freezes `structural` or `performance` evidence;
   structural smoke/canary and recovery evidence cannot support algorithm
   performance conclusions, while performance output remains descriptive;
+- every performance comparison rejects population below 100 or generations below
+  20; single-seed performance remains allowed but is frozen as exploratory, while
+  any stronger seed count stays explicitly user-configurable;
 - planning executes Python but performs no simulator work or run writes;
 - strategies are opaque complete `optimization.py` files;
 - runs freeze their workflow, resources, baselines, strategies, driver, and plan;

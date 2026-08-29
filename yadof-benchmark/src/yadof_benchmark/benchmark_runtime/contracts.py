@@ -12,6 +12,11 @@ WORKFLOW_FORMAT = "yadof.benchmark.workflow"
 RUN_FORMAT = "yadof.benchmark.workflow-run"
 STATE_FORMAT = "yadof.benchmark.state"
 EVIDENCE_CLASSES = ("structural", "performance")
+PERFORMANCE_MIN_POPULATION = 100
+PERFORMANCE_MIN_GENERATIONS = 20
+PERFORMANCE_MIN_PLANNED_EVALUATIONS = (
+    PERFORMANCE_MIN_POPULATION * PERFORMANCE_MIN_GENERATIONS
+)
 
 
 def evidence_notice(value: str) -> str:
@@ -28,6 +33,36 @@ def evidence_notice(value: str) -> str:
             "strategies or make scientific acceptance decisions."
         )
     return "Unclassified historical evidence; do not use it for performance conclusions."
+
+
+def replication_scope(evidence: str, seed_count: int) -> str:
+    """Classify how explicitly configured seeds bound result interpretation."""
+
+    if evidence != "performance":
+        return "structural"
+    if seed_count <= 0:
+        return "unclassified"
+    return "exploratory" if seed_count == 1 else "multi-seed"
+
+
+def replication_notice(value: str) -> str:
+    """Return the fixed interpretation boundary for one replication scope."""
+
+    if value == "exploratory":
+        return (
+            "Exploratory single-seed performance evidence: suitable for fast "
+            "algorithm iteration, not a robust multi-seed conclusion."
+        )
+    if value == "multi-seed":
+        return (
+            "Multi-seed descriptive performance evidence: seed count is explicitly "
+            "configurable, and the benchmark does not infer significance or robustness."
+        )
+    if value == "structural":
+        return (
+            "Seed replication is not a performance claim for structural-only evidence."
+        )
+    return "Unclassified replication scope; do not infer a robust conclusion."
 
 
 class BenchmarkError(RuntimeError):
@@ -142,6 +177,7 @@ class CellSpec:
     population: int
     generations: int
     evidence: str
+    replication_scope: str
     baseline_snapshot: str
     strategy_snapshot: str
     baseline_digest: str
@@ -164,6 +200,7 @@ class CellSpec:
             "population": self.population,
             "generations": self.generations,
             "evidence": self.evidence,
+            "replication_scope": self.replication_scope,
             "planned_evaluations": self.planned_evaluations,
             "baseline_snapshot": self.baseline_snapshot,
             "strategy_snapshot": self.strategy_snapshot,
@@ -196,18 +233,22 @@ class RunSpec:
             }
             for item in self.workflow.strategies
         ]
-        comparisons = [
-            {
-                "id": item.id,
-                "baselines": list(item.baseline_ids),
-                "strategies": list(item.strategy_ids),
-                "seeds": list(item.seeds),
-                "population": item.population,
-                "generations": item.generations,
-                "reference": item.reference,
-            }
-            for item in self.workflow.comparisons
-        ]
+        comparisons = []
+        for item in self.workflow.comparisons:
+            scope = replication_scope(self.workflow.evidence, len(item.seeds))
+            comparisons.append(
+                {
+                    "id": item.id,
+                    "baselines": list(item.baseline_ids),
+                    "strategies": list(item.strategy_ids),
+                    "seeds": list(item.seeds),
+                    "population": item.population,
+                    "generations": item.generations,
+                    "replication_scope": scope,
+                    "replication_notice": replication_notice(scope),
+                    "reference": item.reference,
+                }
+            )
         return {
             "format": RUN_FORMAT,
             "digest": self.digest,
@@ -260,6 +301,9 @@ class CommandResult:
 __all__ = [
     "BASELINE_FORMAT",
     "EVIDENCE_CLASSES",
+    "PERFORMANCE_MIN_GENERATIONS",
+    "PERFORMANCE_MIN_PLANNED_EVALUATIONS",
+    "PERFORMANCE_MIN_POPULATION",
     "RUN_FORMAT",
     "STATE_FORMAT",
     "WORKFLOW_FORMAT",
@@ -276,5 +320,7 @@ __all__ = [
     "WorkflowRequest",
     "freeze_json",
     "evidence_notice",
+    "replication_notice",
+    "replication_scope",
     "thaw_json",
 ]

@@ -114,6 +114,9 @@ def _workspace(
     strategies: tuple[str, ...] = ("alpha", "beta", "gamma"),
     baselines: tuple[str, ...] = ("provider/task",),
     evidence: str = "structural",
+    seeds: tuple[int, ...] = (7,),
+    population: int = 2,
+    generations: int = 3,
     postprocess: str = "",
 ) -> Path:
     root = Path(api.init_workspace(root)["workspace"])
@@ -131,8 +134,9 @@ def _workspace(
         + declarations
         + "\n    benchmark.compare(\n"
         + f"        \"main\", baselines={list(baselines)!r},\n"
-        + f"        strategies={list(strategies)!r}, seeds=[7],\n"
-        + "        population=2, generations=3, reference=\"alpha\",\n"
+        + f"        strategies={list(strategies)!r}, seeds={list(seeds)!r},\n"
+        + f"        population={population}, generations={generations}, "
+        + "reference=\"alpha\",\n"
         + "    )\n"
         + ("    benchmark.postprocess(\"summary\", make_summary)\n" if postprocess else ""),
         encoding="utf-8",
@@ -239,7 +243,9 @@ def test_init_creates_code_first_workspace_without_overwrite(tmp_path: Path) -> 
     assert 'strategies=["nsga3"]' in source
     assert "seeds=[1]" in source
     assert "population=12" in source
-    assert "generations=20" in source
+    assert "generations=3" in source
+    assert "This intentionally small budget is structural-only" in source
+    assert "population >= 100 and generations >= 20" in source
     assert 'benchmark.postprocess("summary", summarize_results)' in source
     for name in ("resources", "runs", "visualizations", "reports", "temp"):
         assert (root / name).is_dir()
@@ -265,6 +271,34 @@ def test_workflow_requires_explicit_valid_evidence_classification(
         encoding="utf-8",
     )
     with pytest.raises(benchmark.BenchmarkError, match="'structural' or 'performance'"):
+        api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+
+
+@pytest.mark.parametrize(
+    ("population", "generations"),
+    ((99, 20), (100, 19), (12, 3)),
+)
+def test_performance_rejects_structural_scale_budgets(
+    tmp_path: Path,
+    population: int,
+    generations: int,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(
+        tmp_path / "performance workspace",
+        strategies=("alpha",),
+        evidence="performance",
+        population=population,
+        generations=generations,
+    )
+
+    with pytest.raises(
+        benchmark.BenchmarkError,
+        match=(
+            r"performance comparison 'main'.*population >= 100, "
+            r"generations >= 20.*2000 planned real evaluations"
+        ),
+    ):
         api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
 
 
@@ -305,6 +339,8 @@ def test_performance_classification_is_explicit_and_descriptive(
         tmp_path / "performance workspace",
         strategies=("alpha",),
         evidence="performance",
+        population=100,
+        generations=20,
     )
 
     assert cli.main(
@@ -321,6 +357,55 @@ def test_performance_classification_is_explicit_and_descriptive(
     assert summary["evidence"]["class"] == "performance"
     assert "descriptive only" in summary["evidence"]["notice"]
     assert "acceptance decisions" in summary["evidence"]["notice"]
+    assert summary["replication"]["scopes"] == ["exploratory"]
+    assert "single-seed" in summary["replication"]["notices"]["exploratory"]
+
+    spec = api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+    assert {cell.replication_scope for cell in spec.cells} == {"exploratory"}
+    run_root = create_run(spec, run_id="exploratory-performance")
+    state = execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=lambda _workspace_path, cell: _cell_result(cell, 0.4),
+    )
+    assert state["status"] == "completed"
+    results = read_json(run_root / "results.json")
+    assert results["replication"]["scopes"] == ["exploratory"]
+    assert all(
+        row["replication_scope"] == "exploratory"
+        for row in results["comparisons"]
+    )
+    assert "Exploratory single-seed performance evidence" in (
+        run_root / "reports" / "summary.md"
+    ).read_text(encoding="utf-8")
+    assert inspect_run(run_root)["replication"]["scopes"] == ["exploratory"]
+
+
+def test_performance_multi_seed_count_is_explicit_and_configurable(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(
+        tmp_path / "multi seed performance",
+        strategies=("alpha",),
+        evidence="performance",
+        seeds=(7, 11, 19, 23),
+        population=100,
+        generations=20,
+    )
+
+    spec = api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+    serialized = spec.to_dict()
+
+    assert len(spec.cells) == 4
+    assert {cell.seed for cell in spec.cells} == {7, 11, 19, 23}
+    assert {cell.replication_scope for cell in spec.cells} == {"multi-seed"}
+    assert serialized["workflow"]["comparisons"][0]["replication_scope"] == (
+        "multi-seed"
+    )
+    assert "significance or robustness" in serialized["workflow"]["comparisons"][0][
+        "replication_notice"
+    ]
 
 
 def test_strategy_requires_complete_build_function(tmp_path: Path) -> None:
@@ -432,7 +517,12 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     assert state["status"] == "completed"
     results = read_json(run_root / "results.json")
     assert results["evidence"]["class"] == "structural"
+    assert results["replication"]["scopes"] == ["structural"]
     assert all(row["evidence"] == "structural" for row in results["comparisons"])
+    assert all(
+        row["replication_scope"] == "structural"
+        for row in results["comparisons"]
+    )
     by_strategy = {
         row["strategy"]: row["reference_delta"]
         for row in results["comparisons"]
@@ -446,14 +536,14 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     assert (run_root / "reports" / "final-hypervolume.csv").is_file()
     assert (run_root / "reports" / "descriptive-results.json").is_file()
     assert (run_root / "results.csv").read_text(encoding="utf-8").startswith(
-        "evidence,"
+        "evidence,replication_scope,"
     )
     assert (run_root / "reports" / "cell-validity.csv").read_text(
         encoding="utf-8"
-    ).startswith("evidence,")
+    ).startswith("evidence,replication_scope,")
     assert (run_root / "reports" / "final-hypervolume.csv").read_text(
         encoding="utf-8"
-    ).startswith("evidence,")
+    ).startswith("evidence,replication_scope,")
     descriptive = read_json(run_root / "reports" / "descriptive-results.json")
     assert descriptive["evidence"]["class"] == "structural"
     summary = (run_root / "reports" / "summary.md").read_text(encoding="utf-8")

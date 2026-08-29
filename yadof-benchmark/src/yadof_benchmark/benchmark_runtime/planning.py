@@ -15,6 +15,7 @@ from .contracts import (
     RunSpec,
     WorkflowRequest,
     freeze_json,
+    replication_scope,
 )
 from .storage import (
     directory_digest,
@@ -150,6 +151,9 @@ def plan_workflow(
                             population=comparison.population,
                             generations=comparison.generations,
                             evidence=request.evidence,
+                            replication_scope=replication_scope(
+                                request.evidence, len(comparison.seeds)
+                            ),
                             baseline_snapshot=(
                                 f"inputs/baselines/{baseline_slug}/workspace"
                             ),

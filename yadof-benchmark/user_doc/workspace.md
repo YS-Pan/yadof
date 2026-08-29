@@ -39,7 +39,11 @@ postprocessor. Replace those examples with the intended workflow and complete
 `resources/.../optimization.py` modules before running `check`. Use `structural`
 for fake/cheap smoke or bounded canaries and `performance` only for a deliberately
 authorized performance campaign; the package never infers this classification
-from population or generation counts.
+from population or generation counts. It does reject a declared performance
+comparison below 100 individuals per generation or below 20 generations. The
+scaffold's 12 × 3 example is explicitly structural-only. A single-seed
+performance comparison remains allowed for algorithm iteration, but its plan and
+results are marked exploratory.
 
 Packaged baselines are version-matched read-only resources. To edit a task, copy
 its complete semantic source directory into a separate baseline collection, keep

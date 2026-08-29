@@ -47,6 +47,13 @@ fixed scope notice.
 Historical runs without the field are inspectable as `unclassified` and are never
 eligible for performance conclusions.
 
+Every new cell also carries its comparison's replication scope. A single-seed
+performance comparison is `exploratory`; a performance comparison with two or
+more explicit seeds is `multi-seed`; structural comparisons use `structural`.
+Plan summaries, result rows, CSV/JSON reports, Markdown, workspace indexes, and
+inspect repeat the scope and its fixed notice so a single-seed result cannot be
+detached from its exploratory boundary.
+
 A cell progresses through planned, checked, running, succeeded, and collected.
 Interrupted checked/running attempts are sealed and the cell returns to planned.
 Failed cells receive a new attempt. Collection failure preserves successful

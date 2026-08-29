@@ -38,10 +38,19 @@ from budget. Structural means integration-only smoke/canary evidence and forbids
 algorithm performance conclusions. Performance remains descriptive and grants no
 execution authority or automatic scientific decision.
 
+After the explicit class is known, freeze validates scale consistency. Every
+performance comparison requires population at least 100 and generations at least
+20, which guarantees at least 2000 planned real evaluations per cell. Structural
+comparisons retain arbitrary positive budgets. The exact seed list remains
+comparison-owned and configurable. A performance comparison with one seed freezes
+`exploratory` replication scope; two or more freeze `multi-seed`, which still does
+not assert robustness or significance.
+
 An initialized `benchmark.py` visibly scaffolds run policy, one semantically named
 algorithm strategy, baseline selection, seeds, budget, and a top-level
-postprocessor. The scaffold remains inert until the author supplies complete
-strategy resources and deliberately enables the declarations. Strategy IDs and
+postprocessor. Its 12 × 3 budget is labeled structural-only, while comments state
+the performance floor and single-seed interpretation. The scaffold remains inert
+until the author supplies complete strategy resources and deliberately enables the declarations. Strategy IDs and
 display names describe algorithms, not comparison roles.
 
 Within a selected baseline collection, each manifest directory relative to the

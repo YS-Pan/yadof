@@ -140,7 +140,13 @@ hot-change contract; structural dimension changes are future work.
   results remain descriptive; a long run follows plan/check, adapter smoke, and a
   structural canary under the applicable simulator authority. A yadof-root defect
   blocks the affected full campaign and receives a root toDo instead of a benchmark
-  workaround. The distribution depends on yadof's public surface, never the
+  workaround. Performance workflow freeze rejects population below 100 or fewer
+  than 20 generations per cell; structural work retains smaller positive budgets.
+  A one-seed performance comparison is propagated as exploratory, while arbitrary
+  explicit multi-seed lists remain descriptive rather than automatically robust.
+  Baseline difficulty stays task-owned and is calibrated with a complete
+  non-surrogate reference rather than inferred from the 2000-evaluation guard.
+  The distribution depends on yadof's public surface, never the
   reverse. Root
   `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
   records.

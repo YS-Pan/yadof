@@ -33,6 +33,15 @@ scientific acceptance. Package tests and recovery fault injection are separate
 engineering evidence and do not substitute for either a real adapter smoke or an
 authorized performance campaign.
 
+Performance comparisons have a hard per-cell floor of 100 individuals per
+generation and 20 generations (2000 planned real evaluations). That floor is a
+validity guard, not a claim that the task is difficult enough. Before a surrogate
+comparison, calibrate the baseline with a complete non-surrogate NSGA-III run so
+convergence is nearer roughly 10000 evaluations; a task already solved easily at
+2000 needs more difficulty. Single-seed performance work is reported as
+exploratory for fast algorithm iteration. Use any explicit multi-seed list needed
+for a stronger campaign; three historical seeds are an example, not a constant.
+
 Both planning commands return bounded summaries by default; request their complete
 expanded JSON with `--json`. Child stdout/stderr is kept in separate command logs
 during `run` and `resume`; raw streaming is an explicit

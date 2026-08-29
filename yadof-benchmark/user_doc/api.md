@@ -37,9 +37,10 @@ def build_benchmark(benchmark: Benchmark) -> None:
         "main",
         baselines=["test-com/synthetic-antenna", "ngspice/saw-ladder"],
         strategies=["nsga3", "gpsaf-conditional-inr"],
+        # This deliberately small comparison is structural-only.
         seeds=[101, 102, 103],
         population=12,
-        generations=20,
+        generations=3,
         reference="nsga3",
     )
     benchmark.postprocess("plots", create_plots)
@@ -75,6 +76,19 @@ reference=None)` declares one Cartesian comparison matrix. Call it more than onc
 to express different baselines, strategy subsets, seeds, or budgets. IDs are stable
 evidence identifiers. A reference is optional and must be selected by that
 comparison.
+
+For `evidence="performance"`, every comparison requires `population >= 100` and
+`generations >= 20`, so every cell plans at least 2000 real evaluations. Smaller
+budgets belong to an explicitly structural smoke/canary workflow. The 2000 floor
+is not a difficulty goal: use a complete non-surrogate reference run to tune a
+baseline toward roughly 10000 evaluations to convergence (for example 200 × 50)
+when 2000 evaluations solve it easily.
+
+`seeds` is always an explicit, non-empty, unique integer sequence. One seed is
+allowed for a fast algorithm-debugging loop, but a performance comparison with one
+seed is serialized and reported as `exploratory`. Use multiple explicit seeds for
+a stronger descriptive campaign. The package never fixes the number at three and
+does not infer statistical significance or robustness from a multi-seed list.
 
 ## `Benchmark.postprocess()`
 

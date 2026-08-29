@@ -13,6 +13,13 @@ marked engineering evidence: they prove resume semantics, not optimizer quality.
 The runtime propagates the class through plans, cells, run reports, indexes, and
 inspect instead of inferring it from budget size.
 
+Explicit classification does not permit an internally inconsistent performance
+plan. Workflow freeze rejects any performance comparison below population 100 or
+20 generations, a 2000-real-evaluation hard floor. Structural workflows retain
+small budgets. Performance comparisons derive a separate replication scope from
+their explicit seed list: one seed is exploratory, while two or more are
+multi-seed without an automatic robustness or significance claim.
+
 The bounded `benchmark_runtime/` package separates responsibilities:
 
 - `workspace.py` and `naming.py`: workspace identity, timestamped human-visible
@@ -57,6 +64,11 @@ configuration paths. These measured steps retain normal simulator authority. A
 benchmark incompatibility is repaired and structurally revalidated before full
 execution; a yadof framework defect becomes a separate root toDo and blocks the
 affected full campaign rather than acquiring a benchmark-local workaround.
+
+Difficulty remains task-owned rather than a generic validator property. The user
+contract requires a complete non-surrogate reference calibration toward roughly
+10000 evaluations to convergence when the 2000-evaluation floor solves a baseline
+too easily; the runtime cannot infer scientific task difficulty from budget alone.
 
 Process-window ownership stays at the caller boundary rather than inside the
 runtime driver. Measured CLI `run` and `resume` operations default to a visible

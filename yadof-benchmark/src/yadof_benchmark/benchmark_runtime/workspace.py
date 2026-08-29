@@ -28,6 +28,9 @@ def build_benchmark(benchmark: Benchmark) -> None:
     # "structural" is for smoke/canary integration evidence only. It must not be
     # presented as algorithm performance evidence. Use "performance" only for a
     # deliberately authorized performance campaign after plan and bounded smoke.
+    # Every performance comparison requires population >= 100 and generations >= 20.
+    # A single-seed performance comparison is marked exploratory; use an explicit,
+    # configurable multi-seed list when a stronger conclusion is required.
     # benchmark.configure(
     #     name="saw-algorithm-comparison",
     #     evidence="structural",
@@ -43,8 +46,9 @@ def build_benchmark(benchmark: Benchmark) -> None:
     #     baselines=["ngspice/saw-ladder"],
     #     strategies=["nsga3"],
     #     seeds=[1],
+    #     # This intentionally small budget is structural-only.
     #     population=12,
-    #     generations=20,
+    #     generations=3,
     # )
     # benchmark.postprocess("summary", summarize_results)
     pass

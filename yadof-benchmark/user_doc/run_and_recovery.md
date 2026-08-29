@@ -34,6 +34,31 @@ Before committing a long performance campaign:
 `check` and `plan` do not execute a simulator. Adapter smoke and a structural
 canary are measured work, so their small size does not bypass execution authority.
 
+## Performance scale, difficulty, and seeds
+
+A performance cell has a hard minimum of 100 individuals per generation and 20
+generations: 2000 planned real evaluations. Workflow loading rejects either lower
+dimension even when their product reaches 2000, and points the author to
+`evidence="structural"` for a smaller smoke or canary. This guard prevents the
+former few-generation, dozen-individual pattern from silently producing a
+performance report.
+
+The minimum is not a task-difficulty target. Before using a baseline to compare a
+surrogate strategy, run a complete non-surrogate NSGA-III reference and adjust the
+task so convergence is nearer roughly 10000 evaluations; 200 × 50 is the
+historical reference shape, not another hard guard. If the reference solves the
+task easily by about 2000 evaluations, the surrogate comparison is not yet
+informative enough and the baseline should be made harder before the multi-strategy
+campaign.
+
+For rapid algorithm debugging, a performance comparison may use one explicit seed
+per state/arm. Plan, cell, CSV/JSON, Markdown, workspace-index, and inspect output
+mark that scope `exploratory`; it cannot stand in for a robust conclusion. Stronger
+campaigns use multiple explicit seeds. The list is fully configurable: the three
+seeds used by earlier three-baseline campaigns are historical practice, not a
+scientific constant enforced by the tool. Multi-seed output remains descriptive
+and does not automatically claim significance or robustness.
+
 ## Visible execution is the default
 
 Every measured `run` or `resume` should have a visible process window, regardless
@@ -113,8 +138,8 @@ The run publishes `results.json` and detailed `results.csv` at its root. Its
 - `descriptive-results.json`, the bounded machine-readable report.
 
 These artifacts, the workspace indexes, and read-only inspect repeat the frozen
-evidence class and its scope notice. A copied CSV row therefore remains classified
-outside its original run directory.
+evidence class, replication scope, and their notices. A copied CSV row therefore
+remains classified outside its original run directory.
 
 After each publication, timestamp-prefixed index directories below the benchmark
 workspace's top-level `reports/` and `visualizations/` point back to this one

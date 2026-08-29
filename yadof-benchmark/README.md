@@ -9,6 +9,15 @@ smoke/canary integration evidence only and must never be presented as algorithm
 performance evidence. Performance runs publish descriptive measurements without
 ranking strategies or making acceptance decisions.
 
+Every performance cell must plan at least 100 individuals per generation and at
+least 20 generations, for a hard minimum of 2000 real evaluations. This minimum
+prevents structural-scale runs from being mislabeled; it is not a task-difficulty
+target. Calibrate each baseline so a complete non-surrogate NSGA-III reference is
+closer to roughly 10000 evaluations (historically 200 × 50) before expecting a
+meaningful surrogate comparison. A single-seed performance comparison is carried
+through plans and reports as exploratory; stronger campaigns use an explicit,
+configurable multi-seed list rather than a package-fixed seed count.
+
 ```powershell
 $workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
   ConvertFrom-Json).workspace

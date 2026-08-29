@@ -8,7 +8,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from .contracts import BenchmarkError, evidence_notice
+from .contracts import (
+    BenchmarkError,
+    evidence_notice,
+    replication_notice,
+    replication_scope,
+)
 from .progress import active_progress, estimate_run_timing
 from .storage import (
     atomic_write_json,
@@ -25,6 +30,34 @@ def _evidence(spec: Mapping[str, Any]) -> str:
     if not isinstance(workflow, Mapping):
         return "unclassified"
     return str(workflow.get("evidence", "unclassified"))
+
+
+def _replication_by_comparison(spec: Mapping[str, Any]) -> dict[str, str]:
+    workflow = spec.get("workflow", {})
+    if not isinstance(workflow, Mapping):
+        return {}
+    evidence = _evidence(spec)
+    output: dict[str, str] = {}
+    for item in workflow.get("comparisons", []):
+        if not isinstance(item, Mapping):
+            continue
+        seeds = item.get("seeds", [])
+        seed_count = len(seeds) if isinstance(seeds, (list, tuple)) else 0
+        output[str(item.get("id", ""))] = str(
+            item.get("replication_scope")
+            or replication_scope(evidence, seed_count)
+        )
+    return output
+
+
+def _replication_summary(spec: Mapping[str, Any]) -> dict[str, Any]:
+    by_comparison = _replication_by_comparison(spec)
+    scopes = sorted(set(by_comparison.values()))
+    return {
+        "by_comparison": by_comparison,
+        "scopes": scopes,
+        "notices": {scope: replication_notice(scope) for scope in scopes},
+    }
 
 
 def _rawdata_shapes(
@@ -109,6 +142,9 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
         cost_rows.append(
             {
                 "evidence": cell.get("evidence", "unclassified"),
+                "replication_scope": cell.get(
+                    "replication_scope", "unclassified"
+                ),
                 "comparison": cell["comparison"],
                 "baseline": cell["baseline"],
                 "strategy": cell["strategy"],
@@ -137,6 +173,7 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
     result = {
         "cell": cell["id"],
         "evidence": cell.get("evidence", "unclassified"),
+        "replication_scope": cell.get("replication_scope", "unclassified"),
         "comparison": cell["comparison"],
         "baseline": cell["baseline"],
         "strategy": cell["strategy"],
@@ -182,6 +219,7 @@ def _comparisons(
         str(item["id"]): item.get("reference")
         for item in spec["workflow"]["comparisons"]
     }
+    replication = _replication_by_comparison(spec)
     groups: dict[tuple[Any, ...], list[Mapping[str, Any]]] = defaultdict(list)
     for cell in cells.values():
         budget = cell["budget"]
@@ -212,6 +250,9 @@ def _comparisons(
             output.append(
                 {
                     "evidence": evidence,
+                    "replication_scope": replication.get(
+                        str(key[0]), "unclassified"
+                    ),
                     "comparison": key[0],
                     "baseline": key[1],
                     "seed": key[2],
@@ -234,9 +275,9 @@ def _comparisons(
 
 def _csv_text(rows: list[Mapping[str, Any]]) -> str:
     fields = [
-        "evidence", "comparison", "baseline", "strategy", "seed", "population",
-        "generations", "job", "generation", "objectives", "average_objective",
-        "metadata",
+        "evidence", "replication_scope", "comparison", "baseline", "strategy",
+        "seed", "population", "generations", "job", "generation", "objectives",
+        "average_objective", "metadata",
     ]
     return _table_csv(rows, fields)
 
@@ -294,6 +335,9 @@ def _cell_summaries(
         output.append(
             {
                 "evidence": evidence,
+                "replication_scope": cell.get(
+                    "replication_scope", "unclassified"
+                ),
                 "cell": cell_id,
                 "comparison": cell["comparison"],
                 "baseline": cell["baseline"],
@@ -318,6 +362,7 @@ def _cell_summaries(
 def _markdown(
     run_id: str,
     evidence: str,
+    replication: Mapping[str, Any],
     state: Mapping[str, Any],
     comparisons: list[Mapping[str, Any]],
     cells: list[Mapping[str, Any]],
@@ -331,11 +376,20 @@ def _markdown(
         "",
         f"> {evidence_notice(evidence)}",
         "",
+        "## Seed replication scope",
+        "",
+    ]
+    for comparison, scope in sorted(replication.get("by_comparison", {}).items()):
+        lines.append(
+            f"- `{comparison}`: `{scope}` — {replication_notice(str(scope))}"
+        )
+    lines.extend([
+        "",
         "## Cell completion and validity",
         "",
         "| Cell | Status | Completed | Valid | Evaluations | Objective contract | rawData contract | Issues |",
         "| --- | --- | --- | --- | ---: | --- | --- | ---: |",
-    ]
+    ])
     for row in cells:
         lines.append(
             "| `{cell}` | {status} | {completed} | {valid} | {done}/{planned} | {objective} | {rawdata} | {issues} |".format(
@@ -416,6 +470,7 @@ def _publish_workspace_indexes(
         "run_id": run_id,
         "status": state["status"],
         "evidence": _evidence(spec),
+        "replication": _replication_summary(spec),
         "updated_utc": state["updated_utc"],
         "run": str(run_root),
         "reports": str(run_root / "reports"),
@@ -437,6 +492,9 @@ def _publish_workspace_indexes(
                 f"Evidence class: `{payload['evidence']}`",
                 "",
                 f"> {evidence_notice(payload['evidence'])}",
+                "",
+                "Seed replication scopes: "
+                f"`{', '.join(payload['replication']['scopes'])}`",
                 "",
                 f"Authoritative run root: `{run_root}`",
                 "",
@@ -467,6 +525,7 @@ def publish_results(
     comparisons = _comparisons(spec, cells)
     cell_summaries = _cell_summaries(spec, state, cells)
     evidence = _evidence(spec)
+    replication = _replication_summary(spec)
     result = {
         "format": "yadof.benchmark.results",
         "run_id": state["run_id"],
@@ -476,6 +535,7 @@ def publish_results(
             "class": evidence,
             "notice": evidence_notice(evidence),
         },
+        "replication": replication,
         "cell_states": {
             cell_id: {"status": item.get("status"), "error": item.get("error")}
             for cell_id, item in state["cells"].items()
@@ -493,16 +553,19 @@ def publish_results(
     atomic_write_text(run_root / "results.csv", _csv_text(rows))
     reports = run_root / "reports"
     atomic_write_text(reports / "summary.md", _markdown(
-        str(state["run_id"]), evidence, state, comparisons, cell_summaries
+        str(state["run_id"]), evidence, replication, state, comparisons,
+        cell_summaries
     ))
     atomic_write_text(
         reports / "cell-validity.csv",
         _table_csv(
             cell_summaries,
             [
-                "evidence", "cell", "comparison", "baseline", "strategy", "seed", "status",
-                "completed", "valid", "completed_evaluations", "planned_evaluations",
-                "objective_contract_matches", "rawdata_contract_matches", "issues", "error",
+                "evidence", "replication_scope", "cell", "comparison", "baseline",
+                "strategy", "seed", "status", "completed", "valid",
+                "completed_evaluations", "planned_evaluations",
+                "objective_contract_matches", "rawdata_contract_matches", "issues",
+                "error",
             ],
         ),
     )
@@ -511,9 +574,10 @@ def publish_results(
         _table_csv(
             comparisons,
             [
-                "evidence", "comparison", "baseline", "seed", "strategy", "reference",
-                "completed_evaluations", "planned_evaluations", "success_rate",
-                "runtime_seconds", "final_hypervolume", "reference_delta",
+                "evidence", "replication_scope", "comparison", "baseline", "seed",
+                "strategy", "reference", "completed_evaluations",
+                "planned_evaluations", "success_rate", "runtime_seconds",
+                "final_hypervolume", "reference_delta",
             ],
         ),
     )
@@ -524,6 +588,7 @@ def publish_results(
             "run_id": state["run_id"],
             "status": state["status"],
             "evidence": result["evidence"],
+            "replication": replication,
             "generated_utc": result["generated_utc"],
             "cells": cell_summaries,
             "final_hypervolume": comparisons,
@@ -670,6 +735,7 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
         for item in state.get("postprocessors", {}).values()
     )
     evidence = _evidence(spec)
+    replication = _replication_summary(spec)
     return {
         "format": "yadof.benchmark.inspect",
         "run_id": state["run_id"],
@@ -679,6 +745,7 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
             "class": evidence,
             "notice": evidence_notice(evidence),
         },
+        "replication": replication,
         "status": state["status"],
         "updated_utc": state["updated_utc"],
         "cell_counts": dict(sorted(counts.items())),

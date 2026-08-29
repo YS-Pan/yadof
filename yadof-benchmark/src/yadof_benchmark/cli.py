@@ -9,7 +9,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import api
 from .benchmark_runtime.launch import launch_detached
-from .benchmark_runtime.contracts import evidence_notice
+from .benchmark_runtime.contracts import evidence_notice, replication_notice
 from .benchmark_runtime.terminal import BenchmarkTerminal
 
 
@@ -52,6 +52,7 @@ def _plan_summary(
     cells = list(spec.cells)
     populations = [cell.population for cell in cells]
     generations = [cell.generations for cell in cells]
+    replication_scopes = sorted({cell.replication_scope for cell in cells})
     full_json = [
         "yadof-benchmark",
         command,
@@ -69,6 +70,12 @@ def _plan_summary(
         "evidence": {
             "class": spec.workflow.evidence,
             "notice": evidence_notice(spec.workflow.evidence),
+        },
+        "replication": {
+            "scopes": replication_scopes,
+            "notices": {
+                scope: replication_notice(scope) for scope in replication_scopes
+            },
         },
         "workspace": str(spec.workflow.workspace),
         "counts": {

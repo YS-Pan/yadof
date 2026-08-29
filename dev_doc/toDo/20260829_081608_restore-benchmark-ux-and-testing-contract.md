@@ -32,7 +32,7 @@
 
 ## 必须恢复的有效要求
 
-实施进度：2026-08-29 已完成第 1--5 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
+实施进度：2026-08-29 已完成第 1--6 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
 strategy、baseline、seed/budget 和 postprocess；baseline discovery 强制 editable source 的
 相对目录等于 `provider/task` semantic ID，run 仍负责 digest 与不可变 snapshot。人类可见
 workspace/run/output-index 现由 benchmark 统一添加秒级时间前缀；每个 cell 强制生成 cost 图与
@@ -52,8 +52,11 @@ config 的 exact 或 compatible prior，禁止跨 strategy 点估计，并用带
 故障注入与 resume 测试另标 recovery，二者均不能替代真实 adapter smoke 或算法性能证据。用户与
 开发文档规定 full 前依次完成有界 plan/check、同 adapter smoke 和使用相同 baseline/strategy/
 配置路径的 structural canary；benchmark 不兼容时先修工具并重跑结构验证，yadof 根缺陷则建立
-独立根 TODO 并阻止受影响 full。第 6--9 小节仍保持 active；本进度不代表 performance 规模、
-配对指标、更丰富的恢复或并行要求已经完成。
+独立根 TODO 并阻止受影响 full。performance workflow 现拒绝低于每代 100 个体或 20 代的配置，
+把 2000 planned real evaluations 明确为有效性硬下限而非难度目标；单 seed performance 结果贯穿
+plan/cell/report/index/inspect/CSV/JSON 标为 exploratory，多 seed 数量继续显式可配且不自动宣称
+稳健性。用户与开发文档要求先用完整纯 NSGA-III 参考把任务难度校准到接近约 10000 evaluations
+才收敛。第 7--9 小节仍保持 active；本进度不代表配对指标、更丰富的恢复或并行要求已经完成。
 
 ### 1. 工具边界和工作区体验
 
