@@ -33,10 +33,13 @@ The marker is tool-owned identity metadata, not a workflow configuration file.
 Do not hand-edit it. The complete editable workflow is `benchmark.py`.
 
 The generated `benchmark.py` is an inert but complete authoring scaffold. Its
-comments show run policy, a semantically named algorithm strategy, baseline IDs,
-seed and budget fields, and a top-level postprocessor. Replace those examples with
-the intended workflow and complete `resources/.../optimization.py` modules before
-running `check`.
+comments show the required evidence class, run policy, a semantically named
+algorithm strategy, baseline IDs, seed and budget fields, and a top-level
+postprocessor. Replace those examples with the intended workflow and complete
+`resources/.../optimization.py` modules before running `check`. Use `structural`
+for fake/cheap smoke or bounded canaries and `performance` only for a deliberately
+authorized performance campaign; the package never infers this classification
+from population or generation counts.
 
 Packaged baselines are version-matched read-only resources. To edit a task, copy
 its complete semantic source directory into a separate baseline collection, keep

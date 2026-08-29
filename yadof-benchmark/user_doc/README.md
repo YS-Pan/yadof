@@ -24,6 +24,15 @@ start simulators, mutate external state, or perform expensive work. Measured wor
 belongs to strategy execution; visualization and analysis belong to the required
 baseline postprocessor and optional workflow-level postprocessors.
 
+Every workflow explicitly declares `evidence="structural"` or
+`evidence="performance"`. Structural fake/cheap runs, CLI smoke, and bounded
+canaries validate integration only; their plan, inspect, CSV/JSON, and Markdown
+outputs carry a structural-only notice and cannot support algorithm performance
+conclusions. Performance reports remain descriptive and never announce a winner or
+scientific acceptance. Package tests and recovery fault injection are separate
+engineering evidence and do not substitute for either a real adapter smoke or an
+authorized performance campaign.
+
 Both planning commands return bounded summaries by default; request their complete
 expanded JSON with `--json`. Child stdout/stderr is kept in separate command logs
 during `run` and `resume`; raw streaming is an explicit

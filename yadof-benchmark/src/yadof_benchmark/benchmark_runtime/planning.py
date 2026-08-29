@@ -149,6 +149,7 @@ def plan_workflow(
                             seed=seed,
                             population=comparison.population,
                             generations=comparison.generations,
+                            evidence=request.evidence,
                             baseline_snapshot=(
                                 f"inputs/baselines/{baseline_slug}/workspace"
                             ),

@@ -40,3 +40,7 @@ include = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
+markers = [
+    "structural: package, CLI, workflow, and integration-contract evidence; never algorithm performance evidence",
+    "recovery: fault-injection and resume-semantics evidence; never algorithm performance evidence",
+]

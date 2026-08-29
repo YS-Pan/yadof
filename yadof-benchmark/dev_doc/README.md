@@ -14,6 +14,9 @@ and documentation resources.
 Any change must preserve these invariants:
 
 - the only editable workflow program is workspace `benchmark.py`;
+- every workflow explicitly freezes `structural` or `performance` evidence;
+  structural smoke/canary and recovery evidence cannot support algorithm
+  performance conclusions, while performance output remains descriptive;
 - planning executes Python but performs no simulator work or run writes;
 - strategies are opaque complete `optimization.py` files;
 - runs freeze their workflow, resources, baselines, strategies, driver, and plan;

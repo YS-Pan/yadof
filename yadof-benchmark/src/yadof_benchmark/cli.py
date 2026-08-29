@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import api
 from .benchmark_runtime.launch import launch_detached
+from .benchmark_runtime.contracts import evidence_notice
 from .benchmark_runtime.terminal import BenchmarkTerminal
 
 
@@ -65,6 +66,10 @@ def _plan_summary(
         "valid": True,
         "writes": False,
         "workflow": spec.workflow.name,
+        "evidence": {
+            "class": spec.workflow.evidence,
+            "notice": evidence_notice(spec.workflow.evidence),
+        },
         "workspace": str(spec.workflow.workspace),
         "counts": {
             "comparisons": len(spec.workflow.comparisons),

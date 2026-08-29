@@ -5,6 +5,14 @@ explicit complete-JSON presentation, and opt-in child-output streaming.
 `src/yadof_benchmark/api.py` is the explicit public facade. Workspace
 `benchmark.py` is the only editable workflow program.
 
+One workflow has one explicit frozen evidence class. `structural` covers package,
+CLI, adapter-smoke, and bounded canary validation without permitting algorithm
+performance conclusions. `performance` covers descriptive measured campaigns
+without winner/acceptance logic. Recovery and fault-injection tests are separately
+marked engineering evidence: they prove resume semantics, not optimizer quality.
+The runtime propagates the class through plans, cells, run reports, indexes, and
+inspect instead of inferring it from budget size.
+
 The bounded `benchmark_runtime/` package separates responsibilities:
 
 - `workspace.py` and `naming.py`: workspace identity, timestamped human-visible
@@ -42,6 +50,13 @@ Planning deliberately executes arbitrary user Python. Its safety boundary is
 documentary and operational: `benchmark.py` is trusted workspace code, `check` and
 `plan` are advertised as run-read-only rather than code-sandboxed, and expensive or
 external side effects are forbidden by the authoring contract.
+
+A long performance run follows a documented ladder: bounded plan/check, real
+adapter smoke, then a bounded structural canary using the same baseline/strategy/
+configuration paths. These measured steps retain normal simulator authority. A
+benchmark incompatibility is repaired and structurally revalidated before full
+execution; a yadof framework defect becomes a separate root toDo and blocks the
+affected full campaign rather than acquiring a benchmark-local workaround.
 
 Process-window ownership stays at the caller boundary rather than inside the
 runtime driver. Measured CLI `run` and `resume` operations default to a visible

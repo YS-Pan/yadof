@@ -3,7 +3,11 @@
 `yadof-benchmark` is an independent Python package for reproducible,
 code-first comparisons of complete yadof optimization strategies. A benchmark
 workspace owns one `benchmark.py`; that Python file declares the whole workflow,
-including strategies, comparison matrices, execution policy, and postprocessing.
+including an explicit `structural` or `performance` evidence class, strategies,
+comparison matrices, execution policy, and postprocessing. Structural runs are
+smoke/canary integration evidence only and must never be presented as algorithm
+performance evidence. Performance runs publish descriptive measurements without
+ranking strategies or making acceptance decisions.
 
 ```powershell
 $workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
@@ -13,6 +17,13 @@ yadof-benchmark check --workspace $workspace
 yadof-benchmark run --workspace $workspace
 ```
 
+Before a long performance campaign, run bounded `check`/`plan`, smoke every
+selected real adapter through its yadof workspace, and complete a bounded
+`evidence="structural"` canary that uses the same baseline IDs and complete
+strategy/configuration paths. These measured steps remain subject to simulator
+execution authority; package pytest and recovery fault-injection tests do not
+replace them and do not constitute performance evidence.
+
 `check` and `plan` print bounded summaries by default. Add `--json` only when the
 complete expanded cell plan is needed. Measured child stdout/stderr always has
 separate per-command logs and is not copied to the terminal unless
@@ -21,7 +32,8 @@ separate per-command logs and is not copied to the terminal unless
 Foreground runs show a Rich active-cell row followed by a global benchmark row.
 For an agent-owned long Windows run, add `--detach`: it opens a normal visible
 console and immediately returns PID/run/log/inspect details. Hidden execution is
-available only as the explicit `--detach --hidden` exception.
+available only as the explicit `--detach --hidden` exception. The receipt repeats
+the frozen evidence class and its scope notice.
 
 `inspect --run RUN_PATH` is read-only and bounded. It reports status, validity,
 comparison readiness, anomalies, active-cell activity, elapsed time, and an ETA

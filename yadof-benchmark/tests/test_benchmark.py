@@ -38,6 +38,8 @@ from yadof_benchmark.benchmark_runtime.storage import (
 )
 from yadof_benchmark.benchmark_runtime.terminal import BenchmarkTerminal
 
+pytestmark = pytest.mark.structural
+
 
 def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
     baseline = root / "baselines" / Path(*baseline_id.split("/"))
@@ -111,6 +113,7 @@ def _workspace(
     *,
     strategies: tuple[str, ...] = ("alpha", "beta", "gamma"),
     baselines: tuple[str, ...] = ("provider/task",),
+    evidence: str = "structural",
     postprocess: str = "",
 ) -> Path:
     root = Path(api.init_workspace(root)["workspace"])
@@ -124,7 +127,7 @@ def _workspace(
         "from yadof_benchmark import Benchmark\n\n"
         + postprocess
         + "\ndef build_benchmark(benchmark: Benchmark) -> None:\n"
-        + "    benchmark.configure(name=\"comparison\", fail_fast=False)\n"
+        + f"    benchmark.configure(name=\"comparison\", evidence={evidence!r}, fail_fast=False)\n"
         + declarations
         + "\n    benchmark.compare(\n"
         + f"        \"main\", baselines={list(baselines)!r},\n"
@@ -148,6 +151,7 @@ def _plan(root: Path):
 def _cell_result(cell: dict, value: float) -> dict:
     return {
         "cell": cell["id"],
+        "evidence": cell["evidence"],
         "comparison": cell["comparison"],
         "baseline": cell["baseline"],
         "strategy": cell["strategy"],
@@ -172,6 +176,7 @@ def _cell_result(cell: dict, value: float) -> dict:
         },
         "rows": [
             {
+                "evidence": cell["evidence"],
                 "comparison": cell["comparison"],
                 "baseline": cell["baseline"],
                 "strategy": cell["strategy"],
@@ -227,7 +232,8 @@ def test_init_creates_code_first_workspace_without_overwrite(tmp_path: Path) -> 
     workflow = root / "benchmark.py"
     assert workflow.is_file()
     source = workflow.read_text(encoding="utf-8")
-    assert 'benchmark.configure(name="saw-algorithm-comparison"' in source
+    assert 'name="saw-algorithm-comparison"' in source
+    assert 'evidence="structural"' in source
     assert 'benchmark.strategy(\n    #     "nsga3"' in source
     assert 'baselines=["ngspice/saw-ladder"]' in source
     assert 'strategies=["nsga3"]' in source
@@ -240,6 +246,26 @@ def test_init_creates_code_first_workspace_without_overwrite(tmp_path: Path) -> 
         assert not any((root / name).iterdir())
     with pytest.raises(benchmark.BenchmarkError, match="not empty"):
         api.init_workspace(root)
+
+
+def test_workflow_requires_explicit_valid_evidence_classification(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "workspace", strategies=("alpha",))
+    workflow = workspace / "benchmark.py"
+    source = workflow.read_text(encoding="utf-8")
+    workflow.write_text(source.replace("evidence='structural', ", ""), encoding="utf-8")
+
+    with pytest.raises(benchmark.BenchmarkError, match="explicitly classify"):
+        api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+
+    workflow.write_text(
+        source.replace("evidence='structural'", "evidence='smoke'"),
+        encoding="utf-8",
+    )
+    with pytest.raises(benchmark.BenchmarkError, match="'structural' or 'performance'"):
+        api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
 
 
 def test_python_workflow_supports_multiple_comparisons_and_budgets(tmp_path: Path) -> None:
@@ -268,6 +294,33 @@ def test_python_workflow_supports_multiple_comparisons_and_budgets(tmp_path: Pat
     assert len(spec.cells) == 7
     assert {cell.comparison_id for cell in spec.cells} == {"main", "small"}
     assert {cell.planned_evaluations for cell in spec.cells} == {2, 6}
+
+
+def test_performance_classification_is_explicit_and_descriptive(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(
+        tmp_path / "performance workspace",
+        strategies=("alpha",),
+        evidence="performance",
+    )
+
+    assert cli.main(
+        [
+            "plan",
+            "--workspace",
+            str(workspace),
+            "--baselines-root",
+            str(tmp_path / "baselines"),
+        ]
+    ) == 0
+    summary = json.loads(capsys.readouterr().out)
+
+    assert summary["evidence"]["class"] == "performance"
+    assert "descriptive only" in summary["evidence"]["notice"]
+    assert "acceptance decisions" in summary["evidence"]["notice"]
 
 
 def test_strategy_requires_complete_build_function(tmp_path: Path) -> None:
@@ -378,6 +431,8 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
 
     assert state["status"] == "completed"
     results = read_json(run_root / "results.json")
+    assert results["evidence"]["class"] == "structural"
+    assert all(row["evidence"] == "structural" for row in results["comparisons"])
     by_strategy = {
         row["strategy"]: row["reference_delta"]
         for row in results["comparisons"]
@@ -390,10 +445,27 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     assert (run_root / "reports" / "cell-validity.csv").is_file()
     assert (run_root / "reports" / "final-hypervolume.csv").is_file()
     assert (run_root / "reports" / "descriptive-results.json").is_file()
+    assert (run_root / "results.csv").read_text(encoding="utf-8").startswith(
+        "evidence,"
+    )
+    assert (run_root / "reports" / "cell-validity.csv").read_text(
+        encoding="utf-8"
+    ).startswith("evidence,")
+    assert (run_root / "reports" / "final-hypervolume.csv").read_text(
+        encoding="utf-8"
+    ).startswith("evidence,")
+    descriptive = read_json(run_root / "reports" / "descriptive-results.json")
+    assert descriptive["evidence"]["class"] == "structural"
+    summary = (run_root / "reports" / "summary.md").read_text(encoding="utf-8")
+    assert "Evidence class: `structural`" in summary
+    assert "must not support algorithm performance conclusions" in summary
+    inspected = inspect_run(run_root)
+    assert inspected["evidence"]["class"] == "structural"
     assert len(list((run_root / "visualizations" / "cost").glob("*.png"))) == 3
     assert len(list((run_root / "visualizations" / "provider-task").glob("*.png"))) == 3
     workspace = Path(_plan(tmp_path).workflow.workspace)
-    assert (workspace / "reports" / run_root.name / "index.json").is_file()
+    report_index = workspace / "reports" / run_root.name / "index.json"
+    assert read_json(report_index)["evidence"] == "structural"
     assert (workspace / "visualizations" / run_root.name / "index.json").is_file()
     run_commands = [item for item in commands if item[2:4] == ("yadof", "run")]
     assert len(run_commands) == 3
@@ -468,6 +540,7 @@ def test_missing_or_empty_required_visualization_fails_run(tmp_path: Path) -> No
     assert "required visualization failed" in result["issues"][0]
 
 
+@pytest.mark.recovery
 def test_postprocessor_failure_resumes_without_rerunning_cells(tmp_path: Path) -> None:
     _baseline(tmp_path)
     postprocess = (
@@ -510,6 +583,7 @@ def test_postprocessor_failure_resumes_without_rerunning_cells(tmp_path: Path) -
     assert [item["status"] for item in attempts] == ["failed", "succeeded"]
 
 
+@pytest.mark.recovery
 def test_postprocessor_import_failure_is_recorded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -540,6 +614,7 @@ def test_postprocessor_import_failure_is_recorded(
     assert item["attempts"][0]["status"] == "failed"
 
 
+@pytest.mark.recovery
 def test_interrupted_cell_is_sealed_and_retried(tmp_path: Path) -> None:
     _baseline(tmp_path)
     _workspace(tmp_path / "workspace", strategies=("alpha",))
@@ -561,6 +636,7 @@ def test_interrupted_cell_is_sealed_and_retried(tmp_path: Path) -> None:
     assert [item["status"] for item in attempts] == ["interrupted", "collected"]
 
 
+@pytest.mark.recovery
 def test_resume_uses_run_driver_and_inspect_is_read_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -590,6 +666,7 @@ def test_resume_uses_run_driver_and_inspect_is_read_only(
     assert state_path.stat().st_mtime_ns == before
 
 
+@pytest.mark.recovery
 def test_detached_run_does_not_require_originating_workspace(tmp_path: Path) -> None:
     _baseline(tmp_path)
     workspace = _workspace(tmp_path / "workspace", strategies=("alpha",))
@@ -773,6 +850,8 @@ def test_plan_defaults_to_bounded_summary_and_full_json_is_explicit(
         "comparisons": 1,
         "planned_evaluations": 18,
     }
+    assert summary["evidence"]["class"] == "structural"
+    assert "must not support algorithm performance conclusions" in summary["evidence"]["notice"]
     assert "cells" not in summary
 
     assert cli.main(
@@ -787,6 +866,8 @@ def test_plan_defaults_to_bounded_summary_and_full_json_is_explicit(
     ) == 0
     full_text = capsys.readouterr().out
     full = json.loads(full_text)
+    assert full["workflow"]["evidence"] == "structural"
+    assert {cell["evidence"] for cell in full["cells"]} == {"structural"}
     assert len(full["cells"]) == 3
     assert len(summary_text) < len(full_text)
 
@@ -1168,6 +1249,9 @@ def test_terminal_log_retains_final_failure_and_inspection_path(tmp_path: Path) 
 @pytest.mark.skipif(os.name != "nt", reason="Windows detached-console contract")
 def test_detached_launch_defaults_visible_and_returns_receipt(tmp_path: Path) -> None:
     captured: dict[str, object] = {}
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="detached-receipt")
 
     class Process:
         pid = 4242
@@ -1177,12 +1261,13 @@ def test_detached_launch_defaults_visible_and_returns_receipt(tmp_path: Path) ->
         captured["kwargs"] = kwargs
         return Process()
 
-    receipt = launch_detached(tmp_path, process_factory=process_factory)
+    receipt = launch_detached(run_root, process_factory=process_factory)
 
     assert receipt["pid"] == 4242
     assert receipt["visible"] is True
-    assert receipt["run"] == str(tmp_path.resolve())
-    assert receipt["log"] == str(tmp_path.resolve() / "benchmark.log")
+    assert receipt["evidence"]["class"] == "structural"
+    assert receipt["run"] == str(run_root.resolve())
+    assert receipt["log"] == str(run_root.resolve() / "benchmark.log")
     assert "inspect --run" in receipt["inspect"]
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)

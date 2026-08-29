@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from .contracts import BenchmarkError
-from .storage import utc_now
+from .contracts import BenchmarkError, evidence_notice
+from .storage import read_json, utc_now
 from .terminal import CONSOLE_LOG_NAME
 
 ProcessFactory = Callable[..., subprocess.Popen[Any]]
@@ -63,6 +63,14 @@ def launch_detached(
     run_root = Path(run).resolve()
     if not run_root.is_dir():
         raise BenchmarkError(f"run does not exist: {run_root}")
+    spec_path = run_root / "spec.json"
+    spec = read_json(spec_path) if spec_path.is_file() else {}
+    workflow = spec.get("workflow", {})
+    evidence = (
+        str(workflow.get("evidence", "unclassified"))
+        if isinstance(workflow, dict)
+        else "unclassified"
+    )
     if os.name != "nt":
         raise BenchmarkError(
             "detached launch requires a caller-owned visible terminal or terminal "
@@ -107,7 +115,7 @@ def launch_detached(
     with log_path.open("a", encoding="utf-8", newline="\n") as stream:
         stream.write(
             f"{utc_now()} detached launch requested; hidden={hidden}; "
-            f"command={_command_text(command)}\n"
+            f"evidence={evidence}; command={_command_text(command)}\n"
         )
     try:
         process = process_factory(command, **kwargs)
@@ -124,6 +132,10 @@ def launch_detached(
         "pid": int(process.pid),
         "visible": not hidden,
         "stream_child_output": stream_child_output,
+        "evidence": {
+            "class": evidence,
+            "notice": evidence_notice(evidence),
+        },
         "run": str(run_root),
         "log": str(log_path),
         "inspect": _command_text(inspect_command),

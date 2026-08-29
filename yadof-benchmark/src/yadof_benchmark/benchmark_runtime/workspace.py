@@ -25,7 +25,14 @@ def build_benchmark(benchmark: Benchmark) -> None:
     # Keep the complete workflow discoverable here. Strategy IDs and names describe
     # their actual algorithm, not a temporary role such as "reference" or
     # "real-search". Each source is a complete submit/optimization.py module.
-    # benchmark.configure(name="saw-algorithm-comparison", fail_fast=False)
+    # "structural" is for smoke/canary integration evidence only. It must not be
+    # presented as algorithm performance evidence. Use "performance" only for a
+    # deliberately authorized performance campaign after plan and bounded smoke.
+    # benchmark.configure(
+    #     name="saw-algorithm-comparison",
+    #     evidence="structural",
+    #     fail_fast=False,
+    # )
     # benchmark.strategy(
     #     "nsga3",
     #     "resources/strategies/nsga3/optimization.py",

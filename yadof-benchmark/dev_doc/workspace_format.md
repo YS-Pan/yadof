@@ -31,6 +31,13 @@ expanding a fixed schema. Deterministic expansion order is comparison declaratio
 baseline declaration, strategy declaration, then seed declaration. Cell IDs include
 all four identities and collision-check before any write.
 
+`Benchmark.configure(evidence=...)` is mandatory and accepts exactly `structural`
+or `performance`. The value belongs to the whole workflow/run, is copied into each
+cell, and participates in the immutable specification digest. It is never inferred
+from budget. Structural means integration-only smoke/canary evidence and forbids
+algorithm performance conclusions. Performance remains descriptive and grants no
+execution authority or automatic scientific decision.
+
 An initialized `benchmark.py` visibly scaffolds run policy, one semantically named
 algorithm strategy, baseline selection, seeds, budget, and a top-level
 postprocessor. The scaffold remains inert until the author supplies complete

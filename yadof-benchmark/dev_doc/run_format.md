@@ -40,6 +40,13 @@ digest mismatch. `state.json` is atomically replaced after every transition.
 Every human-visible run ID begins with local `YYYYMMDD_HHMMSS`; user-provided IDs
 are semantic suffixes unless they already carry that prefix.
 
+The frozen workflow and every serialized cell carry the explicit evidence class.
+Result JSON, detailed/result CSV rows, descriptive report rows, Markdown summary,
+workspace indexes, detached-launch receipt, and inspect repeat that class and its
+fixed scope notice.
+Historical runs without the field are inspectable as `unclassified` and are never
+eligible for performance conclusions.
+
 A cell progresses through planned, checked, running, succeeded, and collected.
 Interrupted checked/running attempts are sealed and the cell returns to planned.
 Failed cells receive a new attempt. Collection failure preserves successful

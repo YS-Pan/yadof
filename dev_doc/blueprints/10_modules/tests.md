@@ -35,6 +35,12 @@ proves timestamped command/generation evidence, exact versus compatible same-arm
 history, exclusion of cross-arm point estimates, non-negative late-generation
 duration trends, terminal confidence, explicit raw-child streaming, and bounded
 inspect anomalies/next steps without simulator execution.
+The entire focused suite carries the `structural` pytest marker; fault-injection
+and resume tests additionally carry `recovery`. The former proves package and
+integration contracts, while the latter proves recovery semantics. Neither marker,
+nor a fake/cheap runner result, is algorithm-performance evidence. Real structural
+adapter smoke/canary and performance campaigns remain separately classified and
+subject to execution authority.
 
 ## Required coverage
 

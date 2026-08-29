@@ -13,7 +13,11 @@ def create_plots(context: PostprocessContext) -> dict[str, str]:
 
 
 def build_benchmark(benchmark: Benchmark) -> None:
-    benchmark.configure(name="antenna-comparison", fail_fast=False)
+    benchmark.configure(
+        name="antenna-comparison",
+        evidence="structural",
+        fail_fast=False,
+    )
     benchmark.strategy(
         "nsga3",
         "resources/strategies/nsga3/optimization.py",
@@ -43,8 +47,13 @@ def build_benchmark(benchmark: Benchmark) -> None:
 
 ## `Benchmark.configure()`
 
-`configure(name=None, fail_fast=None, runs_dir=None, python=None)` sets run-level
-policy. Relative paths resolve from the workspace. Defaults are the workspace name,
+`configure(name=None, evidence=None, fail_fast=None, runs_dir=None, python=None)`
+sets run-level policy. `evidence` is mandatory before the workflow can freeze and
+accepts only `"structural"` or `"performance"`. Structural means integration-only
+smoke/canary evidence and forbids algorithm performance conclusions. Performance
+means descriptive performance evidence; it still does not authorize execution or
+permit the package to rank strategies or make acceptance decisions. Relative paths
+resolve from the workspace. Other defaults are the workspace name,
 continue-on-cell-failure, `runs/`, and the current Python interpreter.
 
 ## `Benchmark.strategy()`

@@ -132,8 +132,16 @@ hot-change contract; structural dimension changes are future work.
   bounded earlier cell timing evidence; ETA prefers exact then compatible matches
   with the same semantic baseline/strategy, budget, task/resource/host/config,
   never substitutes another strategy, and uses timestamped generation-duration
-  trends to represent nonlinear late phases. The distribution depends on yadof's
-  public surface, never the reverse. Root
+  trends to represent nonlinear late phases. Each workflow explicitly freezes
+  `structural` or `performance` evidence into cells, plan/inspect, JSON/CSV,
+  Markdown, and indexes. Structural package/CLI tests, separately marked recovery
+  fault injection, adapter smoke, and bounded same-path canaries prove engineering
+  behavior only and cannot support algorithm-performance conclusions. Performance
+  results remain descriptive; a long run follows plan/check, adapter smoke, and a
+  structural canary under the applicable simulator authority. A yadof-root defect
+  blocks the affected full campaign and receives a root toDo instead of a benchmark
+  workaround. The distribution depends on yadof's public surface, never the
+  reverse. Root
   `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
   records.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with

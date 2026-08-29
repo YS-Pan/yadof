@@ -1,5 +1,39 @@
 # Run, evidence, and recovery
 
+## Evidence classes and execution ladder
+
+Every run freezes the workflow's explicit evidence class. `structural` covers
+fake/cheap runner tests, CLI smoke, adapter integration checks, and bounded
+canaries. Even when it follows real configuration and simulator paths, it proves
+only that the workflow is structurally operable; its plan, cell rows, indexes,
+inspect output, and reports say that it must not support algorithm performance
+conclusions. `performance` identifies a deliberately measured campaign, but its
+outputs remain descriptive and do not rank strategies or decide acceptance.
+
+Package pytest, deterministic event replay, and recovery/fault injection are
+separate engineering evidence. Recovery proves that attempts, snapshots, and
+resume semantics work; it is not an optimization performance benchmark. The
+package test suite registers `structural` and `recovery` pytest markers so these
+claims can be reviewed separately.
+
+Before committing a long performance campaign:
+
+1. Run bounded `check` or `plan` and review the explicit evidence class and budget.
+2. Smoke each selected real adapter through its source yadof workspace under the
+   current simulator execution policy.
+3. Complete a bounded `evidence="structural"` canary using the same baseline IDs,
+   complete strategy modules, interpreter, and external configuration paths as the
+   intended full run.
+4. If benchmark orchestration is incompatible, fix it and repeat the structural
+   ladder before requesting the full run. If the smoke instead exposes a yadof
+   framework defect, record a separate root `dev_doc/toDo/` handoff and do not
+   start the affected performance campaign.
+5. Start the `evidence="performance"` run only with the execution authority
+   required by the current yadof user documentation.
+
+`check` and `plan` do not execute a simulator. Adapter smoke and a structural
+canary are measured work, so their small size does not bypass execution authority.
+
 ## Visible execution is the default
 
 Every measured `run` or `resume` should have a visible process window, regardless
@@ -14,7 +48,8 @@ yadof-benchmark resume --run RUN_PATH --detach
 
 On Windows, `--detach` opens a separate normal console and immediately returns a
 bounded JSON receipt containing the PID, resolved run path, `benchmark.log` path,
-and exact read-only `inspect` command. It does not poll the child. `--hidden` is
+exact read-only `inspect` command, and frozen evidence class/scope notice. It does
+not poll the child. `--hidden` is
 accepted only together with `--detach` and only when the user explicitly requests
 the hidden exception; that receipt also names the redirected stdout/stderr logs.
 The child breaks away from an automation host's command-lifetime job, so returning
@@ -76,6 +111,10 @@ The run publishes `results.json` and detailed `results.csv` at its root. Its
 - `cell-validity.csv`;
 - `final-hypervolume.csv`;
 - `descriptive-results.json`, the bounded machine-readable report.
+
+These artifacts, the workspace indexes, and read-only inspect repeat the frozen
+evidence class and its scope notice. A copied CSV row therefore remains classified
+outside its original run directory.
 
 After each publication, timestamp-prefixed index directories below the benchmark
 workspace's top-level `reports/` and `visualizations/` point back to this one

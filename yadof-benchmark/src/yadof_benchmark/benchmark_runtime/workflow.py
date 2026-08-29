@@ -11,6 +11,7 @@ from typing import Callable, Mapping, Sequence
 from .contracts import (
     BenchmarkError,
     ComparisonSpec,
+    EVIDENCE_CLASSES,
     PostprocessorSpec,
     StrategySpec,
     WorkflowRequest,
@@ -48,6 +49,7 @@ class Benchmark:
         self.workspace = Path(workspace).resolve()
         fallback = re.sub(r"[^A-Za-z0-9._-]+", "-", self.workspace.name).strip("-._")
         self._name = fallback or "benchmark"
+        self._evidence: str | None = None
         self._fail_fast = False
         self._runs_dir = self.workspace / "runs"
         self._python = Path(sys.executable).resolve()
@@ -65,12 +67,21 @@ class Benchmark:
         self,
         *,
         name: str | None = None,
+        evidence: str | None = None,
         fail_fast: bool | None = None,
         runs_dir: str | Path | None = None,
         python: str | Path | None = None,
     ) -> "Benchmark":
         if name is not None:
             self._name = _id(name, label="workflow name")
+        if evidence is not None:
+            selected_evidence = str(evidence)
+            if selected_evidence not in EVIDENCE_CLASSES:
+                raise BenchmarkError(
+                    "evidence must be explicitly classified as "
+                    f"{' or '.join(repr(item) for item in EVIDENCE_CLASSES)}"
+                )
+            self._evidence = selected_evidence
         if fail_fast is not None:
             if not isinstance(fail_fast, bool):
                 raise BenchmarkError("fail_fast must be boolean")
@@ -178,6 +189,11 @@ class Benchmark:
             raise BenchmarkError("benchmark.py must declare at least one strategy")
         if not self._comparisons:
             raise BenchmarkError("benchmark.py must declare at least one comparison")
+        if self._evidence is None:
+            raise BenchmarkError(
+                "benchmark.configure(evidence=...) must explicitly classify this "
+                "workflow as 'structural' or 'performance'"
+            )
         known = set(strategy_ids)
         for comparison in self._comparisons:
             missing = sorted(set(comparison.strategy_ids) - known)
@@ -190,6 +206,7 @@ class Benchmark:
             raise BenchmarkError(f"python executable does not exist: {self._python}")
         return WorkflowRequest(
             name=_id(self._name, label="workflow name"),
+            evidence=self._evidence,
             strategies=tuple(self._strategies),
             comparisons=tuple(self._comparisons),
             postprocessors=tuple(self._postprocessors),

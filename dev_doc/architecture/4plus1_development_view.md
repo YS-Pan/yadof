@@ -39,7 +39,14 @@ selected. Read-only inspect bounds anomalies and exposes validity, comparison
 readiness, next steps, activity, and ETA. ETA freezes bounded earlier same-arm
 timing records, distinguishes exact from compatible task/resource/host/config
 matches, excludes cross-arm point estimates, and models a non-negative
-generation-duration trend once enough timestamped phases exist.
+generation-duration trend once enough timestamped phases exist. Every benchmark
+workflow also freezes one explicit evidence class. Structural package/CLI tests,
+recovery fault injection, real adapter smoke, and bounded canaries prove engineering
+behavior only and cannot support algorithm performance conclusions. Performance
+campaigns remain descriptive and follow bounded plan/check, adapter smoke, and a
+same-path structural canary before separately authorized full execution. The class
+is carried through plan, cells, reports, indexes, and inspect rather than inferred
+from budget.
 
 ## Package dependency discipline
 

@@ -11,6 +11,23 @@ WORKSPACE_FORMAT = "yadof.benchmark.workspace"
 WORKFLOW_FORMAT = "yadof.benchmark.workflow"
 RUN_FORMAT = "yadof.benchmark.workflow-run"
 STATE_FORMAT = "yadof.benchmark.state"
+EVIDENCE_CLASSES = ("structural", "performance")
+
+
+def evidence_notice(value: str) -> str:
+    """Return the fixed human-facing boundary for one evidence class."""
+
+    if value == "structural":
+        return (
+            "Structural-only evidence: this run validates workflow and integration "
+            "behavior and must not support algorithm performance conclusions."
+        )
+    if value == "performance":
+        return (
+            "Performance evidence is descriptive only: the benchmark does not rank "
+            "strategies or make scientific acceptance decisions."
+        )
+    return "Unclassified historical evidence; do not use it for performance conclusions."
 
 
 class BenchmarkError(RuntimeError):
@@ -104,6 +121,7 @@ class PostprocessorSpec:
 @dataclass(frozen=True)
 class WorkflowRequest:
     name: str
+    evidence: str
     strategies: tuple[StrategySpec, ...]
     comparisons: tuple[ComparisonSpec, ...]
     postprocessors: tuple[PostprocessorSpec, ...]
@@ -123,6 +141,7 @@ class CellSpec:
     seed: int
     population: int
     generations: int
+    evidence: str
     baseline_snapshot: str
     strategy_snapshot: str
     baseline_digest: str
@@ -144,6 +163,7 @@ class CellSpec:
             "seed": self.seed,
             "population": self.population,
             "generations": self.generations,
+            "evidence": self.evidence,
             "planned_evaluations": self.planned_evaluations,
             "baseline_snapshot": self.baseline_snapshot,
             "strategy_snapshot": self.strategy_snapshot,
@@ -196,6 +216,7 @@ class RunSpec:
             "workflow": {
                 "format": WORKFLOW_FORMAT,
                 "name": self.workflow.name,
+                "evidence": self.workflow.evidence,
                 "workspace": str(self.workflow.workspace),
                 "source": str(self.workflow.source),
                 "strategies": strategies,
@@ -238,6 +259,7 @@ class CommandResult:
 
 __all__ = [
     "BASELINE_FORMAT",
+    "EVIDENCE_CLASSES",
     "RUN_FORMAT",
     "STATE_FORMAT",
     "WORKFLOW_FORMAT",
@@ -253,5 +275,6 @@ __all__ = [
     "StrategySpec",
     "WorkflowRequest",
     "freeze_json",
+    "evidence_notice",
     "thaw_json",
 ]

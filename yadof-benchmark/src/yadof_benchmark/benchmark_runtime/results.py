@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
-from .contracts import BenchmarkError
+from .contracts import BenchmarkError, evidence_notice
 from .progress import active_progress, estimate_run_timing
 from .storage import (
     atomic_write_json,
@@ -18,6 +18,13 @@ from .storage import (
     read_json,
     utc_now,
 )
+
+
+def _evidence(spec: Mapping[str, Any]) -> str:
+    workflow = spec.get("workflow", {})
+    if not isinstance(workflow, Mapping):
+        return "unclassified"
+    return str(workflow.get("evidence", "unclassified"))
 
 
 def _rawdata_shapes(
@@ -101,6 +108,7 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
         }
         cost_rows.append(
             {
+                "evidence": cell.get("evidence", "unclassified"),
                 "comparison": cell["comparison"],
                 "baseline": cell["baseline"],
                 "strategy": cell["strategy"],
@@ -128,6 +136,7 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
     }
     result = {
         "cell": cell["id"],
+        "evidence": cell.get("evidence", "unclassified"),
         "comparison": cell["comparison"],
         "baseline": cell["baseline"],
         "strategy": cell["strategy"],
@@ -168,6 +177,7 @@ def _comparisons(
     spec: Mapping[str, Any],
     cells: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
+    evidence = _evidence(spec)
     references = {
         str(item["id"]): item.get("reference")
         for item in spec["workflow"]["comparisons"]
@@ -201,6 +211,7 @@ def _comparisons(
             )
             output.append(
                 {
+                    "evidence": evidence,
                     "comparison": key[0],
                     "baseline": key[1],
                     "seed": key[2],
@@ -223,7 +234,7 @@ def _comparisons(
 
 def _csv_text(rows: list[Mapping[str, Any]]) -> str:
     fields = [
-        "comparison", "baseline", "strategy", "seed", "population",
+        "evidence", "comparison", "baseline", "strategy", "seed", "population",
         "generations", "job", "generation", "objectives", "average_objective",
         "metadata",
     ]
@@ -253,6 +264,7 @@ def _cell_summaries(
     state: Mapping[str, Any],
     cells: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
+    evidence = _evidence(spec)
     output: list[dict[str, Any]] = []
     for cell in spec["cells"]:
         cell_id = str(cell["id"])
@@ -281,6 +293,7 @@ def _cell_summaries(
         completed = cell_state.get("status") == "collected"
         output.append(
             {
+                "evidence": evidence,
                 "cell": cell_id,
                 "comparison": cell["comparison"],
                 "baseline": cell["baseline"],
@@ -304,6 +317,7 @@ def _cell_summaries(
 
 def _markdown(
     run_id: str,
+    evidence: str,
     state: Mapping[str, Any],
     comparisons: list[Mapping[str, Any]],
     cells: list[Mapping[str, Any]],
@@ -312,6 +326,10 @@ def _markdown(
         f"# Benchmark run {run_id}",
         "",
         f"Status: `{state['status']}`",
+        "",
+        f"Evidence class: `{evidence}`",
+        "",
+        f"> {evidence_notice(evidence)}",
         "",
         "## Cell completion and validity",
         "",
@@ -397,6 +415,7 @@ def _publish_workspace_indexes(
         "format": "yadof.benchmark.workspace-run-index",
         "run_id": run_id,
         "status": state["status"],
+        "evidence": _evidence(spec),
         "updated_utc": state["updated_utc"],
         "run": str(run_root),
         "reports": str(run_root / "reports"),
@@ -414,6 +433,10 @@ def _publish_workspace_indexes(
                 f"# Benchmark run {run_id}",
                 "",
                 f"Status: `{state['status']}`",
+                "",
+                f"Evidence class: `{payload['evidence']}`",
+                "",
+                f"> {evidence_notice(payload['evidence'])}",
                 "",
                 f"Authoritative run root: `{run_root}`",
                 "",
@@ -443,11 +466,16 @@ def publish_results(
     ]
     comparisons = _comparisons(spec, cells)
     cell_summaries = _cell_summaries(spec, state, cells)
+    evidence = _evidence(spec)
     result = {
         "format": "yadof.benchmark.results",
         "run_id": state["run_id"],
         "generated_utc": utc_now(),
         "execution_status": state["status"],
+        "evidence": {
+            "class": evidence,
+            "notice": evidence_notice(evidence),
+        },
         "cell_states": {
             cell_id: {"status": item.get("status"), "error": item.get("error")}
             for cell_id, item in state["cells"].items()
@@ -465,14 +493,14 @@ def publish_results(
     atomic_write_text(run_root / "results.csv", _csv_text(rows))
     reports = run_root / "reports"
     atomic_write_text(reports / "summary.md", _markdown(
-        str(state["run_id"]), state, comparisons, cell_summaries
+        str(state["run_id"]), evidence, state, comparisons, cell_summaries
     ))
     atomic_write_text(
         reports / "cell-validity.csv",
         _table_csv(
             cell_summaries,
             [
-                "cell", "comparison", "baseline", "strategy", "seed", "status",
+                "evidence", "cell", "comparison", "baseline", "strategy", "seed", "status",
                 "completed", "valid", "completed_evaluations", "planned_evaluations",
                 "objective_contract_matches", "rawdata_contract_matches", "issues", "error",
             ],
@@ -483,7 +511,7 @@ def publish_results(
         _table_csv(
             comparisons,
             [
-                "comparison", "baseline", "seed", "strategy", "reference",
+                "evidence", "comparison", "baseline", "seed", "strategy", "reference",
                 "completed_evaluations", "planned_evaluations", "success_rate",
                 "runtime_seconds", "final_hypervolume", "reference_delta",
             ],
@@ -495,6 +523,7 @@ def publish_results(
             "format": "yadof.benchmark.descriptive-results",
             "run_id": state["run_id"],
             "status": state["status"],
+            "evidence": result["evidence"],
             "generated_utc": result["generated_utc"],
             "cells": cell_summaries,
             "final_hypervolume": comparisons,
@@ -640,11 +669,16 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
         str(item.get("status", "unknown"))
         for item in state.get("postprocessors", {}).values()
     )
+    evidence = _evidence(spec)
     return {
         "format": "yadof.benchmark.inspect",
         "run_id": state["run_id"],
         "run": str(run_root),
         "workflow": spec["workflow"]["name"],
+        "evidence": {
+            "class": evidence,
+            "notice": evidence_notice(evidence),
+        },
         "status": state["status"],
         "updated_utc": state["updated_utc"],
         "cell_counts": dict(sorted(counts.items())),
