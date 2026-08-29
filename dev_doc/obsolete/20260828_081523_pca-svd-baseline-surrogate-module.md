@@ -1,17 +1,93 @@
 # 添加 PCA/SVD rawData 基线与可组合 surrogate 模块
 
+## 2026-08-30 完成证据与归档决定
+
+- 本文的工程、generic tests、文档、installed-wheel 验收和外部三 case measured study 均已完成，
+  因而按文末完成规则移入 `dev_doc/obsolete/`。PCA/SVD 仍是显式 opt-in 确定性基线，不是
+  package 默认、posterior capability 或生产性能推荐。
+- 权威新仿真 workspace 为外层 ignored
+  `temp/20260829_220837-pca-svd-measured-20260829`。`yadof-benchmark 0.2.0` 的三个 cell 均
+  `collected/valid`：SAW 与 synthetic antenna 各完成 `2800/2800`，Chrono 按冻结的
+  no-resampling policy 保留 `729` 个失败并完成 `2071/2800`；三个 case 都验证为 `2800`
+  唯一设计、Halton 计划误差 `0`。原 workspace 因后处理器把 Python 布尔值误写成 JSON
+  token `false` 而保持终态 `failed`，该状态没有被改写。
+- 错误发生在 12 个 codec、12 个 deployable model、24 个 validation receipts 全部完成后，
+  但在 `pretest-gate.json` 写入和 test rawData 首次读取之前。由于 0.2.0 没有 resume/repeat
+  surface，外层 `temp/20260830_073509-pca-svd-analysis-recovery` 在 test access 前冻结一个
+  独立 recovery plan，加载**完全相同字节**的原后处理器并只提供缺失的 Python module global
+  `false = False`。它没有修改原 source/spec/state、科学计划、hyperparameters 或仿真数据，也
+  没有重跑 simulator；输出写入独立 recovery workspace。
+- Recovery 以用户 `ysPan`、Python 3.13.11、yadof 0.4.2、yadof-benchmark 0.2.0 完成，墙钟
+  `159.523 s`。pre-test gate 为 `passed`，记录 `test_rawdata_accessed=false`、
+  `performance_threshold_used=false`、`hyperparameters_changed=false`；随后产生 `24/24`
+  logical analysis cells 和 `12` 个 oracle-deployable gap rows。Recovery 的 48 个 checkpoint
+  文件与原失败 run 在 gate 前写出的 48 个文件逐字节 SHA-256 相同，缺失或不匹配均为 `0`。
+
+冻结 provenance：
+
+- analysis plan SHA-256：`26bb9407d3096b264fed529c08a89d5ee5b102fd33ac72aef07b70dc31d97a76`；
+- 原 postprocessor SHA-256：`205c295656b2ac447bb5b4faaa477a5231c50e739c236e875dd2396401b30ae3`；
+- 原 `spec.json` SHA-256：`ac12712b7e8067cc0a81abad736e26aee83b2842e368b8248d70c326f7e78ff5`；
+- recovery plan/script/receipt SHA-256：
+  `c7f3b925dfba2981acff8ffe182a9b197ac60f96d4c327e14a7a60dfec7c5422` /
+  `7f8a6fc96ec2a1242976660dbc33af31d7be866180475176e136e98f53ff59a3` /
+  `03ff3a9ad6c0bdfe8947349691648a45d9dfef17f9d7efa983bf0412cc1cefa0`；
+- recovered `analysis.json` / `metrics.csv` / `pretest-gate.json` SHA-256：
+  `1e391cc06333f66f5dca23fa05ce04c0597abe32e269aa0122029f48abe9b971` /
+  `8b945dd56ae5fc04f066014dbb2e4c41e71f7210bd59db3d7180d5b1206e1b36` /
+  `c1f8d9b786ea888606aac31f4349fcd8c50c75276c80abd07119243232538075`。
+
+下表使用 `PCA/SVD` 顺序。oracle relative Frobenius 与 oracle current-cost RMSE 是
+representation ceiling；deployable current-cost RMSE、Spearman 和 pairwise dominance agreement
+来自严格的 `normalized parameters -> coefficients -> complete rawData -> current calc_cost.py`
+路径。oracle 从不进入候选选择、optimization ranking 或 HV。
+
+| Case | Train usable / test usable | Oracle relative Frobenius | Oracle cost RMSE | Deployable cost RMSE | Deployable-minus-oracle cost gap | Deployable Spearman | Pareto pair agreement |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SAW | 1000 / 400 | 0.06971 / 0.06983 | 0.06072 / 0.06587 | 0.26937 / 0.26955 | 0.20866 / 0.20368 | 0.60276 / 0.60071 | 0.88008 / 0.88049 |
+| SAW | 2000 / 400 | 0.06833 / 0.06861 | 0.05841 / 0.05861 | 0.26745 / 0.26722 | 0.20904 / 0.20861 | 0.60401 / 0.60392 | 0.87951 / 0.87934 |
+| Chrono | 732 / 296 | 0.23989 / 0.23994 | 0.13504 / 0.13484 | 0.30243 / 0.30296 | 0.16739 / 0.16812 | 0.35955 / 0.35623 | 0.52588 / 0.52437 |
+| Chrono | 1480 / 296 | 0.23923 / 0.23929 | 0.13309 / 0.13180 | 0.29638 / 0.29724 | 0.16330 / 0.16545 | 0.37208 / 0.36825 | 0.52962 / 0.52888 |
+| Synthetic antenna | 1000 / 400 | 0.0000551 / 0.0000588 | 0.000540 / 0.000711 | 0.16364 / 0.16366 | 0.16310 / 0.16295 | 0.77471 / 0.77469 | 0.94703 / 0.94703 |
+| Synthetic antenna | 2000 / 400 | 0.0000540 / 0.0000583 | 0.000490 / 0.000602 | 0.16561 / 0.16562 | 0.16512 / 0.16502 | 0.77309 / 0.77308 | 0.94717 / 0.94718 |
+
+资源结果按一个逻辑 arm 的测量范围汇总；process RSS 是顺序执行进程的峰值，不应解释为单个
+model 的增量 allocation。
+
+| Case | Fit wall (s) | Test prediction wall (s) | Max process RSS (GiB) | Max CUDA allocated (MiB) | Checkpoint (MiB) |
+|---|---:|---:|---:|---:|---:|
+| SAW | 0.208–0.386 | 0.049–0.112 | 1.13 | 21.1 | 0.313–0.337 |
+| Chrono | 0.814–1.735 | 0.153–0.469 | 1.23 | 14.5 | 0.496–0.548 |
+| Synthetic antenna | 2.401–6.209 | 0.511–1.546 | 6.77 | 223.2 | 12.17–12.73 |
+
+结论是：rank-32 对 synthetic antenna 提供近乎完整的 representation ceiling，SAW 为中等、
+Chrono 最弱；但三个 case 的 deployable cost gap 均约 `0.16–0.21`，说明首版线性
+parameter-to-latent ridge 是主要限制。PCA 与未中心化 SVD 的 deployable 结果几乎相同，
+1000 增至 2000 个 training designs 也没有跨 case 的一致改善，因此没有证据支持其中一个成为
+默认或生产推荐。Chrono 的逐坐标 standardized RMSE 被若干近零 training scale 放大到不稳定的
+数量级；报告保留该预注册指标，但结论优先使用 physical/relative、current-cost、rank 与 Pareto
+指标。Synthetic antenna train-2000 SVD 的 explained-energy macro 为 `1.000000127`，是
+randomized float32 累积的约 `1.3e-7` 数值越界，未被裁剪或用于选择。
+
+PCA/SVD 的 measured baseline 至此完成；完整七臂同预算 optimization study 中的 formal-suite
+接入继续由
+[Hierarchical CAE/qNEHVI 总控 TODO](../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)
+拥有，不能从本诊断推导 Hierarchical CAE acceptance、posterior calibration、qNEHVI readiness、
+optimization quality 或默认策略变化。
+
 ## 状态与起因
 
 - 2026-08-28 工程实现已完成：package 现提供显式 opt-in `pca_svd()`、分离的 oracle codec 与
   deployable ridge predictor、GPSAF 生命周期、原子恢复、可组合的完整 optimization strategy、测试和
-  文档。本文仍保留在 active TODO，因为权限边界不授权启动 simulator、正式 benchmark 或
-  长时间训练，三个代表性 case 的合法 1000/2000-design measured results 尚未产生。
+  文档。本文当时保留在 active TODO，因为权限边界尚未授权启动 simulator、正式 benchmark 或
+  长时间训练，三个代表性 case 的合法 1000/2000-design measured results 尚未产生；该剩余条件
+  已由上面的 2026-08-30 evidence 完成。
 - 已封存的 solver audit 只使用 seeded synthetic `1000/2000 x 26645` 矩阵选择实现 backend，
-  不属于科学 case evidence。`plan`/`preflight` 可安全运行；measured `run` 仍要求单独权限和
-  合法的显式 design partition。
+  不属于科学 case evidence。当时 `plan`/`preflight` 可安全运行，measured `run` 仍要求单独权限和
+  合法的显式 design partition；后续授权、冻结 partition 和新 simulation evidence 已如上完成。
 - 用户于 2026-08-28 明确要求：添加 PCA/SVD 基线，并把它们作为可复用算法模块加入 yadof。
   这构成
-  [archived hierarchical CAE plan](../obsolete/20260827_082608_hierarchical-cae-rawdata-surrogate.md)
+  [archived hierarchical CAE plan](20260827_082608_hierarchical-cae-rawdata-surrogate.md)
   中“只有后续用户单独批准才增加 PCA surrogate factory”条件所要求的单独批准。该批准只
   允许实现显式 opt-in 模块，不代表允许把它设为生产默认、宣称性能通过或打开 posterior
   exploitation。
@@ -22,12 +98,12 @@
   rawData。
 - 上述诊断已经参与冻结的先前证据。不得重写或重新解释旧计划及结果；package 模块必须在
   新的外部研究计划中做数值 parity，并由新 strategy identity 产生后续证据。
-- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+- [Hierarchical CAE/qNEHVI 总控 TODO](../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)
   承接的七臂矩阵要求
   `pca-svd-reconstruction`，但 Gate 0 v10 记录它仍没有 current runner arm。新增模块应补齐
   这个可执行缺口，同时把 oracle reconstruction 与真实参数预测的结论严格分开。
 - 2026-08-29 用户决定暂时搁置
-  [抗噪声扩展 TODO](20260828_082308_noise-robust-regime-specialized-surrogate.md)，并进一步明确
+  [抗噪声扩展 TODO](../toDo/20260828_082308_noise-robust-regime-specialized-surrogate.md)，并进一步明确
   抗噪声路线只是扩展能力，不是 Hierarchical CAE 的验收指标或 blocker。该决定不暂停本
   TODO：PCA/SVD 的合法 measured evidence、formal-suite 接入和独立基线结论仍可按其自身权限
   继续；PCA/SVD 仍可为基础 Hierarchical CAE 提供 representation ceiling 与
@@ -216,7 +292,7 @@
   artifact membership 和 change record，使其描述已实现状态而不是引用本 TODO 作为 current
   truth。
 - 将新 strategy 接入
-  [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  [Hierarchical CAE/qNEHVI 总控 TODO](../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)
   后续冻结的正式 study；一个 PCA/SVD strategy 可执行只消除
   该结构缺口，不会解除 Hierarchical CAE performance、posterior calibration、qNEHVI 或其他
   阈值 blocker。
@@ -281,7 +357,7 @@
   `pca-svd-reconstruction` 结构 arm，并提供额外
   deployable predictor 诊断；其余六个正式 arm 和所有科学门槛仍由该汇总 TODO 管理。
 - 若未来 PCA/SVD 需要 posterior calibration 或 qNEHVI，必须遵守
-  [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  [Hierarchical CAE/qNEHVI 总控 TODO](../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)
   中的 exact-state/readiness
   契约并建立新预注册，不能从 reconstruction residual 直接推导授权。旧 082609/082611 计划
   仅保留在 `obsolete/` 作为可选历史细节。

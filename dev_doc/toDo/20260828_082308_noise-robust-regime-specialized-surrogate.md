@@ -161,9 +161,10 @@ Hierarchical CAE 的验收。
 - 继续保留 v5 四臂，至少把 `shared-latent-isolation` 作为直接基线；新 MoE 不得只与失败的
   gated arm 比较。
 - 使用
-  [PCA/SVD 基线模块 TODO](20260828_081523_pca-svd-baseline-surrogate-module.md)
+  [已归档的 PCA/SVD 基线模块与 measured evidence](../obsolete/20260828_081523_pca-svd-baseline-surrogate-module.md)
   中严格区分的 oracle reconstruction 与 deployable predictor，诊断“字段本身可低秩表示但
-  parameter-to-latent 不可学”与“表示空间本身不合适”。oracle 结果不能进入候选选择。
+  parameter-to-latent 不可学”与“表示空间本身不合适”。该 evidence 已显示三个 case 的
+  parameter-to-latent gap 明显；oracle 结果不能进入候选选择。
 - conditional-INR 继续作为生产非劣基线；所有 case/train-size 使用相同 real design 集、
   current cost、seed registry 和 metric implementation。
 - 若 shared isolation 或 PCA/SVD deployable baseline 已满足门槛，而 MoE 没有，完成路线可以
@@ -316,9 +317,9 @@ Hierarchical CAE 的验收。
 - 两个 TODO 共享某次底层 evidence 时必须引用同一 receipt，不能给同一次实验两个矛盾的事实
   结论；但各自基于不同预注册指标形成独立的验收结论。旧 082608/082609/082611/082612 文件
   仅是可选历史资料。
-- [PCA/SVD TODO](20260828_081523_pca-svd-baseline-surrogate-module.md) 提供简单表示和 deployable
-  predictor 对照，保持独立 active，不承担 regime probability 或 posterior 授权，也不因本文
-  暂停而暂停。
+- [已归档的 PCA/SVD TODO](../obsolete/20260828_081523_pca-svd-baseline-surrogate-module.md)
+  已提供简单 representation ceiling 和 deployable predictor measured 对照；它不承担 regime
+  probability 或 posterior 授权，其归档也不改变本文的暂停状态或未来独立扩展 gate。
 - [Acquisition Capability Protocol TODO](20260828_091749_acquisition-capability-protocol.md)
   仍只由第二个真实 acquisition 或具体类型阻塞触发；本文暂停不是它的触发条件。
 

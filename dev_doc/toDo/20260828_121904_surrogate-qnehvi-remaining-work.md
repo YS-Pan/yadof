@@ -42,9 +42,10 @@
   `experimental / performance-not-accepted`，真实 qNEHVI 仍只能 fail closed 到 full-real
   fallback，但原因是基础路线自己的 representation/prediction、worst-field、coordinate、
   resource 和 posterior 证据尚未通过，而不是抗噪声扩展未完成。
-- 当前可独立推进的是 PCA/SVD 三 case measured evidence、formal-suite 结构接入和不依赖新
-  Hierarchical CAE 科学结论的工程改进。基础 Hierarchical CAE 的科学验收也可以在适当权限、
-  新预注册和自己的非抗噪声指标下独立继续，无需恢复或批准任何抗噪声扩展。
+- PCA/SVD 三 case measured evidence 已于 2026-08-30 完成并归档；当前仍可独立推进的是其
+  formal-suite 结构接入和不依赖新 Hierarchical CAE 科学结论的工程改进。基础 Hierarchical
+  CAE 的科学验收也可以在适当权限、新预注册和自己的非抗噪声指标下独立继续，无需恢复或
+  批准任何抗噪声扩展。
 
 ### 已完成并可依赖的基础设施
 
@@ -108,13 +109,14 @@
 - shipped `HierarchicalCAEComponent` 与 `ConditionalINRPosteriorAdapter` 都返回 blocked typed
   exploitation readiness。真实组件进入 `posterior_assisted()` 时只能走可见的 full-real
   fallback；eligible exploitation path 目前只由 fake/mechanism tests 覆盖。
-- 正式七臂 runner 当前仍只有 real NSGA-III 和 conditional-INR + GPSAF。独立 v11
-  recorded-data runner 已补齐 PCA/SVD oracle 与 deployable ridge 的可执行结构，但尚未接入
-  formal suite，也没有权限执行三个 case 的 measured cells。formal matrix 仍缺：
+- 正式七臂 runner 当前仍只有 real NSGA-III 和 conditional-INR + GPSAF。独立的新仿真
+  PCA/SVD study 已完成三个有效 simulation cells、24 个 oracle/deployable logical cells 和
+  resource/gap 报告，确认 postprocessor 路径可执行；这些诊断仍不是七臂同预算 optimization
+  arm。formal matrix 仍缺：
   - hierarchical-CAE mean；
   - hierarchical-CAE + qNEHVI；
   - conditional-INR adapter + qNEHVI；
-  - PCA/SVD reconstruction 的 formal-suite 接入与合法 measured evidence；
+  - PCA/SVD reconstruction/deployable baseline 的 formal-suite 接入；
   - hierarchical-CAE + GPSAF。
 - formal optimization/posterior-decision/总工程成本阈值尚未全部封印，formal benchmark start
   仍为 false。Phase A 只允许冻结证据上的实验/诊断；Phase B public opt-in 必须 full-real
@@ -122,20 +124,21 @@
 
 ## 当前活动范围与依赖顺序
 
-### 1. 补齐 PCA/SVD 基线和可复用模块（当前 active）
+### 1. PCA/SVD 基线和可复用模块（已完成并归档）
 
-- [PCA/SVD 基线 TODO](20260828_081523_pca-svd-baseline-surrogate-module.md)
-  的工程部分已完成；其 active remainder 仅为需单独授权的三 case measured evidence 和
-  formal-suite 接入。
-- 必须区分 oracle reconstruction 与 deployable
-  `normalized parameters -> coefficients -> complete rawData` predictor；oracle validation/test
-  projection 不能冒充 candidate prediction 或 optimization arm。
-- 新 module 使用 component-owned settings、独立 identity/checkpoint，并可显式组合进 GPSAF；
-  不设为默认、不伪造 posterior readiness。
-- 这一步补齐 formal matrix 的 PCA/SVD 结构缺口，同时帮助判断 Hierarchical CAE 的问题位于
-  表示空间还是 parameter-to-latent mapping。
-- 抗噪声 Hierarchical CAE 扩展的状态不阻塞这一步，也不参与基础 Hierarchical CAE 验收；
-  但 PCA/SVD 通过仍不能替代 Hierarchical CAE performance、posterior calibration 或 qNEHVI
+- [已归档的 PCA/SVD 基线 TODO](../obsolete/20260828_081523_pca-svd-baseline-surrogate-module.md)
+  记录工程实现、installed-wheel 验收和 2026-08-30 三 case measured evidence。新数据为唯一
+  权威 evidence；旧 sealed dataset 只作历史对照。
+- 24 个逻辑 cell 严格区分 oracle reconstruction 与 deployable
+  `normalized parameters -> coefficients -> complete rawData` predictor；oracle 未进入候选选择、
+  optimization ranking 或 HV。三个 case 的 deployable-minus-oracle current-cost RMSE gap 约为
+  `0.16–0.21`，说明 parameter-to-latent ridge 是共同限制；PCA/SVD 和 1000/2000 training size
+  没有跨 case 一致胜者。
+- module 继续使用 component-owned settings、独立 identity/checkpoint，并可显式组合进 GPSAF；
+  不设为默认、不伪造 posterior readiness。formal matrix 中的同预算 arm 接入继续由本文第 5
+  项拥有，不重新激活已归档的模块 TODO。
+- 抗噪声 Hierarchical CAE 扩展的状态不参与该 evidence，也不参与基础 Hierarchical CAE 验收；
+  PCA/SVD 完成仍不能替代 Hierarchical CAE performance、posterior calibration 或 qNEHVI
   readiness。
 
 ### 2. 保持 Hierarchical CAE 当前状态与 fail-closed 边界（当前 active）
@@ -197,10 +200,11 @@
   training/inference/acquisition wall time、CPU/GPU memory、checkpoint size 和总工程成本。
 - formal run 需要真实 simulator/长时间资源时，先向用户报告准确 command、cell/design 数、
   预计时间与风险并取得授权。结构 preflight 或单元测试不能替代科学结果。
-- PCA/SVD arm 可在自身 TODO 和权限下先取得 measured evidence；完整七臂 formal benchmark
-  仍等待 performance-accepted、exact-calibrated Hierarchical CAE 与 eligible typed readiness，
-  但不等待抗噪声扩展。基础 Hierarchical CAE arms 不能省略；抗噪声变体若将来被批准加入，
-  只能作为七臂之外的额外扩展 arm，不改变基础 matrix 的完成条件。
+- PCA/SVD 三 case measured evidence 已完成；其同预算 formal arm 仍需在本七臂 runner 中接入。
+  完整七臂 formal benchmark 继续等待 performance-accepted、exact-calibrated Hierarchical CAE
+  与 eligible typed readiness，但不等待抗噪声扩展。基础 Hierarchical CAE arms 不能省略；
+  抗噪声变体若将来被批准加入，只能作为七臂之外的额外扩展 arm，不改变基础 matrix 的完成
+  条件。
 - 只有完整 matrix 通过预注册 gate，才可推荐 Phase B opt-in；默认 GPSAF + conditional-INR
   的 Phase C 迁移需要独立、明确的用户决定。不得自动修改 template default。
 
