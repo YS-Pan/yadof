@@ -21,9 +21,9 @@ from .storage import (
     driver_digest,
     file_digest,
     object_digest,
-    slug,
     workflow_digest,
 )
+from .naming import slug
 from .workflow import Benchmark
 from .workspace import load_workspace
 

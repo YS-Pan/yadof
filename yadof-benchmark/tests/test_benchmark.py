@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,7 +33,7 @@ from yadof_benchmark.benchmark_runtime.storage import (
 
 
 def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
-    baseline = root / "baselines" / "provider" / "task"
+    baseline = root / "baselines" / Path(*baseline_id.split("/"))
     workspace = baseline / "workspace"
     (workspace / ".yadof").mkdir(parents=True)
     (workspace / ".yadof" / "workspace.json").write_text(
@@ -57,6 +58,10 @@ def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
     )
     (workspace / "config.py").write_text(
         'EVALUATION_MODE = "fast"\n', encoding="utf-8"
+    )
+    (workspace / "postprocess.py").write_text(
+        "raise SystemExit('the fake command runner owns test artifacts')\n",
+        encoding="utf-8",
     )
     (baseline / "baseline.json").write_text(
         json.dumps(
@@ -98,9 +103,10 @@ def _workspace(
     root: Path,
     *,
     strategies: tuple[str, ...] = ("alpha", "beta", "gamma"),
+    baselines: tuple[str, ...] = ("provider/task",),
     postprocess: str = "",
 ) -> Path:
-    api.init_workspace(root)
+    root = Path(api.init_workspace(root)["workspace"])
     for name in strategies:
         _strategy(root, name)
     declarations = "\n".join(
@@ -114,7 +120,7 @@ def _workspace(
         + "    benchmark.configure(name=\"comparison\", fail_fast=False)\n"
         + declarations
         + "\n    benchmark.compare(\n"
-        + "        \"main\", baselines=[\"provider/task\"],\n"
+        + f"        \"main\", baselines={list(baselines)!r},\n"
         + f"        strategies={list(strategies)!r}, seeds=[7],\n"
         + "        population=2, generations=3, reference=\"alpha\",\n"
         + "    )\n"
@@ -125,7 +131,11 @@ def _workspace(
 
 
 def _plan(root: Path):
-    return api.plan_workspace(root / "workspace", baselines_root=root / "baselines")
+    markers = list(root.glob("*/.benchmark/workspace.json"))
+    assert len(markers) == 1
+    return api.plan_workspace(
+        markers[0].parents[1], baselines_root=root / "baselines"
+    )
 
 
 def _cell_result(cell: dict, value: float) -> dict:
@@ -177,6 +187,16 @@ def _successful_command(
     command, *, cwd, command_root, label, timeout_seconds, event_sink=None
 ):
     del cwd, label, timeout_seconds, event_sink
+    selected = [str(item) for item in command]
+    if selected[1:5] == ["-m", "yadof", "view", "cost"]:
+        output = Path(selected[selected.index("--output") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"fake png")
+    elif len(selected) > 1 and Path(selected[1]).name == "postprocess.py":
+        output_dir = Path(selected[selected.index("--output-dir") + 1])
+        prefix = selected[selected.index("--output-prefix") + 1]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / f"{prefix}domain.png").write_bytes(b"fake domain png")
     command_root.mkdir(parents=True)
     stdout = command_root / "stdout.log"
     stderr = command_root / "stderr.log"
@@ -188,10 +208,12 @@ def _successful_command(
 
 
 def test_init_creates_code_first_workspace_without_overwrite(tmp_path: Path) -> None:
-    root = tmp_path / "benchmark workspace"
-    created = api.init_workspace(root)
+    requested = tmp_path / "benchmark workspace"
+    created = api.init_workspace(requested)
+    root = Path(created["workspace"])
 
     assert created == {"format": WORKSPACE_FORMAT, "workspace": str(root.resolve())}
+    assert re.match(r"^\d{8}_\d{6}-benchmark-workspace$", root.name)
     assert json.loads((root / ".benchmark" / "workspace.json").read_text())[
         "format"
     ] == WORKSPACE_FORMAT
@@ -288,6 +310,21 @@ def test_attempt_workspace_uses_compact_run_local_path(tmp_path: Path) -> None:
     assert len(str(materialized)) < len(str(attempt_root / "workspace"))
 
 
+def test_run_and_workspace_outputs_use_timestamped_human_names(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "human study", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="descriptive-run")
+
+    assert re.match(r"^\d{8}_\d{6}-human-study$", workspace.name)
+    assert re.match(r"^\d{8}_\d{6}-descriptive-run$", run_root.name)
+
+    saved, state = load_run(run_root)
+    _attempt_root, compact, _attempt = prepare_attempt(
+        run_root, saved["cells"][0], state
+    )
+    assert re.fullmatch(r"[0-9a-f]{16}", compact.parent.name)
+
+
 def test_manifest_rejects_escape_and_nonsemantic_source_path(tmp_path: Path) -> None:
     baseline = _baseline(tmp_path)
     manifest_path = baseline / "baseline.json"
@@ -303,6 +340,14 @@ def test_manifest_rejects_escape_and_nonsemantic_source_path(tmp_path: Path) -> 
     baseline.rename(misplaced)
     with pytest.raises(benchmark.BenchmarkError, match="semantic id"):
         discover_baselines(tmp_path / "baselines")
+
+
+def test_baseline_requires_uniform_postprocess_script(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    (baseline / "workspace" / "postprocess.py").unlink()
+
+    with pytest.raises(benchmark.BenchmarkError, match="postprocess.py"):
+        load_baseline(baseline / "baseline.json")
 
 
 def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
@@ -335,9 +380,85 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     )
     assert {row["comparison"] for row in results["comparisons"]} == {"main"}
     assert (run_root / "reports" / "summary.md").is_file()
+    assert (run_root / "reports" / "cell-validity.csv").is_file()
+    assert (run_root / "reports" / "final-hypervolume.csv").is_file()
+    assert (run_root / "reports" / "descriptive-results.json").is_file()
+    assert len(list((run_root / "visualizations" / "cost").glob("*.png"))) == 3
+    assert len(list((run_root / "visualizations" / "provider-task").glob("*.png"))) == 3
+    workspace = Path(_plan(tmp_path).workflow.workspace)
+    assert (workspace / "reports" / run_root.name / "index.json").is_file()
+    assert (workspace / "visualizations" / run_root.name / "index.json").is_file()
     run_commands = [item for item in commands if item[2:4] == ("yadof", "run")]
     assert len(run_commands) == 3
     assert all("--fail-on-all-infinite" in item for item in run_commands)
+
+
+def test_fake_three_baseline_pipeline_groups_domain_outputs(tmp_path: Path) -> None:
+    baseline_ids = (
+        "chrono/trebuchet",
+        "ngspice/saw-ladder",
+        "test-com/synthetic-antenna",
+    )
+    for baseline_id in baseline_ids:
+        _baseline(tmp_path, baseline_id)
+    _workspace(
+        tmp_path / "three baselines",
+        strategies=("alpha",),
+        baselines=baseline_ids,
+    )
+    run_root = create_run(_plan(tmp_path), run_id="artifact-pipeline")
+
+    state = execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+    )
+
+    assert state["status"] == "completed"
+    visualizations = run_root / "visualizations"
+    assert {path.name for path in visualizations.iterdir() if path.is_dir()} == {
+        "cost",
+        "chrono-trebuchet",
+        "ngspice-saw-ladder",
+        "test-com-synthetic-antenna",
+    }
+    assert len(list((visualizations / "cost").glob("*.png"))) == 3
+    for baseline_id in baseline_ids:
+        category = baseline_id.replace("/", "-")
+        assert len(list((visualizations / category).glob("*domain.png"))) == 1
+    summary = (run_root / "reports" / "summary.md").read_text(encoding="utf-8")
+    assert "## Cell completion and validity" in summary
+    assert "## Final hypervolume" in summary
+    report = read_json(run_root / "reports" / "descriptive-results.json")
+    assert len(report["cells"]) == 3
+    assert all(item["valid"] for item in report["cells"])
+
+
+def test_missing_or_empty_required_visualization_fails_run(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="missing-visualization")
+
+    def command(command, **kwargs):
+        result = _successful_command(command, **kwargs)
+        selected = [str(item) for item in command]
+        if len(selected) > 1 and Path(selected[1]).name == "postprocess.py":
+            output_dir = Path(selected[selected.index("--output-dir") + 1])
+            prefix = selected[selected.index("--output-prefix") + 1]
+            (output_dir / f"{prefix}domain.png").unlink()
+        return result
+
+    state = execution.execute_existing_run(
+        run_root,
+        command_runner=command,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+    )
+
+    assert state["status"] == "failed"
+    cell_state = next(iter(state["cells"].values()))
+    assert "created no non-empty artifact" in cell_state["error"]
+    result = read_json(run_root / cell_state["attempts"][0]["result"])
+    assert "required visualization failed" in result["issues"][0]
 
 
 def test_postprocessor_failure_resumes_without_rerunning_cells(tmp_path: Path) -> None:
@@ -376,7 +497,7 @@ def test_postprocessor_failure_resumes_without_rerunning_cells(tmp_path: Path) -
 
     assert failed["status"] == "failed"
     assert resumed["status"] == "completed"
-    assert calls == ["check", "run"]
+    assert calls == ["check", "run", "view-cost", "baseline-postprocess"]
     assert (run_root / "visualizations" / "done.txt").read_text() == "done"
     attempts = resumed["postprocessors"]["summary"]["attempts"]
     assert [item["status"] for item in attempts] == ["failed", "succeeded"]
@@ -462,6 +583,24 @@ def test_resume_uses_run_driver_and_inspect_is_read_only(
     assert state_path.stat().st_mtime_ns == before
 
 
+def test_detached_run_does_not_require_originating_workspace(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="detached-evidence")
+    detached = tmp_path / "detached" / run_root.name
+    shutil.copytree(run_root, detached)
+    workspace.rename(tmp_path / "origin-no-longer-available")
+
+    state = execution.execute_existing_run(
+        detached,
+        command_runner=_successful_command,
+        collector=lambda _workspace, item: _cell_result(item, 0.2),
+    )
+
+    assert state["status"] == "completed"
+    assert (detached / "reports" / "summary.md").is_file()
+
+
 def test_public_surface_and_cli_have_only_code_first_contract() -> None:
     assert api.__all__ == [
         "BaselineManifest",
@@ -508,6 +647,9 @@ def test_distribution_entrypoints_match_code_first_contract() -> None:
     assert (package / "cli.py").is_file()
     assert (package / "api.py").is_file()
     assert 'name = "yadof-benchmark"' in (project / "pyproject.toml").read_text()
+    assert 'dependencies = ["yadof[plot]>=0.4.2"]' in (
+        project / "pyproject.toml"
+    ).read_text()
     assert 'yadof-benchmark = "yadof_benchmark.cli:main"' in (
         project / "pyproject.toml"
     ).read_text()

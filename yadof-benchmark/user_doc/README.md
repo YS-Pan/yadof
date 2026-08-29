@@ -18,8 +18,13 @@ request, not an agent convenience.
 The workflow contract is Python-only. `check` and `plan` import and execute the
 workspace's `benchmark.py`, so planning code should be deterministic and should not
 start simulators, mutate external state, or perform expensive work. Measured work
-belongs to strategy execution; visualization and analysis belong to declared
-postprocessors.
+belongs to strategy execution; visualization and analysis belong to the required
+baseline postprocessor and optional workflow-level postprocessors.
+
+Human-visible workspace, run, and workspace-level output-index names begin with
+local `YYYYMMDD_HHMMSS`. Every collected cell owns an automatic cost plot and one
+baseline-local domain postprocess result below its run root; the workspace's
+top-level report and visualization indexes lead back to that authoritative root.
 
 List and read the version-matched installed documents with:
 

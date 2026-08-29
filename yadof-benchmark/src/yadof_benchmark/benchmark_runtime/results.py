@@ -222,40 +222,125 @@ def _comparisons(
 
 
 def _csv_text(rows: list[Mapping[str, Any]]) -> str:
-    stream = io.StringIO(newline="")
     fields = [
         "comparison", "baseline", "strategy", "seed", "population",
         "generations", "job", "generation", "objectives", "average_objective",
         "metadata",
     ]
+    return _table_csv(rows, fields)
+
+
+def _table_csv(rows: list[Mapping[str, Any]], fields: list[str]) -> str:
+    stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
     writer.writeheader()
     for row in rows:
         value = dict(row)
-        for field in ("objectives", "metadata"):
-            value[field] = json.dumps(
-                value.get(field, {}),
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            )
+        for key, item in list(value.items()):
+            if isinstance(item, (dict, list, tuple)):
+                value[key] = json.dumps(
+                    item,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
         writer.writerow({field: value.get(field) for field in fields})
     return stream.getvalue()
+
+
+def _cell_summaries(
+    spec: Mapping[str, Any],
+    state: Mapping[str, Any],
+    cells: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for cell in spec["cells"]:
+        cell_id = str(cell["id"])
+        cell_state = state["cells"][cell_id]
+        result = cells.get(cell_id)
+        contract = {} if result is None else result.get("contract", {})
+        objective_contract = (
+            contract.get("objective_count", {})
+            if isinstance(contract, Mapping)
+            else {}
+        )
+        rawdata_contract = (
+            contract.get("rawdata_shapes", {})
+            if isinstance(contract, Mapping)
+            else {}
+        )
+        objective_match = bool(
+            isinstance(objective_contract, Mapping)
+            and objective_contract.get("matches")
+        )
+        rawdata_match = bool(
+            isinstance(rawdata_contract, Mapping)
+            and rawdata_contract.get("matches")
+        )
+        issues = [] if result is None else list(result.get("issues", []))
+        completed = cell_state.get("status") == "collected"
+        output.append(
+            {
+                "cell": cell_id,
+                "comparison": cell["comparison"],
+                "baseline": cell["baseline"],
+                "strategy": cell["strategy"],
+                "seed": cell["seed"],
+                "status": cell_state.get("status"),
+                "completed": completed,
+                "valid": completed and objective_match and rawdata_match and not issues,
+                "objective_contract_matches": objective_match,
+                "rawdata_contract_matches": rawdata_match,
+                "completed_evaluations": (
+                    None if result is None else result.get("completed_evaluations")
+                ),
+                "planned_evaluations": cell.get("planned_evaluations"),
+                "issues": issues,
+                "error": cell_state.get("error"),
+            }
+        )
+    return output
 
 
 def _markdown(
     run_id: str,
     state: Mapping[str, Any],
     comparisons: list[Mapping[str, Any]],
+    cells: list[Mapping[str, Any]],
 ) -> str:
     lines = [
         f"# Benchmark run {run_id}",
         "",
         f"Status: `{state['status']}`",
         "",
-        "| Comparison | Baseline | Seed | Strategy | Evaluations | Success | Runtime (s) | Final hypervolume | Reference delta |",
-        "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |",
+        "## Cell completion and validity",
+        "",
+        "| Cell | Status | Completed | Valid | Evaluations | Objective contract | rawData contract | Issues |",
+        "| --- | --- | --- | --- | ---: | --- | --- | ---: |",
     ]
+    for row in cells:
+        lines.append(
+            "| `{cell}` | {status} | {completed} | {valid} | {done}/{planned} | {objective} | {rawdata} | {issues} |".format(
+                cell=str(row["cell"]).replace("|", "\\|"),
+                status=row.get("status"),
+                completed="yes" if row.get("completed") else "no",
+                valid="yes" if row.get("valid") else "no",
+                done=row.get("completed_evaluations", "—"),
+                planned=row.get("planned_evaluations", "—"),
+                objective="match" if row.get("objective_contract_matches") else "mismatch",
+                rawdata="match" if row.get("rawdata_contract_matches") else "mismatch",
+                issues=len(row.get("issues", [])),
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "## Final hypervolume",
+            "",
+            "| Comparison | Baseline | Seed | Strategy | Evaluations | Success | Runtime (s) | Final hypervolume | Reference delta |",
+            "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
     for row in comparisons:
         hv = row.get("final_hypervolume")
         delta = row.get("reference_delta")
@@ -299,6 +384,47 @@ def _markdown(
     return "\n".join(lines)
 
 
+def _publish_workspace_indexes(
+    run_root: Path,
+    spec: Mapping[str, Any],
+    state: Mapping[str, Any],
+) -> None:
+    workspace = Path(str(spec["workflow"]["workspace"])).resolve()
+    if not (workspace / ".benchmark" / "workspace.json").is_file():
+        return
+    run_id = str(state["run_id"])
+    payload = {
+        "format": "yadof.benchmark.workspace-run-index",
+        "run_id": run_id,
+        "status": state["status"],
+        "updated_utc": state["updated_utc"],
+        "run": str(run_root),
+        "reports": str(run_root / "reports"),
+        "visualizations": str(run_root / "visualizations"),
+    }
+    report_index = workspace / "reports" / run_id
+    visualization_index = workspace / "visualizations" / run_id
+    report_index.mkdir(parents=True, exist_ok=True)
+    visualization_index.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_index / "index.json", payload)
+    atomic_write_text(
+        report_index / "README.md",
+        "\n".join(
+            [
+                f"# Benchmark run {run_id}",
+                "",
+                f"Status: `{state['status']}`",
+                "",
+                f"Authoritative run root: `{run_root}`",
+                "",
+                f"Run report: `{run_root / 'reports' / 'summary.md'}`",
+                "",
+            ]
+        ),
+    )
+    atomic_write_json(visualization_index / "index.json", payload)
+
+
 def publish_results(
     run_root: Path,
     spec: Mapping[str, Any],
@@ -316,6 +442,7 @@ def publish_results(
         if isinstance(row, Mapping)
     ]
     comparisons = _comparisons(spec, cells)
+    cell_summaries = _cell_summaries(spec, state, cells)
     result = {
         "format": "yadof.benchmark.results",
         "run_id": state["run_id"],
@@ -332,12 +459,48 @@ def publish_results(
         "cells": cells,
         "rows": rows,
         "comparisons": comparisons,
+        "cell_summaries": cell_summaries,
     }
     atomic_write_json(run_root / "results.json", result)
     atomic_write_text(run_root / "results.csv", _csv_text(rows))
-    atomic_write_text(run_root / "reports" / "summary.md", _markdown(
-        str(state["run_id"]), state, comparisons
+    reports = run_root / "reports"
+    atomic_write_text(reports / "summary.md", _markdown(
+        str(state["run_id"]), state, comparisons, cell_summaries
     ))
+    atomic_write_text(
+        reports / "cell-validity.csv",
+        _table_csv(
+            cell_summaries,
+            [
+                "cell", "comparison", "baseline", "strategy", "seed", "status",
+                "completed", "valid", "completed_evaluations", "planned_evaluations",
+                "objective_contract_matches", "rawdata_contract_matches", "issues", "error",
+            ],
+        ),
+    )
+    atomic_write_text(
+        reports / "final-hypervolume.csv",
+        _table_csv(
+            comparisons,
+            [
+                "comparison", "baseline", "seed", "strategy", "reference",
+                "completed_evaluations", "planned_evaluations", "success_rate",
+                "runtime_seconds", "final_hypervolume", "reference_delta",
+            ],
+        ),
+    )
+    atomic_write_json(
+        reports / "descriptive-results.json",
+        {
+            "format": "yadof.benchmark.descriptive-results",
+            "run_id": state["run_id"],
+            "status": state["status"],
+            "generated_utc": result["generated_utc"],
+            "cells": cell_summaries,
+            "final_hypervolume": comparisons,
+        },
+    )
+    _publish_workspace_indexes(run_root, spec, state)
     return result
 
 
@@ -370,8 +533,14 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
         "errors": errors,
         "artifacts": {
             name: str(run_root / name)
-            for name in ("spec.json", "state.json", "results.json", "results.csv", "reports/summary.md")
+            for name in (
+                "spec.json", "state.json", "results.json", "results.csv",
+                "reports/summary.md", "reports/cell-validity.csv",
+                "reports/final-hypervolume.csv", "reports/descriptive-results.json",
+                "visualizations",
+            )
             if (run_root / name).is_file()
+            or (run_root / name).is_dir()
         },
     }
 

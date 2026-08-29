@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Code-first benchmark workspaces for yadof optimization strategies"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["yadof>=0.4.2"]
+dependencies = ["yadof[plot]>=0.4.2"]
 
 [project.optional-dependencies]
 dev = ["build>=1.2", "hatchling>=1.27", "pytest>=8"]

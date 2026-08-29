@@ -18,6 +18,11 @@ their command coverage requires all-infinite yadof generations to fail a cell.
 Initialization coverage also treats the generated `benchmark.py` authoring
 scaffold as public output, and baseline discovery proves that manifest IDs and
 editable provider/task source paths agree before a run can snapshot them.
+It verifies local timestamp prefixes for human-visible workspaces/runs/output
+indexes independently of compact digest cell paths. A fake three-baseline pipeline
+must produce non-empty workspace indexes, run-local cell/HV reports, one grouped
+cost plot per cell, and one domain artifact in each baseline-semantic directory;
+missing or empty required postprocess output fails the run.
 
 ## Required coverage
 

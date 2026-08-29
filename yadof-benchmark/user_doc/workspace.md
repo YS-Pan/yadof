@@ -1,10 +1,15 @@
 # Benchmark workspace
 
-Create a workspace with `yadof-benchmark init PATH`. The command refuses to write
-into a non-empty directory and creates this layout:
+Create a workspace with `yadof-benchmark init PATH`. `PATH` supplies the parent and
+human-readable semantic leaf. Unless that leaf already starts with a valid local
+`YYYYMMDD_HHMMSS` prefix, the command creates
+`<parent>/YYYYMMDD_HHMMSS-<semantic-leaf>` and prints the resolved path. Use that
+returned path in later commands. An already timestamped target is not prefixed a
+second time, and the command refuses to write into a non-empty resolved target.
+The created layout is:
 
 ```text
-PATH/
+YYYYMMDD_HHMMSS-SEMANTIC-PATH/
 ├── .benchmark/workspace.json
 ├── benchmark.py
 ├── resources/
@@ -19,6 +24,10 @@ strategy modules and any other inputs used while building the workflow. `runs/`
 holds immutable run directories. The three remaining top-level directories are
 available for workspace-level summaries; authoritative output for a particular run
 lives in that run's own `visualizations/`, `reports/`, and `temp/` directories.
+Once a run publishes results, the workspace top-level `reports/` and
+`visualizations/` each receive a timestamp-prefixed run index directory that
+points to those authoritative run-local artifacts. These indexes make the
+initially empty output roots useful without copying or flattening the evidence.
 
 The marker is tool-owned identity metadata, not a workflow configuration file.
 Do not hand-edit it. The complete editable workflow is `benchmark.py`.

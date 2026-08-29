@@ -6,11 +6,17 @@ workspace owns one `benchmark.py`; that Python file declares the whole workflow,
 including strategies, comparison matrices, execution policy, and postprocessing.
 
 ```powershell
-yadof-benchmark init D:\benchmarks\my-comparison
+$workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
+  ConvertFrom-Json).workspace
 yadof-benchmark baselines
-yadof-benchmark check --workspace D:\benchmarks\my-comparison
-yadof-benchmark run --workspace D:\benchmarks\my-comparison
+yadof-benchmark check --workspace $workspace
+yadof-benchmark run --workspace $workspace
 ```
+
+`init` prints the actual `YYYYMMDD_HHMMSS-...` workspace path, and automatic or
+explicit run names use the same local timestamp prefix. Each run keeps its complete
+reports and grouped cost/domain visualizations under one run root; timestamped
+indexes in the workspace's top-level `reports/` and `visualizations/` lead to it.
 
 `benchmark.py` is the only workflow-definition surface. Distribution metadata in
 `pyproject.toml` is not a benchmark workflow input. Read the installed

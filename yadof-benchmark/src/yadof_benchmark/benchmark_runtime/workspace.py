@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import BenchmarkError, WORKSPACE_FORMAT
+from .naming import timestamped_name
 
 _DIRECTORIES = ("resources", "runs", "visualizations", "reports", "temp")
 _TEMPLATE = '''"""Describe this benchmark's complete workflow."""
@@ -52,7 +53,8 @@ def _write_new(path: Path, text: str) -> None:
 
 
 def init_workspace(path: str | Path) -> dict[str, Any]:
-    root = Path(path).resolve()
+    requested = Path(path).resolve()
+    root = requested.with_name(timestamped_name(requested.name))
     if root.exists() and any(root.iterdir()):
         raise BenchmarkError(f"workspace directory is not empty: {root}")
     root.mkdir(parents=True, exist_ok=True)

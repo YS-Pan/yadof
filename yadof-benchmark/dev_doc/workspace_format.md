@@ -4,6 +4,12 @@
 `yadof.benchmark.workspace`, `workflow` equal to `benchmark.py`, and `resources`
 equal to `resources`. It does not encode strategies, matrices, or behavior.
 
+Initialization treats the requested leaf as a semantic name and materializes a
+human-visible `YYYYMMDD_HHMMSS-<semantic>` workspace unless the leaf is already
+timestamp-prefixed. Workspace-level `reports/<run-id>/` and
+`visualizations/<run-id>/` directories are run indexes, not second copies of
+authoritative evidence; their run IDs carry the same local timestamp prefix.
+
 The loader imports `benchmark.py` under a unique temporary module name, obtains
 `build_benchmark`, passes a new `Benchmark` builder, requires a `None` return, and
 freezes the builder. Import errors and builder errors become contextual
@@ -14,6 +20,10 @@ Builder paths are absolute after resolution from the workspace. Strategies may
 provide one default complete source plus baseline-specific complete sources.
 Planning parses each selected module and requires a top-level
 `build_optimization()`. It does not import strategy modules or classify algorithms.
+
+Every selected baseline must include `workspace/postprocess.py`. Its command-line
+surface is fixed to `--workspace`, `--output-dir`, and `--output-prefix`; a run
+snapshot owns the script used by each cell.
 
 Each `compare()` call owns its baseline IDs, strategy IDs, seeds, budget, and
 optional reference. Multiple calls express heterogeneous future workflows without

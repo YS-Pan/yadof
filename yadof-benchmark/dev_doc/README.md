@@ -18,5 +18,9 @@ Any change must preserve these invariants:
 - strategies are opaque complete `optimization.py` files;
 - runs freeze their workflow, resources, baselines, strategies, driver, and plan;
 - resume uses only the run-owned driver and snapshots;
+- human-visible workspaces, runs, and workspace output indexes start with
+  `YYYYMMDD_HHMMSS`, while compact cell workspaces remain digest-named;
+- every collected cell has a non-empty cost visualization and one uniformly
+  invoked baseline-domain postprocess result;
 - postprocessing is durable attempt-based work after cell collection;
 - algorithm-specific registries and acceptance decisions stay outside the runner.

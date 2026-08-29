@@ -11,7 +11,8 @@ BASELINES_ROOT/
         ├── .yadof/workspace.json
         ├── config.py
         ├── submit/
-        └── job_template/
+        ├── job_template/
+        └── postprocess.py
 ```
 
 Discovery is recursive, but the manifest directory relative to `BASELINES_ROOT`
@@ -22,8 +23,25 @@ content hash or other opaque fingerprint to an editable source directory.
 Each `baseline.json` names the complete yadof workspace, its execution mode and
 timeout, expected objective count and rawData shapes, rough time/record-size
 estimates, and optional task-neutral snapshot exclusions. Behavioral inputs below
-`submit/` and `job_template/`, `config.py`, and the workspace marker cannot be
-excluded.
+`submit/` and `job_template/`, `config.py`, `postprocess.py`, and the workspace
+marker cannot be excluded.
+
+Every baseline workspace must provide the uniformly named `postprocess.py` script.
+The benchmark runtime calls it after each completed optimization with:
+
+```powershell
+python postprocess.py `
+  --workspace CELL_WORKSPACE `
+  --output-dir RUN/visualizations/BASELINE-ID `
+  --output-prefix CELL-ID--attempt-NNNN--
+```
+
+The script must create at least one non-empty file whose name starts with the
+provided prefix and must exit nonzero on failure. The packaged trebuchet script
+selects the finite completed individual with minimum average cost and renders its
+poster/video evidence; the SAW and synthetic-antenna scripts render their domain
+plots. A missing script, a nonzero exit, or an empty output is a benchmark validity
+failure rather than a successful cell with no visualization.
 
 The package currently ships these semantic baseline resources:
 

@@ -14,6 +14,7 @@ from typing import Any, Mapping
 
 from .baselines import snapshot_baseline
 from .contracts import RUN_FORMAT, STATE_FORMAT, BenchmarkError, RunSpec
+from .naming import slug, timestamped_name
 
 _ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _IGNORED_PARTS = {
@@ -156,16 +157,8 @@ def safe_id(value: str, *, label: str) -> str:
     return value
 
 
-def slug(value: str) -> str:
-    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-._")
-    if not normalized:
-        raise BenchmarkError(f"cannot derive a path name from {value!r}")
-    return normalized
-
-
 def make_run_id(spec: RunSpec) -> str:
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return f"{stamp}-{slug(spec.workflow.name)}-{spec.digest[:12]}"
+    return timestamped_name(f"{spec.workflow.name}-{spec.digest[:12]}")
 
 
 def driver_digest(root: str | Path | None = None) -> str:
@@ -232,7 +225,10 @@ def _copy_workflow(spec: RunSpec, destination: Path) -> None:
 
 
 def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
-    selected_id = safe_id(run_id or make_run_id(spec), label="run id")
+    selected_id = safe_id(
+        timestamped_name(run_id) if run_id is not None else make_run_id(spec),
+        label="run id",
+    )
     runs_dir = spec.workflow.runs_dir.resolve()
     runs_dir.mkdir(parents=True, exist_ok=True)
     run_root = runs_dir / selected_id
@@ -396,7 +392,6 @@ __all__ = [
     "read_json",
     "safe_id",
     "save_state",
-    "slug",
     "utc_now",
     "workflow_digest",
     "write_new_json",

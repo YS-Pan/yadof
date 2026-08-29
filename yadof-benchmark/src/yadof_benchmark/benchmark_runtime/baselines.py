@@ -85,6 +85,11 @@ def load_baseline(path: str | Path) -> BaselineManifest:
     workspace = _inside(root, root / workspace_value, label="baseline workspace")
     if not workspace.is_dir():
         raise BenchmarkError(f"baseline workspace does not exist: {workspace}")
+    postprocessor = workspace / "postprocess.py"
+    if not postprocessor.is_file():
+        raise BenchmarkError(
+            f"baseline {baseline_id!r} must provide workspace/postprocess.py"
+        )
 
     execution = data.get("execution")
     contract = data.get("contract")
@@ -119,7 +124,13 @@ def load_baseline(path: str | Path) -> BaselineManifest:
         relative = candidate.relative_to(workspace).as_posix()
         if relative in (".", ""):
             raise BenchmarkError("a snapshot exclusion cannot name the workspace root")
-        fixed_inputs = {"config.py", "submit", "job_template", ".yadof/workspace.json"}
+        fixed_inputs = {
+            "config.py",
+            "submit",
+            "job_template",
+            "postprocess.py",
+            ".yadof/workspace.json",
+        }
         if relative in fixed_inputs or relative.startswith(("submit/", "job_template/")):
             raise BenchmarkError(f"snapshot exclusion names behavioral input: {relative}")
         normalized_excludes.append(relative)

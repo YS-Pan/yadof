@@ -11,6 +11,7 @@ from typing import Any, Callable, Mapping, Sequence
 from .contracts import BenchmarkError, CommandResult
 from .postprocessing import execute_postprocessors
 from .results import collect_cell, publish_results
+from .naming import slug
 from .storage import (
     latest_attempt,
     load_run,
@@ -259,6 +260,97 @@ def _command_failure(label: str, result: CommandResult) -> BenchmarkError:
     )
 
 
+def _require_nonempty_file(path: Path, *, label: str) -> None:
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise BenchmarkError(f"{label} did not create a non-empty artifact: {path}")
+
+
+def _render_cell_outputs(
+    run_root: Path,
+    attempt_root: Path,
+    workspace: Path,
+    attempt: dict[str, Any],
+    cell: Mapping[str, Any],
+    state: dict[str, Any],
+    *,
+    python: str,
+    command_runner: CommandRunner,
+    event_sink: EventSink | None,
+) -> dict[str, Any]:
+    cell_id = str(cell["id"])
+    cost_dir = run_root / "visualizations" / "cost"
+    cost_dir.mkdir(parents=True, exist_ok=True)
+    attempt_number = int(attempt["number"])
+    cost_path = cost_dir / f"{cell_id}--attempt-{attempt_number:04d}.png"
+    cost_root = attempt_root / "commands" / "03-view-cost"
+    attempt["active_command"] = cost_root.relative_to(run_root).as_posix()
+    save_state(run_root, state)
+    cost = command_runner(
+        [
+            python,
+            "-m",
+            "yadof",
+            "view",
+            "cost",
+            "--workspace",
+            str(workspace),
+            "--output",
+            str(cost_path),
+        ],
+        cwd=workspace,
+        command_root=cost_root,
+        label="view-cost",
+        timeout_seconds=600,
+        event_sink=event_sink,
+    )
+    _record_command(run_root, attempt, cost_root, cost)
+    if cost.returncode:
+        raise _command_failure("yadof view cost", cost)
+    _require_nonempty_file(cost_path, label="yadof view cost")
+
+    postprocessor = workspace / "postprocess.py"
+    if not postprocessor.is_file():
+        raise BenchmarkError(f"baseline postprocessor does not exist: {postprocessor}")
+    baseline_dir = run_root / "visualizations" / slug(str(cell["baseline"]))
+    baseline_dir.mkdir(parents=True, exist_ok=True)
+    prefix = f"{cell_id}--attempt-{attempt_number:04d}--"
+    postprocess_root = attempt_root / "commands" / "04-postprocess"
+    attempt["active_command"] = postprocess_root.relative_to(run_root).as_posix()
+    save_state(run_root, state)
+    domain = command_runner(
+        [
+            python,
+            str(postprocessor),
+            "--workspace",
+            str(workspace),
+            "--output-dir",
+            str(baseline_dir),
+            "--output-prefix",
+            prefix,
+        ],
+        cwd=workspace,
+        command_root=postprocess_root,
+        label="baseline-postprocess",
+        timeout_seconds=600,
+        event_sink=event_sink,
+    )
+    _record_command(run_root, attempt, postprocess_root, domain)
+    if domain.returncode:
+        raise _command_failure("baseline postprocess", domain)
+    domain_outputs = sorted(
+        path for path in baseline_dir.iterdir()
+        if path.is_file() and path.name.startswith(prefix) and path.stat().st_size > 0
+    )
+    if not domain_outputs:
+        raise BenchmarkError(
+            f"baseline postprocess created no non-empty artifact with prefix {prefix!r}"
+        )
+    return {
+        "cost": cost_path.relative_to(run_root).as_posix(),
+        "domain": [path.relative_to(run_root).as_posix() for path in domain_outputs],
+    }
+
+
 def _execute_cell(
     run_root: Path,
     spec: Mapping[str, Any],
@@ -337,18 +429,33 @@ def _execute_cell(
 
 def _collect_succeeded(
     run_root: Path,
+    spec: Mapping[str, Any],
     state: dict[str, Any],
     cell: Mapping[str, Any],
     *,
+    command_runner: CommandRunner,
     collector: Collector,
     event_sink: EventSink | None,
 ) -> bool:
     cell_state = state["cells"][str(cell["id"])]
     attempt_root, attempt = latest_attempt(run_root, cell_state)
     workspace = run_root / str(attempt["workspace"])
+    result: dict[str, Any] | None = None
     try:
         result = collector(workspace, cell)
         result["runtime_seconds"] = attempt.get("runtime_seconds", 0.0)
+        visualizations = _render_cell_outputs(
+            run_root,
+            attempt_root,
+            workspace,
+            attempt,
+            cell,
+            state,
+            python=str(spec["workflow"]["python"]),
+            command_runner=command_runner,
+            event_sink=event_sink,
+        )
+        result["visualizations"] = visualizations
         result_path = attempt_root / "result.json"
         write_new_json(result_path, result)
         attempt["result"] = result_path.relative_to(run_root).as_posix()
@@ -359,10 +466,27 @@ def _collect_succeeded(
         _emit(event_sink, event="cell-collected", cell=cell["id"])
         return True
     except Exception as exc:
-        cell_state["status"] = "succeeded"
-        cell_state["error"] = f"collection failed: {exc}"
+        if result is not None:
+            issues = result.setdefault("issues", [])
+            if isinstance(issues, list):
+                issues.append(f"required visualization failed: {exc}")
+            result_path = attempt_root / "result.json"
+            if not result_path.exists():
+                write_new_json(result_path, result)
+                attempt["result"] = result_path.relative_to(run_root).as_posix()
+            attempt["active_command"] = None
+            attempt["status"] = "failed"
+            attempt["finished_utc"] = utc_now()
+            attempt["error"] = f"required visualization failed: {exc}"
+            cell_state["status"] = "failed"
+            cell_state["error"] = attempt["error"]
+            event = "visualization-failed"
+        else:
+            cell_state["status"] = "succeeded"
+            cell_state["error"] = f"collection failed: {exc}"
+            event = "collection-failed"
         save_state(run_root, state)
-        _emit(event_sink, event="collection-failed", cell=cell["id"], error=str(exc))
+        _emit(event_sink, event=event, cell=cell["id"], error=str(exc))
         return False
 
 
@@ -404,8 +528,10 @@ def execute_existing_run(
                 continue
         if not _collect_succeeded(
             run_root,
+            spec,
             state,
             cell,
+            command_runner=command_runner,
             collector=collector,
             event_sink=event_sink,
         ) and fail_fast:

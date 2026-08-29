@@ -24,7 +24,11 @@ benchmark automation remain source-checkout concerns.
 The independent benchmark distribution exposes one editable workflow program per
 benchmark workspace. Its baseline collections use exact semantic
 `provider/task` source paths and freeze content only when a run is created; source
-directory names do not carry provenance digests.
+directory names do not carry provenance digests. Human-visible workspace, run, and
+workspace output-index names use local `YYYYMMDD_HHMMSS` prefixes, while internal
+cell execution paths remain compact digests. Each collected cell owns one cost
+plot and one uniformly invoked baseline-domain postprocess result below its single
+authoritative run root; workspace top-level output roots contain run indexes.
 
 ## Package dependency discipline
 

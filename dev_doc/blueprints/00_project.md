@@ -99,6 +99,13 @@ hot-change contract; structural dimension changes are future work.
   seeds, budgets, and postprocessors. Within a selected editable baseline root,
   each source directory exactly matches its provider/task semantic ID; run-owned
   digests and snapshots provide immutability without fingerprinting source names.
+  Human-visible workspace/run names and workspace-level report/visualization index
+  directories begin with local `YYYYMMDD_HHMMSS`; compact materialized cell paths
+  retain digest names for Windows safety. Every collected cell automatically
+  publishes a cost-history plot plus a non-empty artifact from the baseline's
+  uniform `postprocess.py` into run-local cost and baseline-semantic categories.
+  Cell validity and final-HV reports are available as Markdown, CSV, and bounded
+  JSON, while top-level workspace indexes lead back to the single run root.
   Workspace `benchmark.py` files select complete optimization strategies and
   declare any number of comparison matrices plus postprocessors. Adding an
   algorithm requires no runner registry or source change. A new run snapshots the

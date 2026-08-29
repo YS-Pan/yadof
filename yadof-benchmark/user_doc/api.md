@@ -70,15 +70,22 @@ comparison.
 ## `Benchmark.postprocess()`
 
 `postprocess(id, callback)` registers a named top-level function from the same
-`benchmark.py`. It runs after every cell is collected. The callback receives a
+`benchmark.py`. It runs after all cells are collected and the descriptive result
+set has been published. The callback receives a
 `PostprocessContext` with `run`, `inputs`, `results`, `visualizations`, `reports`,
 `temp`, and the current `attempt` directory. It may return any JSON-compatible
 summary. A failed callback is retried in a new attempt during `resume`; collected
 cells are not rerun.
 
+This workflow-level callback is separate from the required baseline-local
+`postprocess.py`. The runtime invokes the baseline script after each optimization,
+alongside the automatic cost-history plot, before that cell is accepted as
+collected.
+
 ## Other public functions
 
-- `init_workspace(path)` creates the workspace skeleton.
+- `init_workspace(path)` creates the timestamp-prefixed workspace skeleton and
+  returns its resolved path.
 - `discover_baselines(root=None)` returns validated baseline manifests.
 - `load_workflow(workspace)` executes and freezes `benchmark.py`.
 - `plan_workspace(workspace, baselines_root=None)` returns an immutable `RunSpec`.

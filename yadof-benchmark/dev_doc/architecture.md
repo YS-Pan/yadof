@@ -6,16 +6,18 @@
 
 The bounded `benchmark_runtime/` package separates responsibilities:
 
-- `workspace.py`: workspace identity and non-overwriting initialization;
+- `workspace.py` and `naming.py`: workspace identity, timestamped human-visible
+  names, and non-overwriting initialization;
 - `workflow.py`: small user-facing builder and immutable request construction;
 - `planning.py`: dynamic Python loading, strategy validation, and cell expansion;
 - `baselines.py`: recursive manifests and clean workspace snapshots;
 - `storage.py`: digests, immutable inputs, readable attempt evidence, compact
   run-local execution workspaces, and atomic state;
 - `execution.py`: checked subprocess execution, all-infinite-generation rejection,
-  collection, and orchestration;
+  collection, mandatory per-cell cost/domain visualization, and orchestration;
 - `postprocessing.py`: retryable run-local user callbacks;
-- `results.py`: public-yadof collection and descriptive reports;
+- `results.py`: public-yadof collection, cell/HV descriptive reports, and
+  workspace-level run indexes;
 - `progress.py`: read-only active work summaries;
 - `contracts.py`: dependency-free frozen and serialized contracts.
 

@@ -32,12 +32,14 @@
 
 ## 必须恢复的有效要求
 
-实施进度：2026-08-29 已完成第 1 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
+实施进度：2026-08-29 已完成第 1--2 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
 strategy、baseline、seed/budget 和 postprocess；baseline discovery 强制 editable source 的
-相对目录等于 `provider/task` semantic ID，run 仍负责 digest 与不可变 snapshot。独立 package、
-Python-only workflow、无算法 registry、无阶段式命名的现行边界已由安装态测试和文档同步验证。
-第 2--9 小节仍保持 active；本进度不代表命名、输出、CLI/progress、ETA、performance、指标、
-恢复或并行要求已经完成。
+相对目录等于 `provider/task` semantic ID，run 仍负责 digest 与不可变 snapshot。人类可见
+workspace/run/output-index 现由 benchmark 统一添加秒级时间前缀；每个 cell 强制生成 cost 图与
+baseline 领域后处理产物，并发布 cell 有效性、final-HV 和机器可读报告，workspace 顶层索引指向
+唯一 run root。独立 package、Python-only workflow、无算法 registry、无阶段式命名和 compact
+internal workspace 的现行边界已由安装态测试和文档同步验证。第 3--9 小节仍保持 active；本进度
+不代表 CLI/progress、ETA、performance、指标、恢复或并行要求已经完成。
 
 ### 1. 工具边界和工作区体验
 
