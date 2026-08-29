@@ -95,3 +95,9 @@ collected.
 
 All public imports are available from `yadof_benchmark`; `yadof_benchmark.api`
 provides the same explicit surface.
+
+Python `run_workspace()` and `resume_run()` are synchronous and window-neutral.
+They never launch a console or wait for input. A caller may pass `event_sink=` to
+receive lifecycle and real intermediate cell-progress mappings on the caller's
+foreground thread. The Rich terminal and visible-by-default Windows `--detach`
+launcher belong to the CLI boundary, not the public Python API.

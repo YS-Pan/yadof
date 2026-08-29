@@ -23,6 +23,13 @@ indexes independently of compact digest cell paths. A fake three-baseline pipeli
 must produce non-empty workspace indexes, run-local cell/HV reports, one grouped
 cost plot per cell, and one domain artifact in each baseline-semantic directory;
 missing or empty required postprocess output fails the run.
+Terminal coverage uses a fake child that emits separated generation snapshots and
+proves every sink callback stays on the foreground owner thread. Rich rendering is
+checked for fixed cell/global ordering, its first nonzero update, narrow critical
+fields, inherited `TERM=dumb`, `NO_COLOR`, cleanup, and final failure evidence.
+Windows launch tests require visible detach by default plus an immediate
+PID/run/log/inspect receipt; hidden mode must be explicit. These structural tests
+do not launch a simulator or claim performance evidence.
 
 ## Required coverage
 

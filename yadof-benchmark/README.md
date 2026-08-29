@@ -13,6 +13,11 @@ yadof-benchmark check --workspace $workspace
 yadof-benchmark run --workspace $workspace
 ```
 
+Foreground runs show a Rich active-cell row followed by a global benchmark row.
+For an agent-owned long Windows run, add `--detach`: it opens a normal visible
+console and immediately returns PID/run/log/inspect details. Hidden execution is
+available only as the explicit `--detach --hidden` exception.
+
 `init` prints the actual `YYYYMMDD_HHMMSS-...` workspace path, and automatic or
 explicit run names use the same local timestamp prefix. Each run keeps its complete
 reports and grouped cost/domain visualizations under one run root; timestamped

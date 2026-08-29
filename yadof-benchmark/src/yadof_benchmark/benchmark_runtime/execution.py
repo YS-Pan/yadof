@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import queue
+import re
 import subprocess
 import threading
 import time
@@ -26,10 +28,113 @@ EventSink = Callable[[Mapping[str, Any]], None]
 CommandRunner = Callable[..., CommandResult]
 Collector = Callable[[Path, Mapping[str, Any]], dict[str, Any]]
 
+_YADOF_PROGRESS = re.compile(
+    r"^\[yadof\] (?P<phase>smoke|generation (?P<generation>\d+)) "
+    r"\([^)]*\) \[[#.]+\] (?P<finished>\d+)/(?P<total>\d+) "
+    r"successful=(?P<successful>\d+) errors=(?P<errors>\d+) "
+    r"remaining=(?P<remaining>\d+)\s*$"
+)
+
 
 def _emit(sink: EventSink | None, **event: Any) -> None:
     if sink is not None:
         sink({"utc": utc_now(), **event})
+
+
+def _parse_yadof_progress(line: str) -> dict[str, Any] | None:
+    """Return one complete progress snapshot from a piped yadof child."""
+
+    match = _YADOF_PROGRESS.fullmatch(line.strip())
+    if match is None:
+        return None
+    generation_text = match.group("generation")
+    return {
+        "phase": match.group("phase"),
+        "generation": (
+            None if generation_text is None else int(generation_text)
+        ),
+        "finished": int(match.group("finished")),
+        "total": max(1, int(match.group("total"))),
+        "successful": int(match.group("successful")),
+        "errors": int(match.group("errors")),
+        "remaining": int(match.group("remaining")),
+    }
+
+
+def _command_integer(command: Sequence[str], option: str) -> int | None:
+    try:
+        index = list(command).index(option)
+        return int(command[index + 1])
+    except (IndexError, TypeError, ValueError):
+        return None
+
+
+def _emit_child_progress(
+    snapshots: queue.Queue[dict[str, Any]],
+    *,
+    command: Sequence[str],
+    label: str,
+    event_sink: EventSink | None,
+) -> None:
+    """Render queued child snapshots from the foreground command owner."""
+
+    generations = max(1, _command_integer(command, "--generations") or 1)
+    population = max(1, _command_integer(command, "--population-size") or 1)
+    planned = generations * population
+    for _ in range(4096):
+        try:
+            snapshot = snapshots.get_nowait()
+        except queue.Empty:
+            break
+        if int(snapshot["finished"]) <= 0:
+            # Cell start already owns the zero state. Waiting for the first
+            # completed evaluation avoids a redundant 0% refresh/log entry and
+            # makes the first child-derived update observably real.
+            continue
+        generation = snapshot["generation"]
+        absolute = int(snapshot["finished"])
+        if generation is not None:
+            absolute += int(generation) * int(snapshot["total"])
+        _emit(
+            event_sink,
+            event="cell-progress",
+            label=label,
+            phase=snapshot["phase"],
+            generation=generation,
+            generation_number=(
+                None if generation is None else int(generation) + 1
+            ),
+            generations=max(
+                generations,
+                1 if generation is None else int(generation) + 1,
+            ),
+            evaluations=absolute,
+            planned_evaluations=max(planned, absolute),
+            successful=int(snapshot["successful"]),
+            errors=int(snapshot["errors"]),
+            remaining=int(snapshot["remaining"]),
+        )
+
+
+def _state_progress(state: Mapping[str, Any]) -> dict[str, int]:
+    cells = list(state.get("cells", {}).values())
+    completed = sum(item.get("status") == "collected" for item in cells)
+    failed = sum(
+        item.get("status") == "failed"
+        or (
+            item.get("status") != "collected"
+            and bool(item.get("error"))
+        )
+        for item in cells
+    )
+    finished = completed + failed
+    return {
+        "total_cells": len(cells),
+        "finished_cells": finished,
+        "completed_cells": completed,
+        "failed_cells": failed,
+        "remaining_cells": max(0, len(cells) - finished),
+    }
 
 
 def _stop_process_tree(process: subprocess.Popen[str]) -> None:
@@ -74,11 +179,15 @@ def _drain(
     destination: Path,
     last_activity: list[float],
     lock: threading.Lock,
+    progress_snapshots: queue.Queue[dict[str, Any]],
 ) -> None:
     with destination.open("x", encoding="utf-8", newline="\n") as stream:
         for line in iter(source.readline, ""):
             stream.write(line)
             stream.flush()
+            snapshot = _parse_yadof_progress(line)
+            if snapshot is not None:
+                progress_snapshots.put(snapshot)
             with lock:
                 last_activity[0] = time.monotonic()
     source.close()
@@ -92,6 +201,8 @@ def _watch(
     last_activity: list[float],
     lock: threading.Lock,
     label: str,
+    command: Sequence[str],
+    progress_snapshots: queue.Queue[dict[str, Any]],
     event_sink: EventSink | None,
 ) -> bool:
     next_update = started
@@ -100,6 +211,12 @@ def _watch(
         if now - started >= timeout_seconds:
             _stop_process_tree(process)
             return True
+        _emit_child_progress(
+            progress_snapshots,
+            command=command,
+            label=label,
+            event_sink=event_sink,
+        )
         if now >= next_update:
             with lock:
                 inactive = now - last_activity[0]
@@ -111,7 +228,13 @@ def _watch(
                 inactivity_seconds=round(inactive, 3),
             )
             next_update = now + 5.0
-        time.sleep(0.1)
+        time.sleep(0.05)
+    _emit_child_progress(
+        progress_snapshots,
+        command=command,
+        label=label,
+        event_sink=event_sink,
+    )
     return False
 
 
@@ -183,16 +306,36 @@ def run_logged(
     started = time.monotonic()
     last_activity = [started]
     activity_lock = threading.Lock()
+    progress_snapshots: queue.Queue[dict[str, Any]] = queue.Queue()
     process = _start_process(command, cwd)
+    _emit(
+        event_sink,
+        event="command-started",
+        label=label,
+        pid=process.pid,
+        log_dir=str(command_root),
+    )
     threads = [
         threading.Thread(
             target=_drain,
-            args=(process.stdout, command_root / "stdout.log", last_activity, activity_lock),
+            args=(
+                process.stdout,
+                command_root / "stdout.log",
+                last_activity,
+                activity_lock,
+                progress_snapshots,
+            ),
             daemon=True,
         ),
         threading.Thread(
             target=_drain,
-            args=(process.stderr, command_root / "stderr.log", last_activity, activity_lock),
+            args=(
+                process.stderr,
+                command_root / "stderr.log",
+                last_activity,
+                activity_lock,
+                progress_snapshots,
+            ),
             daemon=True,
         ),
     ]
@@ -206,6 +349,8 @@ def run_logged(
             last_activity=last_activity,
             lock=activity_lock,
             label=label,
+            command=command,
+            progress_snapshots=progress_snapshots,
             event_sink=event_sink,
         )
     except BaseException:
@@ -215,6 +360,12 @@ def run_logged(
         process.wait()
         for thread in threads:
             thread.join(timeout=5)
+    _emit_child_progress(
+        progress_snapshots,
+        command=command,
+        label=label,
+        event_sink=event_sink,
+    )
     return _finish_command(
         command, command_root, label, process, started, started_utc, timed_out, event_sink
     )
@@ -423,7 +574,13 @@ def _execute_cell(
         cell_state["status"] = "failed"
         cell_state["error"] = str(exc)
         save_state(run_root, state)
-        _emit(event_sink, event="cell-failed", cell=cell["id"], error=str(exc))
+        _emit(
+            event_sink,
+            event="cell-failed",
+            cell=cell["id"],
+            error=str(exc),
+            **_state_progress(state),
+        )
         return False
 
 
@@ -463,7 +620,12 @@ def _collect_succeeded(
         cell_state["status"] = "collected"
         cell_state["error"] = None
         save_state(run_root, state)
-        _emit(event_sink, event="cell-collected", cell=cell["id"])
+        _emit(
+            event_sink,
+            event="cell-collected",
+            cell=cell["id"],
+            **_state_progress(state),
+        )
         return True
     except Exception as exc:
         if result is not None:
@@ -486,7 +648,13 @@ def _collect_succeeded(
             cell_state["error"] = f"collection failed: {exc}"
             event = "collection-failed"
         save_state(run_root, state)
-        _emit(event_sink, event=event, cell=cell["id"], error=str(exc))
+        _emit(
+            event_sink,
+            event=event,
+            cell=cell["id"],
+            error=str(exc),
+            **_state_progress(state),
+        )
         return False
 
 
@@ -506,6 +674,12 @@ def execute_existing_run(
     mark_interrupted(run_root, state)
     state["status"] = "running"
     save_state(run_root, state)
+    _emit(
+        event_sink,
+        event="run-started",
+        run=str(run_root),
+        **_state_progress(state),
+    )
     cell_by_id = {str(cell["id"]): cell for cell in spec["cells"]}
     fail_fast = bool(spec["workflow"].get("fail_fast", False))
     for cell_id in [str(cell["id"]) for cell in spec["cells"]]:
@@ -513,7 +687,17 @@ def execute_existing_run(
         cell_state = state["cells"][cell_id]
         if cell_state["status"] == "collected":
             continue
-        _emit(event_sink, event="cell-started", cell=cell_id)
+        _emit(
+            event_sink,
+            event="cell-started",
+            cell=cell_id,
+            previous_status=cell_state.get("status"),
+            previous_error=cell_state.get("error"),
+            population=int(cell["population"]),
+            generations=int(cell["generations"]),
+            planned_evaluations=int(cell["planned_evaluations"]),
+            **_state_progress(state),
+        )
         if cell_state["status"] != "succeeded":
             if not _execute_cell(
                 run_root,
@@ -552,7 +736,13 @@ def execute_existing_run(
         state["status"] = "failed"
     save_state(run_root, state)
     publish_results(run_root, spec, state)
-    _emit(event_sink, event="run-finished", status=state["status"])
+    _emit(
+        event_sink,
+        event="run-finished",
+        status=state["status"],
+        run=str(run_root),
+        **_state_progress(state),
+    )
     return state
 
 

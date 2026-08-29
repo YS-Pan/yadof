@@ -28,7 +28,12 @@ directory names do not carry provenance digests. Human-visible workspace, run, a
 workspace output-index names use local `YYYYMMDD_HHMMSS` prefixes, while internal
 cell execution paths remain compact digests. Each collected cell owns one cost
 plot and one uniformly invoked baseline-domain postprocess result below its single
-authoritative run root; workspace top-level output roots contain run indexes.
+authoritative run root; workspace top-level output roots contain run indexes. Its
+CLI owns Rich presentation on the foreground thread, receives real child
+generation snapshots through a queue, and keeps active-cell/global rows in that
+order. Windows detach opens a normal console and returns PID/run/log/inspect
+details; hidden detach is explicit, while Python calls stay synchronous and
+window-neutral.
 
 ## Package dependency discipline
 

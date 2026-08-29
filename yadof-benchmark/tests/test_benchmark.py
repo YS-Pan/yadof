@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
 
 import yadof_benchmark as benchmark
 from yadof_benchmark import api
+from yadof_benchmark import cli
 from yadof_benchmark.benchmark_runtime import execution
 from yadof_benchmark.benchmark_runtime.baselines import (
     discover_baselines,
@@ -22,6 +25,7 @@ from yadof_benchmark.benchmark_runtime.contracts import (
     WORKSPACE_FORMAT,
     CommandResult,
 )
+from yadof_benchmark.benchmark_runtime.launch import launch_detached
 from yadof_benchmark.benchmark_runtime.results import inspect_run
 from yadof_benchmark.benchmark_runtime.storage import (
     create_run,
@@ -30,6 +34,7 @@ from yadof_benchmark.benchmark_runtime.storage import (
     read_json,
     save_state,
 )
+from yadof_benchmark.benchmark_runtime.terminal import BenchmarkTerminal
 
 
 def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
@@ -647,7 +652,7 @@ def test_distribution_entrypoints_match_code_first_contract() -> None:
     assert (package / "cli.py").is_file()
     assert (package / "api.py").is_file()
     assert 'name = "yadof-benchmark"' in (project / "pyproject.toml").read_text()
-    assert 'dependencies = ["yadof[plot]>=0.4.2"]' in (
+    assert 'dependencies = ["rich>=13", "yadof[plot]>=0.4.2"]' in (
         project / "pyproject.toml"
     ).read_text()
     assert 'yadof-benchmark = "yadof_benchmark.cli:main"' in (
@@ -659,3 +664,200 @@ def test_packaged_resources_are_available_from_source_tree() -> None:
     manifests = api.discover_baselines()
     assert {"chrono/trebuchet", "ngspice/saw-ladder", "test-com/synthetic-antenna"} <= set(manifests)
     assert (api.user_doc_root() / "README.md").is_file()
+
+
+def test_logged_child_progress_reaches_sink_on_foreground_thread(
+    tmp_path: Path,
+) -> None:
+    owner = threading.get_ident()
+    observed: list[tuple[int, dict]] = []
+    lines = [
+        "[yadof] generation 0 (fast) [............................] "
+        "0/100 successful=0 errors=0 remaining=100",
+        "[yadof] generation 0 (fast) [............................] "
+        "1/100 successful=1 errors=0 remaining=99",
+        "[yadof] generation 0 (fast) [##############..............] "
+        "50/100 successful=50 errors=0 remaining=50",
+        "[yadof] generation 1 (fast) [............................] "
+        "1/100 successful=1 errors=0 remaining=99",
+    ]
+    child = (
+        "import sys,time; lines="
+        + repr(lines)
+        + "; [(sys.stderr.write(line+'\\r'),sys.stderr.flush(),time.sleep(0.08)) "
+        "for line in lines]; sys.stderr.write('\\n'); sys.stderr.flush()"
+    )
+
+    result = execution.run_logged(
+        [
+            sys.executable,
+            "-c",
+            child,
+            "--generations",
+            "20",
+            "--population-size",
+            "100",
+        ],
+        cwd=tmp_path,
+        command_root=tmp_path / "command",
+        label="run",
+        timeout_seconds=30,
+        event_sink=lambda event: observed.append((threading.get_ident(), dict(event))),
+    )
+
+    assert result.returncode == 0
+    progress = [
+        event for _thread, event in observed if event["event"] == "cell-progress"
+    ]
+    assert [event["evaluations"] for event in progress] == [1, 50, 101]
+    assert all(event["planned_evaluations"] == 2000 for event in progress)
+    assert {thread for thread, _event in observed} == {owner}
+
+
+def test_rich_progress_survives_dumb_term_and_shows_first_real_update(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.setenv("COLUMNS", "120")
+    terminal = TtyBuffer()
+    display = BenchmarkTerminal(stream=terminal)
+    assert display.console.is_terminal
+    assert not display.console.is_dumb_terminal
+    assert display.console.no_color
+    display.start()
+    display.handle(
+        {
+            "event": "run-started",
+            "run": str(tmp_path),
+            "total_cells": 18,
+            "finished_cells": 0,
+            "completed_cells": 0,
+            "failed_cells": 0,
+        }
+    )
+    display.handle(
+        {
+            "event": "cell-started",
+            "cell": "chrono__gpsaf-conditional-inr__seed-130363",
+            "population": 100,
+            "generations": 20,
+            "planned_evaluations": 2000,
+            "total_cells": 18,
+            "finished_cells": 0,
+            "completed_cells": 0,
+            "failed_cells": 0,
+        }
+    )
+    before = terminal.getvalue()
+    display.handle(
+        {
+            "event": "cell-progress",
+            "phase": "generation 0",
+            "generation_number": 1,
+            "generations": 20,
+            "evaluations": 1,
+            "planned_evaluations": 2000,
+            "successful": 1,
+            "errors": 0,
+        }
+    )
+    intermediate = terminal.getvalue()[len(before):]
+    display.finish()
+
+    assert intermediate
+    assert "1/2000 eval | 0.1% gen=1/20 ok=1 err=0" in intermediate
+    assert intermediate.index("[cell]") < intermediate.index("[benchmark]")
+    assert os.environ["TERM"] == "dumb"
+
+
+def test_progress_rows_keep_critical_fields_in_narrow_terminal() -> None:
+    class TtyBuffer(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    display = BenchmarkTerminal(
+        stream=TtyBuffer(),
+        environ={"COLUMNS": "42", "LINES": "25", "TERM": "dumb", "NO_COLOR": "1"},
+    )
+    display.total_cells = 18
+    display.finished_cells = 7
+    display.completed_cells = 6
+    display.failed_cells = 1
+    display.cell_total = 2000
+    display.cell_completed = 1350
+    display.generation_number = 14
+    display.generations = 20
+    display.cell_errors = 8
+    display.phase = "generation 13"
+
+    cell = display._cell_line()
+    global_line = display._global_line()
+    assert display._bar(0, 0, 5) == "-----"
+    assert len(cell) <= 42
+    assert "1350/2000" in cell and "g14/20" in cell and "e8" in cell
+    assert len(global_line) <= 42
+    assert "7/18" in global_line and "ok6" in global_line and "e1" in global_line
+
+
+def test_terminal_log_retains_final_failure_and_inspection_path(tmp_path: Path) -> None:
+    terminal = io.StringIO()
+    display = BenchmarkTerminal(tmp_path, stream=terminal)
+    display.start()
+    display.handle(
+        {
+            "utc": "2026-08-29T00:00:00Z",
+            "event": "run-finished",
+            "run": str(tmp_path),
+            "status": "failed",
+            "total_cells": 1,
+            "finished_cells": 1,
+            "completed_cells": 0,
+            "failed_cells": 1,
+        }
+    )
+    display.finish(result={"status": "failed", "run": str(tmp_path)})
+
+    log = (tmp_path / "benchmark.log").read_text(encoding="utf-8")
+    assert "finished; status=failed" in log
+    assert str(tmp_path) in log
+    assert "benchmark finished: status=failed" in log
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows detached-console contract")
+def test_detached_launch_defaults_visible_and_returns_receipt(tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    class Process:
+        pid = 4242
+
+    def process_factory(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return Process()
+
+    receipt = launch_detached(tmp_path, process_factory=process_factory)
+
+    assert receipt["pid"] == 4242
+    assert receipt["visible"] is True
+    assert receipt["run"] == str(tmp_path.resolve())
+    assert receipt["log"] == str(tmp_path.resolve() / "benchmark.log")
+    assert "inspect --run" in receipt["inspect"]
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["creationflags"] & subprocess.CREATE_NEW_CONSOLE
+    assert kwargs["creationflags"] & subprocess.CREATE_BREAKAWAY_FROM_JOB
+    assert "stdin" not in kwargs
+    assert "stdout" not in kwargs and "stderr" not in kwargs
+
+
+def test_hidden_launch_requires_explicit_detach(tmp_path: Path, capsys) -> None:
+    exit_code = cli.main(["resume", "--run", str(tmp_path), "--hidden"])
+
+    assert exit_code == 2
+    assert "--hidden is valid only with explicit --detach" in capsys.readouterr().err

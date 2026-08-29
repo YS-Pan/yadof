@@ -23,7 +23,7 @@ from .benchmark_runtime.planning import (
     plan_workflow,
 )
 from .benchmark_runtime.results import inspect_run as _inspect_run
-from .benchmark_runtime.storage import create_run
+from .benchmark_runtime.storage import create_run, utc_now
 from .benchmark_runtime.workflow import Benchmark
 from .benchmark_runtime.workspace import init_workspace as _init_workspace
 
@@ -80,10 +80,34 @@ def run_workspace(
     baselines_root: str | Path | None = None,
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    spec = plan_workspace(workspace, baselines_root=baselines_root)
-    run_root = create_run(spec, run_id=run_id)
+    run_root = _prepare_workspace_run(
+        workspace,
+        run_id=run_id,
+        baselines_root=baselines_root,
+    )
+    if event_sink is not None:
+        event_sink(
+            {
+                "utc": utc_now(),
+                "event": "run-created",
+                "run": str(run_root),
+                "log": str(run_root / "benchmark.log"),
+            }
+        )
     execute_existing_run(run_root, event_sink=event_sink)
     return _inspect_run(run_root)
+
+
+def _prepare_workspace_run(
+    workspace: str | Path | WorkflowRequest,
+    *,
+    run_id: str | None = None,
+    baselines_root: str | Path | None = None,
+) -> Path:
+    """Create a planned run for the CLI's detached launcher."""
+
+    spec = plan_workspace(workspace, baselines_root=baselines_root)
+    return create_run(spec, run_id=run_id)
 
 
 def _snapshot_runtime(run_root: Path):

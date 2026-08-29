@@ -119,9 +119,13 @@ hot-change contract; structural dimension changes are future work.
   simulator paths compact; an all-infinite generation fails the benchmark cell
   rather than becoming an empty comparison result. Measured CLI runs use a visible
   process window by default for both humans and AI agents: foreground execution in
-  an existing visible terminal or a separate normal console for a detached long
-  run. Hidden launch is reserved for an explicit user request, while the Python API
-  remains synchronous and window-neutral. The distribution depends on yadof's
+  an existing visible terminal or `--detach` into a separate normal Windows
+  console for a long run. Detached launch immediately reports PID/run/log/inspect
+  details and never polls. Hidden launch is reserved for explicit
+  `--detach --hidden` with a user request. Rich is owned by the foreground caller
+  and shows active-cell then global rows fed by real queued child-generation
+  snapshots; lifecycle output stays above them. The Python API remains synchronous,
+  window-neutral, and input-free. The distribution depends on yadof's
   public surface, never the reverse. Root
   `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
   records.

@@ -21,6 +21,7 @@ RUN/
 │   ├── final-hypervolume.csv
 │   └── descriptive-results.json
 ├── temp/
+├── benchmark.log                 # lifecycle/progress/final status
 ├── spec.json
 ├── state.json
 ├── results.json
@@ -66,3 +67,11 @@ authoritative run root; recovery correctness does not depend on them.
 
 Run-owned recovery dynamically loads `driver/benchmark_runtime`; it never replans
 the original workspace or depends on current package implementation details.
+
+`benchmark.log` is append-only presentation evidence for foreground and detached
+launches. Per-command stdout/stderr remain separated below the relevant attempt.
+The interactive CLI shows exactly two Rich-owned live rows (active cell, then
+global benchmark); lifecycle output is printed above them. Background pipe readers
+never render: they enqueue parsed yadof generation snapshots and the foreground
+owner turns those into timestamped progress events. Non-TTY output is bounded and
+the synchronous Python API never blocks for terminal input.

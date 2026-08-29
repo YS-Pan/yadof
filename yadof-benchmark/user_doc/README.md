@@ -11,9 +11,12 @@ Use this guide for the installed `yadof-benchmark` package. The shortest route i
 
 Measured `run` and `resume` commands use a visible process window by default,
 whether a human or an AI agent starts them. An already visible terminal may run the
-command in the foreground; an agent detaching a long run must create a normal
-visible console. A hidden launch is an explicit exception that requires the user's
-request, not an agent convenience.
+command in the foreground; on Windows an agent detaches with `--detach`, which
+creates a normal visible console and immediately returns PID/run/log/inspect
+details. `--hidden` requires that explicit detach mode and a user request. The
+foreground terminal uses two Rich-owned progress rows backed by real child
+generation updates; non-interactive API calls remain synchronous and never wait
+for input.
 
 The workflow contract is Python-only. `check` and `plan` import and execute the
 workspace's `benchmark.py`, so planning code should be deterministic and should not

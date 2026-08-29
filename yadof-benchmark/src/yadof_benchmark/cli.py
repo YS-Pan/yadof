@@ -5,9 +5,11 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from . import api
+from .benchmark_runtime.launch import launch_detached
+from .benchmark_runtime.terminal import BenchmarkTerminal
 
 
 def _json(value: Any) -> None:
@@ -19,14 +21,6 @@ def _json(value: Any) -> None:
             sort_keys=True,
             indent=2,
         ),
-        flush=True,
-    )
-
-
-def _progress(event: Any) -> None:
-    print(
-        json.dumps(event, ensure_ascii=False, allow_nan=False, sort_keys=True),
-        file=sys.stderr,
         flush=True,
     )
 
@@ -60,11 +54,31 @@ def _parser() -> argparse.ArgumentParser:
     )
     run = _workspace_command(commands, "run", "snapshot and execute a workspace")
     run.add_argument("--run-id")
+    run.add_argument(
+        "--detach",
+        action="store_true",
+        help="start in a separate console and immediately return a launch receipt",
+    )
+    run.add_argument(
+        "--hidden",
+        action="store_true",
+        help="explicitly hide a detached console (requires --detach)",
+    )
 
     resume = commands.add_parser(
         "resume", help="continue a run from its own driver and input snapshots"
     )
     resume.add_argument("--run", type=Path, required=True)
+    resume.add_argument(
+        "--detach",
+        action="store_true",
+        help="continue in a separate console and immediately return a launch receipt",
+    )
+    resume.add_argument(
+        "--hidden",
+        action="store_true",
+        help="explicitly hide a detached console (requires --detach)",
+    )
 
     inspect = commands.add_parser(
         "inspect", help="read current run state and result locations without writing"
@@ -105,6 +119,27 @@ def _docs(args: argparse.Namespace) -> None:
     print(selected.read_text(encoding="utf-8"), end="", flush=True)
 
 
+def _foreground(
+    action: Callable[[Callable[[Mapping[str, Any]], None]], dict[str, Any]],
+    *,
+    run: str | Path | None = None,
+) -> dict[str, Any]:
+    terminal = BenchmarkTerminal(run)
+    terminal.start()
+    try:
+        result = action(terminal.handle)
+    except BaseException as exc:
+        terminal.finish(error=exc)
+        raise
+    terminal.finish(result=result)
+    return result
+
+
+def _require_detach_for_hidden(args: argparse.Namespace) -> None:
+    if bool(args.hidden) and not bool(args.detach):
+        raise api.BenchmarkError("--hidden is valid only with explicit --detach")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -131,16 +166,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             _json(output)
             return 0
         if args.command == "run":
-            result = api.run_workspace(
-                args.workspace,
-                run_id=args.run_id,
-                baselines_root=args.baselines_root,
-                event_sink=_progress,
+            _require_detach_for_hidden(args)
+            if args.detach:
+                run_root = api._prepare_workspace_run(
+                    args.workspace,
+                    run_id=args.run_id,
+                    baselines_root=args.baselines_root,
+                )
+                _json(launch_detached(run_root, hidden=bool(args.hidden)))
+                return 0
+            result = _foreground(
+                lambda event_sink: api.run_workspace(
+                    args.workspace,
+                    run_id=args.run_id,
+                    baselines_root=args.baselines_root,
+                    event_sink=event_sink,
+                )
             )
             _json(result)
             return 0 if result["status"] == "completed" else 1
         if args.command == "resume":
-            result = api.resume_run(args.run, event_sink=_progress)
+            _require_detach_for_hidden(args)
+            if args.detach:
+                _json(launch_detached(args.run, hidden=bool(args.hidden)))
+                return 0
+            result = _foreground(
+                lambda event_sink: api.resume_run(
+                    args.run, event_sink=event_sink
+                ),
+                run=args.run,
+            )
             _json(result)
             return 0 if result["status"] == "completed" else 1
         if args.command == "inspect":
