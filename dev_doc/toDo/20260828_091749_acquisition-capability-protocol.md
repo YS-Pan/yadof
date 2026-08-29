@@ -5,11 +5,18 @@
 - 本文是手动待执行的架构 handoff，不代表已经批准修改当前代码或引入第二种 acquisition。
 - 当前用户没有近期增加第二种 acquisition/search backend 的计划，也暂不面向第三方组件作者。
   因此本 TODO **现在只记录技术债，不实施 Protocol**。
+- 2026-08-29 用户暂停抗噪声 Hierarchical CAE successor，以及当前 Hierarchical CAE 将
+  `frequency` 数据筛选设为显式 opt-in、默认 `none`，都属于 surrogate 侧的优先级或组件
+  边界变化；它们既不是第二个 acquisition，也没有证明真实调用方被 qNEHVI 具体类型阻塞，
+  因而不触发本文。
 - 只有满足以下任一条件后才开始实施：
   1. 一个有明确用途、算法语义和验收标准的第二种 acquisition 已获批准；
   2. 一个真实调用方已经被当前 qNEHVI 具体类型依赖阻塞，并能提供与 qNEHVI 共同需要的
      最小能力证据。
 - 不得仅因本文存在、代码看起来可以抽象，或为了未来可能的 GUI/插件而提前启动。
+- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  可以在只有 qNEHVI 一个真实 acquisition 的情况下继续保持 fail-closed/full-real fallback；
+  它的 Hierarchical CAE 科学 blocker 与本文的架构触发条件相互独立。
 
 ## 当前证据与问题
 

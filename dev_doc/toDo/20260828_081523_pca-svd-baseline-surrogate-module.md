@@ -22,9 +22,15 @@
   rawData。
 - 上述诊断已经参与冻结的先前证据。不得重写或重新解释旧计划及结果；package 模块必须在
   新的外部研究计划中做数值 parity，并由新 strategy identity 产生后续证据。
-- [当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 承接的七臂矩阵要求
+- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  承接的七臂矩阵要求
   `pca-svd-reconstruction`，但 Gate 0 v10 记录它仍没有 current runner arm。新增模块应补齐
   这个可执行缺口，同时把 oracle reconstruction 与真实参数预测的结论严格分开。
+- 2026-08-29 用户决定暂时搁置
+  [抗噪声 Surrogate TODO](20260828_082308_noise-robust-regime-specialized-surrogate.md)。
+  该决定不暂停本 TODO：PCA/SVD 的合法 measured evidence、formal-suite 接入和独立基线结论
+  仍可按其自身权限继续。它不再是近期抗噪声 successor 的执行前置，但仍为 Hierarchical CAE
+  提供 representation ceiling 与 parameter-to-latent 难度诊断。
 
 ## 目标
 
@@ -208,9 +214,11 @@
 - 更新 architecture、surrogate/project/test blueprints、terminology、user docs/API examples、
   artifact membership 和 change record，使其描述已实现状态而不是引用本 TODO 作为 current
   truth。
-- 将新 strategy 接入[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+- 将新 strategy 接入
+  [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
   后续冻结的正式 study；一个 PCA/SVD strategy 可执行只消除
-  该结构缺口，不会解除 CAE performance、posterior calibration、qNEHVI 或其他阈值 blocker。
+  该结构缺口，不会解除 Hierarchical CAE performance、posterior calibration、qNEHVI 或其他
+  阈值 blocker。
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused tests、benchmark
   automation tests 和 full installed-wheel suite。需要 simulator/长时间 measured suite 时另行
   按权限请求用户授权。
@@ -267,13 +275,17 @@
 ## 与现有 TODO 的关系
 
 - 本文是对 082608 中“后续需单独批准 PCA surrogate factory”的明确后继批准；082608 的
-  CAE 性能 gate 仍独立有效，PCA/SVD 完成不能代替 CAE 通过。
-- 本文应为当前汇总 TODO 补齐可执行的 `pca-svd-reconstruction` 结构 arm，并提供额外
+  Hierarchical CAE 性能 gate 仍独立有效，PCA/SVD 完成不能代替 Hierarchical CAE 通过。
+- 本文应为 Hierarchical CAE/qNEHVI 总控 TODO 补齐可执行的
+  `pca-svd-reconstruction` 结构 arm，并提供额外
   deployable predictor 诊断；其余六个正式 arm 和所有科学门槛仍由该汇总 TODO 管理。
 - 若未来 PCA/SVD 需要 posterior calibration 或 qNEHVI，必须遵守
-  [当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 中的 exact-state/readiness
+  [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  中的 exact-state/readiness
   契约并建立新预注册，不能从 reconstruction residual 直接推导授权。旧 082609/082611 计划
   仅保留在 `obsolete/` 作为可选历史细节。
+- 抗噪声 Surrogate 的暂停既不阻塞 PCA/SVD 本身，也不允许用 PCA/SVD 完成来替代
+  Hierarchical CAE 的 performance acceptance、posterior calibration 或 qNEHVI readiness。
 - 模块配置直接遵循当前 component-owned settings/factory 边界；低层 codec/parity 与公开
   component 使用同一权威参数来源，不再安排二次配置迁移。
 

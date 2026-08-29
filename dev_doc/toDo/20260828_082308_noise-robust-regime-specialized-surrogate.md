@@ -1,11 +1,19 @@
-# 补录抗噪声 quality/regime 稳健 surrogate 与后继验收
+# PARKED — 抗噪声 Hierarchical CAE successor 与后继验收
 
 ## 状态、来源与当前结论
 
-- 本文是待执行的手动 TODO，同时补录一项此前只通过 Codex session 转交、没有独立 TODO
+- 本文是已暂停的手动 TODO，同时补录一项此前只通过 Codex session 转交、没有独立 TODO
   落盘的用户要求。原要求由 session `01a04242-14f1-7162-8c38-c44a8b02fe12` 发送给
   hierarchical CAE 实施 session；session ID 只作补充 provenance，本文必须在没有聊天记录时
   也能独立执行。
+- 2026-08-29 用户明确决定暂时搁置抗噪声 successor。暂停期间不得执行本文 Gate 0--5、
+  新建 regime-specialized/MoE 实现、启动 simulator/长训练、访问新的 blind evidence、重新校准
+  或进入 formal qNEHVI benchmark。阅读本文不构成重新激活授权。
+- 相邻的 Hierarchical CAE 数据筛选重构已经完成：`hierarchical_cae()` 默认
+  `data_filter_mode="none"`，当前显式可选机制是
+  `data_filter_mode="frequency"` 与 `frequency_filter=FrequencyFilter(...)`。该重构只建立
+  component-local 可选接口和当前实现身份，不构成抗噪声科学路线恢复、性能接受或 posterior
+  exploitation 授权。
 - 原要求不是“把曲线平滑一下”。1929-row Chrono 描述性审计显示 roughness 与高 cost、未
   release、反复 contact/recontact 等状态相关，更符合**参数诱发的 chatter/failure regime**，
   不是独立同分布 measurement noise。审计中的 four-cost mean 与 curve roughness Spearman
@@ -20,9 +28,24 @@
 - 但工程完成不等于科学完成。Gate 0 v5 已冻结
   `representation_passed=false`、`quality_regime_passed=false`、
   `full_grid_gate_passed=false`：gated MVP 对 clean target 的泄漏和 smooth roughness 均超限，
-  且比 shared-latent isolation 更差。因此本文保持 active，负责把原抗噪声意图推进到一个
-  重新预注册、通过独立证据的后继方案；不得重复声称现有 MVP 尚未实现，也不得把失败结果
-  改写成成功。
+  且比 shared-latent isolation 更差。因此本文以 `PARKED` 状态保持 active，保存未来可能恢复
+  的独立 handoff；不得重复声称现有 MVP 尚未实现，也不得把失败结果改写成成功。
+
+## 暂停边界与重新激活条件
+
+- 暂停不是完成或取消。Hierarchical CAE 继续保持
+  `experimental / performance-not-accepted`，现有 v8 calibration 继续为 `uncalibrated`、
+  `transferable=false`，真实 qNEHVI exploitation readiness 继续 blocked。
+- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  不再把本文列为当前执行步骤；但它也不能绕过缺失的 performance-accepted Hierarchical CAE
+  checkpoint、exact-state calibration 和 typed readiness。完整七臂发布链因此保持有意阻塞。
+- 只有用户以后明确要求恢复抗噪声路线，本文才重新成为执行入口。恢复时必须先复核届时
+  `frequency` 筛选 API、current architecture、已有数据/receipt 和其他活动 TODO，并在访问
+  新 test/calibration evidence 前建立新的 preregistration 与 semantic namespace。
+- 如果用户以后批准另一条 Hierarchical CAE successor 路线，应建立独立 TODO/预注册并更新
+  总控；不得静默把不同 architecture 当作本文已经恢复，也不得把默认无筛选接口当作性能证据。
+- 除“状态、暂停边界、当前基线和冻结失败结论”外，下文目标、候选、gates 与验证要求均为
+  **重新激活后**的保留计划，不是当前执行指令。
 
 ## 原始用户要求的完整补录
 
@@ -85,7 +108,7 @@ chatter-or-failure，预注册的两折 minimum-class-count 无法满足，两�
 fail closed。后继方案必须同时解决 representation contamination 和独立概率校准证据不足，
 不能只优化 classifier 分数。
 
-## 目标
+## 重新激活后的目标
 
 1. 建立一个有界、可解释、重新预注册的 regime-specialized 后继 surrogate，使 smooth/clean
    表示不再因 chatter/failure 训练发生负迁移，同时完整保留异常 regime 的物理 rawData。
@@ -93,16 +116,19 @@ fail closed。后继方案必须同时解决 representation contamination 和独
    样本、改变 cost、泄漏 test、少报失败 arm 或更换统计口径。
 3. 获得一个 performance-accepted checkpoint，并在新的独立 calibration designs 上得到
    exact-state-bound、可迁移的 applicability capability；失败时继续显式 uncalibrated。
-4. 向[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 提供 typed readiness
+4. 向
+   [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+   提供 typed readiness
    所需的真实证据，但不在本文中绕过 qNEHVI 自己的 acquisition/optimization gate。
 5. 如果证据表明简单 shared isolation 或其他较简单基线优于 MoE/gated residual，允许选择
    更简单方案并退役无效复杂度；目标是稳健性和可验证性，不是必须保留某种网络结构。
 
-## 后继 architecture 的有界方向
+## 重新激活后的后继 architecture 有界方向
 
 ### 1. Regime-specialized / Mixture-of-Experts 候选
 
-- v5 已满足原预注册中的 MoE 比较触发条件。下一 gate 可以比较一个有界候选，而不是并行
+- v5 已满足原预注册中的 MoE 比较触发条件。重新激活后的下一 gate 可以比较一个有界候选，
+  而不是并行
   发散实现多种复杂架构：
   - smooth/clean expert：优先保持正常物理结构、低泄漏和合理 roughness；
   - chatter/failure expert：学习异常/失效 regime 的真实结构，不把它平滑成 clean；
@@ -161,7 +187,7 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 - missing/non-finite evidence、缺少必要 class、signature drift 或任一必需 arm 缺失均 fail
   closed。不得通过降低门槛、合并 strata 或隐藏失败 seed 完成 TODO。
 
-## 实施阶段与 gates
+## 重新激活后的实施阶段与 gates
 
 ### Gate 0：补录验证与 successor 预注册
 
@@ -200,7 +226,9 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ### Gate 4：独立 applicability/posterior calibration
 
-- 按[当前汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 的 exact-state 契约，
+- 按
+  [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  的 exact-state 契约，
   为 performance-accepted exact checkpoint 建立新的 pre-access plan，使用未参与训练/模型
   选择的 calibration designs。
 - 证明每 fold/class 支持度、AUPRC、Brier、ECE/reliability、boundary behavior、member pairing
@@ -211,12 +239,14 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ### Gate 5：qNEHVI/release handoff
 
-- 向当前汇总 TODO 提供 typed performance/calibration/applicability capability，由其另行冻结
+- 向 Hierarchical CAE/qNEHVI 总控 TODO 提供 typed
+  performance/calibration/applicability capability，由其另行冻结
   threshold、boundary width、低/边界 real exploration 和 acquisition benchmark。
 - 即使本文通过，也不自动改变 default GPSAF + conditional-INR，不自动运行 formal seven-arm
-  suite；当前汇总 TODO 仍负责同预算 optimization、总工程成本和 Phase B/C release 决定。
+  suite；Hierarchical CAE/qNEHVI 总控 TODO 仍负责同预算 optimization、总工程成本和
+  Phase B/C release 决定。
 
-## 验证要求
+## 重新激活后的验证要求
 
 ### 通用软件合同
 
@@ -260,17 +290,29 @@ fail closed。后继方案必须同时解决 representation contamination 和独
 
 ## 与其他 TODO 的关系
 
-- [当前 surrogate/qNEHVI 汇总 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 拥有
+- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  拥有
   hierarchical CAE 的整体 representation/coordinate gate、exact-state calibration、qNEHVI
   exploitation/exploration 和正式同预算 release 链。本文单独拥有最初未落盘的抗噪声意图、
   regime-specialized successor 和 clean-vs-abnormal 验收；两者共享证据时必须引用同一 receipt，
   不能给同一次实验两个矛盾结论。旧 082608/082609/082611/082612 文件仅是可选历史资料。
+- 当前暂停期间，本文不再是总控的执行前置；它只是未来可能解除 Hierarchical CAE
+  performance blocker 的一条候选路线。暂停不能被解释为总控已满足该 blocker。
 - [PCA/SVD TODO](20260828_081523_pca-svd-baseline-surrogate-module.md) 提供简单表示和 deployable
-  predictor 对照，不承担 regime probability 或 posterior 授权。
+  predictor 对照，保持独立 active，不承担 regime probability 或 posterior 授权，也不因本文
+  暂停而暂停。
+- [Acquisition Capability Protocol TODO](20260828_091749_acquisition-capability-protocol.md)
+  仍只由第二个真实 acquisition 或具体类型阻塞触发；本文暂停不是它的触发条件。
 
 ## 完成规则
 
-只有同时满足以下条件，本 TODO 才可移入 `dev_doc/obsolete/`：
+暂停本身不是完成。本 TODO 只有满足以下两条路径之一才可移入 `dev_doc/obsolete/`：
+
+1. 用户明确取消而不再只是暂时搁置这条抗噪声路线，且当前文档完整保留已实现机制、v5/v8
+   失败和取消原因，Hierarchical CAE/qNEHVI 总控已经自足地承接或明确关闭所有剩余 blocker；
+2. 用户明确重新激活本文；此时只有同时满足下列完成条件，才能归档。
+
+重新激活路径的完成条件：
 
 - 原始抗噪声要求、当前已实现 MVP、v5/v8 失败和 successor 范围在 current docs/change
   records 中保持一致，不再依赖聊天记录解释；
@@ -287,6 +329,7 @@ fail closed。后继方案必须同时解决 representation contamination 和独
   包含算法注册表或专项 adapter，validator 不得比较当前 source/wheel/artifact digest；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full package tests
   和 benchmark automation tests；真实/长时间执行另有明确授权与结果记录；
-- 向当前 surrogate/qNEHVI 汇总 TODO 的剩余 handoff 已更新。若 anti-noise architecture 已完成但后续
+- 向 Hierarchical CAE/qNEHVI 总控 TODO 的剩余 handoff 已更新。若 anti-noise architecture
+  已完成但后续
   acquisition/release 仍未完成，只能在对应 TODO 中保留剩余工作，不能把它们从文档链中
   静默删除。
