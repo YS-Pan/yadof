@@ -24,6 +24,13 @@ start simulators, mutate external state, or perform expensive work. Measured wor
 belongs to strategy execution; visualization and analysis belong to the required
 baseline postprocessor and optional workflow-level postprocessors.
 
+Both planning commands return bounded summaries by default; request their complete
+expanded JSON with `--json`. Child stdout/stderr is kept in separate command logs
+during `run` and `resume`; raw streaming is an explicit
+`--stream-child-output` diagnostic option. Use the bounded, read-only `inspect`
+summary for status, validity, comparison readiness, anomalies, activity, and ETA
+before opening larger evidence.
+
 Human-visible workspace, run, and workspace-level output-index names begin with
 local `YYYYMMDD_HHMMSS`. Every collected cell owns an automatic cost plot and one
 baseline-local domain postprocess result below its run root; the workspace's

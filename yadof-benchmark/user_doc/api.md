@@ -88,9 +88,15 @@ collected.
   returns its resolved path.
 - `discover_baselines(root=None)` returns validated baseline manifests.
 - `load_workflow(workspace)` executes and freezes `benchmark.py`.
-- `plan_workspace(workspace, baselines_root=None)` returns an immutable `RunSpec`.
-- `run_workspace(...)`, `resume_run(...)`, and `inspect_run(...)` provide the CLI
-  behavior to Python callers.
+- `plan_workspace(workspace, baselines_root=None)` returns the complete immutable
+  `RunSpec`; only the CLI presentation defaults to a bounded summary.
+- `run_workspace(...)` and `resume_run(...)` accept
+  `stream_child_output=False`. When it is explicitly true, raw child lines are
+  delivered as `child-output` events to the caller's `event_sink`; per-command
+  stdout/stderr logs are written in either mode.
+- `inspect_run(...)` returns a bounded, read-only summary with status, validity,
+  comparison readiness, anomalies, next commands, active-cell activity, and
+  matched-history ETA evidence.
 - `user_doc_root()` locates this installed documentation.
 
 All public imports are available from `yadof_benchmark`; `yadof_benchmark.api`

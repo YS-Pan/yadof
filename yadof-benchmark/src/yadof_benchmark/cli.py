@@ -32,6 +32,60 @@ def _workspace_command(commands: Any, name: str, help_text: str) -> Any:
     return command
 
 
+def _bounded_values(values: Sequence[Any], *, limit: int = 8) -> dict[str, Any]:
+    selected = sorted({str(value) for value in values})
+    return {
+        "values": selected[:limit],
+        "count": len(selected),
+        "truncated": max(0, len(selected) - limit),
+    }
+
+
+def _plan_summary(
+    spec: api.RunSpec,
+    *,
+    command: str,
+    workspace: Path,
+    baselines_root: Path | None,
+) -> dict[str, Any]:
+    cells = list(spec.cells)
+    populations = [cell.population for cell in cells]
+    generations = [cell.generations for cell in cells]
+    full_json = [
+        "yadof-benchmark",
+        command,
+        "--workspace",
+        str(workspace.resolve()),
+    ]
+    if baselines_root is not None:
+        full_json.extend(["--baselines-root", str(baselines_root.resolve())])
+    full_json.append("--json")
+    return {
+        "format": f"yadof.benchmark.{command}-summary",
+        "valid": True,
+        "writes": False,
+        "workflow": spec.workflow.name,
+        "workspace": str(spec.workflow.workspace),
+        "counts": {
+            "comparisons": len(spec.workflow.comparisons),
+            "cells": len(cells),
+            "planned_evaluations": sum(
+                cell.planned_evaluations for cell in cells
+            ),
+        },
+        "baselines": _bounded_values([cell.baseline_id for cell in cells]),
+        "strategies": _bounded_values([cell.strategy_id for cell in cells]),
+        "seeds": _bounded_values([cell.seed for cell in cells]),
+        "budget": {
+            "population_min": min(populations, default=0),
+            "population_max": max(populations, default=0),
+            "generations_min": min(generations, default=0),
+            "generations_max": max(generations, default=0),
+        },
+        "next_commands": {"full_json": full_json},
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Create and run code-first yadof benchmark workspaces."
@@ -46,11 +100,21 @@ def _parser() -> argparse.ArgumentParser:
     )
     baselines.add_argument("--root", type=Path)
 
-    _workspace_command(
+    check = _workspace_command(
         commands, "check", "execute benchmark.py and validate its complete plan"
     )
-    _workspace_command(
+    check.add_argument(
+        "--json",
+        action="store_true",
+        help="print the complete expanded plan instead of the bounded summary",
+    )
+    plan = _workspace_command(
         commands, "plan", "print a deterministic plan without creating a run"
+    )
+    plan.add_argument(
+        "--json",
+        action="store_true",
+        help="print the complete expanded plan instead of the bounded summary",
     )
     run = _workspace_command(commands, "run", "snapshot and execute a workspace")
     run.add_argument("--run-id")
@@ -63,6 +127,11 @@ def _parser() -> argparse.ArgumentParser:
         "--hidden",
         action="store_true",
         help="explicitly hide a detached console (requires --detach)",
+    )
+    run.add_argument(
+        "--stream-child-output",
+        action="store_true",
+        help="explicitly echo raw child stdout/stderr in addition to separate logs",
     )
 
     resume = commands.add_parser(
@@ -78,6 +147,11 @@ def _parser() -> argparse.ArgumentParser:
         "--hidden",
         action="store_true",
         help="explicitly hide a detached console (requires --detach)",
+    )
+    resume.add_argument(
+        "--stream-child-output",
+        action="store_true",
+        help="explicitly echo raw child stdout/stderr in addition to separate logs",
     )
 
     inspect = commands.add_parser(
@@ -161,8 +235,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             spec = api.plan_workspace(
                 args.workspace, baselines_root=args.baselines_root
             )
-            output = spec.to_dict()
-            output["writes"] = False
+            if args.json:
+                output = spec.to_dict()
+                output["writes"] = False
+            else:
+                output = _plan_summary(
+                    spec,
+                    command=args.command,
+                    workspace=args.workspace,
+                    baselines_root=args.baselines_root,
+                )
             _json(output)
             return 0
         if args.command == "run":
@@ -173,7 +255,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     run_id=args.run_id,
                     baselines_root=args.baselines_root,
                 )
-                _json(launch_detached(run_root, hidden=bool(args.hidden)))
+                _json(
+                    launch_detached(
+                        run_root,
+                        hidden=bool(args.hidden),
+                        stream_child_output=bool(args.stream_child_output),
+                    )
+                )
                 return 0
             result = _foreground(
                 lambda event_sink: api.run_workspace(
@@ -181,6 +269,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     run_id=args.run_id,
                     baselines_root=args.baselines_root,
                     event_sink=event_sink,
+                    stream_child_output=bool(args.stream_child_output),
                 )
             )
             _json(result)
@@ -188,11 +277,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "resume":
             _require_detach_for_hidden(args)
             if args.detach:
-                _json(launch_detached(args.run, hidden=bool(args.hidden)))
+                _json(
+                    launch_detached(
+                        args.run,
+                        hidden=bool(args.hidden),
+                        stream_child_output=bool(args.stream_child_output),
+                    )
+                )
                 return 0
             result = _foreground(
                 lambda event_sink: api.resume_run(
-                    args.run, event_sink=event_sink
+                    args.run,
+                    event_sink=event_sink,
+                    stream_child_output=bool(args.stream_child_output),
                 ),
                 run=args.run,
             )

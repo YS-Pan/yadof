@@ -408,6 +408,8 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
             f"returncode={event.get('returncode')} "
             f"duration={event.get('duration_seconds')}s"
         )
+    if kind == "child-output":
+        return f"[{event.get('stream', 'child')}] {event.get('text', '')}"
     if kind == "cell-collected":
         return f"{prefix}[cell] {event.get('cell')} collected"
     if kind in {"cell-failed", "collection-failed", "visualization-failed"}:

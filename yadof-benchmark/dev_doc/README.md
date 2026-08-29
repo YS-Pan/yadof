@@ -23,4 +23,7 @@ Any change must preserve these invariants:
 - every collected cell has a non-empty cost visualization and one uniformly
   invoked baseline-domain postprocess result;
 - postprocessing is durable attempt-based work after cell collection;
+- planning/check output is bounded unless complete JSON is explicitly requested;
+- inspect is read-only and bounded, and ETA never substitutes a different strategy
+  as timing evidence;
 - algorithm-specific registries and acceptance decisions stay outside the runner.

@@ -25,8 +25,12 @@ def _inspect_command(run_root: Path) -> list[str]:
     ]
 
 
-def _resume_command(run_root: Path) -> list[str]:
-    return [
+def _resume_command(
+    run_root: Path,
+    *,
+    stream_child_output: bool = False,
+) -> list[str]:
+    command = [
         sys.executable,
         "-m",
         "yadof_benchmark",
@@ -34,6 +38,9 @@ def _resume_command(run_root: Path) -> list[str]:
         "--run",
         str(run_root),
     ]
+    if stream_child_output:
+        command.append("--stream-child-output")
+    return command
 
 
 def _command_text(command: Sequence[str]) -> str:
@@ -48,6 +55,7 @@ def launch_detached(
     run: str | Path,
     *,
     hidden: bool = False,
+    stream_child_output: bool = False,
     process_factory: ProcessFactory = subprocess.Popen,
 ) -> dict[str, Any]:
     """Start a run in a new console and return an immediate inspection receipt."""
@@ -63,7 +71,10 @@ def launch_detached(
     log_path = run_root / CONSOLE_LOG_NAME
     stdout_path = run_root / "detached.stdout.log"
     stderr_path = run_root / "detached.stderr.log"
-    command = _resume_command(run_root)
+    command = _resume_command(
+        run_root,
+        stream_child_output=stream_child_output,
+    )
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     # Codex and other automation hosts commonly place the caller in a
     # kill-on-close job. A new console alone does not leave that job, so the
@@ -112,6 +123,7 @@ def launch_detached(
         "format": "yadof.benchmark.detached-launch",
         "pid": int(process.pid),
         "visible": not hidden,
+        "stream_child_output": stream_child_output,
         "run": str(run_root),
         "log": str(log_path),
         "inspect": _command_text(inspect_command),

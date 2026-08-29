@@ -32,7 +32,7 @@
 
 ## 必须恢复的有效要求
 
-实施进度：2026-08-29 已完成第 1--3 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
+实施进度：2026-08-29 已完成第 1--4 小节。初始化 scaffold 现在从唯一入口展示 policy、算法语义
 strategy、baseline、seed/budget 和 postprocess；baseline discovery 强制 editable source 的
 相对目录等于 `provider/task` semantic ID，run 仍负责 digest 与不可变 snapshot。人类可见
 workspace/run/output-index 现由 benchmark 统一添加秒级时间前缀；每个 cell 强制生成 cost 图与
@@ -42,7 +42,13 @@ yadof child 的真实中间评估进度；Windows `--detach` 默认打开独立�
 PID/run/log/inspect 回执，`--hidden` 只能显式与 detach 同用，同步 API 不启动窗口或等待输入。
 独立 package、Python-only workflow、无算法 registry、无阶段式命名和 compact internal workspace 的
 现行边界已由安装态测试和实际 Windows/Codex visible-console structural run 验证。
-第 4--9 小节仍保持 active；本进度不代表 ETA、performance、指标、更丰富的恢复或并行要求已经完成。
+`check`/`plan` 默认只给有界摘要，完整 plan JSON 必须显式请求；child stdout/stderr 默认只进入
+分离日志，显式选项才由前台 owner 流式显示。只读 `inspect` 现提供有界 status、validity、
+comparison、异常、下一步路径以及 elapsed/active/recent/remaining/completion/confidence/evidence；
+每个新 run 冻结 bounded timing history，ETA 先用同 baseline/strategy/budget/task/resource/host/
+config 的 exact 或 compatible prior，禁止跨 strategy 点估计，并用带时间戳的 generation trend
+识别后期训练变慢。第 5--9 小节仍保持 active；本进度不代表 performance 分层/规模、配对指标、
+更丰富的恢复或并行要求已经完成。
 
 ### 1. 工具边界和工作区体验
 

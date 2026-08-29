@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import io
 import json
 import os
@@ -26,6 +27,7 @@ from yadof_benchmark.benchmark_runtime.contracts import (
     CommandResult,
 )
 from yadof_benchmark.benchmark_runtime.launch import launch_detached
+from yadof_benchmark.benchmark_runtime.progress import estimate_run_timing
 from yadof_benchmark.benchmark_runtime.results import inspect_run
 from yadof_benchmark.benchmark_runtime.storage import (
     create_run,
@@ -712,6 +714,340 @@ def test_logged_child_progress_reaches_sink_on_foreground_thread(
     assert [event["evaluations"] for event in progress] == [1, 50, 101]
     assert all(event["planned_evaluations"] == 2000 for event in progress)
     assert {thread for thread, _event in observed} == {owner}
+    persisted = [
+        json.loads(line)
+        for line in (tmp_path / "command" / "progress.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert {item["event"] for item in persisted} >= {
+        "command-progress",
+        "cell-progress",
+    }
+    assert all(item["utc"].endswith("Z") for item in persisted)
+    assert not any(event["event"] == "child-output" for _thread, event in observed)
+
+
+def test_raw_child_output_requires_explicit_stream_option(tmp_path: Path) -> None:
+    observed: list[dict] = []
+    result = execution.run_logged(
+        [sys.executable, "-c", "print('bounded child line')"],
+        cwd=tmp_path,
+        command_root=tmp_path / "streamed-command",
+        label="run",
+        timeout_seconds=30,
+        event_sink=lambda event: observed.append(dict(event)),
+        stream_child_output=True,
+    )
+
+    assert result.returncode == 0
+    assert any(
+        item["event"] == "child-output"
+        and item["stream"] == "stdout"
+        and item["text"] == "bounded child line"
+        for item in observed
+    )
+
+
+def test_plan_defaults_to_bounded_summary_and_full_json_is_explicit(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "workspace")
+
+    assert cli.main(
+        [
+            "plan",
+            "--workspace",
+            str(workspace),
+            "--baselines-root",
+            str(tmp_path / "baselines"),
+        ]
+    ) == 0
+    summary_text = capsys.readouterr().out
+    summary = json.loads(summary_text)
+    assert summary["format"] == "yadof.benchmark.plan-summary"
+    assert summary["counts"] == {
+        "cells": 3,
+        "comparisons": 1,
+        "planned_evaluations": 18,
+    }
+    assert "cells" not in summary
+
+    assert cli.main(
+        [
+            "plan",
+            "--workspace",
+            str(workspace),
+            "--baselines-root",
+            str(tmp_path / "baselines"),
+            "--json",
+        ]
+    ) == 0
+    full_text = capsys.readouterr().out
+    full = json.loads(full_text)
+    assert len(full["cells"]) == 3
+    assert len(summary_text) < len(full_text)
+
+
+def _complete_timing_run(run_root: Path, durations: dict[str, float]) -> None:
+    spec, state = load_run(run_root)
+    for cell in spec["cells"]:
+        cell_id = str(cell["id"])
+        state["cells"][cell_id] = {
+            "status": "collected",
+            "error": None,
+            "attempts": [
+                {
+                    "number": 1,
+                    "runtime_seconds": durations[str(cell["strategy"])],
+                    "finished_utc": "2026-08-29T00:00:00Z",
+                    "collected_utc": "2026-08-29T00:00:00Z",
+                }
+            ],
+        }
+    state["status"] = "completed"
+    state["started_utc"] = "2026-08-28T23:50:00Z"
+    state["finished_utc"] = "2026-08-29T00:00:00Z"
+    save_state(run_root, state)
+
+
+def _activate_first_cell(
+    run_root: Path,
+    *,
+    started_utc: str,
+) -> tuple[dict, dict, Path]:
+    spec, state = load_run(run_root)
+    cell = spec["cells"][0]
+    cell_id = str(cell["id"])
+    command_root = (
+        run_root / "cells" / cell_id / "attempts" / "0001" / "commands" / "02-run"
+    )
+    command_root.mkdir(parents=True)
+    (command_root / "started.json").write_text(
+        json.dumps(
+            {
+                "label": "run",
+                "started_utc": started_utc,
+                "command": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (command_root / "stdout.log").write_text("", encoding="utf-8")
+    (command_root / "stderr.log").write_text("", encoding="utf-8")
+    attempt_root = command_root.parents[1]
+    state["cells"][cell_id] = {
+        "status": "running",
+        "error": None,
+        "attempts": [
+            {
+                "number": 1,
+                "path": attempt_root.relative_to(run_root).as_posix(),
+                "status": "running",
+                "created_utc": started_utc,
+                "active_command": command_root.relative_to(run_root).as_posix(),
+                "runtime_seconds": 0.0,
+            }
+        ],
+    }
+    state["status"] = "running"
+    state["started_utc"] = started_utc
+    state["finished_utc"] = None
+    save_state(run_root, state)
+    return spec, state, command_root
+
+
+def test_eta_prefers_exact_same_arm_history_and_excludes_cross_arm(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha", "beta"))
+    plan = _plan(tmp_path)
+    prior = create_run(plan, run_id="timing-prior")
+    _complete_timing_run(prior, {"alpha": 100.0, "beta": 10.0})
+    current = create_run(plan, run_id="timing-current")
+    spec, state, _command_root = _activate_first_cell(
+        current, started_utc="2026-08-29T00:00:00Z"
+    )
+    now = dt.datetime(2026, 8, 29, 0, 0, 20, tzinfo=dt.timezone.utc)
+
+    timing = estimate_run_timing(current, spec, state, now=now)
+
+    assert timing["estimated_remaining_seconds"] == pytest.approx(90.0)
+    assert timing["matched_history"] == {"exact": 2, "compatible": 0, "none": 0}
+    assert {
+        (item["cell"], item.get("median_seconds"))
+        for item in timing["evidence"]
+        if item["kind"] == "matched-cell"
+    } == {
+        (str(spec["cells"][0]["id"]), 100.0),
+        (str(spec["cells"][1]["id"]), 10.0),
+    }
+
+    history_path = current / "timing_history.json"
+    history = json.loads(history_path.read_text(encoding="utf-8"))
+    cross_task_history = json.loads(json.dumps(history))
+    for item in cross_task_history["records"]:
+        if item["strategy"] == "alpha":
+            item["comparison"] = "another-task"
+    history_path.write_text(json.dumps(cross_task_history), encoding="utf-8")
+    without_same_task = estimate_run_timing(current, spec, state, now=now)
+    cross_task_alpha = next(
+        item
+        for item in without_same_task["evidence"]
+        if item["cell"] == str(spec["cells"][0]["id"])
+    )
+    assert cross_task_alpha["kind"] == "evaluation-lower-bound"
+
+    for item in history["records"]:
+        if item["strategy"] == "alpha":
+            item["strategy_digest"] = "changed-strategy"
+            item["workflow_digest"] = "changed-workflow"
+            item["driver_digest"] = "changed-driver"
+    history_path.write_text(json.dumps(history), encoding="utf-8")
+    compatible = estimate_run_timing(current, spec, state, now=now)
+    assert compatible["matched_history"] == {
+        "exact": 1,
+        "compatible": 1,
+        "none": 0,
+    }
+    compatible_alpha = next(
+        item
+        for item in compatible["evidence"]
+        if item["cell"] == str(spec["cells"][0]["id"])
+    )
+    assert compatible_alpha["match"] == "compatible"
+    assert compatible_alpha["confidence"] == "low"
+
+    history["records"] = [
+        item for item in history["records"] if item["strategy"] == "beta"
+    ]
+    history_path.write_text(json.dumps(history), encoding="utf-8")
+    without_alpha = estimate_run_timing(current, spec, state, now=now)
+    alpha_evidence = next(
+        item
+        for item in without_alpha["evidence"]
+        if item["cell"] == str(spec["cells"][0]["id"])
+    )
+    assert alpha_evidence["kind"] == "evaluation-lower-bound"
+    assert alpha_evidence["seconds"] < 1.0
+
+
+def test_eta_replay_models_increasing_generation_cost(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="trend-replay")
+    spec, state, command_root = _activate_first_cell(
+        run_root, started_utc="2026-08-29T00:00:00Z"
+    )
+    cell = spec["cells"][0]
+    cell["generations"] = 6
+    cell["planned_evaluations"] = 12
+    events = []
+    for generation, seconds in ((0, 10), (1, 30), (2, 60)):
+        events.append(
+            {
+                "utc": (
+                    dt.datetime(2026, 8, 29, tzinfo=dt.timezone.utc)
+                    + dt.timedelta(seconds=seconds)
+                ).isoformat().replace("+00:00", "Z"),
+                "event": "cell-progress",
+                "phase": f"generation {generation}",
+                "generation": generation,
+                "generation_number": generation + 1,
+                "generations": 6,
+                "finished": 2,
+                "total": 2,
+                "remaining": 0,
+                "evaluations": (generation + 1) * 2,
+                "planned_evaluations": 12,
+            }
+        )
+    (command_root / "progress.jsonl").write_text(
+        "".join(json.dumps(item) + "\n" for item in events),
+        encoding="utf-8",
+    )
+    now = dt.datetime(2026, 8, 29, 0, 1, tzinfo=dt.timezone.utc)
+
+    timing = estimate_run_timing(run_root, spec, state, now=now)
+
+    trend = next(item for item in timing["evidence"] if item["kind"] == "generation-trend")
+    assert trend["completed_generations"] == 3
+    assert trend["seconds_per_generation_slope"] == pytest.approx(10.0)
+    assert timing["estimated_remaining_seconds"] == pytest.approx(150.0)
+
+
+def test_inspect_bounds_anomalies_and_exposes_progressive_next_steps(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="bounded-inspect")
+    _spec, state = load_run(run_root)
+    state["status"] = "failed"
+    for index in range(30):
+        state["cells"][f"synthetic-{index:02d}"] = {
+            "status": "failed",
+            "attempts": [],
+            "error": f"failure-{index:02d}",
+        }
+    save_state(run_root, state)
+
+    inspected = inspect_run(run_root)
+
+    assert len(inspected["anomalies"]) == 8
+    assert inspected["anomalies_truncated"] == 22
+    assert inspected["timing"]["confidence"] == "unavailable"
+    assert "resume" in inspected["next_commands"]
+    assert [item["step"] for item in inspected["progressive_disclosure"]][:3] == [
+        "inspect",
+        "report_markdown",
+        "report_json",
+    ]
+    assert len(json.dumps(inspected)) < 8000
+
+
+def test_inspect_adapts_older_results_without_descriptive_report(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    _workspace(tmp_path / "workspace", strategies=("alpha",))
+    run_root = create_run(_plan(tmp_path), run_id="legacy-inspect")
+    execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+    )
+    (run_root / "reports" / "descriptive-results.json").unlink()
+    results_path = run_root / "results.json"
+    results = json.loads(results_path.read_text(encoding="utf-8"))
+    results.pop("cell_summaries", None)
+    results_path.write_text(json.dumps(results), encoding="utf-8")
+    _spec, state = load_run(run_root)
+    state.pop("started_utc", None)
+    state.pop("finished_utc", None)
+    save_state(run_root, state)
+
+    inspected = inspect_run(run_root)
+
+    assert inspected["validity"] == {
+        "completed": 1,
+        "valid": 1,
+        "invalid": 0,
+        "incomplete": 0,
+    }
+    assert inspected["comparison"]["rows"] == 1
+    assert inspected["comparison"]["report"] == str(results_path)
+    assert [
+        item["step"] for item in inspected["progressive_disclosure"]
+    ] == ["inspect", "report_markdown", "legacy_results_json"]
+    assert all(
+        item["path"] is None or Path(item["path"]).exists()
+        for item in inspected["progressive_disclosure"]
+    )
+    assert inspected["timing"]["estimated_completion_utc"] == state["updated_utc"]
 
 
 def test_rich_progress_survives_dumb_term_and_shows_first_real_update(

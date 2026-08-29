@@ -33,7 +33,13 @@ CLI owns Rich presentation on the foreground thread, receives real child
 generation snapshots through a queue, and keeps active-cell/global rows in that
 order. Windows detach opens a normal console and returns PID/run/log/inspect
 details; hidden detach is explicit, while Python calls stay synchronous and
-window-neutral.
+window-neutral. Planning/check output is bounded unless complete JSON is explicit;
+child stdout/stderr stays in per-command logs unless explicit streaming is
+selected. Read-only inspect bounds anomalies and exposes validity, comparison
+readiness, next steps, activity, and ETA. ETA freezes bounded earlier same-arm
+timing records, distinguishes exact from compatible task/resource/host/config
+matches, excludes cross-arm point estimates, and models a non-negative
+generation-duration trend once enough timestamped phases exist.
 
 ## Package dependency discipline
 

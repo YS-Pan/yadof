@@ -1,6 +1,7 @@
 # Architecture
 
-`src/yadof_benchmark/cli.py` owns argument parsing and JSON presentation.
+`src/yadof_benchmark/cli.py` owns argument parsing, bounded default summaries,
+explicit complete-JSON presentation, and opt-in child-output streaming.
 `src/yadof_benchmark/api.py` is the explicit public facade. Workspace
 `benchmark.py` is the only editable workflow program.
 
@@ -12,7 +13,8 @@ The bounded `benchmark_runtime/` package separates responsibilities:
 - `planning.py`: dynamic Python loading, strategy validation, and cell expansion;
 - `baselines.py`: recursive manifests and clean workspace snapshots;
 - `storage.py`: digests, immutable inputs, readable attempt evidence, compact
-  run-local execution workspaces, and atomic state;
+  run-local execution workspaces, frozen matched-timing history, host identity,
+  and atomic state;
 - `execution.py`: checked subprocess execution, all-infinite-generation rejection,
   foreground-thread progress event delivery, collection, mandatory per-cell
   cost/domain visualization, and orchestration;
@@ -21,9 +23,11 @@ The bounded `benchmark_runtime/` package separates responsibilities:
 - `launch.py`: Windows visible-by-default detached launch and immediate
   PID/run/log/inspect receipt; hidden launch is an explicit exception;
 - `postprocessing.py`: retryable run-local user callbacks;
-- `results.py`: public-yadof collection, cell/HV descriptive reports, and
-  workspace-level run indexes;
-- `progress.py`: read-only active work summaries;
+- `results.py`: public-yadof collection, cell/HV descriptive reports,
+  bounded inspect summaries, and workspace-level run indexes;
+- `progress.py` and `timing.py`: read-only activity/ETA calculation, exact versus
+  compatible same-arm matching, timestamped-generation trend replay, and bounded
+  timing-history construction;
 - `contracts.py`: dependency-free frozen and serialized contracts.
 
 The dependency direction is:

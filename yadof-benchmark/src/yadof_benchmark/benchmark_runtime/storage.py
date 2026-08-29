@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from .baselines import snapshot_baseline
 from .contracts import RUN_FORMAT, STATE_FORMAT, BenchmarkError, RunSpec
 from .naming import slug, timestamped_name
+from .timing import build_timing_history, host_identity
 
 _ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _IGNORED_PARTS = {
@@ -199,6 +200,9 @@ def _initial_state(run_id: str, spec: RunSpec) -> dict[str, Any]:
         "status": "planned",
         "created_utc": now,
         "updated_utc": now,
+        "started_utc": None,
+        "finished_utc": None,
+        "host": host_identity(spec),
         "cells": {
             cell.id: {"status": "planned", "attempts": [], "error": None}
             for cell in spec.cells
@@ -231,6 +235,7 @@ def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
     )
     runs_dir = spec.workflow.runs_dir.resolve()
     runs_dir.mkdir(parents=True, exist_ok=True)
+    timing_history = build_timing_history(runs_dir)
     run_root = runs_dir / selected_id
     if run_root.exists():
         raise BenchmarkError(f"run already exists: {run_root}")
@@ -272,6 +277,7 @@ def create_run(spec: RunSpec, *, run_id: str | None = None) -> Path:
         spec_data["created_utc"] = utc_now()
         write_new_json(staging / "spec.json", spec_data)
         write_new_json(staging / "state.json", _initial_state(selected_id, spec))
+        write_new_json(staging / "timing_history.json", timing_history)
         os.replace(staging, run_root)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

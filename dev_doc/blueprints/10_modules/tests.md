@@ -30,6 +30,11 @@ fields, inherited `TERM=dumb`, `NO_COLOR`, cleanup, and final failure evidence.
 Windows launch tests require visible detach by default plus an immediate
 PID/run/log/inspect receipt; hidden mode must be explicit. These structural tests
 do not launch a simulator or claim performance evidence.
+Plan/check coverage proves bounded defaults and explicit full JSON. Event replay
+proves timestamped command/generation evidence, exact versus compatible same-arm
+history, exclusion of cross-arm point estimates, non-negative late-generation
+duration trends, terminal confidence, explicit raw-child streaming, and bounded
+inspect anomalies/next steps without simulator execution.
 
 ## Required coverage
 

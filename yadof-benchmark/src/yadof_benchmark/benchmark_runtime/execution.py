@@ -1,6 +1,7 @@
 """Exact-cell materialization, subprocess logging, and resume."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import re
@@ -41,6 +42,27 @@ def _emit(sink: EventSink | None, **event: Any) -> None:
         sink({"utc": utc_now(), **event})
 
 
+def _emit_progress(
+    sink: EventSink | None,
+    progress_path: Path,
+    **event: Any,
+) -> None:
+    value = {"utc": utc_now(), **event}
+    with progress_path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(
+            json.dumps(
+                value,
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        )
+    if sink is not None:
+        sink(value)
+
+
 def _parse_yadof_progress(line: str) -> dict[str, Any] | None:
     """Return one complete progress snapshot from a piped yadof child."""
 
@@ -74,6 +96,7 @@ def _emit_child_progress(
     *,
     command: Sequence[str],
     label: str,
+    progress_path: Path,
     event_sink: EventSink | None,
 ) -> None:
     """Render queued child snapshots from the foreground command owner."""
@@ -95,8 +118,9 @@ def _emit_child_progress(
         absolute = int(snapshot["finished"])
         if generation is not None:
             absolute += int(generation) * int(snapshot["total"])
-        _emit(
+        _emit_progress(
             event_sink,
+            progress_path,
             event="cell-progress",
             label=label,
             phase=snapshot["phase"],
@@ -108,6 +132,8 @@ def _emit_child_progress(
                 generations,
                 1 if generation is None else int(generation) + 1,
             ),
+            finished=int(snapshot["finished"]),
+            total=int(snapshot["total"]),
             evaluations=absolute,
             planned_evaluations=max(planned, absolute),
             successful=int(snapshot["successful"]),
@@ -180,6 +206,8 @@ def _drain(
     last_activity: list[float],
     lock: threading.Lock,
     progress_snapshots: queue.Queue[dict[str, Any]],
+    output_lines: queue.Queue[tuple[str, str]] | None,
+    stream_name: str,
 ) -> None:
     with destination.open("x", encoding="utf-8", newline="\n") as stream:
         for line in iter(source.readline, ""):
@@ -188,9 +216,30 @@ def _drain(
             snapshot = _parse_yadof_progress(line)
             if snapshot is not None:
                 progress_snapshots.put(snapshot)
+            if output_lines is not None:
+                output_lines.put((stream_name, line.rstrip("\r\n")))
             with lock:
                 last_activity[0] = time.monotonic()
     source.close()
+
+
+def _emit_child_output(
+    output_lines: queue.Queue[tuple[str, str]] | None,
+    event_sink: EventSink | None,
+) -> None:
+    if output_lines is None:
+        return
+    for _ in range(4096):
+        try:
+            stream_name, line = output_lines.get_nowait()
+        except queue.Empty:
+            break
+        _emit(
+            event_sink,
+            event="child-output",
+            stream=stream_name,
+            text=line,
+        )
 
 
 def _watch(
@@ -203,6 +252,8 @@ def _watch(
     label: str,
     command: Sequence[str],
     progress_snapshots: queue.Queue[dict[str, Any]],
+    progress_path: Path,
+    output_lines: queue.Queue[tuple[str, str]] | None,
     event_sink: EventSink | None,
 ) -> bool:
     next_update = started
@@ -215,13 +266,16 @@ def _watch(
             progress_snapshots,
             command=command,
             label=label,
+            progress_path=progress_path,
             event_sink=event_sink,
         )
+        _emit_child_output(output_lines, event_sink)
         if now >= next_update:
             with lock:
                 inactive = now - last_activity[0]
-            _emit(
+            _emit_progress(
                 event_sink,
+                progress_path,
                 event="command-progress",
                 label=label,
                 elapsed_seconds=round(now - started, 3),
@@ -233,8 +287,10 @@ def _watch(
         progress_snapshots,
         command=command,
         label=label,
+        progress_path=progress_path,
         event_sink=event_sink,
     )
+    _emit_child_output(output_lines, event_sink)
     return False
 
 
@@ -290,6 +346,7 @@ def run_logged(
     label: str,
     timeout_seconds: int,
     event_sink: EventSink | None = None,
+    stream_child_output: bool = False,
 ) -> CommandResult:
     command_root.mkdir(parents=True, exist_ok=False)
     started_utc = utc_now()
@@ -307,6 +364,9 @@ def run_logged(
     last_activity = [started]
     activity_lock = threading.Lock()
     progress_snapshots: queue.Queue[dict[str, Any]] = queue.Queue()
+    output_lines: queue.Queue[tuple[str, str]] | None = (
+        queue.Queue(maxsize=4096) if stream_child_output else None
+    )
     process = _start_process(command, cwd)
     _emit(
         event_sink,
@@ -324,6 +384,8 @@ def run_logged(
                 last_activity,
                 activity_lock,
                 progress_snapshots,
+                output_lines,
+                "stdout",
             ),
             daemon=True,
         ),
@@ -335,6 +397,8 @@ def run_logged(
                 last_activity,
                 activity_lock,
                 progress_snapshots,
+                output_lines,
+                "stderr",
             ),
             daemon=True,
         ),
@@ -351,6 +415,8 @@ def run_logged(
             label=label,
             command=command,
             progress_snapshots=progress_snapshots,
+            progress_path=command_root / "progress.jsonl",
+            output_lines=output_lines,
             event_sink=event_sink,
         )
     except BaseException:
@@ -364,8 +430,10 @@ def run_logged(
         progress_snapshots,
         command=command,
         label=label,
+        progress_path=command_root / "progress.jsonl",
         event_sink=event_sink,
     )
+    _emit_child_output(output_lines, event_sink)
     return _finish_command(
         command, command_root, label, process, started, started_utc, timed_out, event_sink
     )
@@ -403,6 +471,29 @@ def _record_command(
     attempt["active_command"] = None
 
 
+def _run_command(
+    command_runner: CommandRunner,
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    command_root: Path,
+    label: str,
+    timeout_seconds: int,
+    event_sink: EventSink | None,
+    stream_child_output: bool,
+) -> CommandResult:
+    kwargs: dict[str, Any] = {
+        "cwd": cwd,
+        "command_root": command_root,
+        "label": label,
+        "timeout_seconds": timeout_seconds,
+        "event_sink": event_sink,
+    }
+    if stream_child_output:
+        kwargs["stream_child_output"] = True
+    return command_runner(command, **kwargs)
+
+
 def _command_failure(label: str, result: CommandResult) -> BenchmarkError:
     suffix = " after timeout" if result.timed_out else ""
     return BenchmarkError(
@@ -427,6 +518,7 @@ def _render_cell_outputs(
     python: str,
     command_runner: CommandRunner,
     event_sink: EventSink | None,
+    stream_child_output: bool,
 ) -> dict[str, Any]:
     cell_id = str(cell["id"])
     cost_dir = run_root / "visualizations" / "cost"
@@ -436,7 +528,8 @@ def _render_cell_outputs(
     cost_root = attempt_root / "commands" / "03-view-cost"
     attempt["active_command"] = cost_root.relative_to(run_root).as_posix()
     save_state(run_root, state)
-    cost = command_runner(
+    cost = _run_command(
+        command_runner,
         [
             python,
             "-m",
@@ -453,6 +546,7 @@ def _render_cell_outputs(
         label="view-cost",
         timeout_seconds=600,
         event_sink=event_sink,
+        stream_child_output=stream_child_output,
     )
     _record_command(run_root, attempt, cost_root, cost)
     if cost.returncode:
@@ -468,7 +562,8 @@ def _render_cell_outputs(
     postprocess_root = attempt_root / "commands" / "04-postprocess"
     attempt["active_command"] = postprocess_root.relative_to(run_root).as_posix()
     save_state(run_root, state)
-    domain = command_runner(
+    domain = _run_command(
+        command_runner,
         [
             python,
             str(postprocessor),
@@ -484,6 +579,7 @@ def _render_cell_outputs(
         label="baseline-postprocess",
         timeout_seconds=600,
         event_sink=event_sink,
+        stream_child_output=stream_child_output,
     )
     _record_command(run_root, attempt, postprocess_root, domain)
     if domain.returncode:
@@ -510,6 +606,7 @@ def _execute_cell(
     *,
     command_runner: CommandRunner,
     event_sink: EventSink | None,
+    stream_child_output: bool,
 ) -> bool:
     cell_state = state["cells"][str(cell["id"])]
     attempt_root, workspace, attempt = prepare_attempt(run_root, cell, state)
@@ -520,13 +617,15 @@ def _execute_cell(
         check_root = attempt_root / "commands" / "01-check"
         attempt["active_command"] = check_root.relative_to(run_root).as_posix()
         save_state(run_root, state)
-        check = command_runner(
+        check = _run_command(
+            command_runner,
             [python, "-m", "yadof", "check", "--workspace", str(workspace)],
             cwd=workspace,
             command_root=check_root,
             label="check",
             timeout_seconds=min(timeout, 600),
             event_sink=event_sink,
+            stream_child_output=stream_child_output,
         )
         _record_command(run_root, attempt, check_root, check)
         if check.returncode:
@@ -550,13 +649,15 @@ def _execute_cell(
         attempt["status"] = "running"
         cell_state["status"] = "running"
         save_state(run_root, state)
-        measured = command_runner(
+        measured = _run_command(
+            command_runner,
             command,
             cwd=workspace,
             command_root=run_command_root,
             label="run",
             timeout_seconds=timeout,
             event_sink=event_sink,
+            stream_child_output=stream_child_output,
         )
         _record_command(run_root, attempt, run_command_root, measured)
         if measured.returncode:
@@ -593,6 +694,7 @@ def _collect_succeeded(
     command_runner: CommandRunner,
     collector: Collector,
     event_sink: EventSink | None,
+    stream_child_output: bool,
 ) -> bool:
     cell_state = state["cells"][str(cell["id"])]
     attempt_root, attempt = latest_attempt(run_root, cell_state)
@@ -611,12 +713,14 @@ def _collect_succeeded(
             python=str(spec["workflow"]["python"]),
             command_runner=command_runner,
             event_sink=event_sink,
+            stream_child_output=stream_child_output,
         )
         result["visualizations"] = visualizations
         result_path = attempt_root / "result.json"
         write_new_json(result_path, result)
         attempt["result"] = result_path.relative_to(run_root).as_posix()
         attempt["status"] = "collected"
+        attempt["collected_utc"] = utc_now()
         cell_state["status"] = "collected"
         cell_state["error"] = None
         save_state(run_root, state)
@@ -664,6 +768,7 @@ def execute_existing_run(
     command_runner: CommandRunner = run_logged,
     collector: Collector = collect_cell,
     event_sink: EventSink | None = None,
+    stream_child_output: bool = False,
 ) -> dict[str, Any]:
     run_root = Path(run).resolve()
     spec, state = load_run(run_root)
@@ -673,6 +778,10 @@ def execute_existing_run(
         return state
     mark_interrupted(run_root, state)
     state["status"] = "running"
+    state.setdefault("started_utc", None)
+    if state["started_utc"] is None:
+        state["started_utc"] = utc_now()
+    state["finished_utc"] = None
     save_state(run_root, state)
     _emit(
         event_sink,
@@ -706,6 +815,7 @@ def execute_existing_run(
                 cell,
                 command_runner=command_runner,
                 event_sink=event_sink,
+                stream_child_output=stream_child_output,
             ):
                 if fail_fast:
                     break
@@ -718,6 +828,7 @@ def execute_existing_run(
             command_runner=command_runner,
             collector=collector,
             event_sink=event_sink,
+            stream_child_output=stream_child_output,
         ) and fail_fast:
             break
         publish_results(run_root, spec, state)
@@ -734,6 +845,7 @@ def execute_existing_run(
         state["status"] = "completed" if processed else "failed"
     else:
         state["status"] = "failed"
+    state["finished_utc"] = utc_now()
     save_state(run_root, state)
     publish_results(run_root, spec, state)
     _emit(

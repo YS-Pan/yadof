@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .contracts import BenchmarkError
-from .progress import active_progress
+from .progress import active_progress, estimate_run_timing
 from .storage import (
     atomic_write_json,
     atomic_write_text,
@@ -520,6 +520,126 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
             if item.get("error")
         }
     )
+    report_path = run_root / "reports" / "descriptive-results.json"
+    report = read_json(report_path) if report_path.is_file() else {}
+    legacy_results_path = run_root / "results.json"
+    report_source_path = (
+        report_path
+        if report_path.is_file()
+        else legacy_results_path
+        if legacy_results_path.is_file()
+        else report_path
+    )
+    reported_cells = (
+        list(report.get("cells", []))
+        if isinstance(report.get("cells"), list)
+        else []
+    )
+    validity = {
+        "completed": sum(bool(item.get("completed")) for item in reported_cells),
+        "valid": sum(bool(item.get("valid")) for item in reported_cells),
+        "invalid": sum(
+            bool(item.get("completed")) and not bool(item.get("valid"))
+            for item in reported_cells
+        ),
+        "incomplete": max(0, len(state["cells"]) - sum(
+            bool(item.get("completed")) for item in reported_cells
+        )),
+    }
+    comparison_rows = (
+        list(report.get("final_hypervolume", []))
+        if isinstance(report.get("final_hypervolume"), list)
+        else []
+    )
+    if not reported_cells or not comparison_rows:
+        legacy_results = (
+            read_json(legacy_results_path) if legacy_results_path.is_file() else {}
+        )
+        legacy_cells = legacy_results.get("cells", {})
+        if not reported_cells and isinstance(legacy_cells, Mapping):
+            reported_cells = _cell_summaries(spec, state, legacy_cells)
+            validity = {
+                "completed": sum(
+                    bool(item.get("completed")) for item in reported_cells
+                ),
+                "valid": sum(bool(item.get("valid")) for item in reported_cells),
+                "invalid": sum(
+                    bool(item.get("completed")) and not bool(item.get("valid"))
+                    for item in reported_cells
+                ),
+                "incomplete": max(
+                    0,
+                    len(state["cells"])
+                    - sum(bool(item.get("completed")) for item in reported_cells),
+                ),
+            }
+        legacy_comparisons = legacy_results.get("comparisons", [])
+        if not comparison_rows and isinstance(legacy_comparisons, list):
+            comparison_rows = legacy_comparisons
+    anomalies: list[dict[str, Any]] = [
+        {"scope": key, "message": str(value)}
+        for key, value in sorted(errors.items())
+    ]
+    for item in reported_cells:
+        issues = item.get("issues", [])
+        if isinstance(issues, list):
+            anomalies.extend(
+                {
+                    "scope": str(item.get("cell", "unknown")),
+                    "message": str(issue),
+                }
+                for issue in issues
+            )
+        if item.get("completed") and not item.get("valid") and not issues:
+            anomalies.append(
+                {
+                    "scope": str(item.get("cell", "unknown")),
+                    "message": "collected cell did not satisfy its validity contract",
+                }
+            )
+    active = active_progress(run_root, state)
+    inspect_command = [
+        "yadof-benchmark", "inspect", "--run", str(run_root)
+    ]
+    next_commands: dict[str, list[str]] = {"inspect_later": inspect_command}
+    if state["status"] in {"failed", "planned"} and active is None:
+        next_commands["resume"] = [
+            "yadof-benchmark", "resume", "--run", str(run_root)
+        ]
+    progressive = [
+        {"step": "inspect", "path": None},
+        {
+            "step": "report_markdown",
+            "path": str(run_root / "reports" / "summary.md"),
+        },
+        {
+            "step": (
+                "report_json"
+                if report_source_path == report_path
+                else "legacy_results_json"
+            ),
+            "path": str(report_source_path),
+        },
+    ]
+    if active is not None:
+        logs = active.get("logs", {})
+        if isinstance(logs, Mapping):
+            for name in ("stdout", "stderr"):
+                if logs.get(name):
+                    progressive.append(
+                        {"step": f"active_cell_{name}", "path": logs[name]}
+                    )
+    if legacy_results_path != report_source_path:
+        progressive.append(
+            {
+                "step": "targeted_metrics_fields",
+                "path": str(legacy_results_path),
+            }
+        )
+    postprocessor_counts = Counter(
+        str(item.get("status", "unknown"))
+        for item in state.get("postprocessors", {}).values()
+    )
     return {
         "format": "yadof.benchmark.inspect",
         "run_id": state["run_id"],
@@ -528,16 +648,33 @@ def inspect_run(run: str | Path) -> dict[str, Any]:
         "status": state["status"],
         "updated_utc": state["updated_utc"],
         "cell_counts": dict(sorted(counts.items())),
-        "postprocessors": state.get("postprocessors", {}),
-        "active": active_progress(run_root, state),
-        "errors": errors,
+        "postprocessor_counts": dict(sorted(postprocessor_counts.items())),
+        "active": active,
+        "timing": estimate_run_timing(run_root, spec, state),
+        "validity": validity,
+        "comparison": {
+            "rows": len(comparison_rows),
+            "final_hypervolume_available": sum(
+                item.get("final_hypervolume") is not None
+                for item in comparison_rows
+            ),
+            "reference_deltas_available": sum(
+                item.get("reference_delta") is not None
+                for item in comparison_rows
+            ),
+            "report": str(report_source_path),
+        },
+        "anomalies": anomalies[:8],
+        "anomalies_truncated": max(0, len(anomalies) - 8),
+        "next_commands": next_commands,
+        "progressive_disclosure": progressive,
         "artifacts": {
             name: str(run_root / name)
             for name in (
                 "spec.json", "state.json", "results.json", "results.csv",
                 "reports/summary.md", "reports/cell-validity.csv",
                 "reports/final-hypervolume.csv", "reports/descriptive-results.json",
-                "visualizations",
+                "visualizations", "benchmark.log", "timing_history.json",
             )
             if (run_root / name).is_file()
             or (run_root / name).is_dir()

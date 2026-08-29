@@ -125,7 +125,14 @@ hot-change contract; structural dimension changes are future work.
   `--detach --hidden` with a user request. Rich is owned by the foreground caller
   and shows active-cell then global rows fed by real queued child-generation
   snapshots; lifecycle output stays above them. The Python API remains synchronous,
-  window-neutral, and input-free. The distribution depends on yadof's
+  window-neutral, and input-free. Plan/check summaries remain bounded unless full
+  JSON is explicit; child output stays in separate logs unless streaming is
+  explicit. Inspect is a bounded read-only first view over status, validity,
+  comparison readiness, anomalies, next steps, activity, and ETA. Each run freezes
+  bounded earlier cell timing evidence; ETA prefers exact then compatible matches
+  with the same semantic baseline/strategy, budget, task/resource/host/config,
+  never substitutes another strategy, and uses timestamped generation-duration
+  trends to represent nonlinear late phases. The distribution depends on yadof's
   public surface, never the reverse. Root
   `dev_doc/` exclusively owns repository-wide toDos, obsolete handoffs, and change
   records.
@@ -250,7 +257,9 @@ suite and follow the user workflow's cost- and risk-based execution policy.
 The independent benchmark distribution has a focused unit suite below
 `yadof-benchmark/tests/`. Its initialization, Python workflow loading, baseline
 discovery, planning, snapshot, execution, postprocessing, recovery, report, and CLI
-tests use fake commands and do not start a simulator. Real `run` and `resume`
+tests use fake commands and do not start a simulator. Deterministic timing replay
+covers exact/compatible same-arm matching, cross-arm exclusion, increasing
+generation cost, terminal confidence, and bounded inspect/plan output. Real `run` and `resume`
 operations remain subject to the user workflow's cost/risk authorization. Separate
 artifact allowlists keep benchmark resources out of the yadof wheel and include
 them in the `yadof-benchmark` wheel.

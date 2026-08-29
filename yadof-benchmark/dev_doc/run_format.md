@@ -21,12 +21,18 @@ RUN/
 │   ├── final-hypervolume.csv
 │   └── descriptive-results.json
 ├── temp/
+├── timing_history.json           # bounded frozen prior-cell timing snapshot
 ├── benchmark.log                 # lifecycle/progress/final status
 ├── spec.json
 ├── state.json
 ├── results.json
 └── results.csv
 ```
+
+Every command attempt keeps immutable `started.json`/`finished.json`, separate
+`stdout.log`/`stderr.log`, and append-only `progress.jsonl`. The progress stream
+timestamps command activity and parsed generation snapshots; raw child lines remain
+only in their stream logs unless explicit CLI/API streaming is requested.
 
 The specification digest excludes only the creation timestamp and includes the
 workflow and driver digests. Loading fails closed on format, identity, JSON, or
@@ -75,3 +81,13 @@ global benchmark); lifecycle output is printed above them. Background pipe reade
 never render: they enqueue parsed yadof generation snapshots and the foreground
 owner turns those into timestamped progress events. Non-TTY output is bounded and
 the synchronous Python API never blocks for terminal input.
+
+Run state records initial host/Python/hashed resource identity plus run start and
+terminal timestamps. `timing_history.json` contains at most 256 completed-cell
+records found before run creation, without changing those earlier runs. Inspect
+adds completed cells from the current run in memory, selects at most five recent
+same-baseline/same-strategy/same-budget matches, distinguishes exact snapshot/config
+identity from compatible identity, and never uses another strategy as a point
+estimate. Three or more timestamped completed generations enable a non-negative
+generation-duration trend for nonlinear late-stage ETA. Inspect itself writes
+nothing and bounds anomaly/evidence disclosure.

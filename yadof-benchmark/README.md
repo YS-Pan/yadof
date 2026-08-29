@@ -13,10 +13,21 @@ yadof-benchmark check --workspace $workspace
 yadof-benchmark run --workspace $workspace
 ```
 
+`check` and `plan` print bounded summaries by default. Add `--json` only when the
+complete expanded cell plan is needed. Measured child stdout/stderr always has
+separate per-command logs and is not copied to the terminal unless
+`--stream-child-output` is explicitly selected.
+
 Foreground runs show a Rich active-cell row followed by a global benchmark row.
 For an agent-owned long Windows run, add `--detach`: it opens a normal visible
 console and immediately returns PID/run/log/inspect details. Hidden execution is
 available only as the explicit `--detach --hidden` exception.
+
+`inspect --run RUN_PATH` is read-only and bounded. It reports status, validity,
+comparison readiness, anomalies, active-cell activity, elapsed time, and an ETA
+with exact/compatible matched-history evidence. The suggested review order is the
+inspect summary, `reports/summary.md`, selected fields from the bounded descriptive
+JSON report, then one cell log or targeted `results.json` fields.
 
 `init` prints the actual `YYYYMMDD_HHMMSS-...` workspace path, and automatic or
 explicit run names use the same local timestamp prefix. Each run keeps its complete

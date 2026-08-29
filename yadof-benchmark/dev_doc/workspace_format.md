@@ -45,3 +45,6 @@ run creation records digests and freezes the complete selected source instead.
 The workflow input digest covers `benchmark.py` and every non-cache file below
 `resources/`. Planning also digests each selected strategy, baseline clean input,
 and driver. The resulting `RunSpec` is the only execution plan.
+
+CLI `check` and `plan` present a bounded count/ID/budget summary by default. Their
+`--json` option exposes this complete `RunSpec`; both modes remain run-read-only.

@@ -33,9 +33,21 @@ success/error, and global completion/failure counts. An inherited `TERM=dumb`
 does not disable refresh in a real TTY, while `NO_COLOR` remains respected. Plain
 non-TTY output uses bounded snapshots and never waits for keyboard input.
 
+Every child command writes separate `stdout.log` and `stderr.log` files below its
+attempt, and raw child output is not echoed by default. Add
+`--stream-child-output` to `run` or `resume` only for a deliberate live diagnostic;
+the foreground terminal owner then prints `child-output` events above the two Rich
+rows while retaining the same log files.
+
 Run `yadof-benchmark check --workspace PATH` before committing compute. It imports
 `benchmark.py`, validates every complete strategy module and baseline ID, expands
 all comparison cells, calculates input digests, and writes nothing.
+
+`check` and `plan` print a bounded overview of comparison/cell/evaluation counts,
+selected semantic IDs, and budget ranges. Add `--json` to either command to print
+the complete expanded `RunSpec`, including every cell. The default is intended for
+both people and agents and does not grow in proportion to a large comparison
+matrix.
 
 `run` creates a new immutable run directory below the workflow's `runs_dir`. The
 human-visible run leaf always starts with local `YYYYMMDD_HHMMSS`; an explicit
@@ -79,11 +91,49 @@ simulators from avoidable path-length failures without hiding the semantic
 cell ID. A measured command rejects an all-infinite generation, so a cell with no
 finite evaluation is failed and remains eligible for a later `resume` attempt.
 
-Use `inspect --run RUN_PATH` for a read-only status view. Use `resume --run
-RUN_PATH` after interruption or failure. Resume loads the run-owned driver and
-input snapshots. Successful cells and postprocessors are skipped; interrupted or
-failed work receives a new attempt. External edits to the original workspace do
-not change an existing run.
+## Read-only inspection and ETA
+
+Use `inspect --run RUN_PATH` for the bounded first view. It does not update state,
+replan the workspace, resume work, or rewrite timing history. The summary reports:
+
+- run/cell/postprocessor status and the active phase;
+- completed/valid/invalid/incomplete counts and comparison-result availability;
+- at most eight anomalies plus an explicit truncated count;
+- total elapsed time, active-cell runtime, last activity, inactivity, estimated
+  remaining seconds, UTC completion time, confidence, and evidence;
+- exact commands and paths for the next disclosure step.
+
+Each new run freezes `timing_history.json` from bounded completed-cell records in
+earlier sibling runs. An **exact** timing match uses the same comparison task,
+baseline and strategy semantic IDs, population/generations, baseline and strategy
+snapshots, execution configuration, workflow/driver identity, Python, host, and
+hashed external-resource identity. A **compatible** match keeps the same baseline,
+strategy, budget, task, execution configuration, Python, and host while allowing
+driver/workflow/strategy source identity to differ. Compatible evidence is lower
+confidence. A different strategy is never used as a point estimate, even for the
+same baseline.
+
+The estimator uses at most the five most recent matches and reports their median,
+sample count, relative MAD, match level, and source runs. During an active cell,
+timestamped generation events replace a whole-cell linear progress assumption once
+three generations have completed: a non-negative generation-duration trend can
+represent later surrogate training becoming slower. Baseline
+`evaluation_seconds × remaining evaluations` is only a low-confidence lower bound
+and explicitly excludes optimizer or surrogate-training overhead. A failed terminal
+run has no asserted completion ETA because resume creates new attempts.
+
+Follow this progressive disclosure order:
+
+1. read `inspect`;
+2. read `reports/summary.md`;
+3. select fields from `reports/descriptive-results.json`;
+4. read one active or failed cell's `stdout.log`/`stderr.log`;
+5. select only the necessary detailed fields from `results.json`.
+
+Use `resume --run RUN_PATH` after interruption or failure. Resume loads the
+run-owned driver and input snapshots. Successful cells and postprocessors are
+skipped; interrupted or failed work receives a new attempt. External edits to the
+original workspace do not change an existing run.
 
 The generated comparison table is descriptive evidence. The package does not rank
 strategies, apply significance tests, or make acceptance decisions.

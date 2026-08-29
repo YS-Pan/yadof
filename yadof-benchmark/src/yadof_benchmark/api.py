@@ -79,6 +79,7 @@ def run_workspace(
     run_id: str | None = None,
     baselines_root: str | Path | None = None,
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+    stream_child_output: bool = False,
 ) -> dict[str, Any]:
     run_root = _prepare_workspace_run(
         workspace,
@@ -94,7 +95,11 @@ def run_workspace(
                 "log": str(run_root / "benchmark.log"),
             }
         )
-    execute_existing_run(run_root, event_sink=event_sink)
+    execute_existing_run(
+        run_root,
+        event_sink=event_sink,
+        stream_child_output=stream_child_output,
+    )
     return _inspect_run(run_root)
 
 
@@ -136,11 +141,15 @@ def resume_run(
     run: str | Path,
     *,
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+    stream_child_output: bool = False,
 ) -> dict[str, Any]:
     run_root = Path(run).resolve()
     execution, results = _snapshot_runtime(run_root)
     try:
-        execution.execute_existing_run(run_root, event_sink=event_sink)
+        kwargs: dict[str, Any] = {"event_sink": event_sink}
+        if stream_child_output:
+            kwargs["stream_child_output"] = True
+        execution.execute_existing_run(run_root, **kwargs)
     except Exception as exc:
         if exc.__class__.__name__ == "BenchmarkError":
             raise BenchmarkError(str(exc)) from exc
