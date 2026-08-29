@@ -35,6 +35,9 @@ def build_benchmark(benchmark: Benchmark) -> None:
     #     name="saw-algorithm-comparison",
     #     evidence="structural",
     #     fail_fast=False,
+    #     # Optional external reference for descriptive surrogate-training context.
+    #     # Use an expensive representative generation, not this cheap cell runtime.
+    #     representative_generation_seconds=7200.0,
     # )
     # benchmark.strategy(
     #     "nsga3",

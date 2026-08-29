@@ -42,6 +42,15 @@ convergence is nearer roughly 10000 evaluations; a task already solved easily at
 exploratory for fast algorithm iteration. Use any explicit multi-seed list needed
 for a stronger campaign; three historical seeds are an example, not a constant.
 
+Reports verify same-baseline/same-seed pairing from the frozen task snapshot,
+planned/attempted budgets, and complete generation-0 normalized population. They
+publish planned/attempted/completed/finite counts plus final HV and an
+attempted-evaluation-aligned HV trajectory/AUC. Invalid or incomplete evidence is
+preserved and visibly excluded from cross-seed aggregates, never converted into a
+performance score. Surrogate-training time is separate from optimizer wall time
+and may be contextualized only against an explicitly configured representative
+expensive generation.
+
 Both planning commands return bounded summaries by default; request their complete
 expanded JSON with `--json`. Child stdout/stderr is kept in separate command logs
 during `run` and `resume`; raw streaming is an explicit

@@ -48,6 +48,26 @@ same-path structural canary before separately authorized full execution. The cla
 is carried through plan, cells, reports, indexes, and inspect rather than inferred
 from budget.
 
+Benchmark result publication validates same-baseline/same-seed pairing from the
+frozen task snapshot, matching planned/attempted budgets, and the complete ordered
+generation-0 normalized-population fingerprint. It publishes
+planned/attempted/completed/finite counts plus final HV and
+attempted-evaluation-aligned HV trajectory/AUC. Invalid or incomplete cell evidence
+is preserved but excluded explicitly from cross-seed descriptive aggregates;
+failures are validity facts rather than a performance score. Surrogate-training
+duration is reported separately from optimizer wall time and may use only an
+explicit external representative expensive-generation reference.
+
+Benchmark result publication validates same-baseline/same-seed pairing from the
+frozen task snapshot, matching planned/attempted budgets, and the complete ordered
+generation-0 normalized-population fingerprint. It publishes
+planned/attempted/completed/finite counts plus final HV and
+attempted-evaluation-aligned HV trajectory/AUC. Invalid or incomplete cell evidence
+is preserved but excluded explicitly from cross-seed descriptive aggregates;
+failures are validity facts rather than a performance score. Surrogate-training
+duration is reported separately from optimizer wall time and may use only an
+explicit external representative expensive-generation reference.
+
 ## Package dependency discipline
 
 - Core modules communicate through public exports or narrow APIs.

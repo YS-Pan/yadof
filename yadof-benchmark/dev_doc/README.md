@@ -20,6 +20,12 @@ Any change must preserve these invariants:
 - every performance comparison rejects population below 100 or generations below
   20; single-seed performance remains allowed but is frozen as exploratory, while
   any stronger seed count stays explicitly user-configurable;
+- same-baseline/same-seed arms must share their frozen task snapshot, planned and
+  attempted real-evaluation budgets, and complete ordered generation-0 normalized
+  population fingerprint before paired deltas or cross-seed aggregates;
+- cell validity distinguishes planned, attempted, completed, and finite counts;
+  final HV and attempted-evaluation-aligned HV trajectory/AUC are descriptive,
+  while incomplete evidence is retained but excluded from aggregates;
 - planning executes Python but performs no simulator work or run writes;
 - strategies are opaque complete `optimization.py` files;
 - runs freeze their workflow, resources, baselines, strategies, driver, and plan;

@@ -132,10 +132,30 @@ successfully and create non-empty artifacts.
 The run publishes `results.json` and detailed `results.csv` at its root. Its
 `reports/` directory contains:
 
-- `summary.md`, with overall status, cell completion/validity, and final HV tables;
-- `cell-validity.csv`;
+- `summary.md`, with cell validity, paired fairness, final HV/HV-AUC, cross-seed
+  aggregates, and surrogate-training summaries;
+- `cell-validity.csv`, including planned/attempted/completed/finite counts and the
+  generation-0 population fingerprint;
 - `final-hypervolume.csv`;
+- `hypervolume-trajectory.csv`, aligned by cumulative attempted real evaluations;
+- `pairing-validity.csv`;
+- `cross-seed-aggregates.csv`;
+- `surrogate-training.csv`;
 - `descriptive-results.json`, the bounded machine-readable report.
+
+Planned is the frozen population × generation budget. Attempted counts durable
+logical candidate records, not transport retries; completed counts successful
+records; finite counts completed rows whose objective tuple is usable for HV.
+Final HV, the cumulative HV trajectory, and trapezoidal HV-AUC are descriptive.
+Failures, non-finite costs, or an incomplete cell make validity/completeness fail
+instead of becoming a performance score. Incomplete and mismatched-pair evidence
+stays in its run, while cross-seed aggregates name and exclude the affected seed.
+
+Optimizer wall time remains operational timing evidence, not a main comparison
+metric. Surrogate-training duration is reported separately and, only when the
+workflow configured an external representative expensive-generation duration,
+shown as a descriptive ratio to that reference. Peak resources and checkpoint
+size are not benchmark acceptance metrics.
 
 These artifacts, the workspace indexes, and read-only inspect repeat the frozen
 evidence class, replication scope, and their notices. A copied CSV row therefore

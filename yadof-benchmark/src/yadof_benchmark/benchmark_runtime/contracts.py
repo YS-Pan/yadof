@@ -161,6 +161,7 @@ class WorkflowRequest:
     comparisons: tuple[ComparisonSpec, ...]
     postprocessors: tuple[PostprocessorSpec, ...]
     fail_fast: bool
+    representative_generation_seconds: float | None
     runs_dir: Path
     python: Path
     workspace: Path
@@ -178,6 +179,7 @@ class CellSpec:
     generations: int
     evidence: str
     replication_scope: str
+    representative_generation_seconds: float | None
     baseline_snapshot: str
     strategy_snapshot: str
     baseline_digest: str
@@ -201,6 +203,9 @@ class CellSpec:
             "generations": self.generations,
             "evidence": self.evidence,
             "replication_scope": self.replication_scope,
+            "representative_generation_seconds": (
+                self.representative_generation_seconds
+            ),
             "planned_evaluations": self.planned_evaluations,
             "baseline_snapshot": self.baseline_snapshot,
             "strategy_snapshot": self.strategy_snapshot,
@@ -267,6 +272,9 @@ class RunSpec:
                     for item in self.workflow.postprocessors
                 ],
                 "fail_fast": self.workflow.fail_fast,
+                "representative_generation_seconds": (
+                    self.workflow.representative_generation_seconds
+                ),
                 "runs_dir": str(self.workflow.runs_dir),
                 "python": str(self.workflow.python),
             },

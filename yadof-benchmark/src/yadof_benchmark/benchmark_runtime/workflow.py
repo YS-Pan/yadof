@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+import math
 import re
 import sys
 from pathlib import Path
@@ -54,6 +55,7 @@ class Benchmark:
         self._name = fallback or "benchmark"
         self._evidence: str | None = None
         self._fail_fast = False
+        self._representative_generation_seconds: float | None = None
         self._runs_dir = self.workspace / "runs"
         self._python = Path(sys.executable).resolve()
         self._strategies: list[StrategySpec] = []
@@ -72,6 +74,7 @@ class Benchmark:
         name: str | None = None,
         evidence: str | None = None,
         fail_fast: bool | None = None,
+        representative_generation_seconds: float | None = None,
         runs_dir: str | Path | None = None,
         python: str | Path | None = None,
     ) -> "Benchmark":
@@ -89,6 +92,19 @@ class Benchmark:
             if not isinstance(fail_fast, bool):
                 raise BenchmarkError("fail_fast must be boolean")
             self._fail_fast = fail_fast
+        if representative_generation_seconds is not None:
+            if (
+                isinstance(representative_generation_seconds, bool)
+                or not isinstance(representative_generation_seconds, (int, float))
+                or not math.isfinite(float(representative_generation_seconds))
+                or float(representative_generation_seconds) <= 0.0
+            ):
+                raise BenchmarkError(
+                    "representative_generation_seconds must be a positive finite number"
+                )
+            self._representative_generation_seconds = float(
+                representative_generation_seconds
+            )
         if runs_dir is not None:
             self._runs_dir = self._path(runs_dir)
         if python is not None:
@@ -231,6 +247,9 @@ class Benchmark:
             comparisons=tuple(self._comparisons),
             postprocessors=tuple(self._postprocessors),
             fail_fast=self._fail_fast,
+            representative_generation_seconds=(
+                self._representative_generation_seconds
+            ),
             runs_dir=self._runs_dir,
             python=self._python,
             workspace=self.workspace,

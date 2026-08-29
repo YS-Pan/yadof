@@ -38,8 +38,10 @@ The bounded `benchmark_runtime/` package separates responsibilities:
 - `launch.py`: Windows visible-by-default detached launch and immediate
   PID/run/log/inspect receipt; hidden launch is an explicit exception;
 - `postprocessing.py`: retryable run-local user callbacks;
-- `results.py`: public-yadof collection, cell/HV descriptive reports,
-  bounded inspect summaries, and workspace-level run indexes;
+- `results.py`: public-yadof collection, four-way evaluation accounting,
+  generation-0 population fingerprinting, paired-fairness validation,
+  attempted-evaluation-aligned HV trajectory/AUC and cross-seed descriptive
+  reports, bounded inspect summaries, and workspace-level run indexes;
 - `progress.py` and `timing.py`: read-only activity/ETA calculation, exact versus
   compatible same-arm matching, timestamped-generation trend replay, and bounded
   timing-history construction;
@@ -69,6 +71,21 @@ Difficulty remains task-owned rather than a generic validator property. The user
 contract requires a complete non-surrogate reference calibration toward roughly
 10000 evaluations to convergence when the 2000-evaluation floor solves a baseline
 too easily; the runtime cannot infer scientific task difficulty from budget alone.
+
+Pairing is validity, not optimizer scoring. Arms in the same baseline/seed group
+must share the frozen baseline digest, planned and attempted real-evaluation
+budgets, and the fingerprint of the complete ordered normalized generation-0
+population. Any mismatch invalidates the pair, suppresses its reference delta, and
+excludes that seed from cross-seed aggregates while preserving its cell evidence.
+Final HV and trapezoidal HV-AUC use cumulative attempted real evaluations as their
+axis. Failures, non-finite objectives, and incomplete counts remain validity facts;
+the runtime does not turn them into a performance score.
+
+Optimizer wall time remains operational evidence rather than a primary algorithm
+metric. Public surrogate-training metadata is summarized separately. An optional
+positive `representative_generation_seconds` workflow value supplies an external
+expensive real-evaluation-generation reference for descriptive ratios; the cheap
+benchmark generation runtime is never substituted for it.
 
 Process-window ownership stays at the caller boundary rather than inside the
 runtime driver. Measured CLI `run` and `resume` operations default to a visible

@@ -38,6 +38,12 @@ from budget. Structural means integration-only smoke/canary evidence and forbids
 algorithm performance conclusions. Performance remains descriptive and grants no
 execution authority or automatic scientific decision.
 
+`Benchmark.configure(representative_generation_seconds=...)` optionally freezes a
+positive finite external reference for one representative expensive generation of
+real evaluations. Result collection compares recorded surrogate-training duration
+with this value descriptively. It must not be populated from the cheap benchmark
+cell's own generation runtime and does not create an acceptance threshold.
+
 After the explicit class is known, freeze validates scale consistency. Every
 performance comparison requires population at least 100 and generations at least
 20, which guarantees at least 2000 planned real evaluations per cell. Structural

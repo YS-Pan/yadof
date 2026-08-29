@@ -104,8 +104,14 @@ hot-change contract; structural dimension changes are future work.
   retain digest names for Windows safety. Every collected cell automatically
   publishes a cost-history plot plus a non-empty artifact from the baseline's
   uniform `postprocess.py` into run-local cost and baseline-semantic categories.
-  Cell validity and final-HV reports are available as Markdown, CSV, and bounded
-  JSON, while top-level workspace indexes lead back to the single run root.
+  Cell validity, pairing validity, final-HV, attempted-evaluation-aligned
+  HV-trajectory/AUC, cross-seed aggregate, and separate surrogate-training reports
+  are available as Markdown, CSV, and bounded JSON, while top-level workspace
+  indexes lead back to the single run root. Same-baseline/same-seed arms require
+  matching frozen task snapshots, planned/attempted real-evaluation budgets, and
+  complete ordered generation-0 normalized-population fingerprints. Invalid or
+  incomplete cell evidence is retained but excluded explicitly from aggregates;
+  failures remain validity facts instead of a performance score.
   Workspace `benchmark.py` files select complete optimization strategies and
   declare any number of comparison matrices plus postprocessors. Adding an
   algorithm requires no runner registry or source change. A new run snapshots the

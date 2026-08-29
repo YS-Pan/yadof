@@ -18,6 +18,13 @@ meaningful surrogate comparison. A single-seed performance comparison is carried
 through plans and reports as exploratory; stronger campaigns use an explicit,
 configurable multi-seed list rather than a package-fixed seed count.
 
+Same-baseline/same-seed arms are paired only when their frozen task snapshot,
+planned/attempted real-evaluation budgets, and complete generation-0 normalized
+population match. Reports retain raw invalid/incomplete evidence, exclude affected
+seeds from aggregates, and publish planned/attempted/completed/finite counts plus
+final HV and attempted-evaluation-aligned HV trajectory/AUC. They never turn
+failures into a performance score or use optimizer wall time as the main metric.
+
 ```powershell
 $workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
   ConvertFrom-Json).workspace

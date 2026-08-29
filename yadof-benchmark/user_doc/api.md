@@ -17,6 +17,8 @@ def build_benchmark(benchmark: Benchmark) -> None:
         name="antenna-comparison",
         evidence="structural",
         fail_fast=False,
+        # Optional external expensive-generation reference for training-time context.
+        representative_generation_seconds=7200.0,
     )
     benchmark.strategy(
         "nsga3",
@@ -48,7 +50,8 @@ def build_benchmark(benchmark: Benchmark) -> None:
 
 ## `Benchmark.configure()`
 
-`configure(name=None, evidence=None, fail_fast=None, runs_dir=None, python=None)`
+`configure(name=None, evidence=None, fail_fast=None,
+representative_generation_seconds=None, runs_dir=None, python=None)`
 sets run-level policy. `evidence` is mandatory before the workflow can freeze and
 accepts only `"structural"` or `"performance"`. Structural means integration-only
 smoke/canary evidence and forbids algorithm performance conclusions. Performance
@@ -56,6 +59,12 @@ means descriptive performance evidence; it still does not authorize execution or
 permit the package to rank strategies or make acceptance decisions. Relative paths
 resolve from the workspace. Other defaults are the workspace name,
 continue-on-cell-failure, `runs/`, and the current Python interpreter.
+
+`representative_generation_seconds`, when supplied, must be positive and finite.
+It is the externally chosen duration of one representative expensive generation
+of real evaluations, used only to contextualize separately recorded surrogate
+training time. Do not use the cheap benchmark cell's own generation runtime; the
+comparison is descriptive and does not decide acceptance.
 
 ## `Benchmark.strategy()`
 
@@ -89,6 +98,12 @@ allowed for a fast algorithm-debugging loop, but a performance comparison with o
 seed is serialized and reported as `exploratory`. Use multiple explicit seeds for
 a stronger descriptive campaign. The package never fixes the number at three and
 does not infer statistical significance or robustness from a multi-seed list.
+
+Within each baseline/seed group, all strategy arms must share the frozen task
+snapshot, planned and attempted real-evaluation budgets, and complete ordered
+generation-0 normalized-population fingerprint. A mismatch invalidates the paired
+comparison and suppresses its reference delta. The raw cell evidence is retained,
+but that seed is explicitly excluded from cross-seed aggregates.
 
 ## `Benchmark.postprocess()`
 

@@ -28,7 +28,8 @@ from yadof_benchmark.benchmark_runtime.contracts import (
 )
 from yadof_benchmark.benchmark_runtime.launch import launch_detached
 from yadof_benchmark.benchmark_runtime.progress import estimate_run_timing
-from yadof_benchmark.benchmark_runtime.results import inspect_run
+from yadof_benchmark.benchmark_runtime import results as result_runtime
+from yadof_benchmark.benchmark_runtime.results import collect_cell, inspect_run
 from yadof_benchmark.benchmark_runtime.storage import (
     create_run,
     load_run,
@@ -153,9 +154,11 @@ def _plan(root: Path):
 
 
 def _cell_result(cell: dict, value: float) -> dict:
+    planned = cell["planned_evaluations"]
     return {
         "cell": cell["id"],
         "evidence": cell["evidence"],
+        "replication_scope": cell["replication_scope"],
         "comparison": cell["comparison"],
         "baseline": cell["baseline"],
         "strategy": cell["strategy"],
@@ -163,13 +166,61 @@ def _cell_result(cell: dict, value: float) -> dict:
         "budget": {
             "population": cell["population"],
             "generations": cell["generations"],
-            "planned_evaluations": cell["planned_evaluations"],
+            "planned_evaluations": planned,
         },
-        "status_counts": {"completed": cell["planned_evaluations"]},
-        "completed_evaluations": cell["planned_evaluations"],
-        "success_rate": 1.0,
+        "counts": {
+            "planned": planned,
+            "attempted": planned,
+            "completed": planned,
+            "finite": planned,
+        },
+        "status_counts": {"completed": planned},
+        "attempted_evaluations": planned,
+        "completed_evaluations": planned,
+        "finite_evaluations": planned,
+        "generation_zero_population": {
+            "expected": cell["population"],
+            "observed": cell["population"],
+            "complete": True,
+            "fingerprint": f"seed-{cell['seed']}-population-{cell['population']}",
+            "issues": [],
+        },
         "objective_names": ["score"],
+        "hypervolume": {
+            "alignment": "attempted_real_evaluations",
+            "reference_point": [1.0],
+            "trajectory": [
+                {
+                    "generation": cell["generations"] - 1,
+                    "attempted_evaluations": planned,
+                    "completed_evaluations": planned,
+                    "finite_evaluations": planned,
+                    "cumulative_hypervolume": value,
+                    "generation_hypervolume": value,
+                }
+            ],
+            "auc": value * planned / 2.0,
+            "auc_normalized": value / 2.0,
+            "final": value,
+        },
         "final_hypervolume": value,
+        "hypervolume_auc": value * planned / 2.0,
+        "hypervolume_auc_normalized": value / 2.0,
+        "surrogate_training": {
+            "event_count": 0,
+            "completed_events": 0,
+            "failed_events": 0,
+            "duration_sample_count": 0,
+            "total_duration_seconds": None,
+            "median_duration_seconds": None,
+            "maximum_duration_seconds": None,
+            "representative_generation_seconds": cell.get(
+                "representative_generation_seconds"
+            ),
+            "maximum_fraction_of_representative_generation": None,
+            "all_completed_within_representative_generation": None,
+            "notice": "descriptive only",
+        },
         "contract": {
             "objective_count": {"expected": 1, "observed": 1, "matches": True},
             "rawdata_shapes": {
@@ -194,7 +245,10 @@ def _cell_result(cell: dict, value: float) -> dict:
                 "metadata": {},
             }
         ],
-        "extensions": {"yadof.optimization": [{"custom": cell["strategy"]}]},
+        "extensions": {
+            "yadof.optimization": [{"custom": cell["strategy"]}],
+            "yadof.surrogate_training": [],
+        },
         "issues": [],
     }
 
@@ -271,6 +325,42 @@ def test_workflow_requires_explicit_valid_evidence_classification(
         encoding="utf-8",
     )
     with pytest.raises(benchmark.BenchmarkError, match="'structural' or 'performance'"):
+        api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+
+
+def test_representative_generation_reference_is_explicit_and_validated(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "workspace", strategies=("alpha",))
+    workflow = workspace / "benchmark.py"
+    source = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        source.replace(
+            "evidence='structural', fail_fast=False",
+            "evidence='structural', fail_fast=False, "
+            "representative_generation_seconds=7200.0",
+        ),
+        encoding="utf-8",
+    )
+
+    spec = api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
+
+    assert spec.workflow.representative_generation_seconds == 7200.0
+    assert {cell.representative_generation_seconds for cell in spec.cells} == {
+        7200.0
+    }
+    assert spec.to_dict()["workflow"]["representative_generation_seconds"] == 7200.0
+
+    workflow.write_text(
+        source.replace(
+            "evidence='structural', fail_fast=False",
+            "evidence='structural', fail_fast=False, "
+            "representative_generation_seconds=0",
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(benchmark.BenchmarkError, match="positive finite"):
         api.plan_workspace(workspace, baselines_root=tmp_path / "baselines")
 
 
@@ -560,6 +650,197 @@ def test_execution_reports_arbitrary_arms_by_comparison(tmp_path: Path) -> None:
     run_commands = [item for item in commands if item[2:4] == ("yadof", "run")]
     assert len(run_commands) == 3
     assert all("--fail-on-all-infinite" in item for item in run_commands)
+
+
+def test_collect_cell_reports_attempted_aligned_hypervolume_and_training_time(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yadof import recorded_data
+    from yadof.tools import cost_viewer
+
+    records = [
+        {
+            "job_name": "g0-0",
+            "status": "completed",
+            "generation_index": 0,
+            "population_index": 0,
+        },
+        {
+            "job_name": "g0-1",
+            "status": "completed",
+            "generation_index": 0,
+            "population_index": 1,
+        },
+        {
+            "job_name": "g1-0",
+            "status": "completed",
+            "generation_index": 1,
+            "population_index": 0,
+        },
+        {
+            "job_name": "g1-1",
+            "status": "error",
+            "generation_index": 1,
+            "population_index": 1,
+        },
+    ]
+    rows = [
+        {
+            "job_name": "g0-0",
+            "generation_index": 0,
+            "costs": (0.2,),
+            "average_cost": 0.2,
+        },
+        {
+            "job_name": "g0-1",
+            "generation_index": 0,
+            "costs": (0.3,),
+            "average_cost": 0.3,
+        },
+        {
+            "job_name": "g1-0",
+            "generation_index": 1,
+            "costs": (0.1,),
+            "average_cost": 0.1,
+        },
+    ]
+
+    monkeypatch.setattr(recorded_data, "list_records", lambda _workspace: records)
+    monkeypatch.setattr(
+        recorded_data, "list_optimization_metadata", lambda _workspace: []
+    )
+    monkeypatch.setattr(
+        recorded_data,
+        "list_surrogate_metadata",
+        lambda _workspace: [
+            {"status": "completed", "duration_sec": 12.0},
+            {"status": "completed", "duration_sec": 18.0},
+        ],
+    )
+    monkeypatch.setattr(
+        recorded_data,
+        "get_normalized_variables",
+        lambda _workspace, status=None: [
+            ("g0-0", (0.1, 0.2)),
+            ("g0-1", (0.8, 0.9)),
+            ("g1-0", (0.4, 0.5)),
+            ("g1-1", (0.6, 0.7)),
+        ],
+    )
+
+    def build_rows(_workspace, *, status, issues, objective_names_out):
+        assert status == "completed"
+        assert isinstance(issues, list)
+        objective_names_out.append("score")
+        return rows
+
+    monkeypatch.setattr(cost_viewer, "build_rows", build_rows)
+    monkeypatch.setattr(
+        cost_viewer,
+        "hypervolume_series",
+        lambda _rows: ([2, 3], [0.2, 0.4], [0.2, 0.3], (1.0,)),
+    )
+    monkeypatch.setattr(
+        result_runtime,
+        "_rawdata_shapes",
+        lambda _workspace, _records: {"value": [1]},
+    )
+    cell = {
+        "id": "main-provider-task-alpha-s7",
+        "evidence": "performance",
+        "replication_scope": "exploratory",
+        "comparison": "main",
+        "baseline": "provider/task",
+        "strategy": "alpha",
+        "seed": 7,
+        "population": 2,
+        "generations": 2,
+        "planned_evaluations": 4,
+        "representative_generation_seconds": 7200.0,
+        "contract": {
+            "objective_count": 1,
+            "rawdata_shapes": {"value": [1]},
+        },
+    }
+
+    result = collect_cell(tmp_path, cell)
+
+    assert result["counts"] == {
+        "planned": 4,
+        "attempted": 4,
+        "completed": 3,
+        "finite": 3,
+    }
+    assert result["generation_zero_population"]["complete"] is True
+    assert result["generation_zero_population"]["fingerprint"]
+    trajectory = result["hypervolume"]["trajectory"]
+    assert [point["attempted_evaluations"] for point in trajectory] == [2, 4]
+    assert [point["finite_evaluations"] for point in trajectory] == [2, 3]
+    assert result["final_hypervolume"] == pytest.approx(0.4)
+    assert result["hypervolume_auc"] == pytest.approx(0.8)
+    assert result["hypervolume_auc_normalized"] == pytest.approx(0.2)
+    assert result["surrogate_training"]["median_duration_seconds"] == 15.0
+    assert result["surrogate_training"][
+        "maximum_fraction_of_representative_generation"
+    ] == pytest.approx(18.0 / 7200.0)
+
+
+def test_invalid_pair_is_retained_but_excluded_from_cross_seed_aggregate(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    _workspace(
+        tmp_path / "workspace",
+        strategies=("alpha", "beta"),
+        seeds=(7, 11),
+    )
+    run_root = create_run(_plan(tmp_path), run_id="paired-validity")
+
+    def collector(_workspace: Path, cell: dict) -> dict:
+        result = _cell_result(
+            cell, 0.2 if cell["strategy"] == "alpha" else 0.3
+        )
+        if cell["seed"] == 7 and cell["strategy"] == "beta":
+            result["counts"]["attempted"] -= 1
+            result["attempted_evaluations"] -= 1
+            result["generation_zero_population"]["fingerprint"] += "-mismatch"
+        return result
+
+    state = execution.execute_existing_run(
+        run_root,
+        command_runner=_successful_command,
+        collector=collector,
+    )
+
+    assert state["status"] == "completed"
+    results = read_json(run_root / "results.json")
+    pairing_by_seed = {row["seed"]: row for row in results["pairings"]}
+    assert pairing_by_seed[7]["valid"] is False
+    assert pairing_by_seed[7]["checks"]["attempted_budget_matches"] is False
+    assert pairing_by_seed[7]["checks"][
+        "generation_zero_population_matches"
+    ] is False
+    assert pairing_by_seed[11]["valid"] is True
+    seed_7_rows = [row for row in results["comparisons"] if row["seed"] == 7]
+    assert all(row["reference_delta"] is None for row in seed_7_rows)
+    assert all(not row["aggregate_eligible"] for row in seed_7_rows)
+    assert len(results["cells"]) == 4
+    for aggregate in results["cross_seed_aggregates"]:
+        assert aggregate["included_seeds"] == [11]
+        assert aggregate["excluded_seeds"] == [7]
+    for name in (
+        "hypervolume-trajectory.csv",
+        "pairing-validity.csv",
+        "cross-seed-aggregates.csv",
+        "surrogate-training.csv",
+    ):
+        assert (run_root / "reports" / name).is_file()
+    final_csv = (run_root / "reports" / "final-hypervolume.csv").read_text(
+        encoding="utf-8"
+    )
+    assert "success_rate" not in final_csv
+    assert "runtime_seconds" not in final_csv
 
 
 def test_fake_three_baseline_pipeline_groups_domain_outputs(tmp_path: Path) -> None:

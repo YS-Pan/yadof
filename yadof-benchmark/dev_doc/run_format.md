@@ -19,6 +19,10 @@ RUN/
 │   ├── summary.md
 │   ├── cell-validity.csv
 │   ├── final-hypervolume.csv
+│   ├── hypervolume-trajectory.csv
+│   ├── pairing-validity.csv
+│   ├── cross-seed-aggregates.csv
+│   ├── surrogate-training.csv
 │   └── descriptive-results.json
 ├── temp/
 ├── timing_history.json           # bounded frozen prior-cell timing snapshot
@@ -46,6 +50,29 @@ workspace indexes, detached-launch receipt, and inspect repeat that class and it
 fixed scope notice.
 Historical runs without the field are inspectable as `unclassified` and are never
 eligible for performance conclusions.
+
+Each collected cell records planned, attempted, completed, and finite evaluation
+counts. Attempted means one durable logical candidate record, not an internal
+transport retry. The ordered normalized generation-0 population is fingerprinted;
+the fingerprint is published only when every planned generation-0 index and vector
+is present. Cumulative HV trajectory points use cumulative attempted real
+evaluations as their x coordinate, and HV-AUC is trapezoidal area from `(0, 0)`;
+the normalized form divides by final attempted count.
+
+For each comparison/baseline/seed group, pairing validation requires matching
+baseline snapshot digests, planned and attempted budgets, complete matching
+generation-0 fingerprints, and individually valid cells. Invalid pairs retain all
+run/cell evidence but publish no reference delta. Cross-seed descriptive aggregates
+include only valid cells from valid pairs and list every excluded seed explicitly.
+Failures, non-finite objectives, and incomplete counts are validity/completeness
+facts, not a performance score. Reports never rank arms, test significance, or
+make acceptance decisions.
+
+Surrogate-training events are copied from public yadof metadata and summarized in
+their own report. When the frozen workflow supplies an external representative
+expensive-generation duration, the report includes the maximum-duration/reference
+ratio. Optimizer wall time remains operational timing evidence rather than a main
+comparison metric; peak resources and checkpoint size are not acceptance metrics.
 
 Every new cell also carries its comparison's replication scope. A single-seed
 performance comparison is `exploratory`; a performance comparison with two or

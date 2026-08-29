@@ -154,6 +154,9 @@ def plan_workflow(
                             replication_scope=replication_scope(
                                 request.evidence, len(comparison.seeds)
                             ),
+                            representative_generation_seconds=(
+                                request.representative_generation_seconds
+                            ),
                             baseline_snapshot=(
                                 f"inputs/baselines/{baseline_slug}/workspace"
                             ),
