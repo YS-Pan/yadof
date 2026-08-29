@@ -31,7 +31,9 @@ Coverage requires:
   and required visualizations retain focused fault tests proportional to changes;
 - inspect is bounded/read-only and has no resume command;
 - Windows detach runs the installed `run --workspace` command, defaults visible,
-  returns PID/workspace/log/inspect, and never claims to switch process identity;
+  keeps the visible console open after the command exits, returns
+  PID/workspace/log/inspect, and never claims to switch process identity; hidden
+  detach remains direct and automatic;
 - public API/CLI and distribution entry points contain no run ID or resume surface.
 
 Installed-wheel acceptance uses a fresh pytest base temp and does not substitute

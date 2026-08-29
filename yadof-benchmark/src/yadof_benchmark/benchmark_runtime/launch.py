@@ -1,4 +1,4 @@
-"""Visible-by-default detached launcher for one benchmark workspace."""
+"""Persistent visible-by-default launcher for one benchmark workspace."""
 from __future__ import annotations
 
 import os
@@ -54,6 +54,47 @@ def _command_text(command: Sequence[str]) -> str:
     return shlex.join(command)
 
 
+def _powershell_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _persistent_console_command(command: Sequence[str]) -> list[str]:
+    system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    powershell = (
+        str(
+            Path(system_root)
+            / "System32"
+            / "WindowsPowerShell"
+            / "v1.0"
+            / "powershell.exe"
+        )
+        if system_root
+        else "powershell.exe"
+    )
+    invocation = "& " + " ".join(
+        _powershell_literal(str(part)) for part in command
+    )
+    completion_message = (
+        "Benchmark command finished with exit code {0}. "
+        "This window will remain open; type exit to close it."
+    )
+    script = (
+        f"{invocation}; "
+        "$yadofBenchmarkExitCode = $LASTEXITCODE; "
+        "Write-Host ''; "
+        f"Write-Host ({_powershell_literal(completion_message)} "
+        "-f $yadofBenchmarkExitCode)"
+    )
+    return [
+        powershell,
+        "-NoLogo",
+        "-NoProfile",
+        "-NoExit",
+        "-Command",
+        script,
+    ]
+
+
 def launch_detached(
     workspace: str | Path,
     *,
@@ -79,10 +120,15 @@ def launch_detached(
     log_path = root / CONSOLE_LOG_NAME
     stdout_path = root / "detached.stdout.log"
     stderr_path = root / "detached.stderr.log"
-    command = _run_command(
+    benchmark_command = _run_command(
         root,
         baselines_root=selected_baselines,
         stream_child_output=stream_child_output,
+    )
+    command = (
+        benchmark_command
+        if hidden
+        else _persistent_console_command(benchmark_command)
     )
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     flags |= getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0)
@@ -128,6 +174,7 @@ def launch_detached(
         "format": "yadof.benchmark.detached-launch",
         "pid": int(process.pid),
         "visible": not hidden,
+        "window_remains_open_after_run": not hidden,
         "stream_child_output": stream_child_output,
         "evidence": {
             "class": evidence,

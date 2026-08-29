@@ -110,6 +110,9 @@ hot-change contract; structural dimension changes are future work.
   short filenames. Inspect is bounded/read-only and uses current-workspace timing
   only. Windows AI-agent launches require host execution under the interactive
   human account because detach cannot change a sandbox process's session.
+  A visible detached console is hosted persistently after the benchmark command
+  exits so the user can review its final terminal state and close it explicitly;
+  hidden detach remains noninteractive and automatic.
   Structural evidence is integration-only; performance output is descriptive and
   single-seed performance remains exploratory. The distribution depends on
   yadof's public surface, never the reverse. Root `dev_doc/` exclusively owns
@@ -237,7 +240,7 @@ The independent benchmark distribution has a focused structural suite below
 fixtures verify initialization, default budget resolution, slow-surrogate
 generation limits, short paths, direct cell/postprocessor output, one-time runtime
 provenance, installed-driver execution, simulation-error tolerance, report
-validity, read-only inspection, CLI surface, and visible detach receipts without a
-simulator. Real benchmark execution remains subject to user workflow cost/risk and
-host-account authority. Separate artifact allowlists keep benchmark resources out
-of the yadof wheel and include them in the yadof-benchmark wheel.
+validity, read-only inspection, CLI surface, and persistent visible-detach receipts
+without a simulator. Real benchmark execution remains subject to user workflow
+cost/risk and host-account authority. Separate artifact allowlists keep benchmark
+resources out of the yadof wheel and include them in the yadof-benchmark wheel.

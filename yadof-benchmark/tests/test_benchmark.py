@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -633,15 +634,57 @@ def test_detached_launch_runs_workspace_directly_and_defaults_visible(
     command = [str(item) for item in captured["command"]]
     assert receipt["pid"] == 4242
     assert receipt["visible"] is True
+    assert receipt["window_remains_open_after_run"] is True
     assert receipt["workspace"] == str(Path(workspace).resolve())
     assert "inspect --workspace" in receipt["inspect"]
     assert "resume" not in command
-    assert command[3:6] == ["run", "--workspace", str(Path(workspace).resolve())]
+    assert command[0].lower().endswith("powershell.exe")
+    assert "-NoExit" in command
+    persistent_script = command[-1]
+    assert sys.executable.replace("'", "''") in persistent_script
+    assert "yadof_benchmark" in persistent_script
+    assert "'run'" in persistent_script
+    assert str(Path(workspace).resolve()).replace("'", "''") in persistent_script
+    assert "This window will remain open" in persistent_script
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)
     assert kwargs["creationflags"] & subprocess.CREATE_NEW_CONSOLE
     assert kwargs["creationflags"] & subprocess.CREATE_BREAKAWAY_FROM_JOB
     assert "stdout" not in kwargs and "stderr" not in kwargs
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows detached-console contract")
+def test_hidden_detached_launch_remains_direct_and_automatic(
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+    workspace = api.init_workspace(tmp_path / "hidden-detached")["workspace"]
+
+    class Process:
+        pid = 4343
+
+    def process_factory(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return Process()
+
+    receipt = launch_detached(
+        workspace,
+        hidden=True,
+        process_factory=process_factory,
+    )
+
+    command = [str(item) for item in captured["command"]]
+    assert command[:4] == [sys.executable, "-m", "yadof_benchmark", "run"]
+    assert "-NoExit" not in command
+    assert receipt["visible"] is False
+    assert receipt["window_remains_open_after_run"] is False
+    assert Path(receipt["stdout"]).is_file()
+    assert Path(receipt["stderr"]).is_file()
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["creationflags"] & subprocess.CREATE_NO_WINDOW
+    assert "stdout" in kwargs and "stderr" in kwargs
 
 
 def test_cli_surface_has_no_resume_or_run_id() -> None:
@@ -717,5 +760,5 @@ def test_terminal_logs_workspace_lifecycle(tmp_path: Path) -> None:
     assert "finished; status=completed" in log
 
 
-def test_distribution_version_is_breaking_release() -> None:
-    assert benchmark.__version__ == "0.2.0"
+def test_distribution_version() -> None:
+    assert benchmark.__version__ == "0.2.1"

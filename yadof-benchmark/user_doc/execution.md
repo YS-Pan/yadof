@@ -34,6 +34,11 @@ human. The correct agent procedure is:
 yadof-benchmark run --workspace WORKSPACE --detach
 ```
 
+The visible detached console remains open after the benchmark succeeds or fails,
+preserving its final progress and error output for review. Type `exit` at the
+PowerShell prompt or close the window when it is no longer needed. An explicit
+`--hidden` launch remains noninteractive and exits automatically.
+
 `--hidden` is only for an explicit user request. If host execution is not
 available, run in the foreground and clearly state that no separate visible
 window can be created; do not silently fall back to a sandbox-owned detached

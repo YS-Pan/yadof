@@ -44,7 +44,9 @@ On Windows, an AI agent must launch a long benchmark through host execution unde
 the interactive human user's account. A process started as the Codex sandbox user
 belongs to a non-interactive session, so `--detach` cannot make its console
 visible. Use host execution plus `--detach` for a visible independent console.
-`--hidden` is only an explicit user-selected exception.
+The visible console remains open after the benchmark finishes so its final output
+can be reviewed; type `exit` or close it when done. `--hidden` is only an explicit
+user-selected exception and exits automatically.
 
 Each cell has a short path such as `cells/c0001`. Semantic IDs remain in
 `spec.json` and reports. Results, reports, and visualizations are direct

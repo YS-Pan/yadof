@@ -101,8 +101,10 @@ There is no attempt field.
 - `user_doc_root()`
 
 `run_workspace` is synchronous and window-neutral. Use the CLI `--detach`
-option when a visible independent Windows console is desired. The functions above
-are the complete current public surface.
+option when a visible independent Windows console is desired. That console remains
+open after the command finishes until the user types `exit` or closes it; explicit
+`--hidden` detach still exits automatically. The functions above are the complete
+current public surface.
 
 ## CLI
 

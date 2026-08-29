@@ -41,7 +41,9 @@ There is no execution container below the workspace and no recovery branch.
 - `postprocessing.py` invokes live workspace callbacks once into
   `postprocessing/<id>/`.
 - `launch.py` creates an optional Windows console process for the same installed
-  CLI.
+  CLI. A visible detached launch is hosted by a persistent PowerShell process so
+  the final terminal output remains available after the benchmark command exits;
+  hidden launches remain direct noninteractive processes.
 - `terminal.py` presents foreground progress and appends `benchmark.log`.
 
 The retained `RunSpec` name denotes the expanded single-execution plan; it does
@@ -95,6 +97,7 @@ A per-cell baseline copy is merely the isolated yadof execution workspace.
 ## Process identity
 
 `--detach` changes Windows console/process lifetime but cannot change the caller
-account or session. Documentation therefore makes the host-account launch
-requirement an agent responsibility rather than embedding account-switching
+account or session. Its visible console stays open after success or failure until
+the user types `exit` or closes it. Documentation therefore makes the host-account
+launch requirement an agent responsibility rather than embedding account-switching
 machinery in the package.

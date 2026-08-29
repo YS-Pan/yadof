@@ -52,7 +52,9 @@ lower bounds.
 
 On Windows detach opens a new console but does not change the process account.
 AI-agent guidance therefore requires host execution under the interactive human
-account; a sandbox-owned detached console is not presented as visible.
+account; a sandbox-owned detached console is not presented as visible. The visible
+detached console is persistent after benchmark success or failure so its final
+terminal output remains reviewable; hidden detach remains automatic.
 
 ## Package dependency discipline
 

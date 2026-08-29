@@ -34,6 +34,9 @@ Current invariants are:
 - terminal result publication is a fatal persistence boundary before FIFO refill;
 - every collected cell owns a cost plot and baseline domain output;
 - inspect is bounded, read-only, and uses only current-workspace timing evidence;
+- a visible Windows detached console remains open after the benchmark command
+  finishes so its terminal result can be reviewed; hidden detach remains automatic;
 - algorithm rankings and acceptance decisions remain outside the runner.
 
-Version `0.2.0` intentionally makes no old-workspace compatibility promise.
+The `0.2` workspace format intentionally makes no old-workspace compatibility
+promise.

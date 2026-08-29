@@ -26,6 +26,8 @@ For long Windows work launched by an AI agent, [execution.md](execution.md)
 requires host execution under the signed-in human user's account. A sandbox-owned
 detached process cannot show a console in the user's interactive session.
 `--detach` controls console/process lifetime; it does not change the account.
+The visible detached console remains open after the benchmark finishes so the
+terminal result can be reviewed; type `exit` or close the window when finished.
 
 Every workflow explicitly declares `evidence="structural"` or
 `evidence="performance"`. Structural output validates integration only.
