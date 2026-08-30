@@ -16,11 +16,11 @@ queue、性能接受、exploitation 授权、正式 optimization-quality 证据�
 ### Tracked provenance
 
 - [v8 calibration change record](../change_records/20260828_010422_coherent-posterior-calibration-framework-fail-closed.md)
-- [v8 archived handoff](../obsolete/20260827_082609_coherent-posterior-sampling-calibration.md)
+- [v8 archived handoff](../obsolete/todo/20260827_082609_coherent-posterior-sampling-calibration.md)
 - [v9 qNEHVI framework change record](../change_records/20260828_020622_qnehvi-posterior-assisted-framework.md)
-- [v9 archived handoff](../obsolete/20260827_082611_qnehvi-acquisition-strategy.md)
+- [v9 archived handoff](../obsolete/todo/20260827_082611_qnehvi-acquisition-strategy.md)
 - [v10 integrated release change record](../change_records/20260828_032749_integrated-acceptance-release-framework.md)
-- [v10 archived handoff](../obsolete/20260827_082612_validate-new-surrogate-and-qnehvi.md)
+- [v10 archived handoff](../obsolete/todo/20260827_082612_validate-new-surrogate-and-qnehvi.md)
 
 历史文件提到的 `benchmark_automation/preregistrations/20260828-*` 目录已不在迁移时的当前
 HEAD；不得把那些旧相对路径写成仍可访问的 current artifact。v8/v9 的可追溯身份由上述

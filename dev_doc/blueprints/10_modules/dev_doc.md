@@ -54,8 +54,11 @@ tools are installed yadof documentation audiences.
   than hidden requirements. Root entries require explicit request, while active
   `auto/` entries receive a bounded match check against already in-scope evidence
   before normal work is reported complete.
-- `obsolete/`: historical completed/cancelled toDos and explicitly reviewed expired
-  context documents, not current guidance.
+- `obsolete/`: source-partitioned inactive archive, not current guidance. Its
+  `todo/` child stores completed or retired toDo handoffs, `context/` stores
+  explicitly reviewed expired context documents, and `other/` stores every other
+  obsolete plan, diagnostic, draft, or historical developer document. No archived
+  file remains directly under the root.
 
 `user_doc/example_prompts/` is an expandable collection with one Markdown file per
 copyable prompt. Its index may link placeholders whose prompt bodies remain empty
@@ -76,15 +79,19 @@ current facts, explicit requirements or decisions, proposals, assumptions, and o
 questions where their status affects implementation. It qualifies important values
 as defaults, targets, limits, gates, best-effort goals, or guarantees, and folds
 later settled decisions into one coherent active handoff rather than relying on
-conversation history. A completed toDo moves to `obsolete/` only after applicable
-code/tests, user docs, architecture, blueprints, terminology, and one change record
-agree; documentation-only work does not invent inapplicable software tests.
+conversation history. A completed toDo moves to `obsolete/todo/` only after
+applicable code/tests, user docs, architecture, blueprints, terminology, and one
+change record agree; documentation-only work does not invent inapplicable software
+tests.
 Completing one occurrence of a recurring automatic toDo does not complete its
 document-level goal, so the handoff remains active until its own completion rule or
 an explicit user decision retires it. Context documents use filename-first routing
 instead of default full reading. They are assessed for expiry only when the user
 explicitly requests that assessment; confirmed-expired documents move unchanged to
-`obsolete/`, while uncertain documents remain active.
+`obsolete/context/`, while uncertain documents remain active. Completed/retired
+toDos move to `obsolete/todo/`; obsolete documents from all other sources move to
+`obsolete/other/`. Archival preserves filenames and content, rejects destination
+collisions, and leaves no file directly under the archive root.
 
 The development guide defines the sibling installed-package venv and mandatory
 build/force-reinstall/import-path/full-test workflow after package code, build, or

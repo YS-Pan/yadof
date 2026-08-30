@@ -173,7 +173,7 @@ Whenever an automatic toDo is read, apply the applicable stale-document rule bef
 treating it as active:
 
 1. **Automatic: time OR configured condition (default).** Check every configured
-   condition and move the document to `../obsolete/` as soon as one is true:
+   condition and move the document to `../obsolete/todo/` as soon as one is true:
    - **Time:** use the leading `YYYYMMDD_HHMMSS` filename timestamp as the local
      creation time. With no obsolete-related annotation, the limit is seven days.
      A document may state a different duration or date in `## Obsolete Rule`.
@@ -192,24 +192,35 @@ treating it as active:
 These stale-document rules do not replace completion handling. After a manual toDo
 is explicitly triggered, or an automatic toDo's bounded check finds a match,
 complete the code and documentation work first and then apply that document's
-completion rule. Move a one-shot toDo to `../obsolete/` only when its document-level
-goal is fully complete. A recurring automatic toDo whose completion rule says to
-remain active is not completed by one trigger instance and must stay under
-`toDo/auto/`. If only part of a one-shot goal is complete, update the remaining toDo
-or split out a new time-named toDo before archiving the completed portion.
+completion rule. Move a one-shot toDo to `../obsolete/todo/` only when its
+document-level goal is fully complete. A recurring automatic toDo whose completion
+rule says to remain active is not completed by one trigger instance and must stay
+under `toDo/auto/`. If only part of a one-shot goal is complete, update the remaining
+toDo or split out a new time-named toDo before archiving the completed portion.
 
 ## Obsolete Archive Contract
 
-`../obsolete/` stores old plans, old diagnostics, completed toDo handoffs,
-automatic toDos retired by age or a configured condition, expired context
-documents moved under the [context-document contract](context.md), and drafts that
-are no longer active design input.
+`../obsolete/` is a source-partitioned archive. It contains exactly these
+subdirectories, and archived files do not remain directly under the archive root:
 
-Do not read `obsolete/` by default. Read it only when a current document explicitly
-points there, when investigating old plans, when checking a completed toDo handoff,
-or when the user explicitly requests review of an archived context document. Never
-use an obsolete document as current fact unless a current document explicitly
-brings that fact forward.
+- `../obsolete/todo/` stores completed toDo handoffs and automatic toDos retired by
+  age or a configured condition.
+- `../obsolete/context/` stores context documents confirmed expired under the
+  [context-document contract](context.md).
+- `../obsolete/other/` stores every other retired developer document, including old
+  plans, old diagnostics, superseded drafts, and historical material whose source
+  is neither `toDo/` nor `context/`.
+
+Classify by the document's source and lifecycle, not by filename style or subject.
+Preserve the filename and content during archival, create the required destination
+subdirectory when absent, and never overwrite an existing destination. A naming
+collision must be reported and resolved deliberately before the move.
+
+Do not read any `obsolete/` subtree by default. Read it only when a current document
+explicitly points there, when investigating old plans, when checking a completed
+toDo handoff, or when the user explicitly requests review of an archived context
+document. Never use an obsolete document as current fact unless a current document
+explicitly brings that fact forward.
 
 ## Maintenance Contract
 
@@ -218,5 +229,6 @@ automatic-trigger work under `toDo/auto/`. When a task is fully completed, updat
 the applicable code/tests, user documentation, architecture, blueprints,
 terminology, and change record first; documentation-only work does not require
 inapplicable software tests. Only then move a completed one-shot toDo to
-`obsolete/`. Keep a recurring automatic toDo active after each completed occurrence
-unless its own completion rule or an explicit user decision retires the document.
+`obsolete/todo/`. Keep a recurring automatic toDo active after each completed
+occurrence unless its own completion rule or an explicit user decision retires the
+document.

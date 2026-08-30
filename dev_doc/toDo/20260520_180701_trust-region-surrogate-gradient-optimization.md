@@ -13,8 +13,9 @@
   architecture, mature packages, benchmarks, and user goals; discard obsolete
   assumptions instead of preserving compatibility with this draft.
 - Its prerequisite manual toDos are now complete and archived under
-  `dev_doc/obsolete/`: real-only surrogate simplification, workspace submit-side
-  optimization composition, and coordinated optimize/surrogate modularization.
+  `dev_doc/obsolete/todo/`: real-only surrogate simplification, workspace
+  submit-side optimization composition, and coordinated optimize/surrogate
+  modularization.
   This does not reactivate the present research task; every other active toDo must
   still be complete and the user must explicitly reactivate it.
 - Use their final real-only, rawData-field-balanced conditional-INR training

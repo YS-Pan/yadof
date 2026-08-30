@@ -59,8 +59,11 @@ invalidated, or made irrelevant. If the conclusion is uncertain, leave the
 document in `context/` and report the uncertainty.
 
 Move each document confirmed expired, unchanged and with the same filename, to
-`../obsolete/`. Do not overwrite an existing destination. The move follows the
-normal documentation maintenance, validation, change-record, and commit rules.
+`../obsolete/context/`. Create that destination directory when absent and do not
+overwrite an existing destination. The move follows the normal documentation
+maintenance, validation, change-record, and commit rules. Context documents never
+move to `obsolete/todo/` or `obsolete/other/` merely because their subject resembles
+pending work or an old plan; source and lifecycle determine the archive class.
 
 ## Maintenance Contract
 

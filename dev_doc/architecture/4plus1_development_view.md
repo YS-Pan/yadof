@@ -92,6 +92,10 @@ belongs in the workspace submit-side definition.
   only on explicit user instruction.
 - `dev_doc/change_records/` preserves completed decisions and implementation
   history; `toDo/` preserves active future work.
+- `dev_doc/obsolete/` is a source-partitioned inactive archive: `todo/` contains
+  retired toDo handoffs, `context/` contains explicitly reviewed expired context
+  documents, and `other/` contains all other obsolete developer material. Files do
+  not remain directly under `obsolete/`.
 - `admin_tool/admin_doc/` owns administrator deployment, configuration, and
   troubleshooting guidance, while sibling directories own executable tools.
 - Integrated tool subtrees may own focused developer documentation that is linked
@@ -118,7 +122,8 @@ they alter packaged documentation behavior.
 Current architecture and blueprints are updated in place. Historical change
 records are append-only. Context documents preserve cross-session evidence without
 becoming current-view contracts or task authorization; confirmed-expired documents
-move to `obsolete/` only after an explicit user-requested review. Task-authoring
-changes update user documentation; administrator procedure changes update
-`admin_tool/admin_doc/`. Repository changes preserve workspace evidence and
-unrelated worktree modifications.
+move to `obsolete/context/` only after an explicit user-requested review. Completed
+or retired toDos move to `obsolete/todo/`, while obsolete material from every other
+source moves to `obsolete/other/`. Task-authoring changes update user documentation;
+administrator procedure changes update `admin_tool/admin_doc/`. Repository changes
+preserve workspace evidence and unrelated worktree modifications.

@@ -164,6 +164,6 @@ class Acquisition(Protocol):
 - `PosteriorAssistedStrategy` 不再依赖 qNEHVI 具体类型，同时没有扩大其算法职责。
 - qNEHVI 行为、identity、fallback、checkpoint/history 和 optional-import 回归全部通过。
 - architecture、blueprints、terminology、用户文档与 installed-wheel tests 已同步，随后将本文
-  移入 `dev_doc/obsolete/`。
+  移入 `dev_doc/obsolete/todo/`。
 - 如果第二个真实实现尚未出现，本文继续保持 active；不得仅因时间经过或完成接口草图而
   宣称完成。
