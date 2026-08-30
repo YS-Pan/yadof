@@ -12,9 +12,10 @@ flowchart LR
     Fast --> Result["Backend-neutral result"]
     Local --> Result
     Execute --> Result
-    Result --> Finalizer["Current-cost finalizer"]
+    Result --> Finalizer["Evidence-first finalization coordinator"]
     Finalizer --> Records["Durable recorder"]
-    Finalizer --> Strategy["Optimization strategy"]
+    Records --> Cost["Current-cost interpreter"]
+    Cost --> Strategy["Optimization strategy"]
     Records --> Surrogate["Derived surrogate state"]
     Surrogate --> Strategy
 ```
@@ -49,11 +50,13 @@ not contain the yadof package or submit-side cost/optimization code.
 
 ## Finalization and persistence
 
-All backends produce the same logical result shape. The common finalizer validates
-owned rawData, applies the current task cost policy, preserves ordered failure
-rows, and hands accepted evidence to the campaign recorder. The recorder publishes
-immutable segments under bounded backpressure; later evaluation cannot pass the
-population boundary until accepted evidence is durable.
+All backends produce the same logical result shape. The common population-scoped
+finalizer validates and owns rawData, groups prepared envelopes against the
+recorder's existing count/byte targets, and waits for committed publication
+receipts. Only then does it apply the frozen current task cost policy in stable
+population order and expose result rows. The recorder publishes immutable segments
+under bounded backpressure; later evaluation cannot pass the population boundary
+until every receipt is committed or the campaign has failed.
 
 Surrogate prediction and posterior projection are derived submit-side computation,
 not additional evaluation backends. They consume recorded evidence and current task
@@ -65,6 +68,8 @@ interpretation, may help select candidates, and never publish predicted rawData.
   scratch boundary.
 - Execute nodes need task dependencies but never need yadof importability.
 - Costs are calculated on the submit side from validated evidence.
+- Real-evaluation cost begins only after the corresponding evidence publication
+  receipt is committed; cost remains replayable derived state.
 - The recorder is the only durable candidate-evidence publisher.
 - Tools are read-only consumers unless their command explicitly owns a separate
   user-selected output artifact.

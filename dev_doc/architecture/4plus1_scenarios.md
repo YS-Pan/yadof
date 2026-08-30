@@ -19,9 +19,10 @@ and agent-not-runtime relationship.
 - Distributed mode transfers the prepared workflow to an administrator-managed
   execute host and returns validated file-backed evidence.
 
-All three paths produce ordered backend-neutral results, use the same current task
-cost policy, and publish through the same campaign recorder. This scenario validates
-transport equivalence without requiring identical intermediate files.
+All three paths produce ordered backend-neutral results, publish through the same
+campaign recorder, and apply the same frozen current task cost policy only after
+committed receipts. This scenario validates transport equivalence without requiring
+identical intermediate files.
 
 ## Use an external simulator runtime
 
@@ -75,11 +76,13 @@ This scenario validates state isolation and the single-writer domain.
 
 ## Handle failures
 
-A candidate preparation, execution, timeout, transport, rawData, or current-cost
-failure produces an ordered diagnostic result and does not erase successful
-candidates. A recorder publication failure stops the campaign because accepted
-evidence cannot be lost. Corrupt historical entries are isolated during reads
-without rewriting good evidence.
+A candidate preparation, execution, timeout, transport, or rawData failure produces
+an ordered diagnostic result and does not erase successful candidates. When valid
+rawData commits but current-cost interpretation fails, the optimizer receives the
+correct-width failure sentinel while the completed evidence remains replayable. A
+recorder publication failure stops the campaign because accepted evidence cannot be
+lost. Corrupt historical entries are isolated during reads without rewriting good
+evidence.
 
 This scenario validates individual failure isolation, campaign-level durability,
 and tolerant recovery.

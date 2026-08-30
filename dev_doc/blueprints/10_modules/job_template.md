@@ -73,7 +73,9 @@ rejects missing/extra fields and schema drift instead of padding or guessing.
 Costs are recomputed through freshly loaded current `submit/calc_cost.py`. A long-running
 cost-history view instead opens one explicit package-owned interpreter context,
 freezing parameter definitions and `calc_cost.py` for all of its batches. Returned rows
-must match reported objective width. The same path is used for completed simulation
+must match reported objective width and contain only finite numeric values. Both
+point-in-time calculation and frozen `CostInterpreter` apply this same callback,
+width, and finite-value contract. The same path is used for completed simulation
 evidence, history queries, and surrogate-predicted rawData. Raw variables may be
 supplied when a task needs them, but rawData remains the evidence source.
 `get_objective_count()` is package-derived from validated objective names; task
@@ -133,6 +135,9 @@ very large finite physical values remain bounded instead of overflowing.
 - Rich rawData is preserved; cost code may select objective-relevant windows.
 - Identical rawData has the same fixed-threshold normalized cost regardless of the
   other samples currently recorded or evaluated.
+- Current-cost callbacks are deterministic and replayable: they do not mutate
+  evidence or depend on one-shot external side effects, because process loss may
+  cause committed evidence to be interpreted again.
 - `cost.json` is never an authoritative task output.
 - Fast task kernels return rawData rather than cost and are rejected explicitly when
   missing or malformed; there is no fallback to local workflow emulation.

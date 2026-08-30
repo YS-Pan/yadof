@@ -9,6 +9,8 @@ import pytest
 import yadof
 from yadof.config import ConfigError, load_config
 from yadof.job_template import (
+    CostNonFiniteError,
+    CostObjectiveWidthError,
     Parameter,
     calculate_cost,
     get_parameter_definition_signature,
@@ -415,6 +417,61 @@ def test_cost_interpreter_keeps_one_task_definition_for_a_history_batch(
         assert interpreter.calculate_costs((({"value": 3.0},),)) == ((4.0,),)
 
     assert calculate_cost(context, (({"value": 3.0},),)) == ((10.0,),)
+
+
+@pytest.mark.parametrize(
+    ("return_expression", "error_type"),
+    [
+        ("(1.0, 2.0)", CostObjectiveWidthError),
+        ("(float('nan'),)", CostNonFiniteError),
+        ("(float('inf'),)", CostNonFiniteError),
+        ("(float('-inf'),)", CostNonFiniteError),
+    ],
+)
+def test_point_in_time_and_frozen_costs_share_width_and_finite_contract(
+    tmp_path: Path,
+    return_expression: str,
+    error_type: type[Exception],
+) -> None:
+    context = _task_files(tmp_path / "workspace", limit=2, offset=1)
+    (context.submit_dir / "calc_cost.py").write_text(
+        "def calculate_cost(sample_rawdata, raw_variables=None):\n"
+        f"    return {return_expression}\n"
+        "def get_objective_names():\n"
+        "    return ('objective',)\n"
+        "def get_objective_count():\n"
+        "    return 1\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    samples = (({"value": 3.0},),)
+    with pytest.raises(error_type):
+        calculate_cost(context, samples)
+    with task_cost_interpreter(context) as interpreter:
+        with pytest.raises(error_type):
+            interpreter.calculate_costs(samples)
+
+
+def test_point_in_time_and_frozen_costs_propagate_callback_exception(
+    tmp_path: Path,
+) -> None:
+    context = _task_files(tmp_path / "workspace", limit=2, offset=1)
+    (context.submit_dir / "calc_cost.py").write_text(
+        "def calculate_cost(sample_rawdata, raw_variables=None):\n"
+        "    raise RuntimeError('injected callback failure')\n"
+        "def get_objective_names():\n"
+        "    return ('objective',)\n"
+        "def get_objective_count():\n"
+        "    return 1\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    samples = (({"value": 3.0},),)
+    with pytest.raises(RuntimeError, match="injected callback failure"):
+        calculate_cost(context, samples)
+    with task_cost_interpreter(context) as interpreter:
+        with pytest.raises(RuntimeError, match="injected callback failure"):
+            interpreter.calculate_costs(samples)
 
 
 def test_task_loader_supports_local_packages_without_global_cache(tmp_path: Path) -> None:

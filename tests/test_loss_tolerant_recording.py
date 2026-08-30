@@ -12,7 +12,10 @@ import numpy as np
 import pytest
 
 from yadof.config import load_config
-from yadof.evaluate_manager.finalizer import finalize_result
+from yadof.evaluate_manager.finalizer import (
+    ResultFinalizationCoordinator,
+    finalize_result,
+)
 from yadof.evaluate_manager.types import JobResult
 from yadof.job_template import RAWDATA_SCHEMA_VERSION, NamedRawDataItem
 from yadof.recorded_data import api as recorded_api
@@ -27,6 +30,7 @@ from yadof.recorded_data.segment_store import (
     publish_segment,
 )
 from yadof.recorded_data.session import CampaignSession, RecordingError
+from yadof.task_snapshot import GenerationTaskSnapshot
 from yadof.tools.history import clear_history
 from yadof.workspace.init import init_workspace
 
@@ -89,6 +93,21 @@ def _session(
     config = load_config(root, overrides=overrides)
     session = CampaignSession(config)
     return session, session.begin_generation(config)
+
+
+def _finalize_many(
+    session: CampaignSession,
+    snapshot: GenerationTaskSnapshot,
+    indexed_results: list[tuple[int, JobResult]],
+) -> tuple[JobResult, ...]:
+    coordinator = ResultFinalizationCoordinator(
+        session,
+        snapshot,
+        expected_count=len(indexed_results),
+    )
+    for index, result in indexed_results:
+        coordinator.accept(index, result)
+    return coordinator.finish()
 
 
 def test_oversized_recording_aborts_before_later_evaluation(tmp_path: Path) -> None:
@@ -182,9 +201,12 @@ def test_segment_count_limit_and_immutable_zip_layout(tmp_path: Path) -> None:
         HISTORY_UNPUBLISHED_MAX_BYTES=32 * 1024 * 1024,
     )
     try:
-        for index in range(5):
-            assert finalize_result(session, snapshot, _result(index, index + 1)).costs
-        session.flush_boundary()
+        finalized = _finalize_many(
+            session,
+            snapshot,
+            [(index, _result(index, index + 1)) for index in range(5)],
+        )
+        assert all(result.costs for result in finalized)
     finally:
         counters = session.close()
     assert counters["published_candidates"] == 5
@@ -379,9 +401,11 @@ def test_bad_candidate_member_does_not_hide_readable_sibling(tmp_path: Path) -> 
         HISTORY_UNPUBLISHED_MAX_CANDIDATES=4,
     )
     try:
-        finalize_result(session, snapshot, _result(0, 0.1))
-        finalize_result(session, snapshot, _result(1, 0.2))
-        session.flush_boundary()
+        _finalize_many(
+            session,
+            snapshot,
+            [(0, _result(0, 0.1)), (1, _result(1, 0.2))],
+        )
     finally:
         session.close()
     (segment,) = root.glob("recorded_data/segments/*/*/segment_*.zip")
@@ -451,9 +475,8 @@ def test_consecutive_writer_failures_abort_before_next_generation(
         HISTORY_UNPUBLISHED_MAX_CANDIDATES=4,
         HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES=2,
     )
-    assert finalize_result(session, snapshot, _result(0, 0.1)).costs is not None
     with pytest.raises(RecordingError, match="no later evaluation may proceed"):
-        session.flush_boundary()
+        finalize_result(session, snapshot, _result(0, 0.1))
     counters = session.counters()
     assert counters["write_failed"] == 2
     assert counters["fatal_errors"] == 1
@@ -510,19 +533,42 @@ def test_full_unpublished_budget_backpressures_instead_of_dropping(
         HISTORY_SEGMENT_MAX_CANDIDATES=1,
         HISTORY_UNPUBLISHED_MAX_CANDIDATES=1,
     )
-    first = finalize_result(session, snapshot, _result(0, 0.1))
-    assert first.costs is not None
+    first_result = _result(0, 0.1)
+    first_envelope = build_owned_envelope(
+        snapshot.config.workspace,
+        first_result.job_name,
+        first_result.unnormalized_variables,
+        first_result.raw_data_items,
+        first_result.metadata,
+    )
+    first_receipt = session.submit_evidence(
+        first_envelope,
+        group_id="backpressure-group-0",
+    )
     assert entered.wait(2.0)
-    outcome: list[JobResult] = []
+    second_result = _result(1, 0.2)
+    second_envelope = build_owned_envelope(
+        snapshot.config.workspace,
+        second_result.job_name,
+        second_result.unnormalized_variables,
+        second_result.raw_data_items,
+        second_result.metadata,
+    )
+    outcome = []
     errors: list[BaseException] = []
 
-    def finalize_second() -> None:
+    def submit_second() -> None:
         try:
-            outcome.append(finalize_result(session, snapshot, _result(1, 0.2)))
+            outcome.append(
+                session.submit_evidence(
+                    second_envelope,
+                    group_id="backpressure-group-1",
+                )
+            )
         except BaseException as exc:
             errors.append(exc)
 
-    producer = threading.Thread(target=finalize_second)
+    producer = threading.Thread(target=submit_second)
     producer.start()
     deadline = time.monotonic() + 2.0
     while (
@@ -536,7 +582,8 @@ def test_full_unpublished_budget_backpressures_instead_of_dropping(
     producer.join(5.0)
     assert not producer.is_alive()
     assert errors == []
-    assert outcome[0].costs is not None
+    first_receipt.wait_committed(2.0)
+    outcome[0].wait_committed(2.0)
     session.flush_boundary()
     counters = session.close()
     assert counters["published_candidates"] == 2
@@ -660,7 +707,15 @@ def test_shutdown_waits_for_in_flight_publication_and_retains_lock(
         root,
         HISTORY_SEGMENT_MAX_CANDIDATES=1,
     )
-    finalize_result(session, snapshot, _result(0, 0.1))
+    result = _result(0, 0.1)
+    envelope = build_owned_envelope(
+        snapshot.config.workspace,
+        result.job_name,
+        result.unnormalized_variables,
+        result.raw_data_items,
+        result.metadata,
+    )
+    receipt = session.submit_evidence(envelope, group_id="shutdown-tail")
     assert entered.wait(2.0)
     closed: list[dict[str, object]] = []
     errors: list[BaseException] = []
@@ -681,6 +736,7 @@ def test_shutdown_waits_for_in_flight_publication_and_retains_lock(
     closer.join(5.0)
     assert not closer.is_alive()
     assert errors == []
+    receipt.wait_committed(2.0)
     assert closed[0]["published_candidates"] == 1
     followup = CampaignSession(load_config(root))
     followup.close()
@@ -757,10 +813,12 @@ def test_5000_row_startup_does_not_make_finalizer_scan_history(
     )
     try:
         started = time.monotonic()
-        costs = [
-            finalize_result(session, snapshot, _result(index, 0.1)).costs
-            for index in range(100)
-        ]
+        finalized = _finalize_many(
+            session,
+            snapshot,
+            [(index, _result(index, 0.1)) for index in range(100)],
+        )
+        costs = [result.costs for result in finalized]
         elapsed = time.monotonic() - started
         assert all(cost is not None for cost in costs)
         assert len(session.records()) == 5100

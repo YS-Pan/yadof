@@ -29,8 +29,9 @@
   diagnostic mechanisms.
 - Resource components interpret backend observations for future scheduling without
   changing task evidence.
-- The common finalizer owns rawData validation/ownership, current-cost evaluation,
-  result construction, and recorder handoff.
+- The common finalizer owns rawData validation/ownership, bounded group admission,
+  committed-receipt coordination, stable-order current-cost interpretation, and
+  result construction.
 
 ## Durable evidence
 
@@ -38,6 +39,10 @@
   publication, tolerant discovery, and current-history queries.
 - The writer bounds unpublished ownership and makes publication failure
   campaign-fatal.
+- Publication receipts distinguish pending, committed, and failed evidence.
+  Committed-but-uninterpreted rawData ownership reuses explicit count/byte limits;
+  excess payload is read back from its immutable segment instead of entering an
+  unbounded memory queue.
 - Readers isolate corrupt or incompatible records without rewriting surviving
   evidence.
 

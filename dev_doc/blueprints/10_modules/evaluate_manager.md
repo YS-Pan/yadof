@@ -4,10 +4,11 @@
 
 `yadof.evaluate_manager` turns normalized candidates into fast logical evaluations
 or prepared jobs, executes them in reusable local workers, prepared local
-subprocesses, or HTCondor, normalizes every outcome into ordered `JobResult` rows,
-derives current cost through one common finalizer, and hands owned evidence to the
-campaign recorder. A preparation, execution, collection, rawData, or cost failure
-affects only its candidate and produces a durable diagnostic row. Recorder
+subprocesses, or HTCondor, and normalizes every outcome into ordered `JobResult`
+rows. One population-scoped coordinator publishes bounded owned-evidence groups
+before deriving current cost in stable population order. A preparation, execution,
+collection, rawData, or cost failure affects only its candidate; valid rawData
+remains durable completed evidence even when its current interpretation fails. Recorder
 backpressure may delay worker reuse or population completion; recorder failure
 stops the campaign before later evaluation.
 
@@ -49,8 +50,9 @@ lifecycle metadata.
 may launch external simulator descendants. Each worker handles one candidate at a
 time and returns a mapping of unique direct `.npz` basenames to validated in-memory
 payloads plus JSON diagnostics. A bounded pipe holds at most one result per worker;
-the parent finalizes each completion before assigning more work. Every worker uses
-the generation's immutable task snapshot. There is no
+the parent admits each completion to the population coordinator before assigning
+more work, and count/byte target commits may expose several ordered results
+together. Every worker uses the generation's immutable task snapshot. There is no
 `prepare_job()`, job-template copy, assigned parameter file, workflow process, or
 fake job path. `fast_resources.py` bounds the configured cap by population and
 declared per-worker CPU/memory/scratch disk against current host capacity.
@@ -75,8 +77,9 @@ held/timed-out jobs when needed. A per-job timeout becomes locally final even wh
 bounded `condor_rm` cleanup fails. Normal policy is `run_as_owner=False`,
 `load_profile=True`; pool repair is outside the module.
 
-Distributed completion callbacks enter the same finalizer used by fast and local;
-no backend contains a persistence branch or publication fallback.
+Distributed completion callbacks enter the same coordinator used by fast and local;
+`RecordingError` is never swallowed as a progress-callback failure, and no backend
+contains a persistence branch or publication fallback.
 
 When CLI progress is active, the manager owns one backend-neutral population bar.
 Fast reports after current-cost finalization; local reports each completed future;
@@ -105,15 +108,19 @@ the same calibration module; only backend-specific enforcement remains separate.
 
 ## Recording and cost return
 
-`finalizer.py` converts file-backed or memory-backed evidence to one owned validated
-envelope, calculates cost with the generation snapshot, and hands the finalized
-`JobResult` to the backpressured session recorder. Failed candidates return `inf`
-with current objective width and are recorded too. Result order always matches
-candidate order, and every dispatch waits for durable population publication.
+`finalizer.py` converts file-backed or memory-backed evidence to owned validated
+envelopes, groups admission by the frozen recorder targets, waits for committed
+receipts, and only then calculates cost with one frozen generation interpreter in
+population order. Execution failures publish diagnostic rows and skip cost. A cost
+interpretation failure preserves immutable completed evidence and returns no
+authoritative cost; the evaluator adapter supplies `inf` with current objective
+width. Result order always matches candidate order, and every dispatch resolves the
+population's receipts before return.
 
 ## Invariants
 
-- Fast/local/distributed share finalization, offer, cost, ordering, and shape rules;
+- Fast/local/distributed share validation, group publication, receipt, cost,
+  ordering, and shape rules;
   only local/distributed share prepared-job composition.
 - Standalone smoke is exactly one midpoint job and has no job/generation timeout.
 - Local default worker cap is eight; adaptive planning may safely choose fewer and

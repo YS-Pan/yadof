@@ -8,24 +8,27 @@ sequenceDiagram
     participant E as evaluation manager
     participant T as task execution
     participant F as common finalizer
-    participant C as current task cost
     participant R as campaign recorder
+    participant C as current task cost
     O->>E: normalized candidate population
     loop each candidate
         E->>T: assigned values and isolated execution context
         T-->>E: rawData or failure diagnostics
         E->>F: backend-neutral result
-        F->>C: validate evidence and calculate current cost
-        F->>R: owned evidence envelope
+        F->>F: validate and own evidence
+        F->>R: bounded prepared-evidence group
+        R-->>F: committed or failed receipt
+        F->>C: calculate current cost in population order
     end
-    R-->>F: publication completed or failed
     F-->>O: ordered objective rows and diagnostics
 ```
 
-The evaluation manager finalizes candidates as they complete while preserving
-input order at the population boundary. Current cost is calculated from validated
-evidence before recorder admission. Bounded recorder capacity may pause producers;
-publication failure stops the campaign rather than losing accepted evidence.
+The evaluation manager prepares candidates as they complete while preserving input
+order for interpretation and return. The coordinator flushes on the existing
+segment count/byte target or the population tail. Current cost starts only after
+the candidate's immutable segment is recovery-visible. Bounded recorder capacity
+may pause producers; publication failure wakes the affected receipts and stops the
+campaign rather than losing accepted evidence.
 
 ## Backend processes
 
@@ -83,7 +86,9 @@ validation, timeout, cleanup, and publication behavior.
 ## Failure and recovery
 
 - Candidate preparation, execution, transport, validation, and current-cost
-  failures are isolated and recorded with the correct objective width.
+  failures are isolated with the correct objective width. Valid rawData is
+  committed as completed evidence before a current-cost failure is reported, so a
+  later generation can replay the interpretation.
 - Backend-specific retry is permitted only for declared recoverable conditions and
   remains bounded.
 - Timeout or cancellation terminates the candidate process tree and ignores
@@ -101,3 +106,5 @@ validation, timeout, cleanup, and publication behavior.
 - Population results are reassembled in input order regardless of completion order.
 - Workers never write recorded data directly; the common finalizer and recorder own
   that boundary.
+- A process lost after commit but before cost may leave interpretation absent; a
+  new session still recovers the evidence. Queue admission alone is never a commit.

@@ -12,6 +12,7 @@ from typing import Callable, Mapping, Sequence
 
 from ..config import LoadedConfig, load_config
 from ..job_template import RawDataContractError, validate_rawdata_directory
+from ..recorded_data.session import RecordingError
 from ..workspace import WorkspaceContext
 from .config import (
     CONDOR_CLUSTER_ID_FILE_NAME,
@@ -190,6 +191,8 @@ def run_condor_jobs(
             return
         try:
             on_result(result)
+        except RecordingError:
+            raise
         except Exception as exc:  # noqa: BLE001 - progress cannot alter outcomes.
             _progress(
                 "htcondor: result callback failed for "

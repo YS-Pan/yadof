@@ -279,6 +279,15 @@ numeric slots enter surrogate modeling; constant slots remain in the reconstruct
 template. `calc_cost.py` owns only current rawData interpretation and objectives—it
 does not select, weight, rank, or mask surrogate training positions.
 
+Real-evaluation rawData is committed before this callback runs. If the process is
+lost or the callback fails, yadof may invoke it again for the same evidence under a
+later task snapshot. Keep it deterministic and replay-safe: use only the supplied
+rawData/raw variables plus task constants, do not mutate rawData, and do not perform
+irreversible external writes. Every returned objective must be numeric and finite,
+and the tuple width must match `get_objective_names()`; callback exceptions, width
+mismatch, `NaN`, and infinity are interpretation failures rather than evidence
+loss.
+
 For large rawData, the package may sample a bounded number of queries per step.
 That sampler balances active fields and samples without replacement inside each
 field. The loss averages pointwise Smooth L1 within each field and then averages
@@ -291,6 +300,8 @@ field's macro influence.
 - Do not depend on `cost.json`.
 - Do not save cost as a source file.
 - Do not mutate rawData while calculating cost.
+- Do not rely on one-shot external side effects; the same committed evidence may be
+  interpreted more than once.
 - Do not return physical values or unit-bearing objective names as costs; map every
   physical metric independently into `[0, 1]` with fixed task thresholds.
 - Do not normalize against observed history, a population, or a batch.

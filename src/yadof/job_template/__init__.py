@@ -3,6 +3,7 @@
 from .api import (
     FAST_EVALUATION_MODULE_NAME,
     CostInterpreter,
+    CostNonFiniteError,
     CostObjectiveWidthError,
     TaskDefinition,
     assign_parameters,
@@ -52,6 +53,7 @@ from .rawdata_template import (
 __all__ = [
     "FAST_EVALUATION_MODULE_NAME",
     "CostInterpreter",
+    "CostNonFiniteError",
     "CostObjectiveWidthError",
     "CostProjectionDiagnostics",
     "CostProjectionFailure",

@@ -115,7 +115,7 @@ the fast evaluation call returns.
 ## Warm start and orchestration
 
 History warm start derives current normalized variables and costs from the session's
-startup catalog plus accepted current rows. `run_generations` supports start/resume,
+startup catalog plus committed current rows. `run_generations` supports start/resume,
 stable run and optimization
 identities, deterministic seed, temporary config overrides, optional pre-run smoke,
 and generation metadata including timings, populations, task fingerprints, and
@@ -143,13 +143,20 @@ Individual infinite rows remain in shape and may be handled by optimizer mechani
 Optional strict mode stops immediately after an all-infinite generation and reports
 recent per-job diagnostics. A smoke failure prevents generation submission.
 
+The real-evaluation adapter creates those `inf` rows only after evidence-first
+finalization returns no authoritative current cost. If valid rawData was already
+committed, the immutable record remains `completed` and replayable; optimization
+does not write the sentinel back into evidence or interpretation state. Recorder
+failure remains campaign-fatal and never becomes an individual `inf`.
+
 ## Invariants
 
 - No workspace-global optimizer singleton or implicit history path.
 - One workspace has one active optimization campaign; concurrent campaigns use
   different workspaces.
-- Current accepted rows are available within the generation while publication is
-  pending; the next generation starts only after every row is durable.
+- Current rows become visible to result consumers only after their receipts commit
+  and ordered interpretation finishes; the next generation starts only after every
+  row is durable.
 - Surrogate predictions never bypass real-evaluation validation.
 - Resume reuses compatible evidence/checkpoints but does not copy another workspace.
 - A semantic strategy switch waits for pending component work, releases old memory,

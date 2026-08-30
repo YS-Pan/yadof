@@ -35,6 +35,86 @@ class RecordingError(RuntimeError):
     """Raised when durable campaign evidence cannot be published."""
 
 
+class PublicationReceipt:
+    """Thread-safe acknowledgement for one immutable evidence publication."""
+
+    __slots__ = (
+        "candidate_id",
+        "job_name",
+        "group_id",
+        "reservation_bytes",
+        "_event",
+        "_lock",
+        "_state",
+        "_reference",
+        "_failure",
+        "_committed_at",
+    )
+
+    def __init__(
+        self,
+        *,
+        candidate_id: str,
+        job_name: str,
+        group_id: str,
+        reservation_bytes: int,
+    ) -> None:
+        self.candidate_id = str(candidate_id)
+        self.job_name = str(job_name)
+        self.group_id = str(group_id)
+        self.reservation_bytes = int(reservation_bytes)
+        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self._state = "pending"
+        self._reference: SegmentReference | None = None
+        self._failure: BaseException | None = None
+        self._committed_at: float | None = None
+
+    @property
+    def state(self) -> str:
+        with self._lock:
+            return self._state
+
+    @property
+    def committed_at_monotonic(self) -> float | None:
+        with self._lock:
+            return self._committed_at
+
+    def wait_committed(self, timeout: float | None = None) -> SegmentReference:
+        """Wait for durable publication and return its recovery-visible reference."""
+
+        if not self._event.wait(timeout):
+            raise TimeoutError(
+                f"timed out waiting for evidence receipt {self.candidate_id}"
+            )
+        with self._lock:
+            if self._state == "committed" and self._reference is not None:
+                return self._reference
+            failure = self._failure
+        raise RecordingError(
+            f"evidence publication failed for {self.job_name}"
+        ) from failure
+
+    def _mark_committed(self, reference: SegmentReference) -> bool:
+        with self._lock:
+            if self._state != "pending":
+                return False
+            self._reference = reference
+            self._committed_at = time.monotonic()
+            self._state = "committed"
+            self._event.set()
+            return True
+
+    def _mark_failed(self, failure: BaseException) -> bool:
+        with self._lock:
+            if self._state != "pending":
+                return False
+            self._failure = failure
+            self._state = "failed"
+            self._event.set()
+            return True
+
+
 @dataclass(slots=True)
 class RecorderCounters:
     offered: int = 0
@@ -53,11 +133,33 @@ class RecorderCounters:
 
 
 @dataclass(slots=True)
+class InterpretationCounters:
+    receipts_submitted: int = 0
+    receipts_committed: int = 0
+    receipts_failed: int = 0
+    committed_uninterpreted_candidates: int = 0
+    committed_uninterpreted_bytes: int = 0
+    peak_committed_uninterpreted_candidates: int = 0
+    peak_committed_uninterpreted_bytes: int = 0
+    committed_owned_candidates: int = 0
+    committed_owned_bytes: int = 0
+    peak_committed_owned_candidates: int = 0
+    peak_committed_owned_bytes: int = 0
+    committed_owned_spills: int = 0
+    interpretation_succeeded: int = 0
+    interpretation_failed: int = 0
+    interpretation_not_applicable: int = 0
+
+
+@dataclass(slots=True)
 class _SessionRow:
     record: dict[str, object]
     reference: SegmentReference | None = None
     envelope: RecordEnvelope | None = None
-    evidence_state: str = "published"
+    receipt: PublicationReceipt | None = None
+    evidence_state: str = "committed"
+    interpretation_state: str = "uninterpreted"
+    interpretation_diagnostics: dict[str, object] | None = None
     normalized: tuple[float, ...] | None = None
     costs: tuple[float, ...] | None = None
     interpretation_fingerprint: str | None = None
@@ -365,6 +467,13 @@ class CampaignSession:
         self._stable_objective_count: int | None = None
         self.last_reinterpretation_sec = 0.0
         self._closed = False
+        self._interpretation_counters = InterpretationCounters()
+        self._committed_owned_count_limit = int(
+            config.HISTORY_UNPUBLISHED_MAX_CANDIDATES
+        )
+        self._committed_owned_bytes_limit = int(
+            config.HISTORY_UNPUBLISHED_MAX_BYTES
+        )
         self._lock_release_guard = threading.Lock()
         try:
             self._writer = _BoundedSegmentWriter(
@@ -417,27 +526,26 @@ class CampaignSession:
             sources=MappingProxyType(sources),
         )
 
-    def add_finalized(
+    def submit_evidence(
         self,
         envelope: RecordEnvelope,
         *,
-        normalized: Sequence[float] | None,
-        costs: Sequence[float] | None,
-        interpretation_fingerprint: str,
-    ) -> bool:
+        group_id: str,
+    ) -> PublicationReceipt:
+        """Admit owned evidence and return its durable-publication receipt."""
+
+        receipt = PublicationReceipt(
+            candidate_id=envelope.candidate_id,
+            job_name=str(envelope.record.get("job_name") or ""),
+            group_id=group_id,
+            reservation_bytes=envelope.reservation_bytes,
+        )
         row = _SessionRow(
             record=dict(envelope.record),
             envelope=envelope,
+            receipt=receipt,
             evidence_state="pending",
-            normalized=(
-                tuple(float(value) for value in normalized)
-                if normalized is not None
-                else None
-            ),
-            costs=(
-                tuple(float(value) for value in costs) if costs is not None else None
-            ),
-            interpretation_fingerprint=interpretation_fingerprint,
+            interpretation_state="pending",
         )
         with self._state_lock:
             if envelope.candidate_id in self._rows:
@@ -446,24 +554,123 @@ class CampaignSession:
                     f"{envelope.candidate_id}"
                 )
             self._rows[envelope.candidate_id] = row
+            self._interpretation_counters.receipts_submitted += 1
         try:
-            return self._writer.offer(envelope)
+            self._writer.offer(envelope)
         except Exception as exc:
             with self._state_lock:
                 row.envelope = None
                 row.reference = None
                 row.evidence_state = "recording_failed"
+                row.interpretation_state = "blocked"
                 metadata = dict(row.record.get("job_metadata") or {})
                 metadata["recording_error"] = str(exc)
                 row.record["job_metadata"] = metadata
+                if receipt._mark_failed(exc):
+                    self._interpretation_counters.receipts_failed += 1
             raise
+        return receipt
+
+    def committed_evidence(
+        self, receipt: PublicationReceipt
+    ) -> tuple[NamedRawDataItem, ...]:
+        """Return owned or recovery-loaded evidence after acknowledgement."""
+
+        reference = receipt.wait_committed()
+        with self._state_lock:
+            row = self._rows.get(receipt.candidate_id)
+            if row is None or row.evidence_state != "committed":
+                raise RecordingError(
+                    f"committed evidence row is unavailable: {receipt.candidate_id}"
+                )
+            if row.envelope is not None:
+                return row.envelope.rawdata_items
+        return load_reference_rawdata(reference)
+
+    def record_interpretation(
+        self,
+        receipt: PublicationReceipt,
+        *,
+        state: str,
+        normalized: Sequence[float] | None,
+        costs: Sequence[float] | None,
+        interpretation_fingerprint: str,
+        diagnostics: Mapping[str, object] | None = None,
+    ) -> None:
+        """Attach a transient derived interpretation and release owned payload."""
+
+        selected_state = str(state)
+        if selected_state not in {"succeeded", "failed", "not_applicable"}:
+            raise ValueError(f"unsupported interpretation state: {selected_state!r}")
+        receipt.wait_committed()
+        with self._state_lock:
+            row = self._rows.get(receipt.candidate_id)
+            if row is None or row.evidence_state != "committed":
+                raise RecordingError(
+                    f"cannot interpret unavailable evidence: {receipt.candidate_id}"
+                )
+            was_pending = row.interpretation_state == "pending"
+            retained_owned = row.envelope is not None
+            row.normalized = (
+                tuple(float(value) for value in normalized)
+                if normalized is not None
+                else None
+            )
+            row.costs = (
+                tuple(float(value) for value in costs) if costs is not None else None
+            )
+            row.interpretation_fingerprint = str(interpretation_fingerprint)
+            row.interpretation_state = selected_state
+            row.interpretation_diagnostics = (
+                dict(diagnostics) if diagnostics is not None else None
+            )
+            row.envelope = None
+            counters = self._interpretation_counters
+            if was_pending:
+                counters.committed_uninterpreted_candidates = max(
+                    0, counters.committed_uninterpreted_candidates - 1
+                )
+                counters.committed_uninterpreted_bytes = max(
+                    0,
+                    counters.committed_uninterpreted_bytes
+                    - receipt.reservation_bytes,
+                )
+                if retained_owned:
+                    counters.committed_owned_candidates = max(
+                        0, counters.committed_owned_candidates - 1
+                    )
+                    counters.committed_owned_bytes = max(
+                        0, counters.committed_owned_bytes - receipt.reservation_bytes
+                    )
+            if selected_state == "succeeded":
+                counters.interpretation_succeeded += 1
+            elif selected_state == "failed":
+                counters.interpretation_failed += 1
+            else:
+                counters.interpretation_not_applicable += 1
 
     def flush_boundary(self) -> None:
         self._writer.flush_boundary()
 
     def records(self) -> tuple[dict[str, object], ...]:
         with self._state_lock:
-            return tuple(dict(row.record) for row in self._rows.values())
+            output = []
+            for row in self._rows.values():
+                record = dict(row.record)
+                record["evidence_state"] = row.evidence_state
+                record["interpretation_state"] = row.interpretation_state
+                if row.interpretation_diagnostics is not None:
+                    record["interpretation_diagnostics"] = dict(
+                        row.interpretation_diagnostics
+                    )
+                if row.receipt is not None:
+                    record["publication_receipt"] = {
+                        "candidate_id": row.receipt.candidate_id,
+                        "group_id": row.receipt.group_id,
+                        "state": row.receipt.state,
+                    }
+                output.append(record)
+            return tuple(output)
 
     def historical_results(
         self, snapshot: GenerationTaskSnapshot | None = None
@@ -476,7 +683,10 @@ class CampaignSession:
         with self._state_lock:
             rows = tuple(self._rows.values())
         for row in rows:
-            if str(row.record.get("status")) != "completed":
+            if (
+                str(row.record.get("status")) != "completed"
+                or row.evidence_state != "committed"
+            ):
                 continue
             if (
                 row.interpretation_fingerprint
@@ -499,7 +709,13 @@ class CampaignSession:
                     )[0]
                     if len(calculated) != len(selected.objective_names):
                         raise ValueError("historical objective width mismatch")
-                except Exception:
+                except Exception as exc:
+                    with self._state_lock:
+                        row.interpretation_state = "failed"
+                        row.interpretation_diagnostics = {
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                        }
                     continue
                 with self._state_lock:
                     row.normalized = tuple(float(value) for value in normalized)
@@ -507,6 +723,8 @@ class CampaignSession:
                     row.interpretation_fingerprint = (
                         selected.interpretation_fingerprint
                     )
+                    row.interpretation_state = "succeeded"
+                    row.interpretation_diagnostics = None
             output.append(
                 (
                     str(row.record.get("job_name", "")),
@@ -603,7 +821,10 @@ class CampaignSession:
         return tuple(output)
 
     def counters(self) -> dict[str, object]:
-        return self._writer.counters()
+        output = self._writer.counters()
+        with self._state_lock:
+            output.update(asdict(self._interpretation_counters))
+        return output
 
     def close(self) -> dict[str, object]:
         if self._closed:
@@ -623,6 +844,8 @@ class CampaignSession:
         return self.counters()
 
     def _evidence(self, row: _SessionRow):
+        if row.evidence_state != "committed":
+            raise FileNotFoundError("recorded evidence is not durably committed")
         if row.envelope is not None:
             return row.envelope.rawdata_items
         if row.reference is not None:
@@ -639,13 +862,46 @@ class CampaignSession:
                 row = self._rows.get(envelope.candidate_id)
                 if row is None:
                     continue
+                counters = self._interpretation_counters
+                retain_owned = bool(envelope.rawdata_items) and (
+                    counters.committed_owned_candidates + 1
+                    <= self._committed_owned_count_limit
+                    and counters.committed_owned_bytes + envelope.reservation_bytes
+                    <= self._committed_owned_bytes_limit
+                )
                 row.reference = reference
-                row.envelope = None
-                row.evidence_state = "published"
+                row.envelope = envelope if retain_owned else None
+                row.evidence_state = "committed"
+                counters.committed_uninterpreted_candidates += 1
+                counters.committed_uninterpreted_bytes += envelope.reservation_bytes
+                counters.peak_committed_uninterpreted_candidates = max(
+                    counters.peak_committed_uninterpreted_candidates,
+                    counters.committed_uninterpreted_candidates,
+                )
+                counters.peak_committed_uninterpreted_bytes = max(
+                    counters.peak_committed_uninterpreted_bytes,
+                    counters.committed_uninterpreted_bytes,
+                )
+                if retain_owned:
+                    counters.committed_owned_candidates += 1
+                    counters.committed_owned_bytes += envelope.reservation_bytes
+                    counters.peak_committed_owned_candidates = max(
+                        counters.peak_committed_owned_candidates,
+                        counters.committed_owned_candidates,
+                    )
+                    counters.peak_committed_owned_bytes = max(
+                        counters.peak_committed_owned_bytes,
+                        counters.committed_owned_bytes,
+                    )
+                elif envelope.rawdata_items:
+                    counters.committed_owned_spills += 1
+                if row.receipt is not None and row.receipt._mark_committed(reference):
+                    counters.receipts_committed += 1
 
     def _on_failed(
         self, envelopes: Sequence[RecordEnvelope], reason: str
     ) -> None:
+        failure = RecordingError(f"evidence publication failed: {reason}")
         with self._state_lock:
             for envelope in envelopes:
                 row = self._rows.get(envelope.candidate_id)
@@ -654,9 +910,12 @@ class CampaignSession:
                 row.envelope = None
                 row.reference = None
                 row.evidence_state = "recording_failed"
+                row.interpretation_state = "blocked"
                 metadata = dict(row.record.get("job_metadata") or {})
                 metadata["recording_error"] = str(reason)
                 row.record["job_metadata"] = metadata
+                if row.receipt is not None and row.receipt._mark_failed(failure):
+                    self._interpretation_counters.receipts_failed += 1
 
     def _release_campaign_lock(self) -> None:
         with self._lock_release_guard:
@@ -677,4 +936,9 @@ def _raw_variables_tuple(
     return tuple(float(value[name]) for name in snapshot.parameter_names)
 
 
-__all__ = ["CampaignSession", "RecorderCounters", "RecordingError"]
+__all__ = [
+    "CampaignSession",
+    "PublicationReceipt",
+    "RecorderCounters",
+    "RecordingError",
+]

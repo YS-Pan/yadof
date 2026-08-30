@@ -67,6 +67,10 @@ for separately authorized real adapter smoke or performance work.
 - backend-neutral finalization; immutable segments; exact unpublished count/byte
   budgets; float32/float64 large-candidate singleton publication; full-budget
   backpressure, same-batch retry, fatal writer propagation, and shutdown durability;
+  grouped committed receipts, out-of-order completion with deterministic
+  interpretation/result order, cost exception/width/non-finite replay, process loss
+  after commit versus enqueue-only loss, bounded committed-owned payloads, and
+  fast/local/distributed recorder-fatal equivalence;
   OS campaign-lock
   exclusivity; corrupt candidate/segment tolerance; task-snapshot hot reload and
   fingerprint invalidation; no old-segment reopen; 5,000-row hot-finalizer and

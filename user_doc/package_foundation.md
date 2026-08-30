@@ -199,13 +199,15 @@ task-owned `evaluation.py:evaluate_rawdata()`, runs it in reusable crash-isolate
 processes on the submit machine, and creates no durable `jobs/<candidate>/`
 directory. A simulator may use the configured fast scratch root, but each candidate
 scratch is temporary, isolated, and cleaned; it is not evidence or a recovery point.
-The parent validates returned memory rawData and calculates current cost in the same
-backend-neutral finalizer used by local and distributed execution. It then hands an
-owned evidence envelope to the bounded campaign recorder. When publication cannot
-keep up, recorder admission waits for capacity; the population boundary waits for
-all evidence to become durable before later evaluation begins. A hard record-limit
-or storage failure stops the campaign visibly instead of continuing with missing
-history.
+The parent validates and owns returned memory rawData in the same backend-neutral
+coordinator used by local and distributed execution. It hands bounded evidence
+groups to the campaign recorder, waits for committed receipts, and only then runs
+current cost in stable population order. When publication cannot keep up, recorder
+admission waits for capacity; the population boundary waits for all evidence to
+become durable before later evaluation begins. A cost failure preserves already
+committed completed evidence for replay and returns transient optimizer `inf`; a
+hard record-limit or storage failure stops the campaign visibly instead of
+continuing with missing history.
 
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace

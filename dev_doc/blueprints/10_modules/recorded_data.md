@@ -19,10 +19,13 @@ workflow timing, status, and diagnostic metadata. RawData member metadata is scr
 of repeated variable payloads before archiving. Normalized variables, current costs,
 and surrogate predictions are not persisted as source truth.
 
-Current cost is finalized before admission. Error/timeout rows may have no rawData;
-completed evidence must satisfy the current rawData schema. Admission reserves both
-a candidate credit and conservative peak-resident byte credits. A full budget
-blocks the producer until publication releases capacity; it never drops a row.
+Current cost is never source truth and is not required for admission. Error/timeout
+rows may have no rawData; completed evidence must satisfy the current rawData schema.
+Admission returns a candidate/group receipt and reserves both a candidate credit and
+conservative peak-resident byte credits. A full budget blocks the producer until
+publication releases capacity; it never drops a row. The receipt remains pending
+through queue admission and resolves committed only after atomic segment
+publication. Failed publication resolves every affected receipt failed.
 
 Sources may be file-backed direct `.npz` paths or named in-memory payloads. The
 recording layer validates memory payloads, canonicalizes metadata, rejects any field
@@ -31,7 +34,10 @@ candidate-scoped standard-ZIP member shape. Workers never write segments.
 
 `CampaignSession` discovers finalized segment names once, builds a private hot
 catalog, validates stable parameter identity/objective width at generation
-boundaries, and owns exactly one bounded writer. The writer publishes up to the
+boundaries, and owns exactly one bounded writer. Committed-but-uninterpreted payload
+ownership reuses the configured unpublished count/byte limits; payloads beyond that
+resident budget are recovered from their new immutable segment rather than retained
+in another unbounded memory queue. The writer publishes up to the
 configured count/byte target through a same-directory temporary ZIP and atomic
 rename; it never opens an older segment. Evaluation/population boundaries wait for
 all pending segments. The writer retries the same retained batch after a transient
@@ -46,7 +52,8 @@ training bundles. Named training reads preserve every direct NPZ basename and ma
 return a separate JSON-safe `job_metadata` row aligned by stable job name, allowing
 task-owned hierarchical-CAE frequency filter to consume recorded diagnostics without altering
 rawData. The live campaign session exposes the same named sample/metadata views over
-durable plus accepted current rows. The cost-view reader freezes one finalized segment-name snapshot,
+durable plus committed current rows; pending evidence is not a readable sample. The
+cost-view reader freezes one finalized segment-name snapshot,
 then opens each selected ZIP once to combine manifest checks, NPZ decode/schema
 validation, and current-cost input delivery. Invalid, missing, or corrupt rawData is skipped with
 diagnostics rather than poisoning all history. Objective changes are reflected on
@@ -63,8 +70,14 @@ readable; central-directory/manifest failure skips one segment.
 - Published segments are immutable, finalized only by atomic rename,
   and bounded by campaign-selected count/byte policy.
 - In-flight envelopes stay within the complete unpublished count/byte budget.
-- Every finalized current row is either durably published before the next
+- Committed owned payloads stay within an explicit count/byte budget; logical
+  population ordering may retain only payload-free result metadata and durable
+  references beyond it.
+- Every prepared current row is either durably published before the next
   population boundary or the campaign stops with a recording error.
+- Immutable completed evidence is independent from transient normalization, cost,
+  and interpretation diagnostics; a failed cost can be replayed under a later
+  generation snapshot.
 - A live campaign rejects a duplicate candidate identity before recorder admission;
   it never publishes a duplicate that a later first-wins query would ignore.
 - Clearing history validates the exact workspace-owned segment and event targets,

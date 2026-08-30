@@ -117,16 +117,27 @@ target. Use a multidimensional field only when its dimensions form one coherent
 physical grid or tensor whose joint meaning is part of the intended prediction
 contract.
 
-Fast, local, and distributed backends all return `JobResult` to one finalizer,
-which owns and validates rawData once, calculates the current objective tuple, and
-hands the owned evidence to the campaign recorder. The recorder keeps bounded
-asynchronous micro-batching, but its limits now apply backpressure: a full
-unpublished budget waits for publication instead of dropping the new result. The
-population boundary waits until every result has been atomically published before
-the next generation can start. An oversized record or a writer that cannot publish
-after its configured attempts raises a recording error and stops the campaign; it
-does not continue with incomplete history or convert the scientific result to an
-`inf` candidate.
+Fast, local, and distributed backends all return `JobResult` to one finalization
+coordinator. It owns and validates rawData once, admits bounded groups to the
+campaign recorder, and waits for committed publication receipts before calculating
+the current objective tuple in population order. A full unpublished budget waits
+for publication instead of dropping the new result, and the population tail forces
+a final group flush. The next generation cannot start until every receipt resolves.
+
+If valid rawData commits but `calc_cost.py` raises, returns the wrong objective
+width, or returns `NaN`/infinity, the immutable record remains completed evidence.
+The current optimizer row becomes correct-width `inf`, while the authoritative
+record does not store that sentinel. Correct the cost code at a later generation
+boundary and yadof can reinterpret the same rawData. An oversized record or a writer
+that cannot publish after its configured attempts is different: it raises a
+recording error and stops the campaign rather than continuing with incomplete
+history.
+
+Because evidence can be committed before a process is lost or a cost callback
+hangs, `calculate_cost()` has replay semantics. Keep it deterministic, derive its
+answer only from supplied rawData/raw variables and frozen task constants, avoid
+irreversible external side effects, and never mutate evidence. Queue admission by
+itself is not a durable commit.
 
 A campaign is not required to keep its original task definition forever. If the
 user discovers a mistake, they may correct `calc_cost.py`, parameter definitions,

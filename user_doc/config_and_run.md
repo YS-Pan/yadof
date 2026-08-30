@@ -115,7 +115,12 @@ and `HISTORY_WRITER_MAX_CONSECUTIVE_FAILURES` (3 attempts for the same pending
 segment). Count and byte budgets are independent backpressure limits, not loss
 allowances. When either unpublished budget is full, evaluation finalization waits
 for the writer to publish enough evidence. Every evaluation/generation boundary
-waits until all admitted evidence is durably published. A record above the explicit
+waits until all admitted evidence is durably published. Candidate/group receipts
+remain pending after admission and become committed only after atomic segment
+publication. Current-cost interpretation starts after that commit. Committed
+rawData kept hot for not-yet-interpreted rows is bounded by the same explicit
+count/byte limits; excess payload is reloaded from its immutable segment. A record
+above the explicit
 single-candidate safety limit or a writer that exhausts its retry count stops the
 campaign before a later evaluation can begin. Recorder settings are frozen when a
 campaign starts even though task-semantic configuration remains hot-reloadable at

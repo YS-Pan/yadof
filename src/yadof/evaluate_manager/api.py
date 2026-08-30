@@ -13,9 +13,9 @@ from typing import Any, Callable, Iterable, Mapping
 from ..config import LoadedConfig, load_config
 from ..job_template import get_objective_count, get_variable_count, validate_fast_task
 from ..workspace import WorkspaceContext
-from ..recorded_data.session import CampaignSession
+from ..recorded_data.session import CampaignSession, RecordingError
 from ..task_snapshot import GenerationTaskSnapshot
-from .finalizer import finalize_result
+from .finalizer import ResultFinalizationCoordinator
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
 from .local_runner import run_local_job
@@ -242,26 +242,33 @@ def _dispatch_fast(
     objective_width = get_objective_count(config.workspace)
     costs: list[tuple[float, ...] | None] = [None] * len(rows)
 
-    def consume(index: int, result: JobResult) -> None:
-        try:
-            finalized = finalize_result(session, snapshot, result)
-            if finalized.costs is not None:
-                costs[index] = tuple(finalized.costs)
-        finally:
-            progress.complete(index, successful=costs[index] is not None)
+    def expose(index: int, finalized: JobResult) -> None:
+        if finalized.costs is not None:
+            costs[index] = tuple(finalized.costs)
+        progress.complete(index, successful=costs[index] is not None)
 
-    run_fast_population(
-        config,
-        rows,
-        timeout_sec=timeout_sec,
-        env=env,
-        max_workers=fast_max_workers,
-        run_id=run_id,
-        optimization_index=optimization_index,
-        generation_index=generation_index,
-        on_result=consume,
+    coordinator = ResultFinalizationCoordinator(
+        session,
+        snapshot,
+        expected_count=len(rows),
+        on_finalized=expose,
     )
-    session.flush_boundary()
+    try:
+        run_fast_population(
+            config,
+            rows,
+            timeout_sec=timeout_sec,
+            env=env,
+            max_workers=fast_max_workers,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+            on_result=coordinator.accept,
+        )
+        coordinator.finish()
+    except BaseException:
+        coordinator.close()
+        raise
     return tuple(
         row if row is not None else _inf_costs(objective_width) for row in costs
     )
@@ -298,6 +305,18 @@ def _dispatch_local(
     worker_plan_metadata = worker_plan.metadata()
     _progress(worker_plan.summary())
 
+    def expose(index: int, finalized: JobResult) -> None:
+        if finalized.costs is not None:
+            costs_by_individual[index] = tuple(finalized.costs)
+        progress.complete(index, successful=finalized.costs is not None)
+
+    coordinator = ResultFinalizationCoordinator(
+        session,
+        snapshot,
+        expected_count=len(population_rows),
+        on_finalized=expose,
+    )
+
     def evaluate_one(
         index: int, population_row: tuple[Any, ...]
     ) -> tuple[int, JobResult]:
@@ -314,54 +333,51 @@ def _dispatch_local(
             worker_plan_metadata=worker_plan_metadata,
         )
 
-    worker_count = worker_plan.worker_count
-    if worker_count <= 1 or len(population_rows) <= 1:
-        for index, row in enumerate(population_rows):
-            outcome = evaluate_one(index, row)
-            finalized = finalize_result(session, snapshot, outcome[1])
-            if finalized.costs is not None:
-                costs_by_individual[index] = tuple(finalized.costs)
-            progress.complete(index, successful=finalized.costs is not None)
-    else:
-        with ThreadPoolExecutor(
-            max_workers=worker_count,
-            thread_name_prefix="yadof-local-eval",
-        ) as executor:
-            futures = {
-                executor.submit(evaluate_one, index, row): (index, row)
-                for index, row in enumerate(population_rows)
-            }
-            for future in as_completed(futures):
-                index, row = futures[future]
-                try:
-                    outcome = future.result()
-                except Exception as exc:  # noqa: BLE001 - isolate one worker.
-                    _progress(
-                        "local worker failed for individual "
-                        f"{index}: {type(exc).__name__}: {exc}"
-                    )
-                    outcome = (
-                        index,
-                        _failed_result(
-                            stage="local_worker",
-                            engine="local",
-                            exc=exc,
-                            population_row=row,
-                            index=index,
-                            jobs_dir=config.workspace.jobs_dir,
-                            job=None,
-                            result=None,
-                            run_id=run_id,
-                            optimization_index=optimization_index,
-                            generation_index=generation_index,
-                        ),
-                    )
-                finalized = finalize_result(session, snapshot, outcome[1])
-                if finalized.costs is not None:
-                    costs_by_individual[index] = tuple(finalized.costs)
-                progress.complete(index, successful=finalized.costs is not None)
-
-    session.flush_boundary()
+    try:
+        worker_count = worker_plan.worker_count
+        if worker_count <= 1 or len(population_rows) <= 1:
+            for index, row in enumerate(population_rows):
+                outcome = evaluate_one(index, row)
+                coordinator.accept(index, outcome[1])
+        else:
+            with ThreadPoolExecutor(
+                max_workers=worker_count,
+                thread_name_prefix="yadof-local-eval",
+            ) as executor:
+                futures = {
+                    executor.submit(evaluate_one, index, row): (index, row)
+                    for index, row in enumerate(population_rows)
+                }
+                for future in as_completed(futures):
+                    index, row = futures[future]
+                    try:
+                        outcome = future.result()
+                    except Exception as exc:  # noqa: BLE001 - isolate one worker.
+                        _progress(
+                            "local worker failed for individual "
+                            f"{index}: {type(exc).__name__}: {exc}"
+                        )
+                        outcome = (
+                            index,
+                            _failed_result(
+                                stage="local_worker",
+                                engine="local",
+                                exc=exc,
+                                population_row=row,
+                                index=index,
+                                jobs_dir=config.workspace.jobs_dir,
+                                job=None,
+                                result=None,
+                                run_id=run_id,
+                                optimization_index=optimization_index,
+                                generation_index=generation_index,
+                            ),
+                        )
+                    coordinator.accept(index, outcome[1])
+        coordinator.finish()
+    except BaseException:
+        coordinator.close()
+        raise
     _run_after_jobs_submitted(after_jobs_submitted)
     return tuple(
         costs if costs is not None else _inf_costs(objective_width)
@@ -464,6 +480,19 @@ def _dispatch_distributed(
     jobs: list[JobSpec] = []
     positions: list[int] = []
 
+    def expose(index: int, finalized: JobResult) -> None:
+        if finalized.costs is not None:
+            costs[index] = tuple(finalized.costs)
+        progress.complete(index, successful=finalized.costs is not None)
+
+    coordinator = ResultFinalizationCoordinator(
+        session,
+        snapshot,
+        expected_count=len(rows),
+        on_finalized=expose,
+    )
+    accepted_positions: set[int] = set()
+
     for index, row in enumerate(rows):
         try:
             job = prepare_job(
@@ -491,8 +520,8 @@ def _dispatch_distributed(
                 optimization_index=optimization_index,
                 generation_index=generation_index,
             )
-            finalized = finalize_result(session, snapshot, failure)
-            progress.complete(index, successful=finalized.costs is not None)
+            coordinator.accept(index, failure)
+            accepted_positions.add(index)
             continue
         jobs.append(job)
         positions.append(index)
@@ -501,16 +530,12 @@ def _dispatch_distributed(
         job.name: position for position, job in zip(positions, jobs)
     }
 
-    finalized_by_job: dict[str, JobResult] = {}
-
     def consume_result(result: JobResult) -> None:
-        finalized = finalize_result(session, snapshot, result)
-        finalized_by_job[result.job_name] = finalized
         position = positions_by_job.get(result.job_name)
-        if position is not None:
-            if finalized.costs is not None:
-                costs[position] = tuple(finalized.costs)
-            progress.complete(position, successful=finalized.costs is not None)
+        if position is None or position in accepted_positions:
+            return
+        coordinator.accept(position, result)
+        accepted_positions.add(position)
 
     try:
         results = run_condor_jobs(
@@ -523,6 +548,9 @@ def _dispatch_distributed(
             on_result=consume_result,
             history_records=session.records(),
         )
+    except RecordingError:
+        coordinator.close()
+        raise
     except Exception as exc:  # noqa: BLE001 - preserve generation shape.
         results = tuple(
             _failed_result(
@@ -542,17 +570,15 @@ def _dispatch_distributed(
         )
 
     for position, result in zip(positions, results):
-        finalized = finalized_by_job.get(result.job_name)
-        if finalized is None:
-            finalized = finalize_result(session, snapshot, result)
-            finalized_by_job[result.job_name] = finalized
-        if finalized.costs is not None:
-            costs[position] = tuple(finalized.costs)
-        progress.complete(position, successful=finalized.costs is not None)
-    for position in range(len(rows)):
-        progress.complete(position, successful=costs[position] is not None)
-
-    session.flush_boundary()
+        if position in accepted_positions:
+            continue
+        coordinator.accept(position, result)
+        accepted_positions.add(position)
+    try:
+        coordinator.finish()
+    except BaseException:
+        coordinator.close()
+        raise
     return tuple(
         row if row is not None else _inf_costs(objective_width) for row in costs
     )

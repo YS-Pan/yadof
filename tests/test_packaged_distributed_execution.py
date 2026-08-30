@@ -10,12 +10,13 @@ from types import SimpleNamespace
 import zipfile
 
 import numpy as np
+import pytest
 
 from yadof.config import load_config
 from yadof.evaluate_manager import evaluate_population, prepare_job, run_smoke_test
 from yadof.evaluate_manager.types import JobResult
 from yadof.job_template.cost_misc import soft_cost
-from yadof.recorded_data import list_records
+from yadof.recorded_data import RecordingError, list_records
 from yadof.workspace.init import init_workspace
 
 
@@ -149,6 +150,61 @@ def test_distributed_population_and_smoke_keep_shape_and_callback(
 
     monkeypatch.setattr(condor_runner, "run_condor_jobs", fake_smoke)
     assert run_smoke_test(workspace, mode="distributed") == ((expected_cost,),)
+
+
+def test_distributed_record_failure_is_fatal_not_individual_inf(
+    tmp_path, monkeypatch
+):
+    from yadof.evaluate_manager import condor_runner
+    from yadof.recorded_data import session as session_module
+
+    workspace = _workspace(tmp_path, "record-failure")
+
+    def fake_run(_workspace, jobs, **kwargs):
+        results = tuple(_completed_result(job) for job in jobs)
+        for result in results:
+            kwargs["on_result"](result)
+        return results
+
+    def fail_publication(*_args, **_kwargs):
+        raise OSError("injected distributed recording failure")
+
+    monkeypatch.setattr(condor_runner, "run_condor_jobs", fake_run)
+    monkeypatch.setattr(session_module, "publish_segment", fail_publication)
+    with pytest.raises(
+        RecordingError,
+        match="before all evidence could be published",
+    ):
+        evaluate_population(
+            workspace,
+            ((0.25,), (0.75,)),
+            mode="distributed",
+        )
+    assert list_records(workspace) == ()
+
+
+def test_condor_result_callback_propagates_recording_error(
+    tmp_path, monkeypatch
+):
+    from yadof.evaluate_manager import condor_runner
+
+    workspace = _workspace(tmp_path, "callback-failure")
+    job = prepare_job(workspace, (0.25,), mode="distributed", timeout_sec=1.0)
+
+    def fail_submit(*_args, **_kwargs):
+        raise OSError("injected submit failure")
+
+    def fail_callback(_result):
+        raise RecordingError("injected recorder callback failure")
+
+    monkeypatch.setattr(condor_runner, "submit_condor_job", fail_submit)
+    with pytest.raises(RecordingError, match="recorder callback failure"):
+        condor_runner.run_condor_jobs(
+            workspace,
+            (job,),
+            timeout_sec=1.0,
+            on_result=fail_callback,
+        )
 
 
 def test_distributed_submit_failure_is_per_individual_and_diagnosable(

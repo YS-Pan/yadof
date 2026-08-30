@@ -5,11 +5,34 @@
 本文是八阶段系列中唯一已精化的首阶段 TODO。2026-08-30 用户授权由一个明确点名全部阶段
 文件的 Goal 依次精化并执行整个系列；该 Goal 触发本文后，可以直接实施，无需在本阶段完成
 后等待用户确认。完成、归档、更新 overall-plan ledger 和提交后，自动进入
-[阶段 2](20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md)。
+[阶段 2](../../toDo/20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md)。
 
 该授权只覆盖本文定义的源码/测试/文档、installed-wheel 验收和 fast synthetic benchmark。
 不授权真实 simulator、HTCondor full-budget run、用户 workspace/evidence 迁移或删除。GPSAF
 `gamma` 在本阶段及整个重构中保持不变。
+
+## 本次执行输入（2026-08-30）
+
+- 输入 HEAD：`17c3e95b3a24184977b300972661a48650632ac7`，分支 `main`，启动时 tracked
+  worktree 与 staged diff 均为空；本地相对当时 tracking ref `origin/main` ahead 2。
+- 本 TODO SHA-256：
+  `6A01CBD81B41A06E98A271B80F6E4E5111A68320A46F7E272E0685F2C603CABB`；overall plan
+  SHA-256：`7A6DEDB02F0E538B02BF3FE5490A4DF515AC34C900235FB7E55FFE405876E7D7`。
+- pre-change 接受输入是 force-installed yadof `0.4.2`，import origin 为外层
+  `.venv/Lib/site-packages/yadof/__init__.py`。task-unique harness 保存在外层 workspace
+  `temp/stage1_recording_microbenchmark.py`，harness SHA-256 为
+  `c3f6a5cc142d80b6790701b8c39d72df1861653d490d1891853b210a16ffcd34`，输入 SHA-256 为
+  `7ba18420708260b32bc5f31d69875d0e988685f2ada636328a6d136c6e2d233b`，结果保存在
+  `temp/stage1-recording-20260830_223600934/pre-change.json`。
+- 一次 warm-up 后五次 100-row 标准小 envelope 重复均得到 100 个唯一 durable rows、7 个
+  segments、occupancy `[16, 16, 16, 16, 16, 16, 4]`。median wall 为 `0.2101266 s`，
+  throughput 为 `475.9036 candidate/s`，completion-to-commit median/p95 为
+  `26.3029/42.9794 ms`，signed commit-to-cost median/p95 为 `-25.3994/-12.3591 ms`；负值直接
+  证明 current cost 在 commit 前完成。median process peak RSS 为 `47,587,328 bytes`，相对
+  repetition-start RSS 的 median sampled delta 为 `86,016 bytes`；recorder peak unpublished
+  count 为 20，peak unpublished reservation 约 1.43 MiB。
+- 后续 post-change 必须使用同一未修改 harness/input digest；15% target 以五次重复的 median
+  wall `0.2101266 s` 与 segments/candidate `0.07` 为 baseline，可靠性 hard gates 仍优先。
 
 ## 已验证的当前事实
 
@@ -155,7 +178,7 @@ post-change 结果后静默改变 gate。若可靠性与该 target 确实无法�
 
 ## Fast synthetic benchmark
 
-按 [overall plan](../context/20260830_193335_explicit-optimization-overall-plan.md) 的共同政策：
+按 [overall plan](../../context/20260830_193335_explicit-optimization-overall-plan.md) 的共同政策：
 
 - fresh smoke workspace：`test-com/synthetic-antenna`，population 20、generations 2、seed 101；
 - fresh measured workspace：同一 baseline/strategy/postprocessors，population 100、
@@ -168,6 +191,81 @@ post-change 结果后静默改变 gate。若可靠性与该 target 确实无法�
 使用 Goal 明确授权的 Windows host foreground execution，只启动一次 measured run，并跟随同一
 terminal/session 到最终退出码。partial progress 不是结果。该 benchmark 之外不启动真实
 simulator 或 full-budget local/distributed work。
+
+## 完成证据（2026-08-30）
+
+### 实施与 ownership 决策
+
+- 新增 population-scoped `ResultFinalizationCoordinator`：backend completion 先验证并转移
+  rawData ownership，再按既有 segment count/byte target 分组提交，等待 committed receipt，最后
+  以稳定 population index 顺序使用一个冻结 `CostInterpreter` 解释 current cost。fast、local、
+  distributed 三条真实 evaluation path 共用该 coordinator；单 row `finalize_result()` 仅是兼容
+  facade。
+- `CampaignSession.submit_evidence()` 返回带 candidate/group identity 的
+  `PublicationReceipt`。receipt 只在原子 segment publication 后转为 `committed`；oversize、重试
+  耗尽、writer death 或 recorder admission failure 转为 `failed` 并唤醒 waiter。completed evidence
+  segment 不包含 derived cost，live session 单独保存 interpretation state/diagnostics。
+- committed-but-uninterpreted payload 复用既有 unpublished count/byte 上限；超出 owned-retention
+  预算时立即丢弃内存 envelope ownership，后续从 immutable segment reference 读取，而不是建立
+  第二条无界队列。
+- cost callback exception、objective-width mismatch 和 `NaN`/`+/-inf` 共用 point-in-time 与 frozen
+  interpreter 的同一 validation contract。interpretation failure 保留 durable `completed` evidence，
+  live result 标记 `cost_interpretation` error；只有 optimizer adapter 补正确宽度的 `inf`。
+- Condor result callback 对 `RecordingError` 保持 execution-fatal，不把可靠发布失败降级为单个
+  candidate failure。rawData validation/execution failure 与 evidence/interpretation state 保持独立。
+
+### Recording microbenchmark
+
+- post-change 使用未修改的 harness/input digest：
+  `c3f6a5cc142d80b6790701b8c39d72df1861653d490d1891853b210a16ffcd34` /
+  `7ba18420708260b32bc5f31d69875d0e988685f2ada636328a6d136c6e2d233b`；结果为外层 workspace
+  `temp/stage1-recording-post-20260830_231248051/post-change.json`。
+- 五次重复全部得到 100 个唯一 durable rows、7 segments、occupancy
+  `[16, 16, 16, 16, 16, 16, 4]`；mean occupancy `14.2857`，segments/candidate 仍为 `0.07`。
+  median wall `0.2101266 -> 0.1353709 s`（改善约 `35.6%`），throughput
+  `475.9036 -> 738.7112 candidate/s`。一轮有 `0.8407237 s` host-noise outlier，但预注册的五次
+  median gate 与其余四轮保持稳定，未重跑或改 gate。
+- completion-to-commit median/p95 从 `26.3029/42.9794 ms` 降至
+  `12.9687/19.9571 ms`；signed commit-to-cost median/p95 从
+  `-25.3994/-12.3591 ms` 变为 `+0.33655/+2.10816 ms`，直接证明解释只在 commit 后开始。
+- median peak RSS `47,587,328 -> 47,607,808 bytes`，median sampled delta
+  `86,016 -> 196,608 bytes`。peak unpublished 与 committed-owned 均为 16 candidates、约
+  `1.145 MiB`，低于 32 candidates / 32 MiB budget；结束时两个 backlog、failed receipts 和
+  interpretation failures 均为零。全部 hard/15% target gates 通过。
+
+### Installed-package tests 与 benchmark
+
+- host wheel build、force reinstall 与 import-origin 检查成功；接受对象仍是 yadof `0.4.2`，来自
+  外层 `.venv/Lib/site-packages/yadof/__init__.py`。focused recovery/backend/finite-value tests
+  通过；最终 installed-package full suite 为 `388 passed in 81.06s`。覆盖 grouped receipts、
+  out-of-order stable interpretation、bounded ownership、writer failure/wakeup、adapter `inf`、
+  rawData/execution/interpretation 状态分离、修正 cost 后 replay，以及子进程 commit 后
+  `os._exit()`/hang 与 enqueue-only loss 的恢复差异。
+- fresh fast synthetic smoke workspace
+  `temp/20260830_232119-stage1-benchmark-smoke` 得到 attempted/completed/finite
+  `40/40/40`；fresh measured workspace `temp/20260830_232119-stage1-benchmark-measured` 得到
+  `2000/2000/2000`，20/20 generations、generation-zero 100/100、objective/rawData contracts
+  match、zero failed/non-finite、cell/pairing `collected=true`、`valid=true`。measured runtime
+  `601.8183 s`，descriptive final hypervolume `0.2057025861`；该单 seed 值不是算法优越性结论。
+- smoke/measured strategy source bytes相同，SHA-256
+  `08E4BE42C4E4A8D377866BF8BC21765A0B776A27C32823290F97210FE086CBA7`；除
+  `20 x 2` 与 `100 x 20` budget 外 baseline、seed 101、NSGA-III/GPSAF/PCA-SVD explicit settings
+  和 postprocessor policy 相同。identity/diagnostics 中 GPSAF `gamma=0.5` 保持不变。
+
+### Automatic TODO bounded check
+
+- reliable-recording consistency 直接触发：原 cost-before-publication 不一致已由 receipt、
+  backpressure、writer-fatal 和 recovery tests 修复；持续 TODO 保持 active。
+- 对改动源码、直接 callers/tests/docs 的 bounded redundancy review 未找到可证明且可安全删除的
+  incidental redundancy。单-row facade、point-in-time/frozen validation 入口以及 backend failure
+  isolation 分别承担兼容、共享合同和故障边界，予以保留。
+- 未新增 component-owned config key、legacy alias 或第二 settings 入口；component configuration
+  migration 未触发。package version 保持 `0.4.2`，`0.5.0` 只存在于已授权 Stage 8 roadmap，未出现
+  incidental release marker。四份 recurring auto TODO 均保持 active、文件不变。
+
+对应 change record 为
+`dev_doc/change_records/20260830_234247_stage-1-evidence-first-finalization.md`。启动时 worktree
+clean，无用户或其他任务的 pre-existing changes 被并入。
 
 ## 完成、归档与自动续跑
 

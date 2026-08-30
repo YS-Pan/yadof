@@ -13,6 +13,7 @@ import numpy as np
 
 from .api import (
     CostInterpreter,
+    CostNonFiniteError,
     CostObjectiveWidthError,
     WorkspaceLike,
     task_cost_interpreter,
@@ -324,6 +325,17 @@ class RawDataCostProjector:
                             draw_index,
                             candidate_index,
                             "objective_width",
+                            str(exc),
+                        )
+                    )
+                    continue
+                except CostNonFiniteError as exc:
+                    failures.add(
+                        self._failure(
+                            draw_id,
+                            draw_index,
+                            candidate_index,
+                            "non_finite_objective",
                             str(exc),
                         )
                     )

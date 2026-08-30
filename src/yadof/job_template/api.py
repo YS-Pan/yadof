@@ -48,6 +48,35 @@ class CostObjectiveWidthError(ValueError):
     """A task cost callback returned a row with the wrong objective width."""
 
 
+class CostNonFiniteError(ValueError):
+    """A task cost callback returned NaN or infinity."""
+
+
+def _validate_cost_rows(
+    rows: Sequence[Sequence[float]],
+    objective_names: Sequence[str],
+    source_path: Path,
+) -> tuple[tuple[float, ...], ...]:
+    """Apply the shared objective-width and finite-value callback contract."""
+
+    names = tuple(str(name) for name in objective_names)
+    validated: list[tuple[float, ...]] = []
+    for row_index, row in enumerate(rows):
+        values = tuple(float(value) for value in row)
+        if len(values) != len(names):
+            raise CostObjectiveWidthError(
+                f"{source_path} returned {len(values)} costs; expected {len(names)}"
+            )
+        for objective_index, value in enumerate(values):
+            if not math.isfinite(value):
+                raise CostNonFiniteError(
+                    f"{source_path} returned non-finite cost for row {row_index}, "
+                    f"objective {names[objective_index]!r}: {value!r}"
+                )
+        validated.append(values)
+    return tuple(validated)
+
+
 @dataclass(frozen=True, slots=True)
 class CostInterpreter:
     """One frozen parameter and cost-definition view of a workspace task."""
@@ -85,13 +114,7 @@ class CostInterpreter:
         """Calculate one batch with the frozen ``calc_cost.py`` callback."""
 
         rows = _calculate_costs(samples, self._calculate_sample, raw_variables)
-        for row in rows:
-            if len(row) != len(self.objective_names):
-                raise CostObjectiveWidthError(
-                    f"{self._source_path} returned {len(row)} costs; expected "
-                    f"{len(self.objective_names)}"
-                )
-        return rows
+        return _validate_cost_rows(rows, self.objective_names, self._source_path)
 
 
 def _workspace(workspace: WorkspaceLike) -> WorkspaceContext:
@@ -370,12 +393,7 @@ def calculate_cost(
         if not callable(calculate_sample):
             raise TypeError(f"{source_path} must define callable calculate_cost()")
         rows = _calculate_costs(samples, calculate_sample, raw_variables)
-    for row in rows:
-        if len(row) != len(names):
-            raise CostObjectiveWidthError(
-                f"{source_path} returned {len(row)} costs; expected {len(names)}"
-            )
-    return rows
+    return _validate_cost_rows(rows, names, source_path)
 
 
 @contextmanager
@@ -446,6 +464,7 @@ def validate_task(workspace: WorkspaceLike) -> TaskDefinition:
 
 
 __all__ = [
+    "CostNonFiniteError",
     "CostObjectiveWidthError",
     "CostInterpreter",
     "CALC_COST_MODULE_NAME",

@@ -24,7 +24,7 @@
   identity 和 diagnostics 语义。
 
 由于 `dev_doc/toDo/` 的手动触发合同要求明确点名文件，真正启动执行的 Goal 必须逐一列出
-[阶段 1](../toDo/20260830_174607_explicit-optimization-stage-1-preserve-evidence-on-cost-failure.md)、
+[阶段 1](../obsolete/todo/20260830_174607_explicit-optimization-stage-1-preserve-evidence-on-cost-failure.md)、
 [阶段 2](../toDo/20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md)、
 [阶段 3](../toDo/20260830_174609_explicit-optimization-stage-3-evaluation-handle.md)、
 [阶段 4](../toDo/20260830_174610_explicit-optimization-stage-4-surrogate-fit-predict.md)、
@@ -205,7 +205,7 @@ eligible/fallback 状态时才提供示例。
 
 | 阶段 | 当前状态 | TODO | 主要交付 |
 |---|---|---|---|
-| 1 | 精确，待 Goal 触发 | [publication before cost](../toDo/20260830_174607_explicit-optimization-stage-1-preserve-evidence-on-cost-failure.md) | bounded group commit、receipt、replayable interpretation、性能/批量基线 |
+| 1 | 已完成并归档（2026-08-30） | [publication before cost](../obsolete/todo/20260830_174607_explicit-optimization-stage-1-preserve-evidence-on-cost-failure.md) | bounded group commit、receipt、replayable interpretation、性能/批量基线 |
 | 2 | 预测性，已授权届时精化/执行 | [Dataset/CostTable](../toDo/20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md) | stable identity、live/durable view、invalid interpretation |
 | 3 | 预测性，已授权届时精化/执行 | [Evaluation Handle](../toDo/20260830_174609_explicit-optimization-stage-3-evaluation-handle.md) | start/wait/cancel、scope/cleanup、三 backend 同义 |
 | 4 | 预测性，已授权届时精化/执行 | [surrogate fit/predict](../toDo/20260830_174610_explicit-optimization-stage-4-surrogate-fit-predict.md) | PCA/SVD 显式数据、state/checkpoint/provenance |
@@ -218,7 +218,7 @@ Goal 启动后，每一行还必须更新以下运行字段；开始时为空不
 
 | 阶段 | 输入 HEAD / TODO digest | accepted tests / benchmark / change record | commit / push | 下一动作 |
 |---|---|---|---|---|
-| 1 | Goal 启动时冻结 | 待执行 | 待执行 | 精化并实施 Stage 1 |
+| 1 | `17c3e95b3a24184977b300972661a48650632ac7` / `6A01CBD8…CABB`；0.4.2 installed-wheel，同一 recording harness/input `c3f6a5cc…cd34` / `7ba18420…233b` | pre/post 100-row：5/5 durable 100，均为 7 segments，median wall `0.2101266 -> 0.1353709 s`，signed commit-to-cost median `-25.3994 -> +0.33655 ms`；installed-wheel full pytest `388 passed in 81.06s`；fast smoke `40/40/40`、measured `2000/2000/2000` 均 collected/valid；[change record](../change_records/20260830_234247_stage-1-evidence-first-finalization.md) | Stage 1 closure commit（本行所在提交）；fresh `origin/main=9b4ed745…a0ac`，closure 后 behind 0 / ahead 3，未达 ahead >= 5 gate，push skipped | 读取、精化并执行 Stage 2 |
 | 2--8 | 各阶段开始时冻结 | 待各阶段执行 | 待各阶段执行 | 严格串行 |
 
 完成阶段归档后，ledger 链接必须指向 `obsolete/todo/` 中的同名文件。若阶段 evidence 只要求

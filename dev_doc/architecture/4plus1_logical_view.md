@@ -15,6 +15,9 @@
   and either file-backed or memory-backed rawData.
 - **Campaign session** owns current accepted rows, the workspace campaign lock, and
   reliable publication for one optimization lifetime.
+- **Publication receipt** is the candidate/group acknowledgement that changes from
+  pending to committed only after immutable segment publication, or to failed when
+  publication cannot complete.
 - **Recording segment** is immutable durable evidence containing a bounded group of
   candidate records.
 - **Generation task snapshot** is the coherent task/configuration definition used
@@ -27,7 +30,7 @@
 The principal logical pipeline is:
 
 ```text
-normalized variables -> assigned values -> task rawData -> current cost
+normalized variables -> assigned values -> task rawData -> committed evidence -> current cost
 ```
 
 Task files own definitions that vary with the scientific problem. The package owns
@@ -66,12 +69,12 @@ selected candidates still receive normal real evaluation.
 
 ## Invariants
 
-- Fast, local, and distributed execution converge before current-cost finalization
-  and recording.
+- Fast, local, and distributed execution converge before evidence-first
+  finalization and recording.
 - Population order and objective width are stable on every return path.
 - Individual execution, rawData, or cost failures remain explicit diagnostic rows.
-- Current cost is known before recorder admission, and accepted evidence is durable
-  before a population boundary completes.
+- Valid rawData is durably committed before current cost starts, and all receipts
+  resolve before a population boundary completes.
 - Stored rawData remains rich enough for later compatible reinterpretation.
 - One active campaign owns one workspace lock and one bounded writer.
 - Task code never duplicates cross-task framework mechanisms, and package code does
