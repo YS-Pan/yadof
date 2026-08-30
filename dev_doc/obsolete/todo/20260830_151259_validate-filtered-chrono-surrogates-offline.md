@@ -1,5 +1,8 @@
 # 离线滤波 Chrono benchmark 并对比 CAE/INR surrogate
 
+> 已于 2026-08-30 完成。结果与证据边界见
+> [Chrono filtered-target surrogate 离线证据](../../context/20260830_155700_chrono-filtered-surrogate-offline-evidence.md)。
+
 ## 状态、来源与目标
 
 - 本文是手动 TODO。2026-08-30 用户要求先跳出现有 yadof surrogate 集成框架，复用上次
@@ -13,7 +16,7 @@
   但当前没有逐事件对齐证据。实验结果只能支持或削弱“高频 target 使 surrogate 更难拟合”
   这一建模假设，不能证明尖峰的物理来源。
 - 本 TODO 与暂停中的
-  [抗噪声 Hierarchical CAE 扩展](20260828_082308_noise-robust-regime-specialized-surrogate.md)
+  [抗噪声 Hierarchical CAE 扩展](../../toDo/20260828_082308_noise-robust-regime-specialized-surrogate.md)
   不同：后者明确不做 rawData smoothing；本文只是一次 disposable、offline、非发布实验，
   不重新激活或修改该扩展。
 
@@ -39,14 +42,14 @@ Chrono 对应两个只读 cell：
 
 必须把以下文件作为 source receipt 输入，而不是从文件夹顺序重新推断 partition：
 
-- [benchmark spec](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/spec.json)
-- [frozen gate plan](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/resources/gate_plan.json)
-- [partition manifest](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/postprocessing/base-hierarchical-cae-performance-gate/partition-manifest.json)
-- [frozen training/evaluation harness](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/resources/hierarchical_cae_gate.py)
+- [benchmark spec](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/spec.json)
+- [frozen gate plan](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/resources/gate_plan.json)
+- [partition manifest](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/postprocessing/base-hierarchical-cae-performance-gate/partition-manifest.json)
+- [frozen training/evaluation harness](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/resources/hierarchical_cae_gate.py)
 
 ### 尖峰与 viewer 事实
 
-- [Chrono/SAW 尖峰对比 context](../context/20260830_143418_surrogate-spikes-chrono-vs-saw.md)
+- [Chrono/SAW 尖峰对比 context](../../context/20260830_143418_surrogate-spikes-chrono-vs-saw.md)
   保存了原始截图和证据限制。Chrono 图中的
   `trebuchet_arm_combined_normal_stress` real curve 有少量窄高峰，surrogate curve 有更多分布
   在全 phase 轴上的窄峰 chatter。
@@ -61,7 +64,7 @@ Chrono 对应两个只读 cell：
 - 原 benchmark postprocessor 保存了 CAE artifact，但没有保存 conditional-INR artifact。
   因此 raw-INR control 和 filtered-INR 都需离线重训。此前 SAW viewer 已验证同样的重训路径
   可以精确复现 benchmark INR metrics；这只是可复用操作先例，不是 Chrono 结果证据。
-- [CAE/PCA-SVD measured context](../context/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
+- [CAE/PCA-SVD measured context](../../context/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
   已记录当前 CAE 在 Chrono 的 rawData、worst-field 和 ranking 明显弱于 INR。本文不得用
   filtered experiment 改写该 raw benchmark 结论。
 
@@ -225,7 +228,7 @@ viewer 也不训练模型或修改 workspace。
 - **CAE 与 INR 都明显改善：** 支持“target 高频结构是共同难点”，但仍不证明应该在生产中
   删除物理峰值；下一步应单独决定趋势曲线与未滤波 peak scalar/residual 的双通道任务定义。
 - **只有 CAE 改善：** 更可能指向 CAE representation/codec/shared-latent 对尖峰敏感；结果交给
-  [基础 CAE 证据研究](20260830_120818_hierarchical-cae-evidence-led-research.md) 作诊断输入，
+  [基础 CAE 证据研究](../../toDo/20260830_120818_hierarchical-cae-evidence-led-research.md) 作诊断输入，
   不自动修改 CAE architecture。
 - **只有 INR 改善：** 说明问题不是 CAE 独有，应检查 conditional coordinate decoder、scaling
   或 field sharing；也不能据此把滤波升为框架通用机制。
