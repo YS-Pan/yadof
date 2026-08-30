@@ -91,6 +91,16 @@ human. The correct agent procedure is:
 yadof-benchmark run --workspace WORKSPACE --detach
 ```
 
+Do not substitute other launch or visibility mechanisms for this command:
+
+- Do not use a Codex execution PTY or Codex Terminal panel as the user-visible
+  Windows console.
+- Do not write a separate `Start-Process` command or auxiliary PowerShell launcher;
+  `--detach` owns console creation, argument quoting, and window persistence.
+- Do not poll `MainWindowHandle` or the window title to decide whether the detached
+  launch succeeded. Use the returned launch receipt and `inspect`; Windows window
+  registration may lag behind process creation.
+
 The visible detached console remains open after the benchmark succeeds or fails,
 preserving its final progress and error output for review. Type `exit` at the
 PowerShell prompt or close the window when it is no longer needed. An explicit
