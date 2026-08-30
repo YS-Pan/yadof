@@ -1,134 +1,185 @@
 # 显式 optimization 重构阶段 1：先可靠发布 evidence，再解释 cost
 
-## 状态与来源
+## 状态、授权与依赖
 
-- 用户在 2026-08-30 明确要求把大范围 optimization 架构改造拆成多个阶段，只让当前阶段
-  精确。本文是当前唯一精确 TODO；本次授权只要求修订 goal/TODO，因此在用户再次明确
-  指示执行前，不得修改源码、测试、architecture/blueprints/terminology/user docs，不得启动
-  benchmark，也不得精化阶段 2。
-- 最终目标是让 workspace `submit/optimization.py` 显式拥有读取数据、计算 cost、训练
-  surrogate、产生候选和真实评估的数据流。该目标要求 rawData 真值不能因为派生 cost 的
-  当前解释失败而丢失。
-- 已验证的当前缺口是 `evaluate_manager/finalizer.py` 在把 owned evidence 交给 recorder 前
-  调用 `calc_cost.py`。即使把普通 Python exception 拆成两个异常边界，cost 卡死、native
-  crash、`os._exit()`、OOM 或 orchestration process 终止仍会丢失尚未发布的有效 rawData。
-  recorder queue/admission 也只表示 writer 已接收请求，不是 recovery 可见的 durable commit。
-  另一个已验证缺口是非有限 objective 目前没有统一被拒绝，可能进入即时或历史 cost view。
+本文是八阶段系列中唯一已精化的首阶段 TODO。2026-08-30 用户授权由一个明确点名全部阶段
+文件的 Goal 依次精化并执行整个系列；该 Goal 触发本文后，可以直接实施，无需在本阶段完成
+后等待用户确认。完成、归档、更新 overall-plan ledger 和提交后，自动进入
+[阶段 2](20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md)。
 
-## 本阶段精确可靠性合同
+该授权只覆盖本文定义的源码/测试/文档、installed-wheel 验收和 fast synthetic benchmark。
+不授权真实 simulator、HTCondor full-budget run、用户 workspace/evidence 迁移或删除。GPSAF
+`gamma` 在本阶段及整个重构中保持不变。
 
-每个获得合法 rawData 的真实 evaluation 必须遵守以下因果顺序：
+## 已验证的当前事实
+
+- `evaluate_manager/finalizer.py` 当前在把 owned evidence 交给 recorder 前运行
+  `calc_cost.py`。cost exception、native crash、`os._exit()`、OOM 或 orchestration process
+  终止都可能让合法 rawData 在 durable publication 前丢失。
+- recorder queue admission/accepted-current-row 只代表内存 ownership，不代表 immutable
+  segment 已原子发布或可由新 session recovery discovery。
+- fast parent 当前按单个 completion finalization 后再补 worker；若直接改成“offer 一个、等一个
+  receipt、算一个 cost”，可能把 recorder micro-batch 退化为 singleton segment 并降低 worker
+  refill throughput。
+- point-in-time `calculate_cost()` 与冻结 `CostInterpreter.calculate_costs()` 必须共享 callback
+  exception、objective width 和 finite-value 合同；只在 finalizer 做有限性检查会让历史重解释
+  再次接纳 `NaN`。
+- 当前 recorder 已有 bounded count/byte backpressure、same-directory atomic segment rename、
+  retained-batch retry、writer-death fatal propagation 和 campaign lock。这些正确机制应复用，
+  不建立第二个 recorder 或新持久格式。
+
+## 本阶段精确结果
+
+每个取得合法 rawData 的真实 evaluation 必须满足：
 
 ```text
-backend result
+backend completion
   -> validate rawData
-  -> transfer/copy into yadof-owned evidence
-  -> publish immutable evidence through recorder
-  -> wait for committed acknowledgement
-  -> calculate current cost through user code
-  -> return cost success/failure as a derived interpretation
+  -> transfer/copy to yadof-owned evidence
+  -> enqueue into a bounded prepared-evidence group
+  -> publish one immutable segment/batch
+  -> resolve committed receipt(s)
+  -> calculate current cost in deterministic candidate order
+  -> expose the interpreted result
 ```
 
-- **validate** 证明 rawData 符合 schema；**own** 证明 job、worker 或 candidate scratch 此刻
-  消失也不会使 yadof 失去 payload；**durable publish** 证明当前 orchestration process 随后
-  终止时，重新打开 workspace 的 session/query 仍能发现完整 evidence。
-- committed acknowledgement 只能在承载该 evidence 的 immutable segment 已完成现有
-  same-directory atomic publication、且 recovery discovery 能识别它之后返回。允许 recorder
-  batching/group commit，但一个 candidate 的用户 cost 代码必须等待包含该 candidate 的 commit
-  acknowledgement。本文不额外承诺超出现有 segment-store 合同的掉电级 `fsync` 保证。
-- queue put、admission、accepted-current-row 或仅在内存中取得 ownership 都不是 durable
-  acknowledgement。recorder commit failure 继续是 campaign-fatal；不得把它降级成个体 cost
-  failure，或为了提前计算 cost 而绕过 backpressure。
-- evidence publication 与 cost interpretation 是两个生命周期。evidence segment 不因 cost
-  成功、失败或以后更换 `calc_cost.py` 而重写。阶段 1 的 live result/generation diagnostics
-  表达 current-cost outcome；稳定 sample-aligned `CostTable` 和更完整 interpretation view 由
-  阶段 2 设计，不能为等待它而削弱本阶段 publication-first 保证。
+`validate` 证明 schema；`own` 证明 worker/job/scratch 立即消失也不丢 payload；`committed` 只在
+segment 已通过现有原子 publication 且新 session 可发现后成立。本阶段不新增掉电级 `fsync`
+承诺。
 
-## 本阶段精确范围
+这是一种 bounded two-phase coordinator，不是逐 candidate 串行等待：
 
-- 将 rawData validation、ownership、durable publication acknowledgement 与 current-cost
-  interpretation 分成有顺序的阶段；任何用户 cost 代码只在对应 evidence commit 后运行。
-- current-cost 的统一解释合同同时约束即时 `calculate_cost()` 与冻结
-  `CostInterpreter.calculate_costs()`：callback 抛错、objective width 错误或任一非有限 objective
-  都是 current-cost failure。有限性检查不能只放在 finalizer，否则历史重解释仍可能把 `NaN`
-  接纳为可用 cost。
-- rawData 无效时继续形成没有正常 evidence 的候选失败记录。
-- rawData 有效但 current cost 失败时：
-  - 当前 evaluation 仍返回缺失 cost，population API 继续产生正确宽度的 `inf`；
-  - durable record 的 evidence status 为 completed，并包含 owned rawData；
-  - durable evidence metadata 只记录 evidence/commit 状态与 provenance；current-cost 状态、
-    失败阶段和耗时作为 publish 后的 live/generation interpretation diagnostics，不能反向重写
-    evidence segment；
-  - 同一 generation 的冻结错误解释不能产生 history cost；修正 `calc_cost.py` 后，下一个
-    generation snapshot 可以从保留 evidence 重新计算有限 cost。
-- 不改变 campaign loop、strategy API、surrogate 隐式训练数据读取、三种 backend 的成熟执行
-  引擎或包版本；除可靠 acknowledgement 所必需的 receipt/metadata 调整外，不在本阶段进行
-  Dataset/CostTable、evaluation handle 或 recorded-data 物理格式的全面重设计。
+1. evaluation completion 可以继续准备多个 owned envelopes；
+2. coordinator 按现有 count/byte targets 或显式 flush boundary 形成 bounded group commit；
+3. receipt 状态至少区分 pending、committed、failed，并能关联 group 与 candidate；
+4. group commit 后，parent 以稳定 population/candidate 顺序运行 current-cost interpretation；
+5. 已 commit、尚未解释的队列仍受 count/byte 或等价显式预算约束，不能把 publication
+   backpressure 转移成另一条无界内存队列；
+6. writer death、oversized envelope 或同一 retained group 重试耗尽必须一次性唤醒所有相关
+   waiter，传播 `RecordingError` 并阻止后续 evaluation。
 
-## 预期修改点
+允许同一 group 中较早完成的 candidate 等待 batching；不允许为追求 batching 无限等待。
+evaluation/population boundary 必须主动 flush 并收口所有 receipt。
 
-- `src/yadof/evaluate_manager/finalizer.py` 及其直接 coordinator/caller：把 evidence
-  validation/ownership、durable publication 和 current-cost interpretation 拆成明确阶段；只要
-  evidence 有效就先交给 recorder，并等待 commit acknowledgement 后才运行用户 cost。
-- `src/yadof/recorded_data/session.py`、writer/segment-store 的直接边界：提供可等待且只在
-  真正 publication 后完成的 per-envelope 或 per-batch receipt；writer death、重试耗尽和
-  oversized envelope 必须唤醒等待者并传播 `RecordingError`。
-- `src/yadof/job_template/api.py`：让 point-in-time 与 frozen interpreter 使用同一有限 objective
-  合同；避免只修写入路径、遗漏历史/工具/预测投影使用的解释入口。
-- `tests/test_loss_tolerant_recording.py`：参数化覆盖 callback 抛错、width 错误、非有限 objective，
-  验证 live/durable evidence、当前 snapshot 跳过、修正后的下一 snapshot 重解释。
-- fast 公共评估测试：验证正确宽度 `inf` 与 completed rawData；以实际 durable record 的
-  `job_name` 对齐查询，不假定 backend 生成 `candidate_0_0`。
-- 实施完成时才同步 architecture、blueprints、terminology、user docs 和 change record；本轮
-  TODO-only 交付不预先修改这些合同文档。
+## Evidence、execution 与 interpretation 状态
 
-## 验证
+三个状态域独立：
 
-- 增加 installed-package 回归测试，覆盖 live/durable rawData 保留、当前代无 cost、三类
-  current-cost failure、修正后跨 generation 重解释，以及 record metadata/status。
-- 增加 ordering/termination 回归：正常 cost 必须在 commit acknowledgement 后才执行；在
-  evidence commit 后、cost completion 前注入 orchestration termination，新 session 仍能发现
-  完整 evidence；仅 enqueue 后终止不得被误报为 committed。
-- 增加 writer failure/oversized envelope/backpressure 回归，证明 cost 不会提前执行且 campaign
-  在没有后续 evaluation/history gap 的情况下明确停止。
-- fast、local、distributed 用小规模 contract/smoke tests 覆盖同一 publication-before-cost
-  顺序和失败分类；local/distributed 不运行全量 benchmark。
-- 完成 wheel build、force reinstall、import-origin、focused tests 和全量 pytest。
-- 使用 `test-com/synthetic-antenna` benchmark baseline 做真实完整工作流验证。strategy 是
-  单一结构验收 arm：`gpsaf(search=pymoo_nsga3(...), surrogate=pca_svd(...), ...)`，不虚构第二个
-  reference arm。NSGA-III 与 GPSAF 的现有默认参数都在 strategy 文件中显式写出；PCA/SVD 固定
-  为 `decomposition="pca"`、`rank=4`、`predictor="ridge"`、`ridge_alpha=1e-6`、
-  `field_mode="per-field"`、`rank_policy="clamp"`、`solver="torch-lowrank"`、`dtype="float32"`、
-  `device="auto"`、`power_iterations=1`、`seed=101`、`fit_intercept=True`、
-  `constant_atol=1e-12`。measured run 只使用 fast backend，严格使用 population `100`、
-  generations `20`、seed `[101]`，执行 2,000 次真实 baseline evaluation；这是结构/回归验收，
-  不宣称 optimizer 性能结论。
-- measured run 前用相同 baseline、strategy、seed、policy 和 postprocessor 做独立小预算
-  benchmark smoke（population `20`、generations `2`）；smoke 只证明执行链，不进入性能解释。
-- measured 前分别运行 benchmark `check` 与 `plan --json`，确认 smoke/measured 除预算外的
-  baseline、strategy source digest、seed、policy、postprocessor 全部一致。验收要求 measured cell
-  `collected=true`、`valid=true`、attempted evaluations 为 `2000`，且没有缺代/缺个体；不设置
-  hypervolume improvement gate。
-- 每个实施阶段里，长 benchmark 只启动一次并跟随同一个 foreground terminal/session 到最终
-  退出码。等待使用当前 Codex/runtime 支持的最长有界 wait 或等价事件驱动方式；无异常时可
-  把约 20 分钟作为目标观察/汇报间隔，而不是要求一次 terminal poll 必须阻塞 20 分钟。若
-  单次 wait 的工具上限更短，或因新输出提前返回，继续等待同一个 session；不得用阻塞
-  `sleep`、高频轮询或重复 run 模拟较长间隔，也不得把 partial progress 当成验收结果。
-- 本阶段不改变 optimization/strategy API，预计无需修改 source baseline。若 installed yadof 的
-  实际接口迫使 benchmark baseline 或 postprocessor 调整，只做该接口所需的最小修改，先增加
-  benchmark focused test，再运行上述同源 smoke/measured；不得借机改变 synthetic objective。
+- execution 描述 workflow/evaluator 是否产生合法 payload；
+- evidence 描述 payload 是否 validated/owned/committed；
+- interpretation 描述当前 task snapshot 下 cost 是否成功。
 
-## 完成规则
+rawData 无效时，candidate 保持现有失败形状且没有 completed evidence。rawData 已 commit、
+cost 失败时：
 
-- 上述代码、测试和文档一致，publication-before-cost、ownership、commit acknowledgement、
-  异常/进程终止恢复和 cost 修复重解释均有直接证据，正常 cost 成功路径无回归；
-- installed-wheel 验收和 100 × 20 benchmark 均达到正常 collected/valid 状态；
-- 形成变更记录、提交，并按仓库规则判断 push；随后把本文移入 `dev_doc/obsolete/todo/`，
-  向用户反馈结果并等待下一阶段精化。
+- durable evidence 仍是 completed，并保留 rawData 与 evidence provenance；
+- current evaluation 返回正确 objective width 的 `inf`，但 `inf` 只是 optimizer adapter 的
+  失败表示，不写成 authoritative cost；
+- callback exception、width mismatch、`NaN`/`+/-inf` 都是 interpretation failure；
+- failure stage、bounded diagnostics 和耗时保存在 live/generation interpretation diagnostics，
+  不反向重写 immutable evidence segment；
+- 修正 `calc_cost.py` 后，下一 generation snapshot 可以从同一 evidence 重算有限 cost。
 
-## 暂停期间获得但未保留的证据
+commit 后而 cost 完成前发生进程终止时，evidence 必须可恢复，interpretation 可以缺失。cost
+callback 因而具有 at-least-once/replay 语义：user docs 必须要求它 deterministic、无不可重放
+外部副作用。框架不因成功解释而删除或覆盖 evidence。
 
-一次随后完全撤回的临时实现运行了 focused tests，结果为 `27 passed, 2 failed`。两项失败都
-用于收紧本文而不是作为已完成实现保留：其一证明 finalizer-only 非有限检查不足，历史路径会
-重新接纳 `NaN`；其二证明 fast backend 的实际 job name 不应由测试硬编码。临时源码、测试、
-合同文档和安装包均已恢复到本 TODO 创建前的 `HEAD` 状态。
+## 精确修改边界
+
+预计涉及但不预先冻结内部文件拆分：
+
+- `evaluate_manager/finalizer.py` 及直接 coordinator/callers：分离 prepare evidence、
+  publication receipt 与 interpretation，保持 ordered result/failure width；
+- `recorded_data/session.py`、writer/segment-store 的窄边界：可等待 committed receipt、group
+  flush、waiter wakeup 和 bounded committed-but-uninterpreted ownership；
+- `job_template/api.py`：统一 point-in-time 与 frozen interpreter 的 exception/width/finite
+  合同；
+- 直接 tests、architecture、evaluate_manager/recorded_data/optimize blueprints、terminology、
+  user docs 和 change record。
+
+允许新增窄内部 DTO/state machine，但不得在本阶段：
+
+- 改变 campaign/generation loop、strategy public composition、surrogate session 读取或包版本；
+- 全面设计 Dataset/CostTable 或 public Evaluation Handle；
+- 改动 recorded-data 物理格式、GPSAF 数学/settings 或任一 optimize/surrogate 能力；
+- 把 predicted data 写入 recorder，或把 recorder failure 降级为 individual `inf`。
+
+内部 API 名称由实施证据决定，无需用户再次确认；关键 ownership/receipt/failure 选择必须写入
+change record，并同步 current architecture/blueprints。
+
+## Pre-change measurement 与工程 gates
+
+任何源码修改前，在当前 installed wheel 上运行一个 task-unique、bounded recording
+microbenchmark，并保存 harness/命令、输入 digest、warm-up、重复次数和以下 baseline：
+
+- standard small-envelope 的 rows/segment 与 segments/candidate；
+- candidate throughput 和 wall time；
+- completion-to-commit、commit-to-cost 的 median/p95 latency；
+- unpublished、committed-but-uninterpreted 的最大 count/bytes；
+- process peak RSS。
+
+同一 harness 改后重跑。建议一轮 warm-up 后至少五次短重复，报告 median 和 spread。以下是
+工程 gate，不是 optimizer performance gate：
+
+- hard：全部 rows 恰好 commit 一次、无 history gap/duplicate、无一个 row 一个 segment 的
+  系统性退化，100-row standard case 的平均 segment occupancy 必须大于 1；
+- hard：两个 pending 队列都不超过配置/明确预算，peak memory 不通过隐藏无界 buffer 增长；
+- hard：writer/oversize/retry failure 在 bounded time 内唤醒 waiter 且不开始后续 evaluation；
+- target：median wall time、segments/candidate 相对 baseline 的回归均不超过 15%；超出时先
+  redesign/定位，不能用删除 batching 或放宽可靠性换取通过；
+- report：p95 commit/cost latency 与 RSS 的变化即使通过 target 也写入 change record。
+
+若机器噪声使 15% 结论不稳定，增加同一 bounded harness 的重复并报告区间；不得在看到
+post-change 结果后静默改变 gate。若可靠性与该 target 确实无法兼得，命中 overall plan 的实质
+权衡暂停边界。
+
+## 测试与 installed-package 验收
+
+至少覆盖：
+
+- cost callback success/exception/hang-isolation test、objective width、`NaN`/`+/-inf`；
+- normal cost 只在对应 receipt committed 后开始；
+- commit 后/cost 前的子进程终止，新 session 仍发现 rawData；仅 enqueue 后终止不能误报
+  committed；
+- same group 多 row receipt、out-of-order completion、deterministic interpretation/result order；
+- writer transient retry、retry exhausted、unexpected death、oversized envelope、full count/byte
+  backpressure 与 shutdown tail；
+- rawData invalid、execution failure、interpretation failure 的独立 status/diagnostics；
+- 修复 cost 后跨 generation 重解释；
+- fast/local/distributed 小规模 contract/smoke，证明同一 publication-before-cost/fatal recorder
+  语义与 cleanup；local/distributed 不跑全预算；
+- normal success path、hot catalog、tolerant read、campaign lock 和 existing segment format 回归。
+
+按 development guide 使用 host build/force reinstall、确认 import origin，运行 focused tests 和
+完整 installed-package pytest。pytest 使用 fresh task-unique absolute `--basetemp` 且禁用 cache。
+
+## Fast synthetic benchmark
+
+按 [overall plan](../context/20260830_193335_explicit-optimization-overall-plan.md) 的共同政策：
+
+- fresh smoke workspace：`test-com/synthetic-antenna`，population 20、generations 2、seed 101；
+- fresh measured workspace：同一 baseline/strategy/postprocessors，population 100、
+  generations 20、seed 101；
+- strategy 冻结为 NSGA-III + GPSAF + PCA/SVD 的完整显式 factory settings；GPSAF `gamma`
+  使用当前值且不改 validation/identity/diagnostics；
+- `check`、`plan --json` 证明 smoke/measured 仅预算不同；
+- measured 必须 collected/valid、attempted 2000、无缺代/缺个体；不要求 HV improvement。
+
+使用 Goal 明确授权的 Windows host foreground execution，只启动一次 measured run，并跟随同一
+terminal/session 到最终退出码。partial progress 不是结果。该 benchmark 之外不启动真实
+simulator 或 full-budget local/distributed work。
+
+## 完成、归档与自动续跑
+
+完成要求：
+
+- publication-before-cost、bounded group commit、receipt/wakeup、replay、状态分离和恢复行为
+  均有直接测试；
+- pre/post microbenchmark 通过 hard gates/target 并记录全部指标；
+- installed wheel、full pytest、fast 100 x 20 benchmark 均成功；
+- current architecture、blueprints、terminology、user docs、overall ledger 和 change record
+  一致；
+- 自动 TODO bounded check 完成，形成一个已验证 commit，并按仓库规则 fetch/push 判断。
+
+随后将本文原样移入 `dev_doc/obsolete/todo/`，更新 overall ledger 的归档链接，不等待普通
+用户确认，立即读取并精化 Stage 2。
