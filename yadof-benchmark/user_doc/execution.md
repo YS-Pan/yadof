@@ -14,6 +14,63 @@ Both commands print a bounded summary by default. Add `--json` only when the
 complete expanded plan is needed. Planning code must therefore be deterministic,
 cheap, and free of simulator or external-state side effects.
 
+## Benchmark smoke test
+
+Use **benchmark smoke test** as the current name for the pre-measured execution
+check. Older discussion may call this a *canary*, but a canary-specific workflow
+is not a separate benchmark contract. The smoke test must exercise the same
+benchmark path as the measured run; the only intentional benchmark-definition
+change is a smaller positive evaluation count.
+
+Create a fresh smoke workspace from the complete measured-workflow authoring
+inputs. Keep all of the following unchanged:
+
+- `benchmark.py` implementation and registrations, including the complete cell,
+  comparison, and arm matrix;
+- selected baseline IDs and their manifests, task workspaces, assets, `config.py`,
+  `submit/`, `job_template/`, and task postprocessing code;
+- every strategy module, algorithm/model setting, seed, evidence classification,
+  failure policy, concurrency policy, dependency, and registered workflow
+  postprocessor;
+- result, contract, metric, visualization, and postprocessing paths.
+
+Change only the explicit evaluation budget, normally `population` and/or
+`generations` in every comparison, while keeping one identical reduced budget
+across paired arms. A different workspace root and a foreground versus detached
+launch are execution controls and do not count as benchmark-code changes. Do not
+change the seed merely to make the smoke pass.
+
+The smoke test must not add conditional smoke branches, a simplified strategy,
+mock or synthetic task code, a different baseline, a reduced cell/arm matrix, or
+an omitted/replacement postprocessor. Run the complete chain, including the
+normal baseline postprocess and every registered workflow postprocessor. Choose
+the smallest budget that makes that unchanged chain produce valid output; if a
+postprocessor requires more data, increase the budget instead of weakening the
+chain.
+
+Run the same preflight and execution commands against the smoke workspace:
+
+```powershell
+yadof-benchmark check --workspace SMOKE_WORKSPACE
+yadof-benchmark plan --workspace SMOKE_WORKSPACE --json
+yadof-benchmark run --workspace SMOKE_WORKSPACE
+yadof-benchmark inspect --workspace SMOKE_WORKSPACE
+```
+
+Compare the smoke plan with the measured plan before the measured run. The
+semantic cells, selected source digests, baselines, strategies, postprocessors,
+seeds, and policies should match; only the evaluation budget may differ. A smoke
+test passes only when every planned cell reaches the normal valid/collected state
+and all postprocessors succeed. Individual simulation failures may still be
+tolerated under the ordinary cell-validity rules, but missing attempts, broken
+contracts, missing metrics, or a postprocessor failure block the measured run.
+
+Smoke output is structural execution evidence only. Do not pool it with measured
+results, use it to select an algorithm or parameter, or cite its metrics as
+performance evidence. After it passes, start the full-budget measured execution
+in another fresh workspace; never turn the smoke workspace into a resumed or
+expanded run.
+
 ## AI agents on Windows: use the human account
 
 When an AI agent launches a benchmark, it must execute the launch command through

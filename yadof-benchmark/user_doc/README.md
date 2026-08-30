@@ -22,6 +22,12 @@ A cell can remain valid when all planned evaluations were attempted and some
 simulations failed or produced non-finite results, provided finite output,
 contracts, generation-0 pairing, and the descriptive metric remain available.
 
+Before a measured execution, use a [benchmark smoke test](execution.md#benchmark-smoke-test)
+in a separate workspace. It is the same benchmark with only a smaller explicit
+evaluation budget: the cell/arm matrix, baseline and strategy code, task inputs,
+postprocessors, and output contracts must remain the same. Smoke output validates
+the execution path only and is never measured performance evidence.
+
 For long Windows work launched by an AI agent, [execution.md](execution.md)
 requires host execution under the signed-in human user's account. A sandbox-owned
 detached process cannot show a console in the user's interactive session.

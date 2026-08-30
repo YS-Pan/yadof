@@ -48,6 +48,22 @@ benchmark, initialize a new workspace and place the desired `benchmark.py` and
 resources there. The current package does not read an older multi-run workspace
 format.
 
+## Smoke workspace
+
+A benchmark smoke test is also one complete execution, so it must use its own
+fresh workspace. Start from the same authoring inputs as the measured benchmark
+and change only the explicit positive evaluation budget. Keep the same
+`benchmark.py` registrations and implementation, selected baselines, strategy
+modules, task workspaces, configuration, postprocessors, dependencies, and
+failure/concurrency policy. The smoke workspace may have a different root and
+generated outputs; those are execution locations, not benchmark behavior.
+
+Do not create a smoke-only strategy, mock or synthetic baseline, reduced cell or
+arm matrix, alternate task code, or smoke-only postprocessor. If the complete
+postprocessing path needs more than the first trial budget to produce valid
+output, increase the budget to the smallest positive value that exercises that
+path; do not bypass or replace the postprocessor.
+
 ## Authoring boundary
 
 `benchmark.py` is the only workflow-definition program. Put complete

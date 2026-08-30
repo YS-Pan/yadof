@@ -122,3 +122,10 @@ yadof-benchmark docs show [PATH]
 
 `--hidden` requires `--detach`. An AI-agent launch must also follow the host
 account rule in [execution.md](execution.md).
+
+There is no separate `canary` or `smoke-test` command in the current benchmark
+CLI. A benchmark smoke test uses the normal `run` command on its own fresh
+workspace with only a reduced explicit evaluation budget; see
+[Benchmark smoke test](execution.md#benchmark-smoke-test). This is distinct from
+the core `yadof smoke-test` command, which evaluates one midpoint task individual
+and does not validate a complete benchmark comparison.
