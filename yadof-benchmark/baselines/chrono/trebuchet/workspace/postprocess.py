@@ -1,4 +1,4 @@
-"""Render the best completed trebuchet individual into one video and poster."""
+"""Render average-cost-best and range-cost-best completed trebuchet individuals."""
 
 from __future__ import annotations
 
@@ -27,13 +27,14 @@ from yadof.recorded_data import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 RENDERER = SCRIPT_DIR / "visualization" / "render_trebuchet_animation.py"
+RANGE_OBJECTIVE_NAME = "cost_range"
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Select the finite completed individual with minimum average cost and "
-            "render its trebuchet replay."
+            "Select finite completed individuals with minimum average cost and "
+            "minimum range cost, then render both trebuchet replays."
         )
     )
     parser.add_argument("--workspace", type=Path, default=SCRIPT_DIR)
@@ -53,7 +54,25 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _select_best(workspace: Path) -> dict[str, object]:
+def _range_cost_index(workspace: Path) -> int:
+    submit_dir = workspace / "submit"
+    sys.path.insert(0, str(submit_dir))
+    try:
+        module = runpy.run_path(str(submit_dir / "calc_cost.py"))
+        objective_names = tuple(str(name) for name in module["get_objective_names"]())
+    finally:
+        sys.path.pop(0)
+    try:
+        return objective_names.index(RANGE_OBJECTIVE_NAME)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"trebuchet objectives do not contain {RANGE_OBJECTIVE_NAME!r}: "
+            f"{objective_names}"
+        ) from exc
+
+
+def _select_best(workspace: Path) -> dict[str, dict[str, object]]:
+    range_cost_index = _range_cost_index(workspace)
     raw_variables = dict(get_raw_variables(workspace, status="completed"))
     records = {
         str(row["job_name"]): dict(row)
@@ -69,7 +88,7 @@ def _select_best(workspace: Path) -> dict[str, object]:
             record is None
             or record.get("generation_index") is None
             or variables is None
-            or not costs
+            or range_cost_index >= len(costs)
             or not all(math.isfinite(value) for value in costs)
         ):
             continue
@@ -86,6 +105,7 @@ def _select_best(workspace: Path) -> dict[str, object]:
                 "raw_variables": [float(value) for value in variables],
                 "costs": list(costs),
                 "average_cost": average_cost,
+                "range_cost": costs[range_cost_index],
                 "generation_index": int(record["generation_index"]),
                 "population_index": record.get("population_index"),
                 "recorded_at": record.get("recorded_at"),
@@ -93,10 +113,23 @@ def _select_best(workspace: Path) -> dict[str, object]:
         )
     if not candidates:
         raise RuntimeError(f"no finite completed optimization individual in {workspace}")
-    return min(
-        candidates,
-        key=lambda row: (float(row["average_cost"]), str(row["source_job_name"])),
-    )
+    return {
+        "average_cost": min(
+            candidates,
+            key=lambda row: (
+                float(row["average_cost"]),
+                str(row["source_job_name"]),
+            ),
+        ),
+        "range_cost": min(
+            candidates,
+            key=lambda row: (
+                float(row["range_cost"]),
+                float(row["average_cost"]),
+                str(row["source_job_name"]),
+            ),
+        ),
+    }
 
 
 def _save_npz(path: Path, payload: dict[str, object]) -> None:
@@ -162,6 +195,68 @@ def _copy_file_atomic(source: Path, destination: Path) -> None:
     os.replace(partial, destination)
 
 
+def _render_selection(
+    *,
+    workspace: Path,
+    selection: dict[str, object],
+    title: str,
+    video: Path,
+    poster: Path,
+    snapshot_archive: Path,
+    diagnostics: Path,
+    trajectory: Path,
+    fps: int,
+    dpi: int,
+    continuation_timeout: float,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="yadof-trebuchet-visualization-") as temporary:
+        scratch_root = Path(temporary)
+        snapshot = _stage_snapshot(workspace, scratch_root, selection)
+        work_dir = scratch_root / "animation_work"
+        subprocess.run(
+            [
+                sys.executable,
+                str(RENDERER),
+                "--workspace",
+                str(workspace),
+                "--job",
+                str(snapshot),
+                "--output",
+                str(video),
+                "--poster",
+                str(poster),
+                "--work-dir",
+                str(work_dir),
+                "--title",
+                title,
+                "--fps",
+                str(fps),
+                "--dpi",
+                str(dpi),
+                "--continuation-timeout",
+                str(continuation_timeout),
+            ],
+            cwd=str(workspace),
+            check=True,
+        )
+        diagnostics_source = work_dir / "continuation_diagnostics.json"
+        trajectory_source = work_dir / "trebuchet_animation_trajectory.npz"
+        for path in (video, poster, diagnostics_source, trajectory_source):
+            if not path.is_file():
+                raise FileNotFoundError(f"renderer did not create expected output: {path}")
+        archive_source = Path(
+            shutil.make_archive(
+                str(scratch_root / "trebuchet_selected_job"),
+                "zip",
+                root_dir=snapshot.parent,
+                base_dir=snapshot.name,
+            )
+        )
+        _copy_file_atomic(archive_source, snapshot_archive)
+        _copy_file_atomic(diagnostics_source, diagnostics)
+        _copy_file_atomic(trajectory_source, trajectory)
+
+
 def main() -> int:
     args = _parse_args()
     if (
@@ -187,6 +282,17 @@ def main() -> int:
     snapshot_archive = output_dir / f"{output_prefix}trebuchet_selected_job.zip"
     diagnostics = output_dir / f"{output_prefix}trebuchet_continuation_diagnostics.json"
     trajectory = output_dir / f"{output_prefix}trebuchet_animation_trajectory.npz"
+    range_video = output_dir / f"{output_prefix}trebuchet_range_best.mp4"
+    range_poster = output_dir / f"{output_prefix}trebuchet_range_best_poster.png"
+    range_snapshot_archive = (
+        output_dir / f"{output_prefix}trebuchet_range_selected_job.zip"
+    )
+    range_diagnostics = (
+        output_dir / f"{output_prefix}trebuchet_range_continuation_diagnostics.json"
+    )
+    range_trajectory = (
+        output_dir / f"{output_prefix}trebuchet_range_animation_trajectory.npz"
+    )
     manifest_path = output_dir / f"{output_prefix}postprocess_manifest.json"
     for path in (
         video,
@@ -194,65 +300,56 @@ def main() -> int:
         snapshot_archive,
         diagnostics,
         trajectory,
+        range_video,
+        range_poster,
+        range_snapshot_archive,
+        range_diagnostics,
+        range_trajectory,
         manifest_path,
     ):
         if path.exists():
             raise FileExistsError(f"refusing to overwrite output: {path}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    selection = _select_best(workspace)
+    selections = _select_best(workspace)
+    selection = selections["average_cost"]
+    range_selection = selections["range_cost"]
     title = (
         "King Arthur trebuchet — minimum average cost "
         f"{float(selection['average_cost']):.6f}"
     )
-    with tempfile.TemporaryDirectory(prefix="yadof-trebuchet-visualization-") as temporary:
-        scratch_root = Path(temporary)
-        snapshot = _stage_snapshot(workspace, scratch_root, selection)
-        work_dir = scratch_root / "animation_work"
-        subprocess.run(
-            [
-                sys.executable,
-                str(RENDERER),
-                "--workspace",
-                str(workspace),
-                "--job",
-                str(snapshot),
-                "--output",
-                str(video),
-                "--poster",
-                str(poster),
-                "--work-dir",
-                str(work_dir),
-                "--title",
-                title,
-                "--fps",
-                str(args.fps),
-                "--dpi",
-                str(args.dpi),
-                "--continuation-timeout",
-                str(args.continuation_timeout),
-            ],
-            cwd=str(workspace),
-            check=True,
-        )
-        diagnostics_source = work_dir / "continuation_diagnostics.json"
-        trajectory_source = work_dir / "trebuchet_animation_trajectory.npz"
-        for path in (video, poster, diagnostics_source, trajectory_source):
-            if not path.is_file():
-                raise FileNotFoundError(f"renderer did not create expected output: {path}")
-        archive_source = Path(
-            shutil.make_archive(
-                str(scratch_root / "trebuchet_selected_job"),
-                "zip",
-                root_dir=snapshot.parent,
-                base_dir=snapshot.name,
-            )
-        )
-        _copy_file_atomic(archive_source, snapshot_archive)
-        _copy_file_atomic(diagnostics_source, diagnostics)
-        _copy_file_atomic(trajectory_source, trajectory)
+    range_title = (
+        "King Arthur trebuchet — minimum range cost "
+        f"{float(range_selection['range_cost']):.6f}"
+    )
+    _render_selection(
+        workspace=workspace,
+        selection=selection,
+        title=title,
+        video=video,
+        poster=poster,
+        snapshot_archive=snapshot_archive,
+        diagnostics=diagnostics,
+        trajectory=trajectory,
+        fps=args.fps,
+        dpi=args.dpi,
+        continuation_timeout=args.continuation_timeout,
+    )
+    _render_selection(
+        workspace=workspace,
+        selection=range_selection,
+        title=range_title,
+        video=range_video,
+        poster=range_poster,
+        snapshot_archive=range_snapshot_archive,
+        diagnostics=range_diagnostics,
+        trajectory=range_trajectory,
+        fps=args.fps,
+        dpi=args.dpi,
+        continuation_timeout=args.continuation_timeout,
+    )
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "workspace": str(workspace),
         "output_prefix": output_prefix,
         "selection_rule": (
@@ -265,6 +362,16 @@ def main() -> int:
         "poster": str(poster),
         "continuation_diagnostics": str(diagnostics),
         "animation_trajectory": str(trajectory),
+        "range_selection_rule": (
+            "minimum finite cost_range among completed optimization individuals, "
+            "with average cost and job name as deterministic tie breakers"
+        ),
+        "range_selection": range_selection,
+        "range_snapshot_archive": str(range_snapshot_archive),
+        "range_video": str(range_video),
+        "range_poster": str(range_poster),
+        "range_continuation_diagnostics": str(range_diagnostics),
+        "range_animation_trajectory": str(range_trajectory),
         "visualization_only": True,
         "optimization_evaluations_added": 0,
     }
@@ -273,6 +380,10 @@ def main() -> int:
     print(f"average cost: {float(selection['average_cost']):.9f}")
     print(f"video: {video}")
     print(f"poster: {poster}")
+    print(f"range selected: {range_selection['source_job_name']}")
+    print(f"range cost: {float(range_selection['range_cost']):.9f}")
+    print(f"range video: {range_video}")
+    print(f"range poster: {range_poster}")
     return 0
 
 

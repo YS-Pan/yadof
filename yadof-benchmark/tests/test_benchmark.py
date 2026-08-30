@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import runpy
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +34,28 @@ from yadof_benchmark.benchmark_runtime.storage import (
 from yadof_benchmark.benchmark_runtime.terminal import BenchmarkTerminal
 
 pytestmark = pytest.mark.structural
+
+
+def _trebuchet_postprocess_path() -> Path:
+    installed = (
+        Path(benchmark.__file__).resolve().parent
+        / "_resources"
+        / "baselines"
+        / "chrono"
+        / "trebuchet"
+        / "workspace"
+        / "postprocess.py"
+    )
+    if installed.is_file():
+        return installed
+    return (
+        Path(__file__).resolve().parents[1]
+        / "baselines"
+        / "chrono"
+        / "trebuchet"
+        / "workspace"
+        / "postprocess.py"
+    )
 
 
 def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
@@ -418,6 +442,132 @@ def test_baseline_contract_uses_materialization_language(tmp_path: Path) -> None
     baseline = _baseline(tmp_path)
     manifest = load_baseline(baseline / "baseline.json")
     assert manifest.materialize_excludes == ()
+
+
+def test_trebuchet_postprocess_selects_average_and_range_minima() -> None:
+    source = _trebuchet_postprocess_path()
+    namespace = runpy.run_path(str(source), run_name="trebuchet_postprocess_selection")
+    selector = namespace["_select_best"]
+    selector_globals = selector.__globals__
+    workspace = source.parent
+    jobs = ("average-best", "range-best", "error-sentinel", "nonfinite")
+    selector_globals["get_raw_variables"] = lambda *_args, **_kwargs: {
+        name: (float(index),) for index, name in enumerate(jobs)
+    }
+    selector_globals["list_records"] = lambda *_args, **_kwargs: [
+        {
+            "job_name": name,
+            "status": "completed",
+            "generation_index": 0,
+            "population_index": index,
+        }
+        for index, name in enumerate(jobs)
+    ]
+    selector_globals["get_historical_results"] = lambda *_args, **_kwargs: [
+        ("average-best", (0.1,), (0.20, 0.10, 0.10, 0.10)),
+        ("range-best", (0.2,), (0.05, 0.70, 0.70, 0.70)),
+        ("error-sentinel", (0.3,), (1.0, 1.0, 1.0, 1.0)),
+        ("nonfinite", (0.4,), (0.01, float("nan"), 0.10, 0.10)),
+    ]
+
+    selections = selector(workspace)
+
+    assert selections["average_cost"]["source_job_name"] == "average-best"
+    assert selections["range_cost"]["source_job_name"] == "range-best"
+    assert selections["range_cost"]["range_cost"] == pytest.approx(0.05)
+    assert selections["range_cost"]["average_cost"] == pytest.approx(0.5375)
+
+
+def test_trebuchet_postprocess_exports_both_visualization_sets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _trebuchet_postprocess_path()
+    namespace = runpy.run_path(str(source), run_name="trebuchet_postprocess_exports")
+    main = namespace["main"]
+    main_globals = main.__globals__
+    workspace = tmp_path / "workspace"
+    output_dir = tmp_path / "visualizations"
+    workspace.mkdir()
+    selections = {
+        "average_cost": {
+            "source_job_name": "average-best",
+            "average_cost": 0.125,
+            "range_cost": 0.20,
+        },
+        "range_cost": {
+            "source_job_name": "range-best",
+            "average_cost": 0.5375,
+            "range_cost": 0.05,
+        },
+    }
+    staged_jobs: list[str] = []
+
+    def fake_stage_snapshot(_workspace, scratch_root, selection):
+        staged_jobs.append(str(selection["source_job_name"]))
+        snapshot = scratch_root / "selected_job"
+        snapshot.mkdir()
+        (snapshot / "selection.txt").write_text(
+            str(selection["source_job_name"]), encoding="utf-8"
+        )
+        return snapshot
+
+    def fake_renderer(command, *, cwd, check):
+        assert Path(cwd) == workspace.resolve()
+        assert check is True
+        selected = [str(item) for item in command]
+        video = Path(selected[selected.index("--output") + 1])
+        poster = Path(selected[selected.index("--poster") + 1])
+        work_dir = Path(selected[selected.index("--work-dir") + 1])
+        video.parent.mkdir(parents=True, exist_ok=True)
+        work_dir.mkdir(parents=True, exist_ok=True)
+        video.write_bytes(b"video")
+        poster.write_bytes(b"poster")
+        (work_dir / "continuation_diagnostics.json").write_text(
+            "{}\n", encoding="utf-8"
+        )
+        (work_dir / "trebuchet_animation_trajectory.npz").write_bytes(b"trajectory")
+        return subprocess.CompletedProcess(selected, 0)
+
+    monkeypatch.setitem(
+        main_globals,
+        "_parse_args",
+        lambda: SimpleNamespace(
+            workspace=workspace,
+            output_dir=output_dir,
+            output_prefix="cell__",
+            fps=30,
+            dpi=120,
+            continuation_timeout=180.0,
+        ),
+    )
+    monkeypatch.setitem(main_globals, "_select_best", lambda _workspace: selections)
+    monkeypatch.setitem(main_globals, "_stage_snapshot", fake_stage_snapshot)
+    monkeypatch.setattr(main_globals["subprocess"], "run", fake_renderer)
+
+    assert main() == 0
+    assert staged_jobs == ["average-best", "range-best"]
+    expected = {
+        "cell__trebuchet_best.mp4",
+        "cell__trebuchet_best_poster.png",
+        "cell__trebuchet_selected_job.zip",
+        "cell__trebuchet_continuation_diagnostics.json",
+        "cell__trebuchet_animation_trajectory.npz",
+        "cell__trebuchet_range_best.mp4",
+        "cell__trebuchet_range_best_poster.png",
+        "cell__trebuchet_range_selected_job.zip",
+        "cell__trebuchet_range_continuation_diagnostics.json",
+        "cell__trebuchet_range_animation_trajectory.npz",
+        "cell__postprocess_manifest.json",
+    }
+    assert {path.name for path in output_dir.iterdir()} == expected
+    manifest = json.loads(
+        (output_dir / "cell__postprocess_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["schema_version"] == 2
+    assert manifest["selection"]["source_job_name"] == "average-best"
+    assert manifest["range_selection"]["source_job_name"] == "range-best"
+    assert Path(manifest["range_video"]).name == "cell__trebuchet_range_best.mp4"
 
 
 def test_plan_uses_short_cell_ids_and_keeps_semantics_in_spec(tmp_path: Path) -> None:
