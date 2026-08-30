@@ -85,11 +85,27 @@ human. The correct agent procedure is:
 1. request or use approved host execution for the exact benchmark launch;
 2. run it under the signed-in user's account;
 3. add `--detach` for a visible independent console;
-4. return the receipt containing PID, workspace, log, and inspect command.
+4. return the receipt containing PID, workspace, log, and inspect command;
+5. treat that successful receipt as the handoff boundary for a full-budget measured
+   benchmark.
 
 ```powershell
 yadof-benchmark run --workspace WORKSPACE --detach
 ```
+
+A full-budget measured benchmark may run for hours. After the detached launch
+returns a successful receipt, do not immediately or repeatedly run `inspect`, poll
+the process or window, wait on the benchmark, or keep the current agent turn open
+solely to observe completion. The agent may continue work that is independent of
+the benchmark result. If no such work remains, or every remaining step depends on
+the benchmark finishing, report the receipt and end the current turn. This is the
+default behavior; do not create a recurring check or otherwise simulate waiting
+unless the user explicitly asks for monitoring.
+
+When the user later asks for progress or results, run one bounded `inspect` and
+report that snapshot. A launch error or an incomplete/ambiguous receipt may be
+diagnosed immediately, but a successful receipt alone is not a reason for a
+follow-up inspection.
 
 Do not substitute other launch or visibility mechanisms for this command:
 

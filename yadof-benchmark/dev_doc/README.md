@@ -36,6 +36,9 @@ Current invariants are:
 - inspect is bounded, read-only, and uses only current-workspace timing evidence;
 - a visible Windows detached console remains open after the benchmark command
   finishes so its terminal result can be reviewed; hidden detach remains automatic;
+- a successful full-budget detached launch receipt is the AI-agent handoff
+  boundary: absent an explicit monitoring request, the agent does not poll or keep
+  its current turn open merely to await completion;
 - algorithm rankings and acceptance decisions remain outside the runner.
 
 The `0.2` workspace format intentionally makes no old-workspace compatibility

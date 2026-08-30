@@ -32,6 +32,10 @@ For long Windows work launched by an AI agent, [execution.md](execution.md)
 requires host execution under the signed-in human user's account. A sandbox-owned
 detached process cannot show a console in the user's interactive session.
 `--detach` controls console/process lifetime; it does not change the account.
+For a full-budget measured benchmark, the successful detached launch receipt is
+the handoff boundary: do not poll or hold the current agent turn open merely to
+wait. Continue only independent work; otherwise report the receipt and end the
+turn until the user explicitly requests a later progress check or monitoring.
 The visible detached console remains open after the benchmark finishes so the
 terminal result can be reviewed; type `exit` or close the window when finished.
 
