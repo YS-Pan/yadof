@@ -40,14 +40,15 @@
 
 - 暂停不是完成或取消。本文管理的抗噪声扩展仍未通过；其 v8 calibration 继续为
   `uncalibrated`、`transferable=false`，因此这个抗噪声变体自身没有 exploitation readiness。
-  基础 Hierarchical CAE 当前仍为 `experimental / performance-not-accepted`，但那是由其独立
-  representation/prediction、worst-field、coordinate、resource 和 posterior 证据决定，不是
-  由本文状态决定。
-- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
-  不把本文列为当前执行步骤，也无需等待本文恢复或通过。总控仍须为基础 Hierarchical CAE
-  取得独立的 performance-accepted checkpoint、exact-state calibration 和 typed readiness，
-  但其中不得包含本文的 clean leakage、smooth roughness、regime classification 或 class-support
-  gate，除非用户以后为某个抗噪声变体单独批准这些扩展指标。
+  基础 Hierarchical CAE 当前仍为 experimental，但 2026-08-30 用户已取消把多 case/多指标
+  合并成一个黑白 performance gate 的做法；基础 component 的收益和弱点改为按 domain、指标
+  和用途解释，不由本文状态决定。
+- [基础 CAE 证据研究](20260830_120818_hierarchical-cae-evidence-led-research.md) 与
+  [EHVI/qNEHVI 工作](20260828_121904_surrogate-qnehvi-remaining-work.md) 都无需等待本文恢复或
+  通过。前者独立研究 representation/prediction、worst-field、coordinate 与 resource tradeoff；
+  后者只为实际使用的 exact posterior 建立 calibration/capability/readiness。二者均不得继承
+  本文的 clean leakage、smooth roughness、regime classification 或 class-support 条件，除非
+  用户以后为某个抗噪声变体单独批准这些扩展指标。
 - 只有用户以后明确要求恢复抗噪声扩展，本文才重新成为执行入口。恢复时必须先复核届时
   `frequency` 筛选 API、current architecture、已有数据/receipt 和其他活动 TODO，并在访问
   新 test/calibration evidence 前建立新的 preregistration 与 semantic namespace。
@@ -130,9 +131,10 @@ Hierarchical CAE 的验收。
    使用时，才在新的独立 calibration designs 上要求 exact-state-bound、可迁移的
    applicability capability，失败时继续显式 uncalibrated。
 4. 向
-   [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+   [EHVI/qNEHVI TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
    提供可选抗噪声变体 typed readiness 所需的真实证据，但不在本文中绕过 qNEHVI 自己的
-   acquisition/optimization gate，也不改变基础 Hierarchical CAE 的 readiness。
+   posterior capability、真实 evaluation 或 optimization evidence，也不改变基础 Hierarchical
+   CAE 的用途判断。
 5. 如果证据表明简单 shared isolation 或其他较简单基线优于 MoE/gated residual，允许选择
    更简单方案并退役无效复杂度；目标是稳健性和可验证性，不是必须保留某种网络结构。
 
@@ -241,7 +243,7 @@ Hierarchical CAE 的验收。
 ### Gate 4：可选的独立 applicability/posterior calibration
 
 - 仅当恢复范围包含该抗噪声变体的 posterior/qNEHVI 使用时，才按
-  [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+  [EHVI/qNEHVI TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
   的 exact-state 契约，
   为扩展验收通过的 exact checkpoint 建立新的 pre-access plan，使用未参与训练/模型选择的
   calibration designs。若扩展目标只包含确定性预测/诊断，本 Gate 明确记为不适用即可，不得
@@ -305,12 +307,12 @@ Hierarchical CAE 的验收。
 
 ## 与其他 TODO 的关系
 
-- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
-  独立拥有基础 Hierarchical CAE 的 representation/prediction、worst-field、coordinate、resource、
-  exact-state calibration、qNEHVI exploitation/exploration 和正式同预算 release 链。本文只拥有
-  抗噪声扩展、regime-specialized architecture 和 clean-vs-abnormal 验收；它不是总控的执行
-  前置，也不是解除总控 blocker 的候选步骤。本文暂停、失败、通过或取消都不改变基础链的
-  gate 状态。
+- [基础 CAE 证据研究](20260830_120818_hierarchical-cae-evidence-led-research.md) 独立拥有
+  representation/prediction、worst-field、coordinate、resource 与 nonlinear representation
+  诊断；[EHVI/qNEHVI TODO](20260828_121904_surrogate-qnehvi-remaining-work.md) 独立拥有
+  exact-state posterior capability、qNEHVI exploitation/exploration 和同预算 optimization
+  evidence。本文只拥有抗噪声扩展、regime-specialized architecture 和 clean-vs-abnormal
+  评估；不是前两者的执行前置。本文暂停、失败、通过或取消都不改变它们的 evidence。
 - 基础 Hierarchical CAE 不得把 clean leakage、smooth roughness、regime classification、
   applicability class balance 或本文的 MoE/router 指标列为必需验收条件。若未来 formal study
   主动加入一个抗噪声扩展 arm，它必须作为额外扩展比较单独报告，不得替换或阻塞基础七臂。
@@ -328,8 +330,8 @@ Hierarchical CAE 的验收。
 暂停本身不是完成。本 TODO 只有满足以下两条路径之一才可移入 `dev_doc/obsolete/`：
 
 1. 用户明确取消而不再只是暂时搁置这条抗噪声路线，且当前文档完整保留已实现机制、v5/v8
-   失败和取消原因；由于本文不是基础路线 blocker，不要求 Hierarchical CAE/qNEHVI 总控先
-   完成或接管本文范围；
+   失败和取消原因；由于本文不是基础路线 blocker，不要求基础 CAE 研究或 EHVI/qNEHVI TODO
+   先完成或接管本文范围；
 2. 用户明确重新激活本文；此时只有同时满足下列完成条件，才能归档。
 
 重新激活路径的完成条件：
@@ -350,6 +352,6 @@ Hierarchical CAE 的验收。
   包含算法注册表或专项 adapter，validator 不得比较当前 source/wheel/artifact digest；
 - 按届时开发指南完成 wheel build、force reinstall、import-origin、focused/full package tests
   和 benchmark automation tests；真实/长时间执行另有明确授权与结果记录；
-- 若重新激活范围包含该抗噪声变体的 acquisition/release，向 Hierarchical CAE/qNEHVI 总控
-  TODO 的可选扩展 handoff 已更新；否则明确记录该 handoff 不适用。无论哪种情况，都不得把
-  本文完成状态传播成基础 Hierarchical CAE 的通过或失败。
+- 若重新激活范围包含该抗噪声变体的 acquisition/release，向 EHVI/qNEHVI TODO 的可选扩展
+  handoff 已更新；否则明确记录该 handoff 不适用。无论哪种情况，都不得把本文完成状态传播
+  成基础 Hierarchical CAE 的全局通过或失败。

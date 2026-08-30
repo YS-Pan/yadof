@@ -7,14 +7,19 @@ backend-neutral joint rawData posterior protocol. The production component remai
 the conditional implicit-neural-representation ensemble used by workspace-owned
 GPSAF. A separate opt-in `hierarchical_cae()` development component reconstructs
 complete fixed-grid rawData with field-specific convolutional codecs and a joint
-parameter-latent predictor. It is installable and recoverable, but its first
-1000/2000-design Gate 0 v5 candidate failed representation and clean-target leakage
-requirements. Gate 0 v6/v7 subsequently completed its all-axis coordinate readout,
-viewer adapter, and fixed offline mechanism path under the explicit status
-`experimental / performance-not-accepted`; none is a production default.
-Gate 0 v8 subsequently exercised exact-signature held-out calibration, but every
-rawData/applicability capability failed closed; this did not change v5 or create a
-production artifact.
+parameter-latent predictor. It is installable and recoverable. Its first Gate 0 v5
+candidate failed the then-sealed representation and anti-noise requirements; v6/v7
+later completed all-axis coordinate readout, the viewer adapter, and a fixed offline
+mechanism path. Exact-signature v8 calibration failed closed and produced no usable
+posterior artifact.
+
+A fresh 24-cell base-component benchmark later found domain-dependent end-to-end
+evidence: strong aggregate cost/ranking benefit on synthetic antenna, mixed SAW
+results, and severe Chrono rawData/worst-field weakness. The sealed all-cell gate
+remains historically false, but current planning no longer treats it as a global
+performance verdict. CAE evidence is reported by case, metric, capability, and
+resource tradeoff; the component remains opt-in and no result changes the production
+default automatically.
 
 The independent opt-in `pca_svd()` component is a deterministic baseline rather
 than a posterior model. It fits centered PCA or uncentered truncated SVD per exact
@@ -233,12 +238,12 @@ output artifacts cold-train instead of being interpreted with the linear decoder
   semantic identity; executable task callbacks cannot bypass that identity.
 - A low-trust field cannot contribute unweighted tokens to shared teacher state,
   and its gated residual never becomes independent Gaussian observation noise.
-- Gate 0 v5's performance failure remains immutable. Gate 0 v6/v7 separately permits
-  the coordinate readout, viewer integration, and one fixed offline-test path only as
-  experimental mechanism evidence. Gate 0 v8 used a new pre-access registration
-  bound to durable exact states, but all calibration artifacts failed closed;
-  production qNEHVI exploitation remains blocked until a performance-accepted
-  architecture and usable independent calibration exist.
+- Gate 0 v5/v8 and the later 24-cell all-cell result remain immutable historical
+  evidence. Current CAE research does not collapse their mixed case/metric outcomes
+  into a global `performance_accepted` truth. The exact calibrated states exercised
+  so far still expose no usable posterior artifact, so their production qNEHVI
+  exploitation remains blocked on capability-specific readiness rather than on a
+  universal CAE performance gate.
 - `PosteriorExploitationReadiness` is the only optimizer-facing typed authorization:
   it aligns one normalized pool with performance/posterior/applicability status,
   transferability, zero-noise state/artifact signatures, calibrated probabilities,

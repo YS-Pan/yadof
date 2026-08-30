@@ -15,7 +15,7 @@
   2. 一个真实调用方已经被当前 qNEHVI 具体类型依赖阻塞，并能提供与 qNEHVI 共同需要的
      最小能力证据。
 - 不得仅因本文存在、代码看起来可以抽象，或为了未来可能的 GUI/插件而提前启动。
-- [Hierarchical CAE/qNEHVI 总控 TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
+- [EHVI/qNEHVI TODO](20260828_121904_surrogate-qnehvi-remaining-work.md)
   可以在只有 qNEHVI 一个真实 acquisition 的情况下继续保持 fail-closed/full-real fallback；
   基础 Hierarchical CAE 的独立科学验收、抗噪声扩展状态与本文的架构触发条件三者相互独立。
 
