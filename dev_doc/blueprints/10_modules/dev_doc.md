@@ -35,13 +35,18 @@ tools are installed yadof documentation audiences.
 - `development_environment.md`: dated machine/tool/package reproducibility snapshot
   that is explicitly separate from declared compatibility requirements.
 - `skill/`: module-specific contracts for user documentation, architecture,
-  blueprints, toDo/obsolete handling, terminology, and change records.
+  blueprints, context documents, toDo/obsolete handling, terminology, and change
+  records.
 - `architecture/`: current system relationships and invariants.
 - `blueprints/10_modules/`: current module responsibility, dependencies, I/O, and
   non-obvious constraints.
 - `blueprints/20_files/`: file lineage for high-risk/specialized implementation.
 - `terminology.md`: project-specific terms whose meaning is not obvious.
 - `change_records/`: append-only time-named decision/implementation explanations.
+- `context/`: time-named cross-session experimental evidence and working context.
+  Every agent recursively enumerates filenames and relative paths without reading
+  contents, then reads a document in full only when the task needs information its
+  filename likely identifies. Expiry review never runs implicitly.
 - `toDo/`: unresolved work recorded as standalone handoffs. Each active document
   embeds the task-specific problem, intent, evidence, material operating envelope,
   decision status, scope, and completion meaning needed by a maintainer who lacks
@@ -49,7 +54,8 @@ tools are installed yadof documentation audiences.
   than hidden requirements. Root entries require explicit request, while active
   `auto/` entries receive a bounded match check against already in-scope evidence
   before normal work is reported complete.
-- `obsolete/`: historical completed/cancelled toDos, not current guidance.
+- `obsolete/`: historical completed/cancelled toDos and explicitly reviewed expired
+  context documents, not current guidance.
 
 `user_doc/example_prompts/` is an expandable collection with one Markdown file per
 copyable prompt. Its index may link placeholders whose prompt bodies remain empty
@@ -75,7 +81,10 @@ code/tests, user docs, architecture, blueprints, terminology, and one change rec
 agree; documentation-only work does not invent inapplicable software tests.
 Completing one occurrence of a recurring automatic toDo does not complete its
 document-level goal, so the handoff remains active until its own completion rule or
-an explicit user decision retires it.
+an explicit user decision retires it. Context documents use filename-first routing
+instead of default full reading. They are assessed for expiry only when the user
+explicitly requests that assessment; confirmed-expired documents move unchanged to
+`obsolete/`, while uncertain documents remain active.
 
 The development guide defines the sibling installed-package venv and mandatory
 build/force-reinstall/import-path/full-test workflow after package code, build, or
@@ -104,6 +113,9 @@ are affected.
   user reference and is explicitly identified as external to yadof behavior.
 - Automatic toDos are always evaluated within established task scope; they neither
   require accidental discovery nor authorize an unrelated repository-wide search.
-- Root `dev_doc/` is the exclusive repository owner of toDo, obsolete, and change-
-  record lifecycle; nested tool/benchmark developer trees link to these contracts
-  instead of duplicating them.
+- Context document names are always enumerated, but their contents are read only on
+  a task-relevant filename match and their expiry is never judged without explicit
+  user instruction.
+- Root `dev_doc/` is the exclusive repository owner of context, toDo, obsolete, and
+  change-record lifecycle; nested tool/benchmark developer trees link to these
+  contracts instead of duplicating them.

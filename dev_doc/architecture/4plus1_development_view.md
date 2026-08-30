@@ -5,7 +5,7 @@
 ```text
 src/yadof/                 installed framework source
 tests/                     generic installed-package verification
-dev_doc/                   developer current-view, blueprint, toDo, and history docs
+dev_doc/                   developer current-view, context, toDo, and history docs
 user_doc/                  installed task-authoring and runtime workflow
 admin_tool/
   admin_doc/               source-checkout administrator documentation
@@ -86,6 +86,10 @@ belongs in the workspace submit-side definition.
   flows, persistence/recovery rules, and core invariants.
 - `dev_doc/blueprints/` contains selectively read implementation and module
   contracts.
+- `dev_doc/context/` preserves time-named cross-session experimental and working
+  context. Every agent lists its filenames without opening them, then reads only a
+  task-relevant document whose name indicates a likely match. Expiry is assessed
+  only on explicit user instruction.
 - `dev_doc/change_records/` preserves completed decisions and implementation
   history; `toDo/` preserves active future work.
 - `admin_tool/admin_doc/` owns administrator deployment, configuration, and
@@ -112,6 +116,9 @@ they alter packaged documentation behavior.
 ## Change discipline
 
 Current architecture and blueprints are updated in place. Historical change
-records are append-only. Task-authoring changes update user documentation;
-administrator procedure changes update `admin_tool/admin_doc/`. Repository changes
-preserve workspace evidence and unrelated worktree modifications.
+records are append-only. Context documents preserve cross-session evidence without
+becoming current-view contracts or task authorization; confirmed-expired documents
+move to `obsolete/` only after an explicit user-requested review. Task-authoring
+changes update user documentation; administrator procedure changes update
+`admin_tool/admin_doc/`. Repository changes preserve workspace evidence and
+unrelated worktree modifications.

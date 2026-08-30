@@ -201,13 +201,15 @@ or split out a new time-named toDo before archiving the completed portion.
 ## Obsolete Archive Contract
 
 `../obsolete/` stores old plans, old diagnostics, completed toDo handoffs,
-automatic toDos retired by age or a configured condition, and drafts that are no
-longer active design input.
+automatic toDos retired by age or a configured condition, expired context
+documents moved under the [context-document contract](context.md), and drafts that
+are no longer active design input.
 
 Do not read `obsolete/` by default. Read it only when a current document explicitly
-points there, when investigating old plans, or when checking a completed toDo
-handoff. Never use an obsolete document as current fact unless a current document
-explicitly brings that fact forward.
+points there, when investigating old plans, when checking a completed toDo handoff,
+or when the user explicitly requests review of an archived context document. Never
+use an obsolete document as current fact unless a current document explicitly
+brings that fact forward.
 
 ## Maintenance Contract
 

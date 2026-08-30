@@ -51,14 +51,19 @@ optional summaries. When collecting project context, follow this order:
    obsolete rules before treating an automatic toDo as active. Once normal task
    scope and findings are known, perform the contract's bounded automatic-trigger
    check before reporting completion.
-5. List the complete `blueprints/` tree and perform the targeted reading pass
+5. Read the [context-document contract](skill/context.md), then recursively list
+   every filename and relative path under `context/` without reading file content.
+   Read a matching context document in full only when the current task needs
+   information that its filename indicates it is likely to contain.
+6. List the complete `blueprints/` tree and perform the targeted reading pass
    defined by the [blueprint contract](skill/blueprints.md).
-6. Apply the [change-record contract](skill/change_records.md). Do not read existing
+7. Apply the [change-record contract](skill/change_records.md). Do not read existing
    change records by default unless one of that contract's targeted-read conditions
    applies.
 
 Do not read `obsolete/` by default. Its targeted-read and archival rules are defined
-by the [toDo and obsolete contract](skill/toDo.md).
+by the [toDo and obsolete contract](skill/toDo.md) and the
+[context-document contract](skill/context.md).
 
 ## Integrated Tool Documentation
 
@@ -177,6 +182,8 @@ that depend on the current Windows code page.
   reading, path layout, and update triggers.
 - [toDo and obsolete](skill/toDo.md): trigger types, expiry, completion, archival,
   and historical-use rules.
+- [Context documents](skill/context.md): filename-first discovery, targeted full
+  reading, cross-session evidence, and user-triggered expiry review.
 - [Terminology](skill/terminology.md): project-specific vocabulary and maintenance
   rules.
 - [Change records](skill/change_records.md): append-only completed-change history,
@@ -229,7 +236,9 @@ After each code change:
    [terminology contract](skill/terminology.md).
 5. Apply the automatic-trigger check plus the completion and archival rules in the
    [toDo and obsolete contract](skill/toDo.md).
-6. Update `user_doc/` when task-authoring behavior changes, as defined by the
+6. Apply the filename-first reading and user-triggered expiry rules in the
+   [context-document contract](skill/context.md).
+7. Update `user_doc/` when task-authoring behavior changes, as defined by the
    [user-document contract](skill/user_doc.md).
 
 For documentation-only changes, still update architecture and blueprints when the
@@ -250,4 +259,6 @@ because doing so would make the change multi-file and defeat the exception.
 When adding new future work, put manual-trigger work directly under `toDo/` and
 automatic-trigger work under `toDo/auto/`, rather than putting either in
 `change_records/`. `change_records/` explains completed changes; `toDo/` describes
-pending work that should influence future technical choices.
+pending work that should influence future technical choices. Put cross-session
+experimental evidence and working context under `context/`; do not use it as a
+second task queue or completed-change history.
