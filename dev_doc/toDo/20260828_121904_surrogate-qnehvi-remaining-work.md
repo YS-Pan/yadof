@@ -28,13 +28,14 @@
   不进入 recorder。
 - `conditional_inr_posterior()` 已提供有限 ensemble compatibility adapter，但仍是
   uncalibrated capability。`hierarchical_cae()` 已有 coherent finite member draws；旧 exact
-  states 的 calibration artifacts 均为 `uncalibrated`、`transferable=false`。
+  states 仍没有可迁移 calibrated capability，详见
+  [posterior/qNEHVI evidence context](../context/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)。
 - public `qnehvi()` 和 `posterior_assisted()` 已实现 fixed real Pareto baseline、candidate
   chunk projection、显式 real exploration、common real evaluator、typed readiness、soft
   full-real fallback 与 hard-stop 边界。BoTorch 只拥有 qLogNEHVI 数值计算。
 - 当前 shipped conditional-INR adapter 与 Hierarchical CAE 都返回 blocked readiness，因此
-  真实运行只会走可见的 full-real fallback。eligible path 目前只有 synthetic/fake mechanism
-  evidence，没有形成真实 surrogate 的 optimization-quality 结论。
+  真实运行只会走可见的 full-real fallback。现有 canary/structural evidence 没有执行真实
+  eligible path，也没有形成 surrogate optimization-quality 结论。
 - `pca_svd()` 是确定性 GPSAF 基线，输出 zero-width intervals，没有 posterior/readiness
   capability；它可以进入确定性同预算比较，但不能伪装成 EHVI posterior arm。
 
@@ -82,18 +83,31 @@ gate 换个名字。
 普通 projection、selection、backend 或 readiness 不可用继续 soft fallback 到完整 real
 search；可靠记录和显式 hard-stop 错误不得被 fallback 吞掉。
 
-## 当前证据输入
+## 实验上下文与当前约束
 
-- PCA/SVD 三 case measured study 已完成 24 个 oracle/deployable logical cells。其主要结论是
-  linear ridge `parameters -> latent` 为共同瓶颈；oracle 不参与 selection/HV。详情见
-  [完成记录](../change_records/20260830_074344_complete-pca-svd-measured-evidence.md)。
-- 新的基础 CAE benchmark 已完成 24/24 logical cells，所有 mechanics/resource/reload checks
-  可执行，但端到端表现高度依赖 case。旧 all-cell gate 为 false 只保留为该 sealed plan 的
-  历史输出，不再升级成全局 CAE 判决；定量解释由 CAE TODO 保存。
-- v8 的六个 exact-state calibration artifacts 均失败关闭，因而不能迁移到新的 CAE state；
-  conditional-INR adapter 同样没有可迁移 calibration。
-- 正式 optimization benchmark 尚未运行。已有结构 run 只证明 9/9 cells、99/99 attempts 和
-  recorder/fallback mechanics，不证明 EHVI 带来优化收益。
+详细实验条件、artifact/receipt 位置、frozen hashes、数值结果和证据限制已迁移到两个
+跨 session context 文档：
+
+- [CAE/PCA-SVD measured evidence](../context/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
+  保存基础 CAE 24-cell benchmark、PCA/SVD oracle/deployable study 和 nonlinear
+  representation 收益解释。
+- [Posterior calibration/qNEHVI structural evidence](../context/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)
+  保存 v8 exact-state held-out calibration、v9 blocked-readiness real canary、v10 9-cell
+  structural run 和未运行 formal optimization 的边界。
+
+本文只保留会约束未来工作路线的结论：
+
+- CAE 与 PCA/SVD 的已完成 deterministic evidence 是 domain-specific；它既不提供一个
+  全局 CAE pass/fail，也不提供 posterior/readiness capability。Oracle reconstruction
+  编码 truth，不能进入 selection/HV。
+- v8 的六个 exact-state rawData calibration artifacts 均为 `uncalibrated`、
+  `transferable=false`；Chrono applicability 也因 class support 不足 fail closed。这些
+  artifacts 不能迁移到新 state。
+- v9 canary 与 v10 structural run 只证明 blocked-readiness fallback、common real evaluator、
+  recorder、baseline checkpoint/viewer/audit 等机制可运行；它们没有执行真实 eligible path，
+  也不产生 qNEHVI optimization-quality 结论。
+- 正式同预算 optimization benchmark 尚未运行。任何后续性能结论必须来自新 pre-access
+  plan、实际可用 exact posterior capability 和获批 real-evaluation budget。
 
 ## 剩余工作
 
