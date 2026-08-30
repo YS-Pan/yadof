@@ -109,8 +109,11 @@ backend result
   baseline、strategy source digest、seed、policy、postprocessor 全部一致。验收要求 measured cell
   `collected=true`、`valid=true`、attempted evaluations 为 `2000`，且没有缺代/缺个体；不设置
   hypervolume improvement gate。
-- 长 benchmark 只启动一次并跟随同一个 foreground terminal/session 到最终退出码，以最长约
-  60 秒一轮的低频等待观察；不得重复启动、用高频轮询或把 partial progress 当成验收结果。
+- 每个实施阶段里，长 benchmark 只启动一次并跟随同一个 foreground terminal/session 到最终
+  退出码。等待使用当前 Codex/runtime 支持的最长有界 wait 或等价事件驱动方式；无异常时可
+  把约 20 分钟作为目标观察/汇报间隔，而不是要求一次 terminal poll 必须阻塞 20 分钟。若
+  单次 wait 的工具上限更短，或因新输出提前返回，继续等待同一个 session；不得用阻塞
+  `sleep`、高频轮询或重复 run 模拟较长间隔，也不得把 partial progress 当成验收结果。
 - 本阶段不改变 optimization/strategy API，预计无需修改 source baseline。若 installed yadof 的
   实际接口迫使 benchmark baseline 或 postprocessor 调整，只做该接口所需的最小修改，先增加
   benchmark focused test，再运行上述同源 smoke/measured；不得借机改变 synthetic objective。

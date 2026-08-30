@@ -173,9 +173,11 @@ benchmark 的执行授权。
 - fast 是唯一全量 backend。local 与 distributed 只运行足以覆盖接口、failure、cleanup、
   resume 和 ordering 的小规模 contract/smoke tests。
 
-长 benchmark 只启动一次，跟随同一个 foreground terminal/session 到最终退出码。等待间隔以
-不高频轮询为原则，可按约 60 秒一轮观察；partial progress 既不是成功也不是失败，不能为了
-更快得到摘要而启动重复 run。
+每个实施阶段里，长 benchmark 只启动一次，并跟随同一个 foreground terminal/session 到最终
+退出码。等待使用当前 Codex/runtime 支持的最长有界 wait 或等价事件驱动方式；无异常时可把
+约 20 分钟作为目标观察/汇报间隔，而不是要求一次 terminal poll 必须阻塞 20 分钟。若单次
+wait 的工具上限更短，或因新输出提前返回，继续等待同一个 session；不得用阻塞 `sleep`、
+高频轮询或重复 run 模拟较长间隔。partial progress 既不是成功也不是失败。
 
 代码阶段还必须遵循仓库的 wheel build、force reinstall、import-origin、focused/full tests 和
 文档同步合同。只修改计划文本时使用 documentation-only validation exception，不运行与文字
