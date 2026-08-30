@@ -16,7 +16,9 @@ flowchart LR
     Finalizer --> Records["Durable recorder"]
     Records --> Cost["Current-cost interpreter"]
     Cost --> Strategy["Optimization strategy"]
-    Records --> Surrogate["Derived surrogate state"]
+    Records --> Views["Identity-preserving evidence and cost views"]
+    Views --> Strategy
+    Views --> Surrogate["Derived surrogate state"]
     Surrogate --> Strategy
 ```
 
@@ -57,6 +59,12 @@ receipts. Only then does it apply the frozen current task cost policy in stable
 population order and expose result rows. The recorder publishes immutable segments
 under bounded backpressure; later evaluation cannot pass the population boundary
 until every receipt is committed or the campaign has failed.
+
+Durable and live history are exposed through immutable identity-preserving evidence
+datasets. RawData stays behind lazy segment references, while a separate task-bound
+cost table records successful, failed, not-applicable, or missing interpretations by
+row identity. Filter, copy, reorder, and optimizer/surrogate joins therefore never
+use job names, physical-design equality, or array position as sample identity.
 
 Surrogate prediction and posterior projection are derived submit-side computation,
 not additional evaluation backends. They consume recorded evidence and current task

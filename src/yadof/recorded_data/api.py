@@ -8,6 +8,21 @@ from typing import Callable, Mapping, Sequence
 from ..workspace import WorkspaceContext, resolve_workspace
 from . import query as _query
 from . import records as _records
+from .dataset import (
+    CostRow,
+    CostTable,
+    EvidenceCostRow,
+    EvidenceDataset,
+    EvidenceLineage,
+    EvidenceRow,
+    EvidenceState,
+    InterpretationStatus,
+    RawDataHandle,
+    calculate_cost_table,
+    derive_evidence_row,
+    get_cost_table,
+    get_evidence_dataset,
+)
 from .paths import (
     VALID_RECORD_STATUSES,
     RecordedDataPaths,
@@ -275,7 +290,20 @@ def open_campaign_session(workspace: WorkspaceLike) -> CampaignSession:
 
 __all__ = [
     "VALID_RECORD_STATUSES",
+    "CostRow",
+    "CostTable",
+    "EvidenceCostRow",
+    "EvidenceDataset",
+    "EvidenceLineage",
+    "EvidenceRow",
+    "EvidenceState",
+    "InterpretationStatus",
+    "RawDataHandle",
+    "calculate_cost_table",
     "calculate_costs",
+    "derive_evidence_row",
+    "get_cost_table",
+    "get_evidence_dataset",
     "get_historical_optimization_results",
     "get_historical_results",
     "get_job_names",

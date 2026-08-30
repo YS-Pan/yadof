@@ -31,6 +31,10 @@ class HistoryRecord:
     job_name: str
     x: tuple[float, ...]
     costs: tuple[float, ...]
+    candidate_id: str = ""
+    row_id: str = ""
+    design_key: str | None = None
+    interpretation_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,26 +159,36 @@ def history_records(
     snapshot: GenerationTaskSnapshot | None = None,
 ) -> tuple[HistoryRecord, ...]:
     try:
-        raw_records = (
-            session.historical_results(snapshot)
-            if session is not None and snapshot is not None
-            else recorded_api.get_historical_results(workspace)
-        )
+        if session is not None and snapshot is not None:
+            dataset = session.evidence_dataset()
+            table = session.cost_table(snapshot)
+        else:
+            dataset = recorded_api.get_evidence_dataset(workspace)
+            table = recorded_api.get_cost_table(workspace, dataset=dataset)
+        joined = dataset.join_costs(table)
     except Exception:
         return ()
     records: list[HistoryRecord] = []
-    for item in raw_records or ():
-        if isinstance(item, dict):
-            name = str(item.get("job_name", item.get("name", "")))
-            variables = item.get("normalized_variables", item.get("variables", ()))
-            costs = item.get("costs", ())
-        else:
-            name, variables, costs = item
+    for item in joined:
+        evidence = item.evidence
+        cost = item.cost
+        if (
+            not evidence.is_durable
+            or evidence.execution_status != "completed"
+            or not cost.valid
+            or cost.normalized_variables is None
+            or cost.costs is None
+        ):
+            continue
         records.append(
             HistoryRecord(
-                job_name=str(name),
-                x=tuple(_clip01(value) for value in variables),
-                costs=tuple(float(value) for value in costs),
+                job_name=evidence.job_name,
+                x=tuple(_clip01(value) for value in cost.normalized_variables),
+                costs=tuple(float(value) for value in cost.costs),
+                candidate_id=evidence.evidence_id,
+                row_id=evidence.row_id,
+                design_key=evidence.design_key,
+                interpretation_id=cost.interpretation_id,
             )
         )
     return tuple(records)

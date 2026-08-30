@@ -18,7 +18,16 @@ from ..task_snapshot import (
     GenerationTaskSnapshot,
     create_generation_snapshot,
 )
+from ..workspace import WorkspaceContext
 from .campaign_lock import CampaignLock
+from .dataset import (
+    CostTable,
+    EvidenceDataset,
+    InterpretationStatus,
+    _LiveEvidenceInput,
+    _evidence_dataset_from_live,
+    calculate_cost_table,
+)
 from .paths import RecordedDataPaths, recorded_data_paths
 from .records import catalog_snapshot
 from .segment_store import (
@@ -672,68 +681,82 @@ class CampaignSession:
                 output.append(record)
             return tuple(output)
 
-    def historical_results(
+    def evidence_dataset(self) -> EvidenceDataset:
+        """Freeze the current live catalog without retaining envelope payloads."""
+
+        with self._state_lock:
+            selected = self.current_snapshot
+        workspace = (
+            self.initial_config.workspace
+            if selected is None
+            else selected.config.workspace
+        )
+        return self._evidence_dataset_for_workspace(workspace)
+
+    def _evidence_dataset_for_workspace(
+        self, workspace: WorkspaceContext
+    ) -> EvidenceDataset:
+        with self._state_lock:
+            inputs = tuple(
+                _LiveEvidenceInput(
+                    candidate_id=candidate_id,
+                    record=dict(row.record),
+                    evidence_state=row.evidence_state,
+                    reference=row.reference,
+                    interpretation_state=row.interpretation_state,
+                    normalized_variables=row.normalized,
+                    costs=row.costs,
+                    interpretation_fingerprint=row.interpretation_fingerprint,
+                    interpretation_diagnostics=(
+                        None
+                        if row.interpretation_diagnostics is None
+                        else dict(row.interpretation_diagnostics)
+                    ),
+                )
+                for candidate_id, row in self._rows.items()
+            )
+            diagnostics = tuple(dict(item) for item in self.catalog_diagnostics)
+        return _evidence_dataset_from_live(workspace, inputs, diagnostics)
+
+    def cost_table(
         self, snapshot: GenerationTaskSnapshot | None = None
-    ) -> tuple[tuple[str, tuple[float, ...], tuple[float, ...]], ...]:
+    ) -> CostTable:
+        """Build and cache one task-scoped interpretation table for live evidence."""
+
         selected = snapshot or self.current_snapshot
         if selected is None:
             raise RuntimeError("campaign generation snapshot has not been selected")
         started = time.monotonic()
-        output: list[tuple[str, tuple[float, ...], tuple[float, ...]]] = []
+        dataset = self._evidence_dataset_for_workspace(selected.config.workspace)
+        table = calculate_cost_table(dataset, selected)
         with self._state_lock:
-            rows = tuple(self._rows.values())
-        for row in rows:
-            if (
-                str(row.record.get("status")) != "completed"
-                or row.evidence_state != "committed"
-            ):
-                continue
-            if (
-                row.interpretation_fingerprint
-                != selected.interpretation_fingerprint
-                or row.normalized is None
-                or row.costs is None
-            ):
-                try:
-                    items = self._evidence(row)
-                    raw_variables = _raw_variables_tuple(
-                        selected, row.record.get("raw_variables")
-                    )
-                    normalized = job_template_api.normalize_variables(
-                        selected.config.workspace, raw_variables
-                    )
-                    calculated = job_template_api.calculate_cost(
-                        selected.config.workspace,
-                        (tuple(item.payload for item in items),),
-                        (raw_variables,),
-                    )[0]
-                    if len(calculated) != len(selected.objective_names):
-                        raise ValueError("historical objective width mismatch")
-                except Exception as exc:
-                    with self._state_lock:
-                        row.interpretation_state = "failed"
-                        row.interpretation_diagnostics = {
-                            "error_type": type(exc).__name__,
-                            "error_message": str(exc),
-                        }
+            for cost_row in table.rows:
+                if cost_row.status == InterpretationStatus.MISSING:
                     continue
-                with self._state_lock:
-                    row.normalized = tuple(float(value) for value in normalized)
-                    row.costs = tuple(float(value) for value in calculated)
-                    row.interpretation_fingerprint = (
-                        selected.interpretation_fingerprint
-                    )
-                    row.interpretation_state = "succeeded"
-                    row.interpretation_diagnostics = None
-            output.append(
-                (
-                    str(row.record.get("job_name", "")),
-                    tuple(row.normalized or ()),
-                    tuple(row.costs or ()),
-                )
-            )
+                row = self._rows.get(cost_row.evidence_id)
+                if row is None or cost_row.row_id != cost_row.evidence_id:
+                    continue
+                row.normalized = cost_row.normalized_variables
+                row.costs = cost_row.costs
+                row.interpretation_fingerprint = table.interpretation_fingerprint
+                row.interpretation_state = cost_row.status.value
+                row.interpretation_diagnostics = dict(cost_row.diagnostics)
         self.last_reinterpretation_sec = max(0.0, time.monotonic() - started)
-        return tuple(output)
+        return table
+
+    def historical_results(
+        self, snapshot: GenerationTaskSnapshot | None = None
+    ) -> tuple[tuple[str, tuple[float, ...], tuple[float, ...]], ...]:
+        table = self.cost_table(snapshot)
+        return tuple(
+            (
+                row.job_name,
+                tuple(row.normalized_variables or ()),
+                tuple(row.costs or ()),
+            )
+            for row in table.rows
+            if row.status == InterpretationStatus.SUCCEEDED
+        )
 
     def rawdata_samples(
         self,
@@ -926,14 +949,6 @@ class CampaignSession:
 
     def __exit__(self, exc_type, exc, traceback) -> None:
         self.close()
-
-
-def _raw_variables_tuple(
-    snapshot: GenerationTaskSnapshot, value: object
-) -> tuple[float, ...]:
-    if not isinstance(value, Mapping):
-        raise TypeError("raw_variables must be a name/value mapping")
-    return tuple(float(value[name]) for name in snapshot.parameter_names)
 
 
 __all__ = [

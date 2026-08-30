@@ -12,6 +12,11 @@ from ..job_template.rawdata_contract import (
     validate_rawdata_item,
 )
 from ..workspace import WorkspaceContext
+from .dataset import (
+    InterpretationStatus,
+    get_cost_table as _get_cost_table,
+    get_evidence_dataset as _get_evidence_dataset,
+)
 from .paths import RecordedDataPaths
 from .segment_store import (
     HistoricalRawDataSnapshot,
@@ -183,37 +188,18 @@ def calculate_costs(
     progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[tuple[str, tuple[float, ...]], ...]:
     requested = set(str(name) for name in job_names) if job_names is not None else None
-    references = tuple(
-        reference
-        for reference in _references(storage, status=status)
-        if requested is None
-        or str(reference.record.get("job_name", "")) in requested
+    dataset = _get_evidence_dataset(workspace).where(
+        lambda row: (
+            (status is None or row.execution_status == status)
+            and (requested is None or row.job_name in requested)
+        )
     )
-    names = tuple(job_template_api.get_parameter_names(workspace))
-    if progress is not None:
-        progress(0, len(references), "calculating costs")
-    output = []
-    for index, reference in enumerate(references, start=1):
-        try:
-            items = load_reference_rawdata(reference)
-            raw_variables = _raw_variables(reference.record, names)
-            costs = job_template_api.calculate_cost(
-                workspace,
-                (tuple(item.payload for item in items),),
-                (raw_variables,),
-            )[0]
-        except TOLERATED_ROW_ERRORS:
-            pass
-        else:
-            output.append(
-                (
-                    str(reference.record.get("job_name", "")),
-                    tuple(float(value) for value in costs),
-                )
-            )
-        if progress is not None:
-            progress(index, len(references), "calculating costs")
-    return tuple(output)
+    table = _get_cost_table(workspace, dataset=dataset, progress=progress)
+    return tuple(
+        (joined.evidence.job_name, tuple(joined.cost.costs or ()))
+        for joined in dataset.join_costs(table)
+        if joined.cost.status == InterpretationStatus.SUCCEEDED
+    )
 
 
 def get_historical_results(
@@ -223,35 +209,19 @@ def get_historical_results(
     status: str | None = "completed",
     progress: Callable[[int, int, str], None] | None = None,
 ) -> tuple[tuple[str, tuple[float, ...], tuple[float, ...]], ...]:
-    references = _references(storage, status=status)
-    parameter_names = tuple(job_template_api.get_parameter_names(workspace))
-    total = len(references)
-    if progress is not None:
-        progress(0, total, "reinterpreting history")
-    output = []
-    for index, reference in enumerate(references, start=1):
-        try:
-            raw_variables = _raw_variables(reference.record, parameter_names)
-            normalized = job_template_api.normalize_variables(workspace, raw_variables)
-            items = load_reference_rawdata(reference)
-            costs = job_template_api.calculate_cost(
-                workspace,
-                (tuple(item.payload for item in items),),
-                (raw_variables,),
-            )[0]
-        except TOLERATED_ROW_ERRORS:
-            pass
-        else:
-            output.append(
-                (
-                    str(reference.record.get("job_name", "")),
-                    tuple(float(value) for value in normalized),
-                    tuple(float(value) for value in costs),
-                )
-            )
-        if progress is not None:
-            progress(index, total, "reinterpreting history")
-    return tuple(output)
+    dataset = _get_evidence_dataset(workspace).where(
+        lambda row: status is None or row.execution_status == status
+    )
+    table = _get_cost_table(workspace, dataset=dataset, progress=progress)
+    return tuple(
+        (
+            joined.evidence.job_name,
+            tuple(joined.cost.normalized_variables or ()),
+            tuple(joined.cost.costs or ()),
+        )
+        for joined in dataset.join_costs(table)
+        if joined.cost.status == InterpretationStatus.SUCCEEDED
+    )
 
 
 def open_historical_rawdata_snapshot(
@@ -267,38 +237,46 @@ def open_historical_rawdata_snapshot(
 def get_surrogate_training_data(
     workspace: WorkspaceContext, storage: RecordedDataPaths
 ) -> dict[str, object]:
-    historical = get_historical_results(workspace, storage, status="completed")
-    wanted = tuple(name for name, _normalized, _costs in historical)
-    named_samples = dict(
-        get_named_rawdata_samples(
-            storage, job_names=wanted, status="completed"
-        )
+    dataset = _get_evidence_dataset(workspace).where(
+        lambda row: row.execution_status == "completed"
     )
-    metadata_by_name = dict(
-        get_record_metadata(storage, job_names=wanted, status="completed")
-    )
+    table = _get_cost_table(workspace, dataset=dataset)
     variables = []
     job_names = []
     raw_data = []
     rawdata_filenames = []
     record_metadata = []
-    for name, normalized, _costs in historical:
-        sample = named_samples.get(name)
-        if sample is None:
+    for joined in dataset.join_costs(table):
+        if joined.cost.status != InterpretationStatus.SUCCEEDED:
             continue
-        job_names.append(name)
-        variables.append(normalized)
+        try:
+            sample = joined.evidence.load_rawdata()
+        except TOLERATED_ROW_ERRORS:
+            continue
+        metadata = joined.evidence.record.get("job_metadata")
+        job_names.append(joined.evidence.job_name)
+        variables.append(tuple(joined.cost.normalized_variables or ()))
         raw_data.append(tuple(dict(item.payload) for item in sample))
         rawdata_filenames.append(tuple(item.filename for item in sample))
-        record_metadata.append(metadata_by_name.get(name, {}))
+        record_metadata.append(
+            _mutable_json(metadata) if isinstance(metadata, Mapping) else {}
+        )
     return {
-        "parameter_names": tuple(job_template_api.get_parameter_names(workspace)),
+        "parameter_names": tuple(dataset.parameter_names),
         "job_names": tuple(job_names),
         "normalized_variables": tuple(variables),
         "raw_data": tuple(raw_data),
         "rawdata_filenames": tuple(rawdata_filenames),
         "record_metadata": tuple(record_metadata),
     }
+
+
+def _mutable_json(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _mutable_json(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_mutable_json(item) for item in value]
+    return value
 
 
 def get_rawdata_diagnostics(

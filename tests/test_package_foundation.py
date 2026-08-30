@@ -674,6 +674,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/recorded_data/__init__.py" in wheel_names
         assert "yadof/recorded_data/api.py" in wheel_names
         assert "yadof/recorded_data/campaign_lock.py" in wheel_names
+        assert "yadof/recorded_data/dataset.py" in wheel_names
         assert "yadof/recorded_data/paths.py" in wheel_names
         assert "yadof/recorded_data/query.py" in wheel_names
         assert "yadof/recorded_data/rawdata.py" in wheel_names

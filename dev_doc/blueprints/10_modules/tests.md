@@ -75,6 +75,12 @@ for separately authorized real adapter smoke or performance work.
   exclusivity; corrupt candidate/segment tolerance; task-snapshot hot reload and
   fingerprint invalidation; no old-segment reopen; 5,000-row hot-finalizer and
   synthetic 100,000-row catalog scale;
+- evidence-dataset identity and duplicate-design separation; stable
+  filter/copy/reorder and ID-based cost joins; lazy one-row rawData decoding;
+  deterministic derived lineage/non-entry; exact succeeded/failed/not-applicable/
+  missing interpretation statuses; task hot reload; live pending/commit/recovery;
+  corrupt candidate/segment isolation; and compatibility query, optimizer-history,
+  multi-objective, and surrogate-training alignment;
 - optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
   checkpoint compatibility, intervals, and workspace-keyed scheduling;
 - PCA/SVD centered-versus-uncentered per-field mathematics, rank clamp and

@@ -36,7 +36,13 @@
 ## Durable evidence
 
 - `recorded_data` owns the campaign session, workspace lock, immutable segment
-  publication, tolerant discovery, and current-history queries.
+  publication, tolerant discovery, identity-preserving evidence datasets, and
+  task/schema-bound cost tables.
+- `EvidenceDataset` keeps original candidate identity distinct from physical-design
+  equality and exposes only lazy rawData handles for committed evidence.
+  `CostTable` joins by row identity, preserves typed interpretation status and
+  bounded diagnostics, and converts failures to optimizer `inf` only at its
+  explicit optimizer adapter boundary.
 - The writer bounds unpublished ownership and makes publication failure
   campaign-fatal.
 - Publication receipts distinguish pending, committed, and failed evidence.

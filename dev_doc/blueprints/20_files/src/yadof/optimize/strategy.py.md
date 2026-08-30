@@ -12,7 +12,10 @@
 - Validate the structural strategy protocol without training or evaluation.
 - Build deterministic JSON semantic identity/signature from selected component
   identity plus parameter/objective names.
-- Adapt current session history and provide the one common real-evaluation handoff.
+- Adapt current session history by joining evidence and costs on row identity, then
+  expose candidate/row/design/interpretation IDs alongside the compatible
+  `job_name/x/costs` fields.
+- Provide the one common real-evaluation handoff.
 
 ## Invariants
 
@@ -20,3 +23,5 @@
 - Workspace strategy source is fresh and isolated; package config/registries never
   select another complete method.
 - Surrogate predictions cannot become accepted results without real evaluation.
+- Pending, failed, or derived rows and non-successful cost interpretations cannot
+  become committed optimizer history.

@@ -114,8 +114,10 @@ the fast evaluation call returns.
 
 ## Warm start and orchestration
 
-History warm start derives current normalized variables and costs from the session's
-startup catalog plus committed current rows. `run_generations` supports start/resume,
+History warm start joins the session's immutable evidence dataset and task-bound
+cost table by row identity. It consumes only successful committed original rows and
+carries candidate, row, design, and interpretation identity alongside the existing
+name/normalized-variable/cost fields. `run_generations` supports start/resume,
 stable run and optimization
 identities, deterministic seed, temporary config overrides, optional pre-run smoke,
 and generation metadata including timings, populations, task fingerprints, and
@@ -163,6 +165,9 @@ failure remains campaign-fatal and never becomes an individual `inf`.
   and activates `strategy-<signature>` while retaining inactive artifacts.
 - Source fingerprints remain separate from deterministic semantic signatures.
 - Stored optimization metadata stays lightweight; rawData remains in recorded_data.
+- History identity comes from durable candidate/row IDs, never job names, design
+  equality, or view position; non-successful cost rows remain typed until an
+  explicit optimizer-shape adapter requires `inf`.
 - Predicted posterior rawData and projected acquisition samples remain transient and
   never become optimizer history, recorder input, or real-evaluation results.
 - Current conditional-INR and hierarchical-CAE posterior components always block

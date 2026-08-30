@@ -172,6 +172,38 @@ Readers ignore temporary and unrelated files, skip a bad candidate member where
 possible, and skip one whole segment when its ZIP directory or manifest is
 unreadable.
 
+For programmatic analysis, use the identity-preserving views instead of joining
+parallel arrays or dictionaries by job name:
+
+```python
+from yadof.recorded_data import get_cost_table, get_evidence_dataset
+
+evidence = get_evidence_dataset(workspace)
+costs = get_cost_table(workspace, dataset=evidence)
+
+for joined in evidence.join_costs(costs):
+    print(joined.evidence.row_id, joined.cost.status, joined.cost.costs)
+```
+
+Original rows use the durable candidate ID as their evidence and row ID. Repeated
+physical designs keep different row IDs even when their `design_key` matches.
+`select()`, `where()`, `copy()`, and `join_costs()` preserve identity and do not
+decode rawData. Committed rawData loads lazily one row at a time; pending rows appear
+only in a live `CampaignSession.evidence_dataset()` and have no readable handle.
+
+A `CostTable` belongs to one task interpretation fingerprint and objective schema.
+Its statuses distinguish `succeeded`, `failed`, `not_applicable`, and `missing`;
+non-successful rows keep `costs=None` and diagnostics. Call
+`to_optimizer_costs()` only when a fixed-shape optimizer input is actually needed;
+that is the boundary that produces `inf`. Existing `get_historical_results()`,
+`calculate_costs()`, and surrogate-training queries keep their compatibility
+shapes, but align their data through row identity internally.
+
+Use `derive_evidence_row()` only for an explicit in-memory rawData transform. It
+creates an owned transient row with deterministic lineage from the parent,
+operation, JSON-safe parameters, ordinal, and transformed content. Derived rows do
+not write segments and do not enter committed optimizer history.
+
 Keep these three decisions separate:
 
 1. `workflow.py` decides what evidence is saved. Save a complete compatible
@@ -611,8 +643,10 @@ worker metadata could not return, while a job that never executed remains
 `unknown`. Existing timeout records use their stored Condor log tail for the same
 read-only display fallback; history is not rewritten.
 
-Individual prepare/run/timeout/rawData/current-cost failures become diagnostic rows
-and correct-width `inf` costs, and those failure rows are recorded like successful
-rows. A history publication failure stops the campaign before another generation;
-it is not reported as an ordinary candidate `inf`. `--fail-on-all-infinite` stops
-after the first generation with no finite objective.
+Individual prepare/run/timeout/rawData failures and current-cost interpretation
+failures remain distinct diagnostic/status rows. The optimizer boundary receives
+correct-width `inf`, but only real evidence is recorded; a cost failure does not
+persist its sentinel, and a missing/pending row does not become history. A history
+publication failure stops the campaign before another generation and is never an
+ordinary candidate `inf`. `--fail-on-all-infinite` stops after the first generation
+with no finite objective.

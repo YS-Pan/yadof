@@ -288,6 +288,20 @@ and the tuple width must match `get_objective_names()`; callback exceptions, wid
 mismatch, `NaN`, and infinity are interpretation failures rather than evidence
 loss.
 
+Programmatic history reinterpretation exposes those outcomes through
+`CostTable`, not by immediately replacing them with numeric sentinels. A successful
+row has finite costs whose width matches `get_objective_names()`; callback
+exception, wrong width, or non-finite output is `failed`; an execution failure is
+`not_applicable`; and pending/unavailable evidence is `missing`. These rows retain
+`costs=None` plus bounded diagnostics. Only `CostTable.to_optimizer_costs()` maps a
+non-successful row to correct-width `inf` for an optimizer that requires a dense
+shape.
+
+A table calculation uses one frozen task interpreter and isolates each evidence
+row. It lazily loads and releases at most one committed rawData payload at a time.
+Changing `calc_cost.py` creates a new task fingerprint, interpretation IDs, and
+cost view; it does not change evidence identity or segment bytes.
+
 For large rawData, the package may sample a bounded number of queries per step.
 That sampler balances active fields and samples without replacement inside each
 field. The loss averages pointwise Smooth L1 within each field and then averages

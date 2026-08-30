@@ -9,6 +9,8 @@
 
 - List/filter catalog records and derive normalized variables/current costs using
   current task code.
+- Build compatibility cost/history/training results from `EvidenceDataset` and
+  `CostTable` identity joins while retaining existing public tuple/dict shapes.
 - Load rawData samples, assemble surrogate training bundles, and report bounded
   segment/candidate diagnostics.
 - Preserve direct NPZ basenames through `get_named_rawdata_samples()` and expose
@@ -27,3 +29,5 @@
 - Public reads perform no repair, overwrite, or publication.
 - Derived values are recalculated under the caller's current task interpretation;
   durable evidence remains unchanged.
+- Duplicate job names/designs and reordered views cannot misalign rawData,
+  metadata, normalized variables, or costs because internal alignment uses row ID.

@@ -11,6 +11,11 @@
 - Create one immutable generation task snapshot per boundary, validate stable
   parameter/objective shapes, and reinterpret history only when its interpretation
   fingerprint changes.
+- Freeze immutable live `EvidenceDataset` views containing accepted pending,
+  committed, and recording-failed rows. Pending rows have no readable rawData;
+  committed rows use durable references rather than retained envelopes.
+- Build a snapshot-bound `CostTable`, reuse same-fingerprint transient hints, and
+  update only the session interpretation cache without rewriting evidence.
 - Expose transient named rawData samples, including exact direct `.npz` basenames,
   for schema adapters that must freeze selector identity. This read view neither
   changes persistence nor retains a second evidence store.
@@ -36,3 +41,5 @@
 - Queue admission is pending, never committed. Writer failure resolves every
   retained or blocked receipt failed within the writer's bounded failure path.
 - Backpressure and retry activity is reflected in monotonic counters.
+- Dataset/cost views preserve candidate and row identity; only successful committed
+  original rows can become optimizer history.

@@ -2,10 +2,11 @@
 
 ## Responsibility and files
 
-`yadof.recorded_data` owns durable workspace evidence and one explicit campaign
-session. Paths are derived only from the effective workspace. Individual evidence
-is stored in immutable standard-ZIP micro-batch segments; optimization and surrogate
-metadata uses unique immutable JSON event files.
+`yadof.recorded_data` owns durable workspace evidence, one explicit campaign
+session, identity-preserving evidence views, and task-bound cost views. Paths are
+derived only from the effective workspace. Individual evidence is stored in
+immutable standard-ZIP micro-batch segments; optimization and surrogate metadata
+uses unique immutable JSON event files.
 The native layout is directly `recorded_data/segments/` and
 `recorded_data/metadata/`; neither paths nor record JSON add a recorded-data version
 layer. Segment format identity and structural/member validation remain explicit,
@@ -44,20 +45,44 @@ all pending segments. The writer retries the same retained batch after a transie
 write failure; an oversized envelope, exhausted retry count, or unexpected writer
 death raises `RecordingError` and prevents later evaluation.
 
+## Evidence and cost views
+
+`EvidenceDataset` is an immutable ordered metadata/provenance view. Original rows
+reuse the durable candidate identity for `candidate_id`, `evidence_id`, and
+`row_id`; a separate canonical design key may match duplicate physical designs but
+never merges them. Selection, filtering, copying, and cost joins preserve row
+identity. Durable and committed-live rows hold only lazy `SegmentReference`-backed
+rawData handles; pending rows have no readable handle.
+
+`CostTable` binds ordered interpretation rows to the task interpretation
+fingerprint and objective schema. Successful rows contain finite costs of the
+declared width. Failed, not-applicable, and missing rows keep `None` costs plus
+bounded diagnostics; only `to_optimizer_costs()` maps them to correct-width `inf`.
+Interpretation loads and releases at most one candidate payload at a time and never
+updates a segment.
+
+`derive_evidence_row()` owns one explicit transformed rawData copy and gives it a
+deterministic row identity from parent ID, operation, JSON-safe parameters,
+ordinal, and semantic content digest. Derived rows retain lineage and root evidence
+identity but remain transient and cannot enter recorder or committed history.
+
 ## Queries
 
 Public queries list/filter records, recover raw variables, load segment members,
-derive current normalized variables and costs through `job_template`, and assemble
-training bundles. Named training reads preserve every direct NPZ basename and may
-return a separate JSON-safe `job_metadata` row aligned by stable job name, allowing
-task-owned hierarchical-CAE frequency filter to consume recorded diagnostics without altering
-rawData. The live campaign session exposes the same named sample/metadata views over
-durable plus committed current rows; pending evidence is not a readable sample. The
-cost-view reader freezes one finalized segment-name snapshot,
-then opens each selected ZIP once to combine manifest checks, NPZ decode/schema
-validation, and current-cost input delivery. Invalid, missing, or corrupt rawData is skipped with
+produce evidence/cost views, and assemble compatibility training bundles.
+Historical result, cost, and surrogate-training adapters use identity joins
+internally while retaining their existing tuple/dict shapes. Named training reads
+preserve every direct NPZ basename and expose copied JSON-safe `job_metadata`
+aligned to the same accepted evidence rows, allowing task-owned hierarchical-CAE
+filters to consume diagnostics without altering rawData. The live campaign exposes
+the same schema over durable plus accepted current rows; pending evidence is
+visible in its dataset but is not a readable sample or optimizer-history row.
+
+The cost-view reader freezes one finalized segment-name snapshot, then opens each
+selected ZIP once to combine manifest checks, NPZ decode/schema validation, and
+current-cost input delivery. Invalid, missing, or corrupt rawData is isolated with
 diagnostics rather than poisoning all history. Objective changes are reflected on
-the next query because costs are recalculated. Historical-result queries accept an
+the next table because costs are recalculated. Historical-result queries accept an
 optional `(completed, total, message)` callback covering reinterpretation; omitting
 it preserves the normal quiet API. Temporary and unrelated files are ignored.
 Candidate/member failure skips that candidate where siblings remain
@@ -78,6 +103,10 @@ readable; central-directory/manifest failure skips one segment.
 - Immutable completed evidence is independent from transient normalization, cost,
   and interpretation diagnostics; a failed cost can be replayed under a later
   generation snapshot.
+- Original evidence identity is never inferred from job name, design key, view
+  position, or normalized variables; cost/history consumers join by row ID.
+- Dataset view operations do not decode rawData, and derived/transformed rows never
+  publish themselves or become committed optimizer history.
 - A live campaign rejects a duplicate candidate identity before recorder admission;
   it never publishes a duplicate that a later first-wins query would ignore.
 - Clearing history validates the exact workspace-owned segment and event targets,

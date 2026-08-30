@@ -20,6 +20,14 @@
   publication cannot complete.
 - **Recording segment** is immutable durable evidence containing a bounded group of
   candidate records.
+- **Evidence dataset** is an immutable ordered view whose original row identity is
+  the durable candidate identity. A separate design key may identify repeated
+  physical designs without merging their evidence.
+- **Cost table** is a current-task interpretation view joined to evidence by row
+  identity. It retains objective schema, interpretation fingerprint, typed status,
+  and bounded diagnostics without changing the evidence row.
+- **Derived evidence row** is a transient owned rawData transform with deterministic
+  parent/operation/parameter/ordinal/content lineage. It is never a recorder row.
 - **Generation task snapshot** is the coherent task/configuration definition used
   throughout one generation.
 - **Surrogate prediction and posterior samples** are transient derived views of
@@ -42,6 +50,11 @@ mechanisms.
 Durable truth includes raw task variables, rawData, schema metadata, lifecycle
 metadata, and bounded provenance. Normalized variables, costs, predictions,
 posterior draws, and acquisition values are recalculable or transient.
+
+Original `candidate_id`, `evidence_id`, and `row_id` are the same durable identity.
+The design key is only an equivalence aid. A derived row keeps its root evidence
+identity but receives a deterministic row identity and explicit lineage, so neither
+duplicate designs nor reordered views can silently change joins.
 
 Changing task cost code intentionally changes the interpretation of compatible
 evidence. Changing parameter ranges or levels changes normalization and later
@@ -76,6 +89,10 @@ selected candidates still receive normal real evaluation.
 - Valid rawData is durably committed before current cost starts, and all receipts
   resolve before a population boundary completes.
 - Stored rawData remains rich enough for later compatible reinterpretation.
+- Evidence/cost joins use row identity; view position, job name, and design key are
+  never substitutes for sample identity.
+- Non-successful interpretations remain typed until the explicit optimizer-shape
+  boundary maps them to correct-width `inf`.
 - One active campaign owns one workspace lock and one bounded writer.
 - Task code never duplicates cross-task framework mechanisms, and package code does
   not hard-code task-specific simulator or objective policy.

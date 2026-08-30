@@ -72,6 +72,14 @@ jobs.
 The current package version is `0.4.2`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
+The core wheel also exposes `yadof.recorded_data.EvidenceDataset` and `CostTable`.
+These are immutable in-memory/lazy views over the existing segment layout, not a
+database, DataFrame dependency, or second history format. Original rows reuse the
+durable candidate identity; cost interpretations are separate task/schema-bound
+rows joined by identity. Filtering or reordering a dataset does not decode rawData,
+and transformed/derived rows remain transient unless the user separately performs a
+normal real evaluation and recording workflow.
+
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
 Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and
 psutil 7.2.2, and HTCondor 25.4.0. psutil is a core dependency because local

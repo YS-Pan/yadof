@@ -54,6 +54,20 @@ evidence.
 This scenario validates workspace isolation, persistence, and current-view
 interpretation.
 
+## Filter, transform, and reinterpret evidence
+
+A reader freezes one durable or live evidence dataset, filters or reorders it by
+row identity, and calculates a cost table under one coherent task snapshot. Lazy
+rawData decoding occurs only during interpretation and one row at a time. Repeated
+physical designs retain distinct candidate identities even though they share a
+design key, and cost joins remain correct when either view is reordered.
+
+An explicit rawData transform may create transient derived rows with deterministic
+parent/operation/parameter/ordinal/content lineage. Those rows can be interpreted
+for analysis, but they do not enter the recorder or committed optimizer history.
+This scenario validates identity-preserving manipulation without creating a second
+source of truth.
+
 ## Use derived candidate selection
 
 An explicitly composed surrogate-assisted strategy learns from recorded real
@@ -79,7 +93,8 @@ This scenario validates state isolation and the single-writer domain.
 A candidate preparation, execution, timeout, transport, or rawData failure produces
 an ordered diagnostic result and does not erase successful candidates. When valid
 rawData commits but current-cost interpretation fails, the optimizer receives the
-correct-width failure sentinel while the completed evidence remains replayable. A
+correct-width failure sentinel only at its adapter boundary while the cost table
+retains a typed failure row and the completed evidence remains replayable. A
 recorder publication failure stops the campaign because accepted evidence cannot be
 lost. Corrupt historical entries are isolated during reads without rewriting good
 evidence.

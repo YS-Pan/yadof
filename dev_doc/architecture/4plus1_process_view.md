@@ -70,6 +70,13 @@ identity can invalidate caches and record provenance, but the user remains
 responsible for deciding whether earlier evidence should be retained, cleared, or
 separated.
 
+History reinterpretation first freezes an `EvidenceDataset` without decoding
+rawData. It then walks rows in stable order through one frozen task interpreter,
+materializing and releasing at most one candidate payload at a time. The resulting
+`CostTable` binds every interpretation to row identity, objective schema, and task
+fingerprint. Identity-based joins feed current history and compatibility adapters;
+pending, failed, or derived rows cannot enter committed optimizer history.
+
 ## External simulator subprocesses
 
 A packaged adapter may launch task-owned child code in a separately provisioned
@@ -97,6 +104,9 @@ validation, timeout, cleanup, and publication behavior.
   a gap in accepted evidence.
 - History readers tolerate unrelated or corrupt entries by isolating them rather
   than mutating surviving evidence.
+- Execution failure, missing evidence, and callback/shape/non-finite interpretation
+  failure remain distinct cost-table statuses; only the optimizer conversion emits
+  fixed-width failure sentinels.
 
 ## Concurrency and publication
 
