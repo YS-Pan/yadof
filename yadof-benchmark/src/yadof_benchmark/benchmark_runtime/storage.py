@@ -13,7 +13,7 @@ import platform
 import shutil
 import sys
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from .._version import __version__ as benchmark_version
@@ -325,10 +325,41 @@ def prepare_cell(
     materialize_baseline(manifest, cell_root)
     workspace = cell_root / "workspace"
 
-    strategy_source = Path(str(cell["strategy_source"])).resolve()
-    strategy_destination = workspace / "submit" / "optimization.py"
-    strategy_destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(strategy_source, strategy_destination)
+    declared_files = cell.get("strategy_files")
+    if declared_files is None:
+        declared_files = {"optimization.py": cell["strategy_source"]}
+    if not isinstance(declared_files, Mapping) or "optimization.py" not in declared_files:
+        raise BenchmarkError(
+            f"cell {cell_id!r} strategy_files must map optimization.py and helpers"
+        )
+    submit_root = (workspace / "submit").resolve()
+    for relative_value, source_value in declared_files.items():
+        relative = str(relative_value)
+        relative_path = PurePosixPath(relative)
+        if (
+            not relative
+            or "\\" in relative
+            or relative_path.is_absolute()
+            or relative_path.suffix != ".py"
+            or any(part in {"", ".", ".."} for part in relative_path.parts)
+            or relative_path.as_posix() != relative
+        ):
+            raise BenchmarkError(
+                f"cell {cell_id!r} has invalid strategy destination: {relative!r}"
+            )
+        source = Path(str(source_value))
+        if source.is_symlink() or not source.is_file():
+            raise BenchmarkError(
+                f"cell {cell_id!r} strategy source is not a regular file: {source}"
+            )
+        destination = submit_root.joinpath(*relative_path.parts)
+        resolved_parent = destination.parent.resolve()
+        if not resolved_parent.is_relative_to(submit_root):
+            raise BenchmarkError(
+                f"cell {cell_id!r} strategy destination escapes submit/: {relative!r}"
+            )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source.resolve(), destination)
     simulation_concurrency = _apply_simulation_concurrency(
         workspace, cell.get("execution", {})
     )

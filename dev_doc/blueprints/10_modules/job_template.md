@@ -31,8 +31,11 @@ objective, posterior model, or acquisition rule.
   select or weight surrogate training positions; validation rejects the removed
   `rawdata_importance_weights()` hook. The file calls package helpers for reusable
   loading/reduction/dispatch, constraints, failure fallback, and objective counting.
-- `submit/optimization.py` defines mandatory side-effect-free
-  `build_optimization()` composition. Submit helpers stay submit-side.
+- `submit/optimization.py` either declares the explicit v1
+  `optimization_program(context)` entry plus exact program helpers, or temporarily
+  defines the transitional side-effect-free `build_optimization()` composition.
+  Explicit program control flow is frozen once per run; current cost and other task
+  sources remain generation-scoped. Submit helpers stay submit-side.
 - adapters, models, lookup data, and task helpers are copied into prepared jobs when
   placed under `job_template/`.
 
@@ -127,8 +130,10 @@ very large finite physical values remain bounded instead of overflowing.
 ## Invariants
 
 - Task modules are workspace-explicit and fresh-loaded.
-- A campaign does not freeze the task selected at startup; supported edits become
-  coherent at the next generation boundary.
+- A campaign does not freeze cost, parameter, workflow, evaluation, or other task
+  sources selected at startup; supported edits become coherent at the next
+  generation boundary. Explicit optimization program sources are the deliberate
+  run-scoped exception.
 - Workflows do not import yadof in distributed execution.
 - Workflows call copied package worker support, which samples `execute_machine` on
   the node where they run and includes it in returned individual metadata.

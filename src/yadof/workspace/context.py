@@ -50,6 +50,7 @@ class WorkspaceContext:
     logs_dir: Path
     tool_output_dir: Path
     fast_evaluation_scratch_dir: Path
+    requires_optimization_source: bool = True
 
     @classmethod
     def from_path(

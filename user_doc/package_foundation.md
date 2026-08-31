@@ -212,9 +212,11 @@ library, and dependencies deliberately installed on execute nodes.
 `submit/` is fixed and is not configurable through `config.py`. Its complete tree
 is available only on the submit host and is never copied into a prepared job or an
 HTCondor transfer list. `calc_cost.py` owns current rawData interpretation;
-`optimization.py` must define `build_optimization()` and compose one complete
-strategy from installed yadof components. Canonical unassigned parameters remain
-only in `job_template/parameters_constraints.py`.
+`optimization.py` must either declare an explicit `YADOF_OPTIMIZATION_PROGRAM` or,
+during the 0.4.x migration, define the transitional `build_optimization()` factory.
+Explicit programs may name an exact set of submit-local `.py` helpers in their
+literal declaration. Canonical unassigned parameters remain only in
+`job_template/parameters_constraints.py`.
 
 Workspace `job_template/workflow.py` and `submit/calc_cost.py` contain only
 behavior that can change with the optimization task. They call copied `worker_misc`

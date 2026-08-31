@@ -17,6 +17,7 @@ from yadof_benchmark.benchmark_runtime import execution
 from yadof_benchmark.benchmark_runtime.baselines import load_baseline
 from yadof_benchmark.benchmark_runtime.contracts import (
     BASELINE_FORMAT,
+    BenchmarkError,
     DEFAULT_GENERATIONS,
     DEFAULT_POPULATION,
     DEFAULT_SEED,
@@ -603,6 +604,68 @@ def test_plan_uses_short_cell_ids_and_keeps_semantics_in_spec(tmp_path: Path) ->
     assert not any("snapshot" in key for cell in expanded["cells"] for key in cell)
 
 
+def test_explicit_program_helpers_are_hashed_and_materialized(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "explicit", strategies=("alpha",))
+    strategy = workspace / "resources/strategies/alpha/optimization.py"
+    helper = strategy.with_name("optimization_helpers.py")
+    sentinel = workspace / "strategy-ran.txt"
+    strategy.write_text(
+        "from pathlib import Path\n"
+        "from optimization_helpers import VALUE\n\n"
+        "YADOF_OPTIMIZATION_PROGRAM = {\n"
+        "    'api': 'yadof.optimize.program/v1',\n"
+        "    'entry': 'optimization_program',\n"
+        "    'helpers': ('optimization_helpers.py',),\n"
+        "    'identity': {'name': 'explicit-test'},\n"
+        "    'capabilities': ('test',),\n"
+        "}\n\n"
+        "def optimization_program(context):\n"
+        f"    Path({str(sentinel)!r}).write_text(str(VALUE), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    helper.write_text("VALUE = 'first'\n", encoding="utf-8")
+
+    first = _plan(tmp_path, workspace).to_dict()["cells"][0]
+    assert set(first["strategy_files"]) == {
+        "optimization.py",
+        "optimization_helpers.py",
+    }
+    first_digest = first["strategy_digest"]
+    assert not sentinel.exists()
+
+    helper.write_text("VALUE = 'second'\n", encoding="utf-8")
+    second = _plan(tmp_path, workspace).to_dict()["cells"][0]
+    assert second["strategy_digest"] != first_digest
+    assert not sentinel.exists()
+
+    _execute(tmp_path, workspace)
+    copied = workspace / "cells/c0001/workspace/submit/optimization_helpers.py"
+    assert copied.read_text(encoding="utf-8") == "VALUE = 'second'\n"
+    assert not sentinel.exists()
+
+
+def test_explicit_program_helper_path_is_statically_rejected(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "invalid-helper", strategies=("alpha",))
+    strategy = workspace / "resources/strategies/alpha/optimization.py"
+    strategy.write_text(
+        "YADOF_OPTIMIZATION_PROGRAM = {\n"
+        "    'api': 'yadof.optimize.program/v1',\n"
+        "    'entry': 'optimization_program',\n"
+        "    'helpers': ('../escape.py',),\n"
+        "    'identity': {'name': 'invalid'},\n"
+        "    'capabilities': (),\n"
+        "}\n\n"
+        "def optimization_program(context):\n"
+        "    raise AssertionError('must not run')\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BenchmarkError, match="canonical relative .py path"):
+        _plan(tmp_path, workspace)
+
+
 def test_workspace_initialization_records_runtime_once_without_snapshots(
     tmp_path: Path,
 ) -> None:
@@ -911,4 +974,4 @@ def test_terminal_logs_workspace_lifecycle(tmp_path: Path) -> None:
 
 
 def test_distribution_version() -> None:
-    assert benchmark.__version__ == "0.2.1"
+    assert benchmark.__version__ == "0.2.2"

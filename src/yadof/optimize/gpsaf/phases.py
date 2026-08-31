@@ -14,6 +14,7 @@ from ..primitives import (
     bind_predicted_costs,
     bind_surrogate_prediction,
     combine_candidate_pools,
+    combine_predicted_cost_rows,
     compose_real_population,
     continue_search_from,
     fork_search_state,
@@ -187,49 +188,6 @@ def assign_clusters(
     return clusters
 
 
-def _bind_combined_prediction(
-    pool: CandidatePool,
-    predictions: Sequence[PredictedCostRows],
-    *,
-    source: str,
-) -> PredictedCostRows:
-    by_id: dict[str, tuple[float, ...]] = {}
-    interpretation_fingerprint = ""
-    state_signature = ""
-    for prediction in predictions:
-        if not isinstance(prediction, PredictedCostRows):
-            raise TypeError("combined prediction inputs must be PredictedCostRows")
-        if not interpretation_fingerprint:
-            interpretation_fingerprint = prediction.interpretation_fingerprint
-            state_signature = prediction.state_signature
-        elif (
-            prediction.interpretation_fingerprint != interpretation_fingerprint
-            or prediction.state_signature != state_signature
-        ):
-            raise ValueError("combined predictions use different fitted semantics")
-        for candidate_id, costs in zip(
-            prediction.candidate_ids,
-            prediction.costs,
-        ):
-            if candidate_id in by_id:
-                raise ValueError("combined predictions repeat a candidate ID")
-            by_id[candidate_id] = costs
-    expected = tuple(candidate.candidate_id for candidate in pool.candidates)
-    if any(candidate_id not in by_id for candidate_id in expected):
-        raise ValueError("combined prediction is missing candidate rows")
-    return bind_predicted_costs(
-        pool,
-        tuple(by_id[candidate_id] for candidate_id in expected),
-        source=source,
-        interpretation_fingerprint=interpretation_fingerprint,
-        state_signature=state_signature,
-        diagnostics={
-            "combined_prediction_count": len(tuple(predictions)),
-            "combined_candidate_count": len(expected),
-        },
-    )
-
-
 def run_alpha_phase(
     state: SearchState,
     batch_target: int,
@@ -273,7 +231,7 @@ def run_alpha_phase(
         }
 
     combined_pool = combine_candidate_pools(current, pools)
-    combined_prediction = _bind_combined_prediction(
+    combined_prediction = combine_predicted_cost_rows(
         combined_pool,
         predictions,
         source="gpsaf-alpha-predicted-costs",
@@ -341,7 +299,7 @@ def run_beta_phase(
         sim_state,
         (anchors, *beta_pools),
     )
-    combined_prediction = _bind_combined_prediction(
+    combined_prediction = combine_predicted_cost_rows(
         combined_pool,
         (anchor_prediction, *beta_predictions),
         source="gpsaf-beta-predicted-costs",

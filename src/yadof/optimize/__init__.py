@@ -23,6 +23,12 @@ from .posterior_assisted import (
     calibrated_applicability_gate,
     posterior_assisted,
 )
+from .program import (
+    OptimizationProgramContext,
+    OptimizationProgramSpec,
+    OptimizationRunScope,
+    ProgramGenerationScope,
+)
 from .primitives import (
     CandidatePool,
     CandidateSelection,
@@ -34,6 +40,7 @@ from .primitives import (
     bind_predicted_costs,
     bind_surrogate_prediction,
     combine_candidate_pools,
+    combine_predicted_cost_rows,
     compose_real_population,
     continue_search_from,
     fork_search_state,
@@ -67,10 +74,14 @@ __all__ = [
     "InsufficientCandidatePoolError",
     "ObjectiveCountSearch",
     "OptimizationResult",
+    "OptimizationProgramContext",
+    "OptimizationProgramSpec",
+    "OptimizationRunScope",
     "OptimizationStrategy",
     "PosteriorAssistedStrategy",
     "PredictedCostRows",
     "PymooSearch",
+    "ProgramGenerationScope",
     "RealSearchStrategy",
     "SearchCandidate",
     "SearchState",
@@ -84,6 +95,7 @@ __all__ = [
     "bind_surrogate_prediction",
     "calibrated_applicability_gate",
     "combine_candidate_pools",
+    "combine_predicted_cost_rows",
     "compose_real_population",
     "continue_search_from",
     "fork_search_state",

@@ -202,13 +202,14 @@ and task execution code may change at the boundary. Structural parameter or
 objective-width changes need separate optimizer-state support; use a new workspace
 and campaign for them for now.
 
-At each generation boundary yadof copies the complete `submit/` and `job_template/`
-source trees below one immutable snapshot root. Every candidate in that
-generation—including fast worker task
-imports—uses that same snapshot. Changes made while a generation is running are
-therefore visible at the next boundary and cannot split the current generation.
-Interpretation, evaluation, and optimization fingerprints are recorded separately:
-only a changed
+At each generation boundary yadof copies the complete `job_template/` tree and the
+current non-program `submit/` task sources below one immutable snapshot root. Every
+candidate in that generation—including fast worker task imports—uses that same
+snapshot. The explicit `optimization.py` entry and declared helpers instead come
+from the one run-frozen program snapshot. Non-program changes made while a
+generation is running are therefore visible at the next boundary and cannot split
+the current generation; program changes wait for the next command. Interpretation,
+evaluation, and optimization fingerprints are recorded separately: only a changed
 interpretation fingerprint invalidates cached normalization/current-cost values;
 an evaluation-only edit records new provenance without forcing old cost work.
 
@@ -528,9 +529,76 @@ when the user explicitly requests it and the workspace documents the reason.
 
 ## 4. Compose the optimization strategy
 
-`submit/optimization.py` is the only complete-strategy selection source. It must
-define a side-effect-free `build_optimization()` function. The starter composes
-GPSAF, objective-count dispatch, pymoo GA or NSGA-III, and conditional INR:
+`submit/optimization.py` is the only complete optimization-program/strategy entry
+source. An explicit program opts in with one literal declaration:
+
+```python
+from yadof.evaluate_manager import start_evaluation
+from yadof.optimize import full_real_search, pymoo_nsga3
+
+
+YADOF_OPTIMIZATION_PROGRAM = {
+    "api": "yadof.optimize.program/v1",
+    "entry": "optimization_program",
+    "helpers": (),
+    "identity": {"program": "real-nsga3", "version": 1},
+    "capabilities": ("real-evaluation",),
+}
+
+
+def optimization_program(context):
+    search = pymoo_nsga3()
+    with context.run_scope() as run:
+        for generation_index in run.generations():
+            with run.generation(generation_index) as step:
+                selected = full_real_search(
+                    step.context,
+                    search,
+                    origin_prefix="workspace-real",
+                )
+                handle = start_evaluation(
+                    step.prepare_evaluation(selected.population)
+                )
+                try:
+                    evaluation = handle.wait()
+                finally:
+                    handle.close()
+                step.commit(
+                    step.result(
+                        population=selected.population,
+                        costs=evaluation.costs,
+                        source=selected.source,
+                    )
+                )
+```
+
+The declaration keys are exactly `api`, `entry`, `helpers`, `identity`, and
+`capabilities`. The entry must have the exact signature
+`optimization_program(context)` and return `None`. Helper paths use canonical
+forward-slash relative `.py` paths below `submit/`; absolute/parent/symlink/
+duplicate paths and undeclared sibling imports fail closed. Program and helper
+top levels may contain only docstrings, imports, definitions, and literal
+assignments. Construct components, evaluate, train, and write files only inside
+functions.
+
+`identity` and `capabilities`, together with parameter and objective names, define
+semantic state compatibility. Update identity whenever algorithm, control-flow,
+training, or scientific semantics change. Source bytes have a separate provenance
+fingerprint, so comment/path-only edits need not create a new semantic namespace.
+
+One `yadof run` freezes the entry and declared helper bytes once. Each generation
+still reloads `calc_cost.py`, parameter definitions, evaluation/workflow code,
+config, and their task helpers. A generation must explicitly commit one correctly
+shaped result. Its normal exit waits/closes training handles, rejects an unclosed
+evaluation handle, flushes durable recording, writes strict generation metadata,
+and advances `.yadof/optimization/program-completion.json`. A later command with
+the same semantic signature must start at exactly the next incomplete generation;
+there is no mid-generation Python-stack resume.
+
+The packaged 0.4.2 starter and advanced components not yet migrated continue to
+use the transitional side-effect-free `build_optimization()` factory. The starter
+composes GPSAF, objective-count dispatch, pymoo GA or NSGA-III, and conditional
+INR:
 
 ```python
 from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3
@@ -547,15 +615,20 @@ def build_optimization():
     )
 ```
 
-The factory calls above are also the only workspace entry for component settings.
+For the transitional factory path, the calls above are the only workspace entry
+for component settings. Explicit programs construct the same public components in
+their entry/helper functions and include the effective semantic controls in
+`identity`.
 For example, a tuned source may use
 `pymoo_ga(crossover_probability=0.9, mutation_eta=15.0)`,
 `gpsaf(..., alpha=3, beta=3, exploration_fraction=0.15)`, and
 `conditional_inr(device="cuda", epochs=64, bootstrap_members=True)`. These
-keyword-only values are validated when the generation snapshot loads. Editing the
-file affects the next generation; the current generation continues with its frozen
-component values. Removed uppercase algorithm/model names in `config.py` fail as
-unknown settings instead of being translated or ignored.
+keyword-only values are validated when the generation snapshot loads. A legacy
+factory edit affects the next generation. An explicit program/helper edit affects
+only the next `yadof run` command after a complete boundary; it never changes the
+program already frozen for the current command. Removed uppercase algorithm/model
+names in `config.py` fail as unknown settings instead of being translated or
+ignored.
 
 For a deterministic low-rank baseline, explicitly replace only the surrogate
 component. PCA centers each recorded field on its training mean; SVD is
@@ -746,8 +819,12 @@ runs exactly one worker and has no timeout or durable job directory.
 
 ## 6. Optimize and inspect
 
-`yadof check` constructs and validates the submit-side strategy, but does not train,
-predict, evaluate candidates, import the workflow, or write an active pointer.
+`yadof check` statically parses the submit-side optimization source. It validates
+the explicit literal declaration, exact entry signature, declared helper paths,
+and import-safe top-level shape, or confirms the transitional top-level legacy
+factory declaration. It does not execute either entry/factory, construct
+components, train, predict, evaluate candidates, import the workflow, or write an
+active pointer.
 
 ```powershell
 yadof run --workspace D:\work\study-a

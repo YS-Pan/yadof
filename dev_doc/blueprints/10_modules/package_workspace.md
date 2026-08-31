@@ -31,7 +31,9 @@ and calls package worker support, which records execute-side machine identity an
 the fixed lifecycle metadata. The generic cost module demonstrates package
 `soft_cost()` normalization from fixed physical thresholds into a dimensionless
 `[0, 1]` minimization objective with task error cost `1.0`. `check` is read-only and reports marker, required
-files, task and strategy-construction contracts, disjoint paths, and optional static rawData diagnostics.
+files, task and optimization-source contracts, disjoint paths, and optional static rawData diagnostics.
+It parses either the exact literal explicit-program declaration or the transitional
+legacy factory declaration without importing or executing either source.
 When fast is selected, check also requires callable task-owned
 `evaluation.py:evaluate_rawdata()` and a scratch path disjoint from task/jobs/history.
 Additional user-created directories for task helpers, debugging evidence, and
@@ -44,7 +46,9 @@ content deliberately selected by preparation becomes job payload.
 Task loading compiles fresh workspace source from an explicitly selected `submit/`
 or `job_template/` root in temporary namespaces and supports
 same-directory helpers/packages without lasting `sys.path` or module-cache
-pollution. Two workspaces may use identical helper module names safely. Package
+pollution. Explicit optimization-program loading is narrower: one run freezes and
+isolated-loads only `optimization.py` plus its exact statically declared helpers;
+other submit sources remain generation-loaded task inputs. Two workspaces may use identical helper module names safely. Package
 resources are read-only and accessed through `importlib.resources`; repository
 examples and benchmark resources are tracked source-checkout concerns, not yadof
 package runtime write locations. The independent benchmark package writes one
@@ -58,6 +62,9 @@ Workspace implementation lives under `yadof.workspace`: `context`, `manifest`,
 
 - Initialization never silently merges, repairs, or rewrites a workspace.
 - Checking never launches the workflow, trains/evaluates, or mutates task/runtime state.
+- Checking never imports or calls an optimization program or legacy strategy
+  factory, and executable explicit-program top-level statements fail static
+  validation.
 - Configured framework paths never overlap fixed `submit/`, `job_template/`, or one another.
 - Package code remains functional when site-packages is read-only.
 - The yadof wheel/sdist excludes concrete models, workspaces, jobs, records, caches,

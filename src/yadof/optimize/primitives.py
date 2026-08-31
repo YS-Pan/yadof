@@ -665,6 +665,68 @@ def bind_predicted_costs(
     )
 
 
+def combine_predicted_cost_rows(
+    pool: CandidatePool,
+    predictions: Sequence[PredictedCostRows],
+    *,
+    source: str,
+) -> PredictedCostRows:
+    """Rebind disjoint same-semantics predictions to one exact combined pool."""
+
+    selected_pool = _require_pool(pool)
+    groups = tuple(predictions)
+    if not groups:
+        raise ValueError("combined prediction requires at least one input")
+    by_id: dict[str, tuple[tuple[float, ...], tuple[float, ...]]] = {}
+    interpretation_fingerprint = ""
+    state_signature = ""
+    for prediction in groups:
+        if not isinstance(prediction, PredictedCostRows):
+            raise TypeError("combined prediction inputs must be PredictedCostRows")
+        if not interpretation_fingerprint:
+            interpretation_fingerprint = prediction.interpretation_fingerprint
+            state_signature = prediction.state_signature
+        elif (
+            prediction.interpretation_fingerprint != interpretation_fingerprint
+            or prediction.state_signature != state_signature
+        ):
+            raise ValueError("combined predictions use different fitted semantics")
+        for candidate_id, variables, costs in zip(
+            prediction.candidate_ids,
+            prediction.normalized_variables,
+            prediction.costs,
+        ):
+            if candidate_id in by_id:
+                raise ValueError("combined predictions repeat a candidate ID")
+            by_id[candidate_id] = (variables, costs)
+
+    expected = {
+        candidate.candidate_id: candidate.normalized_variables
+        for candidate in selected_pool.candidates
+    }
+    if not set(expected).issubset(by_id):
+        missing = tuple(sorted(set(expected) - set(by_id)))
+        raise ValueError(
+            "combined prediction does not cover every pool candidate ID; "
+            f"missing={missing!r}"
+        )
+    if any(by_id[candidate_id][0] != variables for candidate_id, variables in expected.items()):
+        raise ValueError("combined prediction variables do not match the pool")
+    ordered_ids = tuple(candidate.candidate_id for candidate in selected_pool.candidates)
+    return bind_predicted_costs(
+        selected_pool,
+        tuple(by_id[candidate_id][1] for candidate_id in ordered_ids),
+        source=source,
+        interpretation_fingerprint=interpretation_fingerprint,
+        state_signature=state_signature,
+        diagnostics={
+            "combined_prediction_count": len(groups),
+            "combined_candidate_count": len(ordered_ids),
+            "ignored_prediction_count": len(set(by_id) - set(expected)),
+        },
+    )
+
+
 def select_candidates(
     state: SearchState,
     pool: CandidatePool,
@@ -1177,6 +1239,7 @@ __all__ = [
     "bind_predicted_costs",
     "bind_surrogate_prediction",
     "combine_candidate_pools",
+    "combine_predicted_cost_rows",
     "compose_real_population",
     "continue_search_from",
     "fork_search_state",

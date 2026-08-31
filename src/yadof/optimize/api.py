@@ -9,7 +9,7 @@ from ..recorded_data.session import CampaignSession
 from ..task_snapshot import GenerationTaskSnapshot
 from ..workspace import WorkspaceContext
 from .runner import new_run_id, next_optimization_index, now_text, record_generation_metadata
-from .state import read_active_strategy_state, write_active_strategy_state
+from .state import activate_strategy_state
 from .strategy import (
     GenerationContext,
     OptimizationResult,
@@ -43,6 +43,25 @@ def run_one_generation(
     optimization_index: int | None = None,
 ) -> OptimizationResult:
     config = load_config(workspace)
+    from .program import execute_frozen_program, freeze_workspace_program
+
+    frozen_program = freeze_workspace_program(config.workspace)
+    if frozen_program is not None:
+        results = execute_frozen_program(
+            frozen_program,
+            1,
+            start_generation=generation_index,
+            population_size=population_size,
+            variable_count=variable_count,
+            random_seed=random_seed,
+            run_id=run_id,
+            optimization_index=optimization_index,
+        )
+        if len(results) != 1:
+            raise RuntimeError(
+                "single-generation explicit program must commit exactly one result"
+            )
+        return results[0]
     if run_id is None:
         run_id = new_run_id()
     if optimization_index is None:
@@ -108,22 +127,7 @@ def _run_one_generation_with_config(
         problem=problem,
     )
 
-    active = read_active_strategy_state(config.workspace)
-    if active is not None and active.strategy_signature != definition.signature:
-        # A strategy switch is a generation boundary. Finish any work belonging
-        # to the old namespace and release its in-memory model before publishing
-        # the new active pointer; disk evidence remains intact.
-        try:
-            from ..surrogate.api import deactivate_workspace
-
-            deactivate_workspace(config.workspace.root)
-        except ImportError:
-            # A selected non-surrogate strategy must remain usable in a core-only
-            # environment. If the optional backend cannot import, this process
-            # cannot own one of its in-memory training tasks; retained disk state
-            # still remains isolated by the old strategy signature.
-            pass
-    write_active_strategy_state(
+    activate_strategy_state(
         config.workspace,
         strategy_signature=definition.signature,
         strategy_identity=definition.identity,
@@ -180,8 +184,29 @@ def run_generations(
     optimization_index: int | None = None,
     config_overrides: Mapping[str, object] | None = None,
     fail_on_all_infinite: bool = False,
+    _frozen_program=None,
 ) -> tuple[OptimizationResult, ...]:
     initial_config = load_config(workspace, overrides=config_overrides)
+    from .program import execute_frozen_program, freeze_workspace_program
+
+    frozen_program = (
+        freeze_workspace_program(initial_config.workspace)
+        if _frozen_program is None
+        else _frozen_program
+    )
+    if frozen_program is not None:
+        return execute_frozen_program(
+            frozen_program,
+            generations,
+            start_generation=start_generation,
+            population_size=population_size,
+            variable_count=variable_count,
+            random_seed=random_seed,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            config_overrides=config_overrides,
+            fail_on_all_infinite=fail_on_all_infinite,
+        )
     run_id = new_run_id() if run_id is None else str(run_id)
     optimization_index = (
         next_optimization_index(initial_config.workspace)

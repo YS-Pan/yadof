@@ -23,6 +23,16 @@
   missing row cost to correct-width infinity.
 - **Campaign session** owns current accepted rows, the workspace campaign lock, and
   reliable publication for one optimization lifetime.
+- **Frozen optimization program** is the exact `optimization.py` plus declared
+  helper byte set copied once before an explicit run. Its source fingerprint is
+  provenance; its literal identity/capabilities plus problem names form the
+  semantic program signature.
+- **Optimization run scope** is the single framework-created owner of that
+  program's campaign session, lock, bounded generation range, completed results,
+  handle cleanup, and exceptional shutdown.
+- **Program generation scope** reloads non-program task/config sources, exposes
+  evidence/cost/evaluation/result operations, accepts exactly one staged result,
+  and owns the strict durable commit boundary.
 - **Publication receipt** is the candidate/group acknowledgement that changes from
   pending to committed only after immutable segment publication, or to failed when
   publication cannot complete.
@@ -58,7 +68,14 @@
   candidate IDs. They are a deterministic-survival input, not a `CostTable`, rawData
   prediction owner, posterior sample tensor, checkpoint, or evidence value.
 - **Generation task snapshot** is the coherent task/configuration definition used
-  throughout one generation.
+  throughout one generation. For an explicit program it excludes the already
+  frozen program/helper bytes from the copied submit tree, merges their source
+  hashes into provenance, and retains separate program and interpretation
+  fingerprints.
+- **Program completion pointer** is the atomic framework-only record of the last
+  complete generation for one semantic program signature, program source
+  fingerprint, and task snapshot ID. It contains no Python locals, candidates,
+  predictions, or optimizer payload.
 - **Surrogate prediction and posterior samples** are transient derived views of
   possible rawData. They are not recorded evidence.
 - **External simulator runtime** is a separately provisioned process boundary, not
@@ -95,10 +112,13 @@ comparable.
 
 ## Generation-boundary mutability
 
-The task definition may change during a campaign. The next generation captures one
-new coherent snapshot and rebuilds affected derived views. Parameter identity/count
-and objective count remain stable under the current supported contract; structural
-dimension changes require separate state semantics.
+The non-program task definition may change during a campaign. The next generation
+captures one new coherent snapshot and rebuilds affected derived views. An explicit
+program and its declared helpers remain frozen for the complete run command; a
+program edit requires a new command beginning at a complete boundary. Transitional
+legacy strategies retain generation hot reload until cutover. Parameter
+identity/count and objective count remain stable under the current supported
+contract; structural dimension changes require separate state semantics.
 
 Fingerprints provide provenance and invalidate derived caches where appropriate.
 They do not by themselves prove or disprove scientific compatibility.
@@ -147,6 +167,12 @@ search-state commit point; it cannot commit evidence.
 - Non-successful interpretations remain typed until the explicit optimizer-shape
   boundary maps them to correct-width `inf`.
 - One active campaign owns one workspace lock and one bounded writer.
+- One explicit entry creates and closes exactly one run scope. A generation cannot
+  publish completion without one valid committed result, closed evaluation
+  handles, normal training-handle resolution, durable recorder flush, and strict
+  generation metadata.
+- Same-signature explicit resume starts only at the last completed generation plus
+  one; incomplete work is retried from durable evidence rather than a Python stack.
 - Task code never duplicates cross-task framework mechanisms, and package code does
   not hard-code task-specific simulator or objective policy.
 - External simulator failures or partial artifacts never publish normal evidence.

@@ -14,6 +14,8 @@ from yadof.optimize import (
     advance_search,
     bind_predicted_costs,
     bind_surrogate_prediction,
+    combine_candidate_pools,
+    combine_predicted_cost_rows,
     continue_search_from,
     fork_search_state,
     full_real_search,
@@ -292,6 +294,69 @@ def test_prediction_binding_rejects_real_posterior_and_unbound_values() -> None:
     )
     with pytest.raises(ValueError, match="different strategy/generation roots"):
         select_candidates(other_generation_state, pool, predicted, 1)
+
+
+def test_combined_prediction_rebinds_by_id_and_rejects_missing_or_mixed_semantics(
+) -> None:
+    context = _context(
+        ProblemInfo(2, 1, ("single",)),
+        population_size=4,
+    )
+    first = search_candidates(
+        prepare_search(context, pymoo_ga()),
+        2,
+        origin="first",
+    )
+    second = search_candidates(first.state, 2, origin="second")
+    fingerprint = "a" * 64
+    state_signature = "b" * 64
+    first_prediction = bind_predicted_costs(
+        first,
+        ((1.0,), (2.0,)),
+        source="first",
+        interpretation_fingerprint=fingerprint,
+        state_signature=state_signature,
+    )
+    second_prediction = bind_predicted_costs(
+        second,
+        ((3.0,), (4.0,)),
+        source="second",
+        interpretation_fingerprint=fingerprint,
+        state_signature=state_signature,
+    )
+    combined_pool = combine_candidate_pools(second.state, (second, first))
+
+    combined = combine_predicted_cost_rows(
+        combined_pool,
+        (first_prediction, second_prediction),
+        source="combined",
+    )
+
+    assert combined.candidate_ids == tuple(
+        candidate.candidate_id for candidate in combined_pool.candidates
+    )
+    assert combined.costs == ((3.0,), (4.0,), (1.0,), (2.0,))
+    assert combined.diagnostics["combined_prediction_count"] == 2
+
+    with pytest.raises(ValueError, match="does not cover every pool candidate"):
+        combine_predicted_cost_rows(
+            combined_pool,
+            (first_prediction,),
+            source="missing",
+        )
+    incompatible = bind_predicted_costs(
+        second,
+        ((3.0,), (4.0,)),
+        source="mixed",
+        interpretation_fingerprint="c" * 64,
+        state_signature=state_signature,
+    )
+    with pytest.raises(ValueError, match="different fitted semantics"):
+        combine_predicted_cost_rows(
+            combined_pool,
+            (first_prediction, incompatible),
+            source="mixed",
+        )
 
 
 def test_search_exhaustion_is_bounded_for_quantized_archive() -> None:

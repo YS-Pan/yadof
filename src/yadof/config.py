@@ -288,7 +288,11 @@ def _validate_task_paths(workspace: WorkspaceContext) -> None:
             "workspace job_template is missing required task file(s): "
             + ", ".join(job_missing)
         )
-    submit_required = ("calc_cost.py", "optimization.py")
+    submit_required = (
+        ("calc_cost.py", "optimization.py")
+        if workspace.requires_optimization_source
+        else ("calc_cost.py",)
+    )
     submit_missing = [
         name for name in submit_required if not (workspace.submit_dir / name).is_file()
     ]

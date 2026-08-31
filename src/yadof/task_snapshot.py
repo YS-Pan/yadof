@@ -50,25 +50,41 @@ class GenerationTaskSnapshot:
         shutil.rmtree(self.snapshot_root, ignore_errors=True)
 
 
-def create_generation_snapshot(config: LoadedConfig) -> GenerationTaskSnapshot:
+def create_generation_snapshot(
+    config: LoadedConfig,
+    *,
+    program_source_hashes: Mapping[str, str] | None = None,
+    program_fingerprint: str | None = None,
+) -> GenerationTaskSnapshot:
     """Capture complete submit and evaluate trees before generation work starts."""
 
     source_submit = config.workspace.submit_dir.resolve()
     source_job_template = config.workspace.job_template_dir.resolve()
+    frozen_program_hashes = _program_source_hashes(program_source_hashes)
+    excluded_submit_sources = frozenset(
+        key.removeprefix("submit/") for key in frozen_program_hashes
+    )
     snapshot_root = Path(tempfile.mkdtemp(prefix="yadof-task-snapshot-"))
     snapshot_submit = snapshot_root / "submit"
     snapshot_job_template = snapshot_root / "job_template"
     try:
-        _copy_source_tree(source_submit, snapshot_submit, evaluate_side=False)
+        _copy_source_tree(
+            source_submit,
+            snapshot_submit,
+            evaluate_side=False,
+            excluded_relatives=excluded_submit_sources,
+        )
         _copy_source_tree(
             source_job_template,
             snapshot_job_template,
             evaluate_side=True,
+            excluded_relatives=frozenset(),
         )
         snapshot_workspace = replace(
             config.workspace,
             submit_dir=snapshot_submit,
             job_template_dir=snapshot_job_template,
+            requires_optimization_source=program_fingerprint is None,
         )
         values = dict(config.values)
         values["JOB_TEMPLATE_DIR"] = snapshot_job_template
@@ -79,7 +95,7 @@ def create_generation_snapshot(config: LoadedConfig) -> GenerationTaskSnapshot:
         )
         submit_hashes = _source_hashes(snapshot_submit, prefix="submit")
         job_hashes = _source_hashes(snapshot_job_template, prefix="job_template")
-        hashes = {**submit_hashes, **job_hashes}
+        hashes = {**submit_hashes, **job_hashes, **frozen_program_hashes}
         semantic_config = _semantic_config(config)
         interpretation_fingerprint = _hash_json(
             {
@@ -96,11 +112,15 @@ def create_generation_snapshot(config: LoadedConfig) -> GenerationTaskSnapshot:
                 "config": semantic_config,
             }
         )
-        optimization_fingerprint = _hash_json(
-            {
-                "submit_sources": submit_hashes,
-                "config": semantic_config,
-            }
+        optimization_fingerprint = (
+            _sha256(program_fingerprint, "program_fingerprint")
+            if program_fingerprint is not None
+            else _hash_json(
+                {
+                    "submit_sources": submit_hashes,
+                    "config": semantic_config,
+                }
+            )
         )
         task_snapshot_id = _hash_json(
             {
@@ -138,12 +158,21 @@ def _copy_source_tree(
     destination_root: Path,
     *,
     evaluate_side: bool,
+    excluded_relatives: frozenset[str],
 ) -> None:
     if not source_root.is_dir():
         raise FileNotFoundError(source_root)
     destination_root.mkdir(parents=True, exist_ok=True)
     for source in sorted(source_root.rglob("*"), key=lambda item: item.as_posix().casefold()):
         relative = source.relative_to(source_root)
+        relative_text = relative.as_posix()
+        if relative_text in excluded_relatives:
+            continue
+        if any(
+            relative_text.startswith(f"{excluded.rstrip('/')}/")
+            for excluded in excluded_relatives
+        ):
+            continue
         if any(part in {"__pycache__", ".pytest_cache"} for part in relative.parts):
             continue
         if evaluate_side and "rawData" in relative.parts:
@@ -174,6 +203,21 @@ def _source_hashes(root: Path, *, prefix: str) -> dict[str, str]:
     return output
 
 
+def _program_source_hashes(
+    value: Mapping[str, str] | None,
+) -> dict[str, str]:
+    output: dict[str, str] = {}
+    for key, digest in ({} if value is None else value).items():
+        name = str(key).replace("\\", "/")
+        if not name.startswith("submit/") or name.endswith("/"):
+            raise ValueError("program source hashes must use submit/<file> keys")
+        relative = Path(name.removeprefix("submit/"))
+        if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+            raise ValueError("program source hash path must stay below submit/")
+        output[name] = _sha256(digest, f"program source hash {name}")
+    return output
+
+
 def _semantic_config(config: LoadedConfig) -> dict[str, object]:
     return {
         name: _json_value(value)
@@ -200,6 +244,13 @@ def _hash_json(value: object) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def _sha256(value: object, label: str) -> str:
+    text = str(value).strip().lower()
+    if len(text) != 64 or any(char not in "0123456789abcdef" for char in text):
+        raise ValueError(f"{label} must be a SHA-256 hex digest")
+    return text
 
 
 __all__ = [

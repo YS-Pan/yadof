@@ -54,7 +54,8 @@ A benchmark smoke test is also one complete execution, so it must use its own
 fresh workspace. Start from the same authoring inputs as the measured benchmark
 and change only the explicit positive evaluation budget. Keep the same
 `benchmark.py` registrations and implementation, selected baselines, strategy
-modules, task workspaces, configuration, postprocessors, dependencies, and
+entry modules and declared helpers, task workspaces, configuration,
+postprocessors, dependencies, and
 failure/concurrency policy. The smoke workspace may have a different root and
 generated outputs; those are execution locations, not benchmark behavior.
 
@@ -66,10 +67,10 @@ path; do not bypass or replace the postprocessor.
 
 ## Authoring boundary
 
-`benchmark.py` is the only workflow-definition program. Put complete
-`optimization.py` strategy modules and other reusable authoring inputs under
-`resources/`. The program should only register configuration, strategies,
-comparisons, and optional postprocessors.
+`benchmark.py` is the only workflow-definition program. Put complete legacy
+`optimization.py` strategies, or explicit program entry modules and every helper
+they declare, under `resources/`. The program should only register
+configuration, strategies, comparisons, and optional postprocessors.
 
 `check` and `plan` import the file, so imports and
 `build_benchmark(benchmark)` must be deterministic and cheap. They must not

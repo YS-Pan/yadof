@@ -4,8 +4,9 @@
 
 - Define backend-neutral population, history, generation-context, result, and one
   complete strategy invocation contract.
-- Fresh-load the sole complete composition from snapshotted
-  `submit/optimization.py:build_optimization()`.
+- Retain the transitional generation-reloaded
+  `submit/optimization.py:build_optimization()` adapter while explicit programs use
+  `program.py` directly; no new consumer may depend on this legacy loop.
 
 ## Functionalities
 
@@ -20,8 +21,9 @@
 ## Invariants
 
 - No concrete pymoo or Torch type crosses this boundary.
-- Workspace strategy source is fresh and isolated; package config/registries never
-  select another complete method.
+- Transitional workspace strategy source is fresh and isolated; explicit program
+  source is frozen once by `program.py`. Package config/registries never select
+  another complete method.
 - Surrogate predictions cannot become accepted results without real evaluation.
 - Pending, failed, or derived rows and non-successful cost interpretations cannot
   become committed optimizer history.

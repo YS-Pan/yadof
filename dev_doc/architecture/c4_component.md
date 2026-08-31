@@ -62,8 +62,11 @@
 
 ## Optimization and surrogate components
 
-- `optimize` owns the campaign engine, workspace-selected strategy seam, and common
-  real-evaluation boundary.
+- `optimize` owns the campaign engine, static optimization-source inspection,
+  run-level explicit-program snapshot, framework-created run/generation scopes,
+  transitional legacy strategy seam, and common real-evaluation boundary. An
+  explicit workspace program owns the visible generation/data/control flow while
+  scopes retain lock/session/handle/recording/metadata/commit cleanup authority.
 - Its backend-neutral search primitives own immutable candidate/pool/predicted-cost/
   selection values plus generation-local next-state/fork composition. They delegate
   concrete ask/tell/survival and operators to the private pymoo adapter and rebuild
@@ -88,6 +91,10 @@
 - Real-only, GPSAF, and posterior fallback share one full-real primitive. Derived
   deterministic prediction, posterior samples, and real cost tables retain distinct
   types and cannot cross each other's selection boundaries.
+- `task_snapshot` classifies frozen explicit program sources away from the
+  generation-reloaded interpretation/evaluation task copy. It merges program
+  provenance into the complete source record while keeping the program and
+  interpretation fingerprints independent.
 - The integrated surrogate viewer dispatches read-only method adapters for
   conditional-INR, hierarchical-CAE, and deterministic one-member PCA/SVD
   checkpoints. It recalculates current cost and never mutates model or evidence.

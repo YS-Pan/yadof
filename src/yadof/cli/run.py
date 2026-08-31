@@ -13,6 +13,7 @@ from typing import Iterator
 from ..config import ConfigError, load_config
 from ..evaluate_manager import run_smoke_test
 from ..optimize import AllInfiniteGenerationError, run_generations
+from ..optimize.program import freeze_workspace_program
 
 
 def run_command(args) -> int:
@@ -23,6 +24,12 @@ def run_command(args) -> int:
         config = load_config(args.workspace, overrides=overrides)
     except (ConfigError, OSError, TypeError, ValueError) as exc:
         print(f"yadof: error: run configuration is invalid: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        frozen_program = freeze_workspace_program(config.workspace)
+    except (ImportError, OSError, RuntimeError, SyntaxError, TypeError, ValueError) as exc:
+        print(f"yadof: error: optimization source is invalid: {exc}", file=sys.stderr)
         return 1
 
     mode = str(config.EVALUATION_MODE)
@@ -47,42 +54,55 @@ def run_command(args) -> int:
     )
 
     try:
-        with _progress_environment(bool(args.progress)):
-            if smoke_enabled:
-                print(
-                    "Starting real-task smoke test "
-                    "(one midpoint individual, no generation/per-job timeout).",
-                    flush=True,
-                )
-                smoke_costs = run_smoke_test(config.workspace, mode=mode)
-                print(f"Smoke test costs: {smoke_costs[0]!r}", flush=True)
-                if _all_infinite(smoke_costs):
-                    _print_recent_evaluation_failures(config)
+        try:
+            with _progress_environment(bool(args.progress)):
+                if smoke_enabled:
                     print(
-                        "yadof: error: smoke test returned no finite objective; "
-                        "optimization was not started",
-                        file=sys.stderr,
+                        "Starting real-task smoke test "
+                        "(one midpoint individual, no generation/per-job timeout).",
+                        flush=True,
                     )
-                    return 1
+                    smoke_costs = run_smoke_test(config.workspace, mode=mode)
+                    print(f"Smoke test costs: {smoke_costs[0]!r}", flush=True)
+                    if _all_infinite(smoke_costs):
+                        _print_recent_evaluation_failures(config)
+                        print(
+                            "yadof: error: smoke test returned no finite objective; "
+                            "optimization was not started",
+                            file=sys.stderr,
+                        )
+                        return 1
 
-            results = run_generations(
-                config.workspace,
-                args.generations,
-                start_generation=args.start_generation,
-                population_size=args.population_size,
-                random_seed=args.random_seed,
-                config_overrides=overrides,
-                fail_on_all_infinite=bool(args.fail_on_all_infinite),
-            )
-    except AllInfiniteGenerationError as exc:
-        _print_result(exc.result)
-        _print_recent_evaluation_failures(config)
-        print(f"yadof: error: {exc}", file=sys.stderr)
-        return 1
-    except (ConfigError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-        _print_recent_evaluation_failures(config)
-        print(f"yadof: error: optimization could not run: {exc}", file=sys.stderr)
-        return 1
+                results = run_generations(
+                    config.workspace,
+                    args.generations,
+                    start_generation=args.start_generation,
+                    population_size=args.population_size,
+                    random_seed=args.random_seed,
+                    config_overrides=overrides,
+                    fail_on_all_infinite=bool(args.fail_on_all_infinite),
+                    _frozen_program=frozen_program,
+                )
+        except AllInfiniteGenerationError as exc:
+            _print_result(exc.result)
+            _print_recent_evaluation_failures(config)
+            print(f"yadof: error: {exc}", file=sys.stderr)
+            return 1
+        except (
+            ConfigError,
+            ImportError,
+            OSError,
+            RuntimeError,
+            SyntaxError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            _print_recent_evaluation_failures(config)
+            print(f"yadof: error: optimization could not run: {exc}", file=sys.stderr)
+            return 1
+    finally:
+        if frozen_program is not None:
+            frozen_program.close()
 
     for result in results:
         _print_result(result)

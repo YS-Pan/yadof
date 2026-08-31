@@ -34,12 +34,15 @@ normalized variables
 
 - Raw variables and rawData are evidence. Normalized variables, costs, surrogate
   predictions, posterior samples, and acquisition values are derived views.
-- Workflows never publish authoritative cost. The current workspace cost policy
-  interprets validated evidence before it is admitted to the durable recorder.
+- Workflows never publish authoritative cost. Validated evidence becomes durably
+  recovery-visible before the current workspace cost policy interprets it.
 - Individual failures preserve population order and objective width and produce
   durable diagnostics. Failure to publish an accepted record stops the campaign.
 - One generation uses one coherent snapshot of current task and configuration.
   Supported task corrections take effect at the next generation boundary.
+- An explicit optimization program freezes its declared source set once per run
+  command and owns visible generation control flow inside framework lifecycle
+  scopes; task interpretation/evaluation sources still refresh per generation.
 - Cross-task invariant behavior belongs in yadof; simulator-, model-, measurement-,
   and objective-specific behavior belongs in the workspace.
 - Package resources are read-only and execute nodes never need to import yadof.

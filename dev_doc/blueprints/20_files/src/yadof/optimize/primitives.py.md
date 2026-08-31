@@ -34,6 +34,9 @@
 - `bind_surrogate_prediction()` consumes the Stage 4 DTO. The explicit legacy
   binder accepts only plain deterministic current-cost rows and rejects real,
   posterior, and unbound surrogate owners.
+- `combine_predicted_cost_rows()` selects ordered candidate subsets from one or
+  more prediction supersets and concatenates them only when interpretation, fitted
+  state, source, objective width, and candidate bindings agree exactly.
 - `select_candidates()` delegates current-cost survival to pymoo;
   `advance_search()` delegates beta simulation to pymoo tell. Neither mutates input
   state.

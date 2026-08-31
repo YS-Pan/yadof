@@ -18,8 +18,9 @@ Common core workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SE
 `OPTIMIZE_SMOKE_TEST_ENABLED`, `OPTIMIZE_RANDOM_SEED`,
 `OPTIMIZE_ARCHIVE_KEY_DECIMALS`, `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`, and
 HTCondor request/calibration/timeout settings. Search, GPSAF, and surrogate model
-parameters are explicit keyword arguments in `submit/optimization.py`; they are not
-core config settings and cannot be changed with a temporary config override. Task
+parameters are explicit keyword arguments in `submit/optimization.py` program or
+legacy factory code; they are not core config settings and cannot be changed with a
+temporary config override. Task
 physics and problem shape stay in fixed `submit/` and evaluate-side
 `job_template/` roots. Complete strategy selection and component configuration stay
 only in `submit/optimization.py`, never in config.
@@ -287,15 +288,20 @@ HTCondor but never installs or repairs it.
 
 ### Correct the task during a campaign
 
-Task mutability is intentional. Between generations, the user may change:
+Task mutability is intentional. At a generation boundary, the user may change:
 
 - `submit/calc_cost.py`, including objective names, meanings, and thresholds,
   while preserving the objective count;
-- `submit/optimization.py` and its submit-local helpers;
 - `job_template/parameters_constraints.py`, including ranges and levels, while
   preserving parameter names, order, and count;
 - `config.py`;
 - `job_template/workflow.py`, `evaluation.py`, adapters, and task helpers.
+
+An explicit optimization program and its declared helpers are different: their
+bytes are frozen once for the complete `yadof run` command. To load a program edit,
+let the current command stop at a complete generation, then start a new command at
+the exact next generation. Transitional `build_optimization()` workspaces retain
+generation-boundary strategy/helper reload until the 0.5.0 cutover.
 
 The corrected task is allowed to define a different optimization problem. Yadof
 does not evaluate “scientific equivalence” between the old and new versions. It
@@ -325,8 +331,8 @@ yadof check --workspace PATH
 yadof run --workspace PATH --start-generation 10 --generations 10
 ```
 
-The run/resume APIs load current configuration and task definitions once per
-subsequent generation. A complete task snapshot identity plus separate
+The run/resume APIs load current configuration and non-program task definitions
+once per subsequent generation. A complete task snapshot identity plus separate
 interpretation/evaluation/optimization fingerprints is attached to every result.
 The strategy signature and source fingerprint are separate: a comment-only edit
 need not invalidate compatible state, while a changed backend, algorithm,
@@ -348,11 +354,16 @@ This is a scientific/user decision rather than a framework inference. Run only o
 active optimization campaign per workspace. Separate concurrent campaigns into
 different workspaces.
 
-Changing `submit/optimization.py` does not by itself require clearing history.
-At the next generation boundary yadof waits for the old strategy's pending
-surrogate work, releases its memory state, retains namespaced artifacts, and
-activates the new semantic strategy. A non-surrogate strategy produces no
-surrogate state; the viewer reports that no compatible active checkpoints exist.
+Changing `submit/optimization.py` does not by itself require clearing real evidence.
+For an explicit program, source-only edits keep the semantic identity but produce a
+new source fingerprint on the next command. An identity change activates a new
+strategy namespace and does not reuse the previous program-completion pointer.
+For a compatible identity, the new command must use
+`--start-generation` equal to the last completed generation plus one. Transitional
+legacy strategy switches continue to wait for pending component work, release old
+memory state, retain namespaced artifacts, and activate the new semantic strategy
+at the next generation boundary. A non-surrogate strategy produces no surrogate
+state; the viewer reports that no compatible active checkpoints exist.
 
 The Windows distributed submit contract runs `workflow.py` directly with
 `transfer_executable=True`, `load_profile=True`, and `run_as_owner=False`. Input

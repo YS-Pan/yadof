@@ -28,8 +28,13 @@ benchmark.strategy(
 )
 ```
 
-A strategy is one complete Python module defining `build_optimization()`.
-`sources={baseline_id: path}` may select baseline-specific complete modules.
+A strategy source may either define legacy `build_optimization()` or declare an
+explicit `YADOF_OPTIMIZATION_PROGRAM` using `yadof.optimize.program/v1`. For an
+explicit program, every relative `.py` path in its literal `helpers` tuple/list
+is part of the strategy. Helpers are resolved below the directory containing the
+selected `optimization.py`; absolute paths, parent traversal, symlinks,
+duplicates, and undeclared helper files are rejected. `sources={baseline_id:
+path}` may select baseline-specific entry modules and their declared helpers.
 `slow_surrogate=True` declares repeated expensive model training such as a
 neural network. It affects only the default generation count of comparisons that
 select the strategy; the strategy remains otherwise opaque to the runner.

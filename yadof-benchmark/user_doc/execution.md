@@ -29,7 +29,8 @@ inputs. Keep all of the following unchanged:
   comparison, and arm matrix;
 - selected baseline IDs and their manifests, task workspaces, assets, `config.py`,
   `submit/`, `job_template/`, and task postprocessing code;
-- every strategy module, algorithm/model setting, seed, evidence classification,
+- every strategy entry module and declared helper, algorithm/model setting,
+  seed, evidence classification,
   failure policy, concurrency policy, dependency, and registered workflow
   postprocessor;
 - result, contract, metric, visualization, and postprocessing paths.

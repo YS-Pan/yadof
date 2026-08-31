@@ -76,6 +76,7 @@ def record_generation_metadata(
     jobs_after: tuple[str, ...],
     session: CampaignSession | None = None,
     snapshot: GenerationTaskSnapshot | None = None,
+    strict: bool = False,
 ) -> dict[str, object]:
     data = {
         "record_type": "generation",
@@ -122,4 +123,6 @@ def record_generation_metadata(
     try:
         return recorded_api.record_optimization_metadata(workspace, data)
     except Exception:
+        if strict:
+            raise
         return data

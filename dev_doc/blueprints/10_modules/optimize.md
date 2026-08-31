@@ -3,9 +3,11 @@
 ## Responsibility
 
 `yadof.optimize` owns workspace-explicit campaign/generation APIs, common
-result/context/history/real-evaluation contracts, strategy invocation, and compact
-metadata. The snapshotted workspace owns the complete method through
-`submit/optimization.py:build_optimization()`. Package components expose thin lazy
+result/context/history/real-evaluation contracts, explicit optimization-program
+lifecycle scopes, transitional strategy invocation, and compact metadata. An
+explicit workspace owns the complete control flow through the frozen
+`submit/optimization.py:optimization_program(context)` entry and its exact declared
+helpers. Package components expose thin lazy
 pymoo GA/NSGA-III search, objective-count dispatch, real search, irreducible GPSAF
 assistance, and the separate posterior-assisted/qNEHVI composition; there is no
 complete-method registry or config selector.
@@ -13,11 +15,15 @@ complete-method registry or config selector.
 One `CampaignSession` spans a complete `run_generations` campaign. It owns the
 workspace lock, bounded recorder, startup catalog, and in-memory current-campaign
 rows. Standalone `run_one_generation` owns a shorter session with the same
-contracts.
+contracts. `OptimizationRunScope` and `ProgramGenerationScope` expose that owner;
+they do not duplicate its recorder, evaluator, handle registry, or lock.
 
 ## Source structure
 
-- Parent files own campaign/session execution, strategy loading/state, problem
+- `program.py` statically validates the literal v1 declaration, freezes the entry
+  and exact helper sources, isolated-loads the entry once, and owns the public
+  program/run/generation contexts plus strict complete-generation commit/resume.
+- Parent files own campaign/session execution, transitional strategy loading/state, problem
   shape, metadata helpers, and the lightweight public component/factory surface.
 - `primitives.py` owns frozen backend-neutral `SearchCandidate`, `CandidatePool`,
   `PredictedCostRows`, `CandidateSelection`, and opaque generation-local
@@ -56,6 +62,9 @@ not pickleable or durable. Generation-boundary resume rebuilds from real history
 is the only deterministic survival input. `CostTable`, `SurrogatePrediction`, and
 `JointObjectiveSamples` remain distinct owners/types. Selection commits only the
 search continuation; real evidence commits only after the common evaluator.
+`combine_predicted_cost_rows()` projects and concatenates exact candidate-bound
+rows from one semantic prediction owner, including prediction supersets needed by
+beta anchors; it rejects missing, duplicate, or mixed-semantics rows.
 
 GPSAF alpha/beta pools are ranked using surrogate-predicted mean current costs
 through pymoo survival. Conditional-INR member min/max spread remains a diagnostic
@@ -149,9 +158,15 @@ recorder counters. Config is loaded once per generation so one coherent policy
 applies to its work; recorder capacities and storage path remain frozen at campaign
 start.
 
+For an explicit program, source loading is run-scoped: the CLI freezes the program
+before optional smoke and passes that exact snapshot into execution; direct APIs
+freeze at their own entry. The literal declaration supplies exact API/entry/helper,
+semantic identity, and capabilities. Source fingerprint remains separate from the
+program semantic signature, and undeclared helper imports fail closed.
+
 Task flexibility is generation-scoped. At each generation boundary, optimization
-creates an immutable complete two-root task snapshot, loads exactly one strategy,
-and uses its shape-preserving parameter and
+creates an immutable classified two-root task snapshot that excludes frozen program
+sources, then uses its shape-preserving parameter and
 fixed-width objective definitions. An interpretation-fingerprint change
 reinterprets mechanically usable history before selection; an evaluation-only
 change reuses the existing derived view. Changes to optimization composition or
@@ -162,7 +177,10 @@ rebuilding pymoo problem/reference-direction state for structural dimension chan
 is separate future work. Source fingerprints are cache-invalidation/provenance
 inputs only; optimize does not decide whether the user's old and new problems are
 scientifically equivalent or silently discard history because a signature changed.
-Opaque mid-generation search state is never written to metadata. Restart/resume at
+Opaque mid-generation search state is never written to metadata. A successfully
+exited explicit generation first resolves normal-wait training handles, rejects any
+open cancel-policy evaluation handle, confirms recording and metadata, and then
+atomically advances the compatible program completion pointer. Restart/resume at
 this boundary deterministically reconstructs pymoo survivor/archive state from the
 identity-joined committed history and current seeds.
 
@@ -181,6 +199,13 @@ failure remains campaign-fatal and never becomes an individual `inf`.
 ## Invariants
 
 - No workspace-global optimizer singleton or implicit history path.
+- Static workspace checking never imports or executes either an explicit program or
+  a transitional legacy factory.
+- One explicit run uses one frozen program snapshot; generation task snapshots do
+  not recopy or reinterpret declared program sources.
+- A generation without one validated `commit()` never advances the program
+  completion pointer; user exceptions and interrupts retain the previous complete
+  boundary and cleanup the existing session owners before propagating.
 - One workspace has one active optimization campaign; concurrent campaigns use
   different workspaces.
 - Current rows become visible to result consumers only after their receipts commit

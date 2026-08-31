@@ -96,6 +96,38 @@ its entire partial result and start a fresh full-real search, but failure of tha
 real path propagates. Durable resume always reconstructs from committed history at
 the next generation boundary, never from a serialized pymoo stack.
 
+## Explicit workspace program lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as CLI/API
+    participant F as frozen program source
+    participant R as optimization run scope
+    participant G as generation scope
+    participant E as evaluation/training handles
+    participant D as durable recorder/metadata
+    C->>F: static inspect + copy entry and declared helpers once
+    F->>R: load exact entry and create one campaign scope
+    loop bounded generation indices
+        R->>G: reload config and non-program task snapshot
+        G->>E: program-selected prepare/start/wait/close order
+        E-->>G: real finalized costs and fitted state
+        G->>G: stage exactly one validated result
+        G->>D: resolve handles + flush evidence + generation metadata
+        G->>D: atomic complete-generation pointer
+        G-->>R: committed result
+    end
+    R-->>C: close session/lock/writer/snapshots
+```
+
+Static workspace checking parses the literal declaration, exact synchronous entry
+signature, helper containment, and import-safe module top levels without importing
+or calling the program. The run loads only the frozen source root. Undeclared
+sibling imports therefore fail closed, and live program edits cannot affect the
+active command. User exceptions and base exceptions propagate after owned handles,
+writer, snapshots, and the campaign lock are closed; an incomplete generation does
+not advance the pointer.
+
 ## Explicit PCA/SVD fit and prediction
 
 ```mermaid
@@ -130,10 +162,13 @@ adapter until their scheduled migration.
 ## Generation-boundary task changes
 
 Before each generation the campaign reloads effective configuration and captures
-the complete current task source roots. The generation uses that one immutable
-snapshot for parameters, evaluation, cost interpretation, and optimization
-composition. Edits made during a generation become visible only at a later
-generation boundary.
+the current non-program task source. The generation uses that one immutable
+snapshot for parameters, evaluation, and cost interpretation. An explicit
+program's entry/helper source was frozen before the run and is classified out of
+this copy; its hashes remain attached to the complete provenance. Legacy strategy
+composition remains in the full generation snapshot during the transition. Edits
+to non-program task sources made during a generation become visible only at a
+later generation boundary.
 
 A session registry retains every evaluation or training handle created against its current snapshot.
 Beginning another generation fails while any such handle is open, including a

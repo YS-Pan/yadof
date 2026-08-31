@@ -18,7 +18,7 @@ from ..job_template import (
     validate_fast_task,
     validate_task,
 )
-from ..optimize.strategy import load_workspace_strategy
+from ..optimize.program import inspect_workspace_optimization
 from .context import WorkspaceContext, resolve_workspace
 from .init import load_workspace_template
 from .manifest import (
@@ -175,17 +175,30 @@ def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
 
     if task is not None:
         try:
-            definition = load_workspace_strategy(config.workspace, config=config)
+            inspection = inspect_workspace_optimization(config.workspace)
         except (Exception, SystemExit) as exc:
-            _finding(findings, "error", "optimization strategy", str(exc))
+            _finding(findings, "error", "optimization source", str(exc))
         else:
-            _finding(
-                findings,
-                "ok",
-                "optimization strategy",
-                f"constructed {definition.source_path}; semantic signature "
-                f"{definition.signature[:16]}",
-            )
+            if inspection.kind == "explicit-program":
+                program = inspection.program
+                assert program is not None
+                _finding(
+                    findings,
+                    "ok",
+                    "optimization program",
+                    f"statically validated {program.source_path}; entry "
+                    f"{program.entry!r}, {len(program.helpers)} declared helper(s); "
+                    "program code was not imported or executed",
+                )
+            else:
+                _finding(
+                    findings,
+                    "ok",
+                    "optimization strategy",
+                    f"statically validated legacy build_optimization() declaration "
+                    f"in {inspection.source_path}; factory code was not imported or "
+                    "executed",
+                )
 
     if str(config.EVALUATION_MODE) == "fast":
         try:

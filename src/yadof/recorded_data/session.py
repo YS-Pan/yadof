@@ -501,7 +501,13 @@ class CampaignSession:
             self._lock.release()
             raise
 
-    def begin_generation(self, config: LoadedConfig) -> GenerationTaskSnapshot:
+    def begin_generation(
+        self,
+        config: LoadedConfig,
+        *,
+        program_source_hashes: Mapping[str, str] | None = None,
+        program_fingerprint: str | None = None,
+    ) -> GenerationTaskSnapshot:
         with self._state_lock:
             if self._closed or self._closing:
                 raise RuntimeError("campaign session is closing or closed")
@@ -510,7 +516,11 @@ class CampaignSession:
                     "cannot begin a new generation while generation handles remain open; "
                     "wait and close every handle first"
                 )
-        snapshot = create_generation_snapshot(self._freeze_recorder_config(config))
+        snapshot = create_generation_snapshot(
+            self._freeze_recorder_config(config),
+            program_source_hashes=program_source_hashes,
+            program_fingerprint=program_fingerprint,
+        )
         try:
             if self._stable_parameter_names is None:
                 self._stable_parameter_names = snapshot.parameter_names
@@ -563,6 +573,15 @@ class CampaignSession:
             self._generation_handles.discard(handle)
             self._generation_handle_snapshots.pop(handle, None)
             self._generation_handle_policies.pop(handle, None)
+
+    def generation_handle_counts(self) -> Mapping[str, int]:
+        """Return bounded current-generation lease counts by boundary policy."""
+
+        with self._state_lock:
+            counts = {"cancel": 0, "wait": 0}
+            for policy in self._generation_handle_policies.values():
+                counts[policy] = counts.get(policy, 0) + 1
+        return MappingProxyType(counts)
 
     def finish_generation(self) -> None:
         """Resolve and close every exact-current-snapshot handle normally."""

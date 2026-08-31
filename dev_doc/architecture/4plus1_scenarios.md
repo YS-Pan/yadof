@@ -36,11 +36,13 @@ and rejection of partial evidence.
 
 ## Change task interpretation between generations
 
-The user edits task cost, supported parameter ranges/levels, configuration,
-workflow/evaluator logic, or optimization composition between generations. The
-next generation captures one new coherent snapshot and reinterprets mechanically
-compatible history. The framework records provenance but does not decide whether
-the earlier and later scientific problems should share evidence.
+The user edits task cost, supported parameter ranges/levels, configuration, or
+workflow/evaluator logic between generations. The next generation captures one new
+coherent classified task snapshot and reinterprets mechanically compatible history.
+An explicit optimization program remains frozen for its current command; changing
+its control flow or declared helpers takes effect only in a new command that starts
+at the next complete-generation boundary. The framework records provenance but does
+not decide whether the earlier and later scientific problems should share evidence.
 
 This scenario validates generation coherence and user authority over history.
 

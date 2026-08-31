@@ -45,7 +45,10 @@ provenance, not an upgrade/resume compatibility marker.
 
 The fully expanded `yadof.benchmark.spec` plan. Each cell stores its short ID and
 semantic comparison/baseline/strategy/seed identity, resolved budget, contracts,
-execution policy, source digests, and strategy source path.
+execution policy, source digests, strategy entry path, and the destination-to-
+source mapping for the complete declared strategy file set. The strategy digest
+hashes ordered relative paths and file hashes, so a helper-only edit changes the
+cell identity.
 
 ## `state.json`
 
@@ -58,8 +61,9 @@ are no attempt arrays or sealing states.
 
 Before a cell starts, its selected baseline is copied to
 `cells/cNNNN/workspace`; runtime directories are excluded and the selected
-strategy becomes `submit/optimization.py`. Fast/local worker settings are
-applied to that cell's `config.py`.
+strategy entry becomes `submit/optimization.py`; every declared explicit-program
+helper is copied to its relative path below `submit/`. Fast/local worker settings
+are applied to that cell's `config.py`.
 
 The four command directories contain started/finished metadata, stdout, stderr,
 and progress JSONL as applicable. Visualization artifact names use the short cell

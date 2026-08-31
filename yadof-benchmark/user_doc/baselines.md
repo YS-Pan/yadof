@@ -17,7 +17,8 @@ Required manifest fields are:
 The selected yadof workspace must contain the complete task inputs and a uniform
 `postprocess.py`. The runner materializes the clean workspace directly into each
 short cell directory and replaces `submit/optimization.py` with the selected
-complete strategy.
+strategy entry. For an explicit optimization program, it also copies every
+declared helper to the same relative path below `submit/`.
 
 `materialize_excludes` may omit task-local nonbehavioral files from that copy.
 It cannot omit `config.py`, `submit/`, `job_template/`, `postprocess.py`,

@@ -190,6 +190,7 @@ class CellSpec:
     baseline_digest: str
     strategy_digest: str
     strategy_source: Path
+    strategy_files: Mapping[str, Path]
     execution: Mapping[str, Any]
     contract: Mapping[str, Any]
 
@@ -216,6 +217,10 @@ class CellSpec:
             "baseline_digest": self.baseline_digest,
             "strategy_digest": self.strategy_digest,
             "strategy_source": str(self.strategy_source),
+            "strategy_files": {
+                relative: str(source)
+                for relative, source in self.strategy_files.items()
+            },
             "execution": thaw_json(self.execution),
             "contract": thaw_json(self.contract),
         }

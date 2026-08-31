@@ -17,7 +17,8 @@ Current invariants are:
   `runtime.json`;
 - there is no run ID, `runs/`, resume command, attempt hierarchy, cross-run
   timing history, or copied driver/workflow/strategy snapshot;
-- strategy modules are complete, opaque `optimization.py` files;
+- strategies are complete legacy `optimization.py` files or explicit program
+  entry modules plus their statically declared helper set;
 - default seeds are `[101]`;
 - default standard budget is population 200 x 50 generations;
 - a comparison containing `slow_surrogate=True` defaults to 15 generations;

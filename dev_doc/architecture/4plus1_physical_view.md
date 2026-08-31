@@ -54,7 +54,7 @@ ephemeral and carry no durable history meaning.
   job_template/            evaluate-side task definition and assets
   jobs/                    prepared local/distributed executions
   recorded_data/           immutable candidate evidence and metadata events
-  .yadof/                  workspace identity and campaign lock
+  .yadof/                  identity, campaign lock, active strategy, program completion
   <configured state>       checkpoints, logs, and tool output
 ```
 

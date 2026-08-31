@@ -215,7 +215,7 @@ def test_real_multiobjective_nsga3_strategy_runs_without_surrogate(
     assert not (root / ".yadof/surrogate/checkpoints").exists()
 
 
-def test_check_rejects_nsga3_for_one_objective_without_runtime_mutation(
+def test_check_statically_accepts_legacy_factory_without_runtime_mutation(
     tmp_path: Path,
 ) -> None:
     root = _small_workspace(tmp_path / "invalid-nsga3")
@@ -228,8 +228,8 @@ def test_check_rejects_nsga3_for_one_objective_without_runtime_mutation(
 
     report = check_workspace(root)
 
-    assert not report.ok
-    assert "NSGA-III requires at least two objectives" in report.format()
+    assert report.ok, report.format()
+    assert "factory code was not imported or executed" in report.format()
     assert not (root / "jobs").exists()
     assert not (root / ".yadof/optimization").exists()
     assert not (root / ".yadof/surrogate/checkpoints").exists()

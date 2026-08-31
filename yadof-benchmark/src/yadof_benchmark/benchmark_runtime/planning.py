@@ -5,7 +5,8 @@ import ast
 import importlib.util
 import sys
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Any, Mapping
 
 from .contracts import (
@@ -20,28 +21,151 @@ from .contracts import (
 from .storage import (
     directory_digest,
     file_digest,
+    object_digest,
 )
 from .workflow import Benchmark
 from .workspace import load_workspace
 
 
-def _validate_strategy_source(path: Path, *, strategy_id: str) -> None:
+_PROGRAM_DECLARATION = "YADOF_OPTIMIZATION_PROGRAM"
+_PROGRAM_API = "yadof.optimize.program/v1"
+
+
+def _declaration_node(tree: ast.Module) -> ast.AST | None:
+    values: list[ast.AST] = []
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == _PROGRAM_DECLARATION
+            for target in statement.targets
+        ):
+            values.append(statement.value)
+        elif (
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.target.id == _PROGRAM_DECLARATION
+            and statement.value is not None
+        ):
+            values.append(statement.value)
+    if len(values) > 1:
+        raise BenchmarkError(f"{_PROGRAM_DECLARATION} must be assigned exactly once")
+    return None if not values else values[0]
+
+
+def _helper_names(value: object, *, strategy_id: str) -> tuple[str, ...]:
+    if not isinstance(value, (tuple, list)):
+        raise BenchmarkError(
+            f"strategy {strategy_id!r} program helpers must be a literal tuple/list"
+        )
+    helpers: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise BenchmarkError(
+                f"strategy {strategy_id!r} program helper paths must be strings"
+            )
+        path = PurePosixPath(item)
+        if (
+            not item
+            or "\\" in item
+            or path.is_absolute()
+            or path.suffix != ".py"
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or item == "optimization.py"
+            or path.as_posix() != item
+        ):
+            raise BenchmarkError(
+                f"strategy {strategy_id!r} program helper must be a canonical "
+                f"relative .py path: {item!r}"
+            )
+        key = item.casefold()
+        if key in seen:
+            raise BenchmarkError(
+                f"strategy {strategy_id!r} program helper path is duplicated: {item!r}"
+            )
+        seen.add(key)
+        helpers.append(item)
+    return tuple(helpers)
+
+
+def _resolve_helper(source_root: Path, relative: str, *, strategy_id: str) -> Path:
+    current = source_root
+    for part in PurePosixPath(relative).parts:
+        current = current / part
+        if current.is_symlink():
+            raise BenchmarkError(
+                f"strategy {strategy_id!r} program helper cannot use a symlink: "
+                f"{relative!r}"
+            )
+    try:
+        helper = current.resolve(strict=True)
+    except OSError as exc:
+        raise BenchmarkError(
+            f"strategy {strategy_id!r} program helper does not exist: {relative!r}"
+        ) from exc
+    if not helper.is_relative_to(source_root) or not helper.is_file():
+        raise BenchmarkError(
+            f"strategy {strategy_id!r} program helper escapes its strategy directory "
+            f"or is not a file: {relative!r}"
+        )
+    return helper
+
+
+def _validate_strategy_source(
+    path: Path, *, strategy_id: str
+) -> Mapping[str, Path]:
     if not path.is_file():
         raise BenchmarkError(
             f"strategy {strategy_id!r} source does not exist: {path}"
         )
+    if path.is_symlink():
+        raise BenchmarkError(f"strategy {strategy_id!r} source cannot be a symlink: {path}")
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (OSError, SyntaxError, UnicodeError) as exc:
         raise BenchmarkError(f"strategy {strategy_id!r} is not valid Python: {exc}") from exc
-    if not any(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "build_optimization"
-        for node in tree.body
-    ):
+    declaration = _declaration_node(tree)
+    if declaration is None:
+        if any(
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "build_optimization"
+            for node in tree.body
+        ):
+            return MappingProxyType({"optimization.py": path.resolve()})
         raise BenchmarkError(
-            f"strategy {strategy_id!r} must define build_optimization()"
+            f"strategy {strategy_id!r} must define build_optimization() or literal "
+            f"{_PROGRAM_DECLARATION}"
         )
+    try:
+        raw = ast.literal_eval(declaration)
+    except (TypeError, ValueError) as exc:
+        raise BenchmarkError(
+            f"strategy {strategy_id!r} {_PROGRAM_DECLARATION} must be literal"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise BenchmarkError(
+            f"strategy {strategy_id!r} {_PROGRAM_DECLARATION} must be a literal mapping"
+        )
+    if raw.get("api") != _PROGRAM_API:
+        raise BenchmarkError(
+            f"strategy {strategy_id!r} program api must be {_PROGRAM_API!r}"
+        )
+    helpers = _helper_names(raw.get("helpers"), strategy_id=strategy_id)
+    source_root = path.resolve().parent
+    files: dict[str, Path] = {"optimization.py": path.resolve()}
+    for helper in helpers:
+        files[helper] = _resolve_helper(
+            source_root, helper, strategy_id=strategy_id
+        )
+    return MappingProxyType(files)
+
+
+def _strategy_digest(files: Mapping[str, Path]) -> str:
+    return object_digest(
+        [
+            {"path": relative, "sha256": file_digest(source)}
+            for relative, source in files.items()
+        ]
+    )
 
 
 def _load_module(source: Path, workspace: Path) -> Any:
@@ -128,8 +252,10 @@ def plan_workflow(
             for strategy_id in comparison.strategy_ids:
                 strategy = strategy_by_id[strategy_id]
                 source = strategy.source_for(baseline.id)
-                _validate_strategy_source(source, strategy_id=strategy.id)
-                strategy_digest = file_digest(source)
+                strategy_files = _validate_strategy_source(
+                    source, strategy_id=strategy.id
+                )
+                strategy_digest = _strategy_digest(strategy_files)
                 for seed in comparison.seeds:
                     cell_id = f"c{len(cells) + 1:04d}"
                     cells.append(
@@ -154,6 +280,7 @@ def plan_workflow(
                             baseline_digest=baseline_digests[baseline.id],
                             strategy_digest=strategy_digest,
                             strategy_source=source,
+                            strategy_files=strategy_files,
                             execution=freeze_json(baseline.execution),
                             contract=freeze_json(baseline.contract),
                         )

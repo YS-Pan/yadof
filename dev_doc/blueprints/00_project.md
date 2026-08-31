@@ -12,11 +12,15 @@ users. Bounded low-cost execution can be delegated; long or consequential runs
 need an explicit user request.
 
 Workspace task flexibility remains live during a campaign. A user may correct or
-redefine cost, complete optimization composition, parameters, configuration, and task execution code between
-generations. The next generation uses one coherent current snapshot and rebuilds
-affected derived state. The framework detects changes for cache invalidation and
-provenance but does not decide whether two task versions are scientifically
-equivalent; the user owns whether old evidence should remain.
+redefine cost, parameters, configuration, and task execution code between
+generations. An explicit workspace optimization program and its declared helpers
+are frozen once before a run (and before optional smoke); program edits take effect
+only in a later command at a complete-generation boundary. The next generation
+uses one coherent current task snapshot and rebuilds affected derived state. The
+framework detects changes for cache invalidation and provenance but does not decide
+whether two task versions are scientifically equivalent; the user owns whether old
+evidence should remain. The transitional legacy strategy path retains its
+generation-level source reload only until the staged cutover removes it.
 
 ## Main contract
 
@@ -31,9 +35,12 @@ local/distributed remain file-backed prepared-job transports.
 ## End-to-end responsibilities
 
 1. Resolve one explicit workspace and immutable effective configuration.
-2. Snapshot both complete source roots, fresh-load parameter/objective definitions,
-   and construct the one workspace-owned strategy without global module leakage.
-3. Generate normalized candidates through that strategy and materialize a self-contained assigned
+2. Statically validate and freeze the declared workspace optimization program plus
+   exact helpers once per run; at each generation snapshot the remaining task
+   sources and fresh-load parameter/objective definitions without global module
+   leakage.
+3. Let the workspace program compose public search, surrogate, selection, and
+   evaluation primitives to generate normalized candidates, then materialize a self-contained assigned
    parameter snapshot per job.
 4. Execute task-owned `evaluation.py` in reusable isolated fast workers, or
    `workflow.py` locally/directly through HTCondor; prepared workflows' fixed
@@ -79,7 +86,8 @@ local/distributed remain file-backed prepared-job transports.
     never proves optimization benefit, and no study changes the package template
     default without a separate user decision.
 
-Steps 1, 2, 3, 7, and 10 are generation-scoped rather than campaign-frozen.
+The program-source part of step 2 is run-scoped. The task-source part of step 2 and
+steps 1, 3, 7, and 10 are generation-scoped rather than campaign-frozen.
 Shape-preserving parameter-range/level and fixed-width objective changes rebuild
 affected derived history for the next generation; mechanically unusable old records
 are isolated, while a mere source-fingerprint change never excludes evidence by
@@ -137,9 +145,12 @@ hot-change contract; structural dimension changes are future work.
   preparation, fast/local/HTCondor transport, cancellation/cleanup, result shape,
   retries/timeouts, and recording handoff.
 - `recorded_data` owns durable evidence and current-history queries.
-- `optimize` owns the campaign engine and public composition seam; its `gpsaf/` and
+- `optimize` owns the campaign engine, mandatory run/generation lifecycle scopes,
+  frozen program loading, strict complete-generation commit/resume boundary, and
+  public composition seam; its `gpsaf/` and
   `pymoo/` subpackages physically isolate GPSAF coordination and the mature-backend
-  adapter. `optimize/primitives.py` owns backend-neutral immutable search candidate,
+  adapter. `optimize/program.py` owns the explicit declaration, source snapshot,
+  program context, run scope, and generation scope. `optimize/primitives.py` owns backend-neutral immutable search candidate,
   pool, predicted-cost, selection, and generation-local continuation values while
   pymoo retains concrete algorithm/ask/tell/survival ownership. The workspace owns
   complete strategy composition.
@@ -202,7 +213,11 @@ the next snapshot is rejected until they close, and session shutdown cancels/wai
 them before recorder and snapshot cleanup.
 
 An OS campaign lock plus atomic rename protects immutable segment publication;
-checkpoint publication retains its own atomic replacement. Background surrogate
+checkpoint publication retains its own atomic replacement. The explicit program
+publishes one small atomic completion pointer only after all generation handles,
+recording receipts, metadata, and the committed result reach their normal boundary;
+resume reconstructs from durable evidence rather than serializing Python locals.
+Background surrogate
 training is at most one task per workspace. Resume uses current compatible evidence
 and checkpoint signatures and never reads another workspace. Concurrent optimization
 campaigns use different workspaces; one workspace is one active campaign/write

@@ -31,13 +31,17 @@ directory. The package makes no promise to interpret older multi-run workspace
 contents.
 
 `benchmark.py` must define `build_benchmark(benchmark)` and return `None`.
-Top-level named workflow postprocessors may be registered. Strategy modules must
-define `build_optimization()`.
+Top-level named workflow postprocessors may be registered. A strategy entry must
+define legacy `build_optimization()` or contain a literal
+`YADOF_OPTIMIZATION_PROGRAM` declaration. Planning parses explicit declarations
+without importing the strategy and resolves every declared helper below the
+entry module's directory.
 
 Planning is read-only: it imports the live file with bytecode writes disabled,
-validates selected baseline/strategy sources, resolves defaults, and expands cells
-as `c0001`, `c0002`, and so on. Semantic collision concerns are handled in the
-spec rather than filesystem names.
+validates selected baseline/strategy sources, fingerprints the entry and all
+declared helpers, resolves defaults, and expands cells as `c0001`, `c0002`, and
+so on. Semantic collision concerns are handled in the spec rather than
+filesystem names.
 
 Execution does not copy the authoring program or resources. Workflow
 postprocessors import the same live `benchmark.py` once after cell collection.
