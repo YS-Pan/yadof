@@ -39,6 +39,8 @@ from yadof.surrogate import (
     TrainingHandleState,
     materialize_training_data,
     pca_svd,
+    conditional_inr,
+    hierarchical_cae,
 )
 from yadof.surrogate.linear_subspace import runtime, scheduler
 from yadof.task_snapshot import create_generation_snapshot
@@ -106,6 +108,54 @@ def _record(root: Path, index: int, design: float, response: float) -> None:
             "population_index": index,
         },
     )
+
+
+def test_retained_neural_components_schedule_only_explicit_training_data(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from yadof.surrogate.conditional_inr import scheduler as conditional_scheduler
+    from yadof.surrogate.hierarchical_cae import scheduler as cae_scheduler
+    from yadof.surrogate.conditional_inr.types import TrainingData
+    from yadof.surrogate.hierarchical_cae.types import NamedTrainingData
+
+    class ForbiddenSession:
+        def __getattr__(self, name):
+            raise AssertionError(f"hidden session read attempted: {name}")
+
+    context = SimpleNamespace(
+        config=SimpleNamespace(
+            workspace=tmp_path,
+            OPTIMIZE_RANDOM_SEED=101,
+            OPTIMIZE_SURROGATE_MAX_TRAINING_LAG=1,
+        ),
+        generation_index=4,
+        session=ForbiddenSession(),
+    )
+    explicit = _data(values=(0.1, 0.9))
+    captured = {}
+
+    def conditional_start(_workspace, generation_index, **kwargs):
+        captured["conditional"] = kwargs["_training_data"]
+        assert generation_index == 4
+        return SimpleNamespace(action="started")
+
+    def cae_start(_workspace, generation_index, **kwargs):
+        captured["cae"] = kwargs["_training_data"]
+        assert generation_index == 4
+        return SimpleNamespace(action="started")
+
+    monkeypatch.setattr(conditional_scheduler, "start_training", conditional_start)
+    monkeypatch.setattr(cae_scheduler, "start_training", cae_start)
+
+    assert conditional_inr().start_training(context, explicit).action == "started"
+    assert hierarchical_cae().start_training(context, explicit).action == "started"
+    assert isinstance(captured["conditional"], TrainingData)
+    assert isinstance(captured["cae"], NamedTrainingData)
+    assert captured["conditional"].parameter_names == explicit.parameter_names
+    assert captured["conditional"].normalized_variables == explicit.normalized_variables
+    assert captured["cae"].raw_data == explicit.raw_data
+    assert captured["cae"].record_metadata == explicit.record_metadata
 
 
 def test_training_data_digest_separates_content_from_provenance() -> None:
@@ -565,6 +615,65 @@ def test_typed_prediction_uses_hot_snapshot_and_never_records(
     with pytest.raises(TypeError, match="LinearSubspaceState"):
         component.predict(oracle, ((0.25,),), snapshot=None)
     assert list_records(root) == before
+
+
+def test_pca_selection_uses_exact_compatible_lagged_state_without_training(
+    tmp_path: Path,
+) -> None:
+    root = _workspace(tmp_path / "lagged-selection")
+    component = pca_svd(rank=1, ridge_alpha=0.0, device="cpu")
+    prior = _data((0.0, 0.5), row_prefix="evidence")
+    component.fit(root, prior, generation_index=2)
+    current = _data((0.0, 0.5, 1.0), row_prefix="evidence")
+    runtime.reset_workspace_state(root)
+    config = load_config(root)
+    snapshot = create_generation_snapshot(config)
+    context = SimpleNamespace(
+        config=config,
+        generation_index=3,
+        population_size=1,
+        random_seed=101,
+        history=(),
+        problem=ProblemInfo(1, 1, ("response",)),
+        strategy_signature="4" * 64,
+        strategy_identity={},
+        snapshot=snapshot,
+        session=None,
+    )
+    checkpoint_root = root / ".yadof" / "surrogate" / "checkpoints"
+    manifests_before = tuple(checkpoint_root.rglob("generation_*.json"))
+    events_before = tuple(
+        (root / "recorded_data" / "metadata" / "surrogate_training").glob(
+            "*.json"
+        )
+    )
+    try:
+        assert component.latest_trained_generation(context, current) == 2
+        assert component.has_trained_state(context, current)
+        prediction = component.predict_for_selection(
+            context,
+            ((0.25,),),
+            current,
+        )
+    finally:
+        snapshot.close()
+    assert prediction.training_data_digest == prior.content_digest
+    assert tuple(checkpoint_root.rglob("generation_*.json")) == manifests_before
+    assert tuple(
+        (root / "recorded_data" / "metadata" / "surrogate_training").glob(
+            "*.json"
+        )
+    ) == events_before
+
+    changed = _data((0.0, 0.6, 1.0), row_prefix="evidence")
+    runtime.reset_workspace_state(root)
+    changed_snapshot = create_generation_snapshot(config)
+    context.snapshot = changed_snapshot
+    try:
+        assert component.latest_trained_generation(context, changed) is None
+        assert not component.has_trained_state(context, changed)
+    finally:
+        changed_snapshot.close()
 
 
 def test_generic_viewer_discovers_predicts_plots_and_audits_pca_svd(

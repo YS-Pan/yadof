@@ -22,8 +22,8 @@ parameters are explicit keyword arguments in `submit/optimization.py` program or
 legacy factory code; they are not core config settings and cannot be changed with a
 temporary config override. Task
 physics and problem shape stay in fixed `submit/` and evaluate-side
-`job_template/` roots. Complete strategy selection and component configuration stay
-only in `submit/optimization.py`, never in config.
+`job_template/` roots. Complete program control flow and component configuration
+stay only in `submit/optimization.py`, never in config.
 
 ### One-time component setting migration
 
@@ -41,10 +41,10 @@ value from `config.py` to the corresponding factory call in
 | `OPTIMIZE_CROSSOVER_ETA` | both pymoo factories: `crossover_eta` |
 | `OPTIMIZE_MUTATION_ETA` | both pymoo factories: `mutation_eta` |
 | `OPTIMIZE_DIM_MUT_PER_INDIVIDUAL` | both pymoo factories: `mutated_dimensions_per_individual` |
-| `OPTIMIZE_SURROGATE_ALPHA` | `gpsaf(alpha=...)` |
-| `OPTIMIZE_SURROGATE_BETA` | `gpsaf(beta=...)` |
-| `OPTIMIZE_SURROGATE_GAMMA` | `gpsaf(gamma=...)` |
-| `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` | `gpsaf(exploration_fraction=...)` |
+| `OPTIMIZE_SURROGATE_ALPHA` | `gpsaf_settings(alpha=...)` (legacy: `gpsaf(alpha=...)`) |
+| `OPTIMIZE_SURROGATE_BETA` | `gpsaf_settings(beta=...)` (legacy: `gpsaf(beta=...)`) |
+| `OPTIMIZE_SURROGATE_GAMMA` | `gpsaf_settings(gamma=...)` (legacy: `gpsaf(gamma=...)`) |
+| `OPTIMIZE_SURROGATE_EXPLORATION_FRACTION` | `gpsaf_settings(exploration_fraction=...)` (legacy: `gpsaf(exploration_fraction=...)`) |
 | `SURROGATE_CONSTANT_ATOL` | `conditional_inr(constant_atol=...)` |
 | `SURROGATE_TARGET_SCALE_FLOOR` | `conditional_inr(target_scale_floor=...)` |
 | `SURROGATE_TORCH_DEVICE` | selected surrogate factory: `device=...` |

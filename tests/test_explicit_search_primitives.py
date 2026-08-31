@@ -3,8 +3,10 @@ from __future__ import annotations
 import pickle
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
+from yadof.job_template import RAWDATA_SCHEMA_VERSION
 from yadof.job_template.rawdata_projector import JointObjectiveSamples
 from yadof.optimize import (
     CandidatePool,
@@ -19,12 +21,16 @@ from yadof.optimize import (
     continue_search_from,
     fork_search_state,
     full_real_search,
+    finish_explicit_surrogate_training,
     gpsaf,
+    gpsaf_settings,
     prepare_search,
     pymoo_ga,
     pymoo_nsga3,
     search_candidates,
+    select_gpsaf_generation,
     select_candidates,
+    start_explicit_surrogate_training,
     warm_start_candidates,
 )
 from yadof.optimize.gpsaf.phases import surrogate_population
@@ -32,7 +38,8 @@ from yadof.optimize.gpsaf.settings import create_settings as create_gpsaf_settin
 from yadof.optimize.problem_info import ProblemInfo
 from yadof.optimize.strategy import HistoryRecord
 from yadof.recorded_data.dataset import CostTable
-from yadof.surrogate.training import SurrogatePrediction
+from yadof.job_template.rawdata_template import StructuredRawDataSample
+from yadof.surrogate.training import SurrogatePrediction, SurrogateTrainingData
 
 
 HISTORY_SINGLE = (
@@ -425,6 +432,155 @@ class _DeterministicLegacySurrogate:
 
     def semantic_identity(self, _config, _problem):
         return {"component": "deterministic-legacy-test"}
+
+
+class _ExplicitDeterministicSurrogate:
+    def __init__(self) -> None:
+        self.events = []
+
+    def validate(self, _config, _problem) -> None:
+        self.events.append("validate")
+
+    def semantic_identity(self, _config, _problem):
+        return {"component": "explicit-deterministic-test"}
+
+    def training_data(self, _dataset, _cost_table, *, row_ids=None, transform_id=None):
+        del row_ids, transform_id
+        raise AssertionError("the program owns training-data materialization")
+
+    def ensure_fresh_enough(self, _context, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
+        self.events.append("freshness")
+        return SimpleNamespace(
+            action="fresh",
+            pending_generation_index=None,
+            latest_completed_generation_index=2,
+            error="",
+        )
+
+    def latest_trained_generation(self, _context, training_data) -> int | None:
+        assert isinstance(training_data, SurrogateTrainingData)
+        self.events.append("freshness")
+        return 2
+
+    def has_trained_state(self, _context, training_data) -> bool:
+        assert isinstance(training_data, SurrogateTrainingData)
+        self.events.append("readiness")
+        return True
+
+    def start_training(self, _context, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
+        self.events.append("start-training")
+        return SimpleNamespace(
+            action="started",
+            pending_generation_index=3,
+            latest_completed_generation_index=2,
+            error="",
+        )
+
+    def finish_training(self, _context):
+        self.events.append("finish-training")
+        return SimpleNamespace(
+            action="completed",
+            pending_generation_index=None,
+            latest_completed_generation_index=3,
+            error="",
+        )
+
+    def predict_for_selection(self, context, rows, training_data=None):
+        assert isinstance(training_data, SurrogateTrainingData)
+        self.events.append("predict")
+        population = tuple(tuple(float(value) for value in row) for row in rows)
+        costs = tuple(
+            (0.7 * left + 0.3 * right, 0.3 * left + 0.7 * right)
+            for left, right in population
+        )
+        raw_data = tuple(
+            StructuredRawDataSample.from_items(
+                {
+                    "response.npz": {
+                        "values": np.asarray(cost_row),
+                        "metadata": {
+                            "schema_version": RAWDATA_SCHEMA_VERSION,
+                            "shape": [2],
+                            "rawdata_name": "response",
+                        },
+                    }
+                }
+            )
+            for cost_row in costs
+        )
+        return SurrogatePrediction(
+            state_signature="3" * 64,
+            training_data_digest=training_data.content_digest,
+            normalized_variables=population,
+            raw_data=raw_data,
+            costs=costs,
+            intervals=tuple(
+                tuple((value, value) for value in cost_row)
+                for cost_row in costs
+            ),
+            interpretation_fingerprint=context.snapshot.interpretation_fingerprint,
+        )
+
+
+def test_explicit_gpsaf_selection_and_training_use_only_materialized_data() -> None:
+    context = _context(
+        ProblemInfo(2, 2, ("first", "second")),
+        history=HISTORY_MULTI,
+        generation=3,
+        seed=271828,
+    )
+    training = SurrogateTrainingData(
+        ("left", "right"),
+        ((0.2, 0.8),),
+        (
+            StructuredRawDataSample.from_items(
+                {
+                    "response.npz": {
+                        "values": np.asarray((0.25, 0.75)),
+                        "metadata": {
+                            "schema_version": RAWDATA_SCHEMA_VERSION,
+                            "shape": [2],
+                            "rawdata_name": "response",
+                        },
+                    }
+                }
+            ),
+        ),
+        row_ids=("evidence-1",),
+    )
+    surrogate = _ExplicitDeterministicSurrogate()
+    selected = select_gpsaf_generation(
+        context,
+        search=pymoo_nsga3(reference_direction_partitions=3),
+        surrogate=surrogate,
+        settings=gpsaf_settings(
+            alpha=2,
+            beta=1,
+            gamma=0.5,
+            exploration_fraction=0.25,
+        ),
+        training_data=training,
+    )
+
+    assert len(selected.population) == context.population_size
+    assert selected.surrogate_used is True, dict(selected.diagnostics)
+    assert selected.diagnostics["surrogate_gamma"] == 0.5
+    assert selected.diagnostics["surrogate_training_row_ids"] == ("evidence-1",)
+    assert surrogate.events[:3] == ["validate", "freshness", "readiness"]
+    assert "predict" in surrogate.events
+    assert "start-training" not in surrogate.events
+
+    started = start_explicit_surrogate_training(
+        surrogate,
+        context,
+        training,
+    )
+    finished = finish_explicit_surrogate_training(surrogate, context)
+    assert started["surrogate_training_start"] == "started"
+    assert finished["surrogate_training_finish"] == "completed"
+    assert surrogate.events[-2:] == ["start-training", "finish-training"]
 
 
 def test_gpsaf_golden_population_and_gamma_semantics_remain_unchanged() -> None:

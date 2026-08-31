@@ -282,12 +282,29 @@ def gpsaf(
     return GPSAFStrategy(
         search=search,
         surrogate=surrogate,
-        settings=create_gpsaf_settings(
+        settings=gpsaf_settings(
             alpha=alpha,
             beta=beta,
             gamma=gamma,
             exploration_fraction=exploration_fraction,
         ),
+    )
+
+
+def gpsaf_settings(
+    *,
+    alpha: int = 3,
+    beta: int = 3,
+    gamma: float = 0.5,
+    exploration_fraction: float = 0.10,
+) -> GPSAFSettings:
+    """Build the retained GPSAF parameters without creating a strategy loop."""
+
+    return create_gpsaf_settings(
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        exploration_fraction=exploration_fraction,
     )
 
 
@@ -303,6 +320,7 @@ __all__ = [
     "SearchComponent",
     "by_objective_count",
     "gpsaf",
+    "gpsaf_settings",
     "pymoo_ga",
     "pymoo_nsga3",
     "real_search",

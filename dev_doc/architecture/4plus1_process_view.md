@@ -63,16 +63,17 @@ components may create stable function draws and project complete predicted rawDa
 through one frozen current-cost interpreter. Candidate selection retains only the
 derived objective samples and diagnostics.
 
-Posterior-assisted selection is explicit and fail-closed. It requires its declared
-readiness; unavailable or unusable derived state follows the strategy's documented
-fallback or stop boundary. Every selected candidate still enters the common real
-evaluation, finalization, and recording sequence.
+Posterior-assisted selection is explicit, generation-local, and fail-closed. It
+requires its declared readiness; unavailable or unusable derived state follows the
+selector's documented fallback or stop boundary. It returns a typed selection to
+the workspace program, which sends every candidate through common real evaluation,
+finalization, recording, and commit.
 
 The deterministic search path is explicit and generation-local:
 
 ```mermaid
 sequenceDiagram
-    participant O as strategy or program
+    participant O as workspace program
     participant S as search primitives
     participant P as pymoo adapter
     participant M as surrogate prediction
@@ -151,13 +152,18 @@ sequenceDiagram
 Cancellation is checked before fit, after model construction, and immediately
 before checkpoint publication. A cancellation observed before commit publishes no
 manifest; if atomic commit wins the race, the handle completes with that committed
-state. Prediction never calls finalization or the recorder. GPSAF materializes one
-explicit Stage 2 view before selection and another at the real backend's actual
-after-submit callback timing; its compatibility tuple is derived only at that
-narrow consumer boundary. PCA/SVD additionally implements the runtime-checkable
-deterministic selection provider; GPSAF binds its Stage 4 prediction DTO to exact
-pool candidate IDs before pymoo survival. Retained components use one narrow legacy
-adapter until their scheduled migration.
+state. Prediction never calls finalization or the recorder. The workspace program
+materializes one explicit Stage 2 view before GPSAF selection and retains that
+immutable value for pure state-age inspection, prediction, and training. Selection
+never starts or waits for a fit. It may use the newest compatible state within the
+declared lag; PCA/SVD reconstructs that state's exact historical row subset from
+the current view and rehashes it before recovery. The program starts real
+evaluation, starts training on the captured prior evidence, then explicitly
+waits/closes both lifecycles before commit. PCA/SVD, conditional-INR, and
+hierarchical-CAE implement the
+runtime-checkable deterministic component protocol; GPSAF binds each Stage 4
+prediction DTO to exact pool candidate IDs before pymoo survival. Only the closed
+0.4.x strategy/evaluator adapters retain an after-submit callback until cutover.
 
 ## Generation-boundary task changes
 

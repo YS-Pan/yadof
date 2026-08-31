@@ -341,6 +341,7 @@ class RawDataPosteriorSurrogate(Protocol):
         *,
         draw_count: int,
         seed: int,
+        training_data=None,
     ) -> RawDataPosteriorSampler: ...
 
 

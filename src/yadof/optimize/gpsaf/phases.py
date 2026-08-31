@@ -3,7 +3,10 @@ from __future__ import annotations
 import os
 from typing import Sequence
 
-from ...surrogate.training import DeterministicPredictionProvider
+from ...surrogate.training import (
+    DeterministicPredictionProvider,
+    DeterministicSurrogateComponent,
+)
 from ..primitives import (
     CandidatePool,
     CandidateSelection,
@@ -36,14 +39,21 @@ def ensure_surrogate_fresh_enough(
     training_data=None,
 ) -> dict[str, object]:
     try:
-        func = getattr(surrogate, "ensure_fresh_enough", None)
-        if not callable(func):
-            return {"surrogate_training_gate": "unavailable"}
-        status = (
-            func(context, training_data)
-            if training_data is not None
-            else func(context)
-        )
+        if isinstance(surrogate, DeterministicSurrogateComponent):
+            if training_data is None:
+                raise TypeError(
+                    "deterministic surrogate freshness requires explicit training data"
+                )
+            status = surrogate.ensure_fresh_enough(context, training_data)
+        else:
+            func = getattr(surrogate, "ensure_fresh_enough", None)
+            if not callable(func):
+                return {"surrogate_training_gate": "unavailable"}
+            status = (
+                func(context, training_data)
+                if training_data is not None
+                else func(context)
+            )
     except Exception as exc:  # noqa: BLE001 - a stale model should fall back, not stop the generation.
         return {
             "surrogate_training_gate": "failed",
@@ -63,6 +73,12 @@ def surrogate_state_ready(
     training_data=None,
 ) -> bool:
     try:
+        if isinstance(surrogate, DeterministicSurrogateComponent):
+            if training_data is None:
+                raise TypeError(
+                    "deterministic surrogate readiness requires explicit training data"
+                )
+            return bool(surrogate.has_trained_state(context, training_data))
         func = getattr(surrogate, "has_trained_state", None)
         if not callable(func):
             return True

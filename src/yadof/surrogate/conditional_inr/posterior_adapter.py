@@ -80,7 +80,7 @@ class ConditionalINRRawDataSampler:
         except Exception as exc:
             return _FailedPrediction(type(exc).__name__, str(exc).replace('\r', ' ').replace('\n', ' ')[:512])
 
-def make_rawdata_sampler(context, *, component, draw_count: int, seed: int) -> ConditionalINRRawDataSampler:
+def make_rawdata_sampler(context, *, component, draw_count: int, seed: int, training_data=None) -> ConditionalINRRawDataSampler:
     """Create a fixed-draw sampler from the context's trained state."""
     requested = int(draw_count)
     if requested <= 0:
@@ -94,15 +94,33 @@ def make_rawdata_sampler(context, *, component, draw_count: int, seed: int) -> C
     members = member_list(state.model)
     if not members:
         raise RuntimeError('conditional-INR posterior has no ensemble members')
-    schema_template, selectors_by_item = _schema_template_from_context(context, state.schema)
+    schema_template, selectors_by_item = _schema_template(
+        context,
+        state.schema,
+        training_data=training_data,
+    )
     selected = _seeded_member_indices(len(members), requested, int(seed))
     return ConditionalINRRawDataSampler(state, schema_template, selectors_by_item, selected, draw_count=requested, seed=int(seed), strategy_signature=strategy_signature)
 
-def _schema_template_from_context(context, schema: RawDataSchema) -> tuple[RawDataSchemaTemplate, tuple[RawDataFieldSelector, ...]]:
-    try:
-        evidence = context.session.named_rawdata_samples(status='completed')
-    except AttributeError as exc:
-        raise RuntimeError('campaign session does not expose named rawData evidence') from exc
+def _schema_template(context, schema: RawDataSchema, *, training_data=None) -> tuple[RawDataSchemaTemplate, tuple[RawDataFieldSelector, ...]]:
+    if training_data is not None:
+        from ..training import SurrogateTrainingData
+
+        if not isinstance(training_data, SurrogateTrainingData):
+            raise TypeError(
+                "conditional-INR posterior requires SurrogateTrainingData"
+            )
+        evidence = tuple(
+            (row_id, sample.items)
+            for row_id, sample in zip(training_data.row_ids, training_data.raw_data)
+        )
+    else:
+        # Closed legacy strategy adapter. Stage 7 workspace programs always pass
+        # explicit training data; Stage 8 removes this pre-cutover fallback.
+        try:
+            evidence = context.session.named_rawdata_samples(status='completed')
+        except AttributeError as exc:
+            raise RuntimeError('campaign session does not expose named rawData evidence') from exc
     failures: list[str] = []
     for job_name, items in evidence:
         if len(items) != len(schema.templates):

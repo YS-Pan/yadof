@@ -88,6 +88,50 @@ from .exploitation import (
 DEFAULT_CAE_TRAIN_CONFIG = CAETrainConfig()
 
 
+def _explicit_training_data(
+    dataset,
+    cost_table,
+    *,
+    row_ids=None,
+    transform_id: str | None = None,
+):
+    from .training import materialize_training_data
+
+    return materialize_training_data(
+        dataset,
+        cost_table,
+        row_ids=row_ids,
+        transform_id=transform_id,
+    )
+
+
+def _conditional_training_data(training_data):
+    from .conditional_inr.types import TrainingData
+    from .training import SurrogateTrainingData
+
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("conditional_inr requires explicit SurrogateTrainingData")
+    return TrainingData(
+        parameter_names=training_data.parameter_names,
+        normalized_variables=training_data.normalized_variables,
+        raw_data=tuple(sample.cost_items() for sample in training_data.raw_data),
+    )
+
+
+def _cae_training_data(training_data):
+    from .hierarchical_cae.types import NamedTrainingData
+    from .training import SurrogateTrainingData
+
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("hierarchical_cae requires explicit SurrogateTrainingData")
+    return NamedTrainingData(
+        parameter_names=training_data.parameter_names,
+        normalized_variables=training_data.normalized_variables,
+        raw_data=training_data.raw_data,
+        record_metadata=training_data.record_metadata,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class PCASVDComponent:
     """Deterministic per-field PCA/SVD component consumed by GPSAF.
@@ -159,9 +203,7 @@ class PCASVDComponent:
         row_ids=None,
         transform_id: str | None = None,
     ):
-        from .training import materialize_training_data
-
-        return materialize_training_data(
+        return _explicit_training_data(
             dataset,
             cost_table,
             row_ids=row_ids,
@@ -233,14 +275,16 @@ class PCASVDComponent:
             raise TypeError(
                 "pca_svd selection prediction requires SurrogateTrainingData"
             )
-        state = runtime.recover_state(
+        state = runtime.recover_latest_compatible_state(
             context.config.workspace,
             training_data,
             _settings=self.settings,
             _config=context.snapshot.config,
         )
         if state is None:
-            raise RuntimeError("pca_svd surrogate is not trained for this data")
+            raise RuntimeError(
+                "pca_svd has no compatible lagged state for this evidence"
+            )
         return runtime.predict(state, population, snapshot=context.snapshot)
 
     def ensure_fresh_enough(self, context, training_data):
@@ -260,10 +304,21 @@ class PCASVDComponent:
     def has_trained_state(self, context, training_data) -> bool:
         from .linear_subspace import runtime
 
-        return runtime.has_trained_state(
+        return runtime.recover_latest_compatible_state(
             context.config.workspace,
             training_data,
             _settings=self.settings,
+            _config=context.snapshot.config,
+        ) is not None
+
+    def latest_trained_generation(self, context, training_data) -> int | None:
+        from .linear_subspace import runtime
+
+        return runtime.latest_compatible_state_generation(
+            context.config.workspace,
+            training_data,
+            _settings=self.settings,
+            _config=context.snapshot.config,
         )
 
     def start_training(self, context, training_data):
@@ -337,8 +392,23 @@ class ConditionalINRComponent:
             "controlled_parameters": self.settings.semantic_parameters(),
         }
 
-    def ensure_fresh_enough(self, context):
-        from .conditional_inr import runtime, scheduler
+    def training_data(
+        self,
+        dataset,
+        cost_table,
+        *,
+        row_ids=None,
+        transform_id: str | None = None,
+    ):
+        return _explicit_training_data(
+            dataset,
+            cost_table,
+            row_ids=row_ids,
+            transform_id=transform_id,
+        )
+
+    def ensure_fresh_enough(self, context, training_data):
+        from .conditional_inr import scheduler
 
         return scheduler.ensure_fresh_enough(
             context.config.workspace,
@@ -349,23 +419,30 @@ class ConditionalINRComponent:
                 context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
             ),
             _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
-            _training_data=runtime.training_data_from_session(
-                context.session,
-                context.snapshot,
-            ),
+            _training_data=_conditional_training_data(training_data),
         )
 
-    def has_trained_state(self, context) -> bool:
+    def has_trained_state(self, context, training_data) -> bool:
         from .conditional_inr import runtime
 
+        _conditional_training_data(training_data)
         return bool(
             runtime.has_trained_state(
                 context.config.workspace, _settings=self.settings
             )
         )
 
-    def start_training(self, context):
-        from .conditional_inr import runtime, scheduler
+    def latest_trained_generation(self, context, training_data) -> int | None:
+        from .conditional_inr import runtime
+
+        _conditional_training_data(training_data)
+        return runtime.latest_state_generation(
+            context.config.workspace,
+            _settings=self.settings,
+        )
+
+    def start_training(self, context, training_data):
+        from .conditional_inr import scheduler
 
         return scheduler.start_training(
             context.config.workspace,
@@ -374,10 +451,74 @@ class ConditionalINRComponent:
             _config=context.config,
             _settings=self.settings,
             _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
-            _training_data=runtime.training_data_from_session(
-                context.session,
-                context.snapshot,
+            _training_data=_conditional_training_data(training_data),
+        )
+
+    def finish_training(self, context):
+        from .conditional_inr import scheduler
+
+        return scheduler.wait_for_pending_training(
+            context.config.workspace,
+            _settings=self.settings,
+        )
+
+    def predict_for_selection(self, context, population, training_data=None):
+        from .conditional_inr import runtime
+        from .training import SurrogatePrediction
+
+        explicit = _conditional_training_data(training_data)
+        rows = tuple(tuple(float(value) for value in row) for row in population)
+        state = runtime._require_state(context.config, self.settings)
+        raw_samples = runtime.predict_raw_data(
+            context.config.workspace,
+            rows,
+            _settings=self.settings,
+        )
+        names = (
+            ()
+            if not training_data.raw_data
+            else tuple(item.filename for item in training_data.raw_data[0].items)
+        )
+        if raw_samples and len(names) != len(raw_samples[0]):
+            raise ValueError(
+                "conditional-INR prediction does not match explicit rawData names"
+            )
+        from ..job_template.rawdata_contract import NamedRawDataItem
+        from ..job_template.rawdata_template import StructuredRawDataSample
+
+        structured = tuple(
+            StructuredRawDataSample.from_items(
+                tuple(
+                    NamedRawDataItem(filename, payload)
+                    for filename, payload in zip(names, sample)
+                )
+            )
+            for sample in raw_samples
+        )
+        predicted = runtime.predict_population(
+            context.config.workspace,
+            rows,
+            _settings=self.settings,
+        )
+        costs = tuple(item[0] for item in predicted)
+        del explicit
+        return SurrogatePrediction(
+            state_signature=state.state_signature,
+            training_data_digest=training_data.content_digest,
+            normalized_variables=rows,
+            raw_data=structured,
+            costs=costs,
+            intervals=tuple(
+                tuple((value, value) for value in cost_row)
+                for cost_row in costs
             ),
+            interpretation_fingerprint=context.snapshot.interpretation_fingerprint,
+            diagnostics={
+                "component": "conditional-inr",
+                "posterior_capability": True,
+                "interval_policy": "deterministic-mean-zero-width",
+                "candidate_count": len(rows),
+            },
         )
 
     def predict_population(self, context, population):
@@ -447,19 +588,47 @@ class ConditionalINRPosteriorAdapter:
             diagnostics={"evidence_status": "compatibility-path-only"},
         )
 
-    def ensure_fresh_enough(self, context):
-        return self.component.ensure_fresh_enough(context)
+    def training_data(self, dataset, cost_table, *, row_ids=None, transform_id=None):
+        return self.component.training_data(
+            dataset,
+            cost_table,
+            row_ids=row_ids,
+            transform_id=transform_id,
+        )
 
-    def has_trained_state(self, context) -> bool:
-        return self.component.has_trained_state(context)
+    def ensure_fresh_enough(self, context, training_data):
+        return self.component.ensure_fresh_enough(context, training_data)
 
-    def start_training(self, context):
-        return self.component.start_training(context)
+    def has_trained_state(self, context, training_data) -> bool:
+        return self.component.has_trained_state(context, training_data)
+
+    def latest_trained_generation(self, context, training_data) -> int | None:
+        return self.component.latest_trained_generation(context, training_data)
+
+    def start_training(self, context, training_data):
+        return self.component.start_training(context, training_data)
+
+    def finish_training(self, context):
+        return self.component.finish_training(context)
+
+    def predict_for_selection(self, context, population, training_data=None):
+        return self.component.predict_for_selection(
+            context,
+            population,
+            training_data,
+        )
 
     def predict_population(self, context, population):
         return self.component.predict_population(context, population)
 
-    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int):
+    def make_rawdata_sampler(
+        self,
+        context,
+        *,
+        draw_count: int,
+        seed: int,
+        training_data=None,
+    ):
         from .conditional_inr.posterior_adapter import make_rawdata_sampler
 
         return make_rawdata_sampler(
@@ -467,6 +636,7 @@ class ConditionalINRPosteriorAdapter:
             component=self.component,
             draw_count=draw_count,
             seed=seed,
+            training_data=training_data,
         )
 
 
@@ -637,6 +807,21 @@ class HierarchicalCAEComponent:
             )
         )
 
+    def training_data(
+        self,
+        dataset,
+        cost_table,
+        *,
+        row_ids=None,
+        transform_id: str | None = None,
+    ):
+        return _explicit_training_data(
+            dataset,
+            cost_table,
+            row_ids=row_ids,
+            transform_id=transform_id,
+        )
+
     def assess_posterior_exploitation(
         self, context, population
     ) -> PosteriorExploitationReadiness:
@@ -661,8 +846,8 @@ class HierarchicalCAEComponent:
             },
         )
 
-    def ensure_fresh_enough(self, context):
-        from .hierarchical_cae import runtime, scheduler
+    def ensure_fresh_enough(self, context, training_data):
+        from .hierarchical_cae import scheduler
 
         return scheduler.ensure_fresh_enough(
             context.config.workspace,
@@ -673,20 +858,28 @@ class HierarchicalCAEComponent:
                 context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
             ),
             _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
-            _training_data=runtime.training_data_from_session(
-                context.session, context.snapshot
-            ),
+            _training_data=_cae_training_data(training_data),
         )
 
-    def has_trained_state(self, context) -> bool:
+    def has_trained_state(self, context, training_data) -> bool:
         from .hierarchical_cae import runtime
 
+        _cae_training_data(training_data)
         return bool(
             runtime.has_trained_state(context.config.workspace, component=self)
         )
 
-    def start_training(self, context):
-        from .hierarchical_cae import runtime, scheduler
+    def latest_trained_generation(self, context, training_data) -> int | None:
+        from .hierarchical_cae import runtime
+
+        _cae_training_data(training_data)
+        return runtime.latest_state_generation(
+            context.config.workspace,
+            component=self,
+        )
+
+    def start_training(self, context, training_data):
+        from .hierarchical_cae import scheduler
 
         return scheduler.start_training(
             context.config.workspace,
@@ -695,9 +888,52 @@ class HierarchicalCAEComponent:
             _config=context.config,
             _component=self,
             _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
-            _training_data=runtime.training_data_from_session(
-                context.session, context.snapshot
+            _training_data=_cae_training_data(training_data),
+        )
+
+    def finish_training(self, context):
+        from .hierarchical_cae import scheduler
+
+        return scheduler.wait_for_pending_training(
+            context.config.workspace,
+            _component=self,
+        )
+
+    def predict_for_selection(self, context, population, training_data=None):
+        from .hierarchical_cae import runtime
+        from .training import SurrogatePrediction
+
+        _cae_training_data(training_data)
+        rows = tuple(tuple(float(value) for value in row) for row in population)
+        state = runtime._require_state(context.config, component=self)
+        samples = runtime.predict_raw_data(
+            context.config.workspace,
+            rows,
+            component=self,
+        )
+        predicted = runtime.predict_population(
+            context.config.workspace,
+            rows,
+            component=self,
+        )
+        costs = tuple(item[0] for item in predicted)
+        return SurrogatePrediction(
+            state_signature=state.state_signature,
+            training_data_digest=training_data.content_digest,
+            normalized_variables=rows,
+            raw_data=samples,
+            costs=costs,
+            intervals=tuple(
+                tuple((value, value) for value in cost_row)
+                for cost_row in costs
             ),
+            interpretation_fingerprint=context.snapshot.interpretation_fingerprint,
+            diagnostics={
+                "component": "hierarchical-cae",
+                "posterior_capability": True,
+                "interval_policy": "deterministic-mean-zero-width",
+                "candidate_count": len(rows),
+            },
         )
 
     def predict_population(self, context, population):
@@ -707,7 +943,14 @@ class HierarchicalCAEComponent:
             context.config.workspace, population, component=self
         )
 
-    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int):
+    def make_rawdata_sampler(
+        self,
+        context,
+        *,
+        draw_count: int,
+        seed: int,
+        training_data=None,
+    ):
         from .hierarchical_cae.posterior_adapter import make_rawdata_sampler
 
         return make_rawdata_sampler(
@@ -715,6 +958,7 @@ class HierarchicalCAEComponent:
             component=self,
             draw_count=draw_count,
             seed=seed,
+            training_data=training_data,
         )
 
     def predict_applicability(self, context, population) -> ApplicabilityPrediction:

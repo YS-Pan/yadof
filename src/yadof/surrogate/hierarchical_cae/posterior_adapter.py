@@ -76,7 +76,8 @@ class HierarchicalCAERawDataSampler:
         except Exception as exc:
             return _FailedPrediction(type(exc).__name__, str(exc).replace('\r', ' ').replace('\n', ' ')[:512])
 
-def make_rawdata_sampler(context, *, component, draw_count: int, seed: int) -> HierarchicalCAERawDataSampler:
+def make_rawdata_sampler(context, *, component, draw_count: int, seed: int, training_data=None) -> HierarchicalCAERawDataSampler:
+    del training_data
     requested = int(draw_count)
     if requested <= 0:
         raise ValueError('draw_count must be positive')

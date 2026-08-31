@@ -338,6 +338,131 @@ class DeterministicPredictionProvider(Protocol):
     ) -> SurrogatePrediction: ...
 
 
+@runtime_checkable
+class DeterministicSurrogateComponent(DeterministicPredictionProvider, Protocol):
+    """Explicit deterministic component contract used by workspace programs.
+
+    Every operation consumes a caller-materialized :class:`SurrogateTrainingData`
+    value.  Implementations must not reconstruct training evidence through a
+    campaign session or another hidden recorder query.
+    """
+
+    def validate(self, config, problem) -> None: ...
+
+    def semantic_identity(self, config, problem) -> Mapping[str, object]: ...
+
+    def training_data(
+        self,
+        dataset,
+        cost_table,
+        *,
+        row_ids: Sequence[str] | None = None,
+        transform_id: str | None = None,
+    ) -> SurrogateTrainingData: ...
+
+    def ensure_fresh_enough(self, context, training_data: SurrogateTrainingData): ...
+
+    def latest_trained_generation(
+        self,
+        context,
+        training_data: SurrogateTrainingData,
+    ) -> int | None: ...
+
+    def has_trained_state(
+        self,
+        context,
+        training_data: SurrogateTrainingData,
+    ) -> bool: ...
+
+    def start_training(self, context, training_data: SurrogateTrainingData): ...
+
+    def finish_training(self, context): ...
+
+
+@dataclass(frozen=True, slots=True)
+class SurrogateSelectionFreshness:
+    """Pure generation-local readiness for deterministic selection."""
+
+    ready: bool
+    action: str
+    latest_completed_generation_index: int | None
+    lag: int | None
+    max_lag: int
+    error: str = ""
+
+    def diagnostics(self) -> Mapping[str, object]:
+        return MappingProxyType(
+            {
+                "surrogate_training_gate": self.action,
+                "surrogate_training_pending_generation": None,
+                "surrogate_training_latest_generation": (
+                    self.latest_completed_generation_index
+                ),
+                "surrogate_training_lag": self.lag,
+                "surrogate_training_max_lag": self.max_lag,
+                "surrogate_training_gate_error": self.error,
+            }
+        )
+
+
+def assess_surrogate_selection_freshness(
+    component: DeterministicSurrogateComponent,
+    context,
+    training_data: SurrogateTrainingData,
+) -> SurrogateSelectionFreshness:
+    """Inspect state age without waiting for or starting training."""
+
+    if not isinstance(component, DeterministicSurrogateComponent):
+        raise TypeError("freshness requires a DeterministicSurrogateComponent")
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("freshness requires explicit SurrogateTrainingData")
+    max_lag = max(0, int(context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG))
+    if training_data.sample_count < 1:
+        return SurrogateSelectionFreshness(
+            ready=False,
+            action="skipped_no_data",
+            latest_completed_generation_index=None,
+            lag=None,
+            max_lag=max_lag,
+        )
+    try:
+        latest = component.latest_trained_generation(context, training_data)
+    except Exception as exc:  # noqa: BLE001 - derived selection falls back to real.
+        return SurrogateSelectionFreshness(
+            ready=False,
+            action="failed",
+            latest_completed_generation_index=None,
+            lag=None,
+            max_lag=max_lag,
+            error=f"{exc.__class__.__name__}: {exc}"[:512],
+        )
+    if latest is None:
+        return SurrogateSelectionFreshness(
+            ready=False,
+            action="unavailable",
+            latest_completed_generation_index=None,
+            lag=None,
+            max_lag=max_lag,
+        )
+    lag = int(context.generation_index) - int(latest)
+    if lag < 0:
+        return SurrogateSelectionFreshness(
+            ready=False,
+            action="failed",
+            latest_completed_generation_index=int(latest),
+            lag=lag,
+            max_lag=max_lag,
+            error="surrogate state generation is ahead of current generation",
+        )
+    return SurrogateSelectionFreshness(
+        ready=lag <= max_lag,
+        action="fresh" if lag <= max_lag else "stale",
+        latest_completed_generation_index=int(latest),
+        lag=lag,
+        max_lag=max_lag,
+    )
+
+
 class TrainingHandleState(StrEnum):
     CREATED = "created"
     RUNNING = "running"
@@ -724,8 +849,11 @@ def _sha256(value: object, label: str) -> str:
 
 
 __all__ = [
+    "assess_surrogate_selection_freshness",
     "DeterministicPredictionProvider",
+    "DeterministicSurrogateComponent",
     "SurrogatePrediction",
+    "SurrogateSelectionFreshness",
     "SurrogateTrainingData",
     "TrainingCancelledError",
     "TrainingHandle",

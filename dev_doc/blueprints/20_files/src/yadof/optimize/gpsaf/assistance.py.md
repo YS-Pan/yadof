@@ -1,33 +1,43 @@
 ﻿# File blueprint: src/yadof/optimize/gpsaf/assistance.py
 
 ## Intent
-- Orchestrate one GPSAF generation from injected search and rawData-surrogate
-  components without owning campaign/session/recorder or simulator execution.
+- Select one GPSAF generation from injected search and a typed rawData-surrogate
+  component without owning real evaluation, training timing, recording, or commit.
+- Retain the closed 0.4.x complete-generation wrapper only until the Stage 8
+  cutover.
 
 ## Functionalities
 - Receive common generation context/history/problem shape and invoke shared search
   primitives with the injected search settings snapshot.
-- Gate surrogate-assisted prediction through the staggered-training freshness check.
-- Freeze one explicit training value before selection when the component supports
-  it and thread that same value through PCA/SVD state/prediction calls.
-- Use the latest trained surrogate state for candidate selection when available.
+- Require a runtime-checkable `DeterministicSurrogateComponent` and caller-owned
+  `SurrogateTrainingData`; thread that exact value through a pure state-age check,
+  readiness, and typed prediction.
+- Use the latest compatible trained state only within the configured lag. Missing
+  or stale state falls back to real selection without starting or waiting for fit.
 - On any soft derived selection/materialization/prediction failure, discard the
   partial selection and run one fresh complete full-real primitive; failure of that
   real path remains explicit.
-- Evaluate the selected real population and pass an after-submit callback that starts surrogate training.
-- Finish pending surrogate training after real evaluation so session generation
-  leases cannot cross the boundary.
+- Return `GPSAFGenerationSelection` with population/source/surrogate-use/diagnostics
+  only; it cannot evaluate or commit.
+- Expose explicit start/finish training helpers so the workspace program can start
+  evaluation first, start training on prior immutable evidence, and close both
+  lifecycles before commit.
+- Keep session materialization, common evaluation, and after-submit callback only
+  inside the legacy `run_generation()` wrapper scheduled for deletion.
 
 ## I/O Format
-- Returns common `strategy.OptimizationResult`; every accepted row passes through
-  the common real-evaluation handoff.
+- The explicit selector returns `GPSAFGenerationSelection`; the closed legacy
+  wrapper returns `strategy.OptimizationResult` after the common evaluator.
 
 ## Non-Obvious Techniques
-- This file no longer trains surrogate before candidate selection. It schedules training only after real jobs are submitted, and lets lag policy block before selection only when a model would become too stale.
+- Selection has no training/evaluation side effect. The explicit program controls
+  the truthful `start evaluation -> start training -> wait/close` ordering. Lag
+  policy is a read-only selection gate, not a blocking scheduler call.
 
 ## Mutability Profile
 - Keep only irreducible alpha/beta/exploration and staggered-component coordination.
 - Alpha, beta, gamma, and exploration arrive as one immutable factory-owned GPSAF
-  snapshot; no phase reads ambient algorithm config.
+  snapshot; no phase reads ambient algorithm config. `gamma` remains validated,
+  identified, and diagnosed but does not enter selection mathematics.
   Pymoo owns algorithms/operators/survival through `primitives.py`; common
   evaluation/history/types stay in `strategy.py`.

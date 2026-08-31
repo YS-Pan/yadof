@@ -79,9 +79,10 @@
   public contracts and lazy optional dependencies. Its public materialization
   layer identity-joins evidence/cost rows into immutable training values, separates
   exact mathematical content identity from bounded lineage/provenance, and gives
-  explicit fits a generation-scoped handle lifecycle. PCA/SVD is the first
-  component migrated to explicit data/state/prediction; conditional-INR and
-  hierarchical-CAE retain their existing adapters until their scheduled migration.
+  explicit fits a generation-scoped handle lifecycle. PCA/SVD, conditional-INR,
+  and hierarchical-CAE implement one runtime-checkable deterministic component
+  boundary and consume caller-owned training data for freshness, prediction, and
+  scheduling.
   Hierarchical CAE owns its
   training-data filtering implementations below its private package and selects
   them through one component-local mode whose default is no filtering; the current

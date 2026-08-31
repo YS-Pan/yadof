@@ -28,13 +28,23 @@ the concatenated coefficients. A separate codec/oracle API may encode known
 validation rawData and always labels that output diagnostic-only. GPSAF receives
 only deployable parameter predictions and zero-width cost intervals.
 
-PCA/SVD is also the first explicit fit/state/predict implementation. Callers
-materialize an immutable `SurrogateTrainingData` from Stage 2 evidence and cost
-views, or construct the same owned value directly from materialized arrays and
-structured samples. Exact content and provenance have separate digests. A public
-`TrainingHandle` owns asynchronous fit/cancel/wait/close behavior, and the typed
-`SurrogatePrediction` owns transient complete rawData plus current-snapshot cost.
-Neither the PCA/SVD component nor its recovery path scans a session implicitly.
+PCA/SVD was the first explicit fit/state/predict implementation. PCA/SVD,
+conditional-INR, and hierarchical-CAE now implement the runtime-checkable
+`DeterministicSurrogateComponent` boundary. Callers materialize an immutable
+`SurrogateTrainingData` from Stage 2 evidence and cost views, or construct the same
+owned value directly from materialized arrays and structured samples. Exact content
+and provenance have separate digests. A public `TrainingHandle` owns asynchronous
+fit/cancel/wait/close behavior, and the typed `SurrogatePrediction` owns transient
+complete rawData plus current-snapshot cost. Explicit component operations do not
+scan a session for training evidence.
+
+Deterministic selection uses a pure `SurrogateSelectionFreshness` check: it reads
+the newest trained generation and configured lag but never waits for or starts a
+fit. PCA/SVD lagged recovery reconstructs the checkpoint's ordered row IDs from the
+current explicit value and requires the old exact content digest, schema, parameter
+normalization, strategy, settings, and artifact hash before reuse. The current full
+value remains the input to the program-owned training request for a later
+generation.
 
 ## Source structure
 
@@ -57,8 +67,9 @@ Neither the PCA/SVD component nor its recovery path scans a session implicitly.
   explicit-handle scheduler. Its namespace is `pca-svd`; it exposes no
   posterior/readiness method.
 - `training.py` owns the backend-neutral materialized input, semantic/provenance
-  digests, explicit fit-handle state machine, and deterministic prediction DTO. It
-  imports NumPy but not Torch and is exported by the lightweight parent package.
+  digests, runtime-checkable deterministic component protocol, explicit fit-handle
+  state machine, and deterministic prediction DTO. It imports NumPy but not Torch
+  and is exported by the lightweight parent package.
 - `hierarchical_cae/data_filtering/` owns the component-local mode selector and
   implementations; common assessment/applicability types do not depend on a
   concrete implementation. Mode `none` is the default and returns the ordinary uniform
@@ -147,8 +158,9 @@ wrapper is explicitly selected by another strategy.
 
 ## Conditional-INR posterior adapter
 
-The adapter obtains exact direct `.npz` basenames from transient named campaign
-evidence and combines them with the trained state's frozen templates. It rejects a
+The adapter obtains exact direct `.npz` basenames from the explicit
+`SurrogateTrainingData` structured samples and combines them with the trained
+state's frozen templates. It rejects a
 state whose modeled slot is not the resolved main array because posterior axes,
 units, and metadata must remain frozen. A seeded permutation-cycle policy fixes one
 loaded ensemble member for every requested draw. Repeated cycles preserve their
@@ -163,7 +175,7 @@ one of its fields. The adapter remains uncalibrated, includes no observation noi
 and does not change mean rawData, mean costs, min/max intervals, viewer behavior,
 model architecture, or checkpoint mathematics.
 
-## Explicit PCA/SVD data and lifecycle
+## Explicit deterministic data and lifecycle
 
 `materialize_training_data()` joins `EvidenceDataset` and `CostTable` only by row
 identity. Default selection accepts committed original or explicit derived rows
@@ -174,7 +186,7 @@ digest, while dtype, shape, row order, duplicates, status, mask, or numeric cont
 changes it. Source identity, lineage, and optional transform ID change only the
 provenance digest.
 
-`start_fit()` creates one non-daemon owner-thread handle. Cooperative cancellation
+PCA/SVD `start_fit()` creates one non-daemon owner-thread handle. Cooperative cancellation
 checks bracket model fitting and checkpoint publication; atomic commit is the
 terminal race boundary. Session-backed training leases the exact current snapshot,
 normal generation completion waits/closes it, and abnormal session shutdown
@@ -192,10 +204,12 @@ adapter over the same manifest/artifact model.
 
 ## Conditional-INR training data and model
 
-Until the retained-capability migration stage, conditional-INR training bundles
-come from the active campaign session when one exists, so finalized
-segments and accepted unpublished current rows share one validated view. Outside a
-campaign they come from tolerant public recorded-data queries. RawData fields are flattened
+Conditional-INR receives the same explicit `SurrogateTrainingData` used for its
+freshness, prediction, and scheduler decisions. Its private adapter converts the
+owned structured samples into the retained named training bundle; it does not
+reopen history or a campaign session. The 0.4.x posterior adapter keeps one closed
+session fallback only for the legacy generation runner and is deleted at the 0.5.0
+cutover. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
 constant or near-constant fields. Each query position is centered by its recorded
 mean and divided by its recorded standard deviation with a configured floor.
@@ -237,8 +251,9 @@ does not affect selected candidates.
 
 Conditional-INR runtime state and training schedules are keyed by effective workspace/checkpoint
 paths plus active strategy and `conditional-inr` component identities. At most one
-background training task runs for the active workspace strategy. Real jobs are
-submitted first, then training may use the waiting interval; maximum generation lag
+background training task runs for the active workspace strategy. The explicit
+program freezes training data, starts real evaluation, then starts training on that
+prior evidence so the waiting interval can be used; maximum generation lag
 bounds stale models, with a package default of one generation. An asynchronous
 trainer receives an owned task snapshot and
 training bundle rather than reopening mutable task files. Switching strategies
@@ -266,8 +281,8 @@ output artifacts cold-train instead of being interpreted with the linear decoder
 - PCA/SVD state reuse is keyed by exact materialized content; source identity and
   transform labels cannot substitute for that digest or unnecessarily invalidate
   identical mathematics.
-- Explicit PCA/SVD fit/predict never scans session/history internally and never
-  publishes predicted rawData.
+- Explicit deterministic component fit/predict never scans session/history
+  internally, and predicted rawData is never published.
 - Training never needs to scan history per candidate and never depends on a segment
   being published before a current accepted row becomes useful.
 - Non-finite/corrupt history is diagnosed and bounded by policy.
@@ -303,6 +318,6 @@ output artifacts cold-train instead of being interpreted with the linear decoder
 Hierarchical and conditional checkpoints call the same atomic write/publication
 primitive but keep distinct component namespaces and semantic payloads. Their
 training success/failure events share a bounded writer, and their posterior
-adapters share seeded permutation-cycle member selection. Scheduler extraction was
-deliberately rejected because workspace freshness/deactivation/callback policy is
-not behavior-equivalent without a callback-heavy abstraction.
+adapters share seeded permutation-cycle member selection. Each component retains
+its own scheduler semantics behind the common typed lifecycle; no callback-heavy
+shared scheduler abstraction is introduced.

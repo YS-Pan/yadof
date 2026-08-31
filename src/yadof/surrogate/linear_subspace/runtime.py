@@ -203,6 +203,47 @@ def _training_template(data: SurrogateTrainingData) -> RawDataSchemaTemplate:
     return template
 
 
+def _training_subset(
+    data: SurrogateTrainingData,
+    row_ids: Sequence[str],
+) -> SurrogateTrainingData | None:
+    """Recreate an earlier owned training view from current explicit evidence."""
+
+    requested = tuple(str(value) for value in row_ids)
+    if not requested:
+        return None
+    lookup = {row_id: index for index, row_id in enumerate(data.row_ids)}
+    if any(row_id not in lookup for row_id in requested):
+        return None
+    indices = tuple(lookup[row_id] for row_id in requested)
+    return SurrogateTrainingData(
+        parameter_names=data.parameter_names,
+        normalized_variables=tuple(data.normalized_variables[index] for index in indices),
+        raw_data=tuple(data.raw_data[index] for index in indices),
+        row_ids=requested,
+        evidence_ids=tuple(data.evidence_ids[index] for index in indices),
+        statuses=tuple(data.statuses[index] for index in indices),
+        valid_mask=tuple(data.valid_mask[index] for index in indices),
+        lineage=tuple(data.lineage[index] for index in indices),
+        record_metadata=tuple(data.record_metadata[index] for index in indices),
+        transform_id=data.transform_id,
+    )
+
+
+def _matching_training_subset(
+    data: SurrogateTrainingData,
+    row_ids: Sequence[str],
+    content_digest: str,
+) -> SurrogateTrainingData | None:
+    try:
+        subset = _training_subset(data, row_ids)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if subset is None or subset.content_digest != str(content_digest):
+        return None
+    return subset
+
+
 def _recover_latest_state(
     config: LoadedConfig,
     training_data: SurrogateTrainingData,
@@ -237,9 +278,15 @@ def _recover_latest_state(
                 continue
             if payload["training_data_digest"] != training_data.content_digest:
                 continue
-            if payload["parameter_definition_signature"] != parameter_signature:
+            if not _json_equivalent(
+                payload["parameter_definition_signature"],
+                parameter_signature,
+            ):
                 continue
-            if payload["settings"] != settings.semantic_parameters():
+            if not _json_equivalent(
+                payload["settings"],
+                settings.semantic_parameters(),
+            ):
                 continue
             model = checkpoints.load_model(
                 root, payload, template=template
@@ -289,6 +336,96 @@ def _recover_latest_state(
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
             continue
     return None
+
+
+def _recover_latest_compatible_state(
+    config: LoadedConfig,
+    training_data: SurrogateTrainingData,
+    *,
+    settings: LinearSubspaceSettings,
+) -> LinearSubspaceState | None:
+    """Recover the newest state whose exact old rows remain in current evidence."""
+
+    root = config.workspace.surrogate_checkpoint_dir
+    strategy = strategy_signature_for_workspace(config.workspace)
+    namespace = (
+        root
+        / "runs"
+        / checkpoints.run_namespace_for_signature(strategy)
+        / "components"
+        / checkpoints.COMPONENT_NAMESPACE
+    )
+    if not namespace.is_dir():
+        return None
+    parameter_signature = job_template_api.get_parameter_definition_signature(
+        config.workspace
+    )
+    for path in sorted(namespace.glob("generation_*.json"), reverse=True):
+        try:
+            payload = checkpoints.validate_manifest(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
+            if payload["strategy_signature"] != strategy:
+                continue
+            if not _json_equivalent(
+                payload["parameter_definition_signature"],
+                parameter_signature,
+            ):
+                continue
+            if not _json_equivalent(
+                payload["settings"],
+                settings.semantic_parameters(),
+            ):
+                continue
+            subset = _matching_training_subset(
+                training_data,
+                tuple(str(value) for value in payload.get("training_row_ids", ())),
+                str(payload["training_data_digest"]),
+            )
+            if subset is None:
+                continue
+            state = _recover_latest_state(config, subset, settings=settings)
+            if state is not None:
+                return state
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+    return None
+
+
+def _latest_compatible_state(
+    config: LoadedConfig,
+    training_data: SurrogateTrainingData,
+    *,
+    settings: LinearSubspaceSettings,
+) -> LinearSubspaceState | None:
+    key = workspace_state_key(config, settings=settings)
+    with _LOCK:
+        state = _STATES.get(key)
+    if state is not None:
+        parameter_signature = job_template_api.get_parameter_definition_signature(
+            config.workspace
+        )
+        subset = _matching_training_subset(
+            training_data,
+            state.training_row_ids,
+            state.training_data_digest,
+        )
+        if (
+            parameter_signature != state.parameter_definition_signature
+            or subset is None
+            or state.model.template.signature != subset.schema_signature
+        ):
+            state = None
+    if state is None:
+        state = _recover_latest_compatible_state(
+            config,
+            training_data,
+            settings=settings,
+        )
+        if state is not None:
+            with _LOCK:
+                _STATES[key] = state
+    return state
 
 
 def _state_for_config(
@@ -363,6 +500,35 @@ def recover_state(
 ) -> LinearSubspaceState | None:
     config = load_config(workspace) if _config is None else _config
     return _state_for_config(config, training_data, settings=_settings)
+
+
+def recover_latest_compatible_state(
+    workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
+    *,
+    _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
+    _config: LoadedConfig | None = None,
+) -> LinearSubspaceState | None:
+    """Return a lagged state only when its exact training rows remain unchanged."""
+
+    config = load_config(workspace) if _config is None else _config
+    return _latest_compatible_state(config, training_data, settings=_settings)
+
+
+def latest_compatible_state_generation(
+    workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
+    *,
+    _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
+    _config: LoadedConfig | None = None,
+) -> int | None:
+    state = recover_latest_compatible_state(
+        workspace,
+        training_data,
+        _settings=_settings,
+        _config=_config,
+    )
+    return None if state is None else int(state.generation_index)
 
 
 def start_fit(
@@ -546,14 +712,32 @@ def _thaw_json(value: object) -> object:
     return value
 
 
+def _json_equivalent(left: object, right: object) -> bool:
+    def encoded(value: object) -> str:
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+
+    try:
+        return encoded(left) == encoded(right)
+    except (TypeError, ValueError):
+        return False
+
+
 __all__ = [
     "fit",
     "has_trained_state",
     "latest_state_generation",
+    "latest_compatible_state_generation",
     "predict",
     "predict_population",
     "predict_raw_data",
     "recover_state",
+    "recover_latest_compatible_state",
     "reset_workspace_state",
     "start_fit",
     "strategy_signature_for_workspace",

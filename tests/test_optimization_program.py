@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +12,7 @@ from yadof.cli import main as cli_main
 from yadof.config import load_config
 from yadof.optimize import run_generations
 from yadof.optimize.program import (
+    ProgramGenerationScope,
     execute_frozen_program,
     freeze_workspace_program,
     inspect_workspace_optimization,
@@ -41,6 +44,43 @@ def evaluate_rawdata(parameters, context):
         }
     }
 '''
+
+
+def test_retained_source_programs_have_no_legacy_loop_or_callback_edge() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    relative_paths = (
+        "src/yadof/_resources/templates/default/workspace/submit/optimization.py",
+        "examples/hfss-newchoke/submit/optimization.py",
+        "yadof-benchmark/baselines/chrono/trebuchet/workspace/submit/optimization.py",
+        "yadof-benchmark/baselines/ngspice/saw-ladder/workspace/submit/optimization.py",
+        "yadof-benchmark/baselines/test-com/synthetic-antenna/workspace/submit/optimization.py",
+    )
+    for relative_path in relative_paths:
+        source_path = repository / relative_path
+        source = source_path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(source_path))
+        function_names = {
+            node.name for node in tree.body if isinstance(node, ast.FunctionDef)
+        }
+        assignments = {
+            target.id
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        assert "YADOF_OPTIMIZATION_PROGRAM" in assignments
+        assert function_names == {"optimization_program"}
+        assert "build_optimization" not in source
+        assert "run_generation" not in source
+        assert "after_jobs_submitted" not in source
+
+    signature = inspect.signature(ProgramGenerationScope.prepare_evaluation)
+    assert "after_jobs_submitted" not in signature.parameters
+    surrogate_api = (
+        repository / "src/yadof/surrogate/api.py"
+    ).read_text(encoding="utf-8")
+    assert "training_data_from_session(" not in surrogate_api
 
 
 def _real_program(*, close_handle: bool = True, identity: str = "real-pilot") -> str:

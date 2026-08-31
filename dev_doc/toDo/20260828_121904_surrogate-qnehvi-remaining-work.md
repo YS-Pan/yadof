@@ -177,8 +177,11 @@ quality evidence。
 - 当前只有一个真实 acquisition。除非出现第二个获批准实现或真实调用方被 concrete type
   阻塞，不触发
   [Acquisition Capability Protocol TODO](20260828_091749_acquisition-capability-protocol.md)。
-- 新组件继续通过 workspace `submit/optimization.py` factory 显式组合；不建立全局算法
-  registry、字符串 selector 或自动 discovery。
+- 新组件继续通过 workspace `submit/optimization.py` 声明式 program 显式组合：
+  program 物化 Dataset/CostTable，调用 generation-local
+  `selector.select_generation(..., training_data=...)`，并自行拥有 evaluation/training/
+  commit 顺序。0.5.0 cutover 前的 legacy factory/strategy loop 仅是封闭 compatibility
+  adapter；不建立全局算法 registry、字符串 selector 或自动 discovery。
 
 ## 完成规则
 

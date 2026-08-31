@@ -4,7 +4,8 @@
 
 `yadof.optimize` owns workspace-explicit campaign/generation APIs, common
 result/context/history/real-evaluation contracts, explicit optimization-program
-lifecycle scopes, transitional strategy invocation, and compact metadata. An
+lifecycle scopes and generation-local selection operations, transitional strategy
+adapters, and compact metadata. An
 explicit workspace owns the complete control flow through the frozen
 `submit/optimization.py:optimization_program(context)` entry and its exact declared
 helpers. Package components expose thin lazy
@@ -29,18 +30,22 @@ they do not duplicate its recorder, evaluator, handle registry, or lock.
   `PredictedCostRows`, `CandidateSelection`, and opaque generation-local
   `SearchState` values plus prepare/search/bind/select/advance/compose/full-real
   operations. It imports the concrete pymoo adapter only inside operations.
-- `gpsaf/` owns only GPSAF assistance, alpha/beta/exploration phases, and its
-  retained private pymoo record adapter; it does not own a second search loop.
+- `gpsaf/` owns the generation-local typed GPSAF selector,
+  alpha/beta/exploration phases, explicit training start/finish helpers, and its
+  retained private pymoo record adapter; it does not own real evaluation or
+  generation commit.
 - `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
   strategies. Pymoo objects do not cross into the public strategy contract.
 - `qnehvi/` owns the public qNEHVI-family component implementation:
   `acquisition.py` provides controls and discrete greedy multi-start selection,
   `backend.py` provides the lightweight scoring boundary, and
   `_botorch_backend.py` owns the optional Torch/BoTorch numerics.
-- `posterior_assisted.py` owns only the independent generation orchestration around
-  injected search, posterior surrogate, and acquisition components. Its pool and
-  complete real fallback reuse the common primitives without modifying GPSAF.
-- The public `gpsaf()` and `qnehvi()` factories remain at `yadof.optimize`;
+- `posterior_assisted.py` owns the independent generation-local selector around
+  injected search, posterior surrogate, readiness, projector, and acquisition
+  components. Its pool and complete-real fallback reuse the common primitives;
+  the workspace program always owns evaluation and commit.
+- The public `gpsaf()`, `gpsaf_settings()`, and `qnehvi()` factories remain at
+  `yadof.optimize`;
   loading their same-named private implementation packages must not replace those
   callables with subpackage modules.
 
@@ -74,21 +79,27 @@ decision. A configured exploration quota keeps some candidates outside surrogate
 preference. Every selected row is validated by the real evaluator before becoming
 durable truth.
 
-For the migrated PCA/SVD component, GPSAF freezes an explicit
-`SurrogateTrainingData` from the generation's evidence/cost views before freshness,
-state, and prediction calls. Its after-submit hook materializes again at the hook's
-actual backend timing and starts an explicit fit handle. The PCA/SVD
-runtime-checkable provider returns the Stage 4 prediction DTO for an exact candidate
-pool, and the explicit binder retains only aligned current-cost means for survival.
-Conditional-INR and hierarchical-CAE use one narrow legacy prediction binder until
-their scheduled migration.
+For PCA/SVD, conditional-INR, and hierarchical-CAE, the workspace program freezes
+one explicit `SurrogateTrainingData` from the generation's evidence/cost views
+before state-age inspection, prediction, and training calls. Each runtime-checkable
+`DeterministicSurrogateComponent` returns a `SurrogatePrediction` for the exact
+candidate pool, and the explicit binder retains only aligned current-cost means for
+survival. `select_gpsaf_generation()` returns a generation-local selection DTO; it
+does not evaluate, start/wait for training, or commit. Its pure freshness check may
+reuse only a compatible state within the configured generation lag. After starting the real-evaluation handle, the
+program starts training on that prior immutable evidence and later waits/closes both
+operations before commit. Conditional-INR and hierarchical-CAE translate the same
+owned value into their retained named-data internals without changing checkpoint
+identity. No explicit program path has an `after_jobs_submitted` callback.
 
 The public joint rawData posterior protocol, typed exploitation readiness, and cost
-projector feed the explicitly composed posterior-assisted strategy. It requires
+projector feed `PosteriorAssistedStrategy.select_generation()`. The selector
+requires
 both runtime-checkable capabilities rather than probing with `hasattr`, binds the
 search/surrogate/posterior/readiness/acquisition identities plus all pool/draw/
 chunk/exploration controls and objective names, consumes only projected joint cost
-samples/valid masks, and sends every selection through the common real evaluator.
+samples/valid masks, and returns either a typed assisted selection or typed
+complete-real fallback for program-owned evaluation.
 Merely adding a posterior adapter or blocker must not change the existing GPSAF
 identity or conditional-INR checkpoint namespace.
 
@@ -121,7 +132,8 @@ load it.
 
 ## Posterior-assisted generation
 
-The strategy first checks the static typed performance/calibration/transferability
+The generation-local selector first checks the static typed
+performance/calibration/transferability
 identity. A blocker immediately selects a complete real-search population. An
 eligible path freezes the finite unique nondominated real baseline, applies the
 surrogate freshness gate, proposes one unique history-informed pymoo pool, obtains
@@ -133,17 +145,19 @@ real exploration only according to the sealed gate identity.
 One persistent schema-bearing sampler evaluates only eligible exploitation rows in
 candidate chunks. Projection discards rawData and the acquisition selects the
 configured remainder. Exploitation and exploration are combined once, verified
-unique, and passed to common `evaluate_population()`. Selection/projection/backend
+unique, and returned to the workspace program as a selection DTO.
+Selection/projection/backend
 exceptions and configured support fallback discard all derived choices and run the
 same shared full-real primitive used by real-only/GPSAF fallback. Configured support
-rejection propagates. Evaluation,
-finalization, and recording begin outside the fallback catch, so recorder failure
-still aborts the campaign.
+rejection propagates. The workspace program performs real evaluation,
+finalization, recording, and commit outside the selector and fallback catch, so
+recorder failure still aborts the campaign.
 
-Distributed evaluation may invoke the scheduler-specific after-submit hook while
-real jobs are running. Fast creates no scheduler submission and does not fabricate
-that event; the existing orchestration fallback invokes deferred work only after
-the fast evaluation call returns.
+Only the closed 0.4.x strategy adapter may still reach the scheduler-specific
+after-submit hook. Fast creates no scheduler submission and does not fabricate that
+event. Explicit programs instead start an evaluation handle, start training on the
+already frozen evidence, and explicitly wait/close both lifecycles; the 0.5.0
+cutover removes the callback-bearing adapter and backend field.
 
 ## Warm start and orchestration
 
@@ -203,6 +217,12 @@ failure remains campaign-fatal and never becomes an individual `inf`.
   a transitional legacy factory.
 - One explicit run uses one frozen program snapshot; generation task snapshots do
   not recopy or reinterpret declared program sources.
+- Explicit selectors consume owned evidence values and return selection DTOs; they
+  never scan a campaign session for training evidence or evaluate, train, record,
+  or commit a generation.
+- `ProgramGenerationScope.prepare_evaluation()` exposes no lifecycle callback.
+  Callback-bearing evaluation and strategy-owned generation methods are a closed
+  0.4.x compatibility surface scheduled for the 0.5.0 cutover.
 - A generation without one validated `commit()` never advances the program
   completion pointer; user exceptions and interrupts retain the previous complete
   boundary and cleanup the existing session owners before propagating.

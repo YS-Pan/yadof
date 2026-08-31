@@ -72,8 +72,9 @@ source of truth.
 
 ## Use derived candidate selection
 
-An explicitly composed surrogate-assisted strategy learns from recorded real
-evidence and proposes candidates. If it uses posterior samples, those samples keep
+An explicit workspace program composes a surrogate-assisted generation selector
+that learns from recorded real evidence and proposes candidates. If it uses
+posterior samples, those samples keep
 their declared cross-candidate/field/objective identity and are converted through
 the current cost policy. Missing readiness or derived-state failure follows the
 strategy's fail-closed boundary. Selected candidates still receive real evaluation

@@ -582,8 +582,6 @@ class ProgramGenerationScope:
     def prepare_evaluation(
         self,
         population: Sequence[Sequence[float]],
-        *,
-        after_jobs_submitted=None,
     ):
         self._require_entered()
         return evaluate_api.prepare_evaluation(
@@ -593,7 +591,6 @@ class ProgramGenerationScope:
             run_id=self.context.run_id,
             optimization_index=self.context.optimization_index,
             generation_index=self.context.generation_index,
-            after_jobs_submitted=after_jobs_submitted,
             _campaign_session=self.context.session,
             _task_snapshot=self.context.snapshot,
         )

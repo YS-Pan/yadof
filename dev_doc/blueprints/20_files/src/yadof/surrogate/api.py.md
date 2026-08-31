@@ -9,13 +9,14 @@
   projection helper without importing an optional backend.
 
 ## Functionalities
-- Construct `conditional_inr()` with validation, semantic identity, scheduler gate,
-  train-after-submit, readiness, and rawData prediction methods required by GPSAF.
+- Construct `conditional_inr()` with validation, semantic identity, explicit
+  training-data materialization, scheduler gate/start/finish, readiness, and typed
+  rawData prediction methods required by generation-local GPSAF.
   All mathematical/training/backend values are explicit keyword-only factory
   arguments stored in a private frozen settings snapshot.
 - Construct `conditional_inr_posterior()` as a separate semantic wrapper that
-  delegates legacy lifecycle/prediction calls and lazily creates a persistent
-  finite-member rawData sampler.
+  delegates the typed lifecycle/prediction calls and lazily creates a persistent
+  finite-member rawData sampler from caller-owned training evidence.
 - Construct `pca_svd()` from one authoritative keyword-only settings path. Its
   low-level codec/oracle methods are diagnostic-only. Its explicit
   `training_data()`, `fit()`/`start_fit()`, `recover()`, and typed `predict()` paths
@@ -33,24 +34,27 @@
   prediction, and an optional architecture-v2 all-axis coordinate readout. A selected
   frequency filter enables the regime head and default robust cap; a regime head without
   that mode is rejected. `predict_field_at_coordinates()` is viewer/off-grid-only,
-  returns typed member/mean values, and leaves full-grid output authoritative.
+  returns typed member/mean values, and leaves full-grid output authoritative. Its
+  deterministic selection lifecycle consumes the same caller-owned
+  `SurrogateTrainingData` as PCA/SVD and conditional-INR.
 - Lazily forward `train()`, `predict_population()`, `has_trained_state()`, and
   `latest_state_generation()` to `conditional_inr/runtime.py`.
 - Lazily forward scheduler calls, including `deactivate_workspace()`, to
   `conditional_inr/scheduler.py`.
 - Keep `RawDataPosteriorSurrogate`, persistent sampler/posterior/draw types, honest
   support diagnostics, and `project_rawdata_sampler()` on the explicit public
-  surface. A future consumer validates the runtime-checkable protocol rather than
-  scattering implicit attribute probes.
+  surface. Sampler creation may receive explicit training data for schema identity;
+  consumers validate runtime-checkable protocols rather than scattering implicit
+  attribute probes.
 - Re-export immutable spread/applicability calibration records, the self-verifying
   artifact, conservative fit helpers, and the coherent calibrated-sampler wrapper.
   These remain NumPy-only and do not make hierarchical CAE a production default.
 
 ## I/O Format
-- PCA/SVD public prediction and selection-provider methods return
+- PCA/SVD, conditional-INR, and hierarchical-CAE selection-provider methods return
   `SurrogatePrediction`; the optimizer binder, not the component, owns conversion to
-  candidate-aligned `PredictedCostRows`. The retained `predict_population()` tuple
-  remains only for legacy callers during staged migration.
+  candidate-aligned `PredictedCostRows`. Retained `predict_population()` tuples
+  remain only for closed legacy callers until cutover.
 - Posterior prediction returns complete named rawData function draws; streaming
   projection returns `[draw,candidate,objective]` costs and `[draw,candidate]`
   validity without recording predicted evidence.
@@ -60,6 +64,9 @@
 
 ## Non-Obvious Techniques
 - GPSAF calls the injected component only; it does not import concrete surrogate runtime.
+- Explicit deterministic selection asks each component only for its latest trained
+  generation and compatible prediction. Scheduler start/wait is reached solely
+  through the program-owned training helpers.
 - The component semantic version changes whenever architecture/scaler semantics
   would make retained weights unsafe to reuse.
 - Factory defaults are validated by the same path as explicit values. Nested task

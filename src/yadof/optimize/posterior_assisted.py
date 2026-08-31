@@ -23,6 +23,11 @@ from ..surrogate.posterior import (
     project_rawdata_sampler,
     require_rawdata_posterior_surrogate,
 )
+from ..surrogate.training import (
+    DeterministicSurrogateComponent,
+    SurrogateTrainingData,
+    assess_surrogate_selection_freshness,
+)
 from .primitives import (
     CandidatePool,
     full_real_search,
@@ -106,8 +111,12 @@ class _Baseline:
 
 
 @dataclass(frozen=True, slots=True)
-class _SelectedGeneration:
+class PosteriorGenerationSelection:
+    """One typed posterior-assisted or full-real selection awaiting evaluation."""
+
     population: Population
+    source: str
+    surrogate_used: bool
     diagnostics: Mapping[str, object]
 
 
@@ -235,6 +244,47 @@ class PosteriorAssistedStrategy:
         }
 
     def run_generation(self, context: GenerationContext) -> OptimizationResult:
+        # Closed pre-cutover adapter. Explicit workspace programs call
+        # select_generation() with caller-materialized evidence and own evaluation.
+        training_data = None
+        if isinstance(self.surrogate, DeterministicSurrogateComponent):
+            training_data = self.surrogate.training_data(
+                context.session.evidence_dataset(),
+                context.session.cost_table(context.snapshot),
+            )
+        selected = self.select_generation(context, training_data=training_data)
+        costs = evaluate_population(
+            context,
+            selected.population,
+            after_jobs_submitted=lambda: _notify_surrogate_after_submission(
+                self.surrogate, context, training_data
+            ),
+        )
+        return OptimizationResult(
+            generation_index=context.generation_index,
+            population=selected.population,
+            costs=costs,
+            history_count=len(context.history),
+            source=selected.source,
+            surrogate_used=selected.surrogate_used,
+            diagnostics=selected.diagnostics,
+        )
+
+    def select_generation(
+        self,
+        context: GenerationContext,
+        *,
+        training_data: SurrogateTrainingData | None,
+    ) -> PosteriorGenerationSelection:
+        """Select candidates without owning evaluation, training, or commit."""
+
+        if isinstance(self.surrogate, DeterministicSurrogateComponent) and not isinstance(
+            training_data, SurrogateTrainingData
+        ):
+            raise TypeError(
+                "posterior selection requires explicit SurrogateTrainingData"
+            )
+        self.validate(context.config, context.problem)
         diagnostics = _search_diagnostics(self, context)
         static_identity = dict(
             require_posterior_exploitation_surrogate(
@@ -243,7 +293,7 @@ class PosteriorAssistedStrategy:
         )
         diagnostics["exploitation_capability"] = static_identity
         if not _static_exploitation_ready(static_identity):
-            return self._real_fallback(
+            return self._real_fallback_selection(
                 context,
                 diagnostics,
                 reason="typed-exploitation-capability-blocked",
@@ -261,17 +311,21 @@ class PosteriorAssistedStrategy:
         )
         diagnostics["baseline"] = dict(baseline.diagnostics)
         if not baseline.population:
-            return self._real_fallback(
+            return self._real_fallback_selection(
                 context,
                 diagnostics,
                 reason="fixed-real-baseline-unavailable",
                 detail="no unique finite in-contract real Pareto baseline is available",
             )
 
-        freshness = _ensure_surrogate_fresh_enough(self.surrogate, context)
+        freshness = _surrogate_selection_freshness(
+            self.surrogate,
+            context,
+            training_data,
+        )
         diagnostics.update(freshness)
-        if not _surrogate_state_ready(self.surrogate, context):
-            return self._real_fallback(
+        if not _surrogate_state_ready(self.surrogate, context, training_data):
+            return self._real_fallback_selection(
                 context,
                 diagnostics,
                 reason="surrogate-state-unavailable",
@@ -279,7 +333,11 @@ class PosteriorAssistedStrategy:
             )
 
         try:
-            selected = self._select_generation(context, baseline)
+            selected = self._select_generation(
+                context,
+                baseline,
+                training_data=training_data,
+            )
         except QNEHVISupportRejected:
             raise
         except QNEHVIConfigurationError:
@@ -290,7 +348,7 @@ class PosteriorAssistedStrategy:
                 if isinstance(exc, QNEHVIFallback)
                 else "posterior-selection-failure"
             )
-            return self._real_fallback(
+            return self._real_fallback_selection(
                 context,
                 diagnostics,
                 reason=reason,
@@ -298,18 +356,8 @@ class PosteriorAssistedStrategy:
             )
 
         diagnostics.update(dict(selected.diagnostics))
-        costs = evaluate_population(
-            context,
-            selected.population,
-            after_jobs_submitted=lambda: _notify_surrogate_after_submission(
-                self.surrogate, context
-            ),
-        )
-        return OptimizationResult(
-            generation_index=context.generation_index,
+        return PosteriorGenerationSelection(
             population=selected.population,
-            costs=costs,
-            history_count=len(context.history),
             source="posterior_assisted_qnehvi",
             surrogate_used=True,
             diagnostics=diagnostics,
@@ -319,7 +367,9 @@ class PosteriorAssistedStrategy:
         self,
         context: GenerationContext,
         baseline: _Baseline,
-    ) -> _SelectedGeneration:
+        *,
+        training_data: SurrogateTrainingData | None,
+    ) -> PosteriorGenerationSelection:
         candidate_pool = _candidate_pool(self, context)
         candidates = candidate_pool.candidates
         if len(candidates) != self.candidate_pool_size:
@@ -365,11 +415,24 @@ class PosteriorAssistedStrategy:
         exploitation_candidates = tuple(candidates[index] for index in eligible)
 
         posterior_surrogate = require_rawdata_posterior_surrogate(self.surrogate)
-        sampler = posterior_surrogate.make_rawdata_sampler(
-            context,
-            draw_count=self.posterior_draws,
-            seed=context.random_seed + context.generation_index * 1009 + 73013,
+        sampler_seed = (
+            context.random_seed + context.generation_index * 1009 + 73013
         )
+        if training_data is None:
+            # Transitional external posterior fakes/components retain the v1 call.
+            # Explicit deterministic components always take the branch below.
+            sampler = posterior_surrogate.make_rawdata_sampler(
+                context,
+                draw_count=self.posterior_draws,
+                seed=sampler_seed,
+            )
+        else:
+            sampler = posterior_surrogate.make_rawdata_sampler(
+                context,
+                draw_count=self.posterior_draws,
+                seed=sampler_seed,
+                training_data=training_data,
+            )
         if not isinstance(sampler, RawDataPosteriorSampler):
             raise TypeError(
                 "make_rawdata_sampler must return a schema-bearing "
@@ -411,8 +474,10 @@ class PosteriorAssistedStrategy:
             raise RuntimeError(
                 "posterior-assisted selection did not produce one unique real population"
             )
-        return _SelectedGeneration(
+        return PosteriorGenerationSelection(
             population=population,
+            source="posterior_assisted_qnehvi",
+            surrogate_used=True,
             diagnostics={
                 **dict(candidate_pool.state.diagnostics),
                 **dict(candidate_pool.diagnostics),
@@ -431,14 +496,14 @@ class PosteriorAssistedStrategy:
             },
         )
 
-    def _real_fallback(
+    def _real_fallback_selection(
         self,
         context: GenerationContext,
         diagnostics: dict[str, object],
         *,
         reason: str,
         detail: str,
-    ) -> OptimizationResult:
+    ) -> PosteriorGenerationSelection:
         selected = full_real_search(
             context,
             self.search,
@@ -463,18 +528,8 @@ class PosteriorAssistedStrategy:
                 "evaluation_handoff": "common-real-evaluate-population",
             }
         )
-        costs = evaluate_population(
-            context,
-            population,
-            after_jobs_submitted=lambda: _notify_surrogate_after_submission(
-                self.surrogate, context
-            ),
-        )
-        return OptimizationResult(
-            generation_index=context.generation_index,
+        return PosteriorGenerationSelection(
             population=population,
-            costs=costs,
-            history_count=len(context.history),
             source=selected.source,
             surrogate_used=False,
             diagnostics=diagnostics,
@@ -788,9 +843,26 @@ def _exploration_count(population_size: int, fraction: float) -> int:
     return min(size - 1, max(1, int(math.ceil(size * float(fraction)))))
 
 
-def _ensure_surrogate_fresh_enough(
-    surrogate: object, context: GenerationContext
+def _surrogate_selection_freshness(
+    surrogate: object,
+    context: GenerationContext,
+    training_data: SurrogateTrainingData | None,
 ) -> dict[str, object]:
+    if isinstance(surrogate, DeterministicSurrogateComponent):
+        if not isinstance(training_data, SurrogateTrainingData):
+            return {
+                "surrogate_training_gate": "failed",
+                "surrogate_training_gate_error": (
+                    "posterior freshness requires explicit SurrogateTrainingData"
+                ),
+            }
+        return dict(
+            assess_surrogate_selection_freshness(
+                surrogate,
+                context,
+                training_data,
+            ).diagnostics()
+        )
     try:
         function = getattr(surrogate, "ensure_fresh_enough", None)
         if not callable(function):
@@ -813,8 +885,16 @@ def _ensure_surrogate_fresh_enough(
     }
 
 
-def _surrogate_state_ready(surrogate: object, context: GenerationContext) -> bool:
+def _surrogate_state_ready(
+    surrogate: object,
+    context: GenerationContext,
+    training_data: SurrogateTrainingData | None,
+) -> bool:
     try:
+        if isinstance(surrogate, DeterministicSurrogateComponent):
+            if not isinstance(training_data, SurrogateTrainingData):
+                return False
+            return bool(surrogate.has_trained_state(context, training_data))
         function = getattr(surrogate, "has_trained_state", None)
         return True if not callable(function) else bool(function(context))
     except Exception:
@@ -822,13 +902,22 @@ def _surrogate_state_ready(surrogate: object, context: GenerationContext) -> boo
 
 
 def _notify_surrogate_after_submission(
-    surrogate: object, context: GenerationContext
+    surrogate: object,
+    context: GenerationContext,
+    training_data: SurrogateTrainingData | None,
 ) -> None:
     try:
-        function = getattr(surrogate, "start_training", None)
-        if not callable(function):
-            return
-        status = function(context)
+        if isinstance(surrogate, DeterministicSurrogateComponent):
+            if not isinstance(training_data, SurrogateTrainingData):
+                raise TypeError(
+                    "posterior training requires explicit SurrogateTrainingData"
+                )
+            status = surrogate.start_training(context, training_data)
+        else:
+            function = getattr(surrogate, "start_training", None)
+            if not callable(function):
+                return
+            status = function(context)
         if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {
             "1",
             "true",
@@ -865,6 +954,7 @@ def _bounded_error(exc: BaseException) -> str:
 
 __all__ = [
     "CalibratedApplicabilityGate",
+    "PosteriorGenerationSelection",
     "PosteriorAssistedStrategy",
     "calibrated_applicability_gate",
     "posterior_assisted",

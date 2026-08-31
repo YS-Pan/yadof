@@ -9,8 +9,10 @@
 
 - Resolve the active trained state and require its strategy namespace to match the
   generation context.
-- Recover exact direct `.npz` basenames from completed named campaign evidence and
-  freeze them with the state's full-grid rawData templates.
+- Recover exact direct `.npz` basenames from caller-owned
+  `SurrogateTrainingData` and freeze them with the state's full-grid rawData
+  templates. A session-evidence fallback remains only for the closed legacy
+  generation runner until cutover.
 - Select one ensemble member per draw through a deterministic seeded permutation-
   cycle policy and report repeated source identities honestly.
 - Predict one complete member/candidate at a time through runtime's controlled
@@ -19,7 +21,8 @@
 
 ## I/O and failure contract
 
-- `make_rawdata_sampler(context, draw_count, seed)` returns a persistent sampler.
+- `make_rawdata_sampler(context, draw_count, seed, training_data=...)` returns a
+  persistent sampler. Explicit selectors require the owned training value.
 - `predict(population)` returns ordered `RawDataFunctionDraw` objects aligned with
   the fixed draw IDs. Repeated candidates reuse the same result inside a call;
   permutation or external candidate chunking changes only ordering.
@@ -37,3 +40,5 @@
   observation-noise invention.
 - Importing the public parent remains Torch-lazy; this private module loads only
   when the explicit posterior factory creates a sampler.
+- The explicit path never scans `context.session`; the legacy fallback is a closed
+  Stage 8 deletion target.

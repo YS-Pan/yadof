@@ -8,6 +8,13 @@ history implicitly. Sync and async fit share `TrainingHandle`, with cooperative
 cancellation before publication and atomic manifest commit as the race boundary.
 Recovery verifies training content, settings, strategy, parameter normalization,
 rawData schema, and runtime versions while retaining separate bounded provenance.
+Exact low-level recovery still requires the supplied value's complete content.
+Generation selection may additionally recover the newest lagged state only after
+reconstructing its ordered checkpoint row IDs from the current explicit value and
+recomputing the same old content digest. Missing/changed rows, schema or parameter
+drift, and non-canonical identity fail closed. Tuple/list differences introduced by
+JSON storage compare through canonical JSON identity. This lookup never fits or
+writes a checkpoint.
 
 State-only prediction reconstructs complete structured rawData, passes it through
 the caller's exact generation snapshot, and returns `SurrogatePrediction` with

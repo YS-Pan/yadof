@@ -41,6 +41,7 @@ from yadof.surrogate.exploitation import (
     require_posterior_exploitation_surrogate,
 )
 from yadof.surrogate.posterior import RawDataPosteriorDiagnostics, SUPPORT_FINITE
+from yadof.surrogate.training import SurrogateTrainingData
 
 
 STATE_SHA = "1" * 64
@@ -498,6 +499,29 @@ def test_current_posterior_components_are_typed_and_fail_closed() -> None:
         assert readiness.ready is False
         assert readiness.smooth_probabilities is None
         assert readiness.failure_reasons
+
+
+def test_explicit_posterior_selection_keeps_current_component_blocked_without_session_reads() -> None:
+    strategy = _strategy(conditional_inr_posterior())
+    context = _context()
+
+    class ForbiddenSession:
+        def __getattr__(self, name):
+            raise AssertionError(f"hidden posterior session read attempted: {name}")
+
+    context.session = ForbiddenSession()
+    selected = strategy.select_generation(
+        context,
+        training_data=SurrogateTrainingData(("left", "right"), (), ()),
+    )
+
+    assert selected.surrogate_used is False
+    assert selected.diagnostics["fallback"] is True
+    assert (
+        selected.diagnostics["fallback_reason"]
+        == "typed-exploitation-capability-blocked"
+    )
+    assert selected.diagnostics["real_population_count"] == context.population_size
 
 
 def test_member_variance_is_not_a_typed_exploitation_capability() -> None:

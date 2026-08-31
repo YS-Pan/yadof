@@ -7,13 +7,12 @@
 ## Functionalities
 - Compose alpha/beta/exploration as explicit search pool -> typed predicted cost ->
   select/advance -> unique real population operations.
-- Materialize the explicit Stage 2 evidence/cost join only for components that
-  expose `training_data()`, then pass it through freshness, readiness, prediction,
-  and after-submit fit calls without changing legacy component signatures.
-- Dispatch deterministic PCA/SVD through the runtime-checkable selection-provider
-  protocol and bind its Stage 4 DTO to exact pool IDs. Retained components use one
-  narrow legacy tuple binder; neither path preserves rawData/member spread in
-  `PredictedCostRows`.
+- Consume caller-owned explicit training data through freshness, readiness, and
+  prediction for every runtime-checkable deterministic component.
+- Dispatch PCA/SVD, conditional-INR, and hierarchical-CAE through the typed
+  prediction protocol and bind each Stage 4 DTO to exact pool IDs. The closed
+  0.4.x runner alone retains the legacy tuple/materializer adapter; neither path
+  preserves rawData/member spread in `PredictedCostRows`.
 - Apply GPSAF exploration, exploitation, and replacement rules.
 - Return normalized populations through the common strategy contracts.
 
@@ -32,8 +31,9 @@
 - Alpha calls continue one search branch; beta explicitly forks and advances a
   simulated branch; exploration shares archive/RNG bookkeeping without mutating the
   alpha algorithm branch.
-- The after-submit callback materializes at its actual backend timing rather than
-  retaining the pre-selection view; predicted rawData never enters the session.
+- Explicit phases never materialize session evidence or own an after-submit
+  callback; predicted rawData never enters the session. The legacy materializer is
+  a closed Stage 8 deletion target.
 
 ## Mutability Profile
 - GPSAF phase policy may evolve, but real evaluation and durable history must

@@ -9,6 +9,9 @@
 
 - Publish runtime-checkable posterior-surrogate, schema-bearing persistent-sampler,
   and candidate-chunk posterior protocols plus one function-draw container.
+- Allow sampler creation to receive caller-owned explicit training data; concrete
+  adapters may use it for schema identity but the protocol never materializes or
+  scans campaign evidence itself.
 - Validate JSON-safe diagnostics: kind, requested/actual draws, seed, stable
   draw/source IDs, schema/state/strategy signatures, approximation limitations,
   observation-noise status, exact selectors, candidate/failure counts, nominal

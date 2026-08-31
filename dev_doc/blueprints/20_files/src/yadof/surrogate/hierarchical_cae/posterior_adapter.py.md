@@ -9,6 +9,9 @@
 
 - Fix seeded permutation-cycle member/source IDs through the shared finite-member
   primitive when the sampler is created.
+- Accept the common explicit training-data argument for protocol parity. The
+  recovered CAE state's frozen schema is already authoritative, so this adapter
+  does not reinterpret or reopen that evidence.
 - Evaluate each selected member across complete candidate batches and reconstruct
   every frozen named field before returning protocol draw objects.
 - Report nominal/effective finite support, component/state/schema identities,

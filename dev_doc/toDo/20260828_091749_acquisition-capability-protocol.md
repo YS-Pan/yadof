@@ -39,8 +39,9 @@
    `DiscreteQNEHVIAcquisition` 具体类。
 2. 让 qNEHVI 和第二个实现各自拥有专用 settings、校验、backend 和 semantic identity；
    通用协议只表达调用方实际共享的能力。
-3. 保留 workspace 在 `submit/optimization.py:build_optimization()` 中的显式组合、generation
-   snapshot、真实 evaluator、完整 real-search fallback 和 recorder 边界。
+3. 保留 workspace 在 `submit/optimization.py:optimization_program(context)` 中的声明式
+   组合、generation scope/task snapshot、真实 evaluator、完整 real-search fallback 和
+   recorder 边界；当前 legacy `build_optimization()` 仅是 0.5.0 cutover 前 adapter。
 4. 保持 protocol 与配置实现无关：不得要求 Pydantic model、dataclass、全局配置对象或
    backend 类型穿过能力边界。
 

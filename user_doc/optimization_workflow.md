@@ -495,8 +495,9 @@ finite task cost of `1.0` as valid, rejects an incomplete Monte Carlo draw as a
 whole, and retains only compact acquisition diagnostics. The public acquisition
 selects a discrete batch with explicit greedy restarts; it still does not own
 candidate generation, pending state, outcome constraints, evaluation, or recording.
-Those generation responsibilities belong only to `posterior_assisted()`. Do not
-return a qNEHVI backend scorer directly from `build_optimization()`.
+Those generation responsibilities belong to the workspace program around
+`posterior_assisted().select_generation()`. Do not expose a qNEHVI backend scorer
+as the program's selection operation.
 
 Every objective in that tuple must normally be a dimensionless minimization cost
 in `[0, 1]`, independently normalized from its physical metric: `0` is best and `1`
@@ -595,38 +596,90 @@ and advances `.yadof/optimization/program-completion.json`. A later command with
 the same semantic signature must start at exactly the next incomplete generation;
 there is no mid-generation Python-stack resume.
 
-The packaged 0.4.2 starter and advanced components not yet migrated continue to
-use the transitional side-effect-free `build_optimization()` factory. The starter
-composes GPSAF, objective-count dispatch, pymoo GA or NSGA-III, and conditional
-INR:
+The packaged starter now uses that explicit program contract for GPSAF,
+objective-count dispatch, pymoo GA or NSGA-III, and conditional INR. Its important
+ordering is visible in ordinary Python:
 
 ```python
-from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3
+from yadof.evaluate_manager import start_evaluation
+from yadof.optimize import (
+    by_objective_count,
+    finish_explicit_surrogate_training,
+    gpsaf_settings,
+    pymoo_ga,
+    pymoo_nsga3,
+    select_gpsaf_generation,
+    start_explicit_surrogate_training,
+)
 from yadof.surrogate import conditional_inr
 
 
-def build_optimization():
-    return gpsaf(
-        search=by_objective_count(
-            single=pymoo_ga(),
-            multi=pymoo_nsga3(),
-        ),
-        surrogate=conditional_inr(),
-    )
+def optimization_program(context):
+    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())
+    surrogate = conditional_inr()
+    settings = gpsaf_settings(alpha=3, beta=3, gamma=0.5)
+    with context.run_scope() as run:
+        for generation_index in run.generations():
+            with run.generation(generation_index) as step:
+                training = surrogate.training_data(
+                    step.evidence_dataset(), step.cost_table()
+                )
+                selected = select_gpsaf_generation(
+                    step.context,
+                    search=search,
+                    surrogate=surrogate,
+                    settings=settings,
+                    training_data=training,
+                )
+                evaluation_handle = start_evaluation(
+                    step.prepare_evaluation(selected.population)
+                )
+                diagnostics = dict(selected.diagnostics)
+                diagnostics.update(start_explicit_surrogate_training(
+                    surrogate, step.context, training
+                ))
+                try:
+                    evaluation = evaluation_handle.wait()
+                finally:
+                    try:
+                        evaluation_handle.close()
+                    finally:
+                        diagnostics.update(finish_explicit_surrogate_training(
+                            surrogate, step.context
+                        ))
+                step.commit(step.result(
+                    population=selected.population,
+                    costs=evaluation.costs,
+                    source=selected.source,
+                    surrogate_used=selected.surrogate_used,
+                    diagnostics=diagnostics,
+                ))
 ```
 
-For the transitional factory path, the calls above are the only workspace entry
-for component settings. Explicit programs construct the same public components in
-their entry/helper functions and include the effective semantic controls in
-`identity`.
+Add the literal `YADOF_OPTIMIZATION_PROGRAM` declaration shown earlier above this
+entry and include the effective GPSAF/surrogate controls in `identity`. Training
+data is an immutable Dataset/CostTable-derived value captured before the new real
+evaluation starts. Selection performs only a read-only age check and may use the
+newest compatible checkpoint within `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`; it never
+starts or waits for training. For PCA/SVD, every checkpoint row is reconstructed
+from the current explicit evidence and rehashed before lagged reuse. The evaluation
+handle starts first; training on the newly captured prior evidence is then launched
+explicitly for a later generation. The program waits and closes both operations
+before commit. This normally gives one-generation-lag selection after warmup. There
+is no program-level `after_jobs_submitted` callback, so fast, local, and distributed
+modes share this same truthful ordering.
+
+Transitional external 0.4.x workspaces may still use the side-effect-free
+`build_optimization()` adapter until the 0.5.0 cutover. In either form, workspace
+calls are the only entry for component settings.
 For example, a tuned source may use
 `pymoo_ga(crossover_probability=0.9, mutation_eta=15.0)`,
-`gpsaf(..., alpha=3, beta=3, exploration_fraction=0.15)`, and
+`gpsaf_settings(alpha=3, beta=3, exploration_fraction=0.15)`, and
 `conditional_inr(device="cuda", epochs=64, bootstrap_members=True)`. These
-keyword-only values are validated when the generation snapshot loads. A legacy
-factory edit affects the next generation. An explicit program/helper edit affects
-only the next `yadof run` command after a complete boundary; it never changes the
-program already frozen for the current command. Removed uppercase algorithm/model
+keyword-only values are validated when the program calls the component operation.
+A legacy factory edit affects the next generation. An explicit program/helper edit
+affects only the next `yadof run` command after a complete boundary; it never
+changes the program already frozen for the current command. Removed uppercase algorithm/model
 names in `config.py` fail as unknown settings instead of being translated or
 ignored.
 
@@ -637,23 +690,19 @@ coefficients with ridge regression, reconstruct complete named rawData, and let
 the current `calc_cost.py` derive candidate costs:
 
 ```python
-from yadof.optimize import gpsaf, pymoo_nsga3
 from yadof.surrogate import pca_svd
 
-
-def build_optimization():
-    return gpsaf(
-        search=pymoo_nsga3(),
-        surrogate=pca_svd(
-            decomposition="pca",
-            rank=16,
-            ridge_alpha=1e-6,
-            device="cpu",
-        ),
-    )
+surrogate = pca_svd(
+    decomposition="pca",
+    rank=16,
+    ridge_alpha=1e-6,
+    device="cpu",
+)
 ```
 
-This is opt-in diagnostic machinery, not the starter default or a production
+Use this component in the explicit GPSAF program above; that program still owns
+Dataset/CostTable materialization, evaluation, fit scheduling, and commit. This is
+opt-in diagnostic machinery, not the starter default or a production
 recommendation. It is deterministic and reports zero-width cost intervals; it
 does not expose a posterior, applicability probability, or qNEHVI readiness. The
 same component offers `fit_codec()` plus `evaluate_oracle()` for offline
@@ -665,24 +714,19 @@ GPSAF uses the same explicit materialization/state path internally and unwraps t
 typed prediction only at its compatibility boundary; it does not restore an
 implicit PCA/SVD history scan.
 
-For a real multi-objective NSGA-III-only campaign with no GPSAF or surrogate:
-
-```python
-from yadof.optimize import pymoo_nsga3, real_search
-
-
-def build_optimization():
-    return real_search(search=pymoo_nsga3())
-```
+For a real multi-objective NSGA-III-only campaign with no GPSAF or surrogate, use
+the first explicit `full_real_search()` program in this section with
+`pymoo_nsga3()`. It directly starts the evaluation handle and commits the real
+result; no complete strategy object is needed.
 
 The real-only strategy, GPSAF, and posterior full-real fallback now share the same
 explicit search primitives. Advanced program code can import `prepare_search()`,
 `search_candidates()`, `bind_surrogate_prediction()`, `select_candidates()`,
 `advance_search()`, `compose_real_population()`, and `full_real_search()` together
 with the frozen `SearchCandidate`, `CandidatePool`, `PredictedCostRows`,
-`CandidateSelection`, and opaque `SearchState` values. Existing strategy factories
-already use this path; ordinary workspaces do not need to call the primitives
-directly.
+`CandidateSelection`, and opaque `SearchState` values. Transitional strategy
+adapters also use this path, while new workspaces call the generation-local
+primitives or retained selection operations directly.
 
 Each operation leaves its input state unchanged and returns a next state, so a
 program may retain or deterministically fork a same-generation branch. The state is
@@ -710,30 +754,42 @@ source:
 from yadof.optimize import posterior_assisted, pymoo_nsga3, qnehvi
 from yadof.surrogate import conditional_inr_posterior
 
+surrogate = conditional_inr_posterior()
+selector = posterior_assisted(
+    search=pymoo_nsga3(),
+    surrogate=surrogate,
+    acquisition=qnehvi(
+        batch_size=8,
+        greedy_restarts=4,
+        minimum_unique_support=3,
+        low_support_policy="fallback",
+    ),
+    candidate_pool_size=256,
+    posterior_draws=3,
+    candidate_chunk_size=16,
+    exploration_fraction=0.2,
+)
 
-def build_optimization():
-    return posterior_assisted(
-        search=pymoo_nsga3(),
-        surrogate=conditional_inr_posterior(),
-        acquisition=qnehvi(
-            batch_size=8,
-            greedy_restarts=4,
-            minimum_unique_support=3,
-            low_support_policy="fallback",
-        ),
-        candidate_pool_size=256,
-        posterior_draws=3,
-        candidate_chunk_size=16,
-        exploration_fraction=0.2,
-    )
+# Inside run.generation(...):
+training = surrogate.training_data(step.evidence_dataset(), step.cost_table())
+selected = selector.select_generation(
+    step.context,
+    training_data=training,
+)
 ```
+
+The surrounding program uses the same explicit evaluation-handle, training, and
+commit sequence shown for GPSAF. `select_generation()` is only a typed
+generation-local selection operation; it does not evaluate, train, record, loop,
+or commit.
 
 This exact example is intentionally real-search-only today: the conditional-INR
 posterior reports `experimental-performance-not-accepted`, `uncalibrated`, and
 `transferable=False`, so the typed gate prevents acquisition use. The fallback
 still proposes a complete pymoo population, sends every point through common real
-evaluation/finalization/recording, and schedules component training only after jobs
-are submitted. Backend/projection failures have the same full-real fallback;
+evaluation/finalization/recording, and schedules component training only after the
+evaluation handle has started, using the immutable evidence selected before that
+evaluation. Backend/projection failures have the same full-real fallback;
 `low_support_policy="reject"` is instead an explicit campaign-stopping gate.
 
 The qNEHVI batch must equal population size minus
@@ -790,10 +846,14 @@ strategy/component namespace. Recorded real evidence and inactive checkpoints st
 on disk. Returning to a compatible old strategy may recover its state; switching
 strategies never requires `history clear`.
 
-Conditional INR starts training from completed real evidence after evaluation is
-submitted. The package default permits the model used for selection to lag by at
-most one generation; when necessary, selection waits for pending training rather
-than using an older model. Set `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` to a
+The conditional-INR program materializes completed real evidence before starting
+the next evaluation, starts that evaluation handle, then explicitly launches
+training from the immutable prior-evidence value. This order is identical for
+fast, local, and distributed evaluation and does not pretend that a backend
+submission event exists in every mode. The package default permits the model used
+for selection to lag by at most one generation; when necessary, selection waits
+for pending training rather than using an older model. Set
+`OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` to a
 non-negative integer only when the task's evaluation/training timing justifies a
 different throughput-versus-freshness tradeoff. Query minibatches rotate through
 one seeded ordering per rawData field so scarce coordinates are covered before

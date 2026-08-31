@@ -4,11 +4,14 @@ from . import linear_subspace as _linear_subspace_package
 from .linear_subspace import LinearSubspaceState
 from .training import (
     DeterministicPredictionProvider,
+    DeterministicSurrogateComponent,
+    SurrogateSelectionFreshness,
     SurrogatePrediction,
     SurrogateTrainingData,
     TrainingCancelledError,
     TrainingHandle,
     TrainingHandleState,
+    assess_surrogate_selection_freshness,
     materialize_training_data,
 )
 from .api import (
@@ -114,6 +117,7 @@ __all__ = [
     "DiagnosticCondition",
     "DiagnosticRegimeRule",
     "DeterministicPredictionProvider",
+    "DeterministicSurrogateComponent",
     "FieldSpreadCalibration",
     "FrequencyFilter",
     "FrequencyFilterRule",
@@ -133,6 +137,7 @@ __all__ = [
     "SUPPORT_CONTINUOUS_OR_UNKNOWN",
     "SUPPORT_FINITE",
     "SurrogatePrediction",
+    "SurrogateSelectionFreshness",
     "SurrogateTrainingData",
     "TrainingCancelledError",
     "TrainingHandle",
@@ -143,6 +148,7 @@ __all__ = [
     "pca_svd",
     "deactivate_workspace",
     "assess_spread_scale",
+    "assess_surrogate_selection_freshness",
     "calibrated_applicability_prediction",
     "calibration_identity_signature",
     "ensure_fresh_enough",

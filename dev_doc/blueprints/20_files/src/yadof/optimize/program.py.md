@@ -21,6 +21,9 @@
 - Expose one-use `OptimizationProgramContext`, `OptimizationRunScope`, and
   `ProgramGenerationScope` over the existing `CampaignSession`; provide explicit
   data views, preparation, result construction, and one-shot commit.
+- Keep program evaluation preparation callback-free: the program starts an
+  evaluation handle and independently starts any training against its already
+  materialized evidence.
 - Enforce ordered bounded generation entry, normal completion of registered
   training handles, closure of cancel-policy evaluation handles, durable recording,
   metadata publication, result collection, and atomic completion-pointer advance.
@@ -37,6 +40,8 @@
 - The program may choose ordinary Python/NumPy control flow but cannot create a
   second run scope, skip/repeat generations, exceed the caller range, publish a
   result for the wrong generation/shape, or commit twice.
+- `ProgramGenerationScope.prepare_evaluation()` cannot accept an
+  `after_jobs_submitted` callback or otherwise hide program lifecycle ordering.
 - The completion pointer contains no candidate, prediction, rawData, pymoo, or
   arbitrary user payload. Incomplete work resumes from durable evidence and the
   last published boundary.

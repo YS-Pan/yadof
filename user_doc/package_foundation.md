@@ -20,12 +20,13 @@ python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[qnehvi]"
 python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[viewer]"
 ```
 
-The default template's `submit/optimization.py` composes conditional INR. Install
-the `surrogate` extra (or `viewer`, which includes Torch) before using the default
-`init`, `check`, or `run` workflow. The core-only wheel can operate an existing
-workspace whose complete strategy intentionally selects no surrogate component;
-strategy validation reports a missing selected backend without importing it
-eagerly from package parent modules.
+The default template's declared `submit/optimization.py` program composes
+conditional INR. `init` and `check` validate that source statically without
+importing Torch or executing the program. Install the `surrogate` extra (or
+`viewer`, which includes Torch) before `run` executes that component. The
+core-only wheel can operate an existing workspace whose explicit program selects
+no surrogate component; a selected missing backend fails when its operation is
+validated, without eager import from package parent modules.
 
 The opt-in `pca_svd()` baseline uses the same `surrogate` extra. Importing its
 factory remains lightweight; selecting, validating, or fitting it requires Torch.

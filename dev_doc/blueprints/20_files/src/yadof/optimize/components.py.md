@@ -12,7 +12,10 @@
 - Report deterministic adapter/backend/version/algorithm/controlled-parameter
   identity.
 - Delegate real-only execution to the shared full-real primitive and lazy-load
-  concrete pymoo/GPSAF implementation only when a selected strategy runs.
+  concrete pymoo/GPSAF implementation only when a selected operation runs.
+- Expose `gpsaf_settings()` as the validated immutable settings surface for an
+  explicit program's generation-local selector. Keep `gpsaf()` as the closed
+  0.4.x complete-strategy wrapper over the same settings until cutover.
 - Give each public factory an explicit keyword-only configuration surface. Construct
   and eagerly validate private frozen settings without accepting a settings object,
   unrestricted kwargs, or ambient algorithm config.
