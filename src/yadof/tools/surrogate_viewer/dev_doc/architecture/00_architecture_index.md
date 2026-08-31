@@ -41,9 +41,10 @@ Core invariants are:
 - Terminal JSON contains no non-standard NaN values; missing finite cells are
   represented as `null`, and optional progress stays on stderr.
 - Private yadof checkpoint/rawData dependencies remain isolated in `backend/`.
-- One view dispatches to one compatible active conditional-INR or experimental
-  hierarchical-CAE checkpoint namespace; it never combines member state across
-  methods. Hierarchical coordinate plots are explicitly performance-not-accepted,
+- One view dispatches to one compatible active conditional-INR, experimental
+  hierarchical-CAE, or deterministic PCA/SVD checkpoint namespace; it never
+  combines member state across methods. PCA/SVD reports one deterministic member
+  and stored-grid plots only. Hierarchical coordinate plots are explicitly performance-not-accepted,
   and their full-grid prediction remains authoritative for costs and audits.
 
 Read the current views in this order:

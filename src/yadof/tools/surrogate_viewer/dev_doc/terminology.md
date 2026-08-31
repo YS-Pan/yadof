@@ -3,7 +3,8 @@
 | Term | Meaning In This Project |
 |---|---|
 | `viewer workspace` | The explicit yadof workspace selected in the GUI. It is an external, read-only data source for this application, not the `surrogate_viewer/` source directory. |
-| `active strategy scope` | The optimization strategy signature selected by `.yadof/optimization/active.json`. Viewer checkpoint discovery selects one compatible declared `conditional-inr` or experimental `hierarchical-cae` component namespace inside that strategy; inactive or alternate namespaces remain retained but are not mixed into the current report. |
+| `active strategy scope` | The optimization strategy signature selected by `.yadof/optimization/active.json`. Viewer checkpoint discovery selects one compatible declared `conditional-inr`, experimental `hierarchical-cae`, or deterministic `pca-svd` component namespace inside that strategy; inactive or alternate namespaces remain retained but are not mixed into the current report. |
+| `deterministic viewer member` | The single PCA/SVD prediction represented as one member so generic prediction, plot, and audit shapes remain uniform. It is not an ensemble, uncertainty estimate, posterior draw, or off-grid decoder. |
 | `checkpoint generation` | The optimization generation associated with the training evidence used to produce a saved surrogate checkpoint. It is the heatmap x-axis. |
 | `optimization generation` | The generation to which a recorded real individual belongs. It is the heatmap y-axis and is independent of the selected checkpoint generation. |
 | `real result` | One completed recorded individual containing variables and retrievable rawData. It may be overlaid on an interactive surrogate prediction. |

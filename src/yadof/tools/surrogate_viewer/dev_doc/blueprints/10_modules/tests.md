@@ -7,8 +7,8 @@ optimization, or full model audit in the default suite.
 
 ## Functionalities
 
-- Check conditional-INR and hierarchical-CAE checkpoint discovery/dispatch, sorting,
-  method isolation, and malformed-file skipping.
+- Check conditional-INR, hierarchical-CAE, and deterministic PCA/SVD checkpoint
+  discovery/dispatch, sorting, method isolation, and malformed-file skipping.
 - Check scalar rawData plus user-selected 0D/1D/2D slices from higher-rank data,
   including stored fixed dimensions and the two-axis limit.
 - Check that stored-grid direct queries equal each method's checkpoint-grid result,
@@ -28,6 +28,8 @@ optimization, or full model audit in the default suite.
   generation-axis order, null-safe JSON, and terminal matrix formatting.
 - Check per-generation random sampling counts and uniqueness.
 - Check cooperative cancellation before work begins.
+- Check PCA/SVD deterministic prediction, stored-grid plot, per-item audit,
+  one-member shape, artifact immutability, and incompatible-manifest isolation.
 
 ## I/O Format
 

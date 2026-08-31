@@ -452,6 +452,9 @@ their decoder at off-grid values and interpolate the stored per-coordinate targe
 scaler; coordinate-enabled hierarchical-CAE checkpoints query their task-neutral
 all-axis coordinate readout and reject values outside the stored domain. A workspace
 view selects one compatible active component namespace and never mixes methods.
+PCA/SVD checkpoints appear as one deterministic member: prediction, stored-grid
+slice, and audit are supported, while the viewer does not invent ensemble spread or
+an off-grid decoder for that model.
 The interactive plot then shows a scalar value, a curve, or a
 filled two-dimensional color contour without contour lines. Recorded truth is
 omitted for off-grid rawData positions because no such evidence exists. Continuous

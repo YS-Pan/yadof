@@ -6,6 +6,11 @@
 
 ## Functionalities
 - Build and score surrogate-assisted candidate populations.
+- Materialize the explicit Stage 2 evidence/cost join only for components that
+  expose `training_data()`, then pass it through freshness, readiness, prediction,
+  and after-submit fit calls without changing legacy component signatures.
+- Convert typed PCA/SVD prediction only at the component's narrow compatibility
+  boundary and finish any pending fit before generation teardown.
 - Apply GPSAF exploration, exploitation, and replacement rules.
 - Return normalized populations through the common strategy contracts.
 
@@ -20,6 +25,8 @@
 ## Non-Obvious Techniques
 - Pymoo integration is imported from the sibling `optimize.pymoo` package; shared
   optimization state and result types remain in the parent package.
+- The after-submit callback materializes at its actual backend timing rather than
+  retaining the pre-selection view; predicted rawData never enters the session.
 
 ## Mutability Profile
 - GPSAF phase policy may evolve, but real evaluation and durable history must

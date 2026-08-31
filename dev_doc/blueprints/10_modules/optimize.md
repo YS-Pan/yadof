@@ -51,6 +51,13 @@ decision. A configured exploration quota keeps some candidates outside surrogate
 preference. Every selected row is validated by the real evaluator before becoming
 durable truth.
 
+For the migrated PCA/SVD component, GPSAF freezes an explicit
+`SurrogateTrainingData` from the generation's evidence/cost views before freshness,
+state, and prediction calls. Its after-submit hook materializes again at the hook's
+actual backend timing and starts an explicit fit handle. A narrow compatibility
+adapter unwraps typed deterministic predictions into GPSAF rows; conditional-INR
+and hierarchical-CAE keep their existing method signatures in this stage.
+
 The public joint rawData posterior protocol, typed exploitation readiness, and cost
 projector feed the explicitly composed posterior-assisted strategy. It requires
 both runtime-checkable capabilities rather than probing with `hasattr`, binds the

@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import subprocess
-import sys
 
 import numpy as np
 import pytest
@@ -12,9 +10,9 @@ import pytest
 from yadof.config import load_config
 from yadof.job_template.rawdata_contract import NamedRawDataItem
 from yadof.job_template.rawdata_template import StructuredRawDataSample
-from yadof.surrogate import PCASVDComponent, pca_svd
+from yadof.surrogate import PCASVDComponent, SurrogateTrainingData, pca_svd
 from yadof.surrogate.linear_subspace import runtime
-from yadof.surrogate.linear_subspace.types import NamedTrainingData
+from yadof.task_snapshot import create_generation_snapshot
 from yadof.workspace.init import init_workspace
 
 
@@ -56,7 +54,7 @@ def _sample(x: float, *, filename: str = "field.npz"):
 
 def _data(values=(0.0, 0.25, 0.5, 0.75, 1.0)):
     rows = tuple(float(value) for value in values)
-    return NamedTrainingData(
+    return SurrogateTrainingData(
         parameter_names=("x",),
         normalized_variables=tuple((value,) for value in rows),
         raw_data=tuple(_sample(value) for value in rows),
@@ -232,19 +230,34 @@ def test_checkpoint_recovery_and_zero_width_cost_intervals(
     assert state.namespace_manifest_path.is_file()
     assert state.artifact_path.is_file()
     assert "components/pca-svd" in state.artifact_dir.as_posix()
-    monkeypatch.setattr(runtime, "_load_training_data", lambda _workspace: data)
     runtime.reset_workspace_state(workspace)
-    assert runtime.has_trained_state(workspace, _settings=component.settings)
-    recovered = runtime._require_state(config, settings=component.settings)
+    assert runtime.has_trained_state(
+        workspace,
+        data,
+        _settings=component.settings,
+    )
+    recovered = runtime._require_state(
+        config,
+        data,
+        settings=component.settings,
+    )
     assert recovered.state_signature == state.state_signature
     monkeypatch.setattr(
         runtime,
         "_costs_from_samples",
         lambda _workspace, _samples, rows: tuple((float(row[0]),) for row in rows),
     )
-    output = runtime.predict_population(
-        workspace, ((0.2,), (0.8,)), _settings=component.settings
-    )
+    snapshot = create_generation_snapshot(config)
+    try:
+        output = runtime.predict_population(
+            workspace,
+            ((0.2,), (0.8,)),
+            _training_data=data,
+            _snapshot=snapshot,
+            _settings=component.settings,
+        )
+    finally:
+        snapshot.close()
     assert output == (((0.2,), ((0.2, 0.2),)), ((0.8,), ((0.8, 0.8),)))
 
 
@@ -264,9 +277,12 @@ def test_checkpoint_recovery_rejects_changed_training_design(
     )
     runtime.train_with_config(config, training_data=original_data, settings=component.settings)
     changed_data = _data((0.0, 0.25, 0.5, 0.75, 0.9))
-    monkeypatch.setattr(runtime, "_load_training_data", lambda _workspace: changed_data)
     runtime.reset_workspace_state(workspace)
-    assert not runtime.has_trained_state(workspace, _settings=component.settings)
+    assert not runtime.has_trained_state(
+        workspace,
+        changed_data,
+        _settings=component.settings,
+    )
 
 
 def test_in_memory_state_rejects_changed_parameter_normalization(
@@ -285,5 +301,8 @@ def test_in_memory_state_rejects_changed_parameter_normalization(
     )
     runtime.train_with_config(config, training_data=_data(), settings=component.settings)
     signature["signature"] = "changed"
-    monkeypatch.setattr(runtime, "_load_training_data", lambda _workspace: _data())
-    assert not runtime.has_trained_state(workspace, _settings=component.settings)
+    assert not runtime.has_trained_state(
+        workspace,
+        _data(),
+        _settings=component.settings,
+    )

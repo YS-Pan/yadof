@@ -31,9 +31,10 @@
 - Wait for durable generation boundaries, retry the same retained batch after
   transient write failures, propagate exhausted retries or writer death as
   `RecordingError`, and wait for queued/in-flight work during shutdown.
-- Register handles that reuse the exact current snapshot, reject a later generation
-  while any registered handle remains open, and cancel/close all handles before
-  writer shutdown and snapshot deletion.
+- Register evaluation/training handles that reuse the exact current snapshot,
+  retain their normal-boundary `wait`/`cancel` policy, reject a later generation
+  while any registered handle remains open, expose `finish_generation()`, and
+  cancel/close all handles before writer shutdown and snapshot deletion.
 
 ## Invariants
 
@@ -49,3 +50,5 @@
 - Handle close never waits while holding the session state lock; result callbacks
   may therefore finish recording during session-driven cancellation without a
   close deadlock.
+- Normal generation completion waits for training publication; abnormal session
+  close requests cooperative cancellation before recorder/snapshot teardown.

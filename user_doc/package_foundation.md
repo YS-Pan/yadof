@@ -88,6 +88,12 @@ only after durable evidence finalization. Started cancellation records unfinishe
 candidates as diagnosed `cancelled` execution rows, while cancellation before start
 creates no evidence. The synchronous population and smoke APIs use this same path.
 
+`yadof.surrogate` also exports `SurrogateTrainingData`,
+`materialize_training_data()`, `TrainingHandle`, `TrainingHandleState`, and
+`SurrogatePrediction` without importing Torch. These are the explicit data,
+fit-lifecycle, and transient prediction contracts used first by `pca_svd()`.
+Selecting or fitting the actual PCA/SVD model still requires the `surrogate` extra.
+
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
 Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and
 psutil 7.2.2, and HTCondor 25.4.0. psutil is a core dependency because local

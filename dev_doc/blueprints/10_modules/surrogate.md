@@ -28,6 +28,14 @@ the concatenated coefficients. A separate codec/oracle API may encode known
 validation rawData and always labels that output diagnostic-only. GPSAF receives
 only deployable parameter predictions and zero-width cost intervals.
 
+PCA/SVD is also the first explicit fit/state/predict implementation. Callers
+materialize an immutable `SurrogateTrainingData` from Stage 2 evidence and cost
+views, or construct the same owned value directly from materialized arrays and
+structured samples. Exact content and provenance have separate digests. A public
+`TrainingHandle` owns asynchronous fit/cancel/wait/close behavior, and the typed
+`SurrogatePrediction` owns transient complete rawData plus current-snapshot cost.
+Neither the PCA/SVD component nor its recovery path scans a session implicitly.
+
 ## Source structure
 
 - Parent `__init__.py` and `api.py` own only the lightweight public component,
@@ -45,8 +53,12 @@ only deployable parameter predictions and zero-width cost intervals.
   private finite-member posterior adapter, and private in-memory types.
 - `linear_subspace/` owns validated immutable settings, per-field PCA/SVD codecs,
   diagnostic-only oracle reconstruction, deployable ridge prediction, named-schema
-  adaptation, atomic no-pickle checkpoint recovery, and an independent one-worker
-  scheduler. Its namespace is `pca-svd`; it exposes no posterior/readiness method.
+  adaptation, atomic no-pickle checkpoint recovery, and a generation-scoped
+  explicit-handle scheduler. Its namespace is `pca-svd`; it exposes no
+  posterior/readiness method.
+- `training.py` owns the backend-neutral materialized input, semantic/provenance
+  digests, explicit fit-handle state machine, and deterministic prediction DTO. It
+  imports NumPy but not Torch and is exported by the lightweight parent package.
 - `hierarchical_cae/data_filtering/` owns the component-local mode selector and
   implementations; common assessment/applicability types do not depend on a
   concrete implementation. Mode `none` is the default and returns the ordinary uniform
@@ -151,9 +163,37 @@ one of its fields. The adapter remains uncalibrated, includes no observation noi
 and does not change mean rawData, mean costs, min/max intervals, viewer behavior,
 model architecture, or checkpoint mathematics.
 
-## Training data and model
+## Explicit PCA/SVD data and lifecycle
 
-Training bundles come from the active campaign session when one exists, so finalized
+`materialize_training_data()` joins `EvidenceDataset` and `CostTable` only by row
+identity. Default selection accepts committed original or explicit derived rows
+with readable rawData and successful finite interpretation; explicit row IDs are
+strict. Direct values reject lazy loaders plus object, structured, complex,
+masked, or non-finite main targets. C/F source layout canonicalizes to the same
+digest, while dtype, shape, row order, duplicates, status, mask, or numeric content
+changes it. Source identity, lineage, and optional transform ID change only the
+provenance digest.
+
+`start_fit()` creates one non-daemon owner-thread handle. Cooperative cancellation
+checks bracket model fitting and checkpoint publication; atomic commit is the
+terminal race boundary. Session-backed training leases the exact current snapshot,
+normal generation completion waits/closes it, and abnormal session shutdown
+cancels/waits before recorder cleanup. Sync `fit()` composes this same handle path.
+Recovery requires the same exact materialized data. Checkpoints store semantic
+training content separately from bounded provenance and cold-fit old manifests
+that lack this contract.
+
+`predict()` consumes only an explicit `LinearSubspaceState`, normalized candidates,
+and exact task snapshot. It reconstructs full rawData and reapplies that snapshot's
+cost policy, yielding a frozen deterministic DTO with zero-width intervals. GPSAF
+alone derives its legacy `(costs, intervals)` rows; predictions never enter the
+recorder or evidence/history views. The generic viewer uses a read-only one-member
+adapter over the same manifest/artifact model.
+
+## Conditional-INR training data and model
+
+Until the retained-capability migration stage, conditional-INR training bundles
+come from the active campaign session when one exists, so finalized
 segments and accepted unpublished current rows share one validated view. Outside a
 campaign they come from tolerant public recorded-data queries. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
@@ -195,7 +235,7 @@ does not affect selected candidates.
 
 ## Scheduling and recovery
 
-Runtime state and training schedules are keyed by effective workspace/checkpoint
+Conditional-INR runtime state and training schedules are keyed by effective workspace/checkpoint
 paths plus active strategy and `conditional-inr` component identities. At most one
 background training task runs for the active workspace strategy. Real jobs are
 submitted first, then training may use the waiting interval; maximum generation lag
@@ -223,6 +263,11 @@ output artifacts cold-train instead of being interpreted with the linear decoder
 
 - No direct authoritative `variables -> cost` model path.
 - No checkpoint or scheduler collision across workspaces.
+- PCA/SVD state reuse is keyed by exact materialized content; source identity and
+  transform labels cannot substitute for that digest or unnecessarily invalidate
+  identical mathematics.
+- Explicit PCA/SVD fit/predict never scans session/history internally and never
+  publishes predicted rawData.
 - Training never needs to scan history per candidate and never depends on a segment
   being published before a current accepted row becomes useful.
 - Non-finite/corrupt history is diagnosed and bounded by policy.

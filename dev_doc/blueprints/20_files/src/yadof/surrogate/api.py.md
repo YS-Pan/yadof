@@ -17,9 +17,11 @@
   delegates legacy lifecycle/prediction calls and lazily creates a persistent
   finite-member rawData sampler.
 - Construct `pca_svd()` from one authoritative keyword-only settings path. Its
-  low-level codec/oracle methods are diagnostic-only; its GPSAF lifecycle trains
-  a parameter-to-coefficient ridge predictor, reconstructs full named rawData,
-  returns zero-width cost intervals, and exposes no posterior/readiness methods.
+  low-level codec/oracle methods are diagnostic-only. Its explicit
+  `training_data()`, `fit()`/`start_fit()`, `recover()`, and typed `predict()` paths
+  consume caller-owned data/state/snapshot values; the GPSAF adapter reconstructs
+  full named rawData and returns zero-width cost intervals. It exposes no
+  posterior/readiness methods.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
   one `data_filter_mode` selector that defaults to `none`, a mode-specific optional
   versioned `FrequencyFilter`, explicit device/training kwargs, and an internal
@@ -43,7 +45,8 @@
   These remain NumPy-only and do not make hierarchical CAE a production default.
 
 ## I/O Format
-- Prediction returns optimizer-facing `(costs, intervals)` rows.
+- PCA/SVD public prediction returns `SurrogatePrediction`; only its narrow GPSAF
+  compatibility method returns optimizer-facing `(costs, intervals)` rows.
 - Posterior prediction returns complete named rawData function draws; streaming
   projection returns `[draw,candidate,objective]` costs and `[draw,candidate]`
   validity without recording predicted evidence.

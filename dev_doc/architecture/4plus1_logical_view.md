@@ -36,6 +36,17 @@
   and bounded diagnostics without changing the evidence row.
 - **Derived evidence row** is a transient owned rawData transform with deterministic
   parent/operation/parameter/ordinal/content lineage. It is never a recorder row.
+- **Surrogate training data** is one immutable, fully materialized row-identity
+  join of normalized parameters and complete structured rawData. Its semantic
+  content digest is independent from source paths/row IDs/transform labels; its
+  separate provenance digest binds those identities, statuses, lineage, and intent.
+- **Training handle** is the generation-scoped owner of one explicit surrogate fit.
+  It caches completed/cancelled/failed terminal semantics, cooperates with
+  cancellation before checkpoint commit, and releases its input/snapshot lease on
+  close.
+- **Surrogate prediction** is a typed transient state-plus-snapshot result carrying
+  complete predicted rawData, current costs, deterministic zero-width intervals,
+  and bounded diagnostics. It is neither real evidence nor posterior joint draws.
 - **Generation task snapshot** is the coherent task/configuration definition used
   throughout one generation.
 - **Surrogate prediction and posterior samples** are transient derived views of
@@ -88,6 +99,14 @@ across candidates, fields, and objectives. Candidate-selection components may us
 those derived results only behind their declared readiness and failure boundaries;
 selected candidates still receive normal real evaluation.
 
+PCA/SVD fitting consumes an exact caller-owned `SurrogateTrainingData` value; its
+runtime and recovery paths never rescan a session or durable history. Checkpoint
+semantic identity binds the content digest, settings, strategy, parameter
+normalization, rawData schema, and runtime versions. Source identity and transforms
+remain inspectable provenance but do not prevent reuse of identical mathematics.
+Prediction consumes the immutable fitted state plus the exact generation snapshot,
+so edits to current cost policy affect later predictions without changing weights.
+
 ## Invariants
 
 - Fast, local, and distributed execution converge before evidence-first
@@ -96,6 +115,9 @@ selected candidates still receive normal real evaluation.
 - A started evaluation cannot outlive its generation/session scope. An open handle
   prevents the next snapshot; session shutdown cancels and closes registered
   handles before stopping the recorder or deleting snapshots.
+- The same registry owns explicit training handles. Normal generation completion
+  waits and closes training; abnormal campaign close cancels and waits. No handle
+  wait occurs while the recorder state lock is held.
 - Handle results are invisible until every returned row has committed evidence and
   a succeeded/failed/not-applicable interpretation classification.
 - Individual execution, rawData, or cost failures remain explicit diagnostic rows.
@@ -111,4 +133,6 @@ selected candidates still receive normal real evaluation.
   not hard-code task-specific simulator or objective policy.
 - External simulator failures or partial artifacts never publish normal evidence.
 - Predicted rawData never enters real history.
+- A recoverable PCA/SVD state is selected only by exact training content, never by
+  path, job-name tuple position, or an unchecked transform label.
 - Optional numerical backends remain absent from ordinary parent imports.

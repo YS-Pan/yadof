@@ -13,28 +13,11 @@ from ...job_template.rawdata_template import (
     RawDataSchemaTemplate,
     StructuredRawDataSample,
 )
+from ..training import SurrogateTrainingData
 from .settings import LinearSubspaceSettings
 
 
 Population = tuple[tuple[float, ...], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class NamedTrainingData:
-    parameter_names: tuple[str, ...]
-    normalized_variables: Population
-    raw_data: tuple[StructuredRawDataSample, ...]
-    row_ids: tuple[str, ...] = ()
-    record_metadata: tuple[Mapping[str, object], ...] = ()
-
-    def __post_init__(self) -> None:
-        count = len(self.normalized_variables)
-        if count != len(self.raw_data):
-            raise ValueError("parameter and rawData training rows must align")
-        if self.row_ids and len(self.row_ids) != count:
-            raise ValueError("training row identities must align with design rows")
-        if self.record_metadata and len(self.record_metadata) != count:
-            raise ValueError("record metadata must align with design rows")
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +74,8 @@ class LinearSubspaceState:
     sample_count: int
     strategy_signature: str
     state_signature: str
-    training_design_signature: str
+    training_data_digest: str
+    training_provenance_digest: str
     parameter_definition_signature: Mapping[str, object]
     model: LinearSubspaceModel
     checkpoint_path: Path
@@ -101,6 +85,8 @@ class LinearSubspaceState:
     run_namespace: str
     component_namespace: str
     training_row_ids: tuple[str, ...] = field(default=())
+    training_transform_id: str | None = None
+    training_provenance: Mapping[str, object] = field(default_factory=dict)
     train_history: Mapping[str, object] = field(default_factory=dict)
 
 
@@ -112,9 +98,9 @@ __all__ = [
     "LinearSubspaceCodec",
     "LinearSubspaceModel",
     "LinearSubspaceState",
-    "NamedTrainingData",
     "OracleReconstruction",
     "Population",
     "SurrogateState",
+    "SurrogateTrainingData",
     "StructuredRawDataSample",
 ]

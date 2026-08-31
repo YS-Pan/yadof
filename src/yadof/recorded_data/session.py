@@ -478,8 +478,9 @@ class CampaignSession:
         self.last_reinterpretation_sec = 0.0
         self._closed = False
         self._closing = False
-        self._evaluation_handles: set[object] = set()
-        self._evaluation_handle_snapshots: dict[object, GenerationTaskSnapshot] = {}
+        self._generation_handles: set[object] = set()
+        self._generation_handle_snapshots: dict[object, GenerationTaskSnapshot] = {}
+        self._generation_handle_policies: dict[object, str] = {}
         self._interpretation_counters = InterpretationCounters()
         self._committed_owned_count_limit = int(
             config.HISTORY_UNPUBLISHED_MAX_CANDIDATES
@@ -504,9 +505,9 @@ class CampaignSession:
         with self._state_lock:
             if self._closed or self._closing:
                 raise RuntimeError("campaign session is closing or closed")
-            if self._evaluation_handles:
+            if self._generation_handles:
                 raise RuntimeError(
-                    "cannot begin a new generation while evaluation handles remain open; "
+                    "cannot begin a new generation while generation handles remain open; "
                     "wait and close every handle first"
                 )
         snapshot = create_generation_snapshot(self._freeze_recorder_config(config))
@@ -530,29 +531,63 @@ class CampaignSession:
         self.current_snapshot = snapshot
         return snapshot
 
-    def _register_evaluation_handle(
+    def _register_generation_handle(
         self,
         snapshot: GenerationTaskSnapshot | None,
         handle: object,
+        *,
+        boundary_policy: str,
     ) -> None:
         """Retain one exact current-generation lease until its handle closes."""
 
+        policy = str(boundary_policy).strip().lower()
+        if policy not in {"cancel", "wait"}:
+            raise ValueError("generation handle boundary_policy must be 'cancel' or 'wait'")
         with self._state_lock:
             if self._closed or self._closing:
-                raise RuntimeError("cannot register evaluation on a closing campaign")
+                raise RuntimeError("cannot register work on a closing campaign")
             if snapshot is None or snapshot is not self.current_snapshot:
                 raise ValueError(
-                    "evaluation handle must use the campaign's current task snapshot"
+                    "generation handle must use the campaign's current task snapshot"
                 )
-            if handle in self._evaluation_handles:
+            if handle in self._generation_handles:
+                if self._generation_handle_policies[handle] != policy:
+                    raise ValueError("generation handle boundary policy cannot change")
                 return
-            self._evaluation_handles.add(handle)
-            self._evaluation_handle_snapshots[handle] = snapshot
+            self._generation_handles.add(handle)
+            self._generation_handle_snapshots[handle] = snapshot
+            self._generation_handle_policies[handle] = policy
 
-    def _unregister_evaluation_handle(self, handle: object) -> None:
+    def _unregister_generation_handle(self, handle: object) -> None:
         with self._state_lock:
-            self._evaluation_handles.discard(handle)
-            self._evaluation_handle_snapshots.pop(handle, None)
+            self._generation_handles.discard(handle)
+            self._generation_handle_snapshots.pop(handle, None)
+            self._generation_handle_policies.pop(handle, None)
+
+    def finish_generation(self) -> None:
+        """Resolve and close every exact-current-snapshot handle normally."""
+
+        with self._state_lock:
+            handles = tuple(
+                (handle, self._generation_handle_policies[handle])
+                for handle in self._generation_handles
+            )
+        errors: list[BaseException] = []
+        for handle, policy in handles:
+            try:
+                if policy == "wait":
+                    finish = getattr(handle, "finish", None)
+                    if callable(finish):
+                        finish()
+                    else:
+                        getattr(handle, "wait")()
+                        getattr(handle, "close")()
+                else:
+                    getattr(handle, "close")()
+            except BaseException as exc:
+                errors.append(exc)
+        if errors:
+            raise errors[-1]
 
     def _freeze_recorder_config(self, config: LoadedConfig) -> LoadedConfig:
         values = dict(config.values)
@@ -891,7 +926,7 @@ class CampaignSession:
                 return self.counters()
             with self._state_lock:
                 self._closing = True
-                handles = tuple(self._evaluation_handles)
+                handles = tuple(self._generation_handles)
             errors: list[BaseException] = []
             for handle in handles:
                 try:
@@ -910,8 +945,9 @@ class CampaignSession:
                 with self._state_lock:
                     self._closed = True
                     self._closing = False
-                    self._evaluation_handles.clear()
-                    self._evaluation_handle_snapshots.clear()
+                    self._generation_handles.clear()
+                    self._generation_handle_snapshots.clear()
+                    self._generation_handle_policies.clear()
             if errors:
                 raise errors[-1]
             return self.counters()

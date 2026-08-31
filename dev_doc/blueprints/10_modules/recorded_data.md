@@ -46,9 +46,12 @@ all pending segments. The writer retries the same retained batch after a transie
 write failure; an oversized envelope, exhausted retry count, or unexpected writer
 death raises `RecordingError` and prevents later evaluation.
 
-The session also retains open evaluation-handle leases for its exact current task
-snapshot. A new generation is rejected until the registry is empty. Shutdown first
-cancels/closes a copied handle set without holding the state lock, then shuts down
+The session also retains open generation-handle leases for its exact current task
+snapshot. Each registration declares a normal-boundary policy: explicit surrogate
+training waits/closes, while evaluation uses cancellation-close after its owning
+composition has already waited. A new generation is rejected until the registry is
+empty. `finish_generation()` resolves those policies without holding the state
+lock. Shutdown first cancels/closes a copied handle set, then shuts down
 the writer, releases the workspace lock, and removes snapshots; standalone handles
 own and close their private session instead of self-registering recursively.
 
@@ -84,6 +87,10 @@ aligned to the same accepted evidence rows, allowing task-owned hierarchical-CAE
 filters to consume diagnostics without altering rawData. The live campaign exposes
 the same schema over durable plus accepted current rows; pending evidence is
 visible in its dataset but is not a readable sample or optimizer-history row.
+
+The public surrogate materializer consumes these same dataset/table values and
+strictly joins by row ID. It owns copied structured rawData and bounded provenance;
+it does not add a persistence format, rewrite a segment, or record a derived row.
 
 The cost-view reader freezes one finalized segment-name snapshot, then opens each
 selected ZIP once to combine manifest checks, NPZ decode/schema validation, and
@@ -121,3 +128,5 @@ readable; central-directory/manifest failure skips one segment.
   untouched.
 - Named rawData and record metadata queries are read-only derived views. Metadata
   never replaces rawData, changes current cost, or creates a second evidence store.
+- Generation-handle waits/cancellation happen outside the session state lock and
+  all handles close before writer/snapshot teardown.

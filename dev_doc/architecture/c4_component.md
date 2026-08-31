@@ -69,12 +69,21 @@
   method registry.
 - `surrogate` owns rawData-first component lifecycles, checkpoints, prediction, and
   optional posterior capabilities. Concrete models remain behind lightweight
-  public contracts and lazy optional dependencies. Hierarchical CAE owns its
+  public contracts and lazy optional dependencies. Its public materialization
+  layer identity-joins evidence/cost rows into immutable training values, separates
+  exact mathematical content identity from bounded lineage/provenance, and gives
+  explicit fits a generation-scoped handle lifecycle. PCA/SVD is the first
+  component migrated to explicit data/state/prediction; conditional-INR and
+  hierarchical-CAE retain their existing adapters until their scheduled migration.
+  Hierarchical CAE owns its
   training-data filtering implementations below its private package and selects
   them through one component-local mode whose default is no filtering; the current
   opt-in implementation is `frequency`.
 - Posterior and readiness contracts describe derived candidate-selection
   capabilities; they do not bypass real evaluation or persistence.
+- The integrated surrogate viewer dispatches read-only method adapters for
+  conditional-INR, hierarchical-CAE, and deterministic one-member PCA/SVD
+  checkpoints. It recalculates current cost and never mutates model or evidence.
 
 ## Tools and CLI
 

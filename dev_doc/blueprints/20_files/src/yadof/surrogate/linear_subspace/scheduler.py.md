@@ -2,7 +2,10 @@
 
 ## Contract
 
-Own an independent one-worker, workspace/strategy/settings-keyed scheduler with
-freshness checks, blocking and background training, bounded failure reporting,
-generation-snapshot lifetime, and deactivation. Releasing memory never deletes
-retained compatible checkpoint artifacts.
+Own a workspace/strategy/settings-keyed facade over one public `TrainingHandle`.
+Every freshness/state/start call requires the exact explicit training value and
+its content digest; no scheduler query scans history. Blocking and background
+training share the same runtime fit path, expose bounded cached failure status,
+lease the caller's exact generation snapshot, and are drained on strategy
+deactivation. Releasing memory never deletes retained compatible checkpoint
+artifacts.

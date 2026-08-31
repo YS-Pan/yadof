@@ -1,6 +1,15 @@
 from . import conditional_inr as _conditional_inr_package
 from . import hierarchical_cae as _hierarchical_cae_package
 from . import linear_subspace as _linear_subspace_package
+from .linear_subspace import LinearSubspaceState
+from .training import (
+    SurrogatePrediction,
+    SurrogateTrainingData,
+    TrainingCancelledError,
+    TrainingHandle,
+    TrainingHandleState,
+    materialize_training_data,
+)
 from .api import (
     APPLICABILITY_CALIBRATED,
     APPLICABILITY_NOT_APPLICABLE,
@@ -108,6 +117,7 @@ __all__ = [
     "FrequencyFilterRule",
     "ApplicabilityPrediction",
     "MaterializedRawDataPosterior",
+    "LinearSubspaceState",
     "PosteriorCalibrationArtifact",
     "PosteriorExploitationReadiness",
     "PosteriorExploitationSurrogate",
@@ -120,6 +130,11 @@ __all__ = [
     "RawDataPosteriorSurrogate",
     "SUPPORT_CONTINUOUS_OR_UNKNOWN",
     "SUPPORT_FINITE",
+    "SurrogatePrediction",
+    "SurrogateTrainingData",
+    "TrainingCancelledError",
+    "TrainingHandle",
+    "TrainingHandleState",
     "conditional_inr",
     "conditional_inr_posterior",
     "hierarchical_cae",
@@ -132,6 +147,7 @@ __all__ = [
     "fit_monotone_applicability_calibration",
     "has_trained_state",
     "latest_state_generation",
+    "materialize_training_data",
     "predict_population",
     "posterior_capability_identity",
     "project_rawdata_sampler",

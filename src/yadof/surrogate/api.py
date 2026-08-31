@@ -112,7 +112,7 @@ class PCASVDComponent:
         del config, problem
         return {
             "component": "pca-svd-rawdata-surrogate",
-            "component_version": 1,
+            "component_version": 2,
             "backend_distribution": "torch",
             "backend_version": metadata.version("torch"),
             "training_policy": "per-field-lowrank-ridge",
@@ -151,8 +151,80 @@ class PCASVDComponent:
 
         return predict_rawdata(model, normalized_parameters)
 
-    def ensure_fresh_enough(self, context):
-        from .linear_subspace import runtime, scheduler
+    def training_data(
+        self,
+        dataset,
+        cost_table,
+        *,
+        row_ids=None,
+        transform_id: str | None = None,
+    ):
+        from .training import materialize_training_data
+
+        return materialize_training_data(
+            dataset,
+            cost_table,
+            row_ids=row_ids,
+            transform_id=transform_id,
+        )
+
+    def start_fit(
+        self,
+        workspace,
+        training_data,
+        *,
+        generation_index: int = 0,
+        session=None,
+        snapshot=None,
+    ):
+        from .linear_subspace import runtime
+
+        return runtime.start_fit(
+            workspace,
+            training_data,
+            generation_index=generation_index,
+            _settings=self.settings,
+            _session=session,
+            _snapshot=snapshot,
+        )
+
+    def fit(
+        self,
+        workspace,
+        training_data,
+        *,
+        generation_index: int = 0,
+        session=None,
+        snapshot=None,
+    ):
+        from .linear_subspace import runtime
+
+        return runtime.fit(
+            workspace,
+            training_data,
+            generation_index=generation_index,
+            _settings=self.settings,
+            _session=session,
+            _snapshot=snapshot,
+        )
+
+    def recover(self, workspace, training_data, *, snapshot=None):
+        from .linear_subspace import runtime
+
+        return runtime.recover_state(
+            workspace,
+            training_data,
+            _settings=self.settings,
+            _config=(None if snapshot is None else snapshot.config),
+        )
+
+    def predict(self, state, normalized_parameters, *, snapshot):
+        from .linear_subspace import runtime
+
+        return runtime.predict(state, normalized_parameters, snapshot=snapshot)
+
+    def ensure_fresh_enough(self, context, training_data):
+        from .linear_subspace import scheduler
 
         return scheduler.ensure_fresh_enough(
             context.config.workspace,
@@ -160,20 +232,22 @@ class PCASVDComponent:
             _config=context.config,
             _settings=self.settings,
             _max_training_lag=int(context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG),
-            _training_data=runtime.training_data_from_session(
-                context.session, context.snapshot
-            ),
+            _training_data=training_data,
+            _session=context.session,
+            _snapshot=context.snapshot,
         )
 
-    def has_trained_state(self, context) -> bool:
+    def has_trained_state(self, context, training_data) -> bool:
         from .linear_subspace import runtime
 
         return runtime.has_trained_state(
-            context.config.workspace, _settings=self.settings
+            context.config.workspace,
+            training_data,
+            _settings=self.settings,
         )
 
-    def start_training(self, context):
-        from .linear_subspace import runtime, scheduler
+    def start_training(self, context, training_data):
+        from .linear_subspace import scheduler
 
         return scheduler.start_training(
             context.config.workspace,
@@ -181,16 +255,28 @@ class PCASVDComponent:
             block=False,
             _config=context.config,
             _settings=self.settings,
-            _training_data=runtime.training_data_from_session(
-                context.session, context.snapshot
-            ),
+            _training_data=training_data,
+            _session=context.session,
+            _snapshot=context.snapshot,
         )
 
-    def predict_population(self, context, population):
+    def finish_training(self, context):
+        from .linear_subspace import scheduler
+
+        return scheduler.wait_for_pending_training(
+            context.config.workspace,
+            _settings=self.settings,
+        )
+
+    def predict_population(self, context, population, training_data):
         from .linear_subspace import runtime
 
         return runtime.predict_population(
-            context.config.workspace, population, _settings=self.settings
+            context.config.workspace,
+            population,
+            _training_data=training_data,
+            _snapshot=context.snapshot,
+            _settings=self.settings,
         )
 
 

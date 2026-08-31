@@ -27,12 +27,17 @@ def _progress(message: str) -> None:
 def ensure_surrogate_fresh_enough(
     surrogate,
     context: GenerationContext,
+    training_data=None,
 ) -> dict[str, object]:
     try:
         func = getattr(surrogate, "ensure_fresh_enough", None)
         if not callable(func):
             return {"surrogate_training_gate": "unavailable"}
-        status = func(context)
+        status = (
+            func(context, training_data)
+            if training_data is not None
+            else func(context)
+        )
     except Exception as exc:  # noqa: BLE001 - a stale model should fall back, not stop the generation.
         return {
             "surrogate_training_gate": "failed",
@@ -46,10 +51,20 @@ def ensure_surrogate_fresh_enough(
     }
 
 
-def surrogate_state_ready(surrogate, context: GenerationContext) -> bool:
+def surrogate_state_ready(
+    surrogate,
+    context: GenerationContext,
+    training_data=None,
+) -> bool:
     try:
         func = getattr(surrogate, "has_trained_state", None)
-        return True if not callable(func) else bool(func(context))
+        if not callable(func):
+            return True
+        return bool(
+            func(context, training_data)
+            if training_data is not None
+            else func(context)
+        )
     except Exception:
         return False
 
@@ -61,7 +76,12 @@ def notify_surrogate_after_submission(
     try:
         func = getattr(surrogate, "start_training", None)
         if callable(func):
-            status = func(context)
+            training_data = materialize_surrogate_training_data(surrogate, context)
+            status = (
+                func(context, training_data)
+                if training_data is not None
+                else func(context)
+            )
             _progress(
                 "surrogate: background training request generation "
                 f"{context.generation_index}; "
@@ -71,17 +91,55 @@ def notify_surrogate_after_submission(
         _progress(f"surrogate: background training request failed: {exc.__class__.__name__}: {exc}")
 
 
+def finish_surrogate_training(
+    surrogate,
+    context: GenerationContext,
+) -> dict[str, object]:
+    try:
+        func = getattr(surrogate, "finish_training", None)
+        if not callable(func):
+            return {}
+        status = func(context)
+    except Exception as exc:  # noqa: BLE001 - typed fallback remains generation-local.
+        return {
+            "surrogate_training_finish": "failed",
+            "surrogate_training_finish_error": f"{exc.__class__.__name__}: {exc}",
+        }
+    return {
+        "surrogate_training_finish": str(getattr(status, "action", "unknown")),
+        "surrogate_training_finish_error": str(getattr(status, "error", "")),
+    }
+
+
+def materialize_surrogate_training_data(surrogate, context: GenerationContext):
+    factory = getattr(surrogate, "training_data", None)
+    if not callable(factory):
+        return None
+    dataset = context.session.evidence_dataset()
+    table = context.session.cost_table(context.snapshot)
+    return factory(dataset, table)
+
+
 def predict_records(
     surrogate,
     context: GenerationContext,
     records: Sequence[CandidateRecord],
+    training_data=None,
 ) -> list[CandidateRecord]:
     if not records:
         return []
     _progress(f"surrogate: predicting {len(records)} candidates")
-    raw = surrogate.predict_population(
-        context,
-        tuple(record.x for record in records),
+    raw = (
+        surrogate.predict_population(
+            context,
+            tuple(record.x for record in records),
+            training_data,
+        )
+        if training_data is not None
+        else surrogate.predict_population(
+            context,
+            tuple(record.x for record in records),
+        )
     )
     predicted = []
     for record, item in zip(records, raw):
@@ -125,6 +183,7 @@ def run_alpha_phase(
     surrogate,
     generation_context: GenerationContext,
     settings,
+    training_data=None,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
     predicted_pool: list[CandidateRecord] = []
     alpha = max(1, settings.alpha)
@@ -141,7 +200,14 @@ def run_alpha_phase(
         )
         if not pool:
             break
-        predicted_pool.extend(predict_records(surrogate, generation_context, pool))
+        predicted_pool.extend(
+            predict_records(
+                surrogate,
+                generation_context,
+                pool,
+                training_data=training_data,
+            )
+        )
         batches_completed += 1
 
     if not predicted_pool:
@@ -168,6 +234,7 @@ def run_beta_phase(
     surrogate,
     generation_context: GenerationContext,
     settings,
+    training_data=None,
 ) -> tuple[list[CandidateRecord], dict[str, object]]:
     beta = max(0, settings.beta)
     if beta <= 0 or not anchors:
@@ -195,7 +262,12 @@ def run_beta_phase(
         )
         if not pool:
             break
-        records = predict_records(surrogate, generation_context, pool)
+        records = predict_records(
+            surrogate,
+            generation_context,
+            pool,
+            training_data=training_data,
+        )
         iterations += 1
         candidate_count += len(records)
 
@@ -249,12 +321,17 @@ def surrogate_population(
     population_size: int,
     seed: int,
     settings,
+    training_data=None,
 ) -> tuple[Population | None, dict[str, object]]:
     _progress(
         f"surrogate: selecting population; history={len(history)}; "
         f"population_size={int(population_size)}"
     )
-    if not surrogate_state_ready(surrogate, generation_context):
+    if not surrogate_state_ready(
+        surrogate,
+        generation_context,
+        training_data,
+    ):
         return None, {
             "surrogate_error": "no_trained_surrogate",
             "surrogate_mode": "waiting_for_first_staggered_training",
@@ -297,6 +374,7 @@ def surrogate_population(
             surrogate=surrogate,
             generation_context=generation_context,
             settings=settings,
+            training_data=training_data,
         )
         diagnostics.update(alpha_info)
         if not anchors:
@@ -312,6 +390,7 @@ def surrogate_population(
             surrogate=surrogate,
             generation_context=generation_context,
             settings=settings,
+            training_data=training_data,
         )
         diagnostics.update(beta_info)
         final_records = list(final_records) + list(exploration_records)

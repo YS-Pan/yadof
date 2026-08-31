@@ -8,8 +8,12 @@
 - Receive common generation context/history/problem shape and build the selected
   lazy pymoo search context from the injected search settings snapshot.
 - Gate surrogate-assisted prediction through the staggered-training freshness check.
+- Freeze one explicit training value before selection when the component supports
+  it and thread that same value through PCA/SVD state/prediction calls.
 - Use the latest trained surrogate state for candidate selection when available.
 - Evaluate the selected real population and pass an after-submit callback that starts surrogate training.
+- Finish pending surrogate training after real evaluation so session generation
+  leases cannot cross the boundary.
 
 ## I/O Format
 - Returns common `strategy.OptimizationResult`; every accepted row passes through

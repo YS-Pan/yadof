@@ -566,9 +566,10 @@ def discover_checkpoints(
     parameter_definition_signature: Mapping[str, object] | None = None,
     strategy_signature: str | None = None,
 ) -> tuple[CheckpointInfo, ...]:
-    """Discover compatible conditional-INR and hierarchical-CAE artifacts."""
+    """Discover compatible conditional-INR, hierarchical-CAE, and PCA/SVD artifacts."""
 
     from .hierarchical_checkpoints import discover_hierarchical_cae_checkpoints
+    from .pca_svd_checkpoints import discover_pca_svd_checkpoints
 
     combined = (
         *_discover_conditional_inr_checkpoints(
@@ -577,6 +578,11 @@ def discover_checkpoints(
             strategy_signature=strategy_signature,
         ),
         *discover_hierarchical_cae_checkpoints(
+            checkpoint_dir,
+            parameter_definition_signature=parameter_definition_signature,
+            strategy_signature=strategy_signature,
+        ),
+        *discover_pca_svd_checkpoints(
             checkpoint_dir,
             parameter_definition_signature=parameter_definition_signature,
             strategy_signature=strategy_signature,
@@ -618,6 +624,12 @@ def CheckpointPredictor(
         from .hierarchical_checkpoints import HierarchicalCAECheckpointPredictor
 
         return HierarchicalCAECheckpointPredictor(
+            workspace, checkpoint, template_sample
+        )
+    if str(checkpoint.payload.get("surrogate_method", "")) == "pca_svd":
+        from .pca_svd_checkpoints import PCASVDCheckpointPredictor
+
+        return PCASVDCheckpointPredictor(
             workspace, checkpoint, template_sample
         )
     return ConditionalINRCheckpointPredictor(

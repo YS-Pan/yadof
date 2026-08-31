@@ -68,6 +68,34 @@ readiness; unavailable or unusable derived state follows the strategy's document
 fallback or stop boundary. Every selected candidate still enters the common real
 evaluation, finalization, and recording sequence.
 
+## Explicit PCA/SVD fit and prediction
+
+```mermaid
+sequenceDiagram
+    participant O as caller or GPSAF
+    participant D as evidence/cost views
+    participant H as training handle
+    participant P as PCA/SVD state repository
+    participant C as generation cost snapshot
+    O->>D: materialize selected row identities
+    D-->>O: frozen data + content/provenance digests
+    O->>H: start_fit(data, generation snapshot)
+    H->>P: fit model and atomically commit checkpoint
+    P-->>H: immutable state
+    H-->>O: cached terminal result, then close lease
+    O->>P: predict(state, normalized candidates)
+    P->>C: complete transient rawData -> current cost
+    C-->>O: typed prediction + zero-width intervals
+```
+
+Cancellation is checked before fit, after model construction, and immediately
+before checkpoint publication. A cancellation observed before commit publishes no
+manifest; if atomic commit wins the race, the handle completes with that committed
+state. Prediction never calls finalization or the recorder. GPSAF materializes one
+explicit Stage 2 view before selection and another at the real backend's actual
+after-submit callback timing; its compatibility tuple is derived only at that
+narrow consumer boundary.
+
 ## Generation-boundary task changes
 
 Before each generation the campaign reloads effective configuration and captures
@@ -76,11 +104,16 @@ snapshot for parameters, evaluation, cost interpretation, and optimization
 composition. Edits made during a generation become visible only at a later
 generation boundary.
 
-A session registry retains every handle created against its current snapshot.
+A session registry retains every evaluation or training handle created against its current snapshot.
 Beginning another generation fails while any such handle is open, including a
 completed-but-not-closed handle. Session close copies the registry, cancels and
 closes each handle without holding the recorder state lock, and only then shuts down
 the writer and deletes snapshots.
+
+At a normal generation boundary the registry follows each handle's declared
+policy: training is waited/closed, while evaluation retains its cancellation-close
+policy after the real evaluation composition has already waited. Abnormal session
+shutdown closes every handle before writer/snapshot cleanup.
 
 Mechanically compatible history is reinterpreted through the new snapshot. Source
 identity can invalidate caches and record provenance, but the user remains

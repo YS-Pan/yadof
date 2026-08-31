@@ -120,9 +120,10 @@ class EvaluationHandle:
         self._closed_at_monotonic: float | None = None
         self._registered_session = batch._campaign_session
         if self._registered_session is not None:
-            self._registered_session._register_evaluation_handle(  # noqa: SLF001
+            self._registered_session._register_generation_handle(  # noqa: SLF001
                 batch._task_snapshot,
                 self,
+                boundary_policy="cancel",
             )
 
     @property
@@ -270,7 +271,7 @@ class EvaluationHandle:
         if session is None:
             return
         self._registered_session = None
-        session._unregister_evaluation_handle(self)  # noqa: SLF001
+        session._unregister_generation_handle(self)  # noqa: SLF001
 
     def __enter__(self) -> EvaluationHandle:
         if self.state == EvaluationHandleState.CREATED:

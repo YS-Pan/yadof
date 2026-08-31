@@ -5,6 +5,10 @@ from .hierarchical_checkpoints import (
     HierarchicalCAECheckpointPredictor,
     discover_hierarchical_cae_checkpoints,
 )
+from .pca_svd_checkpoints import (
+    PCASVDCheckpointPredictor,
+    discover_pca_svd_checkpoints,
+)
 from .rawdata import (
     extract_curve,
     extract_plot,
@@ -38,6 +42,7 @@ __all__ = [
     "CheckpointInfo",
     "CheckpointPredictor",
     "HierarchicalCAECheckpointPredictor",
+    "PCASVDCheckpointPredictor",
     "CrossGenerationErrorAudit",
     "CurveData",
     "DimensionSpec",
@@ -51,6 +56,7 @@ __all__ = [
     "_check_cancelled",
     "discover_checkpoints",
     "discover_hierarchical_cae_checkpoints",
+    "discover_pca_svd_checkpoints",
     "extract_curve",
     "extract_plot",
     "finite_curve_bounds",

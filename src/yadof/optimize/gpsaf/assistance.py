@@ -11,6 +11,8 @@ from ..pymoo.backend import (
 from ..strategy import GenerationContext, OptimizationResult, evaluate_population
 from .phases import (
     ensure_surrogate_fresh_enough,
+    finish_surrogate_training,
+    materialize_surrogate_training_data,
     notify_surrogate_after_submission,
     surrogate_population,
 )
@@ -56,14 +58,28 @@ def run_generation(
     surrogate_used = False
     rng = random.Random(seed + generation.generation_index * 1009)
     source = "gpsaf_random"
+    explicit_training_data = None
 
     if history and _surrogate_requested(settings):
-        diagnostics.update(
-            ensure_surrogate_fresh_enough(
-                surrogate,
-                generation,
+        try:
+            explicit_training_data = materialize_surrogate_training_data(
+                surrogate, generation
             )
-        )
+        except Exception as exc:  # noqa: BLE001 - explicit data failure falls back to real search.
+            diagnostics.update(
+                {
+                    "surrogate_training_data": "failed",
+                    "surrogate_training_data_error": f"{exc.__class__.__name__}: {exc}",
+                }
+            )
+        else:
+            diagnostics.update(
+                ensure_surrogate_fresh_enough(
+                    surrogate,
+                    generation,
+                    explicit_training_data,
+                )
+            )
         population, surrogate_info = surrogate_population(
             history,
             context=context,
@@ -73,6 +89,7 @@ def run_generation(
             population_size=size,
             seed=seed,
             settings=settings,
+            training_data=explicit_training_data,
         )
         diagnostics.update(surrogate_info)
         if population is None:
@@ -116,6 +133,7 @@ def run_generation(
         population,
         after_jobs_submitted=after_jobs_submitted,
     )
+    diagnostics.update(finish_surrogate_training(surrogate, generation))
     return OptimizationResult(
         generation_index=generation.generation_index,
         population=population,

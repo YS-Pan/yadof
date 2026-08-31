@@ -13,18 +13,21 @@ import numpy as np
 
 from ...config import LoadedConfig, load_config
 from ...job_template import api as job_template_api
-from ...job_template.rawdata_contract import NamedRawDataItem
 from ...job_template.rawdata_template import RawDataSchemaTemplate, StructuredRawDataSample
 from ...optimize.state import active_strategy_signature
-from ...recorded_data import api as recorded_api
-from ...recorded_data.session import CampaignSession
-from ...task_snapshot import GenerationTaskSnapshot
+from ...task_snapshot import GenerationTaskSnapshot, create_generation_snapshot
 from ...workspace import WorkspaceContext
 from .._shared.training_events import monotonic_time, now_text, record_training_event
+from ..training import (
+    SurrogatePrediction,
+    SurrogateTrainingData,
+    TrainingCancelledError,
+    TrainingHandle,
+)
 from . import checkpoints
 from .model import fit_linear_subspace, predict_raw_data as predict_model_raw_data
 from .settings import DEFAULT_LINEAR_SUBSPACE_SETTINGS, LinearSubspaceSettings
-from .types import LinearSubspaceState, NamedTrainingData
+from .types import LinearSubspaceState
 
 
 StateKey = tuple[str, str, str, str, str, str]
@@ -58,77 +61,9 @@ def workspace_state_key(
     )
 
 
-def training_data_from_session(
-    session: CampaignSession,
-    snapshot: GenerationTaskSnapshot,
-) -> NamedTrainingData:
-    historical = session.historical_results(snapshot)
-    job_names = tuple(name for name, _variables, _costs in historical)
-    named = dict(session.named_rawdata_samples(job_names=job_names, status="completed"))
-    metadata_rows = dict(session.record_metadata(job_names=job_names, status="completed"))
-    variables = []
-    samples = []
-    selected_names = []
-    metadata_output = []
-    for job_name, normalized, _costs in historical:
-        items = named.get(job_name)
-        if items is None:
-            continue
-        selected_names.append(str(job_name))
-        variables.append(tuple(float(value) for value in normalized))
-        samples.append(StructuredRawDataSample.from_items(items))
-        metadata_output.append(dict(metadata_rows.get(job_name, {})))
-    return NamedTrainingData(
-        parameter_names=tuple(snapshot.parameter_names),
-        normalized_variables=tuple(variables),
-        raw_data=tuple(samples),
-        row_ids=tuple(selected_names),
-        record_metadata=tuple(metadata_output),
-    )
-
-
-def _load_training_data(workspace: WorkspaceContext) -> NamedTrainingData:
-    bundled = recorded_api.get_surrogate_training_data(workspace)
-    names = tuple(str(value) for value in bundled.get("parameter_names", ()))
-    variables = tuple(
-        tuple(float(value) for value in row)
-        for row in bundled.get("normalized_variables", ())
-    )
-    payload_rows = tuple(bundled.get("raw_data", ()))
-    filename_rows = tuple(bundled.get("rawdata_filenames", ()))
-    metadata_rows = tuple(bundled.get("record_metadata", ()))
-    bundled_job_names = tuple(str(value) for value in bundled.get("job_names", ()))
-    if len(payload_rows) != len(filename_rows):
-        raise ValueError("recorded PCA/SVD training data is missing rawData filenames")
-    samples = []
-    row_ids = []
-    for index, (filenames, payloads) in enumerate(zip(filename_rows, payload_rows)):
-        if len(filenames) != len(payloads):
-            raise ValueError("recorded rawData filenames and payloads must align")
-        samples.append(
-            StructuredRawDataSample.from_items(
-                tuple(
-                    NamedRawDataItem(str(filename), dict(payload))
-                    for filename, payload in zip(filenames, payloads)
-                )
-            )
-        )
-        metadata_row = metadata_rows[index] if index < len(metadata_rows) else {}
-        identity = bundled_job_names[index] if index < len(bundled_job_names) else None
-        row_ids.append(str(identity or f"recorded-row-{index:08d}"))
-    return NamedTrainingData(
-        parameter_names=names,
-        normalized_variables=variables,
-        raw_data=tuple(samples),
-        row_ids=tuple(row_ids),
-        record_metadata=tuple(
-            dict(value) if isinstance(value, Mapping) else {} for value in metadata_rows
-        ),
-    )
-
-
 def train(
     workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
     *,
     generation_index: int = 0,
     _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
@@ -136,6 +71,7 @@ def train(
     return train_with_config(
         load_config(workspace),
         generation_index=generation_index,
+        training_data=training_data,
         settings=_settings,
     )
 
@@ -144,29 +80,33 @@ def train_with_config(
     config: LoadedConfig,
     *,
     generation_index: int = 0,
-    training_data: NamedTrainingData | None = None,
+    training_data: SurrogateTrainingData,
     settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
     random_seed: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> LinearSubspaceState:
     del random_seed  # the component-owned settings snapshot is authoritative
     started_at = now_text()
     started = monotonic_time()
-    data = training_data or _load_training_data(config.workspace)
-    if not data.raw_data:
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("pca_svd fit requires SurrogateTrainingData")
+    data = training_data
+    if data.sample_count < 1:
         raise ValueError("pca_svd training requires at least one completed rawData row")
+    _check_cancelled(cancel_event)
     model = fit_linear_subspace(data, settings)
+    _check_cancelled(cancel_event)
     strategy_signature = strategy_signature_for_workspace(config.workspace)
     parameter_definition_signature = (
         job_template_api.get_parameter_definition_signature(config.workspace)
     )
-    provenance = checkpoints.training_design_signature(data)
     torch_version = metadata.version("torch")
     signature = checkpoints.state_signature(
         strategy_signature=strategy_signature,
         parameter_names=data.parameter_names,
         parameter_definition_signature=parameter_definition_signature,
         schema_signature=model.template.signature,
-        training_design_signature=provenance,
+        training_data_digest=data.content_digest,
         settings=settings,
         numpy_version=np.__version__,
         torch_version=torch_version,
@@ -185,7 +125,7 @@ def train_with_config(
     )
     history = {
         "model": checkpoints.MODEL_NAME,
-        "sample_count": len(data.raw_data),
+        "sample_count": data.sample_count,
         "field_count": len(model.fields),
         "requested_rank": settings.rank,
         "effective_ranks": [field.effective_rank for field in model.fields],
@@ -194,13 +134,29 @@ def train_with_config(
         "duration_sec": monotonic_time() - started,
         "deterministic_intervals": "zero-width",
         "posterior_capability": False,
+        "training_data_digest": data.content_digest,
+        "training_provenance_digest": data.provenance_digest,
+        "training_transform_id": data.transform_id,
+    }
+    selected = data.selected_indices
+    provenance = {
+        "row_ids": [data.row_ids[index] for index in selected],
+        "evidence_ids": [data.evidence_ids[index] for index in selected],
+        "statuses": [data.statuses[index] for index in selected],
+        "valid_mask": list(data.valid_mask),
+        "lineage": [
+            [_thaw_json(step) for step in data.lineage[index]]
+            for index in selected
+        ],
+        "transform_id": data.transform_id,
     }
     state = LinearSubspaceState(
         generation_index=int(generation_index),
-        sample_count=len(data.raw_data),
+        sample_count=data.sample_count,
         strategy_signature=strategy_signature,
         state_signature=signature,
-        training_design_signature=provenance,
+        training_data_digest=data.content_digest,
+        training_provenance_digest=data.provenance_digest,
         parameter_definition_signature=parameter_definition_signature,
         model=model,
         checkpoint_path=checkpoint_path,
@@ -209,9 +165,12 @@ def train_with_config(
         artifact_path=artifact_dir / "model.npz",
         run_namespace=run_namespace,
         component_namespace=component_namespace,
-        training_row_ids=data.row_ids,
+        training_row_ids=tuple(data.row_ids[index] for index in selected),
+        training_transform_id=data.transform_id,
+        training_provenance=provenance,
         train_history=history,
     )
+    _check_cancelled(cancel_event)
     checkpoints.write_checkpoint(state, staging_dir=staging_dir)
     record_training_event(
         config.workspace,
@@ -220,12 +179,13 @@ def train_with_config(
             "status": "completed",
             "model": checkpoints.MODEL_NAME,
             "generation_index": int(generation_index),
-            "sample_count": len(data.raw_data),
+            "sample_count": data.sample_count,
             "started_at": started_at,
             "ended_at": now_text(),
             "duration_sec": monotonic_time() - started,
             "strategy_signature": strategy_signature,
             "state_signature": signature,
+            "training_data_digest": data.content_digest,
         },
     )
     with _LOCK:
@@ -233,20 +193,19 @@ def train_with_config(
     return state
 
 
-def _current_evidence(
-    config: LoadedConfig,
-) -> tuple[NamedTrainingData, RawDataSchemaTemplate, str]:
-    data = _load_training_data(config.workspace)
-    if not data.raw_data:
+def _training_template(data: SurrogateTrainingData) -> RawDataSchemaTemplate:
+    selected = data.selected_indices
+    if not selected:
         raise ValueError("no PCA/SVD training evidence is available")
-    template = RawDataSchemaTemplate.from_items(data.raw_data[0].items)
-    for sample in data.raw_data:
-        template.validate_sample(sample)
-    return data, template, checkpoints.training_design_signature(data)
+    template = RawDataSchemaTemplate.from_items(data.raw_data[selected[0]].items)
+    for index in selected:
+        template.validate_sample(data.raw_data[index])
+    return template
 
 
 def _recover_latest_state(
     config: LoadedConfig,
+    training_data: SurrogateTrainingData,
     *,
     settings: LinearSubspaceSettings,
 ) -> LinearSubspaceState | None:
@@ -262,7 +221,7 @@ def _recover_latest_state(
     if not namespace.is_dir():
         return None
     try:
-        data, template, provenance = _current_evidence(config)
+        template = _training_template(training_data)
     except (OSError, ValueError):
         return None
     parameter_signature = job_template_api.get_parameter_definition_signature(
@@ -276,7 +235,7 @@ def _recover_latest_state(
             )
             if payload["strategy_signature"] != strategy:
                 continue
-            if payload["training_design_signature"] != provenance:
+            if payload["training_data_digest"] != training_data.content_digest:
                 continue
             if payload["parameter_definition_signature"] != parameter_signature:
                 continue
@@ -287,10 +246,10 @@ def _recover_latest_state(
             )
             expected = checkpoints.state_signature(
                 strategy_signature=strategy,
-                parameter_names=data.parameter_names,
+                parameter_names=training_data.parameter_names,
                 parameter_definition_signature=parameter_signature,
                 schema_signature=template.signature,
-                training_design_signature=provenance,
+                training_data_digest=training_data.content_digest,
                 settings=settings,
                 numpy_version=np.__version__,
                 torch_version=metadata.version("torch"),
@@ -298,12 +257,14 @@ def _recover_latest_state(
             if payload["state_signature"] != expected:
                 continue
             artifact_dir = checkpoints.resolve_artifact_dir(root, payload)
+            stored_provenance = payload.get("training_provenance", {})
             return LinearSubspaceState(
                 generation_index=int(payload["generation_index"]),
                 sample_count=int(payload["sample_count"]),
                 strategy_signature=strategy,
                 state_signature=expected,
-                training_design_signature=provenance,
+                training_data_digest=str(payload["training_data_digest"]),
+                training_provenance_digest=str(payload["training_provenance_digest"]),
                 parameter_definition_signature=parameter_signature,
                 model=model,
                 checkpoint_path=root / f"generation_{int(payload['generation_index']):04d}.json",
@@ -312,7 +273,17 @@ def _recover_latest_state(
                 artifact_path=artifact_dir / str(payload["artifact_file"]),
                 run_namespace=str(payload["run_namespace"]),
                 component_namespace=str(payload["component_namespace"]),
-                training_row_ids=data.row_ids,
+                training_row_ids=tuple(str(value) for value in payload.get("training_row_ids", ())),
+                training_transform_id=(
+                    None
+                    if payload.get("training_transform_id") is None
+                    else str(payload["training_transform_id"])
+                ),
+                training_provenance=(
+                    dict(stored_provenance)
+                    if isinstance(stored_provenance, Mapping)
+                    else {}
+                ),
                 train_history=dict(payload.get("train_history", {})),
             )
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
@@ -322,6 +293,7 @@ def _recover_latest_state(
 
 def _state_for_config(
     config: LoadedConfig,
+    training_data: SurrogateTrainingData,
     *,
     settings: LinearSubspaceSettings,
 ) -> LinearSubspaceState | None:
@@ -332,13 +304,15 @@ def _state_for_config(
         current_parameter_signature = (
             job_template_api.get_parameter_definition_signature(config.workspace)
         )
-        if current_parameter_signature != state.parameter_definition_signature:
-            with _LOCK:
-                _STATES.pop(key, None)
+        if (
+            current_parameter_signature != state.parameter_definition_signature
+            or state.training_data_digest != training_data.content_digest
+            or state.model.template.signature != training_data.schema_signature
+        ):
             state = None
     if state is not None:
         return state
-    state = _recover_latest_state(config, settings=settings)
+    state = _recover_latest_state(config, training_data, settings=settings)
     if state is not None:
         with _LOCK:
             state = _STATES.setdefault(key, state)
@@ -347,40 +321,122 @@ def _state_for_config(
 
 def has_trained_state(
     workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
     *,
     _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
 ) -> bool:
-    return _state_for_config(load_config(workspace), settings=_settings) is not None
+    return _state_for_config(
+        load_config(workspace), training_data, settings=_settings
+    ) is not None
 
 
 def latest_state_generation(
     workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
     *,
     _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
 ) -> int | None:
-    state = _state_for_config(load_config(workspace), settings=_settings)
+    state = _state_for_config(
+        load_config(workspace), training_data, settings=_settings
+    )
     return None if state is None else state.generation_index
 
 
 def _require_state(
     config: LoadedConfig,
+    training_data: SurrogateTrainingData,
     *,
     settings: LinearSubspaceSettings,
 ) -> LinearSubspaceState:
-    state = _state_for_config(config, settings=settings)
+    state = _state_for_config(config, training_data, settings=settings)
     if state is None:
         raise RuntimeError("pca_svd surrogate is not trained")
     return state
 
 
-def predict_raw_data(
+def recover_state(
     workspace: WorkspaceLike,
-    population,
+    training_data: SurrogateTrainingData,
     *,
     _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
+    _config: LoadedConfig | None = None,
+) -> LinearSubspaceState | None:
+    config = load_config(workspace) if _config is None else _config
+    return _state_for_config(config, training_data, settings=_settings)
+
+
+def start_fit(
+    workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
+    *,
+    generation_index: int = 0,
+    _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
+    _config: LoadedConfig | None = None,
+    _session=None,
+    _snapshot: GenerationTaskSnapshot | None = None,
+) -> TrainingHandle:
+    owned_snapshot = None
+    if _snapshot is None:
+        base_config = load_config(workspace) if _config is None else _config
+        owned_snapshot = create_generation_snapshot(base_config)
+        selected_snapshot = owned_snapshot
+    else:
+        selected_snapshot = _snapshot
+    config = selected_snapshot.config
+    try:
+        handle = TrainingHandle(
+            lambda cancel_event: train_with_config(
+                config,
+                generation_index=int(generation_index),
+                training_data=training_data,
+                settings=_settings,
+                cancel_event=cancel_event,
+            ),
+            session=_session,
+            snapshot=selected_snapshot,
+            owned_cleanup=(None if owned_snapshot is None else owned_snapshot.close),
+        )
+    except Exception:
+        if owned_snapshot is not None:
+            owned_snapshot.close()
+        raise
+    return handle.start()
+
+
+def fit(
+    workspace: WorkspaceLike,
+    training_data: SurrogateTrainingData,
+    *,
+    generation_index: int = 0,
+    _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
+    _config: LoadedConfig | None = None,
+    _session=None,
+    _snapshot: GenerationTaskSnapshot | None = None,
+) -> LinearSubspaceState:
+    handle = start_fit(
+        workspace,
+        training_data,
+        generation_index=generation_index,
+        _settings=_settings,
+        _config=_config,
+        _session=_session,
+        _snapshot=_snapshot,
+    )
+    try:
+        state = handle.wait()
+        if not isinstance(state, LinearSubspaceState):
+            raise TypeError("pca_svd fit returned an invalid state")
+        return state
+    finally:
+        handle.close()
+
+
+def predict_raw_data(
+    state: LinearSubspaceState,
+    population,
 ) -> tuple[StructuredRawDataSample, ...]:
-    config = load_config(workspace)
-    state = _require_state(config, settings=_settings)
+    if not isinstance(state, LinearSubspaceState):
+        raise TypeError("pca_svd prediction requires LinearSubspaceState")
     return predict_model_raw_data(state.model, population)
 
 
@@ -401,22 +457,61 @@ def _costs_from_samples(
     return tuple(tuple(float(value) for value in row) for row in costs)
 
 
+def predict(
+    state: LinearSubspaceState,
+    population,
+    *,
+    snapshot: GenerationTaskSnapshot,
+) -> SurrogatePrediction:
+    if not isinstance(state, LinearSubspaceState):
+        raise TypeError("pca_svd prediction requires LinearSubspaceState")
+    if not isinstance(snapshot, GenerationTaskSnapshot):
+        raise TypeError("pca_svd prediction requires GenerationTaskSnapshot")
+    rows = tuple(
+        tuple(float(value) for value in row)
+        for row in (() if population is None else population)
+    )
+    if not rows:
+        samples = ()
+        costs = ()
+    else:
+        samples = predict_raw_data(state, rows)
+        costs = _costs_from_samples(snapshot.config.workspace, samples, rows)
+    intervals = tuple(
+        tuple((value, value) for value in cost_row)
+        for cost_row in costs
+    )
+    return SurrogatePrediction(
+        state_signature=state.state_signature,
+        training_data_digest=state.training_data_digest,
+        normalized_variables=rows,
+        raw_data=samples,
+        costs=costs,
+        intervals=intervals,
+        interpretation_fingerprint=snapshot.interpretation_fingerprint,
+        diagnostics={
+            "component": checkpoints.COMPONENT_NAMESPACE,
+            "posterior_capability": False,
+            "interval_policy": "zero-width",
+            "candidate_count": len(rows),
+        },
+    )
+
+
 def predict_population(
     workspace: WorkspaceLike,
     population,
     *,
+    _training_data: SurrogateTrainingData,
+    _snapshot: GenerationTaskSnapshot,
     _settings: LinearSubspaceSettings = DEFAULT_LINEAR_SUBSPACE_SETTINGS,
 ) -> tuple[tuple[tuple[float, ...], tuple[tuple[float, float], ...]], ...]:
-    rows = tuple(tuple(float(value) for value in row) for row in (population or ()))
-    if not rows:
-        return ()
-    config = load_config(workspace)
-    samples = predict_raw_data(config.workspace, rows, _settings=_settings)
-    costs = _costs_from_samples(config.workspace, samples, rows)
-    return tuple(
-        (cost_row, tuple((value, value) for value in cost_row))
-        for cost_row in costs
+    state = _require_state(
+        _snapshot.config,
+        _training_data,
+        settings=_settings,
     )
+    return predict(state, population, snapshot=_snapshot).as_gpsaf_rows()
 
 
 def reset_workspace_state(workspace: WorkspaceLike) -> None:
@@ -438,15 +533,31 @@ def _hash_json(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _check_cancelled(event: threading.Event | None) -> None:
+    if event is not None and event.is_set():
+        raise TrainingCancelledError("surrogate fit cancelled before checkpoint commit")
+
+
+def _thaw_json(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _thaw_json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_json(item) for item in value]
+    return value
+
+
 __all__ = [
+    "fit",
     "has_trained_state",
     "latest_state_generation",
+    "predict",
     "predict_population",
     "predict_raw_data",
+    "recover_state",
     "reset_workspace_state",
+    "start_fit",
     "strategy_signature_for_workspace",
     "train",
-    "training_data_from_session",
     "train_with_config",
     "workspace_state_key",
 ]

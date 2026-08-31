@@ -15,9 +15,9 @@ from .types import (
     LinearSubspaceModel,
     LinearSubspaceCodec,
     LinearSubspaceState,
-    NamedTrainingData,
     OracleReconstruction,
 )
+from ..training import SurrogateTrainingData
 
 
 __all__ = [
@@ -27,8 +27,8 @@ __all__ = [
     "LinearSubspaceCodec",
     "LinearSubspaceSettings",
     "LinearSubspaceState",
-    "NamedTrainingData",
     "OracleReconstruction",
+    "SurrogateTrainingData",
     "fit_linear_subspace",
     "fit_multioutput_ridge",
     "predict_raw_data",

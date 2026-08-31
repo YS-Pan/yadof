@@ -35,7 +35,8 @@
 ## Backend Components
 
 - `SurrogateWorkspace`: explicit workspace facade and top-level use-case API.
-- `CheckpointPredictor` / `HierarchicalCAECheckpointPredictor`: one method-specific
+- `CheckpointPredictor` dispatch plus conditional-INR,
+  `HierarchicalCAECheckpointPredictor`, and `PCASVDCheckpointPredictor`: one method-specific
   checkpoint's validated model/schema/scaler plus interactive and audit inference.
 - `CrossGenerationErrorAudit`: compact relative/absolute cost/rawData sum-count
   arrays and zero-inference matrix derivation.
@@ -63,6 +64,7 @@ ui/*
 backend/workspace.py
   -> backend/checkpoints.py
   -> backend/hierarchical_checkpoints.py (through discovery/dispatch)
+  -> backend/pca_svd_checkpoints.py (through discovery/dispatch)
   -> backend/rawdata.py
   -> backend/types.py
   -> installed yadof APIs
@@ -76,13 +78,18 @@ backend/hierarchical_checkpoints.py
   -> backend/rawdata.py
   -> backend/types.py
   -> installed yadof hierarchical-CAE model/runtime APIs
+
+backend/pca_svd_checkpoints.py
+  -> backend/rawdata.py
+  -> backend/types.py
+  -> installed yadof PCA/SVD checkpoint/model APIs
 ```
 
 The backend must never import UI modules. Plotting code must not parse checkpoints,
 read records, or call private yadof model functions. The UI passes user intent to
 the coordinator; the coordinator submits backend operations.
 
-Package-internal model/runtime imports are isolated to the two checkpoint adapters
+Package-internal model/runtime imports are isolated to the method checkpoint adapters
 under `backend/`; the public `yadof.surrogate` namespace remains the lazy factory
 and scheduling facade.
 

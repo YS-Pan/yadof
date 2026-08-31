@@ -54,6 +54,8 @@ behavior rather than application logic.
 - `hierarchical_checkpoints.py` validates and loads hierarchical-CAE artifacts,
   preserves their full-grid audit/cost path, and provides all-axis in-domain
   coordinate plots for coordinate-enabled checkpoints.
+- `pca_svd_checkpoints.py` validates no-pickle PCA/SVD state/artifact identity and
+  exposes deterministic one-member prediction, stored-grid plots, and audit.
 - `rawdata.py` copies templates, flattens true samples against checkpoint slots,
   aggregates errors by rawData item, and extracts display curves.
 - `types.py` defines the data passed between backend and UI, including derivation of

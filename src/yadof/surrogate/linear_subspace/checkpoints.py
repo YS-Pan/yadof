@@ -10,7 +10,6 @@ from typing import Mapping
 
 import numpy as np
 
-from ...job_template.rawdata_contract import resolve_main_array_key
 from .._shared.artifacts import atomic_write_json, new_publication_paths, run_namespace_for_signature
 from .settings import LinearSubspaceSettings
 from .types import FieldBasis, LinearSubspaceModel, LinearSubspaceState
@@ -25,7 +24,7 @@ MODEL_NAME = "pca-svd-ridge-rawdata"
 def state_signature(
     *, strategy_signature: str, parameter_names: tuple[str, ...],
     parameter_definition_signature: Mapping[str, object], schema_signature: str,
-    training_design_signature: str, settings: LinearSubspaceSettings,
+    training_data_digest: str, settings: LinearSubspaceSettings,
     numpy_version: str, torch_version: str,
 ) -> str:
     return _hash_json({
@@ -35,28 +34,11 @@ def state_signature(
         "parameter_names": list(parameter_names),
         "parameter_definition_signature": dict(parameter_definition_signature),
         "schema_signature": schema_signature,
-        "training_design_signature": training_design_signature,
+        "training_data_digest": training_data_digest,
         "settings": settings.semantic_parameters(),
         "numpy_version": numpy_version,
         "torch_version": torch_version,
     })
-
-
-def training_design_signature(data) -> str:
-    digest = hashlib.sha256(b"yadof.pca-svd-training-evidence:v1\0")
-    row_ids = data.row_ids or tuple(str(index) for index in range(len(data.raw_data)))
-    for row_id, variables, sample in zip(row_ids, data.normalized_variables, data.raw_data):
-        digest.update(str(row_id).encode("utf-8"))
-        digest.update(np.asarray(variables, dtype=np.float64).tobytes(order="C"))
-        for item in sample.items:
-            digest.update(item.filename.encode("utf-8"))
-            key = resolve_main_array_key(item.payload)
-            value = np.asarray(item.payload[key])
-            digest.update(key.encode("utf-8"))
-            digest.update(value.dtype.str.encode("ascii"))
-            digest.update(json.dumps(list(value.shape)).encode("ascii"))
-            digest.update(np.ascontiguousarray(value).tobytes(order="C"))
-    return digest.hexdigest()
 
 
 def publication_paths(checkpoint_dir: Path, generation_index: int, strategy_signature: str):
@@ -157,7 +139,12 @@ def validate_manifest(payload: object) -> dict[str, object]:
         raise ValueError("pca_svd checkpoint run namespace mismatch")
     if payload.get("component_namespace") != COMPONENT_NAMESPACE:
         raise ValueError("unsupported pca_svd component namespace")
-    for key in ("state_signature", "training_design_signature", "artifact_sha256"):
+    for key in (
+        "state_signature",
+        "training_data_digest",
+        "training_provenance_digest",
+        "artifact_sha256",
+    ):
         value = str(payload[key])
         if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
             raise ValueError(f"invalid pca_svd {key}")
@@ -185,7 +172,8 @@ def _manifest_payload(state: LinearSubspaceState, root: Path, artifact_hash: str
         "model": MODEL_NAME,
         "strategy_signature": state.strategy_signature,
         "state_signature": state.state_signature,
-        "training_design_signature": state.training_design_signature,
+        "training_data_digest": state.training_data_digest,
+        "training_provenance_digest": state.training_provenance_digest,
         "run_namespace": state.run_namespace,
         "component_namespace": state.component_namespace,
         "publication_id": state.namespace_manifest_path.stem[len(prefix):],
@@ -194,6 +182,8 @@ def _manifest_payload(state: LinearSubspaceState, root: Path, artifact_hash: str
         "parameter_names": list(model.parameter_names),
         "parameter_definition_signature": dict(state.parameter_definition_signature),
         "training_row_ids": list(state.training_row_ids),
+        "training_transform_id": state.training_transform_id,
+        "training_provenance": dict(state.training_provenance),
         "settings": model.settings.semantic_parameters(),
         "numpy_version": np.__version__,
         "torch_version": _torch_version(),
@@ -226,6 +216,6 @@ def _hash_json(value: object) -> str:
 __all__ = [
     "COMPONENT_NAMESPACE", "MODEL_NAME", "SURROGATE_METHOD", "TRAINING_POLICY",
     "load_model", "publication_paths", "resolve_artifact_dir",
-    "run_namespace_for_signature", "state_signature", "training_design_signature",
+    "run_namespace_for_signature", "state_signature",
     "validate_manifest", "write_checkpoint",
 ]

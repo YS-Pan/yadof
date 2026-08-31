@@ -12,6 +12,7 @@ src/yadof/tools/surrogate_viewer/
     __init__.py             public viewer-backend exports
     checkpoints.py          generic dispatch + conditional-INR loading/inference
     hierarchical_checkpoints.py  hierarchical-CAE loading/inference/readout
+    pca_svd_checkpoints.py  deterministic PCA/SVD loading/inference/audit
     rawdata.py              rawData schema and plotting adapters
     types.py                immutable transfer and aggregate types
     workspace.py            records, prediction facade, audit orchestration
@@ -23,6 +24,7 @@ src/yadof/tools/surrogate_viewer/
     widgets.py              shared toggles, scrolling, and keyboard controls
   dev_doc/                  relatively independent viewer documentation
 tests/test_surrogate_viewer.py
+tests/test_explicit_surrogate_fit.py
 ```
 
 ## Development Rules

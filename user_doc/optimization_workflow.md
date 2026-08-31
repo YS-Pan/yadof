@@ -250,6 +250,60 @@ creates an owned transient row with deterministic lineage from the parent,
 operation, JSON-safe parameters, ordinal, and transformed content. Derived rows do
 not write segments and do not enter committed optimizer history.
 
+The deterministic PCA/SVD component is the first surrogate with a fully explicit
+programmatic fit/state/predict path. Materialize by row identity, fit that exact
+value, and supply one coherent task snapshot when converting predicted rawData to
+current cost:
+
+```python
+from yadof.config import load_config
+from yadof.recorded_data import get_cost_table, get_evidence_dataset
+from yadof.surrogate import materialize_training_data, pca_svd
+from yadof.task_snapshot import create_generation_snapshot
+
+evidence = get_evidence_dataset(workspace)
+costs = get_cost_table(workspace, dataset=evidence)
+training = materialize_training_data(
+    evidence,
+    costs,
+    # row_ids=(...),       # optional strict ordered selection
+    # transform_id="v1",  # provenance only; never replaces content identity
+)
+
+component = pca_svd(rank=16, ridge_alpha=1e-6, device="cpu")
+state = component.fit(workspace, training, generation_index=0)
+
+snapshot = create_generation_snapshot(load_config(workspace))
+try:
+    prediction = component.predict(state, ((0.25,), (0.75,)), snapshot=snapshot)
+finally:
+    snapshot.close()
+
+print(prediction.costs, prediction.intervals)
+```
+
+`SurrogateTrainingData` may also be built directly from fully materialized NumPy
+rows and complete `StructuredRawDataSample` values. It rejects lazy loaders,
+masked/object/structured/complex targets, and non-finite parameters or main arrays.
+Its `content_digest` changes with dtype, shape, order, duplicates, status/mask, or
+numeric content; C/F memory layout, paths, row IDs, and `transform_id` do not alter
+that semantic digest. The separate `provenance_digest` binds ordered source IDs,
+lineage, statuses, and transform intent. Recovery always requires the exact content
+value, so reusing a transform label cannot recover the wrong mathematics.
+
+For an asynchronous standalone fit, call `start_fit()` and always `wait()`/`close()`
+the returned `TrainingHandle` (or use it as a context manager). Wait timeouts do not
+cancel. Cancellation is cooperative around the decomposition kernel and before
+checkpoint publication; an atomic commit that already won the race remains a
+completed state. A campaign-backed handle leases its exact generation snapshot,
+normal generation completion waits for it, and abnormal campaign close cancels it.
+
+`SurrogatePrediction` is immutable transient data: complete predicted rawData,
+current-snapshot costs, deterministic zero-width intervals, and bounded diagnostics.
+It never calls the recorder/finalizer and is not a real `CostTable` or a posterior
+sample. `fit_codec()`/`evaluate_oracle()` remain truth-encoding diagnostics and
+cannot be passed where an explicit deployable state is required.
+
 Keep these three decisions separate:
 
 1. `workflow.py` decides what evidence is saved. Save a complete compatible
@@ -534,6 +588,9 @@ reconstruction diagnostics. That oracle is explicitly marked `diagnostic_only`
 because it encodes known validation rawData; never use its output for candidate
 selection or report it as deployable prediction quality. Torch is loaded only
 when this component is validated or fitted and comes from the `surrogate` extra.
+GPSAF uses the same explicit materialization/state path internally and unwraps the
+typed prediction only at its compatibility boundary; it does not restore an
+implicit PCA/SVD history scan.
 
 For a real multi-objective NSGA-III-only campaign with no GPSAF or surrogate:
 

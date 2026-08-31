@@ -26,7 +26,10 @@
 - A result row carries no rawData payload after finalization; durable evidence is
   read only through `recorded_data` views.
 - A handle using a caller-owned campaign registers against the exact current
-  snapshot at construction and remains open until close, even after completion.
+  snapshot at construction with the generation registry's evaluation
+  cancel-on-close policy and remains open until close, even after completion. The
+  registry is shared with explicit training handles but their normal-boundary
+  wait policy remains distinct.
 - Standalone execution owns and closes its private session inside the owner thread;
   it never registers recursively with that session.
 - Backend or recorder failure is re-raised by every waiter and is never converted

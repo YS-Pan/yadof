@@ -87,6 +87,12 @@ for separately authorized real adapter smoke or performance work.
   mean-only cases, schema/dtype round trips, validation-oracle labeling,
   parameter-only ridge prediction, zero-width cost intervals, no posterior,
   atomic exact-state recovery, and lazy Torch imports;
+- explicit surrogate materialization across raw/filtered/reordered/duplicated and
+  derived identity views; content-versus-provenance digest boundaries, layout/
+  dtype/shape/status/mask/non-finite rejection; sync/async timeout/cancel/failure/
+  publication races, generation cleanup/deactivation/input release; typed hot-cost
+  prediction and recorder non-entry; and PCA/SVD viewer discovery/predict/plot/audit
+  with incompatible-manifest isolation;
 - joint rawData posterior protocol through a neutral sample-backed backend with at
   least two candidates, different-shaped named fields, and two objectives: stable
   seed/draw/source identity, repeated candidates, empty populations, candidate
@@ -175,6 +181,11 @@ cancel-before-start, committed identity before visibility, repeated/multi-thread
 wait, wait timeout, repeated close, generation blocking, caller-exception cleanup,
 session-driven local cancellation, fast active/queued cleanup with Windows PID
 release, fake-Condor removal, recorder-fatal waiter wakeup, and sync-facade parity.
+
+`test_explicit_surrogate_fit.py` is the first explicit surrogate lifecycle suite.
+It keeps materialization, digest/provenance, fit-handle races, generation ownership,
+typed prediction, recorder non-entry, and deterministic viewer behavior independent
+from conditional-INR and hierarchical-CAE migration tests.
 
 ## Acceptance
 

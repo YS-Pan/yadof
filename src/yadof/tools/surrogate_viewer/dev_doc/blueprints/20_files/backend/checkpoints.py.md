@@ -24,6 +24,8 @@ artifact loading, device selection, interactive, and audit inference path.
 - Delegate a uniquely selected hierarchical-CAE namespace to
   `hierarchical_checkpoints.py`; reject ambiguous active component scopes instead of
   mixing checkpoint methods.
+- Delegate a PCA/SVD namespace to `pca_svd_checkpoints.py`, where deterministic
+  one-member state/schema/artifact validation remains isolated from INR loading.
 - Predict member flat arrays, reconstruct mean/member rawData, and calculate current
   costs.
 - Query a modeled slot at arbitrary physical coordinates and build mean/member

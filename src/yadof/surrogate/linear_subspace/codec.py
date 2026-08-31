@@ -11,7 +11,8 @@ from ...job_template.rawdata_template import (
     StructuredRawDataSample,
 )
 from .settings import LinearSubspaceSettings
-from .types import FieldBasis, LinearSubspaceCodec, NamedTrainingData, OracleReconstruction
+from ..training import SurrogateTrainingData
+from .types import FieldBasis, LinearSubspaceCodec, OracleReconstruction
 
 
 def validate_samples(
@@ -216,7 +217,7 @@ def fit_deployable(
     from .model import fit_linear_subspace
 
     return fit_linear_subspace(
-        NamedTrainingData(
+        SurrogateTrainingData(
             parameter_names=tuple(str(value) for value in parameter_names),
             normalized_variables=tuple(
                 tuple(float(value) for value in row) for row in normalized_parameters

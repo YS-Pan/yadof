@@ -7,14 +7,14 @@ read-only values and use-case methods suitable for a desktop viewer.
 
 ## Functionalities
 
-- Resolve the active strategy, select one compatible declared conditional-INR or
-  experimental hierarchical-CAE run/component namespace, and discover its valid
+- Resolve the active strategy, select one compatible declared conditional-INR,
+  experimental hierarchical-CAE, or deterministic PCA/SVD run/component namespace, and discover its valid
   saved checkpoints in generation order without mixing methods.
 - Load effective workspace configuration, parameters, objectives, records, and one
   rawData template.
 - Validate a checkpoint against current parameter names and rawData schema.
-- Dispatch to the method-specific adapter and load conditional-INR or
-  hierarchical-CAE artifacts onto the configured device.
+- Dispatch to the method-specific adapter and load conditional-INR,
+  hierarchical-CAE, or no-pickle PCA/SVD artifacts.
 - Predict reconstructed rawData, optional ensemble-member samples, and current
   costs.
 - Load true samples/costs for recorded comparisons.
@@ -63,6 +63,10 @@ Non-finite error elements add neither sum nor count.
 
 - Checkpoint JSON may exist for skipped/empty generations; discovery requires a
   usable flat schema and positive member count.
+- PCA/SVD is exposed as exactly one deterministic member. Its adapter reconstructs
+  complete stored-grid rawData, calculates current cost, and participates in the
+  same plot/audit contracts without inventing posterior spread or off-grid decoder
+  capability.
 - Retained inactive strategy/component namespaces are deliberately excluded from
   discovery; report metadata exposes the selected scope.
 - True rawData is flattened separately for each distinct checkpoint schema and may
@@ -93,6 +97,7 @@ current-cost interpretation, cancellation semantics, and no-partial-audit
 publication should remain stable.
 
 Package-internal imports from `yadof.surrogate.conditional_inr` and
-`yadof.surrogate.hierarchical_cae` are intentional method-adapter boundaries. They
+`yadof.surrogate.hierarchical_cae`, plus the PCA/SVD linear-subspace reader, are
+intentional method-adapter boundaries. They
 may change with the owning surrogate/rawData implementation, but must not leak into
 UI modules or become an external viewer API.

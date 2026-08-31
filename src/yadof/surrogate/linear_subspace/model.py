@@ -17,11 +17,12 @@ from .codec import (
     validate_samples,
 )
 from .settings import LinearSubspaceSettings
-from .types import LinearSubspaceModel, NamedTrainingData, OracleReconstruction
+from ..training import SurrogateTrainingData
+from .types import LinearSubspaceModel, OracleReconstruction
 
 
 def normalized_parameter_matrix(values, *, width: int | None = None) -> np.ndarray:
-    rows = tuple(values or ())
+    rows = tuple(() if values is None else values)
     if not rows:
         return np.zeros((0, 0 if width is None else width), dtype=np.float64)
     if not isinstance(rows[0], (tuple, list, np.ndarray)):
@@ -40,16 +41,18 @@ def normalized_parameter_matrix(values, *, width: int | None = None) -> np.ndarr
 
 
 def fit_linear_subspace(
-    data: NamedTrainingData,
+    data: SurrogateTrainingData,
     settings: LinearSubspaceSettings,
 ) -> LinearSubspaceModel:
+    selected = data.selected_indices
     x = normalized_parameter_matrix(
-        data.normalized_variables,
+        tuple(data.normalized_variables[index] for index in selected),
         width=len(data.parameter_names),
     )
-    if x.shape[0] != len(data.raw_data):
+    samples = tuple(data.raw_data[index] for index in selected)
+    if x.shape[0] != len(samples):
         raise ValueError("normalized parameter and rawData rows must align")
-    template, samples = validate_samples(data.raw_data)
+    template, samples = validate_samples(samples)
     matrices = field_matrices(template, samples)
     fields = fit_field_bases(template, matrices, settings)
     coefficient_rows = tuple(

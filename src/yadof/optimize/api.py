@@ -78,6 +78,7 @@ def run_one_generation(
             session=session,
             snapshot=snapshot,
         )
+        session.finish_generation()
         return result
     finally:
         session.close()
@@ -225,6 +226,7 @@ def run_generations(
                 session=session,
                 snapshot=snapshot,
             )
+            session.finish_generation()
             results.append(result)
             if fail_on_all_infinite and _all_infinite(result.costs):
                 raise AllInfiniteGenerationError(result)
