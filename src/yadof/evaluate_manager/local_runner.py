@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Mapping
 
@@ -32,11 +34,22 @@ def run_local_job(
     python_executable: str | Path = sys.executable,
     env: Mapping[str, str] | None = None,
     plan_metadata: Mapping[str, object] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> JobResult:
     workflow = job.directory / WORKFLOW_SCRIPT_NAME
     metadata = base_metadata(job, engine="local")
     if plan_metadata:
         metadata.update({str(key): value for key, value in plan_metadata.items()})
+    if cancel_event is not None and cancel_event.is_set():
+        metadata.update(
+            status="cancelled",
+            failure_stage="before_process_start",
+            error_type="EvaluationCancelled",
+            error_message="evaluation cancellation was requested",
+            cancelled_at=now_text(),
+        )
+        write_metadata(job.directory, metadata)
+        return result_from_metadata(job, metadata)
     if not workflow.is_file():
         metadata.update(status="error", error=f"Missing {WORKFLOW_SCRIPT_NAME}", runner_detected_at=now_text())
         write_metadata(job.directory, metadata)
@@ -67,13 +80,37 @@ def run_local_job(
     resource_monitor.start()
 
     timed_out = False
+    cancelled = False
+    stdout = ""
+    stderr = ""
+    deadline = (
+        None if timeout_sec is None else time.monotonic() + float(timeout_sec)
+    )
     try:
-        stdout, stderr = proc.communicate(timeout=None if timeout_sec is None else float(timeout_sec))
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        terminate_process_tree(proc.pid, process_group=os.name != "nt")
-        stdout, stderr = proc.communicate()
-    resource_metadata = resource_monitor.stop()
+        while True:
+            if (
+                cancel_event is not None
+                and cancel_event.is_set()
+                and proc.poll() is None
+            ):
+                cancelled = True
+                terminate_process_tree(proc.pid, process_group=os.name != "nt")
+                stdout, stderr = proc.communicate()
+                break
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0.0 and proc.poll() is None:
+                timed_out = True
+                terminate_process_tree(proc.pid, process_group=os.name != "nt")
+                stdout, stderr = proc.communicate()
+                break
+            poll_timeout = 0.1 if remaining is None else max(0.001, min(0.1, remaining))
+            try:
+                stdout, stderr = proc.communicate(timeout=poll_timeout)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+    finally:
+        resource_metadata = resource_monitor.stop()
 
     raw_paths = raw_data_paths(job.directory)
     individual_metadata = read_individual_metadata(job.directory)
@@ -86,7 +123,10 @@ def run_local_job(
             rawdata_error = str(exc)
             raw_paths = ()
     cost_path = job.directory / "cost.json"
-    if timed_out:
+    if cancelled:
+        status = "cancelled"
+        error = "Evaluation cancellation was requested"
+    elif timed_out:
         status = "timeout"
         error = f"Workflow exceeded timeout_sec={float(timeout_sec):.3f}"
     elif cost_path.exists():
@@ -115,7 +155,9 @@ def run_local_job(
     metadata.update(
         status=status,
         timed_out=timed_out,
-        returncode=None if timed_out else int(proc.returncode),
+        cancelled=cancelled,
+        cancel_requested=bool(cancel_event is not None and cancel_event.is_set()),
+        returncode=None if timed_out or cancelled else int(proc.returncode),
         runner_finished_at=now_text(),
         raw_data_files=[p.name for p in raw_paths],
         stdout_tail=tail(stdout),
@@ -123,6 +165,13 @@ def run_local_job(
     )
     if error is not None:
         metadata["error"] = error
+    if cancelled:
+        metadata.update(
+            failure_stage="process_cancel",
+            error_type="EvaluationCancelled",
+            error_message=error,
+            cancelled_at=now_text(),
+        )
     if rawdata_error is not None:
         metadata["rawdata_error"] = rawdata_error
     write_metadata(job.directory, metadata)

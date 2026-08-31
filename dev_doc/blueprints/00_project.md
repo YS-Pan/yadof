@@ -43,30 +43,33 @@ local/distributed remain file-backed prepared-job transports.
 6. Normalize all outcomes into ordered `JobResult` rows with per-individual
    diagnostics and explicit file/memory evidence backing plus an optional real job
    path.
-7. Normalize local process-tree and HTCondor ClassAd resource evidence, then reuse
+7. Own every started population through one generation-scoped `EvaluationHandle`;
+   wait exposes only finalized rows, cancellation stops unfinished transport work,
+   and close releases every backend/session/snapshot obligation.
+8. Normalize local process-tree and HTCondor ClassAd resource evidence, then reuse
    one smoke/preceding-generation calibration for scheduler requests or local
    worker-count planning.
-8. Atomically record raw variables, rawData, lifecycle/provenance metadata, and
+9. Atomically record raw variables, rawData, lifecycle/provenance metadata, and
    lightweight campaign metadata, applying bounded backpressure and waiting for a
    population's evidence before later evaluation.
-9. Recalculate normalized variables and fixed-threshold `[0, 1]` objective costs
+10. Recalculate normalized variables and fixed-threshold `[0, 1]` objective costs
    through the current workspace task definition.
-10. Train/recover workspace-local rawData-first surrogate models and use predictions
+11. Train/recover workspace-local rawData-first surrogate models and use predictions
     only to screen candidates that still receive real evaluation.
     The opt-in PCA/SVD baseline keeps its truth-encoding reconstruction oracle
     outside this path; deployable use maps normalized parameters through ridge
     coefficients and reports no uncertainty capability.
-11. For an explicitly composed posterior-assisted consumer, require typed
+12. For an explicitly composed posterior-assisted consumer, require typed
     performance/calibration/transferability readiness, create one persistent
     schema-bearing function sampler, stream complete named rawData draws by
     candidate chunk through the generation snapshot's frozen cost interpreter,
     retain only joint objective samples/validity diagnostics, and never publish
     predicted rawData.
-12. Keep discrete qNEHVI exploitation separate from explicit real exploration and
+13. Keep discrete qNEHVI exploitation separate from explicit real exploration and
     send their one combined unique population through the common real evaluator;
     scientific blockers and soft selection failures use a complete real-search
     fallback without changing GPSAF.
-13. Maintain a versioned surrogate evidence and release program. CAE representation,
+14. Maintain a versioned surrogate evidence and release program. CAE representation,
     prediction, coordinate, and resource results remain continuous, case- and
     use-case-specific evidence rather than one all-cell performance gate. Exact
     posterior capability still fails closed when its schema/state/calibration or
@@ -76,7 +79,7 @@ local/distributed remain file-backed prepared-job transports.
     never proves optimization benefit, and no study changes the package template
     default without a separate user decision.
 
-Steps 1, 2, 3, and 9 are generation-scoped rather than campaign-frozen.
+Steps 1, 2, 3, 7, and 10 are generation-scoped rather than campaign-frozen.
 Shape-preserving parameter-range/level and fixed-width objective changes rebuild
 affected derived history for the next generation; mechanically unusable old records
 are isolated, while a mere source-fingerprint change never excludes evidence by
@@ -130,7 +133,8 @@ hot-change contract; structural dimension changes are future work.
 - `job_template` also owns exact named rawData schema templates and the thin frozen
   current-cost projector used by derived posterior samples; it does not own a
   posterior model or acquisition policy.
-- `evaluate_manager` owns preparation, local/HTCondor transport, result shape,
+- `evaluate_manager` owns immutable prepared batches, backend-neutral handle state,
+  preparation, fast/local/HTCondor transport, cancellation/cleanup, result shape,
   retries/timeouts, and recording handoff.
 - `recorded_data` owns durable evidence and current-history queries.
 - `optimize` owns the campaign engine and public composition seam; its `gpsaf/` and
@@ -187,6 +191,12 @@ hold, archive, validation, recording, and cost failures remain per individual. A
 failed fast worker/process tree is killed and replaced. Standard memory/disk holds may trigger bounded
 fresh-cluster retries; other failures do not. Population order/objective width is
 stable regardless of completion order.
+
+Cancellation before start is resource- and evidence-free. Cancellation after start
+preserves completed rows and records each unfinished row as `cancelled`; it never
+turns recorder failure into optimizer infinity. Open handles are generation leases:
+the next snapshot is rejected until they close, and session shutdown cancels/waits
+them before recorder and snapshot cleanup.
 
 An OS campaign lock plus atomic rename protects immutable segment publication;
 checkpoint publication retains its own atomic replacement. Background surrogate

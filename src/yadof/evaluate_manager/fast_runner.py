@@ -17,6 +17,7 @@ from pathlib import Path
 import shutil
 import socket
 import tempfile
+import threading
 import time
 import traceback
 from types import MappingProxyType
@@ -83,6 +84,7 @@ def run_fast_population(
     optimization_index: int | None,
     generation_index: int | None,
     on_result: ResultConsumer,
+    cancel_event: threading.Event | None = None,
 ) -> None:
     """Execute and stream results to the submit-side recording boundary."""
 
@@ -91,6 +93,25 @@ def run_fast_population(
     pending: deque[_FastTask] = deque()
     for index, row in enumerate(population):
         name = _logical_evaluation_name(index)
+        if cancel_event is not None and cancel_event.is_set():
+            on_result(
+                index,
+                _parent_failure_result(
+                    index=index,
+                    name=name,
+                    normalized_variables=tuple(float(value) for value in row),
+                    unnormalized_variables=(),
+                    status="cancelled",
+                    failure_stage="before_parameter_assignment",
+                    error_type="EvaluationCancelled",
+                    error_message="evaluation cancellation was requested",
+                    run_id=run_id,
+                    optimization_index=optimization_index,
+                    generation_index=generation_index,
+                    task_signature=task_signature,
+                ),
+            )
+            continue
         try:
             assigned = assign_parameters(config.workspace, row)
         except Exception as exc:  # noqa: BLE001 - isolate assignment per candidate.
@@ -145,7 +166,11 @@ def run_fast_population(
     try:
         while pending or any(slot.active is not None for slot in slots):
             for slot in slots:
-                if slot.active is None and pending:
+                if (
+                    slot.active is None
+                    and pending
+                    and not (cancel_event is not None and cancel_event.is_set())
+                ):
                     _assign_task(
                         slot,
                         pending.popleft(),
@@ -160,11 +185,34 @@ def run_fast_population(
 
             busy = [slot for slot in slots if slot.active is not None]
             if not busy:
+                if cancel_event is not None and cancel_event.is_set():
+                    while pending:
+                        task = pending.popleft()
+                        on_result(
+                            task.index,
+                            _cancelled_fast_result(
+                                task,
+                                run_id=run_id,
+                                optimization_index=optimization_index,
+                                generation_index=generation_index,
+                                task_signature=task_signature,
+                                plan_metadata=plan_metadata,
+                                stage="before_worker_assignment",
+                            ),
+                        )
+                    break
                 continue
             for slot in busy:
                 _observe_worker_tree(slot)
             ready_connections = set(
-                wait([slot.connection for slot in busy], timeout=0.05)
+                wait(
+                    [slot.connection for slot in busy],
+                    timeout=(
+                        0.0
+                        if cancel_event is not None and cancel_event.is_set()
+                        else 0.05
+                    ),
+                )
             )
             for slot_index, slot in enumerate(tuple(slots)):
                 active = slot.active
@@ -210,6 +258,9 @@ def run_fast_population(
                             )
                         continue
 
+                if cancel_event is not None and cancel_event.is_set():
+                    continue
+
                 elapsed = _active_elapsed(active)
                 if (
                     active.started_monotonic is not None
@@ -221,6 +272,9 @@ def run_fast_population(
                         known_descendant_pids=active.observed_pids,
                     )
                     slot.process.join(timeout=2.0)
+                    if slot.process.is_alive():
+                        slot.process.kill()
+                        slot.process.join(timeout=5.0)
                     cleanup_error = _cleanup_scratch(active.scratch_dir)
                     result = _parent_failure_result(
                         index=active.task.index,
@@ -289,6 +343,52 @@ def run_fast_population(
                     slots[slot_index] = _replace_worker(
                         context, slot, config.workspace
                     )
+            if cancel_event is not None and cancel_event.is_set():
+                for slot in slots:
+                    active = slot.active
+                    if active is None:
+                        continue
+                    _observe_worker_tree(slot)
+                    terminate_process_tree(
+                        slot.process.pid,
+                        known_descendant_pids=active.observed_pids,
+                    )
+                    slot.process.join(timeout=2.0)
+                    cleanup_error = _cleanup_scratch(active.scratch_dir)
+                    on_result(
+                        active.task.index,
+                        _cancelled_fast_result(
+                            active.task,
+                            run_id=run_id,
+                            optimization_index=optimization_index,
+                            generation_index=generation_index,
+                            task_signature=task_signature,
+                            plan_metadata=plan_metadata,
+                            stage="worker_cancel",
+                            worker_pid=slot.process.pid,
+                            started_at=active.started_at,
+                            elapsed_sec=_active_elapsed(active),
+                            observed_pids=active.observed_pids,
+                            peak_process_count=active.peak_process_count,
+                            cleanup_error=cleanup_error,
+                        ),
+                    )
+                    slot.active = None
+                while pending:
+                    task = pending.popleft()
+                    on_result(
+                        task.index,
+                        _cancelled_fast_result(
+                            task,
+                            run_id=run_id,
+                            optimization_index=optimization_index,
+                            generation_index=generation_index,
+                            task_signature=task_signature,
+                            plan_metadata=plan_metadata,
+                            stage="before_worker_assignment",
+                        ),
+                    )
+                break
     finally:
         for slot in slots:
             _stop_worker(slot)
@@ -339,10 +439,24 @@ def _stop_worker(slot: _WorkerSlot) -> None:
             known_descendant_pids=known,
         )
         slot.process.join(timeout=2.0)
+    if slot.process.is_alive():
+        slot.process.kill()
+        slot.process.join(timeout=5.0)
+    if slot.process.is_alive():
+        raise RuntimeError(
+            f"fast worker process {slot.process.pid} survived forced cleanup"
+        )
     try:
         slot.connection.close()
     except OSError:
         pass
+    if not slot.process.is_alive():
+        try:
+            # On Windows the multiprocessing handle keeps an exited process
+            # discoverable by PID until it is explicitly released.
+            slot.process.close()
+        except (OSError, ValueError):
+            pass
 
 
 def _assign_task(
@@ -588,6 +702,45 @@ def _result_from_worker_response(
             item for item in raw_data_items if isinstance(item, NamedRawDataItem)
         ),
         metadata=metadata,
+    )
+
+
+def _cancelled_fast_result(
+    task: _FastTask,
+    *,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+    task_signature: str,
+    plan_metadata: Mapping[str, object],
+    stage: str,
+    worker_pid: int | None = None,
+    started_at: str | None = None,
+    elapsed_sec: float | None = None,
+    observed_pids: Sequence[int] | set[int] = (),
+    peak_process_count: int | None = None,
+    cleanup_error: str | None = None,
+) -> JobResult:
+    return _parent_failure_result(
+        index=task.index,
+        name=task.name,
+        normalized_variables=task.normalized_variables,
+        unnormalized_variables=task.unnormalized_variables,
+        status="cancelled",
+        failure_stage=stage,
+        error_type="EvaluationCancelled",
+        error_message="evaluation cancellation was requested",
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        task_signature=task_signature,
+        worker_pid=worker_pid,
+        started_at=started_at,
+        elapsed_sec=elapsed_sec,
+        observed_pids=observed_pids,
+        peak_process_count=peak_process_count,
+        plan_metadata=plan_metadata,
+        cleanup_error=cleanup_error,
     )
 
 

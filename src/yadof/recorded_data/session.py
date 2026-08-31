@@ -462,6 +462,7 @@ class CampaignSession:
         self._lock = CampaignLock(self.storage.campaign_lock_path)
         self._lock.acquire()
         self._state_lock = threading.RLock()
+        self._close_lock = threading.Lock()
         catalog = catalog_snapshot(self.storage)
         self._rows: dict[str, _SessionRow] = {
             reference.candidate_id: _SessionRow(
@@ -476,6 +477,9 @@ class CampaignSession:
         self._stable_objective_count: int | None = None
         self.last_reinterpretation_sec = 0.0
         self._closed = False
+        self._closing = False
+        self._evaluation_handles: set[object] = set()
+        self._evaluation_handle_snapshots: dict[object, GenerationTaskSnapshot] = {}
         self._interpretation_counters = InterpretationCounters()
         self._committed_owned_count_limit = int(
             config.HISTORY_UNPUBLISHED_MAX_CANDIDATES
@@ -497,6 +501,14 @@ class CampaignSession:
             raise
 
     def begin_generation(self, config: LoadedConfig) -> GenerationTaskSnapshot:
+        with self._state_lock:
+            if self._closed or self._closing:
+                raise RuntimeError("campaign session is closing or closed")
+            if self._evaluation_handles:
+                raise RuntimeError(
+                    "cannot begin a new generation while evaluation handles remain open; "
+                    "wait and close every handle first"
+                )
         snapshot = create_generation_snapshot(self._freeze_recorder_config(config))
         try:
             if self._stable_parameter_names is None:
@@ -517,6 +529,30 @@ class CampaignSession:
         self._snapshots.append(snapshot)
         self.current_snapshot = snapshot
         return snapshot
+
+    def _register_evaluation_handle(
+        self,
+        snapshot: GenerationTaskSnapshot | None,
+        handle: object,
+    ) -> None:
+        """Retain one exact current-generation lease until its handle closes."""
+
+        with self._state_lock:
+            if self._closed or self._closing:
+                raise RuntimeError("cannot register evaluation on a closing campaign")
+            if snapshot is None or snapshot is not self.current_snapshot:
+                raise ValueError(
+                    "evaluation handle must use the campaign's current task snapshot"
+                )
+            if handle in self._evaluation_handles:
+                return
+            self._evaluation_handles.add(handle)
+            self._evaluation_handle_snapshots[handle] = snapshot
+
+    def _unregister_evaluation_handle(self, handle: object) -> None:
+        with self._state_lock:
+            self._evaluation_handles.discard(handle)
+            self._evaluation_handle_snapshots.pop(handle, None)
 
     def _freeze_recorder_config(self, config: LoadedConfig) -> LoadedConfig:
         values = dict(config.values)
@@ -850,21 +886,35 @@ class CampaignSession:
         return output
 
     def close(self) -> dict[str, object]:
-        if self._closed:
+        with self._close_lock:
+            if self._closed:
+                return self.counters()
+            with self._state_lock:
+                self._closing = True
+                handles = tuple(self._evaluation_handles)
+            errors: list[BaseException] = []
+            for handle in handles:
+                try:
+                    close = getattr(handle, "close")
+                    close()
+                except BaseException as exc:  # Finish every owned cleanup obligation.
+                    errors.append(exc)
+            try:
+                self._writer.shutdown()
+            except BaseException as exc:  # Preserve cleanup before propagating failure.
+                errors.append(exc)
+            finally:
+                self._release_campaign_lock()
+                for snapshot in self._snapshots:
+                    snapshot.close()
+                with self._state_lock:
+                    self._closed = True
+                    self._closing = False
+                    self._evaluation_handles.clear()
+                    self._evaluation_handle_snapshots.clear()
+            if errors:
+                raise errors[-1]
             return self.counters()
-        self._closed = True
-        error: BaseException | None = None
-        try:
-            self._writer.shutdown()
-        except BaseException as exc:  # Preserve cleanup before propagating failure.
-            error = exc
-        finally:
-            self._release_campaign_lock()
-            for snapshot in self._snapshots:
-                snapshot.close()
-        if error is not None:
-            raise error
-        return self.counters()
 
     def _evidence(self, row: _SessionRow):
         if row.evidence_state != "committed":

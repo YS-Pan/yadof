@@ -170,6 +170,12 @@ exact font sizes, DPI, colors, legend coordinates, line widths, and other incide
 presentation constants. A rendering smoke may prove that valid data produces a
 non-empty artifact without freezing its pixel dimensions.
 
+`test_evaluation_handle.py` is the direct lifecycle suite. It covers no-resource
+cancel-before-start, committed identity before visibility, repeated/multi-threaded
+wait, wait timeout, repeated close, generation blocking, caller-exception cleanup,
+session-driven local cancellation, fast active/queued cleanup with Windows PID
+release, fake-Condor removal, recorder-fatal waiter wakeup, and sync-facade parity.
+
 ## Acceptance
 
 Build a wheel, force-reinstall without editable/PYTHONPATH shortcuts, verify

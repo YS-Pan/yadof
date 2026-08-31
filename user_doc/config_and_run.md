@@ -487,9 +487,24 @@ checkpoint artifacts. Install the `viewer` extra before using any of its modes.
 Every stateful public call takes a workspace:
 
 ```python
-from yadof.evaluate_manager import evaluate_population, run_smoke_test
+from yadof.evaluate_manager import (
+    evaluate_population,
+    prepare_evaluation,
+    run_smoke_test,
+    start_evaluation,
+)
 from yadof.optimize import run_generations
 
 run_smoke_test("D:/work/study-a", mode="local")
 run_generations("D:/work/study-a", 3, start_generation=0)
+
+batch = prepare_evaluation("D:/work/study-a", ((0.25,),), mode="local")
+with start_evaluation(batch) as handle:
+    finalized = handle.wait()
+print(finalized.costs)
 ```
+
+The explicit handle is useful only when caller code has independent bounded work or
+needs cancellation. Preparing a batch performs no evaluation and opens no runtime
+resource. `evaluate_population()` remains the concise synchronous form and uses the
+same handle internally.

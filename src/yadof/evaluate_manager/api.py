@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import math
 import os
 import sys
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
@@ -18,9 +19,10 @@ from ..task_snapshot import GenerationTaskSnapshot
 from .finalizer import ResultFinalizationCoordinator
 from .job_files import prepare_job, validate_task_payload
 from .job_result import write_metadata
+from .lifecycle import EvaluationBatch, EvaluationHandle
 from .local_runner import run_local_job
 from .local_resources import plan_local_workers
-from .types import JobResult, JobSpec
+from .types import EvaluationResult, JobResult, JobSpec
 
 
 WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
@@ -43,8 +45,109 @@ def evaluate_population(
     _campaign_session: CampaignSession | None = None,
     _task_snapshot: GenerationTaskSnapshot | None = None,
 ) -> tuple[tuple[float, ...], ...]:
-    """Evaluate a population and return dynamic cost tuples in input order."""
+    """Synchronously compose the common prepare/start/wait/close lifecycle."""
 
+    batch = prepare_evaluation(
+        workspace,
+        population,
+        mode=mode,
+        timeout_sec=timeout_sec,
+        python_executable=python_executable,
+        env=env,
+        local_max_workers=local_max_workers,
+        fast_max_workers=fast_max_workers,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        after_jobs_submitted=after_jobs_submitted,
+        _campaign_session=_campaign_session,
+        _task_snapshot=_task_snapshot,
+    )
+    handle = start_evaluation(batch)
+    try:
+        result = handle.wait()
+    except BaseException:
+        try:
+            handle.close()
+        except BaseException:
+            pass
+        raise
+    handle.close()
+    return result.costs
+
+
+def prepare_evaluation(
+    workspace: WorkspaceLike,
+    population: Iterable[Iterable[float]],
+    *,
+    mode: str | None = None,
+    timeout_sec: float | None = None,
+    python_executable: str | Path = sys.executable,
+    env: Mapping[str, str] | None = None,
+    local_max_workers: int | None = None,
+    fast_max_workers: int | None = None,
+    run_id: str | None = None,
+    optimization_index: int | None = None,
+    generation_index: int | None = None,
+    after_jobs_submitted: Callable[[], object] | None = None,
+    _campaign_session: CampaignSession | None = None,
+    _task_snapshot: GenerationTaskSnapshot | None = None,
+) -> EvaluationBatch:
+    """Freeze one population/configuration without opening backend resources."""
+
+    return _prepare_evaluation_batch(
+        workspace,
+        population,
+        mode=mode,
+        timeout_sec=timeout_sec,
+        use_config_timeout=True,
+        python_executable=python_executable,
+        env=env,
+        local_max_workers=local_max_workers,
+        fast_max_workers=fast_max_workers,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=generation_index,
+        after_jobs_submitted=after_jobs_submitted,
+        campaign_session=_campaign_session,
+        task_snapshot=_task_snapshot,
+        phase="evaluation",
+    )
+
+
+def start_evaluation(batch: EvaluationBatch) -> EvaluationHandle:
+    """Create and start the backend-neutral owner for one prepared batch."""
+
+    handle = EvaluationHandle(batch)
+    try:
+        return handle.start()
+    except BaseException:
+        try:
+            handle.close()
+        except BaseException:
+            pass
+        raise
+
+
+def _prepare_evaluation_batch(
+    workspace: WorkspaceLike,
+    population: Iterable[Iterable[float]],
+    *,
+    mode: str | None,
+    timeout_sec: float | None,
+    use_config_timeout: bool,
+    python_executable: str | Path,
+    env: Mapping[str, str] | None,
+    local_max_workers: int | None,
+    fast_max_workers: int | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+    after_jobs_submitted: Callable[[], object] | None,
+    campaign_session: CampaignSession | None,
+    task_snapshot: GenerationTaskSnapshot | None,
+    phase: str,
+) -> EvaluationBatch:
     rows = tuple(_population_row(values) for values in population)
     overrides: dict[str, object] = {}
     if mode is not None:
@@ -55,79 +158,148 @@ def evaluate_population(
         overrides["LOCAL_EVALUATION_MAX_WORKERS"] = max(1, int(local_max_workers))
     if fast_max_workers is not None:
         overrides["FAST_EVALUATION_MAX_WORKERS"] = max(1, int(fast_max_workers))
-    owns_session = _campaign_session is None
-    if _campaign_session is None:
-        live_config = load_config(workspace, overrides=overrides)
-        session = CampaignSession(live_config)
+    if campaign_session is None:
+        if task_snapshot is not None:
+            raise ValueError("task snapshot requires a campaign session")
+        config = load_config(workspace, overrides=overrides)
+    else:
+        if task_snapshot is None:
+            raise ValueError("_task_snapshot is required with _campaign_session")
+        config = task_snapshot.config
+    selected_mode = str(config.EVALUATION_MODE).strip().lower()
+    if selected_mode not in {"fast", "local", "distributed"}:
+        raise ValueError(f"unsupported evaluation mode: {selected_mode!r}")
+    executable = Path(python_executable)
+    if selected_mode == "fast" and executable.resolve() != Path(sys.executable).resolve():
+        raise ValueError(
+            "fast evaluation workers use the current Python executable; "
+            "python_executable cannot select another runtime"
+        )
+    effective_timeout = (
+        float(config.EVALUATION_TIMEOUT_SEC)
+        if use_config_timeout and timeout_sec is None
+        else (None if timeout_sec is None else float(timeout_sec))
+    )
+    environment = tuple(
+        sorted(
+            ((str(key), str(value)) for key, value in (env or {}).items()),
+            key=lambda item: item[0],
+        )
+    )
+    return EvaluationBatch(
+        workspace=config.workspace,
+        population=rows,
+        config=config,
+        mode=selected_mode,
+        timeout_sec=effective_timeout,
+        python_executable=executable,
+        environment=environment,
+        local_max_workers=int(config.LOCAL_EVALUATION_MAX_WORKERS),
+        fast_max_workers=int(config.FAST_EVALUATION_MAX_WORKERS),
+        objective_width=get_objective_count(config.workspace),
+        run_id=None if run_id is None else str(run_id),
+        optimization_index=(
+            None if optimization_index is None else int(optimization_index)
+        ),
+        generation_index=None if generation_index is None else int(generation_index),
+        phase=phase,
+        _campaign_session=campaign_session,
+        _task_snapshot=task_snapshot,
+        _after_jobs_submitted=after_jobs_submitted,
+    )
+
+
+def _execute_evaluation_batch(
+    batch: EvaluationBatch,
+    cancel_event: threading.Event,
+) -> EvaluationResult:
+    """Run one handle-owned backend lifecycle and expose only finalized rows."""
+
+    owns_session = batch._campaign_session is None
+    if owns_session:
+        session = CampaignSession(batch.config)
         try:
-            snapshot = session.begin_generation(live_config)
-        except Exception:
+            snapshot = session.begin_generation(batch.config)
+        except BaseException:
             session.close()
             raise
-        config = snapshot.config
     else:
-        if _task_snapshot is None:
-            raise ValueError("_task_snapshot is required with _campaign_session")
-        session = _campaign_session
-        snapshot = _task_snapshot
-        config = snapshot.config
-    selected_mode = str(config.EVALUATION_MODE).strip().lower()
+        session = batch._campaign_session
+        snapshot = batch._task_snapshot
+        if session is None or snapshot is None:
+            raise RuntimeError("prepared campaign batch lost its session snapshot")
+    config = snapshot.config
     progress = _PopulationProgress(
-        total=len(rows),
-        mode=selected_mode,
-        generation_index=generation_index,
+        total=len(batch.population),
+        mode=batch.mode,
+        generation_index=batch.generation_index,
+        phase=batch.phase,
     )
     progress.start()
+    started = time.monotonic()
     try:
-        if selected_mode == "fast":
-            if Path(python_executable).resolve() != Path(sys.executable).resolve():
-                raise ValueError(
-                    "fast evaluation workers use the current Python executable; "
-                    "python_executable cannot select another runtime"
-                )
-            return _dispatch_fast(
+        if batch.mode == "fast":
+            rows = _dispatch_fast(
                 config,
-                rows,
-                timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
-                env=env,
-                fast_max_workers=int(config.FAST_EVALUATION_MAX_WORKERS),
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
+                batch.population,
+                timeout_sec=batch.timeout_sec,
+                env=batch.env,
+                fast_max_workers=batch.fast_max_workers,
+                run_id=batch.run_id,
+                optimization_index=batch.optimization_index,
+                generation_index=batch.generation_index,
                 progress=progress,
                 session=session,
                 snapshot=snapshot,
+                cancel_event=cancel_event,
             )
-        if selected_mode == "distributed":
-            return _dispatch_distributed(
+        elif batch.mode == "distributed":
+            rows = _dispatch_distributed(
                 config,
-                rows,
-                timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
-                env=env,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=generation_index,
-                after_jobs_submitted=after_jobs_submitted,
+                batch.population,
+                timeout_sec=batch.timeout_sec,
+                env=batch.env,
+                run_id=batch.run_id,
+                optimization_index=batch.optimization_index,
+                generation_index=batch.generation_index,
+                after_jobs_submitted=batch._after_jobs_submitted,
                 progress=progress,
                 session=session,
                 snapshot=snapshot,
+                cancel_event=cancel_event,
             )
-        if selected_mode != "local":
-            raise ValueError(f"unsupported evaluation mode: {selected_mode!r}")
-        return _dispatch_local(
-            config,
-            rows,
-            timeout_sec=float(config.EVALUATION_TIMEOUT_SEC),
-            python_executable=python_executable,
-            env=env,
-            local_max_workers=int(config.LOCAL_EVALUATION_MAX_WORKERS),
-            run_id=run_id,
-            optimization_index=optimization_index,
-            generation_index=generation_index,
-            after_jobs_submitted=after_jobs_submitted,
-            progress=progress,
-            session=session,
-            snapshot=snapshot,
+        else:
+            rows = _dispatch_local(
+                config,
+                batch.population,
+                timeout_sec=batch.timeout_sec,
+                python_executable=batch.python_executable,
+                env=batch.env,
+                local_max_workers=batch.local_max_workers,
+                run_id=batch.run_id,
+                optimization_index=batch.optimization_index,
+                generation_index=batch.generation_index,
+                after_jobs_submitted=batch._after_jobs_submitted,
+                progress=progress,
+                session=session,
+                snapshot=snapshot,
+                cancel_event=cancel_event,
+            )
+        status_counts: dict[str, int] = {}
+        for row in rows:
+            status_counts[row.status] = status_counts.get(row.status, 0) + 1
+        return EvaluationResult(
+            batch_id=batch.batch_id,
+            mode=batch.mode,
+            rows=rows,
+            objective_width=batch.objective_width,
+            cancel_requested=cancel_event.is_set(),
+            diagnostics={
+                "candidate_count": len(rows),
+                "status_counts": status_counts,
+                "elapsed_sec": max(0.0, time.monotonic() - started),
+                "generation_index": batch.generation_index,
+            },
         )
     finally:
         progress.close()
@@ -145,72 +317,40 @@ def run_smoke_test(
     run_id: str | None = None,
     optimization_index: int | None = None,
 ) -> tuple[tuple[float, ...], ...]:
-    """Run exactly one deterministic representative individual with no timeout."""
+    """Run one deterministic representative through the common handle lifecycle."""
 
-    live_config = load_config(
-        workspace,
-        overrides={"EVALUATION_MODE": str(mode).strip().lower()},
-    )
-    session = CampaignSession(live_config)
-    try:
-        snapshot = session.begin_generation(live_config)
-    except Exception:
-        session.close()
-        raise
-    config = snapshot.config
-    selected_mode = str(config.EVALUATION_MODE).strip().lower()
     if normalized_variables is None:
-        normalized_variables = (0.5,) * get_variable_count(config.workspace)
+        normalized_variables = (0.5,) * get_variable_count(workspace)
     row = tuple(float(value) for value in normalized_variables)
-    progress = _PopulationProgress(total=1, mode=selected_mode, phase="smoke")
-    progress.start()
+    batch = _prepare_evaluation_batch(
+        workspace,
+        (row,),
+        mode=mode,
+        timeout_sec=None,
+        use_config_timeout=False,
+        python_executable=python_executable,
+        env=env,
+        local_max_workers=1,
+        fast_max_workers=1,
+        run_id=run_id,
+        optimization_index=optimization_index,
+        generation_index=None,
+        after_jobs_submitted=None,
+        campaign_session=None,
+        task_snapshot=None,
+        phase="smoke",
+    )
+    handle = start_evaluation(batch)
     try:
-        if selected_mode == "distributed":
-            return _dispatch_distributed(
-                config,
-                (row,),
-                timeout_sec=None,
-                env=env,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=None,
-                after_jobs_submitted=None,
-                progress=progress,
-                session=session,
-                snapshot=snapshot,
-            )
-        if selected_mode == "fast":
-            return _dispatch_fast(
-                config,
-                (row,),
-                timeout_sec=None,
-                env=env,
-                fast_max_workers=1,
-                run_id=run_id,
-                optimization_index=optimization_index,
-                generation_index=None,
-                progress=progress,
-                session=session,
-                snapshot=snapshot,
-            )
-        return _dispatch_local(
-            config,
-            (row,),
-            timeout_sec=None,
-            python_executable=python_executable,
-            env=env,
-            local_max_workers=1,
-            run_id=run_id,
-            optimization_index=optimization_index,
-            generation_index=None,
-            after_jobs_submitted=None,
-            progress=progress,
-            session=session,
-            snapshot=snapshot,
-        )
-    finally:
-        progress.close()
-        session.close()
+        result = handle.wait()
+    except BaseException:
+        try:
+            handle.close()
+        except BaseException:
+            pass
+        raise
+    handle.close()
+    return result.costs
 
 
 def evaluate_generation(*args: object, **kwargs: object) -> tuple[tuple[float, ...], ...]:
@@ -234,18 +374,15 @@ def _dispatch_fast(
     progress: _PopulationProgress,
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
-) -> tuple[tuple[float, ...], ...]:
+    cancel_event: threading.Event,
+) -> tuple[JobResult, ...]:
     from .fast_runner import run_fast_population
 
     validate_fast_task(config.workspace)
     rows = tuple(population)
-    objective_width = get_objective_count(config.workspace)
-    costs: list[tuple[float, ...] | None] = [None] * len(rows)
 
     def expose(index: int, finalized: JobResult) -> None:
-        if finalized.costs is not None:
-            costs[index] = tuple(finalized.costs)
-        progress.complete(index, successful=costs[index] is not None)
+        progress.complete(index, successful=finalized.costs is not None)
 
     coordinator = ResultFinalizationCoordinator(
         session,
@@ -264,14 +401,13 @@ def _dispatch_fast(
             optimization_index=optimization_index,
             generation_index=generation_index,
             on_result=coordinator.accept,
+            cancel_event=cancel_event,
         )
-        coordinator.finish()
+        finalized = coordinator.finish()
     except BaseException:
         coordinator.close()
         raise
-    return tuple(
-        row if row is not None else _inf_costs(objective_width) for row in costs
-    )
+    return finalized
 
 
 def _dispatch_local(
@@ -289,11 +425,10 @@ def _dispatch_local(
     progress: _PopulationProgress,
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
-) -> tuple[tuple[float, ...], ...]:
+    cancel_event: threading.Event,
+) -> tuple[JobResult, ...]:
     validate_task_payload(config)
     population_rows = tuple(population)
-    objective_width = get_objective_count(config.workspace)
-    costs_by_individual: list[tuple[float, ...] | None] = [None] * len(population_rows)
     worker_plan = plan_local_workers(
         config,
         population_size=len(population_rows),
@@ -306,8 +441,6 @@ def _dispatch_local(
     _progress(worker_plan.summary())
 
     def expose(index: int, finalized: JobResult) -> None:
-        if finalized.costs is not None:
-            costs_by_individual[index] = tuple(finalized.costs)
         progress.complete(index, successful=finalized.costs is not None)
 
     coordinator = ResultFinalizationCoordinator(
@@ -331,6 +464,7 @@ def _dispatch_local(
             optimization_index=optimization_index,
             generation_index=generation_index,
             worker_plan_metadata=worker_plan_metadata,
+            cancel_event=cancel_event,
         )
 
     try:
@@ -374,15 +508,12 @@ def _dispatch_local(
                             ),
                         )
                     coordinator.accept(index, outcome[1])
-        coordinator.finish()
+        finalized = coordinator.finish()
     except BaseException:
         coordinator.close()
         raise
     _run_after_jobs_submitted(after_jobs_submitted)
-    return tuple(
-        costs if costs is not None else _inf_costs(objective_width)
-        for costs in costs_by_individual
-    )
+    return finalized
 
 
 def _evaluate_one_local(
@@ -397,9 +528,22 @@ def _evaluate_one_local(
     optimization_index: int | None,
     generation_index: int | None,
     worker_plan_metadata: Mapping[str, object],
+    cancel_event: threading.Event,
 ) -> tuple[int, JobResult]:
     job: JobSpec | None = None
     result: JobResult | None = None
+    if cancel_event.is_set():
+        return index, _cancelled_result(
+            stage="before_prepare",
+            engine="local",
+            population_row=population_row,
+            index=index,
+            jobs_dir=config.workspace.jobs_dir,
+            job=None,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
     try:
         job = prepare_job(
             config.workspace,
@@ -429,6 +573,21 @@ def _evaluate_one_local(
         _best_effort_write_failure(failure)
         return index, failure
 
+    if cancel_event.is_set():
+        cancelled = _cancelled_result(
+            stage="before_run",
+            engine="local",
+            population_row=population_row,
+            index=index,
+            jobs_dir=config.workspace.jobs_dir,
+            job=job,
+            run_id=run_id,
+            optimization_index=optimization_index,
+            generation_index=generation_index,
+        )
+        _best_effort_write_failure(cancelled)
+        return index, cancelled
+
     try:
         result = run_local_job(
             job,
@@ -436,6 +595,7 @@ def _evaluate_one_local(
             python_executable=python_executable,
             env=env,
             plan_metadata=worker_plan_metadata,
+            cancel_event=cancel_event,
         )
     except Exception as exc:  # noqa: BLE001 - isolate one candidate.
         failure = _failed_result(
@@ -470,19 +630,16 @@ def _dispatch_distributed(
     progress: _PopulationProgress,
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
-) -> tuple[tuple[float, ...], ...]:
+    cancel_event: threading.Event,
+) -> tuple[JobResult, ...]:
     from .condor_runner import run_condor_jobs
 
     validate_task_payload(config)
     rows = tuple(population)
-    objective_width = get_objective_count(config.workspace)
-    costs: list[tuple[float, ...] | None] = [None] * len(rows)
     jobs: list[JobSpec] = []
     positions: list[int] = []
 
     def expose(index: int, finalized: JobResult) -> None:
-        if finalized.costs is not None:
-            costs[index] = tuple(finalized.costs)
         progress.complete(index, successful=finalized.costs is not None)
 
     coordinator = ResultFinalizationCoordinator(
@@ -494,6 +651,23 @@ def _dispatch_distributed(
     accepted_positions: set[int] = set()
 
     for index, row in enumerate(rows):
+        if cancel_event.is_set():
+            coordinator.accept(
+                index,
+                _cancelled_result(
+                    stage="before_prepare",
+                    engine="htcondor",
+                    population_row=row,
+                    index=index,
+                    jobs_dir=config.workspace.jobs_dir,
+                    job=None,
+                    run_id=run_id,
+                    optimization_index=optimization_index,
+                    generation_index=generation_index,
+                ),
+            )
+            accepted_positions.add(index)
+            continue
         try:
             job = prepare_job(
                 config.workspace,
@@ -547,6 +721,7 @@ def _dispatch_distributed(
             after_jobs_submitted=after_jobs_submitted,
             on_result=consume_result,
             history_records=session.records(),
+            cancel_event=cancel_event,
         )
     except RecordingError:
         coordinator.close()
@@ -575,13 +750,11 @@ def _dispatch_distributed(
         coordinator.accept(position, result)
         accepted_positions.add(position)
     try:
-        coordinator.finish()
+        finalized = coordinator.finish()
     except BaseException:
         coordinator.close()
         raise
-    return tuple(
-        row if row is not None else _inf_costs(objective_width) for row in costs
-    )
+    return finalized
 
 
 def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
@@ -674,6 +847,56 @@ def _failed_result(
     )
 
 
+def _cancelled_result(
+    *,
+    stage: str,
+    engine: str,
+    population_row: tuple[Any, ...],
+    index: int,
+    jobs_dir: Path,
+    job: JobSpec | None,
+    run_id: str | None,
+    optimization_index: int | None,
+    generation_index: int | None,
+) -> JobResult:
+    now = _now_text()
+    job_name = _cancelled_job_name(index, now) if job is None else job.name
+    job_dir = jobs_dir / job_name if job is None else job.directory
+    metadata: dict[str, Any] = {
+        "job_name": job_name,
+        "status": "cancelled",
+        "engine": engine,
+        "failure_stage": stage,
+        "error_type": "EvaluationCancelled",
+        "error_message": "evaluation cancellation was requested",
+        "cancelled_at": now,
+        "population_index": index,
+        "population_row": _metadata_row(population_row),
+    }
+    if run_id is not None:
+        metadata["run_id"] = str(run_id)
+    if optimization_index is not None:
+        metadata["optimization_index"] = int(optimization_index)
+    if generation_index is not None:
+        metadata["generation_index"] = int(generation_index)
+    return JobResult(
+        job_name=job_name,
+        job_dir=job_dir,
+        status="cancelled",
+        unnormalized_variables=(
+            ()
+            if job is None
+            else tuple(float(value) for value in job.unnormalized_variables)
+        ),
+        normalized_variables=(
+            _float_population_row(population_row)
+            if job is None
+            else tuple(float(value) for value in job.normalized_variables)
+        ),
+        metadata=metadata,
+    )
+
+
 def _population_row(variables: Iterable[float]) -> tuple[Any, ...]:
     return tuple(variables)
 
@@ -687,13 +910,21 @@ def _metadata_row(values: Iterable[Any]) -> list[Any]:
     ]
 
 
-def _inf_costs(objective_width: int) -> tuple[float, ...]:
-    return tuple(math.inf for _ in range(max(1, int(objective_width))))
+def _float_population_row(values: Iterable[Any]) -> tuple[float, ...]:
+    try:
+        return tuple(float(value) for value in values)
+    except (TypeError, ValueError):
+        return ()
 
 
 def _failure_job_name(index: int, timestamp: str) -> str:
     safe_stamp = timestamp.replace(":", "").replace(".", "").replace("+", "_")
     return f"failed_individual_{index}_{safe_stamp}"
+
+
+def _cancelled_job_name(index: int, timestamp: str) -> str:
+    safe_stamp = timestamp.replace(":", "").replace(".", "").replace("+", "_")
+    return f"cancelled_individual_{index}_{safe_stamp}"
 
 
 def _now_text() -> str:

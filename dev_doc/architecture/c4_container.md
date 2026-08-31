@@ -38,13 +38,21 @@ explicit root.
 
 ## Evaluation containers
 
+One backend-neutral evaluation handle sits in front of all three transports. A
+prepared batch owns no runtime resource; start creates the bounded owner, wait
+returns immutable finalized rows, cancel signals transport-specific cleanup, and
+close releases the generation lease. The synchronous population and smoke APIs are
+facades over this same lifecycle.
+
 - **Fast evaluation** runs task-owned evaluators in reusable isolated local worker
   processes and returns named memory-backed rawData. It creates no durable
   per-candidate job directory.
 - **Local evaluation** creates a prepared job and launches its task workflow on the
   submit host.
 - **Distributed evaluation** transfers the same prepared task boundary through
-  HTCondor and returns file-backed evidence and diagnostics.
+  HTCondor and returns file-backed evidence and diagnostics. Cancellation stops
+  further submission, collects an already observable completion, and attempts
+  bounded removal of every remaining cluster.
 
 Prepared jobs contain task inputs, one assigned parameter snapshot, and the small
 package-owned worker support needed for invariant execute-side lifecycle. They do
@@ -65,6 +73,11 @@ datasets. RawData stays behind lazy segment references, while a separate task-bo
 cost table records successful, failed, not-applicable, or missing interpretations by
 row identity. Filter, copy, reorder, and optimizer/surrogate joins therefore never
 use job names, physical-design equality, or array position as sample identity.
+
+Cancellation after start is also finalized through this path. Unfinished rows are
+durable `cancelled` execution evidence with not-applicable cost interpretation;
+already completed evidence is retained. Cancellation before start creates neither
+session nor evidence.
 
 Surrogate prediction and posterior projection are derived submit-side computation,
 not additional evaluation backends. They consume recorded evidence and current task

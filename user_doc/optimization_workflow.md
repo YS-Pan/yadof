@@ -124,6 +124,52 @@ the current objective tuple in population order. A full unpublished budget waits
 for publication instead of dropping the new result, and the population tail forces
 a final group flush. The next generation cannot start until every receipt resolves.
 
+The public evaluator exposes the same lifecycle explicitly when bounded overlap or
+cancellation is needed:
+
+```python
+from yadof.evaluate_manager import prepare_evaluation, start_evaluation
+
+batch = prepare_evaluation(
+    workspace,
+    candidates,
+    mode="fast",  # local and distributed use the same handle contract
+)
+handle = start_evaluation(batch)
+try:
+    # Do only independent, generation-bounded work here.
+    result = handle.wait()
+finally:
+    handle.close()
+
+optimizer_costs = result.costs
+```
+
+`prepare_evaluation()` materializes candidates and freezes effective configuration
+but opens no session, snapshot, worker, process, or scheduler resource.
+`start_evaluation()` creates one `EvaluationHandle`; `wait(timeout=...)` may be
+called repeatedly or from multiple threads and returns the same immutable
+`EvaluationResult`. A wait timeout does not cancel work. Result rows are visible
+only after rawData ownership, durable publication, and current-cost classification;
+their rawData payload fields are empty, so load evidence later through
+`EvidenceDataset`.
+
+`cancel()` is best effort and idempotent. Before start it creates no job or durable
+record. After start, fast stops active/queued workers, local terminates active
+workflow trees and short-circuits queued candidates, and distributed stops
+submission/polling and attempts bounded cluster removal. A completion already
+observed by the backend remains completed evidence; each unfinished started row is
+recorded as `cancelled` with `costs=None`, so `result.costs` supplies the normal
+correct-width optimizer infinity. Removal/cleanup failure remains diagnostic.
+Recorder failure is still campaign-fatal and is re-raised by every waiter.
+
+Always close a handle, preferably in `finally` or a context manager. A handle that
+uses an optimization campaign's current snapshot remains a generation lease even
+after completion: the next generation is rejected until it closes. Campaign
+shutdown cancels and closes registered handles before the recorder and snapshots.
+The existing `evaluate_population()` and `run_smoke_test()` helpers already compose
+this same prepare/start/wait/close path.
+
 If valid rawData commits but `calc_cost.py` raises, returns the wrong objective
 width, or returns `NaN`/infinity, the immutable record remains completed evidence.
 The current optimizer row becomes correct-width `inf`, while the authoritative

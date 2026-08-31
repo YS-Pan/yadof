@@ -20,8 +20,9 @@ workflow timing, status, and diagnostic metadata. RawData member metadata is scr
 of repeated variable payloads before archiving. Normalized variables, current costs,
 and surrogate predictions are not persisted as source truth.
 
-Current cost is never source truth and is not required for admission. Error/timeout
-rows may have no rawData; completed evidence must satisfy the current rawData schema.
+Current cost is never source truth and is not required for admission.
+Error/timeout/cancelled rows may have no rawData; completed evidence must satisfy
+the current rawData schema.
 Admission returns a candidate/group receipt and reserves both a candidate credit and
 conservative peak-resident byte credits. A full budget blocks the producer until
 publication releases capacity; it never drops a row. The receipt remains pending
@@ -44,6 +45,12 @@ rename; it never opens an older segment. Evaluation/population boundaries wait f
 all pending segments. The writer retries the same retained batch after a transient
 write failure; an oversized envelope, exhausted retry count, or unexpected writer
 death raises `RecordingError` and prevents later evaluation.
+
+The session also retains open evaluation-handle leases for its exact current task
+snapshot. A new generation is rejected until the registry is empty. Shutdown first
+cancels/closes a copied handle set without holding the state lock, then shuts down
+the writer, releases the workspace lock, and removes snapshots; standalone handles
+own and close their private session instead of self-registering recursively.
 
 ## Evidence and cost views
 

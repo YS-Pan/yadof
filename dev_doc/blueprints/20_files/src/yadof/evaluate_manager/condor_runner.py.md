@@ -8,7 +8,7 @@
 - Write Windows HTCondor submit files from the workspace `LoadedConfig` through `evaluate_manager.config` and the adaptive `resource_requests`/`time_limits` helpers.
 - Invoke an optional `after_jobs_submitted` callback after successful submissions and before polling outputs.
 - Invoke an optional per-result callback exactly when each job reaches its terminal
-  collected, timeout, or submission-failure result; callback failure is diagnostic
+  collected, timeout, cancellation, or submission-failure result; callback failure is diagnostic
   only and cannot change the result.
 - Poll terminal job state or complete returned outputs, collect rawData and metadata, query final `condor_history`/held-job ClassAds for resource and execution-time measurements, and turn failures/timeouts into `JobResult` rows.
 - Parse local `condor.log` event timestamps to measure the current active execution
@@ -26,6 +26,10 @@
 - On a yadof-detected per-job timeout, invoke `condor_rm` with a bounded command
   wait, preserve cleanup failure metadata, finalize timeout locally, and remove the
   job from the local pending set without waiting for queue confirmation.
+- On common-handle cancellation, stop new submissions, wake polling through the
+  event, collect already terminal/output-ready work normally, and attempt bounded
+  removal of every remaining cluster. Preserve remove failure as explicit
+  unconfirmed-cleanup metadata on the cancelled row.
 - Recognize `allowed_execute_duration` hold codes 46/47 as timeouts, capture their diagnostics, and remove the held job so it cannot be retried.
 - Delegate standard memory/disk resource-hold decisions and attempt cleanup to
   `resource_retries.py`, remove the old cluster, and submit a fresh cluster with the
@@ -52,7 +56,9 @@
 - `environment` is emitted as one quoted HTCondor environment string. Entries must be whitespace-separated inside that quoted string; semicolon-separated entries are not valid for the current submit style.
 
 ## Non-Obvious Techniques
-- The after-submit callback is designed for submit-side surrogate training. Callback failure is logged but must not cancel already-submitted HTCondor jobs.
+- The after-submit callback is a compatibility hook for submit-side surrogate
+  training. Callback failure is logged but must not cancel already-submitted
+  HTCondor jobs; new explicit overlap uses handle start/wait order.
 - `condor_environment_string()` only escapes quotes and rejects newlines. It does not translate semicolon-delimited legacy syntax; config must provide the intended HTCondor syntax directly.
 - Transfer-list filenames containing spaces are emitted literally. Windows Condor
   treats surrounding double quotes as filename characters; commas/newlines are

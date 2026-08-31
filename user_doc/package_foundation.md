@@ -80,6 +80,14 @@ rows joined by identity. Filtering or reordering a dataset does not decode rawDa
 and transformed/derived rows remain transient unless the user separately performs a
 normal real evaluation and recording workflow.
 
+The core wheel also exports `EvaluationBatch`, `EvaluationHandle`,
+`EvaluationHandleState`, and `EvaluationResult` from `yadof.evaluate_manager`.
+`prepare_evaluation()` is resource-free; `start_evaluation()` owns one
+generation-bounded fast/local/distributed lifecycle, and terminal rows are exposed
+only after durable evidence finalization. Started cancellation records unfinished
+candidates as diagnosed `cancelled` execution rows, while cancellation before start
+creates no evidence. The synchronous population and smoke APIs use this same path.
+
 The reference development machine used Windows 11 Pro 25H2, ANSYS Electronics
 Desktop 2024 R1, CPython 3.13.11, PyAEDT 0.24.1, NumPy 2.2.6, pymoo 0.6.2, and
 psutil 7.2.2, and HTCondor 25.4.0. psutil is a core dependency because local

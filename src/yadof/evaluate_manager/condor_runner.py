@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import threading
 import time
 from typing import Callable, Mapping, Sequence
 
@@ -170,6 +171,7 @@ def run_condor_jobs(
     after_jobs_submitted: Callable[[], object] | None = None,
     on_result: Callable[[JobResult], object] | None = None,
     history_records: Sequence[Mapping[str, object]] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> tuple[JobResult, ...]:
     """Submit jobs to HTCondor, wait for job-local outputs, and collect results.
 
@@ -202,6 +204,17 @@ def run_condor_jobs(
     _progress(f"htcondor: submitting {total} jobs")
     _progress(f"htcondor: submit progress 0/{total}; queued=0; submit_failures=0; last_cluster=none")
     for index, job in enumerate(jobs, start=1):
+        if cancel_event is not None and cancel_event.is_set():
+            store_result(
+                job.name,
+                cancelled_condor_result(
+                    job,
+                    submission=None,
+                    stage="before_submit",
+                    remove_error=None,
+                ),
+            )
+            continue
         try:
             submission = submit_condor_job(
                 effective.workspace,
@@ -223,7 +236,7 @@ def run_condor_jobs(
                 f"submit_failures={submit_failures}; last_cluster={cluster}"
             )
 
-    if pending:
+    if pending and not (cancel_event is not None and cancel_event.is_set()):
         _run_after_jobs_submitted(after_jobs_submitted)
 
     deadline = None if timeout_sec is None else time.monotonic() + float(timeout_sec)
@@ -237,6 +250,8 @@ def run_condor_jobs(
     if pending:
         _progress(f"htcondor: waiting for {len(pending)} jobs")
     while pending and (deadline is None or time.monotonic() < deadline):
+        if cancel_event is not None and cancel_event.is_set():
+            break
         completed_now = 0
         for job_name, submission in list(pending.items()):
             terminal_reason = terminal_log_reason(submission.job.directory)
@@ -417,10 +432,59 @@ def run_condor_jobs(
                 )
             match_diagnostic_reported = True
         if pending:
-            time.sleep(poll_sec)
+            if cancel_event is None:
+                time.sleep(poll_sec)
+            else:
+                cancel_event.wait(poll_sec)
 
-    timed_out_count = len(pending)
+    cancellation_requested = bool(cancel_event is not None and cancel_event.is_set())
+    timed_out_count = 0 if cancellation_requested else len(pending)
+    cancelled_count = 0
     for job_name, submission in list(pending.items()):
+        if cancellation_requested:
+            terminal_reason = terminal_log_reason(submission.job.directory)
+            individual_metadata = read_individual_metadata(submission.job.directory)
+            outputs_ready = _job_local_outputs_ready(
+                submission.job.directory,
+                individual_metadata,
+            )
+            if terminal_reason is not None or outputs_ready:
+                try:
+                    result = collect_condor_result(
+                        effective.workspace,
+                        submission.job,
+                        config=effective,
+                        submission=submission,
+                        timed_out=False,
+                        terminal_reason=terminal_reason,
+                    )
+                except Exception as exc:  # Preserve a completed-but-bad payload.
+                    result = collect_failure_result(
+                        submission.job,
+                        submission=submission,
+                        exc=exc,
+                        terminal_reason=terminal_reason,
+                    )
+                store_result(job_name, result)
+                pending.pop(job_name, None)
+                continue
+            remove_error = remove_condor_job(
+                effective.workspace,
+                submission,
+                config=effective,
+            )
+            store_result(
+                job_name,
+                cancelled_condor_result(
+                    submission.job,
+                    submission=submission,
+                    stage="scheduler_cancel",
+                    remove_error=remove_error,
+                ),
+            )
+            cancelled_count += 1
+            pending.pop(job_name, None)
+            continue
         active_clock = condor_execution_clock(submission.job.directory)
         timeout_site_metadata = (
             {}
@@ -452,6 +516,8 @@ def run_condor_jobs(
         pending.pop(job_name, None)
     if timed_out_count:
         _progress(f"htcondor: timed out {timed_out_count} jobs")
+    if cancelled_count:
+        _progress(f"htcondor: cancelled {cancelled_count} jobs")
     _progress(f"htcondor: collected {len(results_by_name)}/{total} results")
 
     return tuple(results_by_name[job.name] for job in jobs)
@@ -1411,6 +1477,34 @@ def submit_failure_result(job: JobSpec, exc: BaseException) -> JobResult:
             condor_submit_stdout_tail=tail(exc.stdout),
             condor_submit_stderr_tail=tail(exc.stderr),
         )
+    write_metadata(job.directory, metadata)
+    return result_from_metadata(job, metadata)
+
+
+def cancelled_condor_result(
+    job: JobSpec,
+    *,
+    submission: CondorSubmission | None,
+    stage: str,
+    remove_error: str | None,
+) -> JobResult:
+    metadata = base_metadata(job, engine="htcondor")
+    metadata.update(
+        status="cancelled",
+        failure_stage=stage,
+        error_type="EvaluationCancelled",
+        error_message="evaluation cancellation was requested",
+        cancelled_at=now_text(),
+        condor_submit_file=CONDOR_SUBMIT_FILE_NAME,
+    )
+    if submission is not None:
+        metadata.update(
+            condor_cluster_id=submission.cluster_id,
+            condor_submitted_at=submission.submitted_at,
+        )
+    if remove_error is not None:
+        metadata["condor_remove_error"] = str(remove_error)[:4000]
+        metadata["scheduler_cancellation_unconfirmed"] = True
     write_metadata(job.directory, metadata)
     return result_from_metadata(job, metadata)
 

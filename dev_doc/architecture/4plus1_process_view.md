@@ -5,12 +5,14 @@
 ```mermaid
 sequenceDiagram
     participant O as strategy or caller
+    participant H as evaluation handle
     participant E as evaluation manager
     participant T as task execution
     participant F as common finalizer
     participant R as campaign recorder
     participant C as current task cost
-    O->>E: normalized candidate population
+    O->>H: prepare and start normalized population
+    H->>E: frozen batch and cancellation signal
     loop each candidate
         E->>T: assigned values and isolated execution context
         T-->>E: rawData or failure diagnostics
@@ -20,7 +22,8 @@ sequenceDiagram
         R-->>F: committed or failed receipt
         F->>C: calculate current cost in population order
     end
-    F-->>O: ordered objective rows and diagnostics
+    F-->>H: payload-free finalized rows
+    H-->>O: immutable result after backend cleanup
 ```
 
 The evaluation manager prepares candidates as they complete while preserving input
@@ -29,6 +32,14 @@ segment count/byte target or the population tail. Current cost starts only after
 the candidate's immutable segment is recovery-visible. Bounded recorder capacity
 may pause producers; publication failure wakes the affected receipts and stops the
 campaign rather than losing accepted evidence.
+
+`wait()` may be called by multiple threads and returns the same cached terminal
+result; its timeout does not cancel work. `cancel()` changes running state to
+cancelling once. Fast drains queued work and kills active worker trees, local
+terminates active workflow trees and short-circuits queued candidates, and
+distributed stops submission/polling and attempts cluster removal. Every unfinished
+started row still passes through the common finalizer as `cancelled`; a completion
+already observed by the backend remains completed evidence.
 
 ## Backend processes
 
@@ -65,6 +76,12 @@ snapshot for parameters, evaluation, cost interpretation, and optimization
 composition. Edits made during a generation become visible only at a later
 generation boundary.
 
+A session registry retains every handle created against its current snapshot.
+Beginning another generation fails while any such handle is open, including a
+completed-but-not-closed handle. Session close copies the registry, cancels and
+closes each handle without holding the recorder state lock, and only then shuts down
+the writer and deletes snapshots.
+
 Mechanically compatible history is reinterpreted through the new snapshot. Source
 identity can invalidate caches and record provenance, but the user remains
 responsible for deciding whether earlier evidence should be retained, cleared, or
@@ -98,8 +115,9 @@ validation, timeout, cleanup, and publication behavior.
   later generation can replay the interpretation.
 - Backend-specific retry is permitted only for declared recoverable conditions and
   remains bounded.
-- Timeout or cancellation terminates the candidate process tree and ignores
-  partial evidence.
+- Timeout or cancellation terminates the candidate process/worker tree or attempts
+  scheduler removal and ignores partial rawData. Started cancellation is durable
+  diagnostic evidence; cancellation before start creates no record.
 - Recorder failure is campaign-fatal because later evaluation must not proceed with
   a gap in accepted evidence.
 - History readers tolerate unrelated or corrupt entries by isolating them rather

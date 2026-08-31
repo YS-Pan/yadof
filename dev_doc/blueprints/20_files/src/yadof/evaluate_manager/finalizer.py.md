@@ -8,7 +8,8 @@
 ## Functionalities
 
 - Normalize every backend outcome into an ordered `JobResult` with campaign and
-  generation-snapshot provenance.
+  generation-snapshot provenance. Finalized payload-free metadata includes the
+  durable candidate/evidence identity and committed receipt/group state.
 - Validate and own file-backed or memory-backed rawData exactly once, admit it into
   a count/byte-targeted group, and retain only payload-free result state outside the
   recorder's ownership budget.
@@ -16,7 +17,8 @@
   interpreter in deterministic population order.
 - Keep execution, evidence, and interpretation states independent. RawData failure
   produces no completed evidence; cost failure leaves completed evidence committed
-  and returns a replayable interpretation diagnostic.
+  and returns a replayable interpretation diagnostic. Cancelled execution publishes
+  no rawData and receives a not-applicable interpretation.
 - Record validation, admission, completion-to-commit, and commit-to-interpretation
   timings.
 

@@ -21,8 +21,15 @@
 
 ## Evaluation
 
-- `evaluate_manager` selects the backend and preserves population order and
-  per-individual failure isolation.
+- `evaluate_manager` freezes each `EvaluationBatch`; its backend-neutral
+  `EvaluationHandle` owns created/running/cancelling/completed/failed/closed state,
+  one non-daemon execution owner, ordered terminal rows, and cleanup.
+- `evaluate_population()` and standalone smoke compose the same
+  prepare/start/wait/close lifecycle used by explicit callers; there is no second
+  synchronous dispatch path.
+- Backend selection preserves population order and per-individual failure
+  isolation. A common cancellation signal is interpreted by each transport at its
+  own worker/process/scheduler boundary.
 - Job preparation copies task inputs, assigned parameters, and invariant worker
   support into self-contained prepared jobs.
 - Fast, local, and HTCondor runners own their transport, timeout, cleanup, and
@@ -31,7 +38,8 @@
   changing task evidence.
 - The common finalizer owns rawData validation/ownership, bounded group admission,
   committed-receipt coordination, stable-order current-cost interpretation, and
-  result construction.
+  result construction. Handle results contain only payload-free finalized rows and
+  become visible after this boundary.
 
 ## Durable evidence
 

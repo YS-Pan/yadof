@@ -12,6 +12,15 @@ remains durable completed evidence even when its current interpretation fails. R
 backpressure may delay worker reuse or population completion; recorder failure
 stops the campaign before later evaluation.
 
+`prepare_evaluation()` freezes an `EvaluationBatch` without opening runtime
+resources. `EvaluationHandle(batch)` creates the explicit `created` state;
+`start_evaluation()` or `handle.start()` launches one non-daemon owner thread.
+`wait()` returns one cached immutable `EvaluationResult` only after backend cleanup
+and evidence-first finalization; repeated waiters share it. `cancel()` is one common
+signal interpreted by the selected transport, and `close()` cancels/waits active
+work before releasing its generation lease. `evaluate_population()` and
+`run_smoke_test()` compose exactly these operations.
+
 `resource_calibration.py` is the shared automation boundary. It reads backend-neutral
 resource keys with legacy backend-key fallback, selects compatible smoke or
 preceding-generation records, trims high samples, applies generation-zero bootstrap
@@ -34,7 +43,8 @@ runtime package/archive/config.
 ## Local backend
 
 `local_runner.py` directly runs job-local `workflow.py` with bounded concurrency and
-per-job timeout, kills the process tree on timeout, rejects `cost.json`, validates
+per-job timeout, kills the process tree on timeout or cancellation, rejects
+`cost.json`, validates
 the flat rawData directory even when no direct files exist, merges workflow metadata,
 and captures output tails. psutil samples the workflow and recursive simulator
 children to record summed peak RSS, accumulated CPU time/average cores, peak process
@@ -65,6 +75,12 @@ replacement. A successful worker is reused after descendant cleanup. Fast worker
 plans are stored in evaluation metadata, not emitted once per generation as CLI
 progress. Fast never calls the scheduler-specific `after_jobs_submitted` callback.
 
+The common cancellation event stops new fast assignments, force-kills active fast
+worker trees, and releases Windows process handles; queued fast candidates become
+ordered cancelled rows. Local queued candidates short-circuit before prepare/run,
+while an active local runner polls the event and kills its workflow tree. These are
+transport-specific adapters over the same public handle state.
+
 ## Distributed backend
 
 `condor_runner.py` writes Windows direct-workflow submit files, selects only needed
@@ -76,6 +92,11 @@ and slot as source-labeled fallback provenance, and removes terminal
 held/timed-out jobs when needed. A per-job timeout becomes locally final even when
 bounded `condor_rm` cleanup fails. Normal policy is `run_as_owner=False`,
 `load_profile=True`; pool repair is outside the module.
+
+On handle cancellation, distributed submission stops, an already terminal/output-
+ready job is collected normally, and every remaining submission receives bounded
+`condor_rm`. Removal failure is retained as unconfirmed-cleanup metadata while the
+row remains a diagnosed cancelled terminal result.
 
 Distributed completion callbacks enter the same coordinator used by fast and local;
 `RecordingError` is never swallowed as a progress-callback failure, and no backend
@@ -127,4 +148,10 @@ population's receipts before return.
   never exceeds the population or cap.
 - Resource retries are bounded fresh clusters for standard memory/disk holds only.
 - Submit callbacks run after submission and cannot cancel queued jobs on failure.
+- The callback remains a scheduler-specific compatibility hook; public overlap is
+  expressed by start/wait order, not by a fabricated fast/local submit event.
+- Cancellation before start creates no evidence. Started unfinished candidates are
+  committed with execution status `cancelled` and not-applicable interpretation.
+- A campaign cannot create the next snapshot while a handle on the current snapshot
+  remains open.
 - Every stateful lookup uses the effective workspace.

@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import time
 from typing import Callable
+import uuid
 
 from ..job_template import api as job_template_api
 from ..recorded_data.rawdata import own_rawdata_source
@@ -54,6 +55,7 @@ class ResultFinalizationCoordinator:
         self._results: dict[int, JobResult] = {}
         self._next_index = 0
         self._group_sequence = 0
+        self._coordinator_id = uuid.uuid4().hex[:12]
         self._group_count = 0
         self._group_bytes = 0
         self._closed = False
@@ -164,6 +166,7 @@ class ResultFinalizationCoordinator:
         return (
             f"{self._session.campaign_id}:"
             f"{self._snapshot.task_snapshot_id[:12]}:"
+            f"{self._coordinator_id}:"
             f"{self._group_sequence:06d}"
         )
 
@@ -417,6 +420,8 @@ def _prepare_result(
     prepared_metadata = dict(prepared.metadata)
     prepared_metadata.update(
         {
+            "candidate_id": receipt.candidate_id,
+            "evidence_id": receipt.candidate_id,
             "evidence_state": "pending",
             "publication_receipt_state": "pending",
             "recorder_admission_sec": max(

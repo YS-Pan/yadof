@@ -13,6 +13,14 @@
   job directory.
 - **Backend-neutral result** preserves candidate identity, outcome, diagnostics,
   and either file-backed or memory-backed rawData.
+- **Evaluation batch** freezes candidate order and effective backend configuration
+  without opening a session, snapshot, worker, process, or scheduler resource.
+- **Evaluation handle** is the generation-scoped owner of one started batch. It
+  exposes state and idempotent wait/cancel/close operations while hiding concrete
+  worker, process, and cluster types.
+- **Evaluation result** is the immutable ordered set of payload-free finalized
+  `JobResult` rows. Its optimizer-cost view is the only handle boundary that maps a
+  missing row cost to correct-width infinity.
 - **Campaign session** owns current accepted rows, the workspace campaign lock, and
   reliable publication for one optimization lifetime.
 - **Publication receipt** is the candidate/group acknowledgement that changes from
@@ -85,6 +93,11 @@ selected candidates still receive normal real evaluation.
 - Fast, local, and distributed execution converge before evidence-first
   finalization and recording.
 - Population order and objective width are stable on every return path.
+- A started evaluation cannot outlive its generation/session scope. An open handle
+  prevents the next snapshot; session shutdown cancels and closes registered
+  handles before stopping the recorder or deleting snapshots.
+- Handle results are invisible until every returned row has committed evidence and
+  a succeeded/failed/not-applicable interpretation classification.
 - Individual execution, rawData, or cost failures remain explicit diagnostic rows.
 - Valid rawData is durably committed before current cost starts, and all receipts
   resolve before a population boundary completes.

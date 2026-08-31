@@ -10,7 +10,7 @@ from ..workspace import WorkspaceContext, resolve_workspace
 
 
 WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
-VALID_RECORD_STATUSES = ("completed", "error", "timeout")
+VALID_RECORD_STATUSES = ("completed", "error", "timeout", "cancelled")
 
 
 @dataclass(frozen=True, slots=True)
