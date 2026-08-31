@@ -533,8 +533,8 @@ class ConditionalINRComponent:
 class ConditionalINRPosteriorAdapter:
     """Explicit finite-ensemble posterior view over conditional INR.
 
-    The wrapped component keeps its legacy GPSAF identity and tuple API. This
-    adapter has a separate semantic identity so only strategies that opt into the
+    The wrapped component keeps its established deterministic GPSAF identity and
+    tuple API. This adapter has a separate semantic identity so only programs that opt into the
     joint posterior enter a new state namespace.
     """
 
@@ -627,7 +627,7 @@ class ConditionalINRPosteriorAdapter:
         *,
         draw_count: int,
         seed: int,
-        training_data=None,
+        training_data,
     ):
         from .conditional_inr.posterior_adapter import make_rawdata_sampler
 
@@ -949,7 +949,7 @@ class HierarchicalCAEComponent:
         *,
         draw_count: int,
         seed: int,
-        training_data=None,
+        training_data,
     ):
         from .hierarchical_cae.posterior_adapter import make_rawdata_sampler
 

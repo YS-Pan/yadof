@@ -61,9 +61,15 @@ def _task_files(root: Path, *, limit: int, offset: int) -> WorkspaceContext:
         encoding="utf-8",
     )
     (submit_dir / "optimization.py").write_text(
-        "from yadof.optimize import pymoo_ga, real_search\n"
-        "def build_optimization():\n"
-        "    return real_search(search=pymoo_ga())\n",
+        "YADOF_OPTIMIZATION_PROGRAM = {\n"
+        "    'api': 'yadof.optimize.program/v1',\n"
+        "    'entry': 'optimization_program',\n"
+        "    'helpers': (),\n"
+        "    'identity': {'program': 'loader-test', 'version': 1},\n"
+        "    'capabilities': ('real-evaluation',),\n"
+        "}\n"
+        "def optimization_program(context):\n"
+        "    pass\n",
         encoding="utf-8",
     )
     (task_dir / "workflow.py").write_text(

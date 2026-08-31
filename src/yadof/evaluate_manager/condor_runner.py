@@ -168,7 +168,6 @@ def run_condor_jobs(
     config: LoadedConfig | None = None,
     timeout_sec: float | None,
     env: Mapping[str, str] | None = None,
-    after_jobs_submitted: Callable[[], object] | None = None,
     on_result: Callable[[JobResult], object] | None = None,
     history_records: Sequence[Mapping[str, object]] | None = None,
     cancel_event: threading.Event | None = None,
@@ -235,9 +234,6 @@ def run_condor_jobs(
                 f"htcondor: submit progress {index}/{total}; queued={len(pending)}; "
                 f"submit_failures={submit_failures}; last_cluster={cluster}"
             )
-
-    if pending and not (cancel_event is not None and cancel_event.is_set()):
-        _run_after_jobs_submitted(after_jobs_submitted)
 
     deadline = None if timeout_sec is None else time.monotonic() + float(timeout_sec)
     poll_sec = max(0.1, htcondor_poll_sec(effective))
@@ -522,14 +518,6 @@ def run_condor_jobs(
 
     return tuple(results_by_name[job.name] for job in jobs)
 
-
-def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
-    if callback is None:
-        return
-    try:
-        callback()
-    except Exception as exc:  # noqa: BLE001 - keep submitted jobs alive if training scheduling fails.
-        _progress(f"htcondor: after-submit callback failed: {exc.__class__.__name__}: {exc}")
 
 def submit_condor_job(
     workspace: WorkspaceContext | str | Path,

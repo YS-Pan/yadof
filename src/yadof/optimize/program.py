@@ -86,12 +86,10 @@ def inspect_workspace_optimization(
     tree = ast.parse(source, filename=str(source_path))
     declaration = _declaration_node(tree)
     if declaration is None:
-        if not _top_level_function(tree, "build_optimization"):
-            raise TypeError(
-                f"{source_path} must define build_optimization() or literal "
-                f"{PROGRAM_DECLARATION_NAME}"
-            )
-        return OptimizationSourceInspection("legacy-strategy", source_path)
+        raise TypeError(
+            f"{source_path} must define literal {PROGRAM_DECLARATION_NAME}; "
+            "the 0.4.x build_optimization() entry was removed in yadof 0.5.0"
+        )
 
     raw = ast.literal_eval(declaration)
     if not isinstance(raw, dict):
@@ -145,13 +143,11 @@ def inspect_workspace_optimization(
 
 def freeze_workspace_program(
     workspace: WorkspaceContext | str | os.PathLike[str],
-) -> FrozenOptimizationProgram | None:
-    """Freeze declared program sources once; return None for the legacy path."""
+) -> FrozenOptimizationProgram:
+    """Freeze the required explicit program and its declared helper closure once."""
 
     context = resolve_workspace(workspace)
     inspection = inspect_workspace_optimization(context)
-    if inspection.kind != "explicit-program":
-        return None
     spec = inspection.program
     assert spec is not None
     sources = ("optimization.py", *spec.helpers)

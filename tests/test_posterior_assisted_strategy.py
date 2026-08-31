@@ -9,9 +9,9 @@ import pytest
 
 from yadof.job_template.rawdata_projector import JointObjectiveSamples
 from yadof.optimize import (
-    PosteriorAssistedStrategy,
+    PosteriorAssistedSelector,
     calibrated_applicability_gate,
-    posterior_assisted,
+    posterior_assisted_selector,
     qnehvi,
 )
 from yadof.optimize import pymoo_nsga3
@@ -89,8 +89,8 @@ class _BlockedSurrogate:
         del config, problem
         return {"capability": "joint-rawdata-posterior"}
 
-    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int):
-        raise AssertionError((context, draw_count, seed))
+    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int, training_data):
+        raise AssertionError((context, draw_count, seed, training_data))
 
     def exploitation_semantic_identity(self, config, problem):
         del config, problem
@@ -208,8 +208,8 @@ class _AcceptedSurrogate:
         del context
         return True
 
-    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int):
-        del context, seed
+    def make_rawdata_sampler(self, context, *, draw_count: int, seed: int, training_data):
+        del context, seed, training_data
         assert draw_count == 2
         return _Sampler()
 
@@ -286,8 +286,8 @@ def _samples(
     )
 
 
-def _strategy(surrogate) -> PosteriorAssistedStrategy:
-    return posterior_assisted(
+def _strategy(surrogate) -> PosteriorAssistedSelector:
+    return posterior_assisted_selector(
         search=_Search(),
         surrogate=surrogate,
         acquisition=qnehvi(batch_size=1, greedy_restarts=2),
@@ -296,6 +296,10 @@ def _strategy(surrogate) -> PosteriorAssistedStrategy:
         candidate_chunk_size=2,
         exploration_fraction=0.5,
     )
+
+
+def _training_data() -> SurrogateTrainingData:
+    return SurrogateTrainingData(("left", "right"), (), ())
 
 
 def test_qnehvi_rejects_pending_outcomes_and_single_objective() -> None:
@@ -563,48 +567,23 @@ def test_calibrated_applicability_excludes_low_probability_from_exploitation() -
     assert diagnostics["low_probability_exploration_count"] >= 1
 
 
-def test_static_scientific_gate_falls_back_through_common_evaluator(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("yadof.optimize.posterior_assisted")
-
+def test_static_scientific_gate_returns_typed_full_real_selection() -> None:
     surrogate = _BlockedSurrogate()
     strategy = _strategy(surrogate)
-    calls = []
+    result = strategy.select_generation(_context(), training_data=_training_data())
 
-    def fake_evaluate(context, population, *, after_jobs_submitted=None):
-        calls.append((context, population))
-        assert after_jobs_submitted is not None
-        after_jobs_submitted()
-        return tuple((0.4, 0.6) for _ in population)
-
-    monkeypatch.setattr(module, "evaluate_population", fake_evaluate)
-    result = strategy.run_generation(_context())
-
-    assert len(calls) == 1
-    assert calls[0][1] == result.population
     assert len(result.population) == 2
     assert result.surrogate_used is False
     assert result.diagnostics["fallback_reason"] == (
         "typed-exploitation-capability-blocked"
     )
-    assert result.diagnostics["evaluation_handoff"] == (
-        "common-real-evaluate-population"
-    )
-    assert surrogate.training_requests == 1
+    assert result.diagnostics["evaluation_handoff"] == "workspace-program-real-evaluation"
+    assert surrogate.training_requests == 0
 
 
-def test_common_evaluator_recording_failure_still_aborts_fallback(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("yadof.optimize.posterior_assisted")
-
-    def fail_recording(*_args, **_kwargs):
-        raise RuntimeError("synthetic recorder failure")
-
-    monkeypatch.setattr(module, "evaluate_population", fail_recording)
-    with pytest.raises(RuntimeError, match="recorder failure"):
-        _strategy(_BlockedSurrogate()).run_generation(_context())
+def test_posterior_selector_exposes_no_generation_runner() -> None:
+    selector = _strategy(_BlockedSurrogate())
+    assert not hasattr(selector, "run_generation")
 
 
 def test_accepted_path_projects_then_hands_every_selected_point_to_real_evaluator(
@@ -634,22 +613,15 @@ def test_accepted_path_projects_then_hands_every_selected_point_to_real_evaluato
         return QNEHVISelection((0,), 1.25, {"backend": "spy"})
 
     monkeypatch.setattr(DiscreteQNEHVIAcquisition, "select_batch", fake_select)
-    evaluated = []
-
-    def fake_evaluate(context, population, *, after_jobs_submitted=None):
-        del context
-        evaluated.append(population)
-        after_jobs_submitted()
-        return tuple((0.3, 0.7) for _ in population)
-
-    monkeypatch.setattr(module, "evaluate_population", fake_evaluate)
     history = (
         HistoryRecord("left", (0.05, 0.05), (0.2, 0.8)),
         HistoryRecord("right", (0.95, 0.95), (0.8, 0.2)),
     )
-    result = strategy.run_generation(_context(history=history))
+    result = strategy.select_generation(
+        _context(history=history),
+        training_data=_training_data(),
+    )
 
-    assert evaluated == [result.population]
     assert len(result.population) == 2
     assert len(set(result.population)) == 2
     assert result.surrogate_used is True
@@ -657,10 +629,8 @@ def test_accepted_path_projects_then_hands_every_selected_point_to_real_evaluato
     assert result.diagnostics["real_exploration_count"] == 1
     assert result.diagnostics["exploitation_count"] == 1
     assert result.diagnostics["predicted_rawdata_retained"] is False
-    assert result.diagnostics["evaluation_handoff"] == (
-        "common-real-evaluate-population"
-    )
-    assert surrogate.training_requests == 1
+    assert result.diagnostics["evaluation_handoff"] == "workspace-program-real-evaluation"
+    assert surrogate.training_requests == 0
 
 
 def test_backend_failure_falls_back_but_support_reject_stays_hard(
@@ -682,15 +652,6 @@ def test_backend_failure_falls_back_but_support_reject_stays_hard(
         "project_rawdata_sampler",
         lambda _sampler, _projector, population, **_kwargs: _samples(population),
     )
-    evaluations = []
-
-    def fake_evaluate(_context, population, *, after_jobs_submitted=None):
-        evaluations.append(population)
-        if after_jobs_submitted is not None:
-            after_jobs_submitted()
-        return tuple((0.5, 0.5) for _ in population)
-
-    monkeypatch.setattr(module, "evaluate_population", fake_evaluate)
     history = (
         HistoryRecord("left", (0.05, 0.05), (0.2, 0.8)),
         HistoryRecord("right", (0.95, 0.95), (0.8, 0.2)),
@@ -703,12 +664,12 @@ def test_backend_failure_falls_back_but_support_reject_stays_hard(
             RuntimeError("synthetic backend missing")
         ),
     )
-    fallback = strategy.run_generation(_context(history=history))
+    fallback = strategy.select_generation(
+        _context(history=history),
+        training_data=_training_data(),
+    )
     assert fallback.surrogate_used is False
     assert fallback.diagnostics["fallback_reason"] == "posterior-selection-failure"
-    assert len(evaluations) == 1
-
-    evaluations.clear()
     monkeypatch.setattr(
         DiscreteQNEHVIAcquisition,
         "select_batch",
@@ -717,8 +678,10 @@ def test_backend_failure_falls_back_but_support_reject_stays_hard(
         ),
     )
     with pytest.raises(QNEHVISupportRejected, match="support rejected"):
-        strategy.run_generation(_context(history=history))
-    assert evaluations == []
+        strategy.select_generation(
+            _context(history=history),
+            training_data=_training_data(),
+        )
 
 
 def test_strategy_validation_rejects_variance_only_surrogate() -> None:
@@ -738,7 +701,7 @@ def test_strategy_identity_covers_all_controls_and_objective_names() -> None:
     strategy = _strategy(_BlockedSurrogate())
     identity = strategy.semantic_identity(_config(), _problem())
 
-    assert identity["strategy"] == "posterior-assisted"
+    assert identity["component"] == "posterior-assisted-selector"
     assert identity["objective_names"] == ["drag", "mass"]
     controlled = identity["controlled_parameters"]
     assert controlled["candidate_pool_size"] == 4

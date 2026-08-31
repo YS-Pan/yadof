@@ -125,15 +125,9 @@ def _validate_strategy_source(
         raise BenchmarkError(f"strategy {strategy_id!r} is not valid Python: {exc}") from exc
     declaration = _declaration_node(tree)
     if declaration is None:
-        if any(
-            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.name == "build_optimization"
-            for node in tree.body
-        ):
-            return MappingProxyType({"optimization.py": path.resolve()})
         raise BenchmarkError(
-            f"strategy {strategy_id!r} must define build_optimization() or literal "
-            f"{_PROGRAM_DECLARATION}"
+            f"strategy {strategy_id!r} must define literal {_PROGRAM_DECLARATION}; "
+            "legacy build_optimization() sources are not supported"
         )
     try:
         raw = ast.literal_eval(declaration)

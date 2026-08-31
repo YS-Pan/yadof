@@ -3,10 +3,9 @@
 ## Responsibility
 
 `yadof.optimize` owns workspace-explicit campaign/generation APIs, common
-result/context/history/real-evaluation contracts, explicit optimization-program
-lifecycle scopes and generation-local selection operations, transitional strategy
-adapters, and compact metadata. An
-explicit workspace owns the complete control flow through the frozen
+result/context/history/real-evaluation contracts, optimization-program lifecycle
+scopes, generation-local selection operations, and compact metadata. A workspace
+owns the complete control flow through the frozen
 `submit/optimization.py:optimization_program(context)` entry and its exact declared
 helpers. Package components expose thin lazy
 pymoo GA/NSGA-III search, objective-count dispatch, real search, irreducible GPSAF
@@ -24,8 +23,8 @@ they do not duplicate its recorder, evaluator, handle registry, or lock.
 - `program.py` statically validates the literal v1 declaration, freezes the entry
   and exact helper sources, isolated-loads the entry once, and owns the public
   program/run/generation contexts plus strict complete-generation commit/resume.
-- Parent files own campaign/session execution, transitional strategy loading/state, problem
-  shape, metadata helpers, and the lightweight public component/factory surface.
+- Parent files own campaign/session execution and state, problem shape, metadata
+  helpers, and the lightweight public component/factory surface.
 - `primitives.py` owns frozen backend-neutral `SearchCandidate`, `CandidatePool`,
   `PredictedCostRows`, `CandidateSelection`, and opaque generation-local
   `SearchState` values plus prepare/search/bind/select/advance/compose/full-real
@@ -34,8 +33,8 @@ they do not duplicate its recorder, evaluator, handle registry, or lock.
   alpha/beta/exploration phases, explicit training start/finish helpers, and its
   retained private pymoo record adapter; it does not own real evaluation or
   generation commit.
-- `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
-  strategies. Pymoo objects do not cross into the public strategy contract.
+- `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real search.
+  Pymoo objects do not cross the public component/value boundary.
 - `qnehvi/` owns the public qNEHVI-family component implementation:
   `acquisition.py` provides controls and discrete greedy multi-start selection,
   `backend.py` provides the lightweight scoring boundary, and
@@ -44,8 +43,8 @@ they do not duplicate its recorder, evaluator, handle registry, or lock.
   injected search, posterior surrogate, readiness, projector, and acquisition
   components. Its pool and complete-real fallback reuse the common primitives;
   the workspace program always owns evaluation and commit.
-- The public `gpsaf()`, `gpsaf_settings()`, and `qnehvi()` factories remain at
-  `yadof.optimize`;
+- The public `gpsaf_settings()`, `posterior_assisted_selector()`, and `qnehvi()`
+  factories remain at `yadof.optimize`;
   loading their same-named private implementation packages must not replace those
   callables with subpackage modules.
 
@@ -90,10 +89,10 @@ reuse only a compatible state within the configured generation lag. After starti
 program starts training on that prior immutable evidence and later waits/closes both
 operations before commit. Conditional-INR and hierarchical-CAE translate the same
 owned value into their retained named-data internals without changing checkpoint
-identity. No explicit program path has an `after_jobs_submitted` callback.
+identity. No program or evaluation path has a submission callback.
 
 The public joint rawData posterior protocol, typed exploitation readiness, and cost
-projector feed `PosteriorAssistedStrategy.select_generation()`. The selector
+projector feed `PosteriorAssistedSelector.select_generation()`. The selector
 requires
 both runtime-checkable capabilities rather than probing with `hasattr`, binds the
 search/surrogate/posterior/readiness/acquisition identities plus all pool/draw/
@@ -153,11 +152,9 @@ rejection propagates. The workspace program performs real evaluation,
 finalization, recording, and commit outside the selector and fallback catch, so
 recorder failure still aborts the campaign.
 
-Only the closed 0.4.x strategy adapter may still reach the scheduler-specific
-after-submit hook. Fast creates no scheduler submission and does not fabricate that
-event. Explicit programs instead start an evaluation handle, start training on the
-already frozen evidence, and explicitly wait/close both lifecycles; the 0.5.0
-cutover removes the callback-bearing adapter and backend field.
+Programs start an evaluation handle, start training on already frozen evidence,
+and explicitly wait/close both lifecycles. The evaluation API and all fast, local,
+distributed, and Condor backend paths expose no after-submit callback field.
 
 ## Warm start and orchestration
 
@@ -172,7 +169,7 @@ recorder counters. Config is loaded once per generation so one coherent policy
 applies to its work; recorder capacities and storage path remain frozen at campaign
 start.
 
-For an explicit program, source loading is run-scoped: the CLI freezes the program
+Program source loading is run-scoped: the CLI freezes the program
 before optional smoke and passes that exact snapshot into execution; direct APIs
 freeze at their own entry. The literal declaration supplies exact API/entry/helper,
 semantic identity, and capabilities. Source fingerprint remains separate from the
@@ -183,9 +180,9 @@ creates an immutable classified two-root task snapshot that excludes frozen prog
 sources, then uses its shape-preserving parameter and
 fixed-width objective definitions. An interpretation-fingerprint change
 reinterprets mechanically usable history before selection; an evaluation-only
-change reuses the existing derived view. Changes to optimization composition or
-workflow/evaluation code affect
-the next generation's real evaluations.
+change reuses the existing derived view. Changes to workflow/evaluation code affect
+the next generation's real evaluations. Changes to optimization composition take
+effect only in a new command after a complete-generation boundary.
 Parameter identity/count and objective count remain stable during a campaign;
 rebuilding pymoo problem/reference-direction state for structural dimension changes
 is separate future work. Source fingerprints are cache-invalidation/provenance
@@ -213,16 +210,14 @@ failure remains campaign-fatal and never becomes an individual `inf`.
 ## Invariants
 
 - No workspace-global optimizer singleton or implicit history path.
-- Static workspace checking never imports or executes either an explicit program or
-  a transitional legacy factory.
-- One explicit run uses one frozen program snapshot; generation task snapshots do
+- Static workspace checking never imports or executes a program.
+- One run uses one frozen program snapshot; generation task snapshots do
   not recopy or reinterpret declared program sources.
 - Explicit selectors consume owned evidence values and return selection DTOs; they
   never scan a campaign session for training evidence or evaluate, train, record,
   or commit a generation.
-- `ProgramGenerationScope.prepare_evaluation()` exposes no lifecycle callback.
-  Callback-bearing evaluation and strategy-owned generation methods are a closed
-  0.4.x compatibility surface scheduled for the 0.5.0 cutover.
+- `ProgramGenerationScope.prepare_evaluation()` and the evaluation backend expose
+  no lifecycle callback; the program owns visible handle ordering.
 - A generation without one validated `commit()` never advances the program
   completion pointer; user exceptions and interrupts retain the previous complete
   boundary and cleanup the existing session owners before propagating.

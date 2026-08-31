@@ -14,10 +14,10 @@ Install a built wheel into the Python environment used by submit and local worke
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.4.2-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[qnehvi]"
-python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.5.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.5.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.5.0-py3-none-any.whl[qnehvi]"
+python -m pip install ".\dist\yadof-0.5.0-py3-none-any.whl[viewer]"
 ```
 
 The default template's declared `submit/optimization.py` program composes
@@ -33,7 +33,7 @@ factory remains lightweight; selecting, validating, or fitting it requires Torch
 It does not require scikit-learn and does not add a posterior capability.
 
 The separate `qnehvi` extra supplies the optional BoTorch numerical backend for the
-opt-in `qnehvi()` acquisition and `posterior_assisted()` strategy. It is not a
+opt-in `qnehvi()` acquisition and `posterior_assisted_selector()` component. It is not a
 package default. It declares Torch directly and BoTorch 0.18.x; that BoTorch series
 requires Python 3.11 or newer even though core yadof continues to support Python
 3.10. Ordinary real search, GPSAF, conditional INR, and `import yadof.optimize` do
@@ -75,7 +75,7 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-The current package version is `0.4.2`. Recorded history uses immutable
+The current package version is `0.5.0`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
 The core wheel also exposes `yadof.recorded_data.EvidenceDataset` and `CostTable`.
@@ -213,11 +213,11 @@ library, and dependencies deliberately installed on execute nodes.
 `submit/` is fixed and is not configurable through `config.py`. Its complete tree
 is available only on the submit host and is never copied into a prepared job or an
 HTCondor transfer list. `calc_cost.py` owns current rawData interpretation;
-`optimization.py` must either declare an explicit `YADOF_OPTIMIZATION_PROGRAM` or,
-during the 0.4.x migration, define the transitional `build_optimization()` factory.
-Explicit programs may name an exact set of submit-local `.py` helpers in their
-literal declaration. Canonical unassigned parameters remain only in
-`job_template/parameters_constraints.py`.
+`optimization.py` must declare a literal `YADOF_OPTIMIZATION_PROGRAM`. Programs may
+name an exact set of submit-local `.py` helpers in that declaration. The removed
+0.4.x `build_optimization()` entry is rejected; see
+[migration_0_5.md](migration_0_5.md). Canonical unassigned parameters remain only
+in `job_template/parameters_constraints.py`.
 
 Workspace `job_template/workflow.py` and `submit/calc_cost.py` contain only
 behavior that can change with the optimization task. They call copied `worker_misc`

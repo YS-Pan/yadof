@@ -334,11 +334,15 @@ def test_distributed_handle_cancel_removes_fake_clusters_and_keeps_order(
 
     root = _workspace(tmp_path)
     submitted = threading.Event()
+    submitted_ids: list[int] = []
     removed: list[int] = []
     cluster_ids = iter((401, 402))
 
     def fake_submit(_workspace, job, **_kwargs):
         cluster_id = next(cluster_ids)
+        submitted_ids.append(cluster_id)
+        if len(submitted_ids) == 2:
+            submitted.set()
         return condor_runner.CondorSubmission(
             job=job,
             submit_file=job.directory / "job.sub",
@@ -360,7 +364,6 @@ def test_distributed_handle_cancel_removes_fake_clusters_and_keeps_order(
             ((0.25,), (0.75,)),
             mode="distributed",
             timeout_sec=60.0,
-            after_jobs_submitted=submitted.set,
         )
     )
     assert submitted.wait(10.0)

@@ -77,7 +77,16 @@ def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
         "def calculate_cost(*args): return (0.5,)\n", encoding="utf-8"
     )
     (workspace / "submit" / "optimization.py").write_text(
-        "def build_optimization(): return 'baseline'\n", encoding="utf-8"
+        "YADOF_OPTIMIZATION_PROGRAM = {\n"
+        "    'api': 'yadof.optimize.program/v1',\n"
+        "    'entry': 'optimization_program',\n"
+        "    'helpers': (),\n"
+        "    'identity': {'program': 'benchmark-baseline-fixture', 'version': 1},\n"
+        "    'capabilities': ('real-evaluation',),\n"
+        "}\n"
+        "def optimization_program(context):\n"
+        "    pass\n",
+        encoding="utf-8",
     )
     (workspace / "job_template").mkdir()
     (workspace / "job_template" / "workflow.py").write_text(
@@ -128,7 +137,16 @@ def _strategy(workspace: Path, name: str) -> Path:
     path = workspace / "resources" / "strategies" / name / "optimization.py"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        f"def build_optimization():\n    return {name!r}\n", encoding="utf-8"
+        "YADOF_OPTIMIZATION_PROGRAM = {\n"
+        "    'api': 'yadof.optimize.program/v1',\n"
+        "    'entry': 'optimization_program',\n"
+        "    'helpers': (),\n"
+        f"    'identity': {{'program': {name!r}, 'version': 1}},\n"
+        "    'capabilities': ('real-evaluation',),\n"
+        "}\n"
+        "def optimization_program(context):\n"
+        "    pass\n",
+        encoding="utf-8",
     )
     return path
 
@@ -666,6 +684,20 @@ def test_explicit_program_helper_path_is_statically_rejected(tmp_path: Path) -> 
         _plan(tmp_path, workspace)
 
 
+def test_removed_legacy_strategy_source_is_rejected(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "removed-factory", strategies=("alpha",))
+    strategy = workspace / "resources/strategies/alpha/optimization.py"
+    strategy.write_text(
+        "def build_optimization():\n"
+        "    raise AssertionError('must not run')\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BenchmarkError, match="not supported"):
+        _plan(tmp_path, workspace)
+
+
 def test_workspace_initialization_records_runtime_once_without_snapshots(
     tmp_path: Path,
 ) -> None:
@@ -974,4 +1006,4 @@ def test_terminal_logs_workspace_lifecycle(tmp_path: Path) -> None:
 
 
 def test_distribution_version() -> None:
-    assert benchmark.__version__ == "0.2.2"
+    assert benchmark.__version__ == "0.3.0"

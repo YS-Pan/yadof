@@ -7,16 +7,12 @@ from .api import (
     run_one_generation,
 )
 from .components import (
-    GPSAFStrategy,
     ObjectiveCountSearch,
     PymooSearch,
-    RealSearchStrategy,
     by_objective_count,
-    gpsaf,
     gpsaf_settings,
     pymoo_ga,
     pymoo_nsga3,
-    real_search,
 )
 from .gpsaf.assistance import (
     GPSAFGenerationSelection,
@@ -27,9 +23,9 @@ from .gpsaf.assistance import (
 from .posterior_assisted import (
     CalibratedApplicabilityGate,
     PosteriorGenerationSelection,
-    PosteriorAssistedStrategy,
+    PosteriorAssistedSelector,
     calibrated_applicability_gate,
-    posterior_assisted,
+    posterior_assisted_selector,
 )
 from .program import (
     OptimizationProgramContext,
@@ -66,11 +62,11 @@ from .qnehvi.acquisition import (
     QNEHVISupportRejected,
     qnehvi,
 )
-from .strategy import OptimizationResult, OptimizationStrategy
+from .strategy import OptimizationResult
 
-# The private ``gpsaf`` and ``qnehvi`` packages are loaded above before their
-# public factory names are rebound. Later private-module imports therefore cannot
-# replace those callables on ``yadof.optimize``.
+# Private implementation packages load under aliases. The public ``qnehvi``
+# callable is rebound below; the ``gpsaf`` subpackage itself is not a public
+# complete-method factory and is absent from ``__all__``.
 
 __all__ = [
     "AllInfiniteGenerationError",
@@ -78,7 +74,6 @@ __all__ = [
     "CandidatePool",
     "CandidateSelection",
     "DiscreteQNEHVIAcquisition",
-    "GPSAFStrategy",
     "GPSAFGenerationSelection",
     "InsufficientCandidatePoolError",
     "ObjectiveCountSearch",
@@ -86,13 +81,11 @@ __all__ = [
     "OptimizationProgramContext",
     "OptimizationProgramSpec",
     "OptimizationRunScope",
-    "OptimizationStrategy",
-    "PosteriorAssistedStrategy",
+    "PosteriorAssistedSelector",
     "PosteriorGenerationSelection",
     "PredictedCostRows",
     "PymooSearch",
     "ProgramGenerationScope",
-    "RealSearchStrategy",
     "SearchCandidate",
     "SearchState",
     "QNEHVIConfigurationError",
@@ -111,14 +104,12 @@ __all__ = [
     "fork_search_state",
     "full_real_search",
     "finish_explicit_surrogate_training",
-    "gpsaf",
     "gpsaf_settings",
     "pymoo_ga",
     "pymoo_nsga3",
-    "posterior_assisted",
+    "posterior_assisted_selector",
     "prepare_search",
     "qnehvi",
-    "real_search",
     "run_generations",
     "run_one_generation",
     "search_candidates",

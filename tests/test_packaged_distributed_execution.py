@@ -117,18 +117,16 @@ def test_packaged_submit_file_runs_workflow_directly_with_minimal_payload(
     assert not any(path.name.startswith("yadof_worker") for path in job.directory.iterdir())
 
 
-def test_distributed_population_and_smoke_keep_shape_and_callback(
+def test_distributed_population_and_smoke_keep_shape_without_callback(
     tmp_path, monkeypatch
 ):
     from yadof.evaluate_manager import condor_runner
 
     workspace = _workspace(tmp_path, "dispatch")
-    callbacks: list[str] = []
-
     def fake_run(workspace_arg, jobs, **kwargs):
         assert workspace_arg.root == workspace.resolve()
         assert kwargs["timeout_sec"] is not None
-        kwargs["after_jobs_submitted"]()
+        assert "after_jobs_submitted" not in kwargs
         return tuple(_completed_result(job) for job in jobs)
 
     monkeypatch.setattr(condor_runner, "run_condor_jobs", fake_run)
@@ -136,11 +134,9 @@ def test_distributed_population_and_smoke_keep_shape_and_callback(
         workspace,
         ((0.25,), (0.75,)),
         mode="distributed",
-        after_jobs_submitted=lambda: callbacks.append("submitted"),
     )
     expected_cost = soft_cost(0.25, goal=0.0, worst=1.0)
     assert costs == ((expected_cost,), (expected_cost,))
-    assert callbacks == ["submitted"]
     assert len(list_records(workspace)) == 2
 
     def fake_smoke(workspace_arg, jobs, **kwargs):

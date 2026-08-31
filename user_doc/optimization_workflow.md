@@ -348,7 +348,7 @@ normalized candidate
 The installed package exposes a lightweight protocol for surrogate and acquisition
 components that need joint rawData function draws. The current template still
 composes conditional INR with GPSAF, but a workspace may now explicitly select the
-independent `posterior_assisted(..., acquisition=qnehvi(...))` strategy. Conditional
+independent `posterior_assisted_selector(..., acquisition=qnehvi(...))` component. Conditional
 INR has a separate opt-in posterior adapter and an experimental full-grid
 hierarchical CAE component is available. Both currently expose typed fail-closed
 readiness, so neither may control exploitation until its architecture is accepted
@@ -496,7 +496,7 @@ whole, and retains only compact acquisition diagnostics. The public acquisition
 selects a discrete batch with explicit greedy restarts; it still does not own
 candidate generation, pending state, outcome constraints, evaluation, or recording.
 Those generation responsibilities belong to the workspace program around
-`posterior_assisted().select_generation()`. Do not expose a qNEHVI backend scorer
+`PosteriorAssistedSelector.select_generation()`. Do not expose a qNEHVI backend scorer
 as the program's selection operation.
 
 Every objective in that tuple must normally be a dimensionless minimization cost
@@ -669,16 +669,14 @@ before commit. This normally gives one-generation-lag selection after warmup. Th
 is no program-level `after_jobs_submitted` callback, so fast, local, and distributed
 modes share this same truthful ordering.
 
-Transitional external 0.4.x workspaces may still use the side-effect-free
-`build_optimization()` adapter until the 0.5.0 cutover. In either form, workspace
-calls are the only entry for component settings.
-For example, a tuned source may use
+Workspace calls are the only entry for component settings. For example, a tuned
+source may use
 `pymoo_ga(crossover_probability=0.9, mutation_eta=15.0)`,
 `gpsaf_settings(alpha=3, beta=3, exploration_fraction=0.15)`, and
 `conditional_inr(device="cuda", epochs=64, bootstrap_members=True)`. These
 keyword-only values are validated when the program calls the component operation.
-A legacy factory edit affects the next generation. An explicit program/helper edit
-affects only the next `yadof run` command after a complete boundary; it never
+A program/helper edit affects only the next `yadof run` command after a complete
+boundary; it never
 changes the program already frozen for the current command. Removed uppercase algorithm/model
 names in `config.py` fail as unknown settings instead of being translated or
 ignored.
@@ -724,9 +722,8 @@ explicit search primitives. Advanced program code can import `prepare_search()`,
 `search_candidates()`, `bind_surrogate_prediction()`, `select_candidates()`,
 `advance_search()`, `compose_real_population()`, and `full_real_search()` together
 with the frozen `SearchCandidate`, `CandidatePool`, `PredictedCostRows`,
-`CandidateSelection`, and opaque `SearchState` values. Transitional strategy
-adapters also use this path, while new workspaces call the generation-local
-primitives or retained selection operations directly.
+`CandidateSelection`, and opaque `SearchState` values. Workspace programs call the
+generation-local primitives or retained selection operations directly.
 
 Each operation leaves its input state unchanged and returns a next state, so a
 program may retain or deterministically fork a same-generation branch. The state is
@@ -747,15 +744,15 @@ its existing factory, validation, identity, diagnostics, and behavior; the primi
 split does not add it to selection mathematics.
 
 For an explicit structural posterior-assisted composition, set
-`OPTIMIZE_POPULATION_SIZE = 10` and make every control visible in the strategy
+`OPTIMIZE_POPULATION_SIZE = 10` and make every control visible in the program
 source:
 
 ```python
-from yadof.optimize import posterior_assisted, pymoo_nsga3, qnehvi
+from yadof.optimize import posterior_assisted_selector, pymoo_nsga3, qnehvi
 from yadof.surrogate import conditional_inr_posterior
 
 surrogate = conditional_inr_posterior()
-selector = posterior_assisted(
+selector = posterior_assisted_selector(
     search=pymoo_nsga3(),
     surrogate=surrogate,
     acquisition=qnehvi(
@@ -880,9 +877,8 @@ runs exactly one worker and has no timeout or durable job directory.
 ## 6. Optimize and inspect
 
 `yadof check` statically parses the submit-side optimization source. It validates
-the explicit literal declaration, exact entry signature, declared helper paths,
-and import-safe top-level shape, or confirms the transitional top-level legacy
-factory declaration. It does not execute either entry/factory, construct
+the literal declaration, exact entry signature, declared helper paths, and
+import-safe top-level shape. It does not execute the entry, construct
 components, train, predict, evaluate candidates, import the workflow, or write an
 active pointer.
 

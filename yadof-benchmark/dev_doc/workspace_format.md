@@ -32,10 +32,9 @@ contents.
 
 `benchmark.py` must define `build_benchmark(benchmark)` and return `None`.
 Top-level named workflow postprocessors may be registered. A strategy entry must
-define legacy `build_optimization()` or contain a literal
-`YADOF_OPTIMIZATION_PROGRAM` declaration. Planning parses explicit declarations
-without importing the strategy and resolves every declared helper below the
-entry module's directory.
+contain a literal `YADOF_OPTIMIZATION_PROGRAM` declaration. Planning parses that
+declaration without importing the strategy and resolves every declared helper
+below the entry module's directory. The removed 0.4.x factory entry is rejected.
 
 Planning is read-only: it imports the live file with bytecode writes disabled,
 validates selected baseline/strategy sources, fingerprints the entry and all

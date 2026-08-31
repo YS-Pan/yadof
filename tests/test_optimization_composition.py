@@ -11,9 +11,9 @@ import pytest
 
 from yadof.config import DEFAULT_CONFIG, load_config
 from yadof.optimize import run_one_generation
-from yadof.optimize import gpsaf, pymoo_ga
+from yadof.optimize import gpsaf_settings, pymoo_ga
+from yadof.optimize.program import inspect_workspace_optimization
 from yadof.optimize.state import read_active_strategy_state
-from yadof.optimize.strategy import load_workspace_strategy
 from yadof.recorded_data.session import CampaignSession
 from yadof.workspace.check import check_workspace
 from yadof.workspace.init import init_workspace
@@ -28,14 +28,16 @@ def _small_workspace(root: Path) -> Path:
         "OPTIMIZE_SMOKE_TEST_ENABLED = False\n",
         encoding="utf-8",
     )
-    (root / "submit/optimization.py").write_text(
-        "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
-        "from yadof.surrogate import conditional_inr\n"
-        "def build_optimization():\n"
-        "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
-        "    return gpsaf(search=search, surrogate=conditional_inr(), alpha=1, beta=0)\n",
-        encoding="utf-8",
+    optimization_path = root / "submit/optimization.py"
+    source = optimization_path.read_text(encoding="utf-8")
+    source = source.replace('"alpha": 3', '"alpha": 1')
+    source = source.replace('"beta": 3', '"beta": 0')
+    source = source.replace('"exploration_fraction": 0.10', '"exploration_fraction": 0.0')
+    source = source.replace(
+        "settings = gpsaf_settings()",
+        "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
     )
+    optimization_path.write_text(source, encoding="utf-8")
     return root
 
 
@@ -123,12 +125,8 @@ def test_component_factory_defaults_explicit_parity_and_eager_validation() -> No
     }
     with pytest.raises(ValueError, match=r"pymoo_ga\(\).*mutation_probability=1.5.*<= 1.0"):
         pymoo_ga(mutation_probability=1.5)
-    with pytest.raises(ValueError, match=r"gpsaf\(\).*alpha=-1.*>= 0"):
-        gpsaf(
-            search=pymoo_ga(),
-            surrogate=conditional_inr(),
-            alpha=-1,
-        )
+    with pytest.raises(ValueError, match=r"gpsaf_settings\(\).*alpha=-1.*>= 0"):
+        gpsaf_settings(alpha=-1)
     with pytest.raises(ValueError, match=r"conditional_inr\(\).*epochs=0.*>= 1"):
         conditional_inr(epochs=0)
     with pytest.raises(
@@ -173,13 +171,13 @@ def test_default_composition_dispatches_ga_and_nsga3_by_objective_count(
     )
     multi_result = run_one_generation(multi, generation_index=0, random_seed=31)
 
-    assert single_result.diagnostics["strategy_identity"]["strategy"] == "gpsaf"
+    assert single_result.diagnostics["strategy_identity"]["program_api"] == "yadof.optimize.program/v1"
     assert single_result.diagnostics["backend_algorithm"] == "ga"
-    assert multi_result.diagnostics["strategy_identity"]["strategy"] == "gpsaf"
+    assert multi_result.diagnostics["strategy_identity"]["program_api"] == "yadof.optimize.program/v1"
     assert multi_result.diagnostics["backend_algorithm"] == "nsga3"
 
 
-def test_real_multiobjective_nsga3_strategy_runs_without_surrogate(
+def test_explicit_full_real_multiobjective_nsga3_runs_without_surrogate(
     tmp_path: Path,
 ) -> None:
     root = _small_workspace(tmp_path / "multiobjective")
@@ -191,13 +189,6 @@ def test_real_multiobjective_nsga3_strategy_runs_without_surrogate(
         "    return ('response', 'inverse_response')\n",
         encoding="utf-8",
     )
-    (root / "submit/optimization.py").write_text(
-        "from yadof.optimize import pymoo_nsga3, real_search\n"
-        "def build_optimization():\n"
-        "    return real_search(search=pymoo_nsga3())\n",
-        encoding="utf-8",
-    )
-
     report = check_workspace(root)
     result = run_one_generation(
         root,
@@ -209,27 +200,26 @@ def test_real_multiobjective_nsga3_strategy_runs_without_surrogate(
     assert report.ok, report.format()
     assert len(result.population) == 2
     assert all(len(row) == 2 for row in result.costs)
-    assert result.diagnostics["strategy_identity"]["strategy"] == "real-search"
+    assert result.diagnostics["strategy_identity"]["program_api"] == "yadof.optimize.program/v1"
     assert result.diagnostics["backend_algorithm"] == "nsga3"
     assert result.surrogate_used is False
     assert not (root / ".yadof/surrogate/checkpoints").exists()
 
 
-def test_check_statically_accepts_legacy_factory_without_runtime_mutation(
+def test_check_statically_rejects_removed_legacy_factory_without_runtime_mutation(
     tmp_path: Path,
 ) -> None:
     root = _small_workspace(tmp_path / "invalid-nsga3")
     (root / "submit/optimization.py").write_text(
-        "from yadof.optimize import pymoo_nsga3, real_search\n"
         "def build_optimization():\n"
-        "    return real_search(search=pymoo_nsga3())\n",
+        "    raise AssertionError('must not execute')\n",
         encoding="utf-8",
     )
 
     report = check_workspace(root)
 
-    assert report.ok, report.format()
-    assert "factory code was not imported or executed" in report.format()
+    assert not report.ok
+    assert "build_optimization() entry was removed" in report.format()
     assert not (root / "jobs").exists()
     assert not (root / ".yadof/optimization").exists()
     assert not (root / ".yadof/surrogate/checkpoints").exists()
@@ -255,9 +245,10 @@ def test_strategy_switch_retains_inactive_namespace_and_can_return(
     retained.write_text("inactive evidence\n", encoding="utf-8")
 
     optimization_path.write_text(
-        "from yadof.optimize import pymoo_ga, real_search\n"
-        "def build_optimization():\n"
-        "    return real_search(search=pymoo_ga())\n",
+        default_source.replace(
+            '"program": "starter-conditional-inr-gpsaf"',
+            '"program": "alternate-explicit-program"',
+        ),
         encoding="utf-8",
     )
     second = run_one_generation(root, generation_index=1, random_seed=17)
@@ -283,19 +274,13 @@ def test_strategy_switch_retains_inactive_namespace_and_can_return(
     assert active_payload["strategy_namespace"] == first_state.strategy_namespace
 
 
-def test_real_strategy_switch_does_not_require_optional_surrogate_runtime(
+def test_explicit_program_config_reload_does_not_require_strategy_deactivation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import yadof.surrogate.api as surrogate_api
 
     root = _small_workspace(tmp_path / "core-only-switch")
-    (root / "submit/optimization.py").write_text(
-        "from yadof.optimize import pymoo_ga, real_search\n"
-        "def build_optimization():\n"
-        "    return real_search(search=pymoo_ga())\n",
-        encoding="utf-8",
-    )
     first = run_one_generation(root, generation_index=0, random_seed=13)
 
     def missing_optional_backend(_workspace):
@@ -317,7 +302,7 @@ def test_real_strategy_switch_does_not_require_optional_surrogate_runtime(
     second = run_one_generation(root, generation_index=1, random_seed=13)
 
     assert len(second.population) == 3
-    assert first.diagnostics["strategy_signature"] != second.diagnostics[
+    assert first.diagnostics["strategy_signature"] == second.diagnostics[
         "strategy_signature"
     ]
 
@@ -376,38 +361,33 @@ def test_generation_snapshot_freezes_both_complete_source_roots(
     session = CampaignSession(config)
     try:
         first = session.begin_generation(config)
-        first_definition = load_workspace_strategy(
-            first.config.workspace,
-            config=first.config,
-        )
-        (root / "submit/optimization.py").write_text(
-            "from yadof.optimize import pymoo_ga, real_search\n"
-            "def build_optimization():\n"
-            "    return real_search(search=pymoo_ga())\n",
+        first_definition = inspect_workspace_optimization(first.config.workspace)
+        optimization_path = root / "submit/optimization.py"
+        optimization_path.write_text(
+            optimization_path.read_text(encoding="utf-8").replace(
+                '"program": "starter-conditional-inr-gpsaf"',
+                '"program": "alternate-snapshot-program"',
+            ),
             encoding="utf-8",
         )
         second = session.begin_generation(load_config(root))
-        second_definition = load_workspace_strategy(
-            second.config.workspace,
-            config=second.config,
-        )
-        optimization_path = root / "submit/optimization.py"
+        second_definition = inspect_workspace_optimization(second.config.workspace)
         optimization_path.write_text(
             optimization_path.read_text(encoding="utf-8")
             + "\n# provenance-only source edit\n",
             encoding="utf-8",
         )
         third = session.begin_generation(load_config(root))
-        third_definition = load_workspace_strategy(
-            third.config.workspace,
-            config=third.config,
-        )
+        third_definition = inspect_workspace_optimization(third.config.workspace)
 
-        assert first_definition.identity["strategy"] == "gpsaf"
-        assert second_definition.identity["strategy"] == "real-search"
-        assert first_definition.signature != second_definition.signature
+        assert first_definition.program is not None
+        assert second_definition.program is not None
+        assert third_definition.program is not None
+        assert first_definition.program.identity["program"] == "starter-conditional-inr-gpsaf"
+        assert second_definition.program.identity["program"] == "alternate-snapshot-program"
+        assert first_definition.program.identity != second_definition.program.identity
         assert first.optimization_fingerprint != second.optimization_fingerprint
-        assert second_definition.signature == third_definition.signature
+        assert second_definition.program.identity == third_definition.program.identity
         assert second.optimization_fingerprint != third.optimization_fingerprint
         assert "submit/optimization.py" in first.source_hashes
         assert "job_template/workflow.py" in first.source_hashes
@@ -417,31 +397,29 @@ def test_generation_snapshot_freezes_both_complete_source_roots(
         session.close()
 
 
-def test_factory_edit_reloads_next_generation_without_mutating_snapshot(
+def test_program_declaration_edit_reloads_next_generation_without_mutating_snapshot(
     tmp_path: Path,
 ) -> None:
     root = _small_workspace(tmp_path / "factory-reload")
     session = CampaignSession(load_config(root))
     try:
         first = session.begin_generation(load_config(root))
-        first_definition = load_workspace_strategy(
-            first.config.workspace, config=first.config
-        )
+        first_definition = inspect_workspace_optimization(first.config.workspace)
         optimization_path = root / "submit/optimization.py"
         optimization_path.write_text(
             optimization_path.read_text(encoding="utf-8").replace(
-                "alpha=1, beta=0", "alpha=2, beta=0"
+                '"alpha": 1', '"alpha": 2'
             ),
             encoding="utf-8",
         )
         second = session.begin_generation(load_config(root))
-        second_definition = load_workspace_strategy(
-            second.config.workspace, config=second.config
-        )
+        second_definition = inspect_workspace_optimization(second.config.workspace)
 
-        assert first_definition.identity["gpsaf_parameters"]["alpha"] == 1
-        assert second_definition.identity["gpsaf_parameters"]["alpha"] == 2
-        assert first_definition.signature != second_definition.signature
+        assert first_definition.program is not None
+        assert second_definition.program is not None
+        assert first_definition.program.identity["alpha"] == 1
+        assert second_definition.program.identity["alpha"] == 2
+        assert first_definition.program.identity != second_definition.program.identity
         assert first.optimization_fingerprint != second.optimization_fingerprint
     finally:
         session.close()

@@ -73,7 +73,7 @@ and process-tree diagnostics, enforces the hard timeout, and uses shared
 timed-out/crashed worker tree. A failure discards that worker and creates a
 replacement. A successful worker is reused after descendant cleanup. Fast worker
 plans are stored in evaluation metadata, not emitted once per generation as CLI
-progress. Fast never calls the scheduler-specific `after_jobs_submitted` callback.
+progress. No backend exposes a submission callback.
 
 The common cancellation event stops new fast assignments, force-kills active fast
 worker trees, and releases Windows process handles; queued fast candidates become
@@ -147,9 +147,8 @@ population's receipts before return.
 - Local default worker cap is eight; adaptive planning may safely choose fewer and
   never exceeds the population or cap.
 - Resource retries are bounded fresh clusters for standard memory/disk holds only.
-- Submit callbacks run after submission and cannot cancel queued jobs on failure.
-- The callback remains a scheduler-specific compatibility hook; public overlap is
-  expressed by start/wait order, not by a fabricated fast/local submit event.
+- Public overlap is expressed by evaluation-handle start/wait order; no backend
+  fabricates a scheduler submission event.
 - Cancellation before start creates no evidence. Started unfinished candidates are
   committed with execution status `cancelled` and not-applicable interpretation.
 - A campaign cannot create the next snapshot while a handle on the current snapshot

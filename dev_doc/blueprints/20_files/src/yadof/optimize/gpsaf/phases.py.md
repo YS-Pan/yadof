@@ -10,8 +10,7 @@
 - Consume caller-owned explicit training data through freshness, readiness, and
   prediction for every runtime-checkable deterministic component.
 - Dispatch PCA/SVD, conditional-INR, and hierarchical-CAE through the typed
-  prediction protocol and bind each Stage 4 DTO to exact pool IDs. The closed
-  0.4.x runner alone retains the legacy tuple/materializer adapter; neither path
+  prediction protocol and bind each prediction DTO to exact pool IDs. No path
   preserves rawData/member spread in `PredictedCostRows`.
 - Apply GPSAF exploration, exploitation, and replacement rules.
 - Return normalized populations through the common strategy contracts.
@@ -31,9 +30,8 @@
 - Alpha calls continue one search branch; beta explicitly forks and advances a
   simulated branch; exploration shares archive/RNG bookkeeping without mutating the
   alpha algorithm branch.
-- Explicit phases never materialize session evidence or own an after-submit
-  callback; predicted rawData never enters the session. The legacy materializer is
-  a closed Stage 8 deletion target.
+- Phases never materialize session evidence or own an after-submit callback;
+  predicted rawData never enters the session.
 
 ## Mutability Profile
 - GPSAF phase policy may evolve, but real evaluation and durable history must

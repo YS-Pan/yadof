@@ -296,12 +296,13 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
                 "OPTIMIZE_SMOKE_TEST_ENABLED = False\n",
                 encoding="utf-8",
             )
-            (run_workspace / "submit/optimization.py").write_text(
-                "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
-                "from yadof.surrogate import conditional_inr\n"
-                "def build_optimization():\n"
-                "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
-                "    return gpsaf(search=search, surrogate=conditional_inr(), alpha=1, beta=0)\n",
+            optimization_path = run_workspace / "submit/optimization.py"
+            optimization_source = optimization_path.read_text(encoding="utf-8")
+            optimization_path.write_text(
+                optimization_source.replace(
+                    "settings = gpsaf_settings()",
+                    "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
+                ),
                 encoding="utf-8",
             )
             for generation in (2, 3):
@@ -490,7 +491,7 @@ def test_package_metadata_and_source_resources() -> None:
         "botorch>=0.18,<0.19",
     ]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.4.2"
+    assert yadof.__version__ == "0.5.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(

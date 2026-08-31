@@ -12,6 +12,7 @@ import torch
 from yadof.config import DEFAULT_CONFIG
 from yadof.job_template import Parameter
 from yadof.job_template.rawdata_contract import NamedRawDataItem
+from yadof.job_template.rawdata_template import StructuredRawDataSample
 from yadof.job_template.api import CostInterpreter
 from yadof.job_template.rawdata_projector import RawDataCostProjector
 from yadof.optimize.qnehvi.backend import score_discrete_qlognehvi
@@ -28,6 +29,7 @@ from yadof.surrogate.conditional_inr.types import (
     SurrogateState,
     TargetScaler,
 )
+from yadof.surrogate.training import SurrogateTrainingData
 
 
 def _metadata(shape, axes):
@@ -72,31 +74,37 @@ def _scalar_payload():
 
 class _NamedSession:
     def named_rawdata_samples(self, *, status=None):
-        assert status == "completed"
-        return (
-            (
-                "real-0001",
-                (
-                    NamedRawDataItem("z_curve.npz", _curve_payload()),
-                    NamedRawDataItem("a_scalar.npz", _scalar_payload()),
-                ),
-            ),
+        raise AssertionError(f"hidden session read attempted: {status}")
+
+
+def _training_data() -> SurrogateTrainingData:
+    sample = StructuredRawDataSample.from_items(
+        (
+            NamedRawDataItem("z_curve.npz", _curve_payload()),
+            NamedRawDataItem("a_scalar.npz", _scalar_payload()),
         )
+    )
+    return SurrogateTrainingData(
+        parameter_names=("x", "y"),
+        normalized_variables=((0.5, 0.5),),
+        raw_data=(sample,),
+        row_ids=("real-0001",),
+    )
 
 
 def _state(tmp_path: Path, member_count: int = 3) -> SurrogateState:
     schema = RawDataSchema(
-        templates=(_curve_payload(), _scalar_payload()),
+        templates=(_scalar_payload(), _curve_payload()),
         modeled_slots=(
-            RawArraySlot(0, "values", (2,), "float64", 0, 2, 0),
-            RawArraySlot(1, "values", (), "float64", 2, 3, 1),
+            RawArraySlot(0, "values", (), "float64", 0, 1, 0),
+            RawArraySlot(1, "values", (2,), "float64", 1, 3, 1),
         ),
         flat_dim=3,
         coord_table=np.asarray(
-            [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            [[0.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
             dtype=np.float32,
         ),
-        field_ids=np.asarray([0, 0, 1], dtype=np.int64),
+        field_ids=np.asarray([0, 1, 1], dtype=np.int64),
     )
     train_cfg = modeling.INRTrainConfig(
         ensemble_size=member_count,
@@ -130,8 +138,8 @@ def _state(tmp_path: Path, member_count: int = 3) -> SurrogateState:
         parameter_definition_signature={"parameters": (), "constraints": ()},
         schema=schema,
         scaler=TargetScaler(
-            mean=np.asarray([10.0, 20.0, 3.0], dtype=np.float64),
-            scale=np.asarray([2.0, 4.0, 0.5], dtype=np.float64),
+            mean=np.asarray([3.0, 10.0, 20.0], dtype=np.float64),
+            scale=np.asarray([0.5, 2.0, 4.0], dtype=np.float64),
         ),
         model=model,
         train_cfg=train_cfg,
@@ -160,8 +168,9 @@ def _main_arrays(sample):
 
 
 def _cost(payloads):
-    curve = np.asarray(payloads[0]["values"], dtype=np.float64)
-    scalar = float(np.asarray(payloads[1]["values"]))
+    values = tuple(np.asarray(item["values"], dtype=np.float64) for item in payloads)
+    curve = next(value for value in values if value.ndim == 1)
+    scalar = float(next(value for value in values if value.ndim == 0))
     return (float(np.mean(curve) + scalar), float(np.max(curve) - scalar))
 
 
@@ -173,9 +182,16 @@ def test_seeded_draws_report_honest_finite_support(
 ) -> None:
     _state_value, context = _context(monkeypatch, tmp_path)
     adapter = conditional_inr_posterior()
-    first = adapter.make_rawdata_sampler(context, draw_count=draw_count, seed=7)
-    repeated = adapter.make_rawdata_sampler(context, draw_count=draw_count, seed=7)
-    changed = adapter.make_rawdata_sampler(context, draw_count=draw_count, seed=8)
+    training_data = _training_data()
+    first = adapter.make_rawdata_sampler(
+        context, draw_count=draw_count, seed=7, training_data=training_data
+    )
+    repeated = adapter.make_rawdata_sampler(
+        context, draw_count=draw_count, seed=7, training_data=training_data
+    )
+    changed = adapter.make_rawdata_sampler(
+        context, draw_count=draw_count, seed=8, training_data=training_data
+    )
 
     assert first.diagnostics.posterior_kind == "empirical_ensemble"
     assert first.diagnostics.support_kind == "finite"
@@ -199,6 +215,7 @@ def test_member_draws_match_runtime_full_grid_and_keep_joint_cost_identity(
         context,
         draw_count=3,
         seed=11,
+        training_data=_training_data(),
     )
     posterior = sampler.predict(population)
 
@@ -212,8 +229,8 @@ def test_member_draws_match_runtime_full_grid_and_keep_joint_cost_identity(
         runtime_samples = runtime._raw_samples_from_flat(state.schema, flat)
         for adapter_sample, runtime_sample in zip(draw.samples, runtime_samples):
             curve, scalar = _main_arrays(adapter_sample)
-            np.testing.assert_allclose(curve, runtime_sample[0]["values"])
-            np.testing.assert_allclose(scalar, runtime_sample[1]["values"])
+            np.testing.assert_allclose(curve, runtime_sample[1]["values"])
+            np.testing.assert_allclose(scalar, runtime_sample[0]["values"])
             assert _cost(runtime_sample) == pytest.approx(_cost((
                 {"values": curve},
                 {"values": scalar},
@@ -230,6 +247,7 @@ def test_sampler_is_chunk_permutation_and_duplicate_invariant(
         context,
         draw_count=7,
         seed=17,
+        training_data=_training_data(),
     )
     a, b, c = (0.1, 0.2), (0.4, 0.3), (0.7, 0.9)
 
@@ -282,6 +300,7 @@ def test_member_failure_reduces_effective_support_without_field_splicing(
         context,
         draw_count=40,
         seed=7,
+        training_data=_training_data(),
     )
     posterior = sampler.predict(((0.2, 0.3),))
 
@@ -352,6 +371,7 @@ def test_conditional_inr_adapter_projects_into_qlognehvi_backend_spike(
         context,
         draw_count=5,
         seed=29,
+        training_data=_training_data(),
     )
 
     def calculate_cost(items, raw_variables):

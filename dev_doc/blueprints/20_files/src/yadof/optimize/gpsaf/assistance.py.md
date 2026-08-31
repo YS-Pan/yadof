@@ -3,8 +3,6 @@
 ## Intent
 - Select one GPSAF generation from injected search and a typed rawData-surrogate
   component without owning real evaluation, training timing, recording, or commit.
-- Retain the closed 0.4.x complete-generation wrapper only until the Stage 8
-  cutover.
 
 ## Functionalities
 - Receive common generation context/history/problem shape and invoke shared search
@@ -22,12 +20,10 @@
 - Expose explicit start/finish training helpers so the workspace program can start
   evaluation first, start training on prior immutable evidence, and close both
   lifecycles before commit.
-- Keep session materialization, common evaluation, and after-submit callback only
-  inside the legacy `run_generation()` wrapper scheduled for deletion.
 
 ## I/O Format
-- The explicit selector returns `GPSAFGenerationSelection`; the closed legacy
-  wrapper returns `strategy.OptimizationResult` after the common evaluator.
+- The selector returns `GPSAFGenerationSelection`; the workspace program converts
+  real evaluation output into `OptimizationResult` at commit.
 
 ## Non-Obvious Techniques
 - Selection has no training/evaluation side effect. The explicit program controls

@@ -195,10 +195,11 @@ Recovery requires the same exact materialized data. Checkpoints store semantic
 training content separately from bounded provenance and cold-fit old manifests
 that lack this contract.
 
-`predict()` consumes only an explicit `LinearSubspaceState`, normalized candidates,
+`predict()` consumes only a `LinearSubspaceState`, normalized candidates,
 and exact task snapshot. It reconstructs full rawData and reapplies that snapshot's
-cost policy, yielding a frozen deterministic DTO with zero-width intervals. GPSAF
-alone derives its legacy `(costs, intervals)` rows; predictions never enter the
+cost policy, yielding a frozen deterministic DTO with zero-width intervals. A
+direct low-level tuple prediction remains separate from GPSAF's typed binder;
+predictions never enter the
 recorder or evidence/history views. The generic viewer uses a read-only one-member
 adapter over the same manifest/artifact model.
 
@@ -207,9 +208,8 @@ adapter over the same manifest/artifact model.
 Conditional-INR receives the same explicit `SurrogateTrainingData` used for its
 freshness, prediction, and scheduler decisions. Its private adapter converts the
 owned structured samples into the retained named training bundle; it does not
-reopen history or a campaign session. The 0.4.x posterior adapter keeps one closed
-session fallback only for the legacy generation runner and is deleted at the 0.5.0
-cutover. RawData fields are flattened
+reopen history or a campaign session. Posterior sampler schema recovery also
+requires that caller-owned value. RawData fields are flattened
 into query-aligned numeric slots with schema/axis identity; target scaling handles
 constant or near-constant fields. Each query position is centered by its recorded
 mean and divided by its recorded standard deviation with a configured floor.

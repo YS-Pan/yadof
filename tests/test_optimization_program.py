@@ -46,6 +46,15 @@ def evaluate_rawdata(parameters, context):
 '''
 
 
+OPTIMIZATION_PROGRAM_EXAMPLES = (
+    "overlapped_surrogate",
+    "posterior_assisted_fallback",
+    "real_only",
+    "sequential_surrogate",
+    "split_cost_surrogate_data",
+)
+
+
 def test_retained_source_programs_have_no_legacy_loop_or_callback_edge() -> None:
     repository = Path(__file__).resolve().parents[1]
     relative_paths = (
@@ -54,6 +63,10 @@ def test_retained_source_programs_have_no_legacy_loop_or_callback_edge() -> None
         "yadof-benchmark/baselines/chrono/trebuchet/workspace/submit/optimization.py",
         "yadof-benchmark/baselines/ngspice/saw-ladder/workspace/submit/optimization.py",
         "yadof-benchmark/baselines/test-com/synthetic-antenna/workspace/submit/optimization.py",
+        *(
+            f"examples/optimization-programs/{stem}.py"
+            for stem in OPTIMIZATION_PROGRAM_EXAMPLES
+        ),
     )
     for relative_path in relative_paths:
         source_path = repository / relative_path
@@ -70,7 +83,7 @@ def test_retained_source_programs_have_no_legacy_loop_or_callback_edge() -> None
             if isinstance(target, ast.Name)
         }
         assert "YADOF_OPTIMIZATION_PROGRAM" in assignments
-        assert function_names == {"optimization_program"}
+        assert "optimization_program" in function_names
         assert "build_optimization" not in source
         assert "run_generation" not in source
         assert "after_jobs_submitted" not in source
@@ -81,6 +94,21 @@ def test_retained_source_programs_have_no_legacy_loop_or_callback_edge() -> None
         repository / "src/yadof/surrogate/api.py"
     ).read_text(encoding="utf-8")
     assert "training_data_from_session(" not in surrogate_api
+    import yadof.optimize as optimize_api
+
+    for removed in (
+        "OptimizationStrategy",
+        "OptimizationDefinition",
+        "GPSAFStrategy",
+        "RealSearchStrategy",
+        "load_workspace_strategy",
+        "real_search",
+    ):
+        assert not hasattr(optimize_api, removed)
+    assert "gpsaf" not in optimize_api.__all__
+    assert not callable(getattr(optimize_api, "gpsaf", None))
+    assert "posterior_assisted" not in optimize_api.__all__
+    assert not callable(getattr(optimize_api, "posterior_assisted", None))
 
 
 def _real_program(*, close_handle: bool = True, identity: str = "real-pilot") -> str:
@@ -154,6 +182,54 @@ def _files(root: Path) -> tuple[str, ...]:
             if path.is_file()
         )
     )
+
+
+def test_optimization_program_examples_are_paired_indexed_and_static(
+    tmp_path: Path,
+) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    examples = repository / "examples/optimization-programs"
+    python_stems = tuple(sorted(path.stem for path in examples.glob("*.py")))
+    markdown_stems = tuple(sorted(path.stem for path in examples.glob("*.md")))
+    assert python_stems == OPTIMIZATION_PROGRAM_EXAMPLES
+    assert markdown_stems == OPTIMIZATION_PROGRAM_EXAMPLES
+
+    index = (repository / "user_doc/optimization_program_examples.md").read_text(
+        encoding="utf-8"
+    )
+    for stem in OPTIMIZATION_PROGRAM_EXAMPLES:
+        guide = (examples / f"{stem}.md").read_text(encoding="utf-8")
+        for heading in (
+            "## Workspace dependencies",
+            "## Data flow",
+            "## Concurrency and resources",
+            "## Adoption",
+        ):
+            assert heading in guide
+        assert f"../examples/optimization-programs/{stem}.py" in index
+        root = _workspace(
+            tmp_path / stem,
+            program=(examples / f"{stem}.py").read_text(encoding="utf-8"),
+        )
+        inspection = inspect_workspace_optimization(root)
+        assert inspection.kind == "explicit-program"
+        assert inspection.program is not None
+
+
+def test_real_only_source_example_runs_one_fast_generation(tmp_path: Path) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    program = (
+        repository / "examples/optimization-programs/real_only.py"
+    ).read_text(encoding="utf-8")
+    root = _workspace(tmp_path / "real-example", program=program)
+
+    results = run_generations(root, 1, start_generation=0)
+
+    assert len(results) == 1
+    assert results[0].generation_index == 0
+    assert len(results[0].population) == 2
+    assert results[0].surrogate_used is False
+    assert results[0].diagnostics["program_api"] == "yadof.optimize.program/v1"
 
 
 def test_check_statically_validates_program_without_execution_or_runtime_writes(

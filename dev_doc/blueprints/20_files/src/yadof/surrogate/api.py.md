@@ -23,7 +23,7 @@
   consume caller-owned data/state/snapshot values. `predict_for_selection()`
   satisfies the lightweight deterministic-provider protocol, recovers only the
   exact caller-supplied training state, reconstructs full named rawData, and returns
-  the Stage 4 DTO for explicit pool binding. It exposes no
+  the deterministic DTO for explicit pool binding. It exposes no
   posterior/readiness methods.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
   one `data_filter_mode` selector that defaults to `none`, a mode-specific optional
@@ -53,8 +53,8 @@
 ## I/O Format
 - PCA/SVD, conditional-INR, and hierarchical-CAE selection-provider methods return
   `SurrogatePrediction`; the optimizer binder, not the component, owns conversion to
-  candidate-aligned `PredictedCostRows`. Retained `predict_population()` tuples
-  remain only for closed legacy callers until cutover.
+  candidate-aligned `PredictedCostRows`. Direct `predict_population()` tuples are
+  a separate low-level component operation and are not a GPSAF selection adapter.
 - Posterior prediction returns complete named rawData function draws; streaming
   projection returns `[draw,candidate,objective]` costs and `[draw,candidate]`
   validity without recording predicted evidence.

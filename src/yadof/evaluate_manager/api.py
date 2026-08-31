@@ -9,7 +9,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 from ..config import LoadedConfig, load_config
 from ..job_template import get_objective_count, get_variable_count, validate_fast_task
@@ -41,7 +41,6 @@ def evaluate_population(
     run_id: str | None = None,
     optimization_index: int | None = None,
     generation_index: int | None = None,
-    after_jobs_submitted: Callable[[], object] | None = None,
     _campaign_session: CampaignSession | None = None,
     _task_snapshot: GenerationTaskSnapshot | None = None,
 ) -> tuple[tuple[float, ...], ...]:
@@ -59,7 +58,6 @@ def evaluate_population(
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=generation_index,
-        after_jobs_submitted=after_jobs_submitted,
         _campaign_session=_campaign_session,
         _task_snapshot=_task_snapshot,
     )
@@ -89,7 +87,6 @@ def prepare_evaluation(
     run_id: str | None = None,
     optimization_index: int | None = None,
     generation_index: int | None = None,
-    after_jobs_submitted: Callable[[], object] | None = None,
     _campaign_session: CampaignSession | None = None,
     _task_snapshot: GenerationTaskSnapshot | None = None,
 ) -> EvaluationBatch:
@@ -108,7 +105,6 @@ def prepare_evaluation(
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=generation_index,
-        after_jobs_submitted=after_jobs_submitted,
         campaign_session=_campaign_session,
         task_snapshot=_task_snapshot,
         phase="evaluation",
@@ -143,7 +139,6 @@ def _prepare_evaluation_batch(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
-    after_jobs_submitted: Callable[[], object] | None,
     campaign_session: CampaignSession | None,
     task_snapshot: GenerationTaskSnapshot | None,
     phase: str,
@@ -205,7 +200,6 @@ def _prepare_evaluation_batch(
         phase=phase,
         _campaign_session=campaign_session,
         _task_snapshot=task_snapshot,
-        _after_jobs_submitted=after_jobs_submitted,
     )
 
 
@@ -262,7 +256,6 @@ def _execute_evaluation_batch(
                 run_id=batch.run_id,
                 optimization_index=batch.optimization_index,
                 generation_index=batch.generation_index,
-                after_jobs_submitted=batch._after_jobs_submitted,
                 progress=progress,
                 session=session,
                 snapshot=snapshot,
@@ -279,7 +272,6 @@ def _execute_evaluation_batch(
                 run_id=batch.run_id,
                 optimization_index=batch.optimization_index,
                 generation_index=batch.generation_index,
-                after_jobs_submitted=batch._after_jobs_submitted,
                 progress=progress,
                 session=session,
                 snapshot=snapshot,
@@ -335,7 +327,6 @@ def run_smoke_test(
         run_id=run_id,
         optimization_index=optimization_index,
         generation_index=None,
-        after_jobs_submitted=None,
         campaign_session=None,
         task_snapshot=None,
         phase="smoke",
@@ -421,7 +412,6 @@ def _dispatch_local(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
-    after_jobs_submitted: Callable[[], object] | None,
     progress: _PopulationProgress,
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
@@ -512,7 +502,6 @@ def _dispatch_local(
     except BaseException:
         coordinator.close()
         raise
-    _run_after_jobs_submitted(after_jobs_submitted)
     return finalized
 
 
@@ -626,7 +615,6 @@ def _dispatch_distributed(
     run_id: str | None,
     optimization_index: int | None,
     generation_index: int | None,
-    after_jobs_submitted: Callable[[], object] | None,
     progress: _PopulationProgress,
     session: CampaignSession,
     snapshot: GenerationTaskSnapshot,
@@ -718,7 +706,6 @@ def _dispatch_distributed(
             config=config,
             timeout_sec=timeout_sec,
             env=env,
-            after_jobs_submitted=after_jobs_submitted,
             on_result=consume_result,
             history_records=session.records(),
             cancel_event=cancel_event,
@@ -755,15 +742,6 @@ def _dispatch_distributed(
         coordinator.close()
         raise
     return finalized
-
-
-def _run_after_jobs_submitted(callback: Callable[[], object] | None) -> None:
-    if callback is None:
-        return
-    try:
-        callback()
-    except Exception as exc:  # noqa: BLE001 - callbacks do not change job results.
-        _progress(f"after-submit callback failed: {type(exc).__name__}: {exc}")
 
 
 def _best_effort_write_failure(result: JobResult) -> None:

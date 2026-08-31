@@ -3,7 +3,7 @@
 ## Intent
 
 - Compose public evaluation preparation, handle execution, backend dispatch, and
-  the synchronous compatibility facade through one implementation.
+  the synchronous convenience API through one implementation.
 
 ## Functionalities
 
@@ -16,7 +16,7 @@
   the finalized `EvaluationResult` before closing private scope.
 - Each dispatch returns ordered finalized `JobResult` rows from the same
   `ResultFinalizationCoordinator`. The `EvaluationResult.costs` property supplies
-  the legacy synchronous cost tuple.
+  the synchronous cost tuple.
 - Create durable per-candidate cancelled results for work skipped before prepare or
   run; retain preparation, execution, timeout, and recorder failure distinctions.
 
@@ -26,7 +26,7 @@
   compositions, not alternate dispatch paths.
 - Smoke is one candidate, one worker, and no timeout while still using the common
   handle/finalizer/session lifecycle.
-- The distributed-only `after_jobs_submitted` callback remains compatibility
-  behavior and does not define public handle state.
+- Evaluation batches and backend dispatch expose no submission callback; overlap
+  is visible in caller-owned handle ordering.
 - Objective width and population order are frozen before start and retained for
   every success, failure, timeout, or cancellation result.

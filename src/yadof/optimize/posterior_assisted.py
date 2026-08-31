@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import math
-import os
 import random
 from types import MappingProxyType
 from typing import Mapping, Sequence
@@ -43,9 +42,7 @@ from .qnehvi.acquisition import (
 from .strategy import (
     GenerationContext,
     HistoryRecord,
-    OptimizationResult,
     Population,
-    evaluate_population,
 )
 
 
@@ -121,8 +118,8 @@ class PosteriorGenerationSelection:
 
 
 @dataclass(frozen=True, slots=True)
-class PosteriorAssistedStrategy:
-    """Own candidate-pool, posterior projection, exploration, and real handoff."""
+class PosteriorAssistedSelector:
+    """Select posterior-assisted or full-real candidates without orchestration."""
 
     search: object
     surrogate: object
@@ -147,7 +144,7 @@ class PosteriorAssistedStrategy:
         if not math.isfinite(fraction) or fraction <= 0.0 or fraction >= 1.0:
             raise ValueError("exploration_fraction must be strictly between 0 and 1")
         if not isinstance(self.acquisition, DiscreteQNEHVIAcquisition):
-            raise TypeError("posterior_assisted acquisition must be qnehvi()")
+            raise TypeError("posterior_assisted_selector acquisition must be qnehvi()")
         if self.applicability_gate is not None and not isinstance(
             self.applicability_gate, CalibratedApplicabilityGate
         ):
@@ -164,11 +161,11 @@ class PosteriorAssistedStrategy:
             raise ValueError("posterior-assisted qNEHVI requires at least two objectives")
         search_validate = getattr(self.search, "validate", None)
         if not callable(search_validate):
-            raise TypeError("posterior_assisted search must define validate()")
+            raise TypeError("posterior selector search must define validate()")
         search_validate(config, problem)
         surrogate_validate = getattr(self.surrogate, "validate", None)
         if not callable(surrogate_validate):
-            raise TypeError("posterior_assisted surrogate must define validate()")
+            raise TypeError("posterior selector surrogate must define validate()")
         surrogate_validate(config, problem)
         posterior = require_rawdata_posterior_surrogate(self.surrogate)
         exploitation = require_posterior_exploitation_surrogate(self.surrogate)
@@ -213,11 +210,11 @@ class PosteriorAssistedStrategy:
         exploitation = require_posterior_exploitation_surrogate(self.surrogate)
         if not callable(search_identity) or not callable(surrogate_identity):
             raise TypeError(
-                "posterior_assisted components must expose semantic identities"
+                "posterior selector components must expose semantic identities"
             )
         return {
-            "strategy": "posterior-assisted",
-            "strategy_version": 1,
+            "component": "posterior-assisted-selector",
+            "component_version": 1,
             "objective_names": list(problem.objective_names),
             "search": search_identity(config, problem),
             "surrogate": surrogate_identity(config, problem),
@@ -243,44 +240,15 @@ class PosteriorAssistedStrategy:
             },
         }
 
-    def run_generation(self, context: GenerationContext) -> OptimizationResult:
-        # Closed pre-cutover adapter. Explicit workspace programs call
-        # select_generation() with caller-materialized evidence and own evaluation.
-        training_data = None
-        if isinstance(self.surrogate, DeterministicSurrogateComponent):
-            training_data = self.surrogate.training_data(
-                context.session.evidence_dataset(),
-                context.session.cost_table(context.snapshot),
-            )
-        selected = self.select_generation(context, training_data=training_data)
-        costs = evaluate_population(
-            context,
-            selected.population,
-            after_jobs_submitted=lambda: _notify_surrogate_after_submission(
-                self.surrogate, context, training_data
-            ),
-        )
-        return OptimizationResult(
-            generation_index=context.generation_index,
-            population=selected.population,
-            costs=costs,
-            history_count=len(context.history),
-            source=selected.source,
-            surrogate_used=selected.surrogate_used,
-            diagnostics=selected.diagnostics,
-        )
-
     def select_generation(
         self,
         context: GenerationContext,
         *,
-        training_data: SurrogateTrainingData | None,
+        training_data: SurrogateTrainingData,
     ) -> PosteriorGenerationSelection:
         """Select candidates without owning evaluation, training, or commit."""
 
-        if isinstance(self.surrogate, DeterministicSurrogateComponent) and not isinstance(
-            training_data, SurrogateTrainingData
-        ):
+        if not isinstance(training_data, SurrogateTrainingData):
             raise TypeError(
                 "posterior selection requires explicit SurrogateTrainingData"
             )
@@ -368,7 +336,7 @@ class PosteriorAssistedStrategy:
         context: GenerationContext,
         baseline: _Baseline,
         *,
-        training_data: SurrogateTrainingData | None,
+        training_data: SurrogateTrainingData,
     ) -> PosteriorGenerationSelection:
         candidate_pool = _candidate_pool(self, context)
         candidates = candidate_pool.candidates
@@ -418,21 +386,12 @@ class PosteriorAssistedStrategy:
         sampler_seed = (
             context.random_seed + context.generation_index * 1009 + 73013
         )
-        if training_data is None:
-            # Transitional external posterior fakes/components retain the v1 call.
-            # Explicit deterministic components always take the branch below.
-            sampler = posterior_surrogate.make_rawdata_sampler(
-                context,
-                draw_count=self.posterior_draws,
-                seed=sampler_seed,
-            )
-        else:
-            sampler = posterior_surrogate.make_rawdata_sampler(
-                context,
-                draw_count=self.posterior_draws,
-                seed=sampler_seed,
-                training_data=training_data,
-            )
+        sampler = posterior_surrogate.make_rawdata_sampler(
+            context,
+            draw_count=self.posterior_draws,
+            seed=sampler_seed,
+            training_data=training_data,
+        )
         if not isinstance(sampler, RawDataPosteriorSampler):
             raise TypeError(
                 "make_rawdata_sampler must return a schema-bearing "
@@ -492,7 +451,7 @@ class PosteriorAssistedStrategy:
                 "projection": _compact_projection_diagnostics(samples),
                 "acquisition": dict(selection.diagnostics),
                 "predicted_rawdata_retained": False,
-                "evaluation_handoff": "common-real-evaluate-population",
+                "evaluation_handoff": "workspace-program-real-evaluation",
             },
         )
 
@@ -525,7 +484,7 @@ class PosteriorAssistedStrategy:
                 "fallback": True,
                 "fallback_reason": str(reason),
                 "fallback_detail": str(detail)[:512],
-                "evaluation_handoff": "common-real-evaluate-population",
+                "evaluation_handoff": "workspace-program-real-evaluation",
             }
         )
         return PosteriorGenerationSelection(
@@ -553,7 +512,7 @@ def calibrated_applicability_gate(
     )
 
 
-def posterior_assisted(
+def posterior_assisted_selector(
     *,
     search: object,
     surrogate: object,
@@ -563,8 +522,8 @@ def posterior_assisted(
     candidate_chunk_size: int,
     exploration_fraction: float,
     applicability_gate: CalibratedApplicabilityGate | None = None,
-) -> PosteriorAssistedStrategy:
-    return PosteriorAssistedStrategy(
+) -> PosteriorAssistedSelector:
+    return PosteriorAssistedSelector(
         search=search,
         surrogate=surrogate,
         acquisition=acquisition,
@@ -577,7 +536,7 @@ def posterior_assisted(
 
 
 def _search_diagnostics(
-    strategy: PosteriorAssistedStrategy,
+    strategy: PosteriorAssistedSelector,
     context: GenerationContext,
 ) -> dict[str, object]:
     return {
@@ -593,7 +552,7 @@ def _search_diagnostics(
 
 
 def _candidate_pool(
-    strategy: PosteriorAssistedStrategy,
+    strategy: PosteriorAssistedSelector,
     context: GenerationContext,
 ) -> CandidatePool:
     state = prepare_search(
@@ -838,7 +797,7 @@ def _exploration_count(population_size: int, fraction: float) -> int:
     size = int(population_size)
     if size < 2:
         raise ValueError(
-            "posterior-assisted strategy requires population_size at least two"
+            "posterior-assisted selector requires population_size at least two"
         )
     return min(size - 1, max(1, int(math.ceil(size * float(fraction)))))
 
@@ -846,7 +805,7 @@ def _exploration_count(population_size: int, fraction: float) -> int:
 def _surrogate_selection_freshness(
     surrogate: object,
     context: GenerationContext,
-    training_data: SurrogateTrainingData | None,
+    training_data: SurrogateTrainingData,
 ) -> dict[str, object]:
     if isinstance(surrogate, DeterministicSurrogateComponent):
         if not isinstance(training_data, SurrogateTrainingData):
@@ -888,7 +847,7 @@ def _surrogate_selection_freshness(
 def _surrogate_state_ready(
     surrogate: object,
     context: GenerationContext,
-    training_data: SurrogateTrainingData | None,
+    training_data: SurrogateTrainingData,
 ) -> bool:
     try:
         if isinstance(surrogate, DeterministicSurrogateComponent):
@@ -899,49 +858,6 @@ def _surrogate_state_ready(
         return True if not callable(function) else bool(function(context))
     except Exception:
         return False
-
-
-def _notify_surrogate_after_submission(
-    surrogate: object,
-    context: GenerationContext,
-    training_data: SurrogateTrainingData | None,
-) -> None:
-    try:
-        if isinstance(surrogate, DeterministicSurrogateComponent):
-            if not isinstance(training_data, SurrogateTrainingData):
-                raise TypeError(
-                    "posterior training requires explicit SurrogateTrainingData"
-                )
-            status = surrogate.start_training(context, training_data)
-        else:
-            function = getattr(surrogate, "start_training", None)
-            if not callable(function):
-                return
-            status = function(context)
-        if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }:
-            print(
-                "[yadof] surrogate: posterior-assisted background training "
-                f"generation {context.generation_index}; "
-                f"action={getattr(status, 'action', 'unknown')}",
-                flush=True,
-            )
-    except Exception as exc:  # noqa: BLE001 - submitted real jobs keep running.
-        if str(os.environ.get("YADOF_PROGRESS", "")).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }:
-            print(
-                "[yadof] surrogate: posterior-assisted training request failed: "
-                + _bounded_error(exc),
-                flush=True,
-            )
 
 
 def _bounded_error(exc: BaseException) -> str:
@@ -955,7 +871,7 @@ def _bounded_error(exc: BaseException) -> str:
 __all__ = [
     "CalibratedApplicabilityGate",
     "PosteriorGenerationSelection",
-    "PosteriorAssistedStrategy",
+    "PosteriorAssistedSelector",
     "calibrated_applicability_gate",
-    "posterior_assisted",
+    "posterior_assisted_selector",
 ]

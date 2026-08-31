@@ -26,6 +26,7 @@ from yadof.surrogate import (
     project_rawdata_sampler,
     require_rawdata_posterior_surrogate,
 )
+from yadof.surrogate.training import SurrogateTrainingData
 from yadof.task_snapshot import create_generation_snapshot
 from yadof.workspace.init import init_workspace
 
@@ -181,7 +182,8 @@ class _SampleBackedComponent:
             "posterior": self.posterior_semantic_identity(config, problem),
         }
 
-    def make_rawdata_sampler(self, _context, *, draw_count, seed):
+    def make_rawdata_sampler(self, _context, *, draw_count, seed, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
         return _SampleBackedSampler(
             self.schema,
             draw_count=draw_count,
@@ -330,7 +332,12 @@ def test_persistent_sampler_is_seeded_joint_and_chunk_permutation_invariant() ->
     component = _SampleBackedComponent(schema)
     assert isinstance(component, RawDataPosteriorSurrogate)
     assert require_rawdata_posterior_surrogate(component) is component
-    sampler = component.make_rawdata_sampler(None, draw_count=5, seed=7)
+    sampler = component.make_rawdata_sampler(
+        None,
+        draw_count=5,
+        seed=7,
+        training_data=SurrogateTrainingData(("x", "y"), (), ()),
+    )
     population = ((0.1, 0.2), (0.7, 0.4), (0.1, 0.2))
 
     full = sampler.predict(population)

@@ -9,7 +9,7 @@ from pathlib import Path
 import threading
 import time
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 import uuid
 
 from ..config import LoadedConfig
@@ -59,12 +59,6 @@ class EvaluationBatch:
         repr=False,
         compare=False,
     )
-    _after_jobs_submitted: Callable[[], object] | None = field(
-        default=None,
-        repr=False,
-        compare=False,
-    )
-
     def __post_init__(self) -> None:
         mode = str(self.mode).strip().lower()
         if mode not in {"fast", "local", "distributed"}:

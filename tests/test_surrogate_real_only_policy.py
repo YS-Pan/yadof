@@ -396,13 +396,42 @@ def test_sparse_high_dimensional_training_preserves_all_real_rows_per_member(
 
 def test_optimizer_records_discard_member_spread() -> None:
     import yadof.surrogate.api as surrogate_api
+    from yadof.job_template.rawdata_template import StructuredRawDataSample
+    from yadof.surrogate import SurrogatePrediction, SurrogateTrainingData
 
     class StubSurrogate:
         def __init__(self, interval) -> None:
             self.interval = interval
 
-        def predict_population(self, _context, _rows):
-            return (((0.2,), (self.interval,)),)
+        def predict_for_selection(self, context, rows, training_data):
+            population = tuple(tuple(float(value) for value in row) for row in rows)
+            costs = tuple((0.2,) for _row in population)
+            return SurrogatePrediction(
+                state_signature="3" * 64,
+                training_data_digest=training_data.content_digest,
+                normalized_variables=population,
+                raw_data=tuple(
+                    StructuredRawDataSample.from_items(
+                        {
+                            "response.npz": {
+                                "values": np.asarray(cost_row),
+                                "metadata": {
+                                    "schema_version": 1,
+                                    "shape": [1],
+                                    "rawdata_name": "response",
+                                },
+                            }
+                        }
+                    )
+                    for cost_row in costs
+                ),
+                costs=costs,
+                intervals=tuple(((0.2, 0.2),) for _row in population),
+                interpretation_fingerprint=(
+                    context.snapshot.interpretation_fingerprint
+                ),
+                diagnostics={"member_spread": self.interval},
+            )
 
     config = SimpleNamespace(
         OPTIMIZE_ARCHIVE_KEY_DECIMALS=10,
@@ -423,15 +452,18 @@ def test_optimizer_records_discard_member_spread() -> None:
         1,
         origin="test",
     )
+    training_data = SurrogateTrainingData(("input_value",), (), ())
     wide = predict_pool(
         StubSurrogate((-1000.0, 1000.0)),
         context,
         pool,
+        training_data,
     )
     narrow = predict_pool(
         StubSurrogate((0.19, 0.21)),
         context,
         pool,
+        training_data,
     )
 
     assert wide.costs == narrow.costs

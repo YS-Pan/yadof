@@ -4,7 +4,6 @@
 
 - Implement an independent posterior-assisted generation-local selector while
   leaving GPSAF, its private phases/records, and real-search semantics unchanged.
-- Retain the 0.4.x complete-strategy runner only as a closed cutover adapter.
 
 ## Functionalities
 
@@ -26,8 +25,8 @@
 - Static/runtime scientific blockers, missing baseline/state, projection/backend
   failure, or configured soft support failure use a complete real-search fallback.
 - Configured support rejection propagates. Evaluation/finalization/recording are
-  absent from `select_generation()`; the workspace program owns them. The legacy
-  wrapper keeps them outside the selection catch, so recording failure aborts.
+  absent from `select_generation()`; the workspace program owns them outside the
+  selection catch, so recording failure aborts.
 - Predicted rawData/costs never enter history and are never retained in metadata.
   Explicit training is controlled independently by the workspace program after it
   starts real evaluation.

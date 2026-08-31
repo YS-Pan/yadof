@@ -1,7 +1,8 @@
 # yadof-benchmark
 
-`yadof-benchmark` is an independent, code-first runner for descriptive
-comparisons of complete yadof optimization strategies.
+`yadof-benchmark` 0.3 is an independent, code-first runner for descriptive
+comparisons of complete yadof 0.5 optimization programs. It requires yadof 0.5.0
+or newer and accepts only literal explicit-program strategy sources.
 
 The execution model is deliberately small:
 

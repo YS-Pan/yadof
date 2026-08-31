@@ -6,6 +6,7 @@ import numpy as np
 from ...job_template.rawdata_contract import NamedRawDataItem, resolve_main_array_key
 from ...job_template.rawdata_template import RawDataFieldSelector, RawDataSchemaTemplate, StructuredRawDataSample
 from ..posterior import MaterializedRawDataPosterior, RawDataFunctionDraw, RawDataPosteriorDiagnostics, SUPPORT_FINITE
+from ..training import SurrogateTrainingData
 from . import runtime
 from .modeling import member_list
 from .types import RawDataSchema, SurrogateState
@@ -80,7 +81,7 @@ class ConditionalINRRawDataSampler:
         except Exception as exc:
             return _FailedPrediction(type(exc).__name__, str(exc).replace('\r', ' ').replace('\n', ' ')[:512])
 
-def make_rawdata_sampler(context, *, component, draw_count: int, seed: int, training_data=None) -> ConditionalINRRawDataSampler:
+def make_rawdata_sampler(context, *, component, draw_count: int, seed: int, training_data: SurrogateTrainingData) -> ConditionalINRRawDataSampler:
     """Create a fixed-draw sampler from the context's trained state."""
     requested = int(draw_count)
     if requested <= 0:
@@ -95,32 +96,19 @@ def make_rawdata_sampler(context, *, component, draw_count: int, seed: int, trai
     if not members:
         raise RuntimeError('conditional-INR posterior has no ensemble members')
     schema_template, selectors_by_item = _schema_template(
-        context,
         state.schema,
         training_data=training_data,
     )
     selected = _seeded_member_indices(len(members), requested, int(seed))
     return ConditionalINRRawDataSampler(state, schema_template, selectors_by_item, selected, draw_count=requested, seed=int(seed), strategy_signature=strategy_signature)
 
-def _schema_template(context, schema: RawDataSchema, *, training_data=None) -> tuple[RawDataSchemaTemplate, tuple[RawDataFieldSelector, ...]]:
-    if training_data is not None:
-        from ..training import SurrogateTrainingData
-
-        if not isinstance(training_data, SurrogateTrainingData):
-            raise TypeError(
-                "conditional-INR posterior requires SurrogateTrainingData"
-            )
-        evidence = tuple(
-            (row_id, sample.items)
-            for row_id, sample in zip(training_data.row_ids, training_data.raw_data)
-        )
-    else:
-        # Closed legacy strategy adapter. Stage 7 workspace programs always pass
-        # explicit training data; Stage 8 removes this pre-cutover fallback.
-        try:
-            evidence = context.session.named_rawdata_samples(status='completed')
-        except AttributeError as exc:
-            raise RuntimeError('campaign session does not expose named rawData evidence') from exc
+def _schema_template(schema: RawDataSchema, *, training_data: SurrogateTrainingData) -> tuple[RawDataSchemaTemplate, tuple[RawDataFieldSelector, ...]]:
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("conditional-INR posterior requires SurrogateTrainingData")
+    evidence = tuple(
+        (row_id, sample.items)
+        for row_id, sample in zip(training_data.row_ids, training_data.raw_data)
+    )
     failures: list[str] = []
     for job_name, items in evidence:
         if len(items) != len(schema.templates):

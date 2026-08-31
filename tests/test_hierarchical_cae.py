@@ -830,8 +830,13 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     context = SimpleNamespace(
         config=config, strategy_signature=state.strategy_signature
     )
+    from yadof.surrogate.training import SurrogateTrainingData
+
     sampler = component.make_rawdata_sampler(
-        context, draw_count=5, seed=91
+        context,
+        draw_count=5,
+        seed=91,
+        training_data=SurrogateTrainingData(tuple(state.parameter_names), (), ()),
     )
     posterior = sampler.predict(population[:2])
     assert posterior.diagnostics.unique_support == 2

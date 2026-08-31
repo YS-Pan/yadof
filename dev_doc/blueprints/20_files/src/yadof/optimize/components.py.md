@@ -2,8 +2,8 @@
 
 ## Intent
 
-- Expose the established pymoo GA/NSGA-III, objective-count dispatch, GPSAF, and
-  real-search components with component-owned immutable settings. Posterior-assisted and qNEHVI components live
+- Expose the established pymoo GA/NSGA-III and objective-count search components,
+  plus immutable GPSAF settings. Posterior-assisted and qNEHVI components live
   in their own narrow modules and are re-exported by `yadof.optimize`.
 
 ## Functionalities
@@ -11,11 +11,9 @@
 - Validate objective compatibility and backend distribution availability.
 - Report deterministic adapter/backend/version/algorithm/controlled-parameter
   identity.
-- Delegate real-only execution to the shared full-real primitive and lazy-load
-  concrete pymoo/GPSAF implementation only when a selected operation runs.
-- Expose `gpsaf_settings()` as the validated immutable settings surface for an
-  explicit program's generation-local selector. Keep `gpsaf()` as the closed
-  0.4.x complete-strategy wrapper over the same settings until cutover.
+- Lazy-load concrete pymoo implementation only when a selected operation runs.
+- Expose `gpsaf_settings()` as the validated immutable settings surface for a
+  program's generation-local selector.
 - Give each public factory an explicit keyword-only configuration surface. Construct
   and eagerly validate private frozen settings without accepting a settings object,
   unrestricted kwargs, or ambient algorithm config.
@@ -30,5 +28,5 @@
 - No unrestricted kwargs, generic plugin graph, refinement role, or SciPy path.
 - Runtime receives the selected search/GPSAF settings snapshot through narrow
   arguments; it never looks up removed uppercase algorithm names.
-- RealSearchStrategy owns no private history/survivor/ask/refill loop; it hands the
-  primitive's population to the one common real evaluator.
+- Complete generation orchestration is absent; workspace programs hand the shared
+  full-real primitive's population to the one common real evaluator.

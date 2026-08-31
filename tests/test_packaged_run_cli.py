@@ -31,12 +31,12 @@ def _workspace(tmp_path: Path, *, smoke: bool = False) -> Path:
         f"OPTIMIZE_SMOKE_TEST_ENABLED = {smoke!r}\n",
         encoding="utf-8",
     )
-    (root / "submit/optimization.py").write_text(
-        "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
-        "from yadof.surrogate import conditional_inr\n"
-        "def build_optimization():\n"
-        "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
-        "    return gpsaf(search=search, surrogate=conditional_inr(), alpha=1, beta=0)\n",
+    optimization_path = root / "submit/optimization.py"
+    optimization_path.write_text(
+        optimization_path.read_text(encoding="utf-8").replace(
+            "settings = gpsaf_settings()",
+            "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
+        ),
         encoding="utf-8",
     )
     return root

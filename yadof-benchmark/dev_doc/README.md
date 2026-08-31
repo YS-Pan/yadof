@@ -17,8 +17,8 @@ Current invariants are:
   `runtime.json`;
 - there is no run ID, `runs/`, resume command, attempt hierarchy, cross-run
   timing history, or copied driver/workflow/strategy snapshot;
-- strategies are complete legacy `optimization.py` files or explicit program
-  entry modules plus their statically declared helper set;
+- strategies are literal explicit `optimization.py` programs plus their
+  statically declared helper set;
 - default seeds are `[101]`;
 - default standard budget is population 200 x 50 generations;
 - a comparison containing `slow_surrogate=True` defaults to 15 generations;
@@ -42,5 +42,5 @@ Current invariants are:
   its current turn open merely to await completion;
 - algorithm rankings and acceptance decisions remain outside the runner.
 
-The `0.2` workspace format intentionally makes no old-workspace compatibility
+The `0.3` workspace format intentionally makes no old-workspace compatibility
 promise.

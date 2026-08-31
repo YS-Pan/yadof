@@ -179,26 +179,16 @@ def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
         except (Exception, SystemExit) as exc:
             _finding(findings, "error", "optimization source", str(exc))
         else:
-            if inspection.kind == "explicit-program":
-                program = inspection.program
-                assert program is not None
-                _finding(
-                    findings,
-                    "ok",
-                    "optimization program",
-                    f"statically validated {program.source_path}; entry "
-                    f"{program.entry!r}, {len(program.helpers)} declared helper(s); "
-                    "program code was not imported or executed",
-                )
-            else:
-                _finding(
-                    findings,
-                    "ok",
-                    "optimization strategy",
-                    f"statically validated legacy build_optimization() declaration "
-                    f"in {inspection.source_path}; factory code was not imported or "
-                    "executed",
-                )
+            program = inspection.program
+            assert program is not None
+            _finding(
+                findings,
+                "ok",
+                "optimization program",
+                f"statically validated {program.source_path}; entry "
+                f"{program.entry!r}, {len(program.helpers)} declared helper(s); "
+                "program code was not imported or executed",
+            )
 
     if str(config.EVALUATION_MODE) == "fast":
         try:

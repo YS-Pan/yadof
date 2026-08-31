@@ -21,7 +21,7 @@
 
 ## 当前证据与问题
 
-- `PosteriorAssistedStrategy` 当前把 `acquisition` 标注为
+- `PosteriorAssistedSelector` 当前把 `acquisition` 标注为
   `DiscreteQNEHVIAcquisition`，并在构造阶段用具体 `isinstance` 检查拒绝其他实现。
 - 该策略实际需要的是“根据一个 generation 的真实 baseline 和联合 posterior objective
   samples，从有限候选池中选择 batch”的能力；但当前唯一实现恰好是离散 qNEHVI。
@@ -35,13 +35,13 @@
 
 当第二个真实实现到来时：
 
-1. 让 `PosteriorAssistedStrategy` 依赖最小 acquisition capability，而不是依赖
+1. 让 `PosteriorAssistedSelector` 依赖最小 acquisition capability，而不是依赖
    `DiscreteQNEHVIAcquisition` 具体类。
 2. 让 qNEHVI 和第二个实现各自拥有专用 settings、校验、backend 和 semantic identity；
    通用协议只表达调用方实际共享的能力。
 3. 保留 workspace 在 `submit/optimization.py:optimization_program(context)` 中的声明式
    组合、generation scope/task snapshot、真实 evaluator、完整 real-search fallback 和
-   recorder 边界；当前 legacy `build_optimization()` 仅是 0.5.0 cutover 前 adapter。
+   recorder 边界。
 4. 保持 protocol 与配置实现无关：不得要求 Pydantic model、dataclass、全局配置对象或
    backend 类型穿过能力边界。
 
@@ -89,9 +89,10 @@ class Acquisition(Protocol):
 
 ## 兼容与迁移约束
 
-- 保持现有 workspace 写法 `posterior_assisted(..., acquisition=qnehvi(...))` 可用；
+- 保持现有 workspace 写法
+  `posterior_assisted_selector(..., acquisition=qnehvi(...))` 可用；
   `qnehvi()` 仍是公开 factory，`DiscreteQNEHVIAcquisition` 仍可作为其具体实现。
-- 先添加针对 capability 的契约测试，再替换 `PosteriorAssistedStrategy` 的具体类型标注和
+- 先添加针对 capability 的契约测试，再替换 `PosteriorAssistedSelector` 的具体类型标注和
   `isinstance` 检查。
 - 纯接口重构且算法行为未变时，现有 qNEHVI semantic identity、strategy signature、
   checkpoint namespace、真实 history 和 fallback 结果不得改变。
@@ -131,11 +132,11 @@ class Acquisition(Protocol):
 
 ### Gate 2：组合层迁移
 
-- 把 `PosteriorAssistedStrategy` 的 concrete annotation/check 替换为 capability validation。
+- 把 `PosteriorAssistedSelector` 的 concrete annotation/check 替换为 capability validation。
 - 保持显式 workspace factory 注入、generation snapshot、semantic identity 和完整 real-search
   fallback。
-- 若第二 acquisition 不适合现有 `PosteriorAssistedStrategy` 的算法语义，应建立另一个组合
-  strategy，而不是不断扩大一个假通用 context。
+- 若第二 acquisition 不适合现有 `PosteriorAssistedSelector` 的算法语义，应建立另一个组合
+  selector，而不是不断扩大一个假通用 context。
 
 ### Gate 3：文档与发布边界
 
@@ -162,7 +163,7 @@ class Acquisition(Protocol):
 ## 完成规则
 
 - 至少两个获批准、经过真实验收的 acquisition 实现共同支持一个最小 capability contract。
-- `PosteriorAssistedStrategy` 不再依赖 qNEHVI 具体类型，同时没有扩大其算法职责。
+- `PosteriorAssistedSelector` 不再依赖 qNEHVI 具体类型，同时没有扩大其算法职责。
 - qNEHVI 行为、identity、fallback、checkpoint/history 和 optional-import 回归全部通过。
 - architecture、blueprints、terminology、用户文档与 installed-wheel tests 已同步，随后将本文
   移入 `dev_doc/obsolete/todo/`。

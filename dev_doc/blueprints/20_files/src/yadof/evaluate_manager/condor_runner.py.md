@@ -6,7 +6,6 @@
 ## Functionalities
 - Submit one `job.sub` per prepared `JobSpec`.
 - Write Windows HTCondor submit files from the workspace `LoadedConfig` through `evaluate_manager.config` and the adaptive `resource_requests`/`time_limits` helpers.
-- Invoke an optional `after_jobs_submitted` callback after successful submissions and before polling outputs.
 - Invoke an optional per-result callback exactly when each job reaches its terminal
   collected, timeout, cancellation, or submission-failure result; callback failure is diagnostic
   only and cannot change the result.
@@ -42,8 +41,7 @@
 ## I/O Format
 - Input is prepared job specs.
 - Output is ordered `JobResult` rows.
-- The after-submit callback has no arguments. The result callback receives one
-  `JobResult`. Both return values are ignored.
+- The result callback receives one `JobResult`; its return value is ignored.
 - Submit files use `executable = workflow.py`, omit the argument line, and set
   `transfer_executable = True`. The executable is not duplicated in
   `transfer_input_files`; selected task/support inputs are transferred from the job
@@ -56,9 +54,6 @@
 - `environment` is emitted as one quoted HTCondor environment string. Entries must be whitespace-separated inside that quoted string; semicolon-separated entries are not valid for the current submit style.
 
 ## Non-Obvious Techniques
-- The after-submit callback is a compatibility hook for submit-side surrogate
-  training. Callback failure is logged but must not cancel already-submitted
-  HTCondor jobs; new explicit overlap uses handle start/wait order.
 - `condor_environment_string()` only escapes quotes and rejects newlines. It does not translate semicolon-delimited legacy syntax; config must provide the intended HTCondor syntax directly.
 - Transfer-list filenames containing spaces are emitted literally. Windows Condor
   treats surrounding double quotes as filename characters; commas/newlines are
@@ -110,7 +105,8 @@
   to the failed requirement, no-match warning, and last match failure.
 
 ## Mutability Profile
-- HTCondor submit details may change, but the callback location must remain after submission and before waiting if staggered training is to keep the cluster busy.
+- HTCondor submit details may change, but evaluation/training overlap remains
+  caller-owned through handle start/wait order rather than a runner callback.
 - Keep resource policy in `resource_retries.py`; the runner should contain only the
   minimal orchestration needed to query, remove, reset, and resubmit so native
   Condor retry support can replace it cleanly later.

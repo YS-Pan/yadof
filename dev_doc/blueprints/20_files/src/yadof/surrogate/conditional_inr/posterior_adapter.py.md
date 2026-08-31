@@ -3,7 +3,7 @@
 ## Intent
 
 - Adapt the existing conditional-INR ensemble to the backend-neutral persistent
-  joint rawData posterior protocol without changing legacy prediction or training.
+  joint rawData posterior protocol without changing deterministic prediction or training.
 
 ## Functionalities
 
@@ -11,8 +11,7 @@
   generation context.
 - Recover exact direct `.npz` basenames from caller-owned
   `SurrogateTrainingData` and freeze them with the state's full-grid rawData
-  templates. A session-evidence fallback remains only for the closed legacy
-  generation runner until cutover.
+  templates. No session-evidence fallback exists.
 - Select one ensemble member per draw through a deterministic seeded permutation-
   cycle policy and report repeated source identities honestly.
 - Predict one complete member/candidate at a time through runtime's controlled
@@ -40,5 +39,4 @@
   observation-noise invention.
 - Importing the public parent remains Torch-lazy; this private module loads only
   when the explicit posterior factory creates a sampler.
-- The explicit path never scans `context.session`; the legacy fallback is a closed
-  Stage 8 deletion target.
+- Sampler construction never scans `context.session`.

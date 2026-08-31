@@ -22,7 +22,6 @@ from yadof.optimize import (
     fork_search_state,
     full_real_search,
     finish_explicit_surrogate_training,
-    gpsaf,
     gpsaf_settings,
     prepare_search,
     pymoo_ga,
@@ -418,20 +417,68 @@ def test_pymoo_remains_owner_of_algorithm_ask_tell_and_survival(monkeypatch) -> 
     assert not hasattr(state, "survival")
 
 
-class _DeterministicLegacySurrogate:
-    def has_trained_state(self, _context):
-        return True
-
-    def predict_population(self, _context, rows):
-        output = []
-        for left, right in rows:
-            first = 0.7 * float(left) + 0.3 * float(right)
-            costs = (first, 1.0 - first)
-            output.append((costs, tuple((value, value) for value in costs)))
-        return tuple(output)
+class _GoldenDeterministicSurrogate:
+    def validate(self, _config, _problem) -> None:
+        return None
 
     def semantic_identity(self, _config, _problem):
-        return {"component": "deterministic-legacy-test"}
+        return {"component": "deterministic-golden-test"}
+
+    def training_data(self, _dataset, _cost_table, *, row_ids=None, transform_id=None):
+        del row_ids, transform_id
+        raise AssertionError("golden test passes explicit training data")
+
+    def ensure_fresh_enough(self, _context, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
+        return SimpleNamespace(action="fresh")
+
+    def latest_trained_generation(self, _context, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
+        return 2
+
+    def has_trained_state(self, _context, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
+        return True
+
+    def start_training(self, _context, training_data):
+        assert isinstance(training_data, SurrogateTrainingData)
+        return SimpleNamespace(action="skipped")
+
+    def finish_training(self, _context):
+        return SimpleNamespace(action="idle")
+
+    def predict_for_selection(self, context, rows, training_data):
+        population = tuple(tuple(float(value) for value in row) for row in rows)
+        costs = []
+        for left, right in population:
+            first = 0.7 * float(left) + 0.3 * float(right)
+            costs.append((first, 1.0 - first))
+        cost_rows = tuple(costs)
+        return SurrogatePrediction(
+            state_signature="4" * 64,
+            training_data_digest=training_data.content_digest,
+            normalized_variables=population,
+            raw_data=tuple(
+                StructuredRawDataSample.from_items(
+                    {
+                        "response.npz": {
+                            "values": np.asarray(cost_row),
+                            "metadata": {
+                                "schema_version": RAWDATA_SCHEMA_VERSION,
+                                "shape": [2],
+                                "rawdata_name": "response",
+                            },
+                        }
+                    }
+                )
+                for cost_row in cost_rows
+            ),
+            costs=cost_rows,
+            intervals=tuple(
+                tuple((value, value) for value in row) for row in cost_rows
+            ),
+            interpretation_fingerprint=context.snapshot.interpretation_fingerprint,
+        )
 
 
 class _ExplicitDeterministicSurrogate:
@@ -594,7 +641,8 @@ def test_gpsaf_golden_population_and_gamma_semantics_remain_unchanged() -> None:
         seed=seed,
     )
     search = pymoo_nsga3(reference_direction_partitions=3)
-    surrogate = _DeterministicLegacySurrogate()
+    surrogate = _GoldenDeterministicSurrogate()
+    training_data = SurrogateTrainingData(("left", "right"), (), ())
 
     def run(gamma):
         return surrogate_population(
@@ -611,6 +659,7 @@ def test_gpsaf_golden_population_and_gamma_semantics_remain_unchanged() -> None:
                 gamma=gamma,
                 exploration_fraction=0.25,
             ),
+            training_data=training_data,
         )
 
     expected = (
@@ -630,22 +679,18 @@ def test_gpsaf_golden_population_and_gamma_semantics_remain_unchanged() -> None:
     assert diagnostics["beta_replacements"] == 1
     assert diagnostics["exploration_count"] == 1
 
-    first_identity = gpsaf(
-        search=search,
-        surrogate=surrogate,
+    first_settings = gpsaf_settings(
         alpha=3,
         beta=2,
         gamma=0.5,
         exploration_fraction=0.25,
-    ).semantic_identity(context.config, problem)
-    second_identity = gpsaf(
-        search=search,
-        surrogate=surrogate,
+    )
+    second_settings = gpsaf_settings(
         alpha=3,
         beta=2,
         gamma=0.9,
         exploration_fraction=0.25,
-    ).semantic_identity(context.config, problem)
-    assert first_identity["gpsaf_parameters"]["gamma"] == 0.5
-    assert second_identity["gpsaf_parameters"]["gamma"] == 0.9
-    assert first_identity != second_identity
+    )
+    assert first_settings.gamma == 0.5
+    assert second_settings.gamma == 0.9
+    assert first_settings != second_settings

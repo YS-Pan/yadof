@@ -161,9 +161,9 @@ the current view and rehashes it before recovery. The program starts real
 evaluation, starts training on the captured prior evidence, then explicitly
 waits/closes both lifecycles before commit. PCA/SVD, conditional-INR, and
 hierarchical-CAE implement the
-runtime-checkable deterministic component protocol; GPSAF binds each Stage 4
-prediction DTO to exact pool candidate IDs before pymoo survival. Only the closed
-0.4.x strategy/evaluator adapters retain an after-submit callback until cutover.
+runtime-checkable deterministic component protocol; GPSAF binds each prediction
+DTO to exact pool candidate IDs before pymoo survival. No evaluator path exposes
+an after-submit callback.
 
 ## Generation-boundary task changes
 
@@ -171,9 +171,8 @@ Before each generation the campaign reloads effective configuration and captures
 the current non-program task source. The generation uses that one immutable
 snapshot for parameters, evaluation, and cost interpretation. An explicit
 program's entry/helper source was frozen before the run and is classified out of
-this copy; its hashes remain attached to the complete provenance. Legacy strategy
-composition remains in the full generation snapshot during the transition. Edits
-to non-program task sources made during a generation become visible only at a
+this copy; its hashes remain attached to the complete provenance. Edits to
+non-program task sources made during a generation become visible only at a
 later generation boundary.
 
 A session registry retains every evaluation or training handle created against its current snapshot.

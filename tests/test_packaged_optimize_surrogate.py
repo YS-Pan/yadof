@@ -53,15 +53,27 @@ def _workspace(tmp_path: Path, name: str, *, surrogate: bool = False) -> Path:
         if surrogate
         else "alpha=1, beta=0"
     )
-    (root / "submit/optimization.py").write_text(
-        "from yadof.optimize import by_objective_count, gpsaf, pymoo_ga, pymoo_nsga3\n"
-        "from yadof.surrogate import conditional_inr\n"
-        "def build_optimization():\n"
-        "    search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())\n"
-        f"    surrogate = conditional_inr({component_arguments})\n"
-        f"    return gpsaf(search=search, surrogate=surrogate, {gpsaf_arguments})\n",
-        encoding="utf-8",
+    optimization_path = root / "submit/optimization.py"
+    alpha = 2 if surrogate else 1
+    beta = 1 if surrogate else 0
+    exploration = 0.0
+    source = optimization_path.read_text(encoding="utf-8")
+    source = source.replace(
+        '"program": "starter-conditional-inr-gpsaf"',
+        f'"program": "packaged-test-conditional-inr-gpsaf-{int(surrogate)}"',
     )
+    source = source.replace('"alpha": 3', f'"alpha": {alpha}')
+    source = source.replace('"beta": 3', f'"beta": {beta}')
+    source = source.replace('"exploration_fraction": 0.10', '"exploration_fraction": 0.0')
+    source = source.replace(
+        "surrogate = conditional_inr()",
+        f"surrogate = conditional_inr({component_arguments})",
+    )
+    source = source.replace(
+        "settings = gpsaf_settings()",
+        f"settings = gpsaf_settings({gpsaf_arguments})",
+    )
+    optimization_path.write_text(source, encoding="utf-8")
     return root
 
 
@@ -177,6 +189,12 @@ def test_surrogate_viewer_cli_reports_mapped_history_as_finite_json(
         population_size=2,
         random_seed=47,
     )
+    run_one_generation(
+        workspace,
+        generation_index=1,
+        population_size=2,
+        random_seed=47,
+    )
     wait_for_pending_training(workspace)
     records = list_records(workspace)
     assert records
@@ -211,7 +229,8 @@ def test_surrogate_viewer_cli_reports_mapped_history_as_finite_json(
     assert summary["schema_version"] == 2
     assert summary["analysis"] == "surrogate_workspace_summary"
     assert summary["optimization_generations"] == [
-        {"generation": 0, "completed_results": 2}
+        {"generation": 0, "completed_results": 2},
+        {"generation": 1, "completed_results": 2},
     ]
     assert summary["checkpoints"]
     assert cost_audit["schema_version"] == 2
@@ -311,6 +330,9 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     run_one_generation(
         workspace_a, generation_index=0, population_size=2, random_seed=37
     )
+    run_one_generation(
+        workspace_a, generation_index=1, population_size=2, random_seed=37
+    )
     from yadof.surrogate import wait_for_pending_training
 
     wait_for_pending_training(workspace_a)
@@ -323,10 +345,10 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
 
     checkpoint_dir_a = workspace_a / ".yadof" / "surrogate" / "checkpoints"
     checkpoint_dir_b = workspace_b / ".yadof" / "surrogate" / "checkpoints"
-    assert checkpoint_dir_a.joinpath("generation_0000.json").is_file()
+    assert checkpoint_dir_a.joinpath("generation_0001.json").is_file()
     assert not checkpoint_dir_b.exists()
     manifest = json.loads(
-        checkpoint_dir_a.joinpath("generation_0000.json").read_text(
+        checkpoint_dir_a.joinpath("generation_0001.json").read_text(
             encoding="utf-8"
         )
     )
@@ -424,14 +446,22 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     )
 
     visible = discover_checkpoints(checkpoint_dir_a)
-    assert len(visible) == 1
-    assert visible[0].payload["state_signature"] == state_b.state_signature
+    assert len(visible) == 2
+    selected_checkpoint = next(
+        item
+        for item in visible
+        if item.payload["state_signature"] == state_b.state_signature
+    )
+    assert any(
+        item.payload["state_signature"] == state.state_signature
+        for item in visible
+    )
     template_sample = runtime._load_training_data(
         load_config(workspace_a).workspace
     ).raw_data[0]
     viewer_predictor = CheckpointPredictor(
         workspace_a,
-        visible[0],
+        selected_checkpoint,
         template_sample,
     )
     assert viewer_predictor.train_cfg.hidden_dim == 20
@@ -449,6 +479,12 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
     from yadof.tools.surrogate_viewer.backend.workspace import SurrogateWorkspace
 
     workspace = _workspace(tmp_path, "strategy_state", surrogate=True)
+    config_path = workspace / "config.py"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + "OPTIMIZE_SURROGATE_MAX_TRAINING_LAG = 2\n",
+        encoding="utf-8",
+    )
     optimization_path = workspace / "submit/optimization.py"
     default_source = optimization_path.read_text(encoding="utf-8")
     component_settings = conditional_inr(
@@ -465,6 +501,7 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
     ).settings
 
     run_one_generation(workspace, generation_index=0, random_seed=43)
+    run_one_generation(workspace, generation_index=1, random_seed=43)
     wait_for_pending_training(workspace)
     first_active = read_active_strategy_state(workspace)
     assert first_active is not None
@@ -474,12 +511,19 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
     assert first_model.is_dir()
 
     optimization_path.write_text(
-        "from yadof.optimize import pymoo_ga, real_search\n"
-        "def build_optimization():\n"
-        "    return real_search(search=pymoo_ga())\n",
+        default_source.replace(
+            '"program": "packaged-test-conditional-inr-gpsaf-1"',
+            '"program": "packaged-test-full-real-selection"',
+        )
+        .replace('"alpha": 2', '"alpha": 1')
+        .replace('"beta": 1', '"beta": 0')
+        .replace(
+            "settings = gpsaf_settings(alpha=2, beta=1, exploration_fraction=0.0)",
+            "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
+        ),
         encoding="utf-8",
     )
-    run_one_generation(workspace, generation_index=1, random_seed=43)
+    run_one_generation(workspace, generation_index=2, random_seed=43)
     second_active = read_active_strategy_state(workspace)
     assert second_active is not None
     assert second_active.strategy_signature != first_active.strategy_signature
@@ -491,7 +535,7 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
         SurrogateWorkspace(workspace)
 
     optimization_path.write_text(default_source, encoding="utf-8")
-    returned = run_one_generation(workspace, generation_index=2, random_seed=43)
+    returned = run_one_generation(workspace, generation_index=3, random_seed=43)
     third_active = read_active_strategy_state(workspace)
     assert third_active is not None
     assert third_active.strategy_signature == first_active.strategy_signature
@@ -517,7 +561,7 @@ def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
     raw_rows,
 ) -> None:
     from yadof.optimize.gpsaf.phases import surrogate_state_ready
-    from yadof.surrogate import conditional_inr
+    from yadof.surrogate import SurrogateTrainingData, conditional_inr
     from yadof.surrogate.conditional_inr import runtime
     from yadof.surrogate.conditional_inr.types import TrainingData
 
@@ -544,6 +588,11 @@ def test_nontrainable_surrogate_attempt_never_becomes_optimizer_ready(
         (),
         {"config": load_config(workspace)},
     )()
-    assert not surrogate_state_ready(conditional_inr(), component_context)
+    training_data = SurrogateTrainingData(("input_value",), (), ())
+    assert not surrogate_state_ready(
+        conditional_inr(),
+        component_context,
+        training_data,
+    )
     with pytest.raises(RuntimeError, match="not trained"):
         runtime.predict_population(workspace, ((0.5,),))

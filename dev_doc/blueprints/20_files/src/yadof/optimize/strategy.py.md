@@ -2,28 +2,22 @@
 
 ## Intent
 
-- Define backend-neutral population, history, generation-context, result, and one
-  complete strategy invocation contract.
-- Retain the transitional generation-reloaded
-  `submit/optimization.py:build_optimization()` adapter while explicit programs use
-  `program.py` directly; no new consumer may depend on this legacy loop.
+- Define backend-neutral population, history, generation-context, result, and
+  semantic-signature values used by explicit programs and components.
 
 ## Functionalities
 
-- Validate the structural strategy protocol without training or evaluation.
 - Build deterministic JSON semantic identity/signature from selected component
   identity plus parameter/objective names.
 - Adapt current session history by joining evidence and costs on row identity, then
   expose candidate/row/design/interpretation IDs alongside the compatible
   `job_name/x/costs` fields.
-- Provide the one common real-evaluation handoff.
 
 ## Invariants
 
 - No concrete pymoo or Torch type crosses this boundary.
-- Transitional workspace strategy source is fresh and isolated; explicit program
-  source is frozen once by `program.py`. Package config/registries never select
-  another complete method.
+- Program source is frozen once by `program.py`. Package config/registries never
+  select a competing complete method.
 - Surrogate predictions cannot become accepted results without real evaluation.
 - Pending, failed, or derived rows and non-successful cost interpretations cannot
   become committed optimizer history.

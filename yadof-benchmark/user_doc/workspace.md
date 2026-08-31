@@ -67,9 +67,9 @@ path; do not bypass or replace the postprocessor.
 
 ## Authoring boundary
 
-`benchmark.py` is the only workflow-definition program. Put complete legacy
-`optimization.py` strategies, or explicit program entry modules and every helper
-they declare, under `resources/`. The program should only register
+`benchmark.py` is the only workflow-definition program. Put explicit
+`optimization.py` program entry modules and every helper they declare under
+`resources/`. The program should only register
 configuration, strategies, comparisons, and optional postprocessors.
 
 `check` and `plan` import the file, so imports and

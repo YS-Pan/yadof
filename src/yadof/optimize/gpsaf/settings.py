@@ -1,4 +1,4 @@
-"""Immutable GPSAF settings owned by the strategy component."""
+"""Immutable GPSAF selection settings owned by the workspace program."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def create_settings(
     gamma: float,
     exploration_fraction: float,
 ) -> GPSAFSettings:
-    factory = "gpsaf"
+    factory = "gpsaf_settings"
     return GPSAFSettings(
         alpha=integer(factory, "alpha", alpha, minimum=0),
         beta=integer(factory, "beta", beta, minimum=0),

@@ -6,6 +6,7 @@ from typing import Sequence
 from ...surrogate.training import (
     DeterministicPredictionProvider,
     DeterministicSurrogateComponent,
+    SurrogateTrainingData,
 )
 from ..primitives import (
     CandidatePool,
@@ -14,7 +15,6 @@ from ..primitives import (
     SearchCandidate,
     SearchState,
     advance_search,
-    bind_predicted_costs,
     bind_surrogate_prediction,
     combine_candidate_pools,
     combine_predicted_cost_rows,
@@ -33,151 +33,42 @@ def _progress(message: str) -> None:
         print(f"[yadof] {message}", flush=True)
 
 
-def ensure_surrogate_fresh_enough(
-    surrogate,
-    context: GenerationContext,
-    training_data=None,
-) -> dict[str, object]:
-    try:
-        if isinstance(surrogate, DeterministicSurrogateComponent):
-            if training_data is None:
-                raise TypeError(
-                    "deterministic surrogate freshness requires explicit training data"
-                )
-            status = surrogate.ensure_fresh_enough(context, training_data)
-        else:
-            func = getattr(surrogate, "ensure_fresh_enough", None)
-            if not callable(func):
-                return {"surrogate_training_gate": "unavailable"}
-            status = (
-                func(context, training_data)
-                if training_data is not None
-                else func(context)
-            )
-    except Exception as exc:  # noqa: BLE001 - a stale model should fall back, not stop the generation.
-        return {
-            "surrogate_training_gate": "failed",
-            "surrogate_training_gate_error": f"{exc.__class__.__name__}: {exc}",
-        }
-    return {
-        "surrogate_training_gate": str(getattr(status, "action", "unknown")),
-        "surrogate_training_pending_generation": getattr(status, "pending_generation_index", None),
-        "surrogate_training_latest_generation": getattr(status, "latest_completed_generation_index", None),
-        "surrogate_training_gate_error": str(getattr(status, "error", "")),
-    }
-
-
 def surrogate_state_ready(
-    surrogate,
+    surrogate: DeterministicSurrogateComponent,
     context: GenerationContext,
-    training_data=None,
+    training_data: SurrogateTrainingData,
 ) -> bool:
+    if not isinstance(surrogate, DeterministicSurrogateComponent):
+        raise TypeError("GPSAF readiness requires a deterministic surrogate component")
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("GPSAF readiness requires explicit SurrogateTrainingData")
     try:
-        if isinstance(surrogate, DeterministicSurrogateComponent):
-            if training_data is None:
-                raise TypeError(
-                    "deterministic surrogate readiness requires explicit training data"
-                )
-            return bool(surrogate.has_trained_state(context, training_data))
-        func = getattr(surrogate, "has_trained_state", None)
-        if not callable(func):
-            return True
-        return bool(
-            func(context, training_data)
-            if training_data is not None
-            else func(context)
-        )
+        return bool(surrogate.has_trained_state(context, training_data))
     except Exception:
         return False
 
 
-def notify_surrogate_after_submission(
-    surrogate,
-    context: GenerationContext,
-) -> None:
-    try:
-        func = getattr(surrogate, "start_training", None)
-        if callable(func):
-            training_data = materialize_surrogate_training_data(surrogate, context)
-            status = (
-                func(context, training_data)
-                if training_data is not None
-                else func(context)
-            )
-            _progress(
-                "surrogate: background training request generation "
-                f"{context.generation_index}; "
-                f"action={getattr(status, 'action', 'unknown')}"
-            )
-    except Exception as exc:  # noqa: BLE001 - submitted jobs should keep running if scheduling fails.
-        _progress(f"surrogate: background training request failed: {exc.__class__.__name__}: {exc}")
-
-
-def finish_surrogate_training(
-    surrogate,
-    context: GenerationContext,
-) -> dict[str, object]:
-    try:
-        func = getattr(surrogate, "finish_training", None)
-        if not callable(func):
-            return {}
-        status = func(context)
-    except Exception as exc:  # noqa: BLE001 - typed fallback remains generation-local.
-        return {
-            "surrogate_training_finish": "failed",
-            "surrogate_training_finish_error": f"{exc.__class__.__name__}: {exc}",
-        }
-    return {
-        "surrogate_training_finish": str(getattr(status, "action", "unknown")),
-        "surrogate_training_finish_error": str(getattr(status, "error", "")),
-    }
-
-
-def materialize_surrogate_training_data(surrogate, context: GenerationContext):
-    factory = getattr(surrogate, "training_data", None)
-    if not callable(factory):
-        return None
-    dataset = context.session.evidence_dataset()
-    table = context.session.cost_table(context.snapshot)
-    return factory(dataset, table)
-
-
 def predict_pool(
-    surrogate,
+    surrogate: DeterministicPredictionProvider,
     context: GenerationContext,
     pool: CandidatePool,
-    training_data=None,
+    training_data: SurrogateTrainingData,
 ) -> PredictedCostRows:
-    """Adapt one typed or retained legacy predictor at the explicit pool edge."""
+    """Bind one typed deterministic prediction at the explicit pool edge."""
 
     if not pool.candidates:
         raise ValueError("surrogate prediction requires a non-empty candidate pool")
+    if not isinstance(surrogate, DeterministicPredictionProvider):
+        raise TypeError("GPSAF prediction requires a typed prediction provider")
+    if not isinstance(training_data, SurrogateTrainingData):
+        raise TypeError("GPSAF prediction requires explicit SurrogateTrainingData")
     _progress(f"surrogate: predicting {len(pool.candidates)} candidates")
-    if isinstance(surrogate, DeterministicPredictionProvider):
-        prediction = surrogate.predict_for_selection(
-            context,
-            pool.population,
-            training_data,
-        )
-        return bind_surrogate_prediction(pool, prediction)
-
-    raw = (
-        surrogate.predict_population(context, pool.population, training_data)
-        if training_data is not None
-        else surrogate.predict_population(context, pool.population)
+    prediction = surrogate.predict_for_selection(
+        context,
+        pool.population,
+        training_data,
     )
-    rows = tuple(raw)
-    if len(rows) != len(pool.candidates):
-        raise ValueError("legacy surrogate prediction rows do not match the pool")
-    costs = tuple(tuple(float(value) for value in item[0]) for item in rows)
-    return bind_predicted_costs(
-        pool,
-        costs,
-        source="legacy-gpsaf-prediction-adapter",
-        interpretation_fingerprint=context.snapshot.interpretation_fingerprint,
-        state_signature=context.strategy_signature,
-        diagnostics={"prediction_adapter": "legacy-predict-population-v1"},
-    )
+    return bind_surrogate_prediction(pool, prediction)
 
 
 def distance_sq(left: Sequence[float], right: Sequence[float]) -> float:
@@ -208,10 +99,10 @@ def run_alpha_phase(
     state: SearchState,
     batch_target: int,
     *,
-    surrogate,
+    surrogate: DeterministicSurrogateComponent,
     generation_context: GenerationContext,
     settings,
-    training_data=None,
+    training_data: SurrogateTrainingData,
 ) -> tuple[
     CandidateSelection | None,
     PredictedCostRows | None,
@@ -273,10 +164,10 @@ def run_beta_phase(
     anchor_prediction: PredictedCostRows,
     batch_target: int,
     *,
-    surrogate,
+    surrogate: DeterministicSurrogateComponent,
     generation_context: GenerationContext,
     settings,
-    training_data=None,
+    training_data: SurrogateTrainingData,
 ) -> tuple[CandidateSelection, dict[str, object]]:
     beta = max(0, settings.beta)
     if beta <= 0 or not anchors.candidates:
@@ -358,12 +249,12 @@ def surrogate_population(
     *,
     generation_context: GenerationContext,
     search,
-    surrogate,
+    surrogate: DeterministicSurrogateComponent,
     generation_index: int,
     population_size: int,
     seed: int,
     settings,
-    training_data=None,
+    training_data: SurrogateTrainingData,
 ) -> tuple[Population | None, dict[str, object]]:
     _progress(
         f"surrogate: selecting population; history={len(history)}; "

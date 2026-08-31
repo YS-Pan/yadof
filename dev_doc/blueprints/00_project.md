@@ -13,14 +13,14 @@ need an explicit user request.
 
 Workspace task flexibility remains live during a campaign. A user may correct or
 redefine cost, parameters, configuration, and task execution code between
-generations. An explicit workspace optimization program and its declared helpers
+generations. A workspace optimization program and its declared helpers
 are frozen once before a run (and before optional smoke); program edits take effect
 only in a later command at a complete-generation boundary. The next generation
 uses one coherent current task snapshot and rebuilds affected derived state. The
 framework detects changes for cache invalidation and provenance but does not decide
 whether two task versions are scientifically equivalent; the user owns whether old
-evidence should remain. The transitional legacy strategy path retains its
-generation-level source reload only until the staged cutover removes it.
+evidence should remain. There is no generation-reloaded alternate orchestration
+path.
 
 ## Main contract
 
@@ -35,7 +35,7 @@ local/distributed remain file-backed prepared-job transports.
 ## End-to-end responsibilities
 
 1. Resolve one explicit workspace and immutable effective configuration.
-2. Statically validate and freeze the declared workspace optimization program plus
+2. Statically validate and freeze the mandatory workspace optimization program plus
    exact helpers once per run; at each generation snapshot the remaining task
    sources and fresh-load parameter/objective definitions without global module
    leakage.
@@ -153,7 +153,7 @@ hot-change contract; structural dimension changes are future work.
   program context, run scope, and generation scope. `optimize/primitives.py` owns backend-neutral immutable search candidate,
   pool, predicted-cost, selection, and generation-local continuation values while
   pymoo retains concrete algorithm/ask/tell/survival ownership. The workspace owns
-  complete strategy composition.
+  complete program composition.
 - `surrogate` owns a lightweight public component API plus a backend-neutral joint
   rawData function-sampler protocol; its `conditional_inr/`
   subpackage physically isolates rawData prediction, uncertainty intervals,

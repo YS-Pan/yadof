@@ -10,7 +10,6 @@ from ..config import LoadedConfig
 from .problem_info import ProblemInfo
 from .gpsaf.settings import GPSAFSettings, create_settings as create_gpsaf_settings
 from .pymoo.settings import PymooSearchSettings, create_settings as create_pymoo_settings
-from .strategy import GenerationContext, OptimizationResult, evaluate_population
 
 
 class SearchComponent(Protocol):
@@ -119,95 +118,6 @@ class ObjectiveCountSearch:
         }
 
 
-@dataclass(frozen=True, slots=True)
-class GPSAFStrategy:
-    search: SearchComponent
-    surrogate: object
-    settings: GPSAFSettings
-
-    def validate(self, config: LoadedConfig, problem: ProblemInfo) -> None:
-        self.search.validate(config, problem)
-        validate = getattr(self.surrogate, "validate", None)
-        if not callable(validate):
-            raise TypeError("GPSAF surrogate component must define validate()")
-        validate(config, problem)
-
-    def semantic_identity(
-        self,
-        config: LoadedConfig,
-        problem: ProblemInfo,
-    ) -> Mapping[str, object]:
-        identity = getattr(self.surrogate, "semantic_identity", None)
-        if not callable(identity):
-            raise TypeError("GPSAF surrogate component must define semantic_identity()")
-        return {
-            "strategy": "gpsaf",
-            "strategy_version": 1,
-            "search": self.search.semantic_identity(config, problem),
-            "surrogate": identity(config, problem),
-            "gpsaf_parameters": {
-                "alpha": self.settings.alpha,
-                "beta": self.settings.beta,
-                "gamma": self.settings.gamma,
-                "exploration_fraction": self.settings.exploration_fraction,
-                "maximum_training_lag": int(
-                    config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG
-                ),
-            },
-        }
-
-    def run_generation(self, context: GenerationContext) -> OptimizationResult:
-        from .gpsaf.assistance import run_generation
-
-        return run_generation(
-            context,
-            search=self.search,
-            surrogate=self.surrogate,
-            settings=self.settings,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class RealSearchStrategy:
-    search: SearchComponent
-
-    def validate(self, config: LoadedConfig, problem: ProblemInfo) -> None:
-        self.search.validate(config, problem)
-
-    def semantic_identity(
-        self,
-        config: LoadedConfig,
-        problem: ProblemInfo,
-    ) -> Mapping[str, object]:
-        return {
-            "strategy": "real-search",
-            "strategy_version": 1,
-            "search": self.search.semantic_identity(config, problem),
-        }
-
-    def run_generation(self, context: GenerationContext) -> OptimizationResult:
-        from .primitives import full_real_search
-
-        selection = full_real_search(
-            context,
-            self.search,
-            origin_prefix="pymoo",
-        )
-        costs = evaluate_population(context, selection.population)
-        info = dict(selection.state.diagnostics)
-        info.update(dict(selection.diagnostics))
-        info["strategy"] = "real-search"
-        return OptimizationResult(
-            generation_index=context.generation_index,
-            population=selection.population,
-            costs=costs,
-            history_count=len(context.history),
-            source=selection.source,
-            surrogate_used=False,
-            diagnostics=info,
-        )
-
-
 def pymoo_ga(
     *,
     crossover_probability: float = 0.85,
@@ -270,27 +180,6 @@ def by_objective_count(
     return ObjectiveCountSearch(single=single, multi=multi)
 
 
-def gpsaf(
-    *,
-    search: SearchComponent,
-    surrogate: object,
-    alpha: int = 3,
-    beta: int = 3,
-    gamma: float = 0.5,
-    exploration_fraction: float = 0.10,
-) -> GPSAFStrategy:
-    return GPSAFStrategy(
-        search=search,
-        surrogate=surrogate,
-        settings=gpsaf_settings(
-            alpha=alpha,
-            beta=beta,
-            gamma=gamma,
-            exploration_fraction=exploration_fraction,
-        ),
-    )
-
-
 def gpsaf_settings(
     *,
     alpha: int = 3,
@@ -308,20 +197,12 @@ def gpsaf_settings(
     )
 
 
-def real_search(*, search: SearchComponent) -> RealSearchStrategy:
-    return RealSearchStrategy(search=search)
-
-
 __all__ = [
-    "GPSAFStrategy",
     "ObjectiveCountSearch",
     "PymooSearch",
-    "RealSearchStrategy",
     "SearchComponent",
     "by_objective_count",
-    "gpsaf",
     "gpsaf_settings",
     "pymoo_ga",
     "pymoo_nsga3",
-    "real_search",
 ]

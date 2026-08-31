@@ -30,7 +30,7 @@
   uncalibrated capability。`hierarchical_cae()` 已有 coherent finite member draws；旧 exact
   states 仍没有可迁移 calibrated capability，详见
   [posterior/qNEHVI evidence context](../context/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)。
-- public `qnehvi()` 和 `posterior_assisted()` 已实现 fixed real Pareto baseline、candidate
+- public `qnehvi()` 和 `posterior_assisted_selector()` 已实现 fixed real Pareto baseline、candidate
   chunk projection、显式 real exploration、common real evaluator、typed readiness、soft
   full-real fallback 与 hard-stop 边界。BoTorch 只拥有 qLogNEHVI 数值计算。
 - 当前 shipped conditional-INR adapter 与 Hierarchical CAE 都返回 blocked readiness，因此
@@ -159,7 +159,7 @@ quality evidence。
 
 ### 4. 分层发布决定
 
-- **机制可用：** public opt-in strategy 与 full-real fallback 可在其结构测试范围内保留。
+- **机制可用：** public opt-in selector 与 full-real fallback 可在其结构测试范围内保留。
 - **component-specific EHVI：** 只对 exact posterior capability 和已运行的 cases 作有限
   推荐；不能外推为所有 CAE/conditional-INR state。
 - **默认迁移：** 必须由用户单独决定，并综合优化收益、鲁棒性、总工程成本和失败体验；TODO
@@ -180,8 +180,7 @@ quality evidence。
 - 新组件继续通过 workspace `submit/optimization.py` 声明式 program 显式组合：
   program 物化 Dataset/CostTable，调用 generation-local
   `selector.select_generation(..., training_data=...)`，并自行拥有 evaluation/training/
-  commit 顺序。0.5.0 cutover 前的 legacy factory/strategy loop 仅是封闭 compatibility
-  adapter；不建立全局算法 registry、字符串 selector 或自动 discovery。
+  commit 顺序。不建立全局算法 registry、字符串 selector 或自动 discovery。
 
 ## 完成规则
 

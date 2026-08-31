@@ -40,8 +40,8 @@
 - The program may choose ordinary Python/NumPy control flow but cannot create a
   second run scope, skip/repeat generations, exceed the caller range, publish a
   result for the wrong generation/shape, or commit twice.
-- `ProgramGenerationScope.prepare_evaluation()` cannot accept an
-  `after_jobs_submitted` callback or otherwise hide program lifecycle ordering.
+- `ProgramGenerationScope.prepare_evaluation()` accepts no callback that could hide
+  program lifecycle ordering.
 - The completion pointer contains no candidate, prediction, rawData, pymoo, or
   arbitrary user payload. Incomplete work resumes from durable evidence and the
   last published boundary.

@@ -1,29 +1,23 @@
-"""Common campaign strategy boundary and workspace-owned strategy loading."""
+"""Explicit optimization generation values, history, and semantic identity."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
 import json
-import math
-import os
-from pathlib import Path
-from typing import Callable, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Mapping, Sequence
 
-from ..config import LoadedConfig, load_config
-from ..evaluate_manager import api as evaluate_api
+from ..config import LoadedConfig
 from ..job_template import api as job_template_api
 from ..recorded_data import api as recorded_api
 from ..recorded_data.session import CampaignSession
-from ..task_loader import task_module
 from ..task_snapshot import GenerationTaskSnapshot
-from ..workspace import WorkspaceContext, resolve_workspace
+from ..workspace import WorkspaceContext
 from .problem_info import ProblemInfo, from_job_template
 
 
 Population = tuple[tuple[float, ...], ...]
 Costs = tuple[tuple[float, ...], ...]
-WorkspaceLike = WorkspaceContext | str | os.PathLike[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,73 +56,6 @@ class GenerationContext:
     problem: ProblemInfo
     strategy_signature: str
     strategy_identity: Mapping[str, object]
-
-
-@runtime_checkable
-class OptimizationStrategy(Protocol):
-    def validate(self, config: LoadedConfig, problem: ProblemInfo) -> None: ...
-
-    def semantic_identity(
-        self,
-        config: LoadedConfig,
-        problem: ProblemInfo,
-    ) -> Mapping[str, object]: ...
-
-    def run_generation(self, context: GenerationContext) -> OptimizationResult: ...
-
-
-@dataclass(frozen=True, slots=True)
-class OptimizationDefinition:
-    strategy: OptimizationStrategy
-    identity: Mapping[str, object]
-    signature: str
-    source_path: Path
-
-
-def load_workspace_strategy(
-    workspace: WorkspaceLike,
-    *,
-    config: LoadedConfig | None = None,
-    problem: ProblemInfo | None = None,
-) -> OptimizationDefinition:
-    """Load and validate the one strategy built by ``submit/optimization.py``."""
-
-    context = resolve_workspace(workspace)
-    selected_config = load_config(context) if config is None else config
-    selected_problem = from_job_template(context) if problem is None else problem
-    source_path = context.submit_dir / "optimization.py"
-    with task_module(
-        context,
-        "optimization",
-        source_root=context.submit_dir,
-    ) as module:
-        build = getattr(module, "build_optimization", None)
-        if not callable(build) or getattr(build, "__module__", None) != module.__name__:
-            raise TypeError(
-                f"{source_path} must define callable build_optimization()"
-            )
-        strategy = build()
-    if not isinstance(strategy, OptimizationStrategy):
-        raise TypeError(
-            f"{source_path} build_optimization() must return a yadof optimization "
-            "strategy with validate(), semantic_identity(), and run_generation()"
-        )
-    strategy.validate(selected_config, selected_problem)
-    identity = _json_mapping(
-        strategy.semantic_identity(selected_config, selected_problem),
-        label=f"{source_path} strategy identity",
-    )
-    signature = semantic_strategy_signature(
-        identity,
-        parameter_names=job_template_api.get_parameter_names(context),
-        objective_names=selected_problem.objective_names,
-    )
-    return OptimizationDefinition(
-        strategy=strategy,
-        identity=identity,
-        signature=signature,
-        source_path=source_path,
-    )
 
 
 def semantic_strategy_signature(
@@ -219,41 +146,6 @@ def resolve_problem_info(
         )
 
 
-def evaluate_population(
-    context: GenerationContext,
-    population: Population,
-    *,
-    after_jobs_submitted: Callable[[], object] | None = None,
-) -> Costs:
-    callback_ran = False
-
-    def wrapped_after_jobs_submitted():
-        nonlocal callback_ran
-        callback_ran = True
-        if after_jobs_submitted is not None:
-            return after_jobs_submitted()
-        return None
-
-    raw_costs = evaluate_api.evaluate_population(
-        context.config.workspace,
-        population,
-        mode=str(context.config.EVALUATION_MODE),
-        run_id=context.run_id,
-        optimization_index=context.optimization_index,
-        generation_index=context.generation_index,
-        after_jobs_submitted=(
-            wrapped_after_jobs_submitted
-            if after_jobs_submitted is not None
-            else None
-        ),
-        _campaign_session=context.session,
-        _task_snapshot=context.snapshot,
-    )
-    if after_jobs_submitted is not None and not callback_ran:
-        after_jobs_submitted()
-    return tuple(tuple(float(value) for value in row) for row in raw_costs)
-
-
 def _clip01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
@@ -273,13 +165,9 @@ __all__ = [
     "Costs",
     "GenerationContext",
     "HistoryRecord",
-    "OptimizationDefinition",
     "OptimizationResult",
-    "OptimizationStrategy",
     "Population",
-    "evaluate_population",
     "history_records",
-    "load_workspace_strategy",
     "resolve_problem_info",
     "semantic_strategy_signature",
 ]

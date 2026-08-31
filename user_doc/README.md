@@ -54,6 +54,11 @@ python -m yadof docs bundle user
 3. Read [config_and_run.md](config_and_run.md) for configuration precedence,
    local/distributed smoke, start/resume, history, and viewing commands.
 
+Users upgrading an existing workspace must first read
+[migration_0_5.md](migration_0_5.md). When a source checkout is available,
+[optimization_program_examples.md](optimization_program_examples.md) indexes the
+copyable program references that accompany this release.
+
 Task author references:
 
 - [workflow_typical_patterns.md](workflow_typical_patterns.md)
@@ -69,8 +74,9 @@ Optional agent-host troubleshooting:
   These are host-agent environment concerns rather than yadof behavior.
 
 When a source checkout is available, its top-level `examples/` directory may provide
-additional task-specific reference workspaces. Those examples are not installed
-package resources and must not be assumed to exist in a pip-only environment.
+additional task-specific reference workspaces and optimization programs. Those
+examples are not installed package resources and must not be assumed to exist in a
+pip-only environment; the installed index describes them but does not embed them.
 
 ## Task/framework code boundary
 
