@@ -63,6 +63,9 @@ terminal output remains reviewable; hidden detach remains automatic.
 - `job_template` is task-neutral and owns parameter/rawData/current-cost gateways.
 - Evaluation may depend on task and persistence contracts; optimization may
   coordinate evaluation, history, and surrogate components.
+- Backend-neutral optimization primitives may depend on common strategy/history
+  values but import the optional pymoo adapter only inside operations. Public state,
+  pool, prediction, and selection DTOs never expose pymoo objects.
 - Concrete optional numerical backends load only after their component is selected.
 - Hierarchical-CAE training-data filtering is component-local: implementations live
   below `surrogate/hierarchical_cae/data_filtering/`, and its factory exposes one

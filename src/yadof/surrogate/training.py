@@ -11,7 +11,7 @@ from collections.abc import Iterator, Sequence as MaterializedSequence
 from types import MappingProxyType
 import threading
 import time
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 
@@ -324,6 +324,18 @@ class SurrogatePrediction:
         self,
     ) -> tuple[tuple[tuple[float, ...], tuple[tuple[float, float], ...]], ...]:
         return tuple(zip(self.costs, self.intervals))
+
+
+@runtime_checkable
+class DeterministicPredictionProvider(Protocol):
+    """Typed deterministic prediction edge consumed by search selection."""
+
+    def predict_for_selection(
+        self,
+        context,
+        population,
+        training_data: SurrogateTrainingData | None = None,
+    ) -> SurrogatePrediction: ...
 
 
 class TrainingHandleState(StrEnum):
@@ -712,6 +724,7 @@ def _sha256(value: object, label: str) -> str:
 
 
 __all__ = [
+    "DeterministicPredictionProvider",
     "SurrogatePrediction",
     "SurrogateTrainingData",
     "TrainingCancelledError",

@@ -26,9 +26,9 @@
 由于 `dev_doc/toDo/` 的手动触发合同要求明确点名文件，真正启动执行的 Goal 必须逐一列出
 [阶段 1](../obsolete/todo/20260830_174607_explicit-optimization-stage-1-preserve-evidence-on-cost-failure.md)、
 [阶段 2](../obsolete/todo/20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md)、
-[阶段 3](../toDo/20260830_174609_explicit-optimization-stage-3-evaluation-handle.md)、
+[阶段 3](../obsolete/todo/20260830_174609_explicit-optimization-stage-3-evaluation-handle.md)、
 [阶段 4](../obsolete/todo/20260830_174610_explicit-optimization-stage-4-surrogate-fit-predict.md)、
-[阶段 5](../toDo/20260830_174611_explicit-optimization-stage-5-search-selection-primitives.md)、
+[阶段 5](../obsolete/todo/20260830_174611_explicit-optimization-stage-5-search-selection-primitives.md)、
 [阶段 6](../toDo/20260830_174612_explicit-optimization-stage-6-workspace-program-pilot.md)、
 [阶段 7](../toDo/20260830_220200_explicit-optimization-stage-7-retained-capability-migration.md) 和
 [阶段 8](../toDo/20260830_220201_explicit-optimization-stage-8-cutover-and-release.md)。
@@ -209,7 +209,7 @@ eligible/fallback 状态时才提供示例。
 | 2 | 已完成并归档（2026-08-31） | [Dataset/CostTable](../obsolete/todo/20260830_174608_explicit-optimization-stage-2-dataset-and-cost-tables.md) | stable identity、live/durable view、invalid interpretation |
 | 3 | 已完成并归档（2026-08-31） | [Evaluation Handle](../obsolete/todo/20260830_174609_explicit-optimization-stage-3-evaluation-handle.md) | start/wait/cancel、scope/cleanup、三 backend 同义 |
 | 4 | 已完成并归档（2026-08-31） | [surrogate fit/predict](../obsolete/todo/20260830_174610_explicit-optimization-stage-4-surrogate-fit-predict.md) | PCA/SVD 显式数据、state/checkpoint/provenance |
-| 5 | 预测性，已授权届时精化/执行 | [search/select](../toDo/20260830_174611_explicit-optimization-stage-5-search-selection-primitives.md) | opaque pymoo state、GPSAF 原语、gamma 不变 |
+| 5 | 已完成并归档（2026-08-31） | [search/select](../obsolete/todo/20260830_174611_explicit-optimization-stage-5-search-selection-primitives.md) | opaque pymoo state、GPSAF 原语、gamma 不变 |
 | 6 | 预测性，已授权届时精化/执行 | [workspace program pilot](../toDo/20260830_174612_explicit-optimization-stage-6-workspace-program-pilot.md) | real-only 与 PCA/SVD+GPSAF pilot、program freeze |
 | 7 | 预测性，已授权届时精化/执行 | [retained capability migration](../toDo/20260830_220200_explicit-optimization-stage-7-retained-capability-migration.md) | advanced paths、callbacks、viewer/tools/benchmark 迁移 |
 | 8 | 预测性，已授权届时精化/执行 | [cutover and 0.5.0](../toDo/20260830_220201_explicit-optimization-stage-8-cutover-and-release.md) | 删除旧编排、starter/examples/docs、release |
@@ -222,7 +222,8 @@ Goal 启动后，每一行还必须更新以下运行字段；开始时为空不
 | 2 | `f74b1a46644925064be3d8fa310ff9b5d2ef4def` / pre-refinement `B103F453…FD67`；Stage 1 accepted commit/evidence，installed yadof 0.4.2 | direct `12/12`、recording/session `37/37`、focused `76/76`、installed-wheel full pytest `400 passed in 81.00s`；fast smoke `40/40/40`、measured `2000/2000/2000` 均 collected/valid，20 generations、generation-zero 100/100、runtime `539.1970091 s`；[change record](../change_records/20260831_003835_add-identity-preserving-evidence-cost-views.md) | Stage 2 closure commit（本行所在提交）；fresh `origin/main=9b4ed745…a0ac`，closure 后 behind 0 / ahead 4，未达 ahead >= 5 gate，push skipped | 读取、精化并执行 Stage 3 |
 | 3 | `39da8b3a9ea2262b73a6411c40035ec21c558a5f` / pre-refinement `A8A9219D…3E08`、post-refinement `21B934A3…F7FA`；Stage 2 accepted commit/evidence，installed yadof 0.4.2 | direct `10/10`、focused `109/109`、installed-wheel full pytest `410 passed in 86.27s`；fast smoke `40/40/40/40`、measured `2000/2000/2000/2000` 均 collected/valid、zero anomalies；measured elapsed `568.137814 s`；[change record](../change_records/20260831_084158_add-unified-evaluation-handle-lifecycle.md) | Stage 3 closure commit（本行所在提交）；fresh `origin/main=9b4ed745…a0ac`，closure 后 behind 0 / ahead 5，达到 gate 后 normal push | 读取、精化并执行 Stage 4 |
 | 4 | `38c091d264cc47d9457878d76d8a784b97e7e45b` / pre-refinement `33E66D8E…7B00`、post-refinement `B7E1CC3C…FC13`；Stage 3 accepted commit/evidence，installed yadof 0.4.2 | direct `20/20`、GPSAF/posterior `25/25`、installed-wheel full pytest `419 passed in 86.88s`；fast smoke `40/40/40/40`、measured `2000/2000/2000/2000` 均 collected/valid、zero issues；20/20 training/manifests，measured result runtime `624.151074 s`；[change record](../change_records/20260831_100109_add-explicit-surrogate-fit-state-prediction.md) | Stage 4 closure commit（本行所在提交）；fresh `origin/main=38c091d…e45b`，closure 后 behind 0 / ahead 1，未达 ahead >= 5 gate，push skipped | 读取、精化并执行 Stage 5 |
-| 5--8 | 各阶段开始时冻结 | 待各阶段执行 | 待各阶段执行 | 严格串行 |
+| 5 | `7249298bfdb04201bbba773f305548eadb651a9b` / pre-refinement `943CE72A…C34B`、post-refinement `0630D23E…402A`；Stage 4 accepted commit/evidence，installed yadof 0.4.2 | pre-change `45/45`、final focused `55/55`、broader optimize/surrogate `116/116`、installed-wheel full pytest `429 passed in 94.96s`；seeded GA/NSGA-III/real/GPSAF exact parity；fast smoke `40/40/40/40`、measured `2000/2000/2000/2000` 均 collected/valid、zero issues/anomalies/publication failures；20/20 state/training/checkpoint evidence，measured result runtime `649.4805222 s`；[change record](../change_records/20260831_112512_add-explicit-search-selection-primitives.md) | Stage 5 closure commit（本行所在提交）；post-commit fresh fetch/push gate 结果由 Stage 6 refinement 冻结 | 读取、精化并执行 Stage 6 |
+| 6--8 | 各阶段开始时冻结 | 待各阶段执行 | 待各阶段执行 | 严格串行 |
 
 完成阶段归档后，ledger 链接必须指向 `obsolete/todo/` 中的同名文件。若阶段 evidence 只要求
 在既定阶段内重做或调整，更新当前 TODO 与 ledger 后继续；若要求改变八阶段地图，则命中暂停

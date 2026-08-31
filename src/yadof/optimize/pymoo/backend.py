@@ -24,7 +24,6 @@ from ...workspace import WorkspaceContext
 from ..gpsaf.records import (
     CandidateRecord,
     clip01,
-    history_keys,
     key,
     total_cost,
 )
@@ -267,6 +266,20 @@ def records_from_population(context: PymooContext, pop: Population, origin: str)
     return [_record_from_individual(context, individual, origin) for individual in pop]
 
 
+def selected_records_from_state(
+    context: PymooContext,
+    state,
+    size: int,
+    *,
+    origin: str,
+) -> list[CandidateRecord]:
+    return records_from_population(
+        context,
+        _selected_population(context, state, size),
+        origin,
+    )
+
+
 def population_from_records(records: Sequence[CandidateRecord]) -> OptimizerPopulation:
     return tuple(tuple(float(value) for value in record.x) for record in records)
 
@@ -279,31 +292,73 @@ def generate_candidate_pool(
     rng: random.Random,
     *,
     origin: str,
+    stats: dict[str, object] | None = None,
 ) -> list[CandidateRecord]:
     accepted: list[CandidateRecord] = []
+    output_stats = {} if stats is None else stats
+    output_stats.update(
+        {
+            "ask_attempt_count": 0,
+            "ask_candidate_count": 0,
+            "duplicate_rejection_count": 0,
+            "random_refill_attempt_count": 0,
+            "random_refill_count": 0,
+        }
+    )
     if int(need) <= 0:
         return accepted
 
     attempts = context.search_settings.refill_attempts
     decimals = int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10))
     for _attempt in range(attempts):
+        output_stats["ask_attempt_count"] = int(output_stats["ask_attempt_count"]) + 1
         infills = state.ask()
-        for record in records_from_population(context, infills, origin):
+        records = records_from_population(context, infills, origin)
+        output_stats["ask_candidate_count"] = (
+            int(output_stats["ask_candidate_count"]) + len(records)
+        )
+        for record in records:
             candidate_key = key(record.x, decimals)
             if candidate_key in used_keys:
+                output_stats["duplicate_rejection_count"] = (
+                    int(output_stats["duplicate_rejection_count"]) + 1
+                )
                 continue
             used_keys.add(candidate_key)
             accepted.append(record)
             if len(accepted) >= int(need):
                 return accepted
 
-    while len(accepted) < int(need):
+    random_attempt_limit = max(
+        64,
+        int(need) * max(32, int(attempts) * 8),
+    )
+    for _attempt in range(random_attempt_limit):
+        if len(accepted) >= int(need):
+            break
+        output_stats["random_refill_attempt_count"] = (
+            int(output_stats["random_refill_attempt_count"]) + 1
+        )
         x = tuple(rng.random() for _ in range(int(context.problem.variable_count)))
         candidate_key = key(x, decimals)
         if candidate_key in used_keys:
+            output_stats["duplicate_rejection_count"] = (
+                int(output_stats["duplicate_rejection_count"]) + 1
+            )
             continue
         used_keys.add(candidate_key)
         accepted.append(CandidateRecord(individual=Individual(X=np.asarray(x, dtype=float)), x=x, origin=f"{origin}_random_refill"))
+        output_stats["random_refill_count"] = (
+            int(output_stats["random_refill_count"]) + 1
+        )
+    if len(accepted) < int(need):
+        from ..primitives import InsufficientCandidatePoolError
+
+        raise InsufficientCandidatePoolError(
+            "pymoo search exhausted bounded ask/refill attempts: "
+            f"requested {int(need)}, produced {len(accepted)}, "
+            f"archive size {len(used_keys)}, decimals {decimals}"
+        )
     return accepted
 
 
@@ -372,60 +427,6 @@ def select_records_by_survival(
             if len(selected_records) >= n_survive:
                 break
     return selected_records[:n_survive]
-
-
-def baseline_records(
-    *,
-    context: PymooContext,
-    history: Sequence[HistoryRecord],
-    size: int,
-    generation_index: int,
-    rng: random.Random,
-) -> tuple[list[CandidateRecord], str]:
-    state = history_population(context, history)
-    if not history:
-        return (
-            generate_candidate_pool(context, state, size, set(), rng, origin="gpsaf_random"),
-            "gpsaf_random",
-        )
-
-    if int(generation_index) <= 0:
-        selected = records_from_population(context, _selected_population(context, state, size), "gpsaf_warm_start")
-        if len(selected) < int(size):
-            selected.extend(
-                generate_candidate_pool(
-                    context,
-                    state,
-                    int(size) - len(selected),
-                    history_keys(
-                        history,
-                        int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10)),
-                    ),
-                    rng,
-                    origin="gpsaf_random_refill",
-                )
-            )
-            return selected[: int(size)], "gpsaf_random_refill"
-        return selected, "gpsaf_warm_start"
-
-    state = survivor_state_from_history(context, history, size)
-    records = generate_candidate_pool(
-        context,
-        state,
-        int(size),
-        history_keys(
-            history,
-            int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10)),
-        ),
-        rng,
-        origin="gpsaf_offspring",
-    )
-    if records:
-        return records, "gpsaf_offspring"
-    return (
-        generate_candidate_pool(context, new_algorithm(context), size, set(), rng, origin="gpsaf_random_refill"),
-        "gpsaf_random_refill",
-    )
 
 
 def diagnostics(context: PymooContext) -> dict[str, object]:

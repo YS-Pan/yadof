@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -9,8 +10,9 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from yadof.surrogate.conditional_inr import checkpoints, modeling, runtime
-from yadof.optimize.gpsaf.records import CandidateRecord
-from yadof.optimize.gpsaf.phases import predict_records
+from yadof.optimize import prepare_search, pymoo_ga, search_candidates
+from yadof.optimize.gpsaf.phases import predict_pool
+from yadof.optimize.problem_info import ProblemInfo
 from yadof.surrogate.conditional_inr.types import (
     RawArraySlot,
     RawDataSchema,
@@ -402,20 +404,38 @@ def test_optimizer_records_discard_member_spread() -> None:
         def predict_population(self, _context, _rows):
             return (((0.2,), (self.interval,)),)
 
-    source = [CandidateRecord(x=(0.25,), origin="test")]
-    wide = predict_records(
-        StubSurrogate((-1000.0, 1000.0)),
-        object(),
-        source,
+    config = SimpleNamespace(
+        OPTIMIZE_ARCHIVE_KEY_DECIMALS=10,
+        OPTIMIZE_POPULATION_SIZE=1,
     )
-    narrow = predict_records(
+    context = SimpleNamespace(
+        config=config,
+        problem=ProblemInfo(1, 1, ("objective",)),
+        population_size=1,
+        random_seed=41,
+        generation_index=0,
+        history=(),
+        strategy_signature="1" * 64,
+        snapshot=SimpleNamespace(interpretation_fingerprint="2" * 64),
+    )
+    pool = search_candidates(
+        prepare_search(context, pymoo_ga()),
+        1,
+        origin="test",
+    )
+    wide = predict_pool(
+        StubSurrogate((-1000.0, 1000.0)),
+        context,
+        pool,
+    )
+    narrow = predict_pool(
         StubSurrogate((0.19, 0.21)),
-        object(),
-        source,
+        context,
+        pool,
     )
 
-    assert wide == narrow
-    assert not hasattr(wide[0], "intervals")
+    assert wide.costs == narrow.costs
+    assert not hasattr(wide, "intervals")
     assert not hasattr(surrogate_api, "evaluate_historical_errors")
 
 

@@ -8,6 +8,9 @@
   survival helpers.
 - Translate between normalized yadof rows and pymoo representations.
 - Expose the small adapter surface used by common search and GPSAF phases.
+- Perform configured ask attempts and bounded random refill with duplicate/archive
+  counters; inability to fill an exact unique request raises the public typed
+  insufficient-pool error rather than looping or returning partial success.
 
 ## I/O Format
 - Accepts normalized bounds, populations, objective rows, core candidate-identity
@@ -22,5 +25,7 @@
 ## Mutability Profile
 - Pymoo-version details stay here; public optimization factories and workspace
   contracts must not expose pymoo objects.
+- Algorithms, operators, `Individual`, ask/tell, and survival stay private here;
+  `primitives.py` owns only backend-neutral values and calls this adapter lazily.
 - Operator, refill, and reference-direction values have no fallback lookup in
   `LoadedConfig`; the selected factory snapshot is authoritative.

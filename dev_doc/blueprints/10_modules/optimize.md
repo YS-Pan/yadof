@@ -19,8 +19,12 @@ contracts.
 
 - Parent files own campaign/session execution, strategy loading/state, problem
   shape, metadata helpers, and the lightweight public component/factory surface.
+- `primitives.py` owns frozen backend-neutral `SearchCandidate`, `CandidatePool`,
+  `PredictedCostRows`, `CandidateSelection`, and opaque generation-local
+  `SearchState` values plus prepare/search/bind/select/advance/compose/full-real
+  operations. It imports the concrete pymoo adapter only inside operations.
 - `gpsaf/` owns only GPSAF assistance, alpha/beta/exploration phases, and its
-  private candidate records.
+  retained private pymoo record adapter; it does not own a second search loop.
 - `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real-search
   strategies. Pymoo objects do not cross into the public strategy contract.
 - `qnehvi/` owns the public qNEHVI-family component implementation:
@@ -28,8 +32,8 @@ contracts.
   `backend.py` provides the lightweight scoring boundary, and
   `_botorch_backend.py` owns the optional Torch/BoTorch numerics.
 - `posterior_assisted.py` owns only the independent generation orchestration around
-  injected search, posterior surrogate, and acquisition components. It reuses the
-  private pymoo mechanics but does not modify GPSAF.
+  injected search, posterior surrogate, and acquisition components. Its pool and
+  complete real fallback reuse the common primitives without modifying GPSAF.
 - The public `gpsaf()` and `qnehvi()` factories remain at `yadof.optimize`;
   loading their same-named private implementation packages must not replace those
   callables with subpackage modules.
@@ -42,6 +46,16 @@ survival. Its thin adapter acts in normalized space and uses
 configured crossover/mutation probabilities and distribution indices. NSGA-III
 reference directions are generated from objective count and configured partitions.
 Duplicate/archive keys use configured decimal precision and bounded refill attempts.
+Every search operation clones its opaque input state and returns an exact next state;
+the same input can be forked deterministically. Candidate IDs, rounded design keys,
+and optional source evidence IDs remain separate. State is bound to strategy,
+generation, problem, seeds, archive precision, and interpretation snapshot; it is
+not pickleable or durable. Generation-boundary resume rebuilds from real history.
+
+`PredictedCostRows` aligns finite current-cost means to exact pool candidate IDs and
+is the only deterministic survival input. `CostTable`, `SurrogatePrediction`, and
+`JointObjectiveSamples` remain distinct owners/types. Selection commits only the
+search continuation; real evidence commits only after the common evaluator.
 
 GPSAF alpha/beta pools are ranked using surrogate-predicted mean current costs
 through pymoo survival. Conditional-INR member min/max spread remains a diagnostic
@@ -54,9 +68,11 @@ durable truth.
 For the migrated PCA/SVD component, GPSAF freezes an explicit
 `SurrogateTrainingData` from the generation's evidence/cost views before freshness,
 state, and prediction calls. Its after-submit hook materializes again at the hook's
-actual backend timing and starts an explicit fit handle. A narrow compatibility
-adapter unwraps typed deterministic predictions into GPSAF rows; conditional-INR
-and hierarchical-CAE keep their existing method signatures in this stage.
+actual backend timing and starts an explicit fit handle. The PCA/SVD
+runtime-checkable provider returns the Stage 4 prediction DTO for an exact candidate
+pool, and the explicit binder retains only aligned current-cost means for survival.
+Conditional-INR and hierarchical-CAE use one narrow legacy prediction binder until
+their scheduled migration.
 
 The public joint rawData posterior protocol, typed exploitation readiness, and cost
 projector feed the explicitly composed posterior-assisted strategy. It requires
@@ -109,8 +125,9 @@ One persistent schema-bearing sampler evaluates only eligible exploitation rows 
 candidate chunks. Projection discards rawData and the acquisition selects the
 configured remainder. Exploitation and exploration are combined once, verified
 unique, and passed to common `evaluate_population()`. Selection/projection/backend
-exceptions and configured support fallback discard all derived choices and run a
-full real-search generation. Configured support rejection propagates. Evaluation,
+exceptions and configured support fallback discard all derived choices and run the
+same shared full-real primitive used by real-only/GPSAF fallback. Configured support
+rejection propagates. Evaluation,
 finalization, and recording begin outside the fallback catch, so recorder failure
 still aborts the campaign.
 
@@ -145,6 +162,9 @@ rebuilding pymoo problem/reference-direction state for structural dimension chan
 is separate future work. Source fingerprints are cache-invalidation/provenance
 inputs only; optimize does not decide whether the user's old and new problems are
 scientifically equivalent or silently discard history because a signature changed.
+Opaque mid-generation search state is never written to metadata. Restart/resume at
+this boundary deterministically reconstructs pymoo survivor/archive state from the
+identity-joined committed history and current seeds.
 
 ## Failure behavior
 
@@ -177,5 +197,8 @@ failure remains campaign-fatal and never becomes an individual `inf`.
   explicit optimizer-shape adapter requires `inf`.
 - Predicted posterior rawData and projected acquisition samples remain transient and
   never become optimizer history, recorder input, or real-evaluation results.
+- Search candidates, predicted-cost rows, and opaque continuation payloads are also
+  transient; no public DTO exposes a pymoo algorithm, `Individual`, operator, ask,
+  tell, or survival object.
 - Current conditional-INR and hierarchical-CAE posterior components always block
   exploitation; implementation completeness is not scientific activation.

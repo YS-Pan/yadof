@@ -15,6 +15,13 @@ from yadof.config import load_config
 from yadof.job_template import RAWDATA_SCHEMA_VERSION, NamedRawDataItem
 from yadof.job_template import api as job_template_api
 from yadof.job_template.rawdata_template import StructuredRawDataSample
+from yadof.optimize import (
+    bind_surrogate_prediction,
+    prepare_search,
+    pymoo_ga,
+    search_candidates,
+)
+from yadof.optimize.problem_info import ProblemInfo
 from yadof.recorded_data import (
     EvidenceDataset,
     calculate_cost_table,
@@ -510,6 +517,33 @@ def test_typed_prediction_uses_hot_snapshot_and_never_records(
     try:
         old = component.predict(state, ((0.25,),), snapshot=old_snapshot)
         hot = component.predict(state, ((0.25,),), snapshot=hot_snapshot)
+        generation_context = SimpleNamespace(
+            config=config,
+            generation_index=0,
+            population_size=1,
+            random_seed=43,
+            history=(),
+            problem=ProblemInfo(1, 1, ("hot_response",)),
+            strategy_signature="3" * 64,
+            strategy_identity={},
+            snapshot=hot_snapshot,
+            session=None,
+        )
+        pool = search_candidates(
+            prepare_search(
+                generation_context,
+                pymoo_ga(),
+                population_size=1,
+            ),
+            1,
+            origin="typed-pca-selection",
+        )
+        typed = component.predict_for_selection(
+            generation_context,
+            pool.population,
+            data,
+        )
+        bound = bind_surrogate_prediction(pool, typed)
     finally:
         old_snapshot.close()
         hot_snapshot.close()
@@ -518,6 +552,13 @@ def test_typed_prediction_uses_hot_snapshot_and_never_records(
     assert hot.intervals == (((hot.costs[0][0], hot.costs[0][0]),),)
     assert hot.costs[0][0] == pytest.approx(40.25, abs=1e-8)
     assert old.costs != hot.costs
+    assert isinstance(typed, SurrogatePrediction)
+    assert bound.normalized_variables == pool.population
+    assert bound.costs == typed.costs
+    assert bound.candidate_ids == tuple(
+        candidate.candidate_id for candidate in pool.candidates
+    )
+    assert not hasattr(bound, "raw_data")
     with pytest.raises(TypeError):
         hot.diagnostics["mutate"] = True  # type: ignore[index]
     oracle = component.fit_oracle(data.raw_data)

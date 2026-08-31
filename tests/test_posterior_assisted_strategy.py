@@ -20,7 +20,6 @@ from yadof.optimize.posterior_assisted import (
     _partition_candidates,
 )
 from yadof.optimize.problem_info import ProblemInfo
-from yadof.optimize.pymoo.backend import CandidateRecord
 from yadof.optimize.qnehvi.acquisition import (
     DiscreteQNEHVIAcquisition,
     QNEHVIConfigurationError,
@@ -249,7 +248,7 @@ def _context(*, history=(), population_size: int = 2):
         session=SimpleNamespace(),
         run_id="test-run",
         optimization_index=0,
-        strategy_signature="test-strategy",
+        strategy_signature=STATE_SHA,
         strategy_identity={},
     )
 
@@ -592,14 +591,6 @@ def test_accepted_path_projects_then_hands_every_selected_point_to_real_evaluato
 
     surrogate = _AcceptedSurrogate()
     strategy = _strategy(surrogate)
-    pool = (
-        CandidateRecord(x=(0.1, 0.1), origin="test"),
-        CandidateRecord(x=(0.2, 0.2), origin="test"),
-        CandidateRecord(x=(0.3, 0.3), origin="test"),
-        CandidateRecord(x=(0.4, 0.4), origin="test"),
-    )
-    monkeypatch.setattr(module, "_candidate_pool", lambda *_args: list(pool))
-
     @contextmanager
     def fake_projector(*_args, **_kwargs):
         yield object()
@@ -655,12 +646,6 @@ def test_backend_failure_falls_back_but_support_reject_stays_hard(
     module = importlib.import_module("yadof.optimize.posterior_assisted")
 
     strategy = _strategy(_AcceptedSurrogate())
-    pool = [
-        CandidateRecord(x=(value, value), origin="test")
-        for value in (0.1, 0.2, 0.3, 0.4)
-    ]
-    monkeypatch.setattr(module, "_candidate_pool", lambda *_args: pool)
-
     @contextmanager
     def fake_projector(*_args, **_kwargs):
         yield object()

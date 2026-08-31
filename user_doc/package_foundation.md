@@ -41,6 +41,11 @@ blocked from qNEHVI exploitation because their architecture/calibration evidence
 is not accepted or transferable; an explicit posterior-assisted composition still
 runs through its audited real-search fallback.
 
+The backend-neutral search candidate, pool, predicted-cost, selection, and opaque
+state values are also lightweight. Concrete pymoo algorithms, operators,
+`Individual`, ask/tell, and survival remain private and load only when a search
+operation runs; no public state can be serialized as a pymoo continuation.
+
 The integrated v10 release decision keeps this feature experimental. Offline
 checkpoint/viewer validation is allowed, and the explicit composition remains a
 useful fail-closed structural surface, but it is neither a recommended opt-in nor

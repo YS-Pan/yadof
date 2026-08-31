@@ -23,6 +23,12 @@ from ..surrogate.posterior import (
     project_rawdata_sampler,
     require_rawdata_posterior_surrogate,
 )
+from .primitives import (
+    CandidatePool,
+    full_real_search,
+    prepare_search,
+    search_candidates,
+)
 from .qnehvi.acquisition import (
     DiscreteQNEHVIAcquisition,
     QNEHVIConfigurationError,
@@ -217,7 +223,7 @@ class PosteriorAssistedStrategy:
                 "candidate_chunk_size": self.candidate_chunk_size,
                 "exploration_fraction": self.exploration_fraction,
                 "exploration_count_policy": "ceil-with-one-real-point-v1",
-                "candidate_pool_adapter": "private-pymoo-history-informed-v1",
+                "candidate_pool_adapter": "explicit-search-primitives-v1",
                 "projection": "persistent-draw-streaming-current-cost-v1",
                 "fixed_real_baseline": "nondominated-current-cost-v1",
                 "applicability_gate": (
@@ -314,12 +320,13 @@ class PosteriorAssistedStrategy:
         context: GenerationContext,
         baseline: _Baseline,
     ) -> _SelectedGeneration:
-        records = _candidate_pool(self, context)
-        if len(records) != self.candidate_pool_size:
+        candidate_pool = _candidate_pool(self, context)
+        candidates = candidate_pool.candidates
+        if len(candidates) != self.candidate_pool_size:
             raise QNEHVIFallback(
                 "pymoo candidate pool did not reach the configured unique size"
             )
-        pool = tuple(record.x for record in records)
+        pool = candidate_pool.population
         readiness = require_posterior_exploitation_surrogate(
             self.surrogate
         ).assess_posterior_exploitation(context, pool)
@@ -355,7 +362,7 @@ class PosteriorAssistedStrategy:
             raise QNEHVIFallback(
                 "applicability gate left fewer exploitation candidates than batch_size"
             )
-        exploitation_records = tuple(records[index] for index in eligible)
+        exploitation_candidates = tuple(candidates[index] for index in eligible)
 
         posterior_surrogate = require_rawdata_posterior_surrogate(self.surrogate)
         sampler = posterior_surrogate.make_rawdata_sampler(
@@ -378,7 +385,10 @@ class PosteriorAssistedStrategy:
             samples = project_rawdata_sampler(
                 sampler,
                 projector,
-                tuple(record.x for record in exploitation_records),
+                tuple(
+                    candidate.normalized_variables
+                    for candidate in exploitation_candidates
+                ),
                 candidate_chunk_size=self.candidate_chunk_size,
             )
         selection = self.acquisition.select_batch(
@@ -388,9 +398,12 @@ class PosteriorAssistedStrategy:
             seed=context.random_seed + context.generation_index * 1009 + 97001,
         )
         chosen_exploitation = tuple(
-            exploitation_records[index].x for index in selection.selected_indices
+            exploitation_candidates[index].normalized_variables
+            for index in selection.selected_indices
         )
-        chosen_exploration = tuple(records[index].x for index in exploration)
+        chosen_exploration = tuple(
+            candidates[index].normalized_variables for index in exploration
+        )
         population = chosen_exploitation + chosen_exploration
         if len(population) != context.population_size or len(set(population)) != len(
             population
@@ -401,7 +414,10 @@ class PosteriorAssistedStrategy:
         return _SelectedGeneration(
             population=population,
             diagnostics={
-                "candidate_pool_count": len(records),
+                **dict(candidate_pool.state.diagnostics),
+                **dict(candidate_pool.diagnostics),
+                "candidate_pool_count": len(candidates),
+                "candidate_id_count": len(candidates),
                 "posterior_draw_count": self.posterior_draws,
                 "candidate_chunk_size": self.candidate_chunk_size,
                 "readiness": readiness.as_dict(),
@@ -423,37 +439,19 @@ class PosteriorAssistedStrategy:
         reason: str,
         detail: str,
     ) -> OptimizationResult:
-        from .pymoo.backend import (
-            baseline_records,
-            diagnostics as pymoo_diagnostics,
-            make_context,
-            population_from_records,
-        )
-
-        search_context = make_context(
-            context.config,
-            context.problem,
+        selected = full_real_search(
+            context,
+            self.search,
             population_size=context.population_size,
-            seed=context.random_seed,
-            generation_index=context.generation_index,
-            search_algorithm=self.search.resolve_algorithm(
-                context.problem.objective_count
-            ),
-            search_settings=self.search.backend_settings(
-                context.problem.objective_count
-            ),
-        )
-        records, source = baseline_records(
-            context=search_context,
-            history=context.history,
-            size=context.population_size,
-            generation_index=context.generation_index,
-            rng=random.Random(
+            algorithm_seed=context.random_seed,
+            random_seed=(
                 context.random_seed + context.generation_index * 1009 + 19001
             ),
+            origin_prefix="posterior_assisted_real",
         )
-        population = population_from_records(records)
-        diagnostics.update(pymoo_diagnostics(search_context))
+        population = selected.population
+        diagnostics.update(dict(selected.state.diagnostics))
+        diagnostics.update(dict(selected.diagnostics))
         diagnostics.update(
             {
                 "optimizer": "posterior-assisted",
@@ -477,7 +475,7 @@ class PosteriorAssistedStrategy:
             population=population,
             costs=costs,
             history_count=len(context.history),
-            source=source.replace("gpsaf_", "posterior_assisted_real_"),
+            source=selected.source,
             surrogate_used=False,
             diagnostics=diagnostics,
         )
@@ -542,41 +540,22 @@ def _search_diagnostics(
 def _candidate_pool(
     strategy: PosteriorAssistedStrategy,
     context: GenerationContext,
-):
-    from .gpsaf.records import history_keys
-    from .pymoo.backend import (
-        generate_candidate_pool,
-        make_context,
-        survivor_state_from_history,
-    )
-
-    search_context = make_context(
-        context.config,
-        context.problem,
+) -> CandidatePool:
+    state = prepare_search(
+        context,
+        strategy.search,
         population_size=strategy.candidate_pool_size,
-        seed=context.random_seed + context.generation_index * 1009 + 27011,
-        generation_index=context.generation_index,
-        search_algorithm=strategy.search.resolve_algorithm(
-            context.problem.objective_count
+        algorithm_seed=(
+            context.random_seed + context.generation_index * 1009 + 27011
         ),
-        search_settings=strategy.search.backend_settings(
-            context.problem.objective_count
-        ),
-    )
-    state = survivor_state_from_history(
-        search_context,
-        context.history,
-        strategy.candidate_pool_size,
-    )
-    decimals = int(context.config.OPTIMIZE_ARCHIVE_KEY_DECIMALS)
-    return generate_candidate_pool(
-        search_context,
-        state,
-        strategy.candidate_pool_size,
-        history_keys(context.history, decimals),
-        random.Random(
+        random_seed=(
             context.random_seed + context.generation_index * 1009 + 35023
         ),
+        history_policy="survivor",
+    )
+    return search_candidates(
+        state,
+        strategy.candidate_pool_size,
         origin="posterior_assisted_pool",
     )
 

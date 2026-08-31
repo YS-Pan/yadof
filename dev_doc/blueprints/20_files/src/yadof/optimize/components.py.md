@@ -11,7 +11,8 @@
 - Validate objective compatibility and backend distribution availability.
 - Report deterministic adapter/backend/version/algorithm/controlled-parameter
   identity.
-- Lazy-load concrete pymoo/GPSAF implementation only when a selected strategy runs.
+- Delegate real-only execution to the shared full-real primitive and lazy-load
+  concrete pymoo/GPSAF implementation only when a selected strategy runs.
 - Give each public factory an explicit keyword-only configuration surface. Construct
   and eagerly validate private frozen settings without accepting a settings object,
   unrestricted kwargs, or ambient algorithm config.
@@ -26,3 +27,5 @@
 - No unrestricted kwargs, generic plugin graph, refinement role, or SciPy path.
 - Runtime receives the selected search/GPSAF settings snapshot through narrow
   arguments; it never looks up removed uppercase algorithm names.
+- RealSearchStrategy owns no private history/survivor/ask/refill loop; it hands the
+  primitive's population to the one common real evaluator.

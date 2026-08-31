@@ -47,6 +47,16 @@
 - **Surrogate prediction** is a typed transient state-plus-snapshot result carrying
   complete predicted rawData, current costs, deterministic zero-width intervals,
   and bounded diagnostics. It is neither real evidence nor posterior joint draws.
+- **Search candidate** is a generation-local normalized proposal with its own
+  deterministic candidate ID and rounded duplicate key. Its optional source
+  evidence ID is a separate lineage reference, never an identity alias.
+- **Search state and candidate pool** are immutable generation-local continuation
+  values. The state hides cloned pymoo context/algorithm/RNG ownership; the pool
+  aligns unique candidates to one exact strategy, generation, task snapshot, and
+  state revision. Mid-generation state is deliberately not durable or pickleable.
+- **Predicted cost rows** are finite current-cost means aligned to exact pool
+  candidate IDs. They are a deterministic-survival input, not a `CostTable`, rawData
+  prediction owner, posterior sample tensor, checkpoint, or evidence value.
 - **Generation task snapshot** is the coherent task/configuration definition used
   throughout one generation.
 - **Surrogate prediction and posterior samples** are transient derived views of
@@ -70,7 +80,9 @@ Durable truth includes raw task variables, rawData, schema metadata, lifecycle
 metadata, and bounded provenance. Normalized variables, costs, predictions,
 posterior draws, and acquisition values are recalculable or transient.
 
-Original `candidate_id`, `evidence_id`, and `row_id` are the same durable identity.
+For evaluated original evidence, `candidate_id`, `evidence_id`, and `row_id` are the
+same durable identity. A transient search candidate uses a separate candidate ID;
+only common real evaluation assigns the durable evidence identity.
 The design key is only an equivalence aid. A derived row keeps its root evidence
 identity but receives a deterministic row identity and explicit lineage, so neither
 duplicate designs nor reordered views can silently change joins.
@@ -107,6 +119,12 @@ remain inspectable provenance but do not prevent reuse of identical mathematics.
 Prediction consumes the immutable fitted state plus the exact generation snapshot,
 so edits to current cost policy affect later predictions without changing weights.
 
+Search primitives rebuild their root from durable history at each generation
+boundary. Within one generation they return next states rather than mutating input
+state, permit deterministic forks, and bind continuation to the exact strategy,
+problem, seeds, archive precision, and interpretation snapshot. Selection is only a
+search-state commit point; it cannot commit evidence.
+
 ## Invariants
 
 - Fast, local, and distributed execution converge before evidence-first
@@ -133,6 +151,10 @@ so edits to current cost policy affect later predictions without changing weight
   not hard-code task-specific simulator or objective policy.
 - External simulator failures or partial artifacts never publish normal evidence.
 - Predicted rawData never enters real history.
+- Search candidates, predicted costs, and mid-generation search state never enter
+  the recorder, `EvidenceDataset`, `CostTable`, optimizer history, or checkpoints.
+- Pymoo remains the sole owner of concrete algorithms, operators, ask/tell, and
+  survival; public search values expose no pymoo object.
 - A recoverable PCA/SVD state is selected only by exact training content, never by
   path, job-name tuple position, or an unchecked transform label.
 - Optional numerical backends remain absent from ordinary parent imports.

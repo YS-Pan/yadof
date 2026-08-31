@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import os
-import random
 from typing import Sequence
 
-from ..pymoo.backend import (
-    PymooContext,
-    advance_population_with_records,
-    clone_algorithm,
-    generate_candidate_pool,
-    select_records_by_survival,
-    survivor_state_from_history,
-)
-from .records import (
-    CandidateRecord,
-    history_keys,
+from ...surrogate.training import DeterministicPredictionProvider
+from ..primitives import (
+    CandidatePool,
+    CandidateSelection,
+    PredictedCostRows,
+    SearchCandidate,
+    SearchState,
+    advance_search,
+    bind_predicted_costs,
+    bind_surrogate_prediction,
+    combine_candidate_pools,
+    compose_real_population,
+    continue_search_from,
+    fork_search_state,
+    prepare_search,
+    search_candidates,
+    select_candidates,
 )
 from ..strategy import GenerationContext, HistoryRecord, Population
 
@@ -120,39 +125,42 @@ def materialize_surrogate_training_data(surrogate, context: GenerationContext):
     return factory(dataset, table)
 
 
-def predict_records(
+def predict_pool(
     surrogate,
     context: GenerationContext,
-    records: Sequence[CandidateRecord],
+    pool: CandidatePool,
     training_data=None,
-) -> list[CandidateRecord]:
-    if not records:
-        return []
-    _progress(f"surrogate: predicting {len(records)} candidates")
-    raw = (
-        surrogate.predict_population(
+) -> PredictedCostRows:
+    """Adapt one typed or retained legacy predictor at the explicit pool edge."""
+
+    if not pool.candidates:
+        raise ValueError("surrogate prediction requires a non-empty candidate pool")
+    _progress(f"surrogate: predicting {len(pool.candidates)} candidates")
+    if isinstance(surrogate, DeterministicPredictionProvider):
+        prediction = surrogate.predict_for_selection(
             context,
-            tuple(record.x for record in records),
+            pool.population,
             training_data,
         )
+        return bind_surrogate_prediction(pool, prediction)
+
+    raw = (
+        surrogate.predict_population(context, pool.population, training_data)
         if training_data is not None
-        else surrogate.predict_population(
-            context,
-            tuple(record.x for record in records),
-        )
+        else surrogate.predict_population(context, pool.population)
     )
-    predicted = []
-    for record, item in zip(records, raw):
-        costs, _member_spread = item
-        predicted.append(
-            CandidateRecord(
-                x=record.x,
-                origin=record.origin,
-                individual=record.individual,
-                pred_costs=tuple(float(value) for value in costs),
-            )
-        )
-    return predicted
+    rows = tuple(raw)
+    if len(rows) != len(pool.candidates):
+        raise ValueError("legacy surrogate prediction rows do not match the pool")
+    costs = tuple(tuple(float(value) for value in item[0]) for item in rows)
+    return bind_predicted_costs(
+        pool,
+        costs,
+        source="legacy-gpsaf-prediction-adapter",
+        interpretation_fingerprint=context.snapshot.interpretation_fingerprint,
+        state_signature=context.strategy_signature,
+        diagnostics={"prediction_adapter": "legacy-predict-population-v1"},
+    )
 
 
 def distance_sq(left: Sequence[float], right: Sequence[float]) -> float:
@@ -161,146 +169,206 @@ def distance_sq(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 def assign_clusters(
-    anchors: Sequence[CandidateRecord],
-    candidates: Sequence[CandidateRecord],
-) -> list[list[CandidateRecord]]:
+    anchors: Sequence[SearchCandidate],
+    candidates: Sequence[SearchCandidate],
+) -> list[list[SearchCandidate]]:
     clusters = [[] for _ in anchors]
     if not anchors:
         return clusters
     for record in candidates:
-        idx = min(range(len(anchors)), key=lambda anchor_idx: distance_sq(record.x, anchors[anchor_idx].x))
+        idx = min(
+            range(len(anchors)),
+            key=lambda anchor_idx: distance_sq(
+                record.normalized_variables,
+                anchors[anchor_idx].normalized_variables,
+            ),
+        )
         clusters[idx].append(record)
     return clusters
 
 
+def _bind_combined_prediction(
+    pool: CandidatePool,
+    predictions: Sequence[PredictedCostRows],
+    *,
+    source: str,
+) -> PredictedCostRows:
+    by_id: dict[str, tuple[float, ...]] = {}
+    interpretation_fingerprint = ""
+    state_signature = ""
+    for prediction in predictions:
+        if not isinstance(prediction, PredictedCostRows):
+            raise TypeError("combined prediction inputs must be PredictedCostRows")
+        if not interpretation_fingerprint:
+            interpretation_fingerprint = prediction.interpretation_fingerprint
+            state_signature = prediction.state_signature
+        elif (
+            prediction.interpretation_fingerprint != interpretation_fingerprint
+            or prediction.state_signature != state_signature
+        ):
+            raise ValueError("combined predictions use different fitted semantics")
+        for candidate_id, costs in zip(
+            prediction.candidate_ids,
+            prediction.costs,
+        ):
+            if candidate_id in by_id:
+                raise ValueError("combined predictions repeat a candidate ID")
+            by_id[candidate_id] = costs
+    expected = tuple(candidate.candidate_id for candidate in pool.candidates)
+    if any(candidate_id not in by_id for candidate_id in expected):
+        raise ValueError("combined prediction is missing candidate rows")
+    return bind_predicted_costs(
+        pool,
+        tuple(by_id[candidate_id] for candidate_id in expected),
+        source=source,
+        interpretation_fingerprint=interpretation_fingerprint,
+        state_signature=state_signature,
+        diagnostics={
+            "combined_prediction_count": len(tuple(predictions)),
+            "combined_candidate_count": len(expected),
+        },
+    )
+
+
 def run_alpha_phase(
-    context: PymooContext,
-    state,
+    state: SearchState,
     batch_target: int,
-    used_keys: set[tuple[float, ...]],
-    rng: random.Random,
     *,
     surrogate,
     generation_context: GenerationContext,
     settings,
     training_data=None,
-) -> tuple[list[CandidateRecord], dict[str, object]]:
-    predicted_pool: list[CandidateRecord] = []
+) -> tuple[
+    CandidateSelection | None,
+    PredictedCostRows | None,
+    dict[str, object],
+]:
+    pools: list[CandidatePool] = []
+    predictions: list[PredictedCostRows] = []
+    current = state
     alpha = max(1, settings.alpha)
-    batches_completed = 0
 
     for batch_index in range(alpha):
-        pool = generate_candidate_pool(
-            context,
-            state,
+        pool = search_candidates(
+            current,
             batch_target,
-            used_keys,
-            rng,
             origin=f"gpsaf_alpha_{batch_index + 1}",
         )
-        if not pool:
-            break
-        predicted_pool.extend(
-            predict_records(
+        current = pool.state
+        pools.append(pool)
+        predictions.append(
+            predict_pool(
                 surrogate,
                 generation_context,
                 pool,
                 training_data=training_data,
             )
         )
-        batches_completed += 1
 
-    if not predicted_pool:
-        return [], {"alpha_batches": 0, "alpha_replacements": 0, "alpha_candidate_count": 0}
+    if not pools:
+        return None, None, {
+            "alpha_batches": 0,
+            "alpha_replacements": 0,
+            "alpha_candidate_count": 0,
+        }
 
-    selected = select_records_by_survival(context, predicted_pool, batch_target)
-    return selected[: int(batch_target)], {
-        "alpha_batches": int(batches_completed),
+    combined_pool = combine_candidate_pools(current, pools)
+    combined_prediction = _bind_combined_prediction(
+        combined_pool,
+        predictions,
+        source="gpsaf-alpha-predicted-costs",
+    )
+    selected = select_candidates(
+        current,
+        combined_pool,
+        combined_prediction,
+        batch_target,
+        source="gpsaf-alpha-selection",
+    )
+    return selected, combined_prediction, {
+        "alpha_batches": len(pools),
         "alpha_replacements": 0,
-        "alpha_candidate_count": int(len(predicted_pool)),
+        "alpha_candidate_count": len(combined_pool.candidates),
         "alpha_selection": "nsga3_pooled_survival",
-        "alpha_survival_selected": int(len(selected)),
+        "alpha_survival_selected": len(selected.candidates),
     }
 
 
 def run_beta_phase(
-    context: PymooContext,
-    state,
-    anchors: Sequence[CandidateRecord],
+    anchors: CandidateSelection,
+    anchor_prediction: PredictedCostRows,
     batch_target: int,
-    used_keys: set[tuple[float, ...]],
-    rng: random.Random,
     *,
     surrogate,
     generation_context: GenerationContext,
     settings,
     training_data=None,
-) -> tuple[list[CandidateRecord], dict[str, object]]:
+) -> tuple[CandidateSelection, dict[str, object]]:
     beta = max(0, settings.beta)
-    if beta <= 0 or not anchors:
-        return list(anchors), {
+    if beta <= 0 or not anchors.candidates:
+        return anchors, {
             "beta_iterations": 0,
             "beta_candidate_count": 0,
             "beta_replacements": 0,
             "beta_cluster_size_max": 0,
         }
 
-    sim_state = clone_algorithm(state)
-    clusters = [[] for _ in anchors]
-    beta_records: list[CandidateRecord] = []
-    candidate_count = 0
-    iterations = 0
+    sim_state = fork_search_state(anchors.state)
+    clusters = [[] for _ in anchors.candidates]
+    beta_pools: list[CandidatePool] = []
+    beta_predictions: list[PredictedCostRows] = []
 
     for beta_idx in range(beta):
-        pool = generate_candidate_pool(
-            context,
+        pool = search_candidates(
             sim_state,
             batch_target,
-            used_keys,
-            rng,
             origin=f"gpsaf_beta_{beta_idx + 1}",
         )
-        if not pool:
-            break
-        records = predict_records(
+        prediction = predict_pool(
             surrogate,
             generation_context,
             pool,
             training_data=training_data,
         )
-        iterations += 1
-        candidate_count += len(records)
-
-        local_clusters = assign_clusters(anchors, records)
+        local_clusters = assign_clusters(anchors.candidates, pool.candidates)
         for idx, bucket in enumerate(local_clusters):
             clusters[idx].extend(bucket)
-        beta_records.extend(records)
-        sim_state = advance_population_with_records(context, sim_state, records, batch_target)
+        beta_pools.append(pool)
+        beta_predictions.append(prediction)
+        sim_state = advance_search(pool.state, pool, prediction)
 
-    cluster_sizes = [len(bucket) for bucket in clusters]
-    cluster_max = max(cluster_sizes) if cluster_sizes else 0
-    pooled = list(anchors) + beta_records
-    final_records = select_records_by_survival(context, pooled, batch_target)
-    if len(final_records) < int(batch_target):
-        existing = {id(record) for record in final_records}
-        for record in anchors:
-            if id(record) in existing:
-                continue
-            final_records.append(record)
-            if len(final_records) >= int(batch_target):
-                break
-    anchor_ids = {id(record) for record in anchors}
-    replacements = sum(1 for record in final_records if id(record) not in anchor_ids)
+    combined_pool = combine_candidate_pools(
+        sim_state,
+        (anchors, *beta_pools),
+    )
+    combined_prediction = _bind_combined_prediction(
+        combined_pool,
+        (anchor_prediction, *beta_predictions),
+        source="gpsaf-beta-predicted-costs",
+    )
+    final_selection = select_candidates(
+        sim_state,
+        combined_pool,
+        combined_prediction,
+        batch_target,
+        source="gpsaf-beta-selection",
+    )
+    anchor_ids = {candidate.candidate_id for candidate in anchors.candidates}
+    replacements = sum(
+        candidate.candidate_id not in anchor_ids
+        for candidate in final_selection.candidates
+    )
+    cluster_sizes = tuple(len(bucket) for bucket in clusters)
 
-    return final_records[: int(batch_target)], {
-        "beta_iterations": int(iterations),
-        "beta_candidate_count": int(candidate_count),
+    return final_selection, {
+        "beta_iterations": len(beta_pools),
+        "beta_candidate_count": sum(len(pool.candidates) for pool in beta_pools),
         "beta_replacements": int(replacements),
-        "beta_cluster_size_max": int(cluster_max),
-        "beta_cluster_sizes": tuple(int(value) for value in cluster_sizes),
+        "beta_cluster_size_max": max(cluster_sizes, default=0),
+        "beta_cluster_sizes": cluster_sizes,
         "beta_selection": "nsga3_pooled_survival",
-        "beta_pool_size": int(len(pooled)),
-        "beta_survival_selected": int(len(final_records)),
+        "beta_pool_size": len(combined_pool.candidates),
+        "beta_survival_selected": len(final_selection.candidates),
     }
 
 
@@ -314,8 +382,8 @@ def _exploration_count(settings, population_size: int) -> int:
 def surrogate_population(
     history: tuple[HistoryRecord, ...],
     *,
-    context: PymooContext,
     generation_context: GenerationContext,
+    search,
     surrogate,
     generation_index: int,
     population_size: int,
@@ -337,75 +405,91 @@ def surrogate_population(
             "surrogate_mode": "waiting_for_first_staggered_training",
         }
 
-    rng = random.Random(int(seed) + int(generation_index) * 1009 + 17)
-    base_state = survivor_state_from_history(context, history, population_size)
-    used_keys = history_keys(
-        history,
-        int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10)),
-    )
     diagnostics: dict[str, object] = {"optimizer": "gpsaf"}
-    exploration_count = _exploration_count(settings, population_size)
-    surrogate_target = max(0, int(population_size) - int(exploration_count))
-
     try:
-        exploration_records = (
-            generate_candidate_pool(
-                context,
-                clone_algorithm(base_state),
+        base_state = prepare_search(
+            generation_context,
+            search,
+            population_size=population_size,
+            algorithm_seed=seed,
+            random_seed=seed + generation_index * 1009 + 17,
+            history_policy="survivor",
+        )
+        diagnostics.update(dict(base_state.diagnostics))
+        exploration_count = _exploration_count(settings, population_size)
+        surrogate_target = max(0, int(population_size) - exploration_count)
+        exploration_pool = None
+        main_state = base_state
+        if exploration_count > 0:
+            exploration_pool = search_candidates(
+                fork_search_state(base_state),
                 exploration_count,
-                used_keys,
-                rng,
                 origin="gpsaf_exploration",
             )
-            if exploration_count > 0
-            else []
+            main_state = continue_search_from(base_state, exploration_pool.state)
+        diagnostics["exploration_count"] = (
+            0 if exploration_pool is None else len(exploration_pool.candidates)
         )
-        diagnostics["exploration_count"] = int(len(exploration_records))
         diagnostics["exploration_fraction"] = settings.exploration_fraction
-        if surrogate_target <= 0:
-            return tuple(record.x for record in exploration_records[: int(population_size)]), diagnostics
 
-        anchors, alpha_info = run_alpha_phase(
-            context,
-            base_state,
+        if surrogate_target <= 0:
+            if exploration_pool is None:
+                return None, {
+                    **diagnostics,
+                    "surrogate_error": "empty_surrogate_and_exploration_targets",
+                }
+            selected = compose_real_population(
+                exploration_pool.state,
+                (exploration_pool,),
+                size=population_size,
+                source="gpsaf-surrogate-selection",
+                refill_origin="gpsaf_exploration_refill",
+            )
+            diagnostics.update(dict(selected.state.diagnostics))
+            diagnostics["search_selection_source"] = selected.source
+            return selected.population, diagnostics
+
+        anchors, alpha_prediction, alpha_info = run_alpha_phase(
+            main_state,
             surrogate_target,
-            used_keys,
-            rng,
             surrogate=surrogate,
             generation_context=generation_context,
             settings=settings,
             training_data=training_data,
         )
         diagnostics.update(alpha_info)
-        if not anchors:
+        if anchors is None or alpha_prediction is None:
             return None, {**diagnostics, "surrogate_error": "no_alpha_candidates"}
 
-        final_records, beta_info = run_beta_phase(
-            context,
-            base_state,
+        final_selection, beta_info = run_beta_phase(
             anchors,
+            alpha_prediction,
             surrogate_target,
-            used_keys,
-            rng,
             surrogate=surrogate,
             generation_context=generation_context,
             settings=settings,
             training_data=training_data,
         )
         diagnostics.update(beta_info)
-        final_records = list(final_records) + list(exploration_records)
-        if len(final_records) < int(population_size):
-            final_records.extend(
-                generate_candidate_pool(
-                    context,
-                    clone_algorithm(base_state),
-                    int(population_size) - len(final_records),
-                    used_keys,
-                    rng,
-                    origin="gpsaf_exploration_refill",
-                )
-            )
-    except Exception as exc:
-        return None, {**diagnostics, "surrogate_error": f"{exc.__class__.__name__}: {exc}"}
+        groups: tuple[CandidatePool | CandidateSelection, ...] = (
+            (final_selection,)
+            if exploration_pool is None
+            else (final_selection, exploration_pool)
+        )
+        selected = compose_real_population(
+            final_selection.state,
+            groups,
+            size=population_size,
+            source="gpsaf-surrogate-selection",
+            refill_origin="gpsaf_exploration_refill",
+        )
+        diagnostics.update(dict(selected.state.diagnostics))
+        diagnostics["search_selection_source"] = selected.source
+        diagnostics["search_candidate_id_count"] = len(selected.candidates)
+    except Exception as exc:  # noqa: BLE001 - surrogate selection has a generation-local real fallback.
+        return None, {
+            **diagnostics,
+            "surrogate_error": f"{exc.__class__.__name__}: {exc}",
+        }
 
-    return tuple(record.x for record in final_records[: int(population_size)]), diagnostics
+    return selected.population, diagnostics

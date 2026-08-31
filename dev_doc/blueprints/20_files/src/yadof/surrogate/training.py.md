@@ -15,3 +15,7 @@ generation-snapshot registration. Close releases the runner, training input,
 thread, and snapshot lease. `SurrogatePrediction` owns complete immutable transient
 rawData, current-snapshot finite costs, exact zero-width intervals, semantic
 signatures, and bounded diagnostics; it is never evidence or a posterior draw.
+`DeterministicPredictionProvider` is the lightweight runtime-checkable consumer edge
+for components that can produce that exact DTO for a candidate-selection pool. It
+contains no Torch type and replaces method-name probing for the migrated PCA/SVD
+path.

@@ -187,6 +187,12 @@ It keeps materialization, digest/provenance, fit-handle races, generation owners
 typed prediction, recorder non-entry, and deterministic viewer behavior independent
 from conditional-INR and hierarchical-CAE migration tests.
 
+`test_explicit_search_primitives.py` freezes the backend-neutral search contract:
+seeded GA/NSGA-III and GPSAF ordering, input-state immutability/forking, non-pickle
+continuation, candidate/design/evidence identity separation, wrong-root rejection,
+bounded exhaustion, typed prediction separation, pymoo ask/tell/survival ownership,
+warm-start/later offspring, and unchanged GPSAF gamma selection semantics.
+
 ## Acceptance
 
 Build a wheel, force-reinstall without editable/PYTHONPATH shortcuts, verify

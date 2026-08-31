@@ -91,6 +91,9 @@ visible in its dataset but is not a readable sample or optimizer-history row.
 The public surrogate materializer consumes these same dataset/table values and
 strictly joins by row ID. It owns copied structured rawData and bounded provenance;
 it does not add a persistence format, rewrite a segment, or record a derived row.
+Optimization search candidates, candidate-pool IDs, predicted-cost rows, and opaque
+mid-generation search continuations likewise never enter this module. Only common
+real evaluation can create candidate evidence submitted to the recorder.
 
 The cost-view reader freezes one finalized segment-name snapshot, then opens each
 selected ZIP once to combine manifest checks, NPZ decode/schema validation, and

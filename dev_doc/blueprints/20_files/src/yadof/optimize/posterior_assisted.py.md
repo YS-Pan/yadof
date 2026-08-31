@@ -9,8 +9,9 @@
 
 - Bind search, surrogate/posterior/readiness, acquisition, objective names, pool,
   draw/chunk, applicability, and exploration controls into semantic identity.
-- Reuse private pymoo history/duplicate/refill mechanics, build a unique fixed real
-  nondominated baseline, and enforce freshness plus typed readiness.
+- Reuse `prepare_search()`/`search_candidates()` for the candidate pool and the
+  shared `full_real_search()` for fallback, build a unique fixed real nondominated
+  baseline, and enforce freshness plus typed readiness.
 - Reserve an explicit real exploration quota; a calibrated applicability gate
   excludes below-threshold exploitation and audits low/boundary exploration.
 - Create one persistent schema-bearing sampler, stream current-cost projection by
@@ -25,3 +26,6 @@
   happen outside the selection catch, so recording failure aborts normally.
 - Predicted rawData/costs never enter history and are never retained in metadata.
   Training notification occurs only after real jobs are submitted.
+- `JointObjectiveSamples` never becomes deterministic `PredictedCostRows`; qNEHVI
+  support/configuration hard stops and common evaluator/recorder failures stay
+  outside soft selection catches.

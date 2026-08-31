@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-import random
-
-from ..pymoo.backend import (
-    baseline_records,
-    diagnostics as pymoo_diagnostics,
-    make_context,
-    population_from_records,
-)
+from ..primitives import full_real_search
 from ..strategy import GenerationContext, OptimizationResult, evaluate_population
 from .phases import (
     ensure_surrogate_fresh_enough,
@@ -30,33 +23,15 @@ def run_generation(
     surrogate,
     settings: GPSAFSettings,
 ) -> OptimizationResult:
-    config = generation.config
     size = generation.population_size
     seed = generation.random_seed
     history = generation.history
-    context = make_context(
-        config,
-        generation.problem,
-        population_size=size,
-        seed=seed,
-        generation_index=generation.generation_index,
-        search_algorithm=search.resolve_algorithm(
-            generation.problem.objective_count
-        ),
-        search_settings=search.backend_settings(
-            generation.problem.objective_count
-        ),
-    )
-    diagnostics: dict[str, object] = pymoo_diagnostics(context)
-    diagnostics.update(
-        {
-            "surrogate_alpha": settings.alpha,
-            "surrogate_beta": settings.beta,
-            "surrogate_gamma": settings.gamma,
-        }
-    )
+    diagnostics: dict[str, object] = {
+        "surrogate_alpha": settings.alpha,
+        "surrogate_beta": settings.beta,
+        "surrogate_gamma": settings.gamma,
+    }
     surrogate_used = False
-    rng = random.Random(seed + generation.generation_index * 1009)
     source = "gpsaf_random"
     explicit_training_data = None
 
@@ -82,8 +57,8 @@ def run_generation(
             )
         population, surrogate_info = surrogate_population(
             history,
-            context=context,
             generation_context=generation,
+            search=search,
             surrogate=surrogate,
             generation_index=generation.generation_index,
             population_size=size,
@@ -93,14 +68,18 @@ def run_generation(
         )
         diagnostics.update(surrogate_info)
         if population is None:
-            records, source = baseline_records(
-                context=context,
-                history=history,
-                size=size,
-                generation_index=generation.generation_index,
-                rng=rng,
+            selected = full_real_search(
+                generation,
+                search,
+                population_size=size,
+                algorithm_seed=seed,
+                random_seed=seed + generation.generation_index * 1009,
+                origin_prefix="gpsaf",
             )
-            population = population_from_records(records)
+            population = selected.population
+            source = selected.source
+            diagnostics.update(dict(selected.state.diagnostics))
+            diagnostics.update(dict(selected.diagnostics))
         else:
             surrogate_used = True
             source = "gpsaf_surrogate"
@@ -109,14 +88,18 @@ def run_generation(
             diagnostics["surrogate_mode"] = "disabled_by_gpsaf_parameters"
         elif not history:
             diagnostics["surrogate_mode"] = "warmup_no_history"
-        records, source = baseline_records(
-            context=context,
-            history=history,
-            size=size,
-            generation_index=generation.generation_index,
-            rng=rng,
+        selected = full_real_search(
+            generation,
+            search,
+            population_size=size,
+            algorithm_seed=seed,
+            random_seed=seed + generation.generation_index * 1009,
+            origin_prefix="gpsaf",
         )
-        population = population_from_records(records)
+        population = selected.population
+        source = selected.source
+        diagnostics.update(dict(selected.state.diagnostics))
+        diagnostics.update(dict(selected.diagnostics))
 
     after_jobs_submitted = (
         (

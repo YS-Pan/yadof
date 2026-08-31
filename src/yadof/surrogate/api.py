@@ -223,6 +223,26 @@ class PCASVDComponent:
 
         return runtime.predict(state, normalized_parameters, snapshot=snapshot)
 
+    def predict_for_selection(self, context, population, training_data=None):
+        """Recover the exact fitted state and return the Stage 4 prediction DTO."""
+
+        from .linear_subspace import runtime
+        from .training import SurrogateTrainingData
+
+        if not isinstance(training_data, SurrogateTrainingData):
+            raise TypeError(
+                "pca_svd selection prediction requires SurrogateTrainingData"
+            )
+        state = runtime.recover_state(
+            context.config.workspace,
+            training_data,
+            _settings=self.settings,
+            _config=context.snapshot.config,
+        )
+        if state is None:
+            raise RuntimeError("pca_svd surrogate is not trained for this data")
+        return runtime.predict(state, population, snapshot=context.snapshot)
+
     def ensure_fresh_enough(self, context, training_data):
         from .linear_subspace import scheduler
 

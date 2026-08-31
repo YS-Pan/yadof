@@ -602,6 +602,33 @@ def build_optimization():
     return real_search(search=pymoo_nsga3())
 ```
 
+The real-only strategy, GPSAF, and posterior full-real fallback now share the same
+explicit search primitives. Advanced program code can import `prepare_search()`,
+`search_candidates()`, `bind_surrogate_prediction()`, `select_candidates()`,
+`advance_search()`, `compose_real_population()`, and `full_real_search()` together
+with the frozen `SearchCandidate`, `CandidatePool`, `PredictedCostRows`,
+`CandidateSelection`, and opaque `SearchState` values. Existing strategy factories
+already use this path; ordinary workspaces do not need to call the primitives
+directly.
+
+Each operation leaves its input state unchanged and returns a next state, so a
+program may retain or deterministically fork a same-generation branch. The state is
+bound to the exact strategy, generation, problem, interpretation snapshot, seeds,
+and duplicate policy. It intentionally cannot be pickled or resumed mid-stack;
+campaign restart reconstructs state from committed real history at the next
+generation boundary. Candidate IDs, rounded duplicate keys, and durable evidence
+IDs are separate. A `CandidateSelection` is only a real-evaluation handoff—nothing
+is recorded until the common evaluator/finalizer commits real evidence.
+
+Deterministic `PredictedCostRows` accepts only finite current-cost means aligned to
+one exact pool. It is not interchangeable with the real-history `CostTable`, the
+rawData-owning `SurrogatePrediction`, or posterior `JointObjectiveSamples`.
+Configured ask/refill exhaustion raises `InsufficientCandidatePoolError`; derived
+GPSAF/posterior paths may discard the entire partial choice and run a fresh complete
+real search, while failure of that real path remains explicit. GPSAF `gamma` keeps
+its existing factory, validation, identity, diagnostics, and behavior; the primitive
+split does not add it to selection mathematics.
+
 For an explicit structural posterior-assisted composition, set
 `OPTIMIZE_POPULATION_SIZE = 10` and make every control visible in the strategy
 source:

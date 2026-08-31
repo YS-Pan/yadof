@@ -186,47 +186,23 @@ class RealSearchStrategy:
         }
 
     def run_generation(self, context: GenerationContext) -> OptimizationResult:
-        import random
+        from .primitives import full_real_search
 
-        from .pymoo.backend import (
-            baseline_records,
-            diagnostics,
-            make_context,
-            population_from_records,
+        selection = full_real_search(
+            context,
+            self.search,
+            origin_prefix="pymoo",
         )
-
-        search_context = make_context(
-            context.config,
-            context.problem,
-            population_size=context.population_size,
-            seed=context.random_seed,
-            generation_index=context.generation_index,
-            search_algorithm=self.search.resolve_algorithm(
-                context.problem.objective_count
-            ),
-            search_settings=self.search.backend_settings(
-                context.problem.objective_count
-            ),
-        )
-        records, source = baseline_records(
-            context=search_context,
-            history=context.history,
-            size=context.population_size,
-            generation_index=context.generation_index,
-            rng=random.Random(
-                context.random_seed + context.generation_index * 1009
-            ),
-        )
-        population = population_from_records(records)
-        costs = evaluate_population(context, population)
-        info = diagnostics(search_context)
+        costs = evaluate_population(context, selection.population)
+        info = dict(selection.state.diagnostics)
+        info.update(dict(selection.diagnostics))
         info["strategy"] = "real-search"
         return OptimizationResult(
             generation_index=context.generation_index,
-            population=population,
+            population=selection.population,
             costs=costs,
             history_count=len(context.history),
-            source=source.replace("gpsaf_", "pymoo_"),
+            source=selection.source,
             surrogate_used=False,
             diagnostics=info,
         )

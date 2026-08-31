@@ -139,7 +139,10 @@ hot-change contract; structural dimension changes are future work.
 - `recorded_data` owns durable evidence and current-history queries.
 - `optimize` owns the campaign engine and public composition seam; its `gpsaf/` and
   `pymoo/` subpackages physically isolate GPSAF coordination and the mature-backend
-  adapter. The workspace owns complete strategy composition.
+  adapter. `optimize/primitives.py` owns backend-neutral immutable search candidate,
+  pool, predicted-cost, selection, and generation-local continuation values while
+  pymoo retains concrete algorithm/ask/tell/survival ownership. The workspace owns
+  complete strategy composition.
 - `surrogate` owns a lightweight public component API plus a backend-neutral joint
   rawData function-sampler protocol; its `conditional_inr/`
   subpackage physically isolates rawData prediction, uncertainty intervals,

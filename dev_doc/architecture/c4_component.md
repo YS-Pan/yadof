@@ -64,6 +64,10 @@
 
 - `optimize` owns the campaign engine, workspace-selected strategy seam, and common
   real-evaluation boundary.
+- Its backend-neutral search primitives own immutable candidate/pool/predicted-cost/
+  selection values plus generation-local next-state/fork composition. They delegate
+  concrete ask/tell/survival and operators to the private pymoo adapter and rebuild
+  durable resume state only from real history.
 - Search, surrogate-assistance, posterior-assisted selection, and acquisition
   components remain explicitly composed rather than selected by a second global
   method registry.
@@ -81,6 +85,9 @@
   opt-in implementation is `frequency`.
 - Posterior and readiness contracts describe derived candidate-selection
   capabilities; they do not bypass real evaluation or persistence.
+- Real-only, GPSAF, and posterior fallback share one full-real primitive. Derived
+  deterministic prediction, posterior samples, and real cost tables retain distinct
+  types and cannot cross each other's selection boundaries.
 - The integrated surrogate viewer dispatches read-only method adapters for
   conditional-INR, hierarchical-CAE, and deterministic one-member PCA/SVD
   checkpoints. It recalculates current cost and never mutates model or evidence.

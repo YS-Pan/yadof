@@ -5,12 +5,15 @@
   components without owning campaign/session/recorder or simulator execution.
 
 ## Functionalities
-- Receive common generation context/history/problem shape and build the selected
-  lazy pymoo search context from the injected search settings snapshot.
+- Receive common generation context/history/problem shape and invoke shared search
+  primitives with the injected search settings snapshot.
 - Gate surrogate-assisted prediction through the staggered-training freshness check.
 - Freeze one explicit training value before selection when the component supports
   it and thread that same value through PCA/SVD state/prediction calls.
 - Use the latest trained surrogate state for candidate selection when available.
+- On any soft derived selection/materialization/prediction failure, discard the
+  partial selection and run one fresh complete full-real primitive; failure of that
+  real path remains explicit.
 - Evaluate the selected real population and pass an after-submit callback that starts surrogate training.
 - Finish pending surrogate training after real evaluation so session generation
   leases cannot cross the boundary.
@@ -26,5 +29,5 @@
 - Keep only irreducible alpha/beta/exploration and staggered-component coordination.
 - Alpha, beta, gamma, and exploration arrive as one immutable factory-owned GPSAF
   snapshot; no phase reads ambient algorithm config.
-  Pymoo owns algorithms/operators/survival; common evaluation/history/types stay in
-  `strategy.py`.
+  Pymoo owns algorithms/operators/survival through `primitives.py`; common
+  evaluation/history/types stay in `strategy.py`.

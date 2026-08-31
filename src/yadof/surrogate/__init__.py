@@ -3,6 +3,7 @@ from . import hierarchical_cae as _hierarchical_cae_package
 from . import linear_subspace as _linear_subspace_package
 from .linear_subspace import LinearSubspaceState
 from .training import (
+    DeterministicPredictionProvider,
     SurrogatePrediction,
     SurrogateTrainingData,
     TrainingCancelledError,
@@ -112,6 +113,7 @@ __all__ = [
     "CoordinatePrediction",
     "DiagnosticCondition",
     "DiagnosticRegimeRule",
+    "DeterministicPredictionProvider",
     "FieldSpreadCalibration",
     "FrequencyFilter",
     "FrequencyFilterRule",

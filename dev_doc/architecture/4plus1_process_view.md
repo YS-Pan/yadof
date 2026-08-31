@@ -68,6 +68,34 @@ readiness; unavailable or unusable derived state follows the strategy's document
 fallback or stop boundary. Every selected candidate still enters the common real
 evaluation, finalization, and recording sequence.
 
+The deterministic search path is explicit and generation-local:
+
+```mermaid
+sequenceDiagram
+    participant O as strategy or program
+    participant S as search primitives
+    participant P as pymoo adapter
+    participant M as surrogate prediction
+    participant E as common real evaluator
+    O->>S: prepare_search(history, strategy, snapshot, seeds)
+    S->>P: construct survivor state
+    O->>S: search_candidates(state, bounded count)
+    S->>P: cloned ask + bounded duplicate/refill policy
+    S-->>O: candidate pool + next state
+    O->>M: typed prediction for exact pool rows
+    M-->>O: candidate-bound predicted current costs
+    O->>S: select/advance/compose
+    S->>P: survival or tell
+    S-->>O: candidate selection + next state
+    O->>E: selected normalized population
+```
+
+Every primitive leaves its input state unchanged. Exhausted bounded refill raises
+an explicit insufficient-pool error; a derived GPSAF/posterior selection may discard
+its entire partial result and start a fresh full-real search, but failure of that
+real path propagates. Durable resume always reconstructs from committed history at
+the next generation boundary, never from a serialized pymoo stack.
+
 ## Explicit PCA/SVD fit and prediction
 
 ```mermaid
@@ -94,7 +122,10 @@ manifest; if atomic commit wins the race, the handle completes with that committ
 state. Prediction never calls finalization or the recorder. GPSAF materializes one
 explicit Stage 2 view before selection and another at the real backend's actual
 after-submit callback timing; its compatibility tuple is derived only at that
-narrow consumer boundary.
+narrow consumer boundary. PCA/SVD additionally implements the runtime-checkable
+deterministic selection provider; GPSAF binds its Stage 4 prediction DTO to exact
+pool candidate IDs before pymoo survival. Retained components use one narrow legacy
+adapter until their scheduled migration.
 
 ## Generation-boundary task changes
 
