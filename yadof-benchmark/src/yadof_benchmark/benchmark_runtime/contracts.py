@@ -12,6 +12,7 @@ WORKFLOW_FORMAT = "yadof.benchmark.workflow"
 SPEC_FORMAT = "yadof.benchmark.spec"
 STATE_FORMAT = "yadof.benchmark.state"
 EVIDENCE_CLASSES = ("structural", "performance")
+BUDGET_PROFILES = ("declared", "smoke")
 DEFAULT_SEED = 101
 DEFAULT_SEEDS = (DEFAULT_SEED,)
 DEFAULT_POPULATION = 200
@@ -169,6 +170,8 @@ class WorkflowRequest:
     fail_fast: bool
     cell_concurrency: int
     representative_generation_seconds: float | None
+    budget_profile: str
+    preset: Mapping[str, Any]
     python: Path
     workspace: Path
     source: Path
@@ -177,6 +180,7 @@ class WorkflowRequest:
 @dataclass(frozen=True)
 class CellSpec:
     id: str
+    display_label: str
     comparison_id: str
     baseline_id: str
     strategy_id: str
@@ -201,6 +205,7 @@ class CellSpec:
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "display_label": self.display_label,
             "comparison": self.comparison_id,
             "baseline": self.baseline_id,
             "strategy": self.strategy_id,
@@ -285,6 +290,8 @@ class RunSpec:
                 "representative_generation_seconds": (
                     self.workflow.representative_generation_seconds
                 ),
+                "budget_profile": self.workflow.budget_profile,
+                "preset": thaw_json(self.workflow.preset),
                 "python": str(self.workflow.python),
             },
             "baselines": {
@@ -315,8 +322,29 @@ class CommandResult:
     stderr: Path
 
 
+def cell_display_label(
+    *,
+    baseline_id: str,
+    baseline_name: str,
+    strategy_id: str,
+    strategy_name: str,
+    seed: int,
+) -> str:
+    """Build a stable display-only identity that is never used as a path."""
+
+    def clean(value: object) -> str:
+        return " ".join(str(value).split()) or "unnamed"
+
+    return (
+        f"baseline={clean(baseline_id)} ({clean(baseline_name)}) | "
+        f"strategy={clean(strategy_id)} ({clean(strategy_name)}) | "
+        f"seed={int(seed)}"
+    )
+
+
 __all__ = [
     "BASELINE_FORMAT",
+    "BUDGET_PROFILES",
     "DEFAULT_GENERATIONS",
     "DEFAULT_POPULATION",
     "DEFAULT_SEED",
@@ -338,6 +366,7 @@ __all__ = [
     "RunSpec",
     "StrategySpec",
     "WorkflowRequest",
+    "cell_display_label",
     "freeze_json",
     "evidence_notice",
     "replication_notice",

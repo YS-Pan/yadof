@@ -106,6 +106,17 @@ class BenchmarkTerminal:
         self.completed_cells = 0
         self.failed_cells = 0
         self.current_cell: str | None = None
+        self.current_label: str | None = None
+        self.current_baseline: str | None = None
+        self.current_strategy: str | None = None
+        self.current_seed: int | None = None
+        self.timeout_seconds = 0
+        self.simulator_mode: str | None = None
+        self.simulator_workers: int | None = None
+        self.simulator_worker_autodetect = False
+        self.simulator_resource: str | None = None
+        self._active_cell_ids: set[str] = set()
+        self._cell_contexts: dict[str, dict[str, Any]] = {}
         self.cell_total = 0
         self.cell_completed = 0
         self.cell_successful = 0
@@ -113,6 +124,8 @@ class BenchmarkTerminal:
         self.generation_number: int | None = None
         self.generations = 0
         self.phase = "waiting"
+        self.command_elapsed_seconds = 0.0
+        self._command_started_monotonic: float | None = None
         self._cell_task = self._progress.add_task(
             "",
             total=1,
@@ -131,6 +144,7 @@ class BenchmarkTerminal:
         )
         self._active = False
         self._plain_bucket = -1
+        self._plain_elapsed_bucket = -1
         self._last_progress_log = 0.0
         self._log_path: Path | None = None
         if workspace is not None:
@@ -169,13 +183,57 @@ class BenchmarkTerminal:
         filled = min(width, math.ceil(width * ratio)) if ratio else 0
         return "#" * filled + "-" * (width - filled)
 
+    @staticmethod
+    def _clip(value: object, limit: int) -> str:
+        text = " ".join(str(value).split())
+        if len(text) <= limit:
+            return text
+        if limit < 7:
+            return text[:limit]
+        left = (limit - 3) // 2
+        return f"{text[:left]}...{text[-(limit - 3 - left):]}"
+
+    def _identity_detail(self) -> str:
+        if not self._compact:
+            return self.current_label or "identity=unknown"
+        if self.current_baseline and self.current_strategy and self.current_seed is not None:
+            limit = 10 if not self._very_compact else 7
+            return (
+                f"b={self._clip(self.current_baseline, limit)} "
+                f"s={self._clip(self.current_strategy, limit)} "
+                f"z={self.current_seed}"
+            )
+        return self._clip(self.current_label or "identity=unknown", 28)
+
+    def _execution_detail(self) -> str:
+        worker = "-" if self.simulator_workers is None else str(self.simulator_workers)
+        if self.simulator_worker_autodetect and worker != "-":
+            worker += "a"
+        if self._compact:
+            return f"to={self.timeout_seconds or '-'}s w={worker}"
+        mode = self.simulator_mode or "unknown"
+        autodetect = "(auto)" if self.simulator_worker_autodetect else ""
+        resource = (
+            f" resource={self.simulator_resource}"
+            if self.simulator_resource
+            else ""
+        )
+        return (
+            f"timeout={self.timeout_seconds or '-'}s sim={mode} "
+            f"workers={worker.removesuffix('a')}{autodetect}{resource}"
+        )
+
     def _cell_detail(self) -> str:
         phase = self._compact_phase()
+        cell = self.current_cell or "-"
+        identity = self._identity_detail()
+        execution = self._execution_detail()
+        elapsed = f"t={int(self.command_elapsed_seconds)}s"
         if self._very_compact:
             generation = f"g{self.generation_number or '-'}/{self.generations or '-'}"
             return (
-                f"{self.cell_completed}/{self.cell_total} {generation} "
-                f"e{self.cell_errors} {phase}"
+                f"{cell} {identity} {self.cell_completed}/{self.cell_total} {generation} "
+                f"e{self.cell_errors} {elapsed} {execution} {phase}"
             )
         percentage = self._percentage(self.cell_completed, self.cell_total)
         generation = (
@@ -185,13 +243,14 @@ class BenchmarkTerminal:
         )
         if self._compact:
             return (
-                f"{self.cell_completed}/{self.cell_total} {percentage} {generation} "
-                f"o{self.cell_successful} e{self.cell_errors} {phase}"
+                f"{cell} {identity} {self.cell_completed}/{self.cell_total} {percentage} "
+                f"{generation} o{self.cell_successful} e{self.cell_errors} "
+                f"{elapsed} {execution} {phase}"
             )
         return (
-            f"{self.cell_completed}/{self.cell_total} eval | {percentage} "
+            f"{cell} | {identity} | {self.cell_completed}/{self.cell_total} eval | {percentage} "
             f"{generation} ok={self.cell_successful} err={self.cell_errors} "
-            f"phase={self.phase}"
+            f"{elapsed} {execution} phase={self.phase}"
         )
 
     def _compact_phase(self) -> str:
@@ -206,14 +265,107 @@ class BenchmarkTerminal:
         return aliases.get(self.phase, self.phase[:8])
 
     def _global_detail(self) -> str:
+        running = len(self._active_cell_ids)
+        queued = max(0, self.total_cells - self.finished_cells - running)
         if self._compact:
             return (
                 f"{self.finished_cells}/{self.total_cells} "
-                f"ok{self.completed_cells} e{self.failed_cells}"
+                f"ok{self.completed_cells} e{self.failed_cells} "
+                f"r{running} q{queued}"
             )
         return (
             f"{self.finished_cells}/{self.total_cells} cells | "
-            f"ok={self.completed_cells} err={self.failed_cells}"
+            f"ok={self.completed_cells} err={self.failed_cells} "
+            f"run={running} queued={queued}"
+        )
+
+    def _select_cell(self, event: Mapping[str, Any]) -> None:
+        raw_cell = event.get("cell")
+        if raw_cell is None:
+            return
+        cell = str(raw_cell)
+        context = self._cell_contexts.setdefault(cell, {})
+        for key in (
+            "display_label",
+            "baseline",
+            "strategy",
+            "seed",
+            "timeout_seconds",
+            "simulator_mode",
+            "simulator_workers",
+            "simulator_worker_autodetect",
+            "simulator_resource",
+        ):
+            if event.get(key) is not None:
+                context[key] = event[key]
+        self.current_cell = cell
+        self.current_label = str(context.get("display_label", cell))
+        self.current_baseline = (
+            None if context.get("baseline") is None else str(context["baseline"])
+        )
+        self.current_strategy = (
+            None if context.get("strategy") is None else str(context["strategy"])
+        )
+        self.current_seed = (
+            None if context.get("seed") is None else int(context["seed"])
+        )
+        self.timeout_seconds = int(context.get("timeout_seconds", 0))
+        self.simulator_mode = (
+            None
+            if context.get("simulator_mode") is None
+            else str(context["simulator_mode"])
+        )
+        self.simulator_workers = (
+            None
+            if context.get("simulator_workers") is None
+            else int(context["simulator_workers"])
+        )
+        self.simulator_worker_autodetect = bool(
+            context.get("simulator_worker_autodetect", False)
+        )
+        self.simulator_resource = (
+            None
+            if context.get("simulator_resource") is None
+            else str(context["simulator_resource"])
+        )
+        self.cell_total = int(context.get("_cell_total", 0))
+        self.cell_completed = int(context.get("_cell_completed", 0))
+        self.cell_successful = int(context.get("_cell_successful", 0))
+        self.cell_errors = int(context.get("_cell_errors", 0))
+        self.generation_number = context.get("_generation_number")
+        self.generations = int(context.get("_generations", 0))
+        self.phase = str(context.get("_phase", "waiting"))
+        self.command_elapsed_seconds = float(
+            context.get("_command_elapsed_seconds", 0.0)
+        )
+        self._command_started_monotonic = context.get(
+            "_command_started_monotonic"
+        )
+        self._plain_bucket = int(context.get("_plain_bucket", -1))
+        self._plain_elapsed_bucket = int(
+            context.get("_plain_elapsed_bucket", -1)
+        )
+        self._last_progress_log = float(context.get("_last_progress_log", 0.0))
+
+    def _store_current_cell(self) -> None:
+        if self.current_cell is None:
+            return
+        context = self._cell_contexts.setdefault(self.current_cell, {})
+        context.update(
+            {
+                "_cell_total": self.cell_total,
+                "_cell_completed": self.cell_completed,
+                "_cell_successful": self.cell_successful,
+                "_cell_errors": self.cell_errors,
+                "_generation_number": self.generation_number,
+                "_generations": self.generations,
+                "_phase": self.phase,
+                "_command_elapsed_seconds": self.command_elapsed_seconds,
+                "_command_started_monotonic": self._command_started_monotonic,
+                "_plain_bucket": self._plain_bucket,
+                "_plain_elapsed_bucket": self._plain_elapsed_bucket,
+                "_last_progress_log": self._last_progress_log,
+            }
         )
 
     def _cell_line(self) -> str:
@@ -287,11 +439,12 @@ class BenchmarkTerminal:
         if event.get("workspace"):
             self._bind_workspace(str(event["workspace"]))
         self._apply_global(event)
+        self._select_cell(event)
         if kind == "cell-started":
             if event.get("previous_status") == "failed" or event.get("previous_error"):
                 self.failed_cells = max(0, self.failed_cells - 1)
                 self.finished_cells = max(0, self.finished_cells - 1)
-            self.current_cell = str(event.get("cell", ""))
+            self._active_cell_ids.add(str(event.get("cell", "")))
             self.cell_total = int(event.get("planned_evaluations", 0))
             self.cell_completed = 0
             self.cell_successful = 0
@@ -299,12 +452,24 @@ class BenchmarkTerminal:
             self.generation_number = None
             self.generations = int(event.get("generations", 0))
             self.phase = "preparing"
+            self.command_elapsed_seconds = 0.0
             self._plain_bucket = -1
+            self._plain_elapsed_bucket = -1
         elif kind == "command-started":
             self.phase = str(event.get("label", "command"))
+            self.command_elapsed_seconds = 0.0
+            self._command_started_monotonic = time.monotonic()
         elif kind == "command-progress":
             self.phase = str(event.get("label", self.phase))
+            self.command_elapsed_seconds = float(
+                event.get("elapsed_seconds", self.command_elapsed_seconds)
+            )
         elif kind == "cell-progress":
+            if self._command_started_monotonic is not None:
+                self.command_elapsed_seconds = max(
+                    self.command_elapsed_seconds,
+                    time.monotonic() - self._command_started_monotonic,
+                )
             self.cell_completed = max(
                 self.cell_completed, int(event.get("evaluations", 0))
             )
@@ -318,15 +483,25 @@ class BenchmarkTerminal:
             self.cell_errors = int(event.get("errors", 0))
             self.phase = str(event.get("phase", "run"))
         elif kind == "command-finished":
-            self.phase = f"{event.get('label', 'command')}:{event.get('returncode', '?')}"
+            self.phase = (
+                "timeout"
+                if event.get("timed_out")
+                else f"{event.get('label', 'command')}:{event.get('returncode', '?')}"
+            )
+            self.command_elapsed_seconds = float(
+                event.get("duration_seconds", self.command_elapsed_seconds)
+            )
             if event.get("label") == "run" and int(event.get("returncode", 1)) == 0:
                 self.cell_completed = self.cell_total
         elif kind == "cell-collected":
+            self._active_cell_ids.discard(str(event.get("cell", "")))
             self.cell_completed = self.cell_total
             self.phase = "collected"
         elif kind in {"cell-failed", "collection-failed", "visualization-failed"}:
+            self._active_cell_ids.discard(str(event.get("cell", "")))
             self.phase = "failed"
         elif kind == "workspace-finished":
+            self._active_cell_ids.clear()
             self.phase = str(event.get("status", "finished"))
 
         message = _event_message(event)
@@ -339,6 +514,8 @@ class BenchmarkTerminal:
                 self._append_log(f"{event.get('utc', '')} {self._cell_line()}")
                 self._last_progress_log = now
         if self.interactive:
+            if event.get("cell") is not None:
+                self._store_current_cell()
             self._refresh()
             return
         if kind == "cell-progress":
@@ -352,6 +529,11 @@ class BenchmarkTerminal:
             elif bucket > self._plain_bucket:
                 self._plain_bucket = bucket
                 self._write_plain_snapshot()
+        elif kind == "command-progress":
+            elapsed_bucket = int(self.command_elapsed_seconds // 60.0)
+            if elapsed_bucket > self._plain_elapsed_bucket:
+                self._plain_elapsed_bucket = elapsed_bucket
+                self._write_plain_snapshot()
         elif kind in {
             "workspace-started",
             "cell-started",
@@ -362,6 +544,8 @@ class BenchmarkTerminal:
             "workspace-finished",
         }:
             self._write_plain_snapshot()
+        if event.get("cell") is not None:
+            self._store_current_cell()
 
     def finish(
         self,
@@ -399,7 +583,22 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
     if kind == "workspace-started":
         return f"{prefix}[benchmark] started; workspace={event.get('workspace')}"
     if kind == "cell-started":
-        return f"{prefix}[cell] {event.get('cell')} started"
+        worker = event.get("simulator_workers")
+        if event.get("simulator_worker_autodetect") and worker is not None:
+            worker = f"{worker}(auto)"
+        resource = (
+            f" resource={event.get('simulator_resource')}"
+            if event.get("simulator_resource")
+            else ""
+        )
+        return (
+            f"{prefix}[cell] {event.get('cell')} started; "
+            f"{event.get('display_label', event.get('cell'))}; "
+            f"population={event.get('population')} generations={event.get('generations')} "
+            f"planned={event.get('planned_evaluations')} "
+            f"timeout={event.get('timeout_seconds')}s "
+            f"simulator={event.get('simulator_mode')} workers={worker}{resource}"
+        )
     if kind == "command-started":
         return (
             f"{prefix}[{event.get('label')}] started; pid={event.get('pid')} "
@@ -409,14 +608,22 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
         return (
             f"{prefix}[{event.get('label')}] finished; "
             f"returncode={event.get('returncode')} "
+            f"timed_out={event.get('timed_out')} "
+            f"cleanup={event.get('process_tree_cleanup')} "
             f"duration={event.get('duration_seconds')}s"
         )
     if kind == "child-output":
         return f"[{event.get('stream', 'child')}] {event.get('text', '')}"
     if kind == "cell-collected":
-        return f"{prefix}[cell] {event.get('cell')} collected"
+        return (
+            f"{prefix}[cell] {event.get('cell')} collected; "
+            f"{event.get('display_label', event.get('cell'))}"
+        )
     if kind in {"cell-failed", "collection-failed", "visualization-failed"}:
-        return f"{prefix}[cell] {event.get('cell')} failed; {event.get('error')}"
+        return (
+            f"{prefix}[cell] {event.get('cell')} failed; "
+            f"{event.get('display_label', event.get('cell'))}; {event.get('error')}"
+        )
     if kind == "postprocessor-started":
         return f"{prefix}[postprocess] {event.get('postprocessor')} started"
     if kind == "postprocessor-finished":

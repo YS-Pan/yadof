@@ -15,20 +15,27 @@ claim performance evidence.
 
 Coverage requires:
 
-- initialization creates direct single-execution roots without `runs/`;
+- no-argument initialization materializes portable, complete/blank are explicit,
+  wheel resources have relative SHA-256 provenance, and roots contain no `runs/`;
+- complete expands deterministically to 18 cells at 200 x 25 and its smoke profile
+  preserves all non-budget identity/policy fields while setting generations to one;
 - standard and slow-surrogate omitted budgets resolve to 200x50 and 200x15,
   respectively, with one default seed;
 - explicit budgets and arbitrary explicit seed lists remain unchanged;
 - cells use `cNNNN` paths and artifact filenames remain short while semantic
-  identity stays in the spec;
+  labels cover collision, special-character, long-path, propagation, and legacy
+  fallback behavior;
 - initialization records installed versions and process account once, with no
   driver/workflow/strategy snapshot tree;
 - cell and workflow postprocessing outputs are direct and have no attempt layer;
 - complete attempted budgets with individual failed/non-finite simulations remain
   valid when finite contract-valid metrics exist;
 - missing attempts and all other hard validity failures remain non-successful;
-- FIFO publication/storage boundaries, concurrency controls, progress ownership,
-  and required visualizations retain focused fault tests proportional to changes;
+- FIFO publication/storage boundaries, separated cell/simulator concurrency,
+  actual-yadof progress parsing, TTY/non-TTY ownership, timeout descendant cleanup,
+  continue-after-timeout, and required visualizations retain focused fault tests;
+- the literal `yadof.optimize.program/v1` protocol discriminator is accepted and
+  a lookalike unsupported API is rejected, proving it is not incidental release prose;
 - inspect is bounded/read-only and has no resume command;
 - Windows detach runs the installed `run --workspace` command, defaults visible,
   keeps the visible console open after the command exits, returns

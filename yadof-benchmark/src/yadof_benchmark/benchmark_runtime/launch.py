@@ -29,6 +29,7 @@ def _run_command(
     workspace: Path,
     *,
     baselines_root: Path | None,
+    budget_profile: str,
     stream_child_output: bool,
 ) -> list[str]:
     command = [
@@ -41,6 +42,8 @@ def _run_command(
     ]
     if baselines_root is not None:
         command.extend(["--baselines-root", str(baselines_root)])
+    if budget_profile != "declared":
+        command.extend(["--budget-profile", budget_profile])
     if stream_child_output:
         command.append("--stream-child-output")
     return command
@@ -100,6 +103,7 @@ def launch_detached(
     *,
     baselines_root: str | Path | None = None,
     evidence: str = "unclassified",
+    budget_profile: str = "declared",
     hidden: bool = False,
     stream_child_output: bool = False,
     process_factory: ProcessFactory = subprocess.Popen,
@@ -123,6 +127,7 @@ def launch_detached(
     benchmark_command = _run_command(
         root,
         baselines_root=selected_baselines,
+        budget_profile=budget_profile,
         stream_child_output=stream_child_output,
     )
     command = (
@@ -176,6 +181,7 @@ def launch_detached(
         "visible": not hidden,
         "window_remains_open_after_run": not hidden,
         "stream_child_output": stream_child_output,
+        "budget_profile": budget_profile,
         "evidence": {
             "class": evidence,
             "notice": evidence_notice(evidence),

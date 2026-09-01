@@ -9,7 +9,9 @@ benchmark runner.
 The core lifecycle is linear:
 
 ```text
-benchmark.py
+packaged preset or explicit blank authoring
+    ↓ materialize + hash
+benchmark.py + resources + .benchmark/preset.json
     ↓ load + freeze
 expanded RunSpec
     ↓ initialize once
@@ -27,6 +29,8 @@ There is no execution container below the workspace and no recovery branch.
 ## Components
 
 - `workspace.py` creates and identifies timestamped code-first workspaces.
+- `presets.py` validates the packaged catalog, copies only canonical relative
+  resources, and records portable SHA-256 provenance.
 - `workflow.py` implements the small authoring builder and resolves defaults.
 - `planning.py` expands comparisons into deterministic short ordinal cells.
 - `baselines.py` discovers task adapters and materializes clean cell workspaces.
@@ -46,6 +50,11 @@ There is no execution container below the workspace and no recovery branch.
   hidden launches remain direct noninteractive processes.
 - `terminal.py` presents foreground progress and appends `benchmark.log`.
 
+Planning assigns both a safe `cNNNN` storage ID and a display-only identity that
+contains the complete baseline ID/name, strategy ID/name, and seed. Duplicate
+baseline/strategy/seed identities are rejected across comparisons. Display text
+is never used to form a filesystem path.
+
 The retained `RunSpec` name denotes the expanded single-execution plan; it does
 not imply a `runs/` storage abstraction.
 
@@ -61,6 +70,29 @@ checks selected strategy declarations and resolves:
 An explicit value is never rewritten. If a comparison mixes slow and standard
 strategies, every arm receives the same resolved 15-generation default so pairing
 budgets remain equal.
+
+Preset budgets are explicit: portable is 2 cells at 12 x 2; complete is 18 cells
+at 200 x 25 with a 7200-second baseline timeout. `apply_budget_profile(...,
+"smoke")` returns a new frozen request with generations set to one and leaves
+population, matrix, identities, digests, execution/failure/concurrency policies,
+dependencies, and postprocessors unchanged.
+
+## Progress and timeouts
+
+The runner parses version-matched yadof `evaluation` snapshots and infers a new
+generation only when the observed evaluation batch resets. These observations
+produce structured `cell-progress` JSONL; periodic `command-progress` records
+only elapsed and inactivity time. Windows timeout cleanup enumerates and kills
+the full descendant tree with `psutil`, uses recursive `taskkill /T /F` as a
+fallback, and waits for the parent; POSIX uses a new process session and signals
+the process group. Timeout evidence is terminal for the cell but does not stop
+FIFO admission when `fail_fast=False`.
+
+Inspection treats `checked` and `running` cells as active and also keeps a
+`succeeded` cell active while its collection commands are still in flight. This
+prevents the execution-to-collection boundary from appearing idle.
+Planned/active incompleteness is filtered from running-workspace anomalies;
+terminal workspaces still expose the full incomplete-cell validity diagnostics.
 
 ## Validity
 

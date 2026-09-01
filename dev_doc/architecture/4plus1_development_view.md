@@ -22,7 +22,10 @@ mapped into installed read-only resources. Administrator resources, examples, an
 benchmark automation remain source-checkout concerns.
 
 The independent benchmark distribution exposes one `benchmark.py` per
-timestamped workspace. One workspace owns one direct execution; another execution
+timestamped workspace. Initialization defaults to a packaged portable preset;
+complete and blank are explicit. Complete expands to 18 cells at population 200,
+25 generations, and a 7200-second timeout; its smoke profile changes only
+generations to one. One workspace owns one direct execution; another execution
 uses another workspace. Runtime provenance, expanded plan, mutable state, results,
 reports, visualizations, and short `cells/cNNNN` directories all live directly
 under that root. The runner uses the installed packages and records their versions
@@ -34,6 +37,13 @@ and 50 generations, or 15 generations when any selected strategy declares a slow
 surrogate. Explicit budgets remain unchanged. Structural evidence is integration
 only; performance evidence is descriptive and a single performance seed is
 exploratory.
+
+Every short cell path is paired with a full baseline/strategy/seed display label
+in spec, state, terminal, inspect, errors, and reports. Version-matched yadof
+evaluation snapshots are the only source of completion percentage; elapsed
+heartbeats remain non-completion evidence. Timeouts stop process trees and allow
+independent FIFO work to continue under non-fail-fast policy while final status
+remains non-successful.
 
 Result publication validates same-baseline/same-seed pairing from baseline input
 digest, planned/attempted budgets, and the complete ordered generation-0

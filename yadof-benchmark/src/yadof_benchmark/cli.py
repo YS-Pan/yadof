@@ -30,6 +30,12 @@ def _workspace_command(commands: Any, name: str, help_text: str) -> Any:
     command = commands.add_parser(name, help=help_text)
     command.add_argument("--workspace", type=Path, default=Path("."))
     command.add_argument("--baselines-root", type=Path)
+    command.add_argument(
+        "--budget-profile",
+        choices=("declared", "smoke"),
+        default="declared",
+        help="use declared budgets or mechanically set every cell to one generation",
+    )
     return command
 
 
@@ -71,12 +77,15 @@ def _plan_summary(
     ]
     if baselines_root is not None:
         full_json.extend(["--baselines-root", str(baselines_root.resolve())])
+    if spec.workflow.budget_profile != "declared":
+        full_json.extend(["--budget-profile", spec.workflow.budget_profile])
     full_json.append("--json")
     return {
         "format": f"yadof.benchmark.{command}-summary",
         "valid": True,
         "writes": False,
         "workflow": spec.workflow.name,
+        "budget_profile": spec.workflow.budget_profile,
         "evidence": {
             "class": spec.workflow.evidence,
             "notice": evidence_notice(spec.workflow.evidence),
@@ -94,6 +103,14 @@ def _plan_summary(
             "planned_evaluations": sum(
                 cell.planned_evaluations for cell in cells
             ),
+        },
+        "cells": {
+            "values": [
+                {"id": cell.id, "display_label": cell.display_label}
+                for cell in cells[:8]
+            ],
+            "count": len(cells),
+            "truncated": max(0, len(cells) - 8),
         },
         "baselines": _bounded_values([cell.baseline_id for cell in cells]),
         "strategies": _bounded_values([cell.strategy_id for cell in cells]),
@@ -123,6 +140,25 @@ def _parser() -> argparse.ArgumentParser:
 
     init = commands.add_parser("init", help="create a benchmark workspace")
     init.add_argument("workspace", type=Path)
+    init_preset = init.add_mutually_exclusive_group()
+    init_preset.add_argument(
+        "--preset",
+        choices=("portable", "complete"),
+        help=(
+            "select portable or the explicit long-running complete preset "
+            "(default: portable)"
+        ),
+    )
+    init_preset.add_argument(
+        "--blank",
+        action="store_true",
+        help="create an explicit blank authoring workspace",
+    )
+
+    commands.add_parser(
+        "presets",
+        help="list packaged presets, budgets, dependencies, and long-run warnings",
+    )
 
     baselines = commands.add_parser(
         "baselines", help="list discovered self-describing baselines"
@@ -228,7 +264,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "init":
-            _json(api.init_workspace(args.workspace))
+            selected = "blank" if args.blank else (args.preset or "portable")
+            _json(api.init_workspace(args.workspace, preset=selected))
+            return 0
+        if args.command == "presets":
+            _json(
+                {
+                    "format": "yadof.benchmark.presets",
+                    "presets": list(api.discover_presets().values()),
+                }
+            )
             return 0
         if args.command == "baselines":
             manifests = api.discover_baselines(args.root)
@@ -243,7 +288,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command in {"check", "plan"}:
             spec = api.plan_workspace(
-                args.workspace, baselines_root=args.baselines_root
+                args.workspace,
+                baselines_root=args.baselines_root,
+                budget_profile=args.budget_profile,
             )
             if args.json:
                 output = spec.to_dict()
@@ -261,13 +308,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             _require_detach_for_hidden(args)
             if args.detach:
                 spec = api.plan_workspace(
-                    args.workspace, baselines_root=args.baselines_root
+                    args.workspace,
+                    baselines_root=args.baselines_root,
+                    budget_profile=args.budget_profile,
                 )
                 _json(
                     launch_detached(
                         args.workspace,
                         baselines_root=args.baselines_root,
                         evidence=spec.workflow.evidence,
+                        budget_profile=args.budget_profile,
                         hidden=bool(args.hidden),
                         stream_child_output=bool(args.stream_child_output),
                     )
@@ -277,6 +327,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 lambda event_sink: api.run_workspace(
                     args.workspace,
                     baselines_root=args.baselines_root,
+                    budget_profile=args.budget_profile,
                     event_sink=event_sink,
                     stream_child_output=bool(args.stream_child_output),
                 ),

@@ -28,6 +28,17 @@ from .storage import (
 )
 
 
+def _cell_label(cell: Mapping[str, Any]) -> str:
+    recorded = cell.get("display_label")
+    if isinstance(recorded, str) and recorded.strip():
+        return recorded
+    return (
+        f"baseline={cell.get('baseline', 'unknown')} | "
+        f"strategy={cell.get('strategy', 'unknown')} | "
+        f"seed={cell.get('seed', 'unknown')}"
+    )
+
+
 def _evidence(spec: Mapping[str, Any]) -> str:
     workflow = spec.get("workflow", {})
     if not isinstance(workflow, Mapping):
@@ -395,6 +406,8 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
         }
         cost_rows.append(
             {
+                "cell": cell["id"],
+                "display_label": _cell_label(cell),
                 "evidence": cell.get("evidence", "unclassified"),
                 "replication_scope": cell.get(
                     "replication_scope", "unclassified"
@@ -426,6 +439,7 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
     }
     result = {
         "cell": cell["id"],
+        "display_label": _cell_label(cell),
         "evidence": cell.get("evidence", "unclassified"),
         "replication_scope": cell.get("replication_scope", "unclassified"),
         "comparison": cell["comparison"],
@@ -511,6 +525,7 @@ def _pairing_summaries(
             arms.append(
                 {
                     "cell": cell_id,
+                    "display_label": _cell_label(cell),
                     "strategy": cell["strategy"],
                     "baseline_input_digest": cell.get("baseline_digest"),
                     "planned_evaluations": cell.get("planned_evaluations"),
@@ -647,6 +662,7 @@ def _comparisons(
             output.append(
                 {
                     "cell": cell_id,
+                    "display_label": _cell_label(item_spec),
                     "evidence": evidence,
                     "replication_scope": replication.get(
                         str(key[0]), "unclassified"
@@ -756,7 +772,7 @@ def _cross_seed_aggregates(
 
 def _csv_text(rows: list[Mapping[str, Any]]) -> str:
     fields = [
-        "evidence", "replication_scope", "comparison", "baseline", "strategy",
+        "cell", "display_label", "evidence", "replication_scope", "comparison", "baseline", "strategy",
         "seed", "population", "generations", "job", "generation", "objectives",
         "average_objective", "metadata",
     ]
@@ -878,6 +894,7 @@ def _cell_summaries(
                     "replication_scope", "unclassified"
                 ),
                 "cell": cell_id,
+                "display_label": _cell_label(cell),
                 "comparison": cell["comparison"],
                 "baseline": cell["baseline"],
                 "strategy": cell["strategy"],
@@ -943,13 +960,14 @@ def _markdown(
         "",
         "## Cell completion and validity",
         "",
-        "| Cell | Status | Completed | Valid | Planned/attempted/completed/finite | Initial population | Objective contract | rawData contract | Issues |",
-        "| --- | --- | --- | --- | ---: | --- | --- | --- | ---: |",
+        "| Cell | Semantic identity | Status | Completed | Valid | Planned/attempted/completed/finite | Initial population | Objective contract | rawData contract | Issues |",
+        "| --- | --- | --- | --- | --- | ---: | --- | --- | --- | ---: |",
     ])
     for row in cells:
         lines.append(
-            "| `{cell}` | {status} | {completed} | {valid} | {planned}/{attempted}/{done}/{finite} | {population} | {objective} | {rawdata} | {issues} |".format(
+            "| `{cell}` | {display_label} | {status} | {completed} | {valid} | {planned}/{attempted}/{done}/{finite} | {population} | {objective} | {rawdata} | {issues} |".format(
                 cell=str(row["cell"]).replace("|", "\\|"),
+                display_label=str(row.get("display_label", "")).replace("|", "\\|"),
                 status=row.get("status"),
                 completed="yes" if row.get("completed") else "no",
                 valid="yes" if row.get("valid") else "no",
@@ -1102,7 +1120,8 @@ def _markdown(
         lines.extend(["", "## Incomplete cells", ""])
         for cell_id, cell in incomplete:
             lines.append(
-                f"- `{cell_id}`: {cell.get('status')} — "
+                f"- `{cell_id}` ({cell.get('display_label', cell_id)}): "
+                f"{cell.get('status')} — "
                 f"{cell.get('error') or 'no error detail'}"
             )
         lines.append("")
@@ -1120,7 +1139,11 @@ def publish_results(
         if (result := _latest_result(workspace, cell_state)) is not None
     }
     rows = [
-        row
+        {
+            **dict(row),
+            "cell": cell.get("cell"),
+            "display_label": cell.get("display_label"),
+        }
         for cell in cells.values()
         for row in cell.get("rows", [])
         if isinstance(row, Mapping)
@@ -1142,7 +1165,11 @@ def publish_results(
         },
         "replication": replication,
         "cell_states": {
-            cell_id: {"status": item.get("status"), "error": item.get("error")}
+            cell_id: {
+                "display_label": item.get("display_label", cell_id),
+                "status": item.get("status"),
+                "error": item.get("error"),
+            }
             for cell_id, item in state["cells"].items()
         },
         "postprocessor_states": {
@@ -1168,7 +1195,7 @@ def publish_results(
         _table_csv(
             cell_summaries,
             [
-                "evidence", "replication_scope", "cell", "comparison", "baseline",
+                "evidence", "replication_scope", "cell", "display_label", "comparison", "baseline",
                 "strategy", "seed", "status", "completed", "valid",
                 "planned_evaluations", "attempted_evaluations",
                 "completed_evaluations", "finite_evaluations",
@@ -1187,7 +1214,7 @@ def publish_results(
         _table_csv(
             comparisons,
             [
-                "evidence", "replication_scope", "cell", "comparison", "baseline",
+                "evidence", "replication_scope", "cell", "display_label", "comparison", "baseline",
                 "seed", "strategy", "reference", "cell_valid", "pairing_valid",
                 "aggregate_eligible", "planned_evaluations",
                 "attempted_evaluations", "completed_evaluations",
@@ -1210,6 +1237,7 @@ def publish_results(
             trajectory_rows.append(
                 {
                     "cell": cell_id,
+                    "display_label": cell_result.get("display_label"),
                     "evidence": cell_result.get("evidence"),
                     "replication_scope": cell_result.get("replication_scope"),
                     "comparison": cell_result.get("comparison"),
@@ -1224,7 +1252,7 @@ def publish_results(
         _table_csv(
             trajectory_rows,
             [
-                "cell", "evidence", "replication_scope", "comparison", "baseline",
+                "cell", "display_label", "evidence", "replication_scope", "comparison", "baseline",
                 "strategy", "seed", "generation", "attempted_evaluations",
                 "completed_evaluations", "finite_evaluations",
                 "cumulative_hypervolume", "generation_hypervolume",
@@ -1275,7 +1303,7 @@ def publish_results(
         {
             key: item.get(key)
             for key in (
-                "cell", "evidence", "replication_scope", "comparison", "baseline",
+                "cell", "display_label", "evidence", "replication_scope", "comparison", "baseline",
                 "strategy", "seed",
             )
         }
@@ -1288,7 +1316,7 @@ def publish_results(
         _table_csv(
             training_rows,
             [
-                "cell", "evidence", "replication_scope", "comparison", "baseline",
+                "cell", "display_label", "evidence", "replication_scope", "comparison", "baseline",
                 "strategy", "seed", "event_count", "completed_events",
                 "failed_events", "duration_sample_count", "total_duration_seconds",
                 "median_duration_seconds", "maximum_duration_seconds",
@@ -1321,6 +1349,14 @@ def publish_results(
 def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
     root = Path(workspace).resolve()
     spec, state = load_execution(root)
+    cell_specs = {
+        str(cell["id"]): cell
+        for cell in spec.get("cells", [])
+        if isinstance(cell, Mapping) and cell.get("id") is not None
+    }
+    cell_labels = {
+        cell_id: _cell_label(cell) for cell_id, cell in cell_specs.items()
+    }
     counts = Counter(
         str(cell.get("status", "unknown")) for cell in state["cells"].values()
     )
@@ -1363,21 +1399,53 @@ def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
         else []
     )
     anomalies: list[dict[str, Any]] = [
-        {"scope": key, "message": str(value)}
+        {
+            "scope": key,
+            "display_label": cell_labels.get(key),
+            "message": str(value),
+        }
         for key, value in sorted(errors.items())
     ]
+    workspace_terminal = state.get("status") in {"completed", "failed"}
     for item in reported_cells:
+        # Planned and active cells are expected to be incomplete while a
+        # workspace is running. State errors are already present in ``errors``;
+        # defer completeness/validity diagnostics until a cell completes or the
+        # workspace itself reaches a terminal state.
+        if not bool(item.get("completed")) and not workspace_terminal:
+            continue
         for field in ("validity_issues", "issues"):
             issues = item.get(field, [])
             if isinstance(issues, list):
                 anomalies.extend(
                     {
                         "scope": str(item.get("cell", "unknown")),
+                        "display_label": cell_labels.get(
+                            str(item.get("cell", "unknown"))
+                        ),
                         "message": str(issue),
                     }
                     for issue in issues
                 )
     active = active_progress(root, state)
+    if active is not None and active.get("cell") is not None:
+        active_id = str(active["cell"])
+        active_spec = cell_specs.get(active_id, {})
+        execution = active_spec.get("execution", {})
+        active.update(
+            {
+                "display_label": cell_labels.get(active_id, active_id),
+                "baseline": active_spec.get("baseline"),
+                "strategy": active_spec.get("strategy"),
+                "seed": active_spec.get("seed"),
+                "timeout_seconds": execution.get("timeout_seconds"),
+                "simulator": {
+                    "mode": execution.get("mode"),
+                    "resource": execution.get("resource"),
+                    "workers": execution.get("simulation_concurrency"),
+                },
+            }
+        )
     inspect_command = [
         "yadof-benchmark",
         "inspect",
@@ -1418,6 +1486,7 @@ def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
         "status": state["status"],
         "updated_utc": state["updated_utc"],
         "cell_counts": dict(sorted(counts.items())),
+        "cell_labels": cell_labels,
         "postprocessor_counts": dict(sorted(postprocessor_counts.items())),
         "active": active,
         "timing": estimate_workspace_timing(root, spec, state),

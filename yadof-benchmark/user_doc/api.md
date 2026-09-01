@@ -37,7 +37,10 @@ path}` may select baseline-specific entry modules and their declared helpers.
 `slow_surrogate=True` declares repeated expensive model training such as a
 neural network. It affects only the default generation count of comparisons that
 select the strategy; the strategy remains otherwise opaque to the runner.
-The 0.4.x `build_optimization()` entry is rejected rather than translated.
+The removed `build_optimization()` factory entry is rejected rather than translated.
+Here `program/v1` is the exact executable protocol discriminator, not incidental
+release prose: the planner accepts that value and rejects lookalike unsupported
+values such as `program/v2`.
 
 ## `Benchmark.compare`
 
@@ -96,11 +99,13 @@ There is no attempt field.
 
 ## Public Python functions
 
-- `init_workspace(path)`
+- `discover_presets()`
+- `init_workspace(path, preset="portable")`
+- `load_workspace_preset(path)`
 - `discover_baselines(root=None)`
 - `load_workflow(workspace)`
-- `plan_workspace(workspace, baselines_root=None)`
-- `run_workspace(workspace, baselines_root=None, event_sink=None,
+- `plan_workspace(workspace, baselines_root=None, budget_profile="declared")`
+- `run_workspace(workspace, baselines_root=None, budget_profile="declared", event_sink=None,
   stream_child_output=False)`
 - `inspect_workspace(workspace)`
 - `user_doc_root()`
@@ -114,11 +119,15 @@ current public surface.
 ## CLI
 
 ```text
-yadof-benchmark init PATH
+yadof-benchmark presets
+yadof-benchmark init PATH [--preset {portable,complete} | --blank]
 yadof-benchmark baselines [--root PATH]
-yadof-benchmark check --workspace PATH [--baselines-root PATH] [--json]
-yadof-benchmark plan --workspace PATH [--baselines-root PATH] [--json]
+yadof-benchmark check --workspace PATH [--baselines-root PATH]
+                      [--budget-profile {declared,smoke}] [--json]
+yadof-benchmark plan --workspace PATH [--baselines-root PATH]
+                     [--budget-profile {declared,smoke}] [--json]
 yadof-benchmark run --workspace PATH [--baselines-root PATH]
+                    [--budget-profile {declared,smoke}]
                     [--detach] [--hidden] [--stream-child-output]
 yadof-benchmark inspect --workspace PATH
 yadof-benchmark docs list
@@ -128,9 +137,9 @@ yadof-benchmark docs show [PATH]
 `--hidden` requires `--detach`. An AI-agent launch must also follow the host
 account rule in [execution.md](execution.md).
 
-There is no separate `canary` or `smoke-test` command in the current benchmark
-CLI. A benchmark smoke test uses the normal `run` command on its own fresh
-workspace with only a reduced explicit evaluation budget; see
+There is no separate `canary` or `smoke-test` command. A benchmark smoke test uses
+the normal commands on a fresh complete-preset workspace with
+`--budget-profile smoke`; see
 [Benchmark smoke test](execution.md#benchmark-smoke-test). This is distinct from
 the core `yadof smoke-test` command, which evaluates one midpoint task individual
 and does not validate a complete benchmark comparison.

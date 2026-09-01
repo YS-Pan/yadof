@@ -5,6 +5,7 @@ import json
 import os
 import queue
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -29,11 +30,75 @@ CommandRunner = Callable[..., CommandResult]
 Collector = Callable[[Path, Mapping[str, Any]], dict[str, Any]]
 
 _YADOF_PROGRESS = re.compile(
-    r"^\[yadof\] (?P<phase>smoke|generation (?P<generation>\d+)) "
+    r"^\[yadof\] (?P<phase>smoke|population|evaluation|generation (?P<generation>\d+)) "
     r"\([^)]*\) \[[#.]+\] (?P<finished>\d+)/(?P<total>\d+) "
     r"successful=(?P<successful>\d+) errors=(?P<errors>\d+) "
     r"remaining=(?P<remaining>\d+)\s*$"
 )
+
+
+class _YadofProgressTracker:
+    """Infer batch boundaries only from observed child evaluation snapshots."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._generation = -1
+        self._last_finished: int | None = None
+        self._last_remaining: int | None = None
+        self._completed: dict[int, tuple[int, int, int]] = {}
+
+    def parse(self, line: str) -> dict[str, Any] | None:
+        match = _YADOF_PROGRESS.fullmatch(line.strip())
+        if match is None:
+            return None
+        finished = int(match.group("finished"))
+        total = max(1, int(match.group("total")))
+        successful = int(match.group("successful"))
+        errors = int(match.group("errors"))
+        remaining = int(match.group("remaining"))
+        generation_text = match.group("generation")
+        with self._lock:
+            if generation_text is not None:
+                generation = int(generation_text)
+                self._generation = max(self._generation, generation)
+            else:
+                if self._generation < 0:
+                    self._generation = 0
+                elif (
+                    self._last_finished is not None
+                    and (
+                        finished < self._last_finished
+                        or (
+                            self._last_remaining == 0
+                            and finished != self._last_finished
+                        )
+                    )
+                ):
+                    self._generation += 1
+                generation = self._generation
+            evaluations_before = sum(
+                item[0] for index, item in self._completed.items() if index < generation
+            )
+            successful_before = sum(
+                item[1] for index, item in self._completed.items() if index < generation
+            )
+            errors_before = sum(
+                item[2] for index, item in self._completed.items() if index < generation
+            )
+            if remaining <= 0:
+                self._completed[generation] = (total, successful, errors)
+            self._last_finished = finished
+            self._last_remaining = remaining
+        return {
+            "phase": match.group("phase"),
+            "generation": generation,
+            "finished": finished,
+            "total": total,
+            "successful": successful_before + successful,
+            "errors": errors_before + errors,
+            "remaining": remaining,
+            "evaluations_before": evaluations_before,
+        }
 
 
 def _state_guard(lock: threading.RLock | None):
@@ -43,6 +108,27 @@ def _state_guard(lock: threading.RLock | None):
 def _emit(sink: EventSink | None, **event: Any) -> None:
     if sink is not None:
         sink({"utc": utc_now(), **event})
+
+
+def _cell_sink(
+    sink: EventSink | None,
+    cell: Mapping[str, Any],
+) -> EventSink | None:
+    if sink is None:
+        return None
+
+    def bound(event: Mapping[str, Any]) -> None:
+        sink(
+            {
+                **event,
+                "cell": str(cell["id"]),
+                "display_label": str(
+                    cell.get("display_label", cell["id"])
+                ),
+            }
+        )
+
+    return bound
 
 
 def _emit_progress(
@@ -66,24 +152,13 @@ def _emit_progress(
         sink(value)
 
 
-def _parse_yadof_progress(line: str) -> dict[str, Any] | None:
+def _parse_yadof_progress(
+    line: str,
+    tracker: _YadofProgressTracker | None = None,
+) -> dict[str, Any] | None:
     """Return one complete progress snapshot from a piped yadof child."""
 
-    match = _YADOF_PROGRESS.fullmatch(line.strip())
-    if match is None:
-        return None
-    generation_text = match.group("generation")
-    return {
-        "phase": match.group("phase"),
-        "generation": (
-            None if generation_text is None else int(generation_text)
-        ),
-        "finished": int(match.group("finished")),
-        "total": max(1, int(match.group("total"))),
-        "successful": int(match.group("successful")),
-        "errors": int(match.group("errors")),
-        "remaining": int(match.group("remaining")),
-    }
+    return (tracker or _YadofProgressTracker()).parse(line)
 
 
 def _command_integer(command: Sequence[str], option: str) -> int | None:
@@ -118,9 +193,9 @@ def _emit_child_progress(
             # makes the first child-derived update observably real.
             continue
         generation = snapshot["generation"]
-        absolute = int(snapshot["finished"])
-        if generation is not None:
-            absolute += int(generation) * int(snapshot["total"])
+        absolute = int(snapshot.get("evaluations_before", 0)) + int(
+            snapshot["finished"]
+        )
         _emit_progress(
             event_sink,
             progress_path,
@@ -170,18 +245,72 @@ def _stop_process_tree(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        psutil_cleanup_complete = False
+        try:
+            import psutil
+        except ImportError:
+            psutil = None
+        if psutil is not None:
+            try:
+                parent = psutil.Process(process.pid)
+                descendants = parent.children(recursive=True)
+                for target in reversed(descendants):
+                    try:
+                        target.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+                _, alive = psutil.wait_procs(descendants, timeout=10)
+                for target in alive:
+                    try:
+                        target.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+                if alive:
+                    _, alive = psutil.wait_procs(alive, timeout=5)
+                # Keep the parent alive until every enumerated descendant is
+                # gone, so taskkill /T can still traverse the tree on fallback.
+                if not alive:
+                    try:
+                        parent.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+                    _, parent_alive = psutil.wait_procs([parent], timeout=10)
+                    psutil_cleanup_complete = not parent_alive
+            except (OSError, psutil.Error):
+                # Fall through to Windows' recursive tree termination when
+                # process enumeration races or the host denies access.
+                pass
+        if not psutil_cleanup_complete and process.poll() is None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=30,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
         return
-    process.terminate()
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        process.kill()
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 def _start_process(command: Sequence[str], cwd: Path) -> subprocess.Popen[str]:
@@ -198,6 +327,7 @@ def _start_process(command: Sequence[str], cwd: Path) -> subprocess.Popen[str]:
             errors="replace",
             bufsize=1,
             creationflags=flags,
+            start_new_session=os.name != "nt",
         )
     except OSError as exc:
         raise BenchmarkError(f"cannot start command: {exc}") from exc
@@ -209,6 +339,7 @@ def _drain(
     last_activity: list[float],
     lock: threading.Lock,
     progress_snapshots: queue.Queue[dict[str, Any]],
+    progress_tracker: _YadofProgressTracker,
     output_lines: queue.Queue[tuple[str, str]] | None,
     stream_name: str,
 ) -> None:
@@ -216,7 +347,7 @@ def _drain(
         for line in iter(source.readline, ""):
             stream.write(line)
             stream.flush()
-            snapshot = _parse_yadof_progress(line)
+            snapshot = _parse_yadof_progress(line, progress_tracker)
             if snapshot is not None:
                 progress_snapshots.put(snapshot)
             if output_lines is not None:
@@ -327,6 +458,9 @@ def _finish_command(
             "command": list(command),
             "returncode": result.returncode,
             "timed_out": timed_out,
+            "process_tree_cleanup": (
+                "requested-and-parent-exited" if timed_out else "not-required"
+            ),
             "duration_seconds": duration,
             "started_utc": started_utc,
             "finished_utc": utc_now(),
@@ -340,6 +474,9 @@ def _finish_command(
         label=label,
         returncode=result.returncode,
         timed_out=timed_out,
+        process_tree_cleanup=(
+            "requested-and-parent-exited" if timed_out else "not-required"
+        ),
         duration_seconds=round(duration, 3),
     )
     return result
@@ -372,6 +509,7 @@ def run_logged(
     last_activity = [started]
     activity_lock = threading.Lock()
     progress_snapshots: queue.Queue[dict[str, Any]] = queue.Queue()
+    progress_tracker = _YadofProgressTracker()
     output_lines: queue.Queue[tuple[str, str]] | None = (
         queue.Queue(maxsize=4096) if stream_child_output else None
     )
@@ -392,6 +530,7 @@ def run_logged(
                 last_activity,
                 activity_lock,
                 progress_snapshots,
+                progress_tracker,
                 output_lines,
                 "stdout",
             ),
@@ -405,6 +544,7 @@ def run_logged(
                 last_activity,
                 activity_lock,
                 progress_snapshots,
+                progress_tracker,
                 output_lines,
                 "stderr",
             ),
@@ -632,6 +772,7 @@ def _execute_cell(
     state_lock: threading.RLock | None = None,
     cancel_event: threading.Event | None = None,
 ) -> bool:
+    cell_event_sink = _cell_sink(event_sink, cell)
     with _state_guard(state_lock):
         cell_root, workspace, cell_state = prepare_cell(root, spec, cell, state)
     timeout = int(cell.get("execution", {}).get("timeout_seconds", 7200))
@@ -649,7 +790,7 @@ def _execute_cell(
             command_root=check_root,
             label="check",
             timeout_seconds=min(timeout, 600),
-            event_sink=event_sink,
+            event_sink=cell_event_sink,
             stream_child_output=stream_child_output,
             cancel_event=cancel_event,
         )
@@ -692,7 +833,7 @@ def _execute_cell(
             command_root=run_command_root,
             label="run",
             timeout_seconds=timeout,
-            event_sink=event_sink,
+            event_sink=cell_event_sink,
             stream_child_output=stream_child_output,
             cancel_event=cancel_event,
         )
@@ -719,6 +860,7 @@ def _execute_cell(
             event_sink,
             event="cell-failed",
             cell=cell["id"],
+            display_label=cell.get("display_label", cell["id"]),
             error=str(exc),
             **progress,
         )
@@ -738,6 +880,7 @@ def _collect_succeeded(
     state_lock: threading.RLock | None = None,
     cancel_event: threading.Event | None = None,
 ) -> bool:
+    cell_event_sink = _cell_sink(event_sink, cell)
     with _state_guard(state_lock):
         cell_state = state["cells"][str(cell["id"])]
         cell_root = root / str(cell_state["path"])
@@ -745,6 +888,11 @@ def _collect_succeeded(
     result: dict[str, Any] | None = None
     try:
         result = collector(workspace, cell)
+        result.setdefault("cell", cell["id"])
+        result.setdefault(
+            "display_label",
+            cell.get("display_label", cell["id"]),
+        )
         result["runtime_seconds"] = cell_state.get("runtime_seconds", 0.0)
         result["visualizations"] = _render_cell_outputs(
             root,
@@ -755,7 +903,7 @@ def _collect_succeeded(
             state,
             python=str(spec["workflow"]["python"]),
             command_runner=command_runner,
-            event_sink=event_sink,
+            event_sink=cell_event_sink,
             stream_child_output=stream_child_output,
             state_lock=state_lock,
             cancel_event=cancel_event,
@@ -773,6 +921,7 @@ def _collect_succeeded(
             event_sink,
             event="cell-collected",
             cell=cell["id"],
+            display_label=cell.get("display_label", cell["id"]),
             **progress,
         )
         return True
@@ -803,6 +952,7 @@ def _collect_succeeded(
             event_sink,
             event=event,
             cell=cell["id"],
+            display_label=cell.get("display_label", cell["id"]),
             error=str(exc),
             **progress,
         )
@@ -976,15 +1126,31 @@ def execute_workspace(
                 while pending and len(active) < cell_concurrency and not stop_admission:
                     cell_id = pending.pop(0)
                     cell = cell_by_id[cell_id]
+                    execution = cell.get("execution", {})
+                    simulation = execution.get("simulation_concurrency", {})
+                    resource = execution.get("resource", {})
                     with state_lock:
                         progress = _state_progress(state)
                     _emit(
                         event_sink,
                         event="cell-started",
                         cell=cell_id,
+                        display_label=cell.get("display_label", cell_id),
+                        baseline=cell.get("baseline"),
+                        strategy=cell.get("strategy"),
+                        seed=cell.get("seed"),
                         population=int(cell["population"]),
                         generations=int(cell["generations"]),
                         planned_evaluations=int(cell["planned_evaluations"]),
+                        timeout_seconds=int(execution.get("timeout_seconds", 7200)),
+                        simulator_mode=execution.get("mode"),
+                        simulator_workers=simulation.get("max_workers"),
+                        simulator_worker_autodetect=simulation.get(
+                            "resource_autodetect"
+                        ),
+                        simulator_resource=(
+                            resource.get("variable") or resource.get("kind")
+                        ),
                         **progress,
                     )
                     future = executor.submit(

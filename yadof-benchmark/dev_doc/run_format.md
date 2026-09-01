@@ -43,8 +43,10 @@ provenance, not an upgrade/resume compatibility marker.
 
 ## `spec.json`
 
-The fully expanded `yadof.benchmark.spec` plan. Each cell stores its short ID and
-semantic comparison/baseline/strategy/seed identity, resolved budget, contracts,
+The fully expanded `yadof.benchmark.spec` plan. The workflow stores preset
+provenance and the selected declared/smoke budget profile. Each cell stores its
+short ID, full `display_label`, semantic comparison/baseline/strategy/seed
+identity, resolved budget, contracts,
 execution policy, source digests, strategy entry path, and the destination-to-
 source mapping for the complete declared strategy file set. The strategy digest
 hashes ordered relative paths and file hashes, so a helper-only edit changes the
@@ -53,8 +55,9 @@ cell identity.
 ## `state.json`
 
 The mutable `yadof.benchmark.state` record. Each cell directly stores status,
-short paths, command paths, runtime, active command, result, timestamps, and
-error. Each postprocessor directly stores the same terminal information. There
+display label and raw identity fields, short paths, command paths, runtime,
+active command, result, timestamps, and error. Each postprocessor directly stores
+the same terminal information. There
 are no attempt arrays or sealing states.
 
 ## Cell materialization
@@ -66,8 +69,10 @@ helper is copied to its relative path below `submit/`. Fast/local worker setting
 are applied to that cell's `config.py`.
 
 The four command directories contain started/finished metadata, stdout, stderr,
-and progress JSONL as applicable. Visualization artifact names use the short cell
-ID only.
+and progress JSONL as applicable. A timed-out command records process-tree cleanup
+and the scheduler continues independent cells when failure policy permits.
+Visualization artifact names use the short cell ID only; human-facing reports
+also carry the full display label.
 
 ## Publication
 

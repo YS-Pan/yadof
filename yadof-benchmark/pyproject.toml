@@ -24,6 +24,7 @@ packages = ["src/yadof_benchmark"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "baselines" = "yadof_benchmark/_resources/baselines"
+"presets" = "yadof_benchmark/_resources/presets"
 "user_doc" = "yadof_benchmark/_resources/user_doc"
 
 [tool.hatch.build.targets.sdist]
@@ -32,6 +33,7 @@ include = [
     "/pyproject.toml",
     "/src/yadof_benchmark",
     "/baselines",
+    "/presets",
     "/user_doc",
     "/dev_doc",
     "/tests",

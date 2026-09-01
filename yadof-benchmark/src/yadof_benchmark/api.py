@@ -18,10 +18,15 @@ from .benchmark_runtime.planning import (
     load_workflow as _load_workflow,
     plan_workflow,
 )
+from .benchmark_runtime.presets import discover_presets as _discover_presets
 from .benchmark_runtime.results import inspect_workspace as _inspect_workspace
 from .benchmark_runtime.storage import initialize_workspace, utc_now
 from .benchmark_runtime.workflow import Benchmark
-from .benchmark_runtime.workspace import init_workspace as _init_workspace
+from .benchmark_runtime.workflow import apply_budget_profile
+from .benchmark_runtime.workspace import (
+    init_workspace as _init_workspace,
+    load_workspace_preset as _load_workspace_preset,
+)
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 
@@ -48,8 +53,26 @@ def discover_baselines(
     return _discover_baselines(root or _resource_root("baselines"))
 
 
-def init_workspace(path: str | Path) -> dict[str, Any]:
-    return _init_workspace(path)
+def discover_presets() -> dict[str, dict[str, Any]]:
+    """Return ordered metadata for the installed workspace presets."""
+
+    return _discover_presets(_resource_root("presets"))
+
+
+def init_workspace(
+    path: str | Path,
+    *,
+    preset: str = "portable",
+) -> dict[str, Any]:
+    return _init_workspace(
+        path,
+        presets_root=_resource_root("presets"),
+        preset=preset,
+    )
+
+
+def load_workspace_preset(path: str | Path) -> dict[str, Any]:
+    return _load_workspace_preset(path)
 
 
 def load_workflow(workspace: str | Path) -> WorkflowRequest:
@@ -60,25 +83,34 @@ def plan_workspace(
     workspace: str | Path | WorkflowRequest,
     *,
     baselines_root: str | Path | None = None,
+    budget_profile: str = "declared",
 ) -> RunSpec:
     request = (
         _load_workflow(workspace)
         if isinstance(workspace, (str, Path))
         else workspace
     )
-    return plan_workflow(request, discover_baselines(baselines_root))
+    return plan_workflow(
+        apply_budget_profile(request, budget_profile),
+        discover_baselines(baselines_root),
+    )
 
 
 def run_workspace(
     workspace: str | Path | WorkflowRequest,
     *,
     baselines_root: str | Path | None = None,
+    budget_profile: str = "declared",
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
     stream_child_output: bool = False,
 ) -> dict[str, Any]:
     """Execute the workspace's one benchmark using the installed packages."""
 
-    spec = plan_workspace(workspace, baselines_root=baselines_root)
+    spec = plan_workspace(
+        workspace,
+        baselines_root=baselines_root,
+        budget_profile=budget_profile,
+    )
     root = initialize_workspace(spec)
     if event_sink is not None:
         event_sink(
@@ -110,9 +142,11 @@ __all__ = [
     "RunSpec",
     "WorkflowRequest",
     "discover_baselines",
+    "discover_presets",
     "init_workspace",
     "inspect_workspace",
     "load_workflow",
+    "load_workspace_preset",
     "plan_workspace",
     "run_workspace",
     "user_doc_root",

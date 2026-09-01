@@ -7,11 +7,19 @@ Use these version-matched documents for the installed package:
 3. Read [baselines.md](baselines.md) to select or provide task baselines.
 4. Read [execution.md](execution.md) before launching or inspecting measured work.
 
+The no-argument initializer creates the packaged `portable` preset: two canonical
+real-only and PCA/SVD+GPSAF strategies on the synthetic antenna baseline, seed
+101, population 12, and two generations. Select the long-running 18-cell
+`complete` preset explicitly with `init --preset complete`; it fixes population
+200, generations 25, seeds 101/102/103, and a 7200-second cell timeout. Use
+`init --blank` only when authoring a workflow from scratch. `presets` lists the
+budgets, dependencies, and long-run warning before any workspace is created.
+
 The central contract is one workspace equals one execution. Another execution
 uses another workspace. Results are direct children of the workspace; there is no
 `runs/`, run ID, resume command, or attempt-number directory.
 
-Comparisons use one seed by default. Standard optimization defaults to population
+Custom comparisons use one seed by default. Standard optimization defaults to population
 `200` and `50` generations. A comparison containing a strategy declared
 `slow_surrogate=True` defaults to `15` generations, keeping repeated neural
 network or similarly expensive surrogate training within the intended 10-20
@@ -22,9 +30,10 @@ A cell can remain valid when all planned evaluations were attempted and some
 simulations failed or produced non-finite results, provided finite output,
 contracts, generation-0 pairing, and the descriptive metric remain available.
 
-Before a measured execution, use a [benchmark smoke test](execution.md#benchmark-smoke-test)
-in a separate workspace. It is the same benchmark with only a smaller explicit
-evaluation budget: the cell/arm matrix, baseline and strategy code, task inputs,
+Before a measured execution, use the mechanical `--budget-profile smoke` described
+under [benchmark smoke test](execution.md#benchmark-smoke-test) in a separate
+complete-preset workspace. It keeps population 200 and changes only generations
+to one: the cell/arm matrix, baseline and strategy code, task inputs,
 postprocessors, and output contracts must remain the same. Smoke output validates
 the execution path only and is never measured performance evidence.
 
@@ -32,10 +41,12 @@ For long Windows work launched by an AI agent, [execution.md](execution.md)
 requires host execution under the signed-in human user's account. A sandbox-owned
 detached process cannot show a console in the user's interactive session.
 `--detach` controls console/process lifetime; it does not change the account.
-For a full-budget measured benchmark, the successful detached launch receipt is
-the handoff boundary: do not poll or hold the current agent turn open merely to
-wait. Continue only independent work; otherwise report the receipt and end the
-turn until the user explicitly requests a later progress check or monitoring.
+For a full-budget measured benchmark, a successful detached launch receipt proves
+only that launch was requested; it does not prove benchmark completion. Unless a
+task explicitly requests monitoring, the receipt is the normal handoff boundary.
+When monitoring or a heartbeat is explicitly required, the same task retains
+ownership and uses bounded `inspect` snapshots at the requested interval until a
+terminal result is collected.
 The visible detached console remains open after the benchmark finishes so the
 terminal result can be reviewed; type `exit` or close the window when finished.
 

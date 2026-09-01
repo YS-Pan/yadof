@@ -112,14 +112,21 @@ remains authoritative for Python and dependency requirements.
 `yadof-benchmark` is a separate distribution developed beside yadof. It depends
 on public yadof behavior; yadof does not import benchmark orchestration or include
 concrete baselines. Its wheel owns the API, console command, baseline resources,
-and version-matched documents.
+packaged presets and canonical strategies, and version-matched documents.
 
 ```powershell
-$workspace = (yadof-benchmark init D:\benchmarks\comparison |
+$workspace = (yadof-benchmark init .\benchmarks\comparison |
   ConvertFrom-Json).workspace
+yadof-benchmark presets
 yadof-benchmark baselines
 yadof-benchmark plan --workspace $workspace
 ```
+
+No-argument initialization selects the portable two-cell synthetic preset. The
+explicit complete preset is a three-baseline x two-strategy x three-seed matrix
+at population 200 and 25 generations with a 7200-second cell timeout. Its
+mechanical `--budget-profile smoke` keeps all identities and policies while
+setting generations to one. `init --blank` is the explicit authoring path.
 
 One benchmark workspace owns one `benchmark.py` and one execution. Another
 execution uses another initialized workspace. There is no `runs/`, run ID,
@@ -132,6 +139,8 @@ population 200, and 50 generations; a comparison containing a slow surrogate
 defaults to 15 generations. Explicit values override defaults. Individual
 simulation errors are retained without invalidating a cell when the planned
 attempt count is complete and finite, contract-valid metric evidence remains.
+Short `cNNNN` filesystem IDs coexist with a full baseline/strategy/seed display
+label in plans, state, terminal output, inspect, errors, results, and reports.
 
 Measured `run` may launch task software and remains subject to
 `config_and_run.md`. On Windows an AI agent must launch through host execution
@@ -142,8 +151,8 @@ a console in the user's session. Use
 ## Initialize and inspect
 
 ```powershell
-yadof init D:\work\study-a
-yadof check --workspace D:\work\study-a
+yadof init .\work\study-a
+yadof check --workspace .\work\study-a
 ```
 
 Initialization publishes a generic pure-Python template and `.yadof/workspace.json`

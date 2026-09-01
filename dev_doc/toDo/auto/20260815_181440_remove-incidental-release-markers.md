@@ -31,6 +31,11 @@
   markers in third-party formats, ordinary variable names, version fields required
   by a protocol itself, and the package's real public version are not cleanup
   targets.
+- In particular, `YADOF_OPTIMIZATION_PROGRAM["api"] ==
+  "yadof.optimize.program/v1"` is the exact executable protocol discriminator:
+  planning and runtime accept it and reject lookalike unsupported values. It is
+  not incidental release prose and must remain until the protocol contract itself
+  is deliberately replaced.
 - Rename transitional modules, directories, and fields directly by responsibility.
   Do not preserve old-name import aliases, dual-path readers, or old/new wording
   that continues to expose the transition.

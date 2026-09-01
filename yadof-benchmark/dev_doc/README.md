@@ -19,11 +19,19 @@ Current invariants are:
   timing history, or copied driver/workflow/strategy snapshot;
 - strategies are literal explicit `optimization.py` programs plus their
   statically declared helper set;
+- no-argument initialization materializes the wheel-contained `portable` preset;
+  `complete` and `blank` are explicit, and preset provenance records relative
+  resource names plus SHA-256 digests;
+- complete is exactly 18 cells at population 200, generations 25, and a
+  7200-second cell timeout; its `smoke` budget profile changes only generations
+  to one;
 - default seeds are `[101]`;
 - default standard budget is population 200 x 50 generations;
 - a comparison containing `slow_surrogate=True` defaults to 15 generations;
 - explicit positive budgets and explicit seed lists override defaults;
-- cell IDs are short ordinals and semantic identity stays in `spec.json`;
+- cell IDs and filesystem artifacts remain short ordinals; a full semantic
+  `display_label` is propagated through specs, state, events, inspect, errors,
+  results, reports, and evidence;
 - individual simulation failures/non-finite completions do not invalidate a cell
   when attempts are complete and finite contract-valid metric evidence remains;
 - missing attempts, no finite evidence, contract failure, initial-population
@@ -33,6 +41,10 @@ Current invariants are:
 - planning performs no simulator work and writes no execution evidence;
 - cell concurrency and baseline simulation concurrency are separate controls;
 - terminal result publication is a fatal persistence boundary before FIFO refill;
+- yadof `evaluation` snapshots are the only source of evaluation percentage;
+  command heartbeats expose elapsed/activity state without inventing completion;
+- timeout handling stops the child process tree, records cleanup, continues
+  independent cells when policy allows, and always produces non-success status;
 - every collected cell owns a cost plot and baseline domain output;
 - inspect is bounded, read-only, and uses only current-workspace timing evidence;
 - a visible Windows detached console remains open after the benchmark command
@@ -42,5 +54,6 @@ Current invariants are:
   its current turn open merely to await completion;
 - algorithm rankings and acceptance decisions remain outside the runner.
 
-The `0.3` workspace format intentionally makes no old-workspace compatibility
-promise.
+Current readers preserve legacy workspaces that lack preset provenance or
+`display_label` by reporting `legacy-unrecorded` provenance and deriving a label
+from baseline, strategy, and seed fields.

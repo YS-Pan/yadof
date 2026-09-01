@@ -22,8 +22,11 @@ is not a separate benchmark contract. The smoke test must exercise the same
 benchmark path as the measured run; the only intentional benchmark-definition
 change is a smaller positive evaluation count.
 
-Create a fresh smoke workspace from the complete measured-workflow authoring
-inputs. Keep all of the following unchanged:
+Create a fresh workspace with `init --preset complete`, then select
+`--budget-profile smoke` on check, plan, and run. The profile mechanically keeps
+the complete preset's 18 cells, population 200, strategies, seeds, hashes,
+policies, and 7200-second timeout while changing only generations from 25 to 1.
+Keep all of the following unchanged:
 
 - `benchmark.py` implementation and registrations, including the complete cell,
   comparison, and arm matrix;
@@ -35,9 +38,7 @@ inputs. Keep all of the following unchanged:
   postprocessor;
 - result, contract, metric, visualization, and postprocessing paths.
 
-Change only the explicit evaluation budget, normally `population` and/or
-`generations` in every comparison, while keeping one identical reduced budget
-across paired arms. A different workspace root and a foreground versus detached
+Do not edit `benchmark.py` for this reduction. A different workspace root and a foreground versus detached
 launch are execution controls and do not count as benchmark-code changes. Do not
 change the seed merely to make the smoke pass.
 
@@ -52,9 +53,9 @@ chain.
 Run the same preflight and execution commands against the smoke workspace:
 
 ```powershell
-yadof-benchmark check --workspace SMOKE_WORKSPACE
-yadof-benchmark plan --workspace SMOKE_WORKSPACE --json
-yadof-benchmark run --workspace SMOKE_WORKSPACE
+yadof-benchmark check --workspace SMOKE_WORKSPACE --budget-profile smoke
+yadof-benchmark plan --workspace SMOKE_WORKSPACE --budget-profile smoke --json
+yadof-benchmark run --workspace SMOKE_WORKSPACE --budget-profile smoke
 yadof-benchmark inspect --workspace SMOKE_WORKSPACE
 ```
 
@@ -87,21 +88,18 @@ human. The correct agent procedure is:
 2. run it under the signed-in user's account;
 3. add `--detach` for a visible independent console;
 4. return the receipt containing PID, workspace, log, and inspect command;
-5. treat that successful receipt as the handoff boundary for a full-budget measured
-   benchmark.
+5. record the receipt as launch evidence, not terminal benchmark evidence.
 
 ```powershell
 yadof-benchmark run --workspace WORKSPACE --detach
 ```
 
-A full-budget measured benchmark may run for hours. After the detached launch
-returns a successful receipt, do not immediately or repeatedly run `inspect`, poll
-the process or window, wait on the benchmark, or keep the current agent turn open
-solely to observe completion. The agent may continue work that is independent of
-the benchmark result. If no such work remains, or every remaining step depends on
-the benchmark finishing, report the receipt and end the current turn. This is the
-default behavior; do not create a recurring check or otherwise simulate waiting
-unless the user explicitly asks for monitoring.
+A full-budget measured benchmark may run for hours. A successful receipt alone
+does not satisfy a task whose definition of done requires terminal results. The
+default agent handoff still avoids unrequested polling. If the user explicitly
+requests monitoring or a heartbeat, bind that monitor to the same task, workspace,
+receipt, and PID; use bounded `inspect` snapshots at the requested interval and
+stop the monitor immediately after terminal evidence is collected.
 
 When the user later asks for progress or results, run one bounded `inspect` and
 report that snapshot. A launch error or an incomplete/ambiguous receipt may be
@@ -150,6 +148,12 @@ an isolated execution workspace.
 
 ## Budget defaults
 
+Packaged preset budgets are explicit and therefore do not use these authoring
+defaults. `portable` is population 12 by two generations for two cells.
+`complete` is population 200 by 25 generations for 18 cells; every baseline
+declares a 7200-second per-cell command timeout. The derived `smoke` profile keeps
+population 200 and sets generations to one.
+
 - Default seeds: `[101]`.
 - Standard optimization-only comparison: population `200`, generations `50`.
 - Any comparison containing a strategy declared `slow_surrogate=True`:
@@ -182,9 +186,20 @@ A command, storage, visualization, collection, or workflow postprocessor failure
 is retained in `state.json` and makes the overall status non-successful. Create
 a new workspace after correcting the problem.
 
+A cell timeout stops the child process tree, records
+`process_tree_cleanup=requested-and-parent-exited`, fails that cell, and—when
+`fail_fast=False`—continues independent cells. Any timeout still makes the final
+workspace status non-successful.
+
 ## Progress, logs, and inspection
 
 Foreground execution owns a Rich active-cell row and a global benchmark row.
+The active lifecycle includes the semantic display label, cell/global counts,
+elapsed command time, generation/evaluation counts, phase, failures, and timeout
+state. Progress percentages advance only from actual version-matched yadof
+`evaluation` snapshots; command heartbeats never manufacture completion. TTY
+output refreshes live. Non-TTY output is append-only, contains no ANSI control
+sequences, and emits bounded progress/elapsed snapshots.
 Every measured command has separate `stdout.log` and `stderr.log` files below
 `cells/cNNNN/commands/`. Raw child output is echoed only with the explicit
 `--stream-child-output` diagnostic option.
@@ -199,6 +214,12 @@ It reports status, active logs, current-workspace timing evidence, validity,
 simulation errors that were tolerated, anomalies, and artifact paths. Timing
 estimates use only this workspace's observed generation trend and baseline lower
 bounds; there is no cross-workspace timing history.
+
+While a workspace is running, planned and active cells are expected to be
+incomplete and are not reported as anomalies. Real state errors and validity
+issues from completed cells remain visible. Once the workspace is terminal,
+incomplete-cell validity issues are included so a failed campaign retains its
+full diagnostic evidence.
 
 Review in this order: inspect summary, `reports/summary.md`, the targeted CSV or
 descriptive JSON report, then a specific cell command log.

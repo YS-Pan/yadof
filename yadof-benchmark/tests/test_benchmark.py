@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import io
+import hashlib
 import os
 import re
 import runpy
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -380,7 +383,9 @@ def test_init_creates_single_execution_workspace(tmp_path: Path) -> None:
     created = api.init_workspace(tmp_path / "benchmark workspace")
     root = Path(created["workspace"])
 
-    assert created == {"format": WORKSPACE_FORMAT, "workspace": str(root.resolve())}
+    assert created["format"] == WORKSPACE_FORMAT
+    assert created["workspace"] == str(root.resolve())
+    assert created["preset"]["id"] == "portable"
     assert re.match(r"^\d{8}_\d{6}-benchmark-workspace$", root.name)
     assert (root / "benchmark.py").is_file()
     assert {
@@ -393,9 +398,85 @@ def test_init_creates_single_execution_workspace(tmp_path: Path) -> None:
     } <= {item.name for item in root.iterdir()}
     assert not (root / "runs").exists()
     source = (root / "benchmark.py").read_text(encoding="utf-8")
-    assert "default to one seed" in source
-    assert "slow_surrogate=True" in source
-    assert "default is 15 generations" in source
+    assert "test-com/synthetic-antenna" in source
+    assert "population=12" in source
+    assert "generations=2" in source
+    assert (root / ".benchmark" / "preset.json").is_file()
+
+
+def test_complete_preset_and_mechanical_smoke_profile(tmp_path: Path) -> None:
+    root = Path(api.init_workspace(tmp_path / "complete", preset="complete")["workspace"])
+    complete = api.plan_workspace(root)
+    smoke = api.plan_workspace(root, budget_profile="smoke")
+
+    assert len(complete.cells) == 18
+    assert {cell.population for cell in complete.cells} == {200}
+    assert {cell.generations for cell in complete.cells} == {25}
+    assert {cell.execution["timeout_seconds"] for cell in complete.cells} == {7200}
+    assert {cell.seed for cell in complete.cells} == {101, 102, 103}
+    assert {cell.baseline_id for cell in complete.cells} == {
+        "chrono/trebuchet",
+        "ngspice/saw-ladder",
+        "test-com/synthetic-antenna",
+    }
+    assert {cell.strategy_id for cell in complete.cells} == {
+        "real-only-nsga3",
+        "gpsaf-pca-svd-nsga3",
+    }
+    assert len(smoke.cells) == 18
+    assert {cell.population for cell in smoke.cells} == {200}
+    assert {cell.generations for cell in smoke.cells} == {1}
+    assert [
+        (
+            cell.id,
+            cell.baseline_id,
+            cell.strategy_id,
+            cell.seed,
+            cell.baseline_digest,
+            cell.strategy_digest,
+            cell.execution,
+        )
+        for cell in smoke.cells
+    ] == [
+        (
+            cell.id,
+            cell.baseline_id,
+            cell.strategy_id,
+            cell.seed,
+            cell.baseline_digest,
+            cell.strategy_digest,
+            cell.execution,
+        )
+        for cell in complete.cells
+    ]
+
+
+def test_blank_is_explicit_and_presets_are_discoverable(tmp_path: Path) -> None:
+    presets = api.discover_presets()
+    assert list(presets) == ["portable", "complete", "blank"]
+    assert presets["portable"]["default"] is True
+    assert presets["complete"]["long_running"] is True
+    assert presets["complete"]["cells"] == 18
+
+    root = Path(api.init_workspace(tmp_path / "blank", preset="blank")["workspace"])
+    assert api.load_workspace_preset(root)["id"] == "blank"
+    assert "benchmark.configure" in (root / "benchmark.py").read_text(encoding="utf-8")
+
+
+def test_preset_provenance_uses_relative_sources_and_verified_digests(
+    tmp_path: Path,
+) -> None:
+    root = Path(api.init_workspace(tmp_path / "portable-provenance")["workspace"])
+    provenance = api.load_workspace_preset(root)
+    assert provenance["id"] == "portable"
+    assert provenance["source"] == "packaged"
+    assert provenance["files"]
+    for item in provenance["files"]:
+        assert not Path(item["source"]).is_absolute()
+        assert "\\" not in item["source"]
+        output = root / Path(*item["workspace_path"].split("/"))
+        assert output.is_file()
+        assert hashlib.sha256(output.read_bytes()).hexdigest().upper() == item["sha256"]
 
 
 def test_default_budget_depends_on_slow_surrogate_and_defaults_to_one_seed(
@@ -619,7 +700,71 @@ def test_plan_uses_short_cell_ids_and_keeps_semantics_in_spec(tmp_path: Path) ->
         ),
     }
     assert all(len(cell["id"]) == 5 for cell in expanded["cells"])
+    assert all("display_label" in cell for cell in expanded["cells"])
+    assert all("provider/a-very-long-semantic-baseline-name" in cell["display_label"] for cell in expanded["cells"])
+    assert all("seed=123456789" in cell["display_label"] for cell in expanded["cells"])
     assert not any("snapshot" in key for cell in expanded["cells"] for key in cell)
+
+
+def test_display_labels_handle_special_names_without_becoming_paths(
+    tmp_path: Path,
+) -> None:
+    baseline = _baseline(tmp_path, "provider/task-with-a-very-long-safe-id")
+    manifest_path = baseline / "baseline.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["name"] = "Task | 特殊 名称"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    workspace = _workspace(
+        tmp_path / "labels",
+        baselines=("provider/task-with-a-very-long-safe-id",),
+        strategies=("alpha",),
+    )
+    workflow = workspace / "benchmark.py"
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            '"resources/strategies/alpha/optimization.py", slow_surrogate=False)',
+            '"resources/strategies/alpha/optimization.py", name="算法 | alpha", slow_surrogate=False)',
+        ),
+        encoding="utf-8",
+    )
+    plan = _plan(tmp_path, workspace)
+
+    assert "Task | 特殊 名称" in plan.cells[0].display_label
+    assert "算法 | alpha" in plan.cells[0].display_label
+    initialized = initialize_workspace(plan)
+    assert [path.name for path in (initialized / "cells").iterdir()] == []
+    assert plan.cells[0].id == "c0001"
+
+
+def test_duplicate_semantic_cell_identity_is_rejected(tmp_path: Path) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "duplicate", strategies=("alpha",))
+    with (workspace / "benchmark.py").open("a", encoding="utf-8") as stream:
+        stream.write(
+            "    benchmark.compare('duplicate', baselines=['provider/task'], "
+            "strategies=['alpha'], reference='alpha', seeds=[7], "
+            "population=2, generations=3)\n"
+        )
+    with pytest.raises(BenchmarkError, match="duplicate benchmark cell identity"):
+        _plan(tmp_path, workspace)
+
+
+def test_program_protocol_v1_is_accepted_but_lookalike_release_marker_is_not(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "protocol", strategies=("alpha",))
+    assert _plan(tmp_path, workspace).cells
+
+    strategy = workspace / "resources/strategies/alpha/optimization.py"
+    strategy.write_text(
+        strategy.read_text(encoding="utf-8").replace(
+            "yadof.optimize.program/v1", "yadof.optimize.program/v2"
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(BenchmarkError, match="program api must be"):
+        _plan(tmp_path, workspace)
 
 
 def test_explicit_program_helpers_are_hashed_and_materialized(tmp_path: Path) -> None:
@@ -763,6 +908,55 @@ def test_fake_pipeline_writes_direct_short_paths_and_reports(tmp_path: Path) -> 
     assert "resume" not in inspected["next_commands"]
 
 
+def test_cell_started_event_carries_active_identity_and_execution_capacity(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "event-capacity", strategies=("alpha",))
+    plan = _plan(tmp_path, workspace)
+    initialize_workspace(plan)
+    events: list[dict] = []
+    execution.execute_workspace(
+        workspace,
+        command_runner=_successful_command,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+        event_sink=lambda event: events.append(dict(event)),
+    )
+
+    started = next(event for event in events if event.get("event") == "cell-started")
+    expected = plan.cells[0]
+    assert started["cell"] == expected.id
+    assert started["display_label"] == expected.display_label
+    assert started["baseline"] == expected.baseline_id
+    assert started["strategy"] == expected.strategy_id
+    assert started["seed"] == expected.seed
+    assert started["timeout_seconds"] == expected.execution["timeout_seconds"]
+    assert started["simulator_mode"] == expected.execution["mode"]
+    assert started["simulator_workers"] == expected.execution[
+        "simulation_concurrency"
+    ]["max_workers"]
+
+
+def test_legacy_execution_without_display_labels_remains_inspectable(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "legacy-labels", strategies=("alpha",))
+    _execute(tmp_path, workspace)
+    spec = read_json(workspace / "spec.json")
+    state = read_json(workspace / "state.json")
+    for cell in spec["cells"]:
+        cell.pop("display_label", None)
+    for cell in state["cells"].values():
+        cell.pop("display_label", None)
+    (workspace / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    (workspace / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    inspected = inspect_workspace(workspace)
+    assert "baseline=provider/task" in inspected["cell_labels"]["c0001"]
+    assert "strategy=alpha" in inspected["cell_labels"]["c0001"]
+
+
 def test_individual_simulation_errors_do_not_invalidate_cell(tmp_path: Path) -> None:
     _baseline(tmp_path)
     workspace = _workspace(tmp_path / "errors", strategies=("alpha",))
@@ -855,6 +1049,38 @@ def test_inspect_is_read_only(tmp_path: Path) -> None:
     assert before == after
 
 
+@pytest.mark.parametrize("active_status", ["running", "succeeded"])
+def test_inspect_active_cell_includes_identity_timeout_and_worker_state(
+    tmp_path: Path,
+    active_status: str,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "inspect-active", strategies=("alpha",))
+    plan = _plan(tmp_path, workspace)
+    initialize_workspace(plan)
+    _, state = load_execution(workspace)
+    state["status"] = "running"
+    state["cells"]["c0001"]["status"] = active_status
+    (workspace / "state.json").write_text(
+        json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    observed = api.inspect_workspace(workspace)
+    expected = plan.to_dict()["cells"][0]
+    active = observed["active"]
+    assert active["cell"] == "c0001"
+    assert active["display_label"] == expected["display_label"]
+    assert active["baseline"] == expected["baseline"]
+    assert active["strategy"] == expected["strategy"]
+    assert active["seed"] == expected["seed"]
+    assert active["timeout_seconds"] == expected["execution"]["timeout_seconds"]
+    assert active["simulator"]["workers"] == expected["execution"][
+        "simulation_concurrency"
+    ]
+    assert observed["anomalies"] == []
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows detached-console contract")
 def test_detached_launch_runs_workspace_directly_and_defaults_visible(
     tmp_path: Path,
@@ -939,6 +1165,7 @@ def test_cli_surface_has_no_resume_or_run_id() -> None:
     )
     assert set(subparsers.choices) == {
         "init",
+        "presets",
         "baselines",
         "check",
         "plan",
@@ -951,12 +1178,21 @@ def test_cli_surface_has_no_resume_or_run_id() -> None:
         for action in subparsers.choices["run"]._actions
         for option in action.option_strings
     }
+    init_options = {
+        option
+        for action in subparsers.choices["init"]._actions
+        for option in action.option_strings
+    }
     inspect_options = {
         option
         for action in subparsers.choices["inspect"]._actions
         for option in action.option_strings
     }
     assert "--run-id" not in run_options
+    assert {"--preset", "--blank"} <= init_options
+    init_help = " ".join(subparsers.choices["init"].format_help().split())
+    assert "long-running complete preset" in init_help
+    assert "--budget-profile" in run_options
     assert inspect_options == {"-h", "--help", "--workspace"}
     assert "resume_run" not in benchmark.__all__
     assert "inspect_run" not in benchmark.__all__
@@ -1005,5 +1241,418 @@ def test_terminal_logs_workspace_lifecycle(tmp_path: Path) -> None:
     assert "finished; status=completed" in log
 
 
+def test_actual_yadof_evaluation_output_emits_truthful_generation_progress(
+    tmp_path: Path,
+) -> None:
+    events: list[dict] = []
+    script = (
+        "import sys\n"
+        "for _batch in range(2):\n"
+        "    for finished in range(5):\n"
+        "        successful = finished\n"
+        "        remaining = 4 - finished\n"
+        "        print(f'[yadof] evaluation (fast) [####] {finished}/4 '"
+        "              f'successful={successful} errors=0 remaining={remaining}', "
+        "              file=sys.stderr, flush=True)\n"
+    )
+    result = execution.run_logged(
+        [
+            sys.executable,
+            "-c",
+            script,
+            "--generations",
+            "2",
+            "--population-size",
+            "4",
+        ],
+        cwd=tmp_path,
+        command_root=tmp_path / "progress-command",
+        label="run",
+        timeout_seconds=10,
+        event_sink=lambda event: events.append(dict(event)),
+    )
+
+    progress = [event for event in events if event.get("event") == "cell-progress"]
+    assert result.returncode == 0
+    assert progress
+    assert [event["generation_number"] for event in progress if event["remaining"] == 0] == [1, 2]
+    assert progress[-1]["evaluations"] == 8
+    assert progress[-1]["planned_evaluations"] == 8
+
+
+class _TTYBuffer(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+@pytest.mark.parametrize(
+    ("stream", "non_tty"),
+    [(io.StringIO(), True), (_TTYBuffer(), False)],
+)
+def test_terminal_surfaces_semantic_cell_label_without_ansi(
+    tmp_path: Path,
+    stream: io.StringIO,
+    non_tty: bool,
+) -> None:
+    label = (
+        "baseline=provider/a-long-task (Task | 特殊) | "
+        "strategy=gpsaf-pca-svd (GPSAF + PCA/SVD) | seed=101"
+    )
+    terminal = BenchmarkTerminal(
+        tmp_path,
+        stream=stream,
+        environ={"NO_COLOR": "1", "COLUMNS": "240"},
+    )
+    terminal.start()
+    terminal.handle(
+        {
+            "event": "cell-started",
+            "cell": "c0001",
+            "display_label": label,
+            "baseline": "provider/a-long-task",
+            "strategy": "gpsaf-pca-svd",
+            "seed": 101,
+            "population": 4,
+            "generations": 2,
+            "planned_evaluations": 8,
+            "timeout_seconds": 7200,
+            "simulator_mode": "fast",
+            "simulator_workers": 4,
+            "simulator_worker_autodetect": True,
+            "simulator_resource": "YADOF_SIMULATOR",
+            "total_cells": 1,
+            "finished_cells": 0,
+            "completed_cells": 0,
+            "failed_cells": 0,
+        }
+    )
+    terminal.finish(error="short test stop")
+    rendered = stream.getvalue()
+    assert label in rendered
+    assert "timeout=7200s" in rendered
+    assert "workers=4(auto)" in rendered
+    if non_tty:
+        assert "\x1b" not in rendered
+
+
+def test_live_terminal_tracks_semantics_capacity_and_concurrent_counts(
+    tmp_path: Path,
+) -> None:
+    stream = _TTYBuffer()
+    terminal = BenchmarkTerminal(
+        tmp_path,
+        stream=stream,
+        environ={"NO_COLOR": "1", "COLUMNS": "240"},
+    )
+    terminal.start()
+    first = {
+        "event": "cell-started",
+        "cell": "c0001",
+        "display_label": "baseline=chrono/trebuchet (Trebuchet) | strategy=real-only-nsga3 (Real-only NSGA-III) | seed=101",
+        "baseline": "chrono/trebuchet",
+        "strategy": "real-only-nsga3",
+        "seed": 101,
+        "population": 200,
+        "generations": 25,
+        "planned_evaluations": 5000,
+        "timeout_seconds": 7200,
+        "simulator_mode": "fast",
+        "simulator_workers": 4,
+        "simulator_worker_autodetect": True,
+        "simulator_resource": "YADOF_PYCHRONO_PYTHON",
+        "total_cells": 3,
+        "finished_cells": 0,
+        "completed_cells": 0,
+        "failed_cells": 0,
+    }
+    second = {
+        **first,
+        "cell": "c0002",
+        "display_label": "baseline=ngspice/saw-ladder (SAW ladder) | strategy=gpsaf-pca-svd-nsga3 (GPSAF) | seed=102",
+        "baseline": "ngspice/saw-ladder",
+        "strategy": "gpsaf-pca-svd-nsga3",
+        "seed": 102,
+        "simulator_workers": 64,
+        "simulator_resource": "YADOF_NGSPICE_EXE",
+    }
+    terminal.handle(first)
+    terminal.handle(second)
+
+    assert second["display_label"] in terminal._cell_detail()
+    assert "timeout=7200s" in terminal._cell_detail()
+    assert "workers=64(auto)" in terminal._cell_detail()
+    assert "run=2 queued=1" in terminal._global_detail()
+
+    terminal.handle(
+        {
+            "event": "cell-progress",
+            "cell": "c0001",
+            "display_label": first["display_label"],
+            "evaluations": 100,
+            "planned_evaluations": 5000,
+            "generation_number": 1,
+            "generations": 25,
+            "successful": 90,
+            "errors": 10,
+            "phase": "evaluation",
+        }
+    )
+    terminal.handle(
+        {
+            "event": "cell-progress",
+            "cell": "c0002",
+            "display_label": second["display_label"],
+            "evaluations": 50,
+            "planned_evaluations": 5000,
+            "generation_number": 1,
+            "generations": 25,
+            "successful": 50,
+            "errors": 0,
+            "phase": "evaluation",
+        }
+    )
+    terminal.handle(
+        {
+            "event": "cell-progress",
+            "cell": "c0001",
+            "display_label": first["display_label"],
+            "evaluations": 200,
+            "planned_evaluations": 5000,
+            "generation_number": 1,
+            "generations": 25,
+            "successful": 180,
+            "errors": 20,
+            "phase": "evaluation",
+        }
+    )
+    assert terminal.current_cell == "c0001"
+    assert terminal.cell_completed == 200
+    assert terminal.cell_errors == 20
+
+    terminal._select_cell({"cell": "c0002"})
+    assert terminal.cell_completed == 50
+    assert terminal.cell_errors == 0
+
+    terminal.handle(
+        {
+            "event": "command-finished",
+            "cell": "c0002",
+            "display_label": second["display_label"],
+            "label": "run",
+            "returncode": 1,
+            "timed_out": True,
+            "process_tree_cleanup": "requested-and-parent-exited",
+            "duration_seconds": 7200.0,
+        }
+    )
+    assert terminal.phase == "timeout"
+    terminal.handle(
+        {
+            "event": "cell-failed",
+            "cell": "c0002",
+            "display_label": second["display_label"],
+            "error": "run failed after timeout",
+            "total_cells": 3,
+            "finished_cells": 1,
+            "completed_cells": 0,
+            "failed_cells": 1,
+        }
+    )
+    assert "err=1 run=1 queued=1" in terminal._global_detail()
+    terminal.finish(error="cancelled by user")
+    rendered = stream.getvalue()
+    assert "timed_out=True" in rendered
+    assert "cleanup=requested-and-parent-exited" in rendered
+    assert "benchmark failed: cancelled by user" in rendered
+
+
+def test_narrow_terminal_uses_deterministic_semantic_compression(
+    tmp_path: Path,
+) -> None:
+    terminal = BenchmarkTerminal(
+        tmp_path,
+        stream=_TTYBuffer(),
+        environ={"NO_COLOR": "1", "COLUMNS": "48"},
+    )
+    terminal.handle(
+        {
+            "event": "cell-started",
+            "cell": "c0001",
+            "display_label": "baseline=provider/a-very-long-task | strategy=gpsaf-pca-svd-nsga3 | seed=101",
+            "baseline": "provider/a-very-long-task",
+            "strategy": "gpsaf-pca-svd-nsga3",
+            "seed": 101,
+            "planned_evaluations": 5000,
+            "generations": 25,
+            "timeout_seconds": 7200,
+            "simulator_workers": 32,
+            "simulator_worker_autodetect": True,
+            "total_cells": 18,
+            "finished_cells": 0,
+            "completed_cells": 0,
+            "failed_cells": 0,
+        }
+    )
+    detail = terminal._cell_detail()
+    assert "c0001" in detail
+    assert "b=" in detail and "s=" in detail and "z=101" in detail
+    assert "to=7200s" in detail and "w=32a" in detail
+
+
+def test_non_tty_terminal_appends_real_elapsed_heartbeat(tmp_path: Path) -> None:
+    stream = io.StringIO()
+    terminal = BenchmarkTerminal(tmp_path, stream=stream)
+    terminal.start()
+    terminal.handle(
+        {
+            "event": "cell-started",
+            "cell": "c0001",
+            "display_label": "baseline=task | strategy=algo | seed=101",
+            "population": 200,
+            "generations": 25,
+            "planned_evaluations": 5000,
+            "total_cells": 18,
+            "finished_cells": 0,
+            "completed_cells": 0,
+            "failed_cells": 0,
+        }
+    )
+    terminal.handle({"event": "command-started", "label": "run"})
+    terminal.handle(
+        {
+            "event": "command-progress",
+            "label": "run",
+            "elapsed_seconds": 65.0,
+            "inactivity_seconds": 2.0,
+        }
+    )
+    terminal.finish(error="short test stop")
+    rendered = stream.getvalue()
+    assert "t=65s" in rendered
+    assert "\x1b" not in rendered
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows process-tree contract")
+def test_timeout_stops_descendant_process_tree(tmp_path: Path) -> None:
+    sentinel = tmp_path / "descendant-survived.txt"
+    child = tmp_path / "child.py"
+    parent = tmp_path / "parent.py"
+    child.write_text(
+        "import pathlib, sys, time\n"
+        "time.sleep(2.5)\n"
+        "pathlib.Path(sys.argv[1]).write_text('survived', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    parent.write_text(
+        "import subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, sys.argv[1], sys.argv[2]])\n"
+        "time.sleep(30)\n",
+        encoding="utf-8",
+    )
+    result = execution.run_logged(
+        [sys.executable, str(parent), str(child), str(sentinel)],
+        cwd=tmp_path,
+        command_root=tmp_path / "timeout-command",
+        label="run",
+        timeout_seconds=1,
+    )
+    time.sleep(2.0)
+    assert result.timed_out is True
+    assert result.returncode != 0
+    assert not sentinel.exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows taskkill fallback contract")
+def test_timeout_cleanup_falls_back_when_psutil_denies_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PsutilError(Exception):
+        pass
+
+    def deny_process(_pid: int):
+        raise PsutilError("access denied")
+
+    fake_psutil = SimpleNamespace(
+        Error=PsutilError,
+        NoSuchProcess=PsutilError,
+        Process=deny_process,
+    )
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+    taskkill_calls: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        taskkill_calls.append(list(command))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(execution.subprocess, "run", fake_run)
+
+    class Process:
+        pid = 4321
+
+        @staticmethod
+        def poll():
+            return None
+
+        @staticmethod
+        def wait(timeout):
+            del timeout
+            return 0
+
+        @staticmethod
+        def kill():
+            raise AssertionError("parent-only fallback should not be needed")
+
+    execution._stop_process_tree(Process())
+
+    assert taskkill_calls == [["taskkill", "/PID", "4321", "/T", "/F"]]
+
+
+def test_timeout_fails_one_cell_continues_independent_cell_and_fails_workspace(
+    tmp_path: Path,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "continue", strategies=("alpha", "beta"))
+    spec = _plan(tmp_path, workspace)
+    initialize_workspace(spec)
+    timed_out = False
+
+    def runner(command, **kwargs):
+        nonlocal timed_out
+        result = _successful_command(command, **kwargs)
+        if kwargs["label"] == "run" and not timed_out:
+            timed_out = True
+            return CommandResult(
+                result.command,
+                1,
+                result.duration_seconds,
+                True,
+                result.stdout,
+                result.stderr,
+            )
+        return result
+
+    state = execution.execute_workspace(
+        workspace,
+        command_runner=runner,
+        collector=lambda _workspace, cell: _cell_result(cell, 0.2),
+    )
+    assert state["status"] == "failed"
+    assert [state["cells"][cell]["status"] for cell in ("c0001", "c0002")] == [
+        "failed",
+        "collected",
+    ]
+    assert "timeout" in state["cells"]["c0001"]["error"]
+    inspected = api.inspect_workspace(workspace)
+    assert any(
+        item["scope"] == "c0001" and "timeout" in item["message"]
+        for item in inspected["anomalies"]
+    )
+    assert any(
+        item["scope"] == "c0001"
+        and item["message"] == "cell collection incomplete"
+        for item in inspected["anomalies"]
+    )
+
+
 def test_distribution_version() -> None:
-    assert benchmark.__version__ == "0.3.0"
+    assert benchmark.__version__ == "0.4.0"

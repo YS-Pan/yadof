@@ -110,7 +110,13 @@ hot-change contract; structural dimension changes are future work.
   `benchmark.py` and one direct execution. Another execution uses another
   workspace; there is no run container, resume, attempt array, or copied code
   snapshot. Runtime/package/account provenance is recorded once before cell work.
-  Planning expands semantic comparisons into short ordinal `cells/cNNNN`.
+  No-argument initialization materializes the wheel-contained portable preset;
+  complete and blank are explicit. The complete preset is 18 cells at 200 x 25
+  with a 7200-second timeout, and its mechanical smoke profile changes only
+  generations to one. Relative packaged resource names and SHA-256 digests are
+  retained as preset provenance. Planning expands semantic comparisons into short
+  ordinal `cells/cNNNN` plus display-only full baseline/strategy/seed labels
+  propagated through human-facing and evidence surfaces.
   Omitted budgets resolve to seed 101, population 200, and 50 generations, or 15
   generations when any selected strategy declares `slow_surrogate=True`.
   Explicit budgets are preserved. Individual simulation failures are counted and
@@ -120,7 +126,10 @@ hot-change contract; structural dimension changes are future work.
   and initial normalized population. A terminal cell publishes aggregate evidence
   before FIFO refill. Cell concurrency and baseline worker concurrency remain
   separate. Results/reports/visualizations are direct workspace outputs with
-  short filenames. Inspect is bounded/read-only and uses current-workspace timing
+  short filenames. Actual yadof evaluation snapshots drive progress; command
+  heartbeats expose only elapsed/activity state. Timeout cleanup stops the process
+  tree, independent cells continue when policy permits, and final status remains
+  non-successful. Inspect is bounded/read-only and uses current-workspace timing
   only. Windows AI-agent launches require host execution under the interactive
   human account because detach cannot change a sandbox process's session.
   A visible detached console is hosted persistently after the benchmark command

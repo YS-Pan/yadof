@@ -12,6 +12,7 @@ from typing import Callable, Mapping, Sequence
 
 from .contracts import (
     BenchmarkError,
+    BUDGET_PROFILES,
     ComparisonSpec,
     DEFAULT_GENERATIONS,
     DEFAULT_POPULATION,
@@ -277,10 +278,36 @@ class Benchmark:
             representative_generation_seconds=(
                 self._representative_generation_seconds
             ),
+            budget_profile="declared",
+            preset=MappingProxyType({}),
             python=self._python,
             workspace=self.workspace,
             source=source.resolve(),
         )
 
 
-__all__ = ["Benchmark"]
+def apply_budget_profile(
+    request: WorkflowRequest,
+    profile: str = "declared",
+) -> WorkflowRequest:
+    """Mechanically derive a bounded plan without changing its scientific inputs."""
+
+    selected = str(profile)
+    if selected not in BUDGET_PROFILES:
+        raise BenchmarkError(
+            f"budget profile must be one of {', '.join(BUDGET_PROFILES)}: {profile!r}"
+        )
+    comparisons = request.comparisons
+    if selected == "smoke":
+        comparisons = tuple(
+            replace(comparison, generations=1)
+            for comparison in request.comparisons
+        )
+    return replace(
+        request,
+        comparisons=comparisons,
+        budget_profile=selected,
+    )
+
+
+__all__ = ["Benchmark", "apply_budget_profile"]

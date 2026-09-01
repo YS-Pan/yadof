@@ -207,6 +207,10 @@ def _initial_state(spec: RunSpec) -> dict[str, Any]:
         "cells": {
             cell.id: {
                 "status": "planned",
+                "display_label": cell.display_label,
+                "baseline": cell.baseline_id,
+                "strategy": cell.strategy_id,
+                "seed": cell.seed,
                 "path": f"cells/{cell.id}",
                 "workspace": f"cells/{cell.id}/workspace",
                 "created_utc": None,

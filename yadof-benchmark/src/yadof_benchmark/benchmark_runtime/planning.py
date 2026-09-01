@@ -5,6 +5,7 @@ import ast
 import importlib.util
 import sys
 import uuid
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -15,6 +16,7 @@ from .contracts import (
     CellSpec,
     RunSpec,
     WorkflowRequest,
+    cell_display_label,
     freeze_json,
     replication_scope,
 )
@@ -24,7 +26,7 @@ from .storage import (
     object_digest,
 )
 from .workflow import Benchmark
-from .workspace import load_workspace
+from .workspace import load_workspace, load_workspace_preset
 
 
 _PROGRAM_DECLARATION = "YADOF_OPTIMIZATION_PROGRAM"
@@ -199,7 +201,10 @@ def load_workflow(workspace: str | Path) -> WorkflowRequest:
         raise BenchmarkError(f"build_benchmark() failed: {exc}") from exc
     if result is not None:
         raise BenchmarkError("build_benchmark() must return None")
-    request = builder.freeze(source)
+    request = replace(
+        builder.freeze(source),
+        preset=freeze_json(load_workspace_preset(root)),
+    )
     for postprocessor in request.postprocessors:
         callback = getattr(module, postprocessor.callback, None)
         if not callable(callback):
@@ -238,6 +243,8 @@ def plan_workflow(
     baseline_by_id = {item.id: item for item in selected}
     strategy_by_id = {item.id: item for item in request.strategies}
     cells: list[CellSpec] = []
+    identities: set[tuple[str, str, int]] = set()
+    display_labels: set[str] = set()
     for comparison in request.comparisons:
         if comparison.population is None or comparison.generations is None:
             raise BenchmarkError(f"comparison {comparison.id!r} budget is unresolved")
@@ -251,10 +258,31 @@ def plan_workflow(
                 )
                 strategy_digest = _strategy_digest(strategy_files)
                 for seed in comparison.seeds:
+                    identity = (baseline.id, strategy.id, int(seed))
+                    if identity in identities:
+                        raise BenchmarkError(
+                            "duplicate benchmark cell identity across comparisons: "
+                            f"baseline={baseline.id!r}, strategy={strategy.id!r}, "
+                            f"seed={seed!r}"
+                        )
+                    identities.add(identity)
+                    display_label = cell_display_label(
+                        baseline_id=baseline.id,
+                        baseline_name=baseline.name,
+                        strategy_id=strategy.id,
+                        strategy_name=strategy.name,
+                        seed=seed,
+                    )
+                    if display_label in display_labels:
+                        raise BenchmarkError(
+                            f"benchmark cell display label collision: {display_label!r}"
+                        )
+                    display_labels.add(display_label)
                     cell_id = f"c{len(cells) + 1:04d}"
                     cells.append(
                         CellSpec(
                             id=cell_id,
+                            display_label=display_label,
                             comparison_id=comparison.id,
                             baseline_id=baseline.id,
                             strategy_id=strategy.id,

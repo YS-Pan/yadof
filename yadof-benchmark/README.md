@@ -1,6 +1,6 @@
 # yadof-benchmark
 
-`yadof-benchmark` 0.3 is an independent, code-first runner for descriptive
+`yadof-benchmark` 0.4 is an independent, code-first runner for descriptive
 comparisons of complete yadof 0.5 optimization programs. It requires yadof 0.5.0
 or newer and accepts only literal explicit-program strategy sources.
 
@@ -19,7 +19,13 @@ The execution model is deliberately small:
 evidence remains descriptive: the runner reports measurements and validity but
 does not rank strategies or make acceptance decisions.
 
-Comparisons default to seed `101`, population `200`, and `50` generations.
+No-argument `init` materializes a wheel-contained portable preset (two canonical
+strategies, synthetic antenna, seed 101, population 12, two generations). The
+explicit complete preset contains 18 cells at population 200 and 25 generations;
+`--budget-profile smoke` mechanically keeps that matrix and sets generations to
+one. `init --blank` is the explicit custom-authoring path.
+
+Custom comparisons default to seed `101`, population `200`, and `50` generations.
 Mark a strategy `slow_surrogate=True` when it repeatedly trains a slow model such
 as a neural network; a comparison containing such a strategy defaults to `15`
 generations. Explicit seeds and budgets always take precedence. A single-seed
@@ -33,12 +39,16 @@ whole cell. Missing attempts, all-infinite output, or broken task/metric contrac
 still invalidate it.
 
 ```powershell
-$workspace = (yadof-benchmark init D:\benchmarks\my-comparison |
+$workspace = (yadof-benchmark init .\benchmarks\my-comparison |
   ConvertFrom-Json).workspace
 yadof-benchmark check --workspace $workspace
 yadof-benchmark plan --workspace $workspace
 yadof-benchmark run --workspace $workspace
 yadof-benchmark inspect --workspace $workspace
+
+$complete = (yadof-benchmark init .\benchmarks\complete --preset complete |
+  ConvertFrom-Json).workspace
+yadof-benchmark run --workspace $complete --budget-profile smoke
 ```
 
 On Windows, an AI agent must launch a long benchmark through host execution under
@@ -49,8 +59,9 @@ The visible console remains open after the benchmark finishes so its final outpu
 can be reviewed; type `exit` or close it when done. `--hidden` is only an explicit
 user-selected exception and exits automatically.
 
-Each cell has a short path such as `cells/c0001`. Semantic IDs remain in
-`spec.json` and reports. Results, reports, and visualizations are direct
+Each cell has a short path such as `cells/c0001`. Its full baseline, strategy,
+and seed display label appears in terminal output, `spec.json`, state, inspect,
+errors, results, and reports. Results, reports, and visualizations are direct
 workspace outputs, so long comparison/baseline/strategy names no longer expand
 artifact filenames.
 

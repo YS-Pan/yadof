@@ -59,6 +59,7 @@ def _cell_progress(
     if not active_value:
         return {
             "cell": cell_id,
+            "display_label": cell.get("display_label", cell_id),
             "phase": cell.get("status"),
             "cell_elapsed_seconds": (
                 None if created is None else max(0.0, (now - created).total_seconds())
@@ -84,6 +85,7 @@ def _cell_progress(
     latest = max(activity_times) if activity_times else None
     output = {
         "cell": cell_id,
+        "display_label": cell.get("display_label", cell_id),
         "phase": (
             latest_progress.get("phase")
             if latest_progress is not None
@@ -131,7 +133,9 @@ def active_progresses(
     return [
         _cell_progress(root, str(cell_id), cell, now=current)
         for cell_id, cell in state.get("cells", {}).items()
-        if cell.get("status") in {"checked", "running"}
+        # A successfully executed cell remains active while collection commands
+        # (for example ``view-cost`` and baseline postprocessing) are running.
+        if cell.get("status") in {"checked", "running", "succeeded"}
     ]
 
 
@@ -295,6 +299,9 @@ def estimate_workspace_timing(
         "elapsed_seconds": elapsed,
         "active_cell_count": len(actives),
         "active_cells": [str(item["cell"]) for item in actives[:8]],
+        "active_cell_labels": [
+            str(item.get("display_label", item["cell"])) for item in actives[:8]
+        ],
         "active_cells_truncated": max(0, len(actives) - 8),
         "recent_activity_utc": _iso(recent),
         "inactivity_seconds": (

@@ -1,0 +1,78 @@
+{
+  "format": "yadof.benchmark.presets/v1",
+  "presets": [
+    {
+      "id": "portable",
+      "name": "Portable structural smoke",
+      "description": "Two canonical strategies on the packaged synthetic antenna baseline with a small one-seed budget.",
+      "default": true,
+      "long_running": false,
+      "cells": 2,
+      "population": 12,
+      "generations": 2,
+      "timeout_seconds": 7200,
+      "baselines": ["test-com/synthetic-antenna"],
+      "strategies": ["real-only-nsga3", "gpsaf-pca-svd-nsga3"],
+      "seeds": [101],
+      "requirements": ["Installed yadof and yadof-benchmark wheels; no external simulator executable."],
+      "workflow": "workflows/portable.py",
+      "files": [
+        {
+          "source": "strategies/real-only-nsga3/optimization.py",
+          "destination": "resources/strategies/real-only-nsga3/optimization.py"
+        },
+        {
+          "source": "strategies/gpsaf-pca-svd-nsga3/optimization.py",
+          "destination": "resources/strategies/gpsaf-pca-svd-nsga3/optimization.py"
+        }
+      ]
+    },
+    {
+      "id": "complete",
+      "name": "Complete measured matrix",
+      "description": "Three packaged baselines by two canonical strategies by three fixed seeds.",
+      "default": false,
+      "long_running": true,
+      "cells": 18,
+      "population": 200,
+      "generations": 25,
+      "timeout_seconds": 7200,
+      "baselines": ["chrono/trebuchet", "ngspice/saw-ladder", "test-com/synthetic-antenna"],
+      "strategies": ["real-only-nsga3", "gpsaf-pca-svd-nsga3"],
+      "seeds": [101, 102, 103],
+      "requirements": [
+        "YADOF_PYCHRONO_PYTHON must name an executable Python runtime with PyChrono.",
+        "YADOF_NGSPICE_EXE must name an executable ngspice binary.",
+        "This is a long-running measured campaign; run check and the derived smoke profile first."
+      ],
+      "workflow": "workflows/complete.py",
+      "files": [
+        {
+          "source": "strategies/real-only-nsga3/optimization.py",
+          "destination": "resources/strategies/real-only-nsga3/optimization.py"
+        },
+        {
+          "source": "strategies/gpsaf-pca-svd-nsga3/optimization.py",
+          "destination": "resources/strategies/gpsaf-pca-svd-nsga3/optimization.py"
+        }
+      ]
+    },
+    {
+      "id": "blank",
+      "name": "Blank authoring workspace",
+      "description": "An explicit commented authoring template with no registered benchmark cells.",
+      "default": false,
+      "long_running": false,
+      "cells": 0,
+      "population": null,
+      "generations": null,
+      "timeout_seconds": null,
+      "baselines": [],
+      "strategies": [],
+      "seeds": [],
+      "requirements": ["The user must author benchmark.py and strategy resources before check or run."],
+      "workflow": "workflows/blank.py",
+      "files": []
+    }
+  ]
+}
