@@ -1,7 +1,7 @@
 # yadof
 
 yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.4.2**. Evaluation
+or HTCondor workflows. The current packaged release is **0.5.1**. Evaluation
 history uses immutable standard-ZIP segments plus immutable metadata events.
 
 Its durable modeling contract is:
@@ -38,25 +38,28 @@ ready for additional examples.
 Install the wheel into the Python environment used on the submit machine:
 
 ```powershell
-python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[surrogate]"
-python -m pip install ".\dist\yadof-0.4.2-py3-none-any.whl[viewer]"
+python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[surrogate]"
+python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[viewer]"
 ```
 
-The default workspace composes conditional INR, so `init`, `check`, and `run`
-require the `surrogate` extra (the `viewer` extra includes the same Torch runtime).
-A core-only installation remains valid for an existing workspace whose
-`submit/optimization.py` selects no surrogate component.
+The default workspace's `submit/optimization.py` composes conditional INR.
+`init` and `check` validate the program statically without importing Torch;
+`run` requires the `surrogate` extra to execute that component (the `viewer`
+extra includes the same Torch runtime). A core-only installation can run an
+existing workspace whose program selects no surrogate component. Workspaces
+using the former `build_optimization()` entry must follow the
+[0.5 migration guide](user_doc/migration_0_5.md).
 
 Ask the AI agent to initialize and author the task, or use the underlying commands
 directly:
 
 ```powershell
-yadof init D:\work\my-study
-yadof check --workspace D:\work\my-study
-yadof smoke-test --workspace D:\work\my-study --real-task
-yadof run --workspace D:\work\my-study
-yadof view all --workspace D:\work\my-study
-yadof view surrogate --workspace D:\work\my-study
+yadof init .\work\my-study
+yadof check --workspace .\work\my-study
+yadof smoke-test --workspace .\work\my-study --real-task
+yadof run --workspace .\work\my-study
+yadof view all --workspace .\work\my-study
+yadof view surrogate --workspace .\work\my-study
 ```
 
 `yadof run` now runs **50 generations by default**. Use `--generations N` to
@@ -115,16 +118,19 @@ Create a code-first workspace, edit its complete `benchmark.py`, and start with 
 read-only plan:
 
 ```powershell
-yadof-benchmark init D:\benchmarks\comparison
+$workspace = (yadof-benchmark init .\benchmarks\comparison |
+  ConvertFrom-Json).workspace
 yadof-benchmark baselines
-yadof-benchmark plan --workspace D:\benchmarks\comparison
+yadof-benchmark plan --workspace $workspace
 ```
 
-The Python workflow may declare multiple comparison matrices and retryable
-postprocessors without a fixed configuration schema. `run` snapshots the workflow,
-resources, baselines, complete strategies, and driver; `resume --run PATH` uses only
-that run-owned evidence. Read [the workspace contract](yadof-benchmark/user_doc/workspace.md)
-and apply the normal cost/risk policy before starting real work.
+The Python workflow declares complete optimization strategies, comparisons, and
+postprocessors. Initialization defaults to the portable preset; `complete` and
+`blank` are explicit choices. One benchmark workspace owns one execution, with
+results directly under that root and no resume command. Another execution uses
+another initialized workspace. Read
+[the workspace contract](yadof-benchmark/user_doc/workspace.md) and apply the normal
+cost/risk policy before starting real work.
 
 ## Package and workspace boundary
 

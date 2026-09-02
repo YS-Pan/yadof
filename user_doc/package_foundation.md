@@ -14,10 +14,10 @@ Install a built wheel into the Python environment used by submit and local worke
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.5.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.5.0-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.5.0-py3-none-any.whl[qnehvi]"
-python -m pip install ".\dist\yadof-0.5.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.5.1-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[qnehvi]"
+python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[viewer]"
 ```
 
 The default template's declared `submit/optimization.py` program composes
@@ -75,7 +75,7 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-The current package version is `0.5.0`. Recorded history uses immutable
+The current package version is `0.5.1`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
 The core wheel also exposes `yadof.recorded_data.EvidenceDataset` and `CostTable`.

@@ -31,7 +31,7 @@ HTCondor deployment.
 
 The installed yadof version was 0.1.0 when the snapshot was collected before the
 installable-package work. Acceptance for the current packaged line must build and
-force-install the 0.5.0 wheel into the same `.venv`, then verify that imports
+force-install the current wheel into the same `.venv`, then verify that imports
 resolve from `.venv\Lib\site-packages\yadof`.
 
 ## Detection notes

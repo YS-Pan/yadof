@@ -491,7 +491,7 @@ def test_package_metadata_and_source_resources() -> None:
         "botorch>=0.18,<0.19",
     ]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.5.0"
+    assert yadof.__version__ == "0.5.1"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(

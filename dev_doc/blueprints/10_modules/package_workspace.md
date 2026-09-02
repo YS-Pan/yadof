@@ -10,7 +10,7 @@ code, generic templates/adapters, and version-matched documentation. The top-lev
 package resources and console entry point; it is not a yadof package resource or
 implicit yadof workspace.
 
-The current package version is 0.5.0. Recorded history uses immutable standard-ZIP
+The current package version is 0.5.1. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Workspace contract
