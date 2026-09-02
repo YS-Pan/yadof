@@ -85,6 +85,13 @@ def history_records(
     session: CampaignSession | None = None,
     snapshot: GenerationTaskSnapshot | None = None,
 ) -> tuple[HistoryRecord, ...]:
+    """Return successful generation-scoped evidence as optimizer history.
+
+    Standalone and pre-run smoke evaluations are deliberately unscoped.  Their
+    durable evidence remains available to diagnostics and resource calibration,
+    but a midpoint smoke row is not an optimization population.
+    """
+
     try:
         if session is not None and snapshot is not None:
             dataset = session.evidence_dataset()
@@ -102,6 +109,7 @@ def history_records(
         if (
             not evidence.is_durable
             or evidence.execution_status != "completed"
+            or evidence.record.get("generation_index") is None
             or not cost.valid
             or cost.normalized_variables is None
             or cost.costs is None

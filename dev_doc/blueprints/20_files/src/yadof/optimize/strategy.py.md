@@ -10,8 +10,10 @@
 - Build deterministic JSON semantic identity/signature from selected component
   identity plus parameter/objective names.
 - Adapt current session history by joining evidence and costs on row identity, then
-  expose candidate/row/design/interpretation IDs alongside the compatible
-  `job_name/x/costs` fields.
+  retain only successful committed original rows with a generation index and expose
+  candidate/row/design/interpretation IDs alongside the compatible
+  `job_name/x/costs` fields. Unindexed smoke evidence remains durable outside this
+  optimizer-history adapter.
 
 ## Invariants
 
@@ -21,3 +23,5 @@
 - Surrogate predictions cannot become accepted results without real evaluation.
 - Pending, failed, or derived rows and non-successful cost interpretations cannot
   become committed optimizer history.
+- Standalone and pre-run smoke rows cannot warm-start generation zero merely because
+  their midpoint evidence was durably recorded.

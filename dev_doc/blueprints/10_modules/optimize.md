@@ -159,9 +159,12 @@ distributed, and Condor backend paths expose no after-submit callback field.
 ## Warm start and orchestration
 
 History warm start joins the session's immutable evidence dataset and task-bound
-cost table by row identity. It consumes only successful committed original rows and
-carries candidate, row, design, and interpretation identity alongside the existing
-name/normalized-variable/cost fields. `run_generations` supports start/resume,
+cost table by row identity. It consumes only successful committed original rows
+that carry a generation index, and carries candidate, row, design, and
+interpretation identity alongside the existing name/normalized-variable/cost
+fields. Unindexed standalone and pre-run smoke rows remain durable for diagnostics
+and resource calibration but cannot turn a new generation-zero search into a
+midpoint warm start. `run_generations` supports start/resume,
 stable run and optimization
 identities, deterministic seed, temporary config overrides, optional pre-run smoke,
 and generation metadata including timings, populations, task fingerprints, and

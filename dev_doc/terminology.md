@@ -82,8 +82,8 @@
 | `self-contained parameter snapshot` | Assigned job-local `parameters_constraints.py` with a minimal local `Parameter` representation and no yadof import. |
 | `direct workflow submission` | Windows HTCondor contract in which `workflow.py` itself is `executable` with `transfer_executable=True`; there is no yadof launcher. |
 | `job_static_hash` | Definition-oriented hash of task/worker inputs that excludes runtime metadata and per-candidate assignments. |
-| `standalone smoke test` | `yadof smoke-test`: exactly one midpoint real task, no generation/per-job/whole-generation timeout; edited tasks require explicit real-task intent. |
-| `run smoke` | Optional pre-run real-task smoke chosen by workspace config unless `--smoke-test` or `--no-smoke-test` overrides it. Failure prevents generation submission. |
+| `standalone smoke test` | `yadof smoke-test`: exactly one midpoint real task, no generation/per-job/whole-generation timeout; edited tasks require explicit real-task intent. Its unindexed durable evidence supports diagnostics and compatible resource calibration but is not optimizer history. |
+| `run smoke` | Optional pre-run real-task smoke chosen by workspace config unless `--smoke-test` or `--no-smoke-test` overrides it. Failure prevents generation submission; success does not warm-start generation zero from the midpoint row. |
 | `local mode` | Prepared workflow subprocess execution using the installed package and selected workspace. |
 | `fast mode` | A single-host evaluation backend using bounded reusable spawn workers and task-owned `evaluation.py`. It returns named memory rawData directly to the parent recorder, creates no durable per-candidate job folder, and replaces a worker after task failure, crash, or timeout. |
 | `fast task kernel` | Callable `job_template/evaluation.py:evaluate_rawdata(parameters, context)` for a fast-compatible task. It receives read-only assigned named values and a no-job-path context, may run external local software, and returns schema-valid named rawData payloads plus optional JSON diagnostics, never cost. |

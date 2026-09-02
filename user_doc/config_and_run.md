@@ -244,7 +244,11 @@ per-job execution limit, and no submit-side whole-generation deadline. It succee
 only if at least one finite objective is returned. Before it blocks on the real
 workflow, the CLI immediately prints the selected workspace, evaluation mode, jobs
 directory, and no-timeout warning. It then prints the returned costs on success or
-an actionable error with the jobs directory on failure.
+an actionable error with the jobs directory on failure. Its durable evidence remains
+available for diagnostics, views, and compatible resource calibration, but the
+unindexed midpoint row is not optimizer history and cannot warm-start generation
+zero. A new campaign therefore keeps its global random initialization unless
+generation-scoped optimization evidence already exists.
 
 For fast, the same feedback says that there is no durable job directory and prints
 the ephemeral scratch root instead. Fast failure diagnostics are durable recorded

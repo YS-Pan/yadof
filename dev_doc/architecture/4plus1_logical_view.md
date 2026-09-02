@@ -140,10 +140,13 @@ Prediction consumes the immutable fitted state plus the exact generation snapsho
 so edits to current cost policy affect later predictions without changing weights.
 
 Search primitives rebuild their root from durable history at each generation
-boundary. Within one generation they return next states rather than mutating input
-state, permit deterministic forks, and bind continuation to the exact strategy,
-problem, seeds, archive precision, and interpretation snapshot. Selection is only a
-search-state commit point; it cannot commit evidence.
+boundary. Optimizer history contains only successful generation-scoped evidence;
+an unindexed standalone or pre-run smoke remains durable calibration and diagnostic
+evidence but is not an optimization population. Within one generation search
+primitives return next states rather than mutating input state, permit deterministic
+forks, and bind continuation to the exact strategy, problem, seeds, archive
+precision, and interpretation snapshot. Selection is only a search-state commit
+point; it cannot commit evidence.
 
 ## Invariants
 
@@ -177,6 +180,8 @@ search-state commit point; it cannot commit evidence.
   not hard-code task-specific simulator or objective policy.
 - External simulator failures or partial artifacts never publish normal evidence.
 - Predicted rawData never enters real history.
+- Unindexed smoke evidence never enters optimizer history or changes generation-zero
+  global random initialization.
 - Search candidates, predicted costs, and mid-generation search state never enter
   the recorder, `EvidenceDataset`, `CostTable`, optimizer history, or checkpoints.
 - Pymoo remains the sole owner of concrete algorithms, operators, ask/tell, and

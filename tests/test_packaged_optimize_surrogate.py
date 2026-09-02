@@ -268,6 +268,32 @@ def test_packaged_optimizer_recovers_history_without_crossing_workspaces(tmp_pat
     assert not (workspace_b / ".yadof" / "surrogate" / "checkpoints").exists()
 
 
+def test_smoke_evidence_is_durable_but_not_an_optimizer_warm_start(tmp_path):
+    from yadof.evaluate_manager import run_smoke_test
+    from yadof.optimize import run_one_generation
+
+    workspace = _workspace(tmp_path, "smoke_is_not_population")
+
+    smoke_costs = run_smoke_test(workspace)
+    assert len(smoke_costs) == 1
+    assert len(get_historical_results(workspace)) == 1
+
+    first = run_one_generation(
+        workspace,
+        generation_index=0,
+        population_size=2,
+        random_seed=41,
+    )
+
+    assert first.history_count == 0
+    assert first.source == "gpsaf_random"
+    assert all(row != (0.5,) for row in first.population)
+    assert len(get_historical_results(workspace)) == 3
+    records = list_records(workspace)
+    assert sum(row.get("generation_index") is None for row in records) == 1
+    assert sum(row.get("generation_index") == 0 for row in records) == 2
+
+
 def test_packaged_run_generations_records_workspace_local_metadata(tmp_path):
     from yadof.optimize import run_generations
 

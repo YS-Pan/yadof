@@ -88,8 +88,10 @@ for separately authorized real adapter smoke or performance work.
   missing interpretation statuses; task hot reload; live pending/commit/recovery;
   corrupt candidate/segment isolation; and compatibility query, optimizer-history,
   multi-objective, and surrogate-training alignment;
-- optimizer start/resume/shape/failure behavior, surrogate rawData-first training,
-  checkpoint compatibility, intervals, and workspace-keyed scheduling;
+- optimizer start/resume/shape/failure behavior, durable unindexed smoke exclusion
+  from optimizer warm start, generation-zero global random initialization,
+  surrogate rawData-first training, checkpoint compatibility, intervals, and
+  workspace-keyed scheduling;
 - PCA/SVD centered-versus-uncentered per-field mathematics, rank clamp and
   mean-only cases, schema/dtype round trips, validation-oracle labeling,
   parameter-only ridge prediction, zero-width cost intervals, no posterior,
