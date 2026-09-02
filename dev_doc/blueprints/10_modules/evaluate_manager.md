@@ -48,10 +48,10 @@ per-job timeout, kills the process tree on timeout or cancellation, rejects
 the flat rawData directory even when no direct files exist, merges workflow metadata,
 and captures output tails. psutil samples the workflow and recursive simulator
 children to record summed peak RSS, accumulated CPU time/average cores, peak process
-count, and job-directory disk use. `local_resources.py` combines calibrated per-job
-needs with physical CPU, currently available memory, free disk, reserve fraction,
-population size, and the configured worker cap. The task workflow calls package
-worker support, which records the execute-machine name and the rest of the invariant
+count, and job-directory disk use. `local_resources.py` reports calibrated per-job
+needs and advisory physical-CPU/memory/disk capacities but uses the configured
+worker cap without resource clamping. The task workflow calls package worker
+support, which records the execute-machine name and the rest of the invariant
 lifecycle metadata.
 
 ## Fast backend
@@ -64,8 +64,9 @@ the parent admits each completion to the population coordinator before assigning
 more work, and count/byte target commits may expose several ordered results
 together. Every worker uses the generation's immutable task snapshot. There is no
 `prepare_job()`, job-template copy, assigned parameter file, workflow process, or
-fake job path. `fast_resources.py` bounds the configured cap by population and
-declared per-worker CPU/memory/scratch disk against current host capacity.
+fake job path. `fast_resources.py` bounds useful concurrency by population, trusts
+the configured cap, and records declared per-worker CPU/memory/scratch disk against
+current host capacity only as advisory diagnostics.
 
 The parent owns candidate scratch creation/cleanup, records worker/machine/timing
 and process-tree diagnostics, enforces the hard timeout, and uses shared
@@ -144,8 +145,8 @@ population's receipts before return.
   ordering, and shape rules;
   only local/distributed share prepared-job composition.
 - Standalone smoke is exactly one midpoint job and has no job/generation timeout.
-- Local default worker cap is eight; adaptive planning may safely choose fewer and
-  never exceeds the population or cap.
+- Fast/local configured worker caps are authoritative and are not reduced by host
+  resource observations; effective useful concurrency never exceeds the population.
 - Resource retries are bounded fresh clusters for standard memory/disk holds only.
 - Public overlap is expressed by evaluation-handle start/wait order; no backend
   fabricates a scheduler submission event.

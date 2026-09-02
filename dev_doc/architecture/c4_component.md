@@ -34,8 +34,8 @@
   support into self-contained prepared jobs.
 - Fast, local, and HTCondor runners own their transport, timeout, cleanup, and
   diagnostic mechanisms.
-- Resource components interpret backend observations for future scheduling without
-  changing task evidence.
+- Resource components retain backend observations and advisory capacity estimates
+  without changing task evidence or clamping an explicit fast/local worker cap.
 - The common finalizer owns rawData validation/ownership, bounded group admission,
   committed-receipt coordination, stable-order current-cost interpretation, and
   result construction. Handle results contain only payload-free finalized rows and

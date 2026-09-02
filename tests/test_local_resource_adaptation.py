@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from yadof.config import load_config
-from yadof.evaluate_manager import local_resources, resource_calibration
+from yadof.evaluate_manager import (
+    fast_resources,
+    local_resources,
+    resource_calibration,
+)
 from yadof.workspace.init import init_workspace
 
 
@@ -22,7 +26,7 @@ def _system() -> local_resources.SystemResourceSnapshot:
     )
 
 
-def test_local_adaptive_plan_uses_shared_cross_backend_smoke_calibration(
+def test_local_plan_observes_calibration_without_clamping_configured_workers(
     tmp_path,
     monkeypatch,
 ):
@@ -65,11 +69,11 @@ def test_local_adaptive_plan_uses_shared_cross_backend_smoke_calibration(
         system=_system(),
     )
 
-    assert plan.worker_count == 2
+    assert plan.worker_count == 8
     assert plan.configured_max == 8
     assert plan.cpu_limit == 4
     assert plan.memory_limit == 2
-    assert plan.source == "adaptive_smoke_calibration"
+    assert plan.source == "configured_limit_with_smoke_calibration_observation"
     assert plan.estimate_source == "smoke_calibration"
     assert plan.calibration_sample_count == 2
     assert plan.cpus_per_worker == 2
@@ -124,8 +128,8 @@ def test_local_autodetect_is_independent_of_condor_switch(tmp_path):
         system=_system(),
     )
 
-    assert plan.worker_count == 6
-    assert plan.source == "adaptive_configured_default"
+    assert plan.worker_count == 8
+    assert plan.source == "configured_limit_with_configured_default_observation"
     assert plan.cpu_limit == 8
     assert plan.memory_limit == 6
 
@@ -145,3 +149,29 @@ def test_local_plan_never_exceeds_population_size(tmp_path):
 
     assert plan.worker_count == 3
     assert plan.configured_max == 3
+
+
+def test_fast_plan_observes_resources_without_clamping_configured_workers(tmp_path):
+    workspace = _workspace(tmp_path)
+    config = load_config(workspace)
+    constrained = local_resources.SystemResourceSnapshot(
+        physical_cpus=2,
+        logical_cpus=4,
+        available_memory_mib=1,
+        free_disk_kib=1,
+    )
+
+    plan = fast_resources.plan_fast_workers(
+        config,
+        population_size=20,
+        configured_max=8,
+        system=constrained,
+    )
+
+    assert plan.worker_count == 8
+    assert plan.configured_max == 8
+    assert plan.cpu_limit == 2
+    assert plan.memory_limit == 1
+    assert plan.disk_limit == 1
+    assert plan.source == "configured_limit_with_resource_observation"
+    assert plan.metadata()["fast_resource_limits_enforced"] is False

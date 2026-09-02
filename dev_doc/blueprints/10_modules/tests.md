@@ -32,6 +32,8 @@ Coverage requires:
   valid when finite contract-valid metrics exist;
 - missing attempts and all other hard validity failures remain non-successful;
 - FIFO publication/storage boundaries, separated cell/simulator concurrency,
+  physical-core multiplier resolution, authoritative fast/local configured caps
+  under lower advisory CPU/memory/disk observations,
   actual-yadof progress parsing, TTY/non-TTY ownership, timeout descendant cleanup,
   continue-after-timeout, and required visualizations retain focused fault tests;
 - the literal `yadof.optimize.program/v1` protocol discriminator is accepted and

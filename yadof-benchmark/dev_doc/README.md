@@ -40,6 +40,8 @@ Current invariants are:
   attempted budget, and generation-0 normalized population before pairing;
 - planning performs no simulator work and writes no execution evidence;
 - cell concurrency and baseline simulation concurrency are separate controls;
+  baseline manifests store only a finite positive physical-core multiplier,
+  while cell state records the host detection and resolved worker count;
 - terminal result publication is a fatal persistence boundary before FIFO refill;
 - yadof `evaluation` snapshots are the only source of evaluation percentage;
   command heartbeats expose elapsed/activity state without inventing completion;

@@ -7,6 +7,10 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
+from .concurrency import (
+    SIMULATION_CONCURRENCY_FIELDS,
+    validate_physical_core_multiplier,
+)
 from .contracts import BASELINE_FORMAT, BaselineManifest, BenchmarkError, freeze_json
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9._/-]*\Z")
@@ -31,7 +35,6 @@ _MANIFEST_FIELDS = {
     "format", "id", "name", "description", "workspace", "execution",
     "contract", "estimates", "materialize_excludes",
 }
-_SIMULATION_CONCURRENCY_FIELDS = {"max_workers", "resource_autodetect"}
 
 
 def _read_json(path: Path) -> Mapping[str, Any]:
@@ -124,21 +127,19 @@ def load_baseline(path: str | Path) -> BaselineManifest:
                 "must explicitly configure fast/local worker limits"
             )
         unknown_concurrency = sorted(
-            set(concurrency) - _SIMULATION_CONCURRENCY_FIELDS
+            set(concurrency) - SIMULATION_CONCURRENCY_FIELDS
         )
         if unknown_concurrency:
             raise BenchmarkError(
                 f"unknown execution.simulation_concurrency fields in "
                 f"{baseline_id!r}: {', '.join(unknown_concurrency)}"
             )
-        _positive_int(
-            concurrency.get("max_workers"),
-            label="execution.simulation_concurrency.max_workers",
+        validate_physical_core_multiplier(
+            concurrency.get("physical_core_multiplier"),
+            label=(
+                "execution.simulation_concurrency.physical_core_multiplier"
+            ),
         )
-        if not isinstance(concurrency.get("resource_autodetect"), bool):
-            raise BenchmarkError(
-                "execution.simulation_concurrency.resource_autodetect must be boolean"
-            )
     elif concurrency is not None:
         raise BenchmarkError(
             f"baseline {baseline_id!r} configures simulation_concurrency for "

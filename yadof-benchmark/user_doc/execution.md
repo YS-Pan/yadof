@@ -141,6 +141,11 @@ Immediately before cell work, the runner writes:
 - `spec.json`: the complete expanded plan;
 - `state.json`: current execution state.
 
+For each materialized fast/local cell, state includes the detected physical core
+count, baseline `physical_core_multiplier`, floor rounding rule, and resolved
+maximum simulator workers. The baseline's fixed input remains the multiplier in
+`spec.json`; the host-specific integer is execution evidence.
+
 The installed package performs the execution directly. The runner does not copy
 its own driver, `benchmark.py`, resources, or strategy source as a versioned
 code snapshot. A baseline is materialized into each cell only because yadof needs

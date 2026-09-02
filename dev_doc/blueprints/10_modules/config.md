@@ -33,17 +33,19 @@ The default conditional-INR freshness bound is one generation. A workspace may
 set another non-negative `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` when its measured
 evaluation/training timing favors throughput over newer surrogate evidence.
 
-Local evaluation defaults to a worker cap of eight, resource autodetection enabled,
-and a 15% host reserve. The cap remains a positive integer. Autodetection and reserve
-settings are independently validated bool/fraction values. Existing HTCondor
-CPU/memory/disk request and calibration settings also provide the per-job bootstrap
-hints for local planning because both backends execute the same workflow.
+Local evaluation defaults to a worker cap of eight, resource observation enabled,
+and a 15% host reserve. The cap remains a positive integer and is authoritative;
+detected capacity never clamps it. Observation and reserve settings are
+independently validated bool/fraction values. Existing HTCondor CPU/memory/disk
+request and calibration settings also provide the per-job bootstrap hints for
+local diagnostics because both backends execute the same workflow.
 
 Fast evaluation separately defaults to eight reusable workers, host-capacity
-autodetection, a 15% reserve, and explicit one-worker CPU/memory/scratch-disk
-declarations. `FAST_EVALUATION_SCRATCH_DIR` resolves from the workspace like other
-path settings and must not overlap task, jobs, or recorded-data paths. Fast policy
-does not reuse HTCondor request fields.
+observation, a 15% reserve, and explicit one-worker CPU/memory/scratch-disk
+declarations. Its configured worker cap is likewise authoritative; observed
+limits are diagnostic. `FAST_EVALUATION_SCRATCH_DIR` resolves from the workspace
+like other path settings and must not overlap task, jobs, or recorded-data paths.
+Fast policy does not reuse HTCondor request fields.
 
 Recorder policy defines the segment candidate cap/byte target, maximum one-candidate
 size, complete unpublished candidate/byte backpressure budgets, and the maximum

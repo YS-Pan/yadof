@@ -129,15 +129,15 @@ generation boundaries.
 
 ## Local concurrency and resource calibration
 
-`LOCAL_EVALUATION_MAX_WORKERS` is a safety cap, not always the number that will run.
-Its package default is 8. With the default
-`LOCAL_RESOURCE_AUTODETECT_ENABLED = True`, yadof plans every local batch from the
-minimum of:
+`LOCAL_EVALUATION_MAX_WORKERS` is the user-directed concurrency cap and defaults
+to 8. With enough candidates in the current population, yadof uses this value
+without lowering it from detected CPU, memory, or disk capacity. Population size
+remains the natural bound on simultaneously useful work.
 
-- the current population size and configured cap;
-- physical CPU count divided by estimated CPU cores per workflow;
-- available memory divided by estimated peak process-tree memory;
-- free disk divided by estimated job-directory disk use.
+With the default `LOCAL_RESOURCE_AUTODETECT_ENABLED = True`, yadof still observes
+physical CPU capacity, available memory, and free disk against calibrated
+per-workflow estimates. These values are advisory diagnostics only; they never
+rewrite the configured worker cap.
 
 `LOCAL_RESOURCE_SYSTEM_RESERVE_FRACTION` defaults to `0.15`, reserving 15% of
 available memory and disk for the operating system and other work. The one-individual
@@ -156,24 +156,27 @@ existing workspace resource declarations across local and distributed execution.
 `HTCONDOR_RESOURCE_BOOTSTRAP_MULTIPLIER` and
 `HTCONDOR_RESOURCE_TRIM_TOP_FRACTION` also apply to the shared calibration.
 
-`--progress` prints the effective local worker count, the configured/CPU/memory/disk
-limits, calibration source, and sample count. A temporary `local_max_workers` API
-override changes the cap; autodetection may still select a smaller safe count.
-Disable `LOCAL_RESOURCE_AUTODETECT_ENABLED` only to use the cap directly.
+`--progress` prints the effective local worker count, configured cap, advisory
+CPU/memory/disk capacities, calibration source, and sample count. A temporary
+`local_max_workers` API override changes the cap and is trusted in the same way.
+Disabling `LOCAL_RESOURCE_AUTODETECT_ENABLED` suppresses adaptive observation and
+calibration; it does not change worker-count authority.
 
 ## Fast concurrency, timeout, and scratch
 
 `EVALUATION_MODE = "fast"` selects reusable process-isolated workers on the current
-machine. `FAST_EVALUATION_MAX_WORKERS` defaults to 8. With
-`FAST_RESOURCE_AUTODETECT_ENABLED = True`, the effective count is the minimum of
-population/cap and host CPU, available memory, and free scratch disk divided by:
+machine. `FAST_EVALUATION_MAX_WORKERS` defaults to 8 and is used without a host-
+resource clamp when enough candidates are available. With
+`FAST_RESOURCE_AUTODETECT_ENABLED = True`, yadof observes host CPU, available
+memory, and free scratch disk divided by:
 
 - `FAST_EVALUATION_CPUS_PER_WORKER` (default 1);
 - `FAST_EVALUATION_MEMORY_MIB_PER_WORKER` (default 512);
 - `FAST_EVALUATION_SCRATCH_DISK_KIB_PER_WORKER` (default 1024).
 
-`FAST_RESOURCE_SYSTEM_RESERVE_FRACTION` defaults to `0.15`. These are explicit fast
-task/simulator declarations and are independent of HTCondor requests.
+`FAST_RESOURCE_SYSTEM_RESERVE_FRACTION` defaults to `0.15`. These values produce
+advisory diagnostics; they do not reduce `FAST_EVALUATION_MAX_WORKERS`. The
+declarations are independent of HTCondor requests.
 `EVALUATION_TIMEOUT_SEC` is the hard candidate timeout; timeout/crash kills the
 worker tree and the next queued individual uses a replacement worker. A smoke still
 disables the timeout and caps fast at one worker.

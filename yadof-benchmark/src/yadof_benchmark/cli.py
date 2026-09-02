@@ -61,10 +61,8 @@ def _plan_summary(
     replication_scopes = sorted({cell.replication_scope for cell in cells})
     simulation_concurrency = [
         (
-            f"{cell.baseline_id}:max_workers="
-            f"{cell.execution.get('simulation_concurrency', {}).get('max_workers')}:"
-            f"resource_autodetect="
-            f"{cell.execution.get('simulation_concurrency', {}).get('resource_autodetect')}"
+            f"{cell.baseline_id}:physical_core_multiplier="
+            f"{cell.execution.get('simulation_concurrency', {}).get('physical_core_multiplier')}"
         )
         for cell in cells
         if isinstance(cell.execution.get("simulation_concurrency"), Mapping)

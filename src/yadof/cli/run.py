@@ -159,12 +159,12 @@ def _print_run_summary(
             flush=True,
         )
         print(
-            "Fast resource autodetect: "
+            "Fast resource observation: "
             f"{config.FAST_RESOURCE_AUTODETECT_ENABLED}",
             flush=True,
         )
         print(
-            "Local resource autodetect: "
+            "Local resource observation: "
             f"{config.LOCAL_RESOURCE_AUTODETECT_ENABLED}",
             flush=True,
         )

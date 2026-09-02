@@ -1,4 +1,4 @@
-"""Adaptive local concurrency and process-tree resource measurement."""
+"""User-directed local concurrency and process-tree resource measurement."""
 
 from __future__ import annotations
 
@@ -66,6 +66,7 @@ class LocalWorkerPlan:
             "local_resource_cpu_worker_limit": self.cpu_limit,
             "local_resource_memory_worker_limit": self.memory_limit,
             "local_resource_disk_worker_limit": self.disk_limit,
+            "local_resource_limits_enforced": False,
             "local_system_physical_cpus": self.system.physical_cpus,
             "local_system_logical_cpus": self.system.logical_cpus,
             "local_system_available_memory_mib": self.system.available_memory_mib,
@@ -77,9 +78,9 @@ class LocalWorkerPlan:
             f"{name}={value if value is not None else 'unknown'}"
             for name, value in (
                 ("configured", self.configured_max),
-                ("cpu", self.cpu_limit),
-                ("memory", self.memory_limit),
-                ("disk", self.disk_limit),
+                ("advisory_cpu", self.cpu_limit),
+                ("advisory_memory", self.memory_limit),
+                ("advisory_disk", self.disk_limit),
             )
         )
         return (
@@ -98,7 +99,7 @@ def plan_local_workers(
     system: SystemResourceSnapshot | None = None,
     history_records: Sequence[Mapping[str, object]] | None = None,
 ) -> LocalWorkerPlan:
-    """Choose local concurrency from configured and detected resource capacity."""
+    """Use configured concurrency and observe resources without clamping it."""
 
     population_limit = max(1, int(population_size))
     configured_limit = min(max(1, int(configured_max)), population_limit)
@@ -153,13 +154,7 @@ def plan_local_workers(
                     / max(1, estimate.disk_kib)
                 ),
             )
-        worker_count = min(
-            configured_limit,
-            cpu_limit,
-            memory_limit if memory_limit is not None else configured_limit,
-            disk_limit if disk_limit is not None else configured_limit,
-        )
-        source = f"adaptive_{estimate.source}"
+        source = f"configured_limit_with_{estimate.source}_observation"
 
     return LocalWorkerPlan(
         worker_count=max(1, worker_count),

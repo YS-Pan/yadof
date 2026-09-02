@@ -53,8 +53,11 @@ but can be tolerated when every planned attempt exists and finite contract-valid
 metric evidence remains. Invalid evidence is retained and excluded from paired
 aggregates.
 
-Cell and simulation concurrency remain separate explicit controls. FIFO admission
-waits for terminal aggregate publication; storage failure is fatal. Foreground
+Cell and simulation concurrency remain separate explicit controls. Benchmark
+baseline simulation concurrency is a physical-core multiplier resolved and
+recorded on the execution host; yadof trusts that resolved fast/local cap rather
+than applying a second resource clamp. FIFO admission waits for terminal aggregate
+publication; storage failure is fatal. Foreground
 Rich presentation receives real child generation snapshots and command output
 stays in per-cell logs unless explicitly streamed. Inspect is bounded/read-only
 and estimates timing only from current-workspace generation trends and baseline

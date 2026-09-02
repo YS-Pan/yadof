@@ -2,9 +2,9 @@
 
 ## Intent
 
-- Choose a safe, useful local simulation concurrency from live host capacity and
-  shared per-job resource estimates, then measure each local process tree for the
-  next calibration step.
+- Apply the user-configured local simulation cap without resource clamping,
+  observe live host capacity against shared per-job estimates, and measure each
+  local process tree for the next calibration step.
 
 ## Functionalities
 
@@ -12,10 +12,11 @@
   jobs filesystem.
 - Expose that backend-neutral host snapshot probe for the fast-specific planner,
   which supplies its own scratch path and per-worker declarations.
-- Reserve the configured host fraction and calculate independent CPU, memory, and
-  disk concurrency limits.
+- Reserve the configured host fraction and calculate independent advisory CPU,
+  memory, and disk concurrency limits.
 - Bound the effective worker count by population size and
-  `LOCAL_EVALUATION_MAX_WORKERS`, while always allowing one job.
+  `LOCAL_EVALUATION_MAX_WORKERS`, while always allowing one job; advisory limits
+  never reduce the configured cap.
 - Reuse `resource_calibration.py` for per-job CPU, memory, and disk estimates.
 - Monitor a workflow process and its recursive children with `psutil`, recording
   peak RSS, accumulated CPU time, average CPU cores, and peak process count.
@@ -28,7 +29,8 @@
 - Input: selected workspace, loaded config, population size, generation/run
   identity, and optional maximum-worker override.
 - Output: immutable `LocalWorkerPlan` containing worker count, resource estimates,
-  host snapshot, capacity limits, provenance, and serializable metadata.
+  host snapshot, advisory capacity limits, non-enforcement provenance, and
+  serializable metadata.
 - Job metadata includes `local_*` measurements and the shared
   `resource_cpu_usage_cores`, `resource_memory_usage_mib`, and
   `resource_disk_usage_kib` fields.

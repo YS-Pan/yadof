@@ -110,8 +110,10 @@ benchmark.configure(
 ```
 
 Cell concurrency is a FIFO limit and defaults to one. Baseline simulation-worker
-concurrency is a separate task-adapter setting. Increase either only after
-reviewing simulator licenses, CPU, memory, and storage.
+concurrency is a separate task-adapter multiplier of the runtime host's physical
+core count. The plan retains the multiplier while cell state records its resolved
+worker count. Increase either only after reviewing simulator licenses, CPU,
+memory, and storage; yadof does not reduce an explicitly resolved worker cap.
 
 Structural workflows fail fast by default; performance workflows continue
 independent cells by default so completed expensive evidence is retained.

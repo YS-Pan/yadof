@@ -29,13 +29,28 @@ Fast/local execution baselines must explicitly provide:
 
 ```json
 "simulation_concurrency": {
-  "max_workers": 4,
-  "resource_autodetect": true
+  "physical_core_multiplier": 2.0
 }
 ```
 
-This worker limit is separate from workflow `cell_concurrency`. Distributed
-modes leave simulation admission to their external scheduler.
+At cell materialization time, the runner detects physical CPU cores with
+`psutil.cpu_count(logical=False)`, multiplies by this finite positive value, and
+rounds down to a positive worker count. The manifest therefore contains no fixed
+worker count. `spec.json` preserves the portable multiplier; `state.json` and
+reports record the detected physical cores, multiplier, rounding rule, and
+resolved worker count. Detection failure is explicit rather than silently using
+logical cores.
+
+Packaged defaults are `2.0` for `chrono/trebuchet`, `2.0` for
+`ngspice/saw-ladder`, and `1.0` for `test-com/synthetic-antenna`. These defaults
+come from short 200-individual, one-generation throughput trials. A custom
+baseline may use another positive multiplier, including a value below one when
+that is faster or safer on its simulator.
+
+This host-adaptive simulator limit is separate from workflow
+`cell_concurrency`. yadof treats the resolved fast/local worker cap as the user's
+decision; host resource observations are diagnostic and do not reduce it.
+Distributed modes leave simulation admission to their external scheduler.
 
 Contracts declare expected objective count and rawData shapes. Estimates provide
 a conservative evaluation-time lower bound for current-workspace inspection;

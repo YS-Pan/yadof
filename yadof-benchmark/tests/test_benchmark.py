@@ -16,7 +16,7 @@ import pytest
 
 import yadof_benchmark as benchmark
 from yadof_benchmark import api, cli
-from yadof_benchmark.benchmark_runtime import execution
+from yadof_benchmark.benchmark_runtime import concurrency, execution
 from yadof_benchmark.benchmark_runtime.baselines import load_baseline
 from yadof_benchmark.benchmark_runtime.contracts import (
     BASELINE_FORMAT,
@@ -114,8 +114,7 @@ def _baseline(root: Path, baseline_id: str = "provider/task") -> Path:
                     "mode": "fast",
                     "timeout_seconds": 30,
                     "simulation_concurrency": {
-                        "max_workers": 4,
-                        "resource_autodetect": True,
+                        "physical_core_multiplier": 2.0,
                     },
                 },
                 "contract": {
@@ -544,6 +543,78 @@ def test_baseline_contract_uses_materialization_language(tmp_path: Path) -> None
     assert manifest.materialize_excludes == ()
 
 
+def test_packaged_baselines_use_tuned_physical_core_multipliers() -> None:
+    manifests = api.discover_baselines()
+
+    assert {
+        baseline_id: manifest.execution["simulation_concurrency"][
+            "physical_core_multiplier"
+        ]
+        for baseline_id, manifest in manifests.items()
+    } == {
+        "chrono/trebuchet": 2.0,
+        "ngspice/saw-ladder": 2.0,
+        "test-com/synthetic-antenna": 1.0,
+    }
+
+
+def test_legacy_fixed_simulation_worker_fields_are_rejected(tmp_path: Path) -> None:
+    baseline = _baseline(tmp_path)
+    manifest_path = baseline / "baseline.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["execution"]["simulation_concurrency"] = {
+        "max_workers": 4,
+        "resource_autodetect": True,
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(BenchmarkError, match="unknown.*max_workers"):
+        load_baseline(manifest_path)
+
+
+@pytest.mark.parametrize("value", [0, -0.5, True, "2", float("nan"), float("inf")])
+def test_physical_core_multiplier_must_be_finite_and_positive(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    baseline = _baseline(tmp_path)
+    manifest_path = baseline / "baseline.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["execution"]["simulation_concurrency"][
+        "physical_core_multiplier"
+    ] = value
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(BenchmarkError, match="finite positive number"):
+        load_baseline(manifest_path)
+
+
+def test_simulation_concurrency_resolves_from_physical_cores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        concurrency.psutil,
+        "cpu_count",
+        lambda *, logical: 12 if logical is False else 24,
+    )
+
+    detected = concurrency.resolve_simulation_concurrency(
+        {
+            "simulation_concurrency": {
+                "physical_core_multiplier": 0.875,
+            }
+        }
+    )
+
+    assert detected == {
+        "physical_core_detection": "psutil.cpu_count(logical=False)",
+        "physical_cores": 12,
+        "physical_core_multiplier": 0.875,
+        "resolved_max_workers": 10,
+        "rounding": "floor",
+    }
+
+
 def test_trebuchet_postprocess_selects_average_and_range_minima() -> None:
     source = _trebuchet_postprocess_path()
     namespace = runpy.run_path(str(source), run_name="trebuchet_postprocess_selection")
@@ -910,13 +981,19 @@ def test_fake_pipeline_writes_direct_short_paths_and_reports(tmp_path: Path) -> 
 
 def test_cell_started_event_carries_active_identity_and_execution_capacity(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        concurrency.psutil,
+        "cpu_count",
+        lambda *, logical: 6 if logical is False else 12,
+    )
     _baseline(tmp_path)
     workspace = _workspace(tmp_path / "event-capacity", strategies=("alpha",))
     plan = _plan(tmp_path, workspace)
     initialize_workspace(plan)
     events: list[dict] = []
-    execution.execute_workspace(
+    state = execution.execute_workspace(
         workspace,
         command_runner=_successful_command,
         collector=lambda _workspace, cell: _cell_result(cell, 0.2),
@@ -932,9 +1009,25 @@ def test_cell_started_event_carries_active_identity_and_execution_capacity(
     assert started["seed"] == expected.seed
     assert started["timeout_seconds"] == expected.execution["timeout_seconds"]
     assert started["simulator_mode"] == expected.execution["mode"]
-    assert started["simulator_workers"] == expected.execution[
+    assert started["simulator_physical_core_multiplier"] == expected.execution[
         "simulation_concurrency"
-    ]["max_workers"]
+    ]["physical_core_multiplier"]
+    resolved = next(
+        event
+        for event in events
+        if event.get("event") == "simulation-concurrency-resolved"
+    )
+    assert resolved["simulator_physical_cores"] == 6
+    assert resolved["simulator_physical_core_multiplier"] == 2.0
+    assert resolved["simulator_workers"] == 12
+    recorded = state["cells"]["c0001"]["simulation_concurrency"]
+    assert recorded["physical_cores"] == 6
+    assert recorded["resolved_max_workers"] == 12
+    config = (workspace / "cells" / "c0001" / "workspace" / "config.py").read_text(
+        encoding="utf-8"
+    )
+    assert "FAST_EVALUATION_MAX_WORKERS = 12" in config
+    assert "FAST_RESOURCE_AUTODETECT_ENABLED" not in config
 
 
 def test_legacy_execution_without_display_labels_remains_inspectable(
@@ -1317,8 +1410,7 @@ def test_terminal_surfaces_semantic_cell_label_without_ansi(
             "planned_evaluations": 8,
             "timeout_seconds": 7200,
             "simulator_mode": "fast",
-            "simulator_workers": 4,
-            "simulator_worker_autodetect": True,
+            "simulator_physical_core_multiplier": 2.0,
             "simulator_resource": "YADOF_SIMULATOR",
             "total_cells": 1,
             "finished_cells": 0,
@@ -1326,11 +1418,22 @@ def test_terminal_surfaces_semantic_cell_label_without_ansi(
             "failed_cells": 0,
         }
     )
+    terminal.handle(
+        {
+            "event": "simulation-concurrency-resolved",
+            "cell": "c0001",
+            "display_label": label,
+            "simulator_physical_cores": 8,
+            "simulator_physical_core_multiplier": 2.0,
+            "simulator_workers": 16,
+        }
+    )
     terminal.finish(error="short test stop")
     rendered = stream.getvalue()
     assert label in rendered
     assert "timeout=7200s" in rendered
-    assert "workers=4(auto)" in rendered
+    assert "workers=physical_cores*2" in rendered
+    assert "physical_cores=8 multiplier=2 workers=16" in rendered
     if non_tty:
         assert "\x1b" not in rendered
 
@@ -1357,8 +1460,9 @@ def test_live_terminal_tracks_semantics_capacity_and_concurrent_counts(
         "planned_evaluations": 5000,
         "timeout_seconds": 7200,
         "simulator_mode": "fast",
-        "simulator_workers": 4,
-        "simulator_worker_autodetect": True,
+        "simulator_workers": 16,
+        "simulator_physical_cores": 8,
+        "simulator_physical_core_multiplier": 2.0,
         "simulator_resource": "YADOF_PYCHRONO_PYTHON",
         "total_cells": 3,
         "finished_cells": 0,
@@ -1372,7 +1476,7 @@ def test_live_terminal_tracks_semantics_capacity_and_concurrent_counts(
         "baseline": "ngspice/saw-ladder",
         "strategy": "gpsaf-pca-svd-nsga3",
         "seed": 102,
-        "simulator_workers": 64,
+        "simulator_workers": 16,
         "simulator_resource": "YADOF_NGSPICE_EXE",
     }
     terminal.handle(first)
@@ -1380,7 +1484,7 @@ def test_live_terminal_tracks_semantics_capacity_and_concurrent_counts(
 
     assert second["display_label"] in terminal._cell_detail()
     assert "timeout=7200s" in terminal._cell_detail()
-    assert "workers=64(auto)" in terminal._cell_detail()
+    assert "workers=16(8*2)" in terminal._cell_detail()
     assert "run=2 queued=1" in terminal._global_detail()
 
     terminal.handle(
@@ -1485,8 +1589,9 @@ def test_narrow_terminal_uses_deterministic_semantic_compression(
             "planned_evaluations": 5000,
             "generations": 25,
             "timeout_seconds": 7200,
-            "simulator_workers": 32,
-            "simulator_worker_autodetect": True,
+            "simulator_workers": 8,
+            "simulator_physical_cores": 8,
+            "simulator_physical_core_multiplier": 1.0,
             "total_cells": 18,
             "finished_cells": 0,
             "completed_cells": 0,
@@ -1496,7 +1601,7 @@ def test_narrow_terminal_uses_deterministic_semantic_compression(
     detail = terminal._cell_detail()
     assert "c0001" in detail
     assert "b=" in detail and "s=" in detail and "z=101" in detail
-    assert "to=7200s" in detail and "w=32a" in detail
+    assert "to=7200s" in detail and "w=8(8*1)" in detail
 
 
 def test_non_tty_terminal_appends_real_elapsed_heartbeat(tmp_path: Path) -> None:
@@ -1655,4 +1760,4 @@ def test_timeout_fails_one_cell_continues_independent_cell_and_fails_workspace(
 
 
 def test_distribution_version() -> None:
-    assert benchmark.__version__ == "0.4.0"
+    assert benchmark.__version__ == "0.5.0"

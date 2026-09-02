@@ -922,6 +922,9 @@ def _cell_summaries(
                 "completed_evaluations": completed_evaluations,
                 "finite_evaluations": finite,
                 "planned_evaluations": planned,
+                "simulation_concurrency": cell_state.get(
+                    "simulation_concurrency"
+                ),
                 "validity_issues": validity_issues,
                 "issues": issues,
                 "error": cell_state.get("error"),
@@ -1432,6 +1435,12 @@ def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
         active_id = str(active["cell"])
         active_spec = cell_specs.get(active_id, {})
         execution = active_spec.get("execution", {})
+        active_state = state.get("cells", {}).get(active_id, {})
+        resolved_concurrency = (
+            active_state.get("simulation_concurrency")
+            if isinstance(active_state, Mapping)
+            else None
+        )
         active.update(
             {
                 "display_label": cell_labels.get(active_id, active_id),
@@ -1442,7 +1451,10 @@ def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
                 "simulator": {
                     "mode": execution.get("mode"),
                     "resource": execution.get("resource"),
-                    "workers": execution.get("simulation_concurrency"),
+                    "workers": (
+                        resolved_concurrency
+                        or execution.get("simulation_concurrency")
+                    ),
                 },
             }
         )

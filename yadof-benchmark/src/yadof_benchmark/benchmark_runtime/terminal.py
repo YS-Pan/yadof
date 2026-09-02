@@ -113,7 +113,8 @@ class BenchmarkTerminal:
         self.timeout_seconds = 0
         self.simulator_mode: str | None = None
         self.simulator_workers: int | None = None
-        self.simulator_worker_autodetect = False
+        self.simulator_physical_cores: int | None = None
+        self.simulator_physical_core_multiplier: float | None = None
         self.simulator_resource: str | None = None
         self._active_cell_ids: set[str] = set()
         self._cell_contexts: dict[str, dict[str, Any]] = {}
@@ -206,13 +207,20 @@ class BenchmarkTerminal:
         return self._clip(self.current_label or "identity=unknown", 28)
 
     def _execution_detail(self) -> str:
-        worker = "-" if self.simulator_workers is None else str(self.simulator_workers)
-        if self.simulator_worker_autodetect and worker != "-":
-            worker += "a"
+        multiplier = self.simulator_physical_core_multiplier
+        multiplier_text = None if multiplier is None else f"{multiplier:g}"
+        if self.simulator_workers is None:
+            worker = "-" if multiplier_text is None else f"cores*{multiplier_text}"
+        elif self.simulator_physical_cores is None or multiplier_text is None:
+            worker = str(self.simulator_workers)
+        else:
+            worker = (
+                f"{self.simulator_workers}"
+                f"({self.simulator_physical_cores}*{multiplier_text})"
+            )
         if self._compact:
             return f"to={self.timeout_seconds or '-'}s w={worker}"
         mode = self.simulator_mode or "unknown"
-        autodetect = "(auto)" if self.simulator_worker_autodetect else ""
         resource = (
             f" resource={self.simulator_resource}"
             if self.simulator_resource
@@ -220,7 +228,7 @@ class BenchmarkTerminal:
         )
         return (
             f"timeout={self.timeout_seconds or '-'}s sim={mode} "
-            f"workers={worker.removesuffix('a')}{autodetect}{resource}"
+            f"workers={worker}{resource}"
         )
 
     def _cell_detail(self) -> str:
@@ -293,7 +301,8 @@ class BenchmarkTerminal:
             "timeout_seconds",
             "simulator_mode",
             "simulator_workers",
-            "simulator_worker_autodetect",
+            "simulator_physical_cores",
+            "simulator_physical_core_multiplier",
             "simulator_resource",
         ):
             if event.get(key) is not None:
@@ -320,8 +329,15 @@ class BenchmarkTerminal:
             if context.get("simulator_workers") is None
             else int(context["simulator_workers"])
         )
-        self.simulator_worker_autodetect = bool(
-            context.get("simulator_worker_autodetect", False)
+        self.simulator_physical_cores = (
+            None
+            if context.get("simulator_physical_cores") is None
+            else int(context["simulator_physical_cores"])
+        )
+        self.simulator_physical_core_multiplier = (
+            None
+            if context.get("simulator_physical_core_multiplier") is None
+            else float(context["simulator_physical_core_multiplier"])
         )
         self.simulator_resource = (
             None
@@ -584,8 +600,9 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
         return f"{prefix}[benchmark] started; workspace={event.get('workspace')}"
     if kind == "cell-started":
         worker = event.get("simulator_workers")
-        if event.get("simulator_worker_autodetect") and worker is not None:
-            worker = f"{worker}(auto)"
+        multiplier = event.get("simulator_physical_core_multiplier")
+        if worker is None and multiplier is not None:
+            worker = f"physical_cores*{float(multiplier):g}"
         resource = (
             f" resource={event.get('simulator_resource')}"
             if event.get("simulator_resource")
@@ -598,6 +615,13 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
             f"planned={event.get('planned_evaluations')} "
             f"timeout={event.get('timeout_seconds')}s "
             f"simulator={event.get('simulator_mode')} workers={worker}{resource}"
+        )
+    if kind == "simulation-concurrency-resolved":
+        return (
+            f"{prefix}[cell] {event.get('cell')} simulator concurrency resolved; "
+            f"physical_cores={event.get('simulator_physical_cores')} "
+            f"multiplier={float(event.get('simulator_physical_core_multiplier')):g} "
+            f"workers={event.get('simulator_workers')}"
         )
     if kind == "command-started":
         return (

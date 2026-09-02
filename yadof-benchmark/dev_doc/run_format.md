@@ -65,8 +65,14 @@ are no attempt arrays or sealing states.
 Before a cell starts, its selected baseline is copied to
 `cells/cNNNN/workspace`; runtime directories are excluded and the selected
 strategy entry becomes `submit/optimization.py`; every declared explicit-program
-helper is copied to its relative path below `submit/`. Fast/local worker settings
-are applied to that cell's `config.py`.
+helper is copied to its relative path below `submit/`. For fast/local execution,
+the baseline physical-core multiplier is resolved on the execution host and the
+resulting worker cap is applied to that cell's `config.py`.
+
+The cell's `state.json` entry records `physical_core_detection`,
+`physical_cores`, `physical_core_multiplier`, `rounding`, and
+`resolved_max_workers`. `spec.json` retains only the baseline multiplier, so a
+plan is portable while each execution remains auditable.
 
 The four command directories contain started/finished metadata, stdout, stderr,
 and progress JSONL as applicable. A timed-out command records process-tree cleanup

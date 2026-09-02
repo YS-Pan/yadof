@@ -1,4 +1,4 @@
-"""Resource-bounded concurrency planning for the fast backend."""
+"""User-directed concurrency with advisory fast-backend resource observations."""
 
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ class FastWorkerPlan:
             "fast_resource_cpu_worker_limit": self.cpu_limit,
             "fast_resource_memory_worker_limit": self.memory_limit,
             "fast_resource_disk_worker_limit": self.disk_limit,
+            "fast_resource_limits_enforced": False,
             "fast_system_physical_cpus": self.system.physical_cpus,
             "fast_system_logical_cpus": self.system.logical_cpus,
             "fast_system_available_memory_mib": self.system.available_memory_mib,
@@ -47,9 +48,9 @@ class FastWorkerPlan:
             f"{name}={value if value is not None else 'unknown'}"
             for name, value in (
                 ("configured", self.configured_max),
-                ("cpu", self.cpu_limit),
-                ("memory", self.memory_limit),
-                ("scratch_disk", self.disk_limit),
+                ("advisory_cpu", self.cpu_limit),
+                ("advisory_memory", self.memory_limit),
+                ("advisory_scratch_disk", self.disk_limit),
             )
         )
         return f"fast: workers={self.worker_count}; {limits}; source={self.source}"
@@ -86,7 +87,7 @@ def plan_fast_workers(
     configured_max: int,
     system: SystemResourceSnapshot | None = None,
 ) -> FastWorkerPlan:
-    """Bound reusable workers by explicit per-worker resource declarations."""
+    """Use the configured cap and observe host capacity without clamping it."""
 
     scratch = validate_fast_configuration(config)
     population_limit = max(1, int(population_size))
@@ -120,13 +121,7 @@ def plan_fast_workers(
                 1,
                 math.floor(snapshot.free_disk_kib * usable_fraction / disk_per_worker),
             )
-        worker_count = min(
-            configured_limit,
-            cpu_limit,
-            memory_limit if memory_limit is not None else configured_limit,
-            disk_limit if disk_limit is not None else configured_limit,
-        )
-        source = "declared_resources_and_host_capacity"
+        source = "configured_limit_with_resource_observation"
 
     return FastWorkerPlan(
         worker_count=max(1, worker_count),

@@ -8,8 +8,7 @@
     "mode": "fast",
     "timeout_seconds": 7200,
     "simulation_concurrency": {
-      "max_workers": 64,
-      "resource_autodetect": true
+      "physical_core_multiplier": 2.0
     },
     "resource": {
       "kind": "environment_executable",

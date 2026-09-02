@@ -67,23 +67,18 @@ final costs or an actionable failure.
 ### Local concurrency
 
 Local mode previously defaulted to one concurrent simulation. The packaged default
-cap is now **8**, with resource autodetection enabled. The effective count for each
-batch is the smallest safe value allowed by:
-
-- the population size and `LOCAL_EVALUATION_MAX_WORKERS`;
-- physical CPU capacity;
-- currently available memory and free disk after a 15% system reserve;
-- per-job CPU, peak-memory, and disk estimates calibrated from the preceding smoke
-  test or optimization generation.
+cap is now **8**. For a batch with enough candidates, yadof uses the explicit
+`LOCAL_EVALUATION_MAX_WORKERS` value without reducing it from detected CPU,
+memory, or disk capacity. Population size remains the natural upper bound on
+simultaneously useful work.
 
 Local workflows are monitored as process trees, so simulator child processes are
 included. Their measurements and HTCondor measurements use the same recorded
 resource fields and shared calibration algorithm. `HTCONDOR_REQUEST_CPUS`,
 `HTCONDOR_REQUEST_MEMORY`, and `HTCONDOR_REQUEST_DISK` remain the initial per-job
-resource hints when no usable history exists. Use `--progress` to print the selected
-local worker count and each limiting capacity. Set
-`LOCAL_RESOURCE_AUTODETECT_ENABLED = False` only when the configured worker cap
-should be used directly.
+resource hints when no usable history exists. With resource observation enabled,
+`--progress` prints the selected local worker count and advisory CPU/memory/disk
+capacities. Those observations do not override the user-configured cap.
 
 ## Reference development environment
 

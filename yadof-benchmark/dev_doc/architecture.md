@@ -34,6 +34,8 @@ There is no execution container below the workspace and no recovery branch.
 - `workflow.py` implements the small authoring builder and resolves defaults.
 - `planning.py` expands comparisons into deterministic short ordinal cells.
 - `baselines.py` discovers task adapters and materializes clean cell workspaces.
+- `concurrency.py` validates portable physical-core multipliers and resolves them
+  from the execution host's physical CPU count.
 - `storage.py` owns direct JSON publication, one-time runtime provenance, state,
   and cell materialization.
 - `execution.py` owns subprocess logs, FIFO cell scheduling, collection, and
@@ -57,6 +59,21 @@ is never used to form a filesystem path.
 
 The retained `RunSpec` name denotes the expanded single-execution plan; it does
 not imply a `runs/` storage abstraction.
+
+## Simulator concurrency
+
+Fast/local baseline manifests contain only
+`simulation_concurrency.physical_core_multiplier`. Planning freezes that
+portable value without detecting the planning host. Cell materialization detects
+physical cores with `psutil.cpu_count(logical=False)`, computes
+`max(1, floor(physical_cores * multiplier))`, writes that integer to the isolated
+yadof config, and records the complete resolution in state and reports. Fixed
+worker counts and the former per-baseline resource-autodetection switch are
+rejected as unknown manifest fields.
+
+Workflow `cell_concurrency` remains independent. The resolved per-cell value is
+an explicit yadof fast/local worker cap; yadof may observe CPU, memory, and disk
+capacity for diagnostics but does not clamp the user's value.
 
 ## Budget resolution
 

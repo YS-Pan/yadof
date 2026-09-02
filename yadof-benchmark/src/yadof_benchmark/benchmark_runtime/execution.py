@@ -775,6 +775,17 @@ def _execute_cell(
     cell_event_sink = _cell_sink(event_sink, cell)
     with _state_guard(state_lock):
         cell_root, workspace, cell_state = prepare_cell(root, spec, cell, state)
+        resolved_concurrency = cell_state.get("simulation_concurrency")
+    if isinstance(resolved_concurrency, Mapping):
+        _emit(
+            cell_event_sink,
+            event="simulation-concurrency-resolved",
+            simulator_workers=resolved_concurrency.get("resolved_max_workers"),
+            simulator_physical_cores=resolved_concurrency.get("physical_cores"),
+            simulator_physical_core_multiplier=resolved_concurrency.get(
+                "physical_core_multiplier"
+            ),
+        )
     timeout = int(cell.get("execution", {}).get("timeout_seconds", 7200))
     python = str(spec["workflow"]["python"])
     try:
@@ -1144,9 +1155,8 @@ def execute_workspace(
                         planned_evaluations=int(cell["planned_evaluations"]),
                         timeout_seconds=int(execution.get("timeout_seconds", 7200)),
                         simulator_mode=execution.get("mode"),
-                        simulator_workers=simulation.get("max_workers"),
-                        simulator_worker_autodetect=simulation.get(
-                            "resource_autodetect"
+                        simulator_physical_core_multiplier=simulation.get(
+                            "physical_core_multiplier"
                         ),
                         simulator_resource=(
                             resource.get("variable") or resource.get("kind")

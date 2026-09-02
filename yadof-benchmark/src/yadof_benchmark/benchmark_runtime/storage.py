@@ -18,6 +18,7 @@ from typing import Any, Mapping
 
 from .._version import __version__ as benchmark_version
 from .baselines import load_baseline, materialize_baseline
+from .concurrency import resolve_simulation_concurrency
 from .contracts import (
     SPEC_FORMAT,
     STATE_FORMAT,
@@ -289,8 +290,10 @@ def _apply_simulation_concurrency(
         raise BenchmarkError(
             f"simulation concurrency cannot be applied to execution mode {mode!r}"
         )
-    max_workers = int(value["max_workers"])
-    resource_autodetect = bool(value["resource_autodetect"])
+    resolved = resolve_simulation_concurrency(execution)
+    if resolved is None:
+        return None
+    max_workers = int(resolved["resolved_max_workers"])
     config_path = workspace / "config.py"
     try:
         source = config_path.read_text(encoding="utf-8")
@@ -303,13 +306,11 @@ def _apply_simulation_concurrency(
     source += (
         "\n# Applied by yadof-benchmark for this cell.\n"
         f"{prefix}_EVALUATION_MAX_WORKERS = {max_workers}\n"
-        f"{prefix}_RESOURCE_AUTODETECT_ENABLED = {resource_autodetect!r}\n"
     )
     atomic_write_text(config_path, source)
     return {
         "mode": mode,
-        "max_workers": max_workers,
-        "resource_autodetect": resource_autodetect,
+        **resolved,
     }
 
 

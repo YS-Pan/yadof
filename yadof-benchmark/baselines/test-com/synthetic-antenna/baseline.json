@@ -8,8 +8,7 @@
     "mode": "fast",
     "timeout_seconds": 7200,
     "simulation_concurrency": {
-      "max_workers": 32,
-      "resource_autodetect": true
+      "physical_core_multiplier": 1.0
     }
   },
   "contract": {
