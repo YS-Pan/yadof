@@ -7,6 +7,6 @@
 - File blueprints mirror current source paths below `blueprints/20_files/`.
 - User task files and active adapters live in explicit workspaces. Packaged adapter
   resources are copied by CLI, never imported from a repository staging namespace.
-- Historical paths may remain in `change_records/` and `obsolete/`; current
-  architecture, blueprints, user docs, and pending toDos must use package/workspace
-  terminology.
+- Historical paths may remain in either `change_records/` tier and in `obsolete/`;
+  current architecture, blueprints, user docs, and pending toDos must use
+  package/workspace terminology.

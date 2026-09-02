@@ -106,8 +106,9 @@ belongs in the workspace submit-side definition.
   context. Every agent lists its filenames without opening them, then reads only a
   task-relevant document whose name indicates a likely match. Expiry is assessed
   only on explicit user instruction.
-- `dev_doc/change_records/` preserves completed decisions and implementation
-  history; `toDo/` preserves active future work.
+- `dev_doc/change_records/` preserves substantive completed decisions and
+  implementation history; its `minor/` child keeps localized low-risk records out
+  of that primary listing. `toDo/` preserves active future work.
 - `dev_doc/obsolete/` is a source-partitioned inactive archive: `todo/` contains
   retired toDo handoffs, `context/` contains explicitly reviewed expired context
   documents, and `other/` contains all other obsolete developer material. Files do
@@ -136,10 +137,12 @@ they alter packaged documentation behavior.
 ## Change discipline
 
 Current architecture and blueprints are updated in place. Historical change
-records are append-only. Context documents preserve cross-session evidence without
-becoming current-view contracts or task authorization; confirmed-expired documents
-move to `obsolete/context/` only after an explicit user-requested review. Completed
-or retired toDos move to `obsolete/todo/`, while obsolete material from every other
-source moves to `obsolete/other/`. Task-authoring changes update user documentation;
+records are append-only and are classified at creation between the substantive
+root and localized low-risk `minor/` tier. Context documents preserve cross-session
+evidence without becoming current-view contracts or task authorization.
+Confirmed-expired documents move to `obsolete/context/` only after an explicit
+user-requested review. Completed or retired toDos move to `obsolete/todo/`, while
+obsolete material from every other source moves to `obsolete/other/`.
+Task-authoring changes update user documentation;
 administrator procedure changes update `admin_tool/admin_doc/`. Repository changes
 preserve workspace evidence and unrelated worktree modifications.

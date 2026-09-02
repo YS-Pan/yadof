@@ -42,7 +42,9 @@ tools are installed yadof documentation audiences.
   non-obvious constraints.
 - `blueprints/20_files/`: file lineage for high-risk/specialized implementation.
 - `terminology.md`: project-specific terms whose meaning is not obvious.
-- `change_records/`: append-only time-named decision/implementation explanations.
+- `change_records/`: append-only time-named decision/implementation explanations;
+  substantive records live at the root and localized low-risk records under
+  `minor/`.
 - `context/`: time-named cross-session experimental evidence and working context.
   Every agent recursively enumerates filenames and relative paths without reading
   contents, then reads a document in full only when the task needs information its
@@ -72,7 +74,10 @@ yadof's package/workspace/runtime contracts.
 ## Maintenance rules
 
 Architecture and blueprints describe the present, so update them in place when code
-changes. Change records remain append-only. Old external references may restore lost
+changes. Change records remain append-only and are classified before commit:
+localized low-risk work that preserves existing contracts uses `minor/`, while
+public, architectural, cross-module, migration, reliability, release, or formal
+evidence changes remain at the root. Old external references may restore lost
 rationale, but obsolete layouts, names, and fallbacks are filtered against current
 code before inclusion. A new or substantially revised toDo distinguishes verified
 current facts, explicit requirements or decisions, proposals, assumptions, and open
@@ -107,6 +112,9 @@ are affected.
   contract, workflow, architecture, blueprint, toDo state, user instruction,
   public behavior, or historical decision; that narrow exception is reported as an
   uncommitted diff unless the user requests a commit.
+- Every non-exempt change record is classified by semantic impact rather than diff
+  size: `minor/` is limited to localized low-risk contract-preserving work, and an
+  uncertain or substantive record stays at the `change_records/` root.
 - `README.md` links every module contract instead of duplicating its detailed rules.
 - Installed docs are generated from root source, never edited under site-packages.
 - Viewer-specific docs are edited only in the owning viewer subtree and ship beside its
@@ -124,5 +132,5 @@ are affected.
   a task-relevant filename match and their expiry is never judged without explicit
   user instruction.
 - Root `dev_doc/` is the exclusive repository owner of context, toDo, obsolete, and
-  change-record lifecycle; nested tool/benchmark developer trees link to these
+  both change-record tiers; nested tool/benchmark developer trees link to these
   contracts instead of duplicating them.

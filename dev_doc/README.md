@@ -57,9 +57,10 @@ optional summaries. When collecting project context, follow this order:
    information that its filename indicates it is likely to contain.
 6. List the complete `blueprints/` tree and perform the targeted reading pass
    defined by the [blueprint contract](skill/blueprints.md).
-7. Apply the [change-record contract](skill/change_records.md). Do not read existing
-   change records by default unless one of that contract's targeted-read conditions
-   applies.
+7. Apply the [change-record contract](skill/change_records.md). Its substantive
+   records live directly under `change_records/` and minor records under
+   `change_records/minor/`; neither tier is read by default unless one of the
+   contract's targeted-read conditions applies.
 
 Do not read `obsolete/` by default. Its targeted-read and archival rules are defined
 by the [toDo and obsolete contract](skill/toDo.md) and the
@@ -186,8 +187,8 @@ that depend on the current Windows code page.
   reading, cross-session evidence, and user-triggered expiry review.
 - [Terminology](skill/terminology.md): project-specific vocabulary and maintenance
   rules.
-- [Change records](skill/change_records.md): append-only completed-change history,
-  naming, structure, and targeted reading.
+- [Change records](skill/change_records.md): two-tier append-only completed-change
+  history, significance classification, naming, structure, and targeted reading.
 
 ## Task/framework ownership rule
 
@@ -231,7 +232,8 @@ After each code change:
 1. Apply the update rules in the [architecture contract](skill/architecture.md).
 2. Apply the update rules in the [blueprint contract](skill/blueprints.md).
 3. Add the record required by the
-   [change-record contract](skill/change_records.md).
+   [change-record contract](skill/change_records.md), placing minor work under
+   `change_records/minor/` and substantive work directly under `change_records/`.
 4. Apply the vocabulary rules in the
    [terminology contract](skill/terminology.md).
 5. Apply the automatic-trigger check plus the completion and archival rules in the
@@ -258,7 +260,7 @@ because doing so would make the change multi-file and defeat the exception.
 
 When adding new future work, put manual-trigger work directly under `toDo/` and
 automatic-trigger work under `toDo/auto/`, rather than putting either in
-`change_records/`. `change_records/` explains completed changes; `toDo/` describes
-pending work that should influence future technical choices. Put cross-session
-experimental evidence and working context under `context/`; do not use it as a
-second task queue or completed-change history.
+`change_records/`. Both its root and `minor/` tier explain completed changes;
+`toDo/` describes pending work that should influence future technical choices. Put
+cross-session experimental evidence and working context under `context/`; do not
+use it as a second task queue or completed-change history.

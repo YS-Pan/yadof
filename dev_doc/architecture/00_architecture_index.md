@@ -67,5 +67,5 @@ normalized variables
 Implementation-level current state belongs in `../blueprints/`. Task-authoring
 instructions belong in `../../user_doc/`. Administrator deployment procedures live
 in `../../admin_tool/admin_doc/`. Completed decisions and experiment history live
-in `../change_records/` or external evidence and do not form part of this mandatory
-architecture reading set.
+in the substantive or `minor/` tier under `../change_records/`, or in external
+evidence, and do not form part of this mandatory architecture reading set.

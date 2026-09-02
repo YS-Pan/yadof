@@ -138,7 +138,8 @@ hot-change contract; structural dimension changes are future work.
   Structural evidence is integration-only; performance output is descriptive and
   single-seed performance remains exploratory. The distribution depends on
   yadof's public surface, never the reverse. Root `dev_doc/` exclusively owns
-  repository-wide context documents, toDos, obsolete handoffs, and change records.
+  repository-wide context documents, toDos, obsolete handoffs, and both
+  change-record tiers.
 - Admin: deployment and configuration guidance under `admin_tool/admin_doc/`, with
   executable administrator resources in sibling directories under `admin_tool/`.
 - Tests: installed-package generic contracts under `tests/`.
