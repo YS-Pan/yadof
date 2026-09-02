@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import random
 from typing import Sequence
 
 from ...surrogate.training import (
     DeterministicPredictionProvider,
     DeterministicSurrogateComponent,
     SurrogateTrainingData,
+    SurrogateContractError,
 )
 from ..primitives import (
     CandidatePool,
@@ -23,9 +25,10 @@ from ..primitives import (
     fork_search_state,
     prepare_search,
     search_candidates,
-    select_candidates,
+    select_candidate_indices,
 )
 from ..strategy import GenerationContext, HistoryRecord, Population
+from .tournament import tournament_winner, probabilistic_knockout, replacement_probabilities
 
 
 def _progress(message: str) -> None:
@@ -44,6 +47,8 @@ def surrogate_state_ready(
         raise TypeError("GPSAF readiness requires explicit SurrogateTrainingData")
     try:
         return bool(surrogate.has_trained_state(context, training_data))
+    except SurrogateContractError:
+        raise
     except Exception:
         return False
 
@@ -72,8 +77,9 @@ def predict_pool(
 
 
 def distance_sq(left: Sequence[float], right: Sequence[float]) -> float:
-    width = min(len(left), len(right))
-    return sum((float(left[idx]) - float(right[idx])) ** 2 for idx in range(width))
+    if len(left) != len(right):
+        raise ValueError("cluster parameter widths must match")
+    return sum((float(a) - float(b)) ** 2 for a, b in zip(left, right))
 
 
 def assign_clusters(
@@ -103,6 +109,7 @@ def run_alpha_phase(
     generation_context: GenerationContext,
     settings,
     training_data: SurrogateTrainingData,
+    rng=None,
 ) -> tuple[
     CandidateSelection | None,
     PredictedCostRows | None,
@@ -112,6 +119,7 @@ def run_alpha_phase(
     predictions: list[PredictedCostRows] = []
     current = state
     alpha = max(1, settings.alpha)
+    rng = rng if rng is not None else random.Random(generation_context.random_seed + 313)
 
     for batch_index in range(alpha):
         pool = search_candidates(
@@ -143,19 +151,23 @@ def run_alpha_phase(
         predictions,
         source="gpsaf-alpha-predicted-costs",
     )
-    selected = select_candidates(
-        current,
-        combined_pool,
-        combined_prediction,
-        batch_target,
-        source="gpsaf-alpha-selection",
+    indices = []
+    for position in range(batch_target):
+        competitors = [batch * batch_target + position for batch in range(alpha)]
+        winner = tournament_winner(
+            [combined_prediction.costs[i] for i in competitors], rng,
+            valid=[combined_prediction.valid_mask[i] for i in competitors],
+        )
+        indices.append(competitors[winner])
+    selected = select_candidate_indices(
+        current, combined_pool, indices, source="gpsaf-alpha-selection",
     )
     return selected, combined_prediction, {
         "alpha_batches": len(pools),
-        "alpha_replacements": 0,
+        "alpha_replacements": sum(index >= batch_target for index in indices),
         "alpha_candidate_count": len(combined_pool.candidates),
-        "alpha_selection": "nsga3_pooled_survival",
-        "alpha_survival_selected": len(selected.candidates),
+        "alpha_selection": "positional-feasibility-pareto-tournament",
+        "alpha_selected_indices": tuple(indices),
     }
 
 
@@ -168,14 +180,20 @@ def run_beta_phase(
     generation_context: GenerationContext,
     settings,
     training_data: SurrogateTrainingData,
+    error_scales=None,
+    rng=None,
 ) -> tuple[CandidateSelection, dict[str, object]]:
     beta = max(0, settings.beta)
-    if beta <= 0 or not anchors.candidates:
+    rng = rng if rng is not None else random.Random(generation_context.random_seed + 317)
+    anchor_costs = dict(zip(anchor_prediction.candidate_ids, anchor_prediction.costs))
+    if beta <= 0 or not anchors.candidates or error_scales is None:
         return anchors, {
             "beta_iterations": 0,
             "beta_candidate_count": 0,
             "beta_replacements": 0,
             "beta_cluster_size_max": 0,
+            "beta_error_ready": error_scales is not None,
+            "_prediction_rows": tuple(anchor_costs[c.candidate_id] for c in anchors.candidates),
         }
 
     sim_state = fork_search_state(anchors.state)
@@ -202,8 +220,9 @@ def run_beta_phase(
         beta_predictions.append(prediction)
         sim_state = advance_search(pool.state, pool, prediction)
 
+    real_state = continue_search_from(anchors.state, sim_state)
     combined_pool = combine_candidate_pools(
-        sim_state,
+        real_state,
         (anchors, *beta_pools),
     )
     combined_prediction = combine_predicted_cost_rows(
@@ -211,29 +230,44 @@ def run_beta_phase(
         (anchor_prediction, *beta_predictions),
         source="gpsaf-beta-predicted-costs",
     )
-    final_selection = select_candidates(
-        sim_state,
-        combined_pool,
-        combined_prediction,
-        batch_target,
-        source="gpsaf-beta-selection",
+    index_by_id = {candidate.candidate_id: i for i, candidate in enumerate(combined_pool.candidates)}
+    cluster_sizes = tuple(len(bucket) for bucket in clusters)
+    probabilities = replacement_probabilities(cluster_sizes, settings.gamma)
+    indices = []
+    for position, bucket in enumerate(clusters):
+        chosen = position
+        if bucket:
+            local_indices = [index_by_id[candidate.candidate_id] for candidate in bucket]
+            winner = probabilistic_knockout(
+                [combined_prediction.costs[i] for i in local_indices], error_scales, rng,
+                valid=[combined_prediction.valid_mask[i] for i in local_indices],
+            )
+            if rng.random() < probabilities[position]:
+                chosen = local_indices[winner]
+        indices.append(chosen)
+    final_selection = select_candidate_indices(
+        real_state, combined_pool, indices, source="gpsaf-beta-selection"
     )
     anchor_ids = {candidate.candidate_id for candidate in anchors.candidates}
     replacements = sum(
         candidate.candidate_id not in anchor_ids
         for candidate in final_selection.candidates
     )
-    cluster_sizes = tuple(len(bucket) for bucket in clusters)
 
     return final_selection, {
+        "beta_error_ready": True,
+        "beta_replacement_probabilities": probabilities,
+        "beta_prediction_error": tuple(error_scales),
+        "beta_noise": "independent-normal-max-error-scale",
+        "_prediction_rows": tuple(combined_prediction.costs[i] for i in indices),
         "beta_iterations": len(beta_pools),
         "beta_candidate_count": sum(len(pool.candidates) for pool in beta_pools),
         "beta_replacements": int(replacements),
         "beta_cluster_size_max": max(cluster_sizes, default=0),
         "beta_cluster_sizes": cluster_sizes,
-        "beta_selection": "nsga3_pooled_survival",
+        "beta_selection": "nearest-alpha-cluster-pkt-gamma-replacement",
         "beta_pool_size": len(combined_pool.candidates),
-        "beta_survival_selected": len(final_selection.candidates),
+        "beta_selected_count": len(final_selection.candidates),
     }
 
 
@@ -255,6 +289,7 @@ def surrogate_population(
     seed: int,
     settings,
     training_data: SurrogateTrainingData,
+    error_scales=None,
 ) -> tuple[Population | None, dict[str, object]]:
     _progress(
         f"surrogate: selecting population; history={len(history)}; "
@@ -272,6 +307,7 @@ def surrogate_population(
 
     diagnostics: dict[str, object] = {"optimizer": "gpsaf"}
     try:
+        rng = random.Random(seed + generation_index * 1009 + 313)
         base_state = prepare_search(
             generation_context,
             search,
@@ -291,7 +327,7 @@ def surrogate_population(
                 exploration_count,
                 origin="gpsaf_exploration",
             )
-            main_state = continue_search_from(base_state, exploration_pool.state)
+            main_state = exploration_pool.state
         diagnostics["exploration_count"] = (
             0 if exploration_pool is None else len(exploration_pool.candidates)
         )
@@ -321,6 +357,7 @@ def surrogate_population(
             generation_context=generation_context,
             settings=settings,
             training_data=training_data,
+            rng=rng,
         )
         diagnostics.update(alpha_info)
         if anchors is None or alpha_prediction is None:
@@ -334,7 +371,10 @@ def surrogate_population(
             generation_context=generation_context,
             settings=settings,
             training_data=training_data,
+            error_scales=error_scales,
+            rng=rng,
         )
+        prediction_rows = beta_info.pop("_prediction_rows")
         diagnostics.update(beta_info)
         groups: tuple[CandidatePool | CandidateSelection, ...] = (
             (final_selection,)
@@ -351,6 +391,9 @@ def surrogate_population(
         diagnostics.update(dict(selected.state.diagnostics))
         diagnostics["search_selection_source"] = selected.source
         diagnostics["search_candidate_id_count"] = len(selected.candidates)
+        diagnostics["_prediction_rows"] = prediction_rows + (None,) * diagnostics["exploration_count"]
+    except SurrogateContractError:
+        raise
     except Exception as exc:  # noqa: BLE001 - surrogate selection has a generation-local real fallback.
         return None, {
             **diagnostics,

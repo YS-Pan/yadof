@@ -16,7 +16,8 @@
   partial selection and run one fresh complete full-real primitive; failure of that
   real path remains explicit.
 - Return `GPSAFGenerationSelection` with population/source/surrogate-use/diagnostics
-  only; it cannot evaluate or commit.
+  and immutable pre-evaluation predicted costs for explicit error observation;
+  it cannot evaluate or commit. Caller-owned `GPSAFErrorState` supplies PKT scales.
 - Expose explicit start/finish training helpers so the workspace program can start
   evaluation first, start training on prior immutable evidence, and close both
   lifecycles before commit.
@@ -33,7 +34,9 @@
 ## Mutability Profile
 - Keep only irreducible alpha/beta/exploration and staggered-component coordination.
 - Alpha, beta, gamma, and exploration arrive as one immutable factory-owned GPSAF
-  snapshot; no phase reads ambient algorithm config. `gamma` remains validated,
-  identified, and diagnosed but does not enter selection mathematics.
+  snapshot; no phase reads ambient algorithm config. `gamma` enters the
+  cluster-size replacement probability. Contract errors propagate; unavailable
+  learned state may use ordinary fallback. Error bootstrap is a separate explicit
+  operation, outside the read-only selector.
   Pymoo owns algorithms/operators/survival through `primitives.py`; common
   evaluation/history/types stay in `strategy.py`.

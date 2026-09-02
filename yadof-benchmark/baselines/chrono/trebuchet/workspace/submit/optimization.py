@@ -8,6 +8,8 @@ from yadof.optimize import (
     pymoo_ga,
     pymoo_nsga3,
     select_gpsaf_generation,
+    GPSAFErrorState,
+    initialize_gpsaf_error,
     start_explicit_surrogate_training,
 )
 from yadof.surrogate import conditional_inr
@@ -33,18 +35,21 @@ def optimization_program(context):
     search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())
     surrogate = conditional_inr()
     settings = gpsaf_settings(alpha=3, beta=3)
+    error_state = GPSAFErrorState()
     with context.run_scope() as run:
         for generation_index in run.generations():
             with run.generation(generation_index) as step:
                 training = surrogate.training_data(
                     step.evidence_dataset(), step.cost_table()
                 )
+                initialize_gpsaf_error(surrogate, step.context, training, error_state)
                 selected = select_gpsaf_generation(
                     step.context,
                     search=search,
                     surrogate=surrogate,
                     settings=settings,
                     training_data=training,
+                    error_state=error_state,
                 )
                 handle = start_evaluation(
                     step.prepare_evaluation(selected.population)
@@ -66,6 +71,8 @@ def optimization_program(context):
                                 surrogate, step.context
                             )
                         )
+                error_state.observe(selected, evaluation.costs)
+                diagnostics.update(error_state.diagnostics())
                 step.commit(
                     step.result(
                         population=selected.population,

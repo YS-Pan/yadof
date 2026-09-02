@@ -32,6 +32,11 @@ There is no execution container below the workspace and no recovery branch.
 - `presets.py` validates the packaged catalog, copies only canonical relative
   resources, and records portable SHA-256 provenance.
 - `workflow.py` implements the small authoring builder and resolves defaults.
+- `perfect_oracle.py` owns transient simulator-backed predictions and fatal
+  interface-error handling; it never creates recorded yadof evaluations.
+- `perfect_program.py`, `perfect_protocol.py`, and `runtime_freeze.py` own the
+  opt-in paired top-10 protocol, explicit programs, metric receipts, independent
+  real-history verification, final summary and installed-code guard.
 - `planning.py` expands comparisons into deterministic short ordinal cells.
 - `baselines.py` discovers task adapters and materializes clean cell workspaces.
 - `concurrency.py` validates portable physical-core multipliers and resolves them

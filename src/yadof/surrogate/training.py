@@ -239,6 +239,10 @@ def materialize_training_data(
     )
 
 
+class SurrogateContractError(RuntimeError):
+    """A prediction implementation/interface failure that must not become fallback."""
+
+
 @dataclass(frozen=True, slots=True)
 class SurrogatePrediction:
     """Transient deterministic rawData and current-cost prediction."""
@@ -246,12 +250,13 @@ class SurrogatePrediction:
     state_signature: str
     training_data_digest: str
     normalized_variables: tuple[tuple[float, ...], ...]
-    raw_data: tuple[StructuredRawDataSample, ...]
+    raw_data: tuple[StructuredRawDataSample | None, ...]
     costs: tuple[tuple[float, ...], ...]
     intervals: tuple[tuple[tuple[float, float], ...], ...]
     interpretation_fingerprint: str
     diagnostics: Mapping[str, object] = field(default_factory=dict)
     kind: str = "deterministic_rawdata_current_cost"
+    valid_mask: tuple[bool, ...] = ()
 
     def __post_init__(self) -> None:
         rows = tuple(tuple(float(value) for value in row) for row in self.normalized_variables)
@@ -269,15 +274,22 @@ class SurrogatePrediction:
             tuple(max(0.0, min(1.0, value)) for value in row)
             for row in rows
         )
+        valid = tuple(self.valid_mask) if self.valid_mask else (True,) * len(rows)
+        if len(valid) != len(rows) or any(type(value) is not bool for value in valid):
+            raise ValueError("surrogate prediction valid_mask must align and be boolean")
         samples = tuple(
             sample
-            if isinstance(sample, StructuredRawDataSample)
+            if sample is None or isinstance(sample, StructuredRawDataSample)
             else StructuredRawDataSample.from_items(sample)
             for sample in self.raw_data
         )
-        if samples:
-            template = RawDataSchemaTemplate.from_items(samples[0].items)
-            samples = tuple(template.validate_sample(sample) for sample in samples)
+        present = tuple(sample for sample in samples if sample is not None)
+        if present:
+            template = RawDataSchemaTemplate.from_items(present[0].items)
+            samples = tuple(
+                None if sample is None else template.validate_sample(sample)
+                for sample in samples
+            )
         costs = tuple(tuple(float(value) for value in row) for row in self.costs)
         intervals = tuple(
             tuple((float(lower), float(upper)) for lower, upper in row)
@@ -286,11 +298,17 @@ class SurrogatePrediction:
         count = len(rows)
         if len(samples) != count or len(costs) != count or len(intervals) != count:
             raise ValueError("surrogate prediction rows must align")
-        for cost_row, interval_row in zip(costs, intervals):
+        for sample, cost_row, interval_row, is_valid in zip(samples, costs, intervals, valid):
             if len(cost_row) != len(interval_row):
                 raise ValueError("surrogate cost and interval widths must align")
-            if any(not math.isfinite(value) for value in cost_row):
-                raise ValueError("surrogate predicted costs must be finite")
+            if not is_valid:
+                if sample is not None or not cost_row or any(value != math.inf for value in cost_row):
+                    raise ValueError("failed prediction requires no rawData and all +inf costs")
+                if any(pair != (math.inf, math.inf) for pair in interval_row):
+                    raise ValueError("failed prediction requires +inf point intervals")
+                continue
+            if sample is None or any(not math.isfinite(value) for value in cost_row):
+                raise ValueError("valid surrogate predictions require rawData and finite costs")
             if any(
                 not math.isfinite(lower)
                 or not math.isfinite(upper)
@@ -309,6 +327,7 @@ class SurrogatePrediction:
         )
         object.__setattr__(self, "normalized_variables", rows)
         object.__setattr__(self, "raw_data", samples)
+        object.__setattr__(self, "valid_mask", valid)
         object.__setattr__(self, "costs", costs)
         object.__setattr__(self, "intervals", intervals)
         object.__setattr__(
@@ -417,16 +436,10 @@ def assess_surrogate_selection_freshness(
     if not isinstance(training_data, SurrogateTrainingData):
         raise TypeError("freshness requires explicit SurrogateTrainingData")
     max_lag = max(0, int(context.config.OPTIMIZE_SURROGATE_MAX_TRAINING_LAG))
-    if training_data.sample_count < 1:
-        return SurrogateSelectionFreshness(
-            ready=False,
-            action="skipped_no_data",
-            latest_completed_generation_index=None,
-            lag=None,
-            max_lag=max_lag,
-        )
     try:
         latest = component.latest_trained_generation(context, training_data)
+    except SurrogateContractError:
+        raise
     except Exception as exc:  # noqa: BLE001 - derived selection falls back to real.
         return SurrogateSelectionFreshness(
             ready=False,
@@ -439,7 +452,7 @@ def assess_surrogate_selection_freshness(
     if latest is None:
         return SurrogateSelectionFreshness(
             ready=False,
-            action="unavailable",
+            action="skipped_no_data" if training_data.sample_count < 1 else "unavailable",
             latest_completed_generation_index=None,
             lag=None,
             max_lag=max_lag,
@@ -853,6 +866,7 @@ __all__ = [
     "DeterministicPredictionProvider",
     "DeterministicSurrogateComponent",
     "SurrogatePrediction",
+    "SurrogateContractError",
     "SurrogateSelectionFreshness",
     "SurrogateTrainingData",
     "TrainingCancelledError",

@@ -1,5 +1,12 @@
 # Single-workspace execution format
 
+The optional `top10_reference` cell field identifies a declared sequential paired
+protocol. `benchmark_control.json` freezes the reference threshold before the
+assisted command; `experiment_metrics/gNNNN.json` records each committed real
+generation, and `oracle_audit/events.jsonl` is separate diagnostic evidence.
+`result.json.top10_protocol` independently validates receipts and early completion
+from durable formal rows. A `runtime_lock.json` can freeze installed file hashes.
+
 Despite this source filename, the current storage model has no separate run
 directory. The benchmark workspace itself contains one execution:
 

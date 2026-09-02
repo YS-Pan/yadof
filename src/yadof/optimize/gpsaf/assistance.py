@@ -13,6 +13,7 @@ from ..primitives import full_real_search
 from ..strategy import GenerationContext
 from .phases import surrogate_population
 from .settings import GPSAFSettings
+from .errors import GPSAFErrorState
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,7 @@ class GPSAFGenerationSelection:
     source: str
     surrogate_used: bool
     diagnostics: Mapping[str, object]
+    predicted_costs: tuple[tuple[float, ...] | None, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -50,6 +52,7 @@ def select_gpsaf_generation(
     surrogate: DeterministicSurrogateComponent,
     settings: GPSAFSettings,
     training_data: SurrogateTrainingData,
+    error_state: GPSAFErrorState | None = None,
 ) -> GPSAFGenerationSelection:
     """Select real candidates without owning evaluation, training, or commit."""
 
@@ -65,6 +68,8 @@ def select_gpsaf_generation(
     size = generation.population_size
     seed = generation.random_seed
     history = generation.history
+    errors = error_state if error_state is not None else GPSAFErrorState()
+    error_scales = errors.for_interpretation(generation.snapshot.interpretation_fingerprint)
     diagnostics: dict[str, object] = {
         "surrogate_alpha": settings.alpha,
         "surrogate_beta": settings.beta,
@@ -76,6 +81,7 @@ def select_gpsaf_generation(
         "surrogate_component": dict(
             surrogate.semantic_identity(generation.config, generation.problem)
         ),
+        **errors.diagnostics(),
     }
     surrogate_used = False
     source = "gpsaf_random"
@@ -98,6 +104,7 @@ def select_gpsaf_generation(
                 seed=seed,
                 settings=settings,
                 training_data=training_data,
+                error_scales=error_scales,
             )
         else:
             population = None
@@ -140,11 +147,13 @@ def select_gpsaf_generation(
         diagnostics.update(dict(selected.state.diagnostics))
         diagnostics.update(dict(selected.diagnostics))
 
+    predicted_costs = diagnostics.pop("_prediction_rows", ())
     return GPSAFGenerationSelection(
         population=population,
         source=source,
         surrogate_used=surrogate_used,
         diagnostics=diagnostics,
+        predicted_costs=predicted_costs,
     )
 
 

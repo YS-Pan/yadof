@@ -26,7 +26,7 @@ def create_settings(
     return GPSAFSettings(
         alpha=integer(factory, "alpha", alpha, minimum=0),
         beta=integer(factory, "beta", beta, minimum=0),
-        gamma=real(factory, "gamma", gamma, minimum=0.0, maximum=1.0),
+        gamma=real(factory, "gamma", gamma, minimum=0.0),
         exploration_fraction=real(
             factory,
             "exploration_fraction",

@@ -7,6 +7,7 @@ from .training import (
     DeterministicSurrogateComponent,
     SurrogateSelectionFreshness,
     SurrogatePrediction,
+    SurrogateContractError,
     SurrogateTrainingData,
     TrainingCancelledError,
     TrainingHandle,
@@ -88,6 +89,7 @@ from .api import (
 # ``yadof.surrogate.conditional_inr`` callable after private implementation imports.
 
 __all__ = [
+    "SurrogateContractError",
     "APPLICABILITY_CALIBRATED",
     "APPLICABILITY_NOT_APPLICABLE",
     "APPLICABILITY_UNCALIBRATED",

@@ -8,6 +8,11 @@
   survival helpers.
 - Translate between normalized yadof rows and pymoo representations.
 - Expose the small adapter surface used by common search and GPSAF phases.
+- Replay labeled true generations once each in population order, preserving
+  survival normalization and n_gen instead of pooling the whole archive into one
+  tell. Seed survival and infill independently by real-generation ordinal.
+- Clone candidate Individuals before predicted tells; beta must not mutate source
+  pools. Avoid a redundant survival pass after already-replayed generations.
 - Perform configured ask attempts and bounded random refill with duplicate/archive
   counters; inability to fill an exact unique request raises the public typed
   insufficient-pool error rather than looping or returning partial success.

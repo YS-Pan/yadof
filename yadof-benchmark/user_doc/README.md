@@ -6,6 +6,7 @@ Use these version-matched documents for the installed package:
 2. Read [api.md](api.md) while authoring `benchmark.py`.
 3. Read [baselines.md](baselines.md) to select or provide task baselines.
 4. Read [execution.md](execution.md) before launching or inspecting measured work.
+5. For the real-simulation oracle experiment, read [perfect_surrogate.md](perfect_surrogate.md).
 
 The no-argument initializer creates the packaged `portable` preset: two canonical
 real-only and PCA/SVD+GPSAF strategies on the synthetic antenna baseline, seed

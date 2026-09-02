@@ -38,6 +38,9 @@
   more prediction supersets and concatenates them only when interpretation, fitted
   state, source, objective width, and candidate bindings agree exactly.
 - `select_candidates()` delegates current-cost survival to pymoo;
+- `select_candidate_indices()` returns an ordered validated subset for positional
+  tournaments, without adding environmental survival. Predicted rows preserve an
+  explicit validity mask; only failed rows may carry all positive infinity.
   `advance_search()` delegates beta simulation to pymoo tell. Neither mutates input
   state.
 - `fork_search_state()` and `continue_search_from()` support deterministic
@@ -54,6 +57,7 @@
 - State cannot cross a strategy, generation, problem/snapshot root, cannot be
   constructed without the framework token, and deliberately refuses pickle.
   Durable resume reconstructs from real history at a generation boundary.
+  Real generation and population labels participate in state identity/replay.
 - Concrete pymoo imports occur only inside operations. Pymoo owns algorithms,
   operators, `Individual`, ask/tell, reference directions, and survival.
 - Candidate identity, rounded design equivalence, and durable evidence identity are

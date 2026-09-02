@@ -152,6 +152,7 @@ class ComparisonSpec:
     generations: int | None
     reference: str | None
     contains_slow_surrogate: bool = False
+    stop_on_top10_reference: bool = False
 
 
 @dataclass(frozen=True)
@@ -197,6 +198,7 @@ class CellSpec:
     strategy_files: Mapping[str, Path]
     execution: Mapping[str, Any]
     contract: Mapping[str, Any]
+    top10_reference: str | None = None
 
     @property
     def planned_evaluations(self) -> int:
@@ -228,6 +230,7 @@ class CellSpec:
             },
             "execution": thaw_json(self.execution),
             "contract": thaw_json(self.contract),
+            "top10_reference": self.top10_reference,
         }
 
 
@@ -269,6 +272,7 @@ class RunSpec:
                     "replication_scope": scope,
                     "replication_notice": replication_notice(scope),
                     "reference": item.reference,
+                    "stop_on_top10_reference": item.stop_on_top10_reference,
                 }
             )
         return {

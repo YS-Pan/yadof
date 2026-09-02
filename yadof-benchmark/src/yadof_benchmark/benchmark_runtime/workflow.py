@@ -158,6 +158,7 @@ class Benchmark:
         population: int | None = None,
         generations: int | None = None,
         reference: str | None = None,
+        stop_on_top10_reference: bool = False,
     ) -> "Benchmark":
         selected_strategies = _items(strategies, label="comparison strategies")
         selected_seeds = tuple(DEFAULT_SEEDS if seeds is None else seeds)
@@ -173,6 +174,7 @@ class Benchmark:
                 f"reference strategy is not selected by comparison: {reference!r}"
             )
         self._comparisons.append(
+            # Stopping is a declared measured protocol, never a fitted ranking.
             ComparisonSpec(
                 id=_id(comparison_id, label="comparison id"),
                 baseline_ids=_items(baselines, label="comparison baselines"),
@@ -187,6 +189,7 @@ class Benchmark:
                     else _positive(generations, label="generations")
                 ),
                 reference=reference,
+                stop_on_top10_reference=stop_on_top10_reference,
             )
         )
         return self
@@ -232,6 +235,13 @@ class Benchmark:
         strategy_by_id = {item.id: item for item in self._strategies}
         resolved_comparisons: list[ComparisonSpec] = []
         for comparison in self._comparisons:
+            if not isinstance(comparison.stop_on_top10_reference, bool):
+                raise BenchmarkError("stop_on_top10_reference must be boolean")
+            if comparison.stop_on_top10_reference and (
+                self._cell_concurrency != 1 or comparison.reference is None
+                or comparison.strategy_ids[0] != comparison.reference
+            ):
+                raise BenchmarkError("top-10 stopping requires cell_concurrency=1 and the reference strategy first")
             missing = sorted(set(comparison.strategy_ids) - known)
             if missing:
                 raise BenchmarkError(

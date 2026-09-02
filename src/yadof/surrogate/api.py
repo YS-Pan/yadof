@@ -195,6 +195,10 @@ class PCASVDComponent:
 
         return predict_rawdata(model, normalized_parameters)
 
+    def estimate_initial_error(self, context, training_data, *, folds=5):
+        from .linear_subspace.gpsaf_error import estimate_initial_error
+        return estimate_initial_error(self, context, training_data, folds=folds)
+
     def training_data(
         self,
         dataset,

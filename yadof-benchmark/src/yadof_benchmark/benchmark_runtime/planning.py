@@ -305,6 +305,7 @@ def plan_workflow(
                             strategy_files=strategy_files,
                             execution=freeze_json(baseline.execution),
                             contract=freeze_json(baseline.contract),
+                            top10_reference=(comparison.reference if comparison.stop_on_top10_reference else None),
                         )
                     )
     return RunSpec(

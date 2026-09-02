@@ -181,6 +181,7 @@ class PredictedCostRows:
     source: str
     diagnostics: Mapping[str, object] = field(default_factory=dict)
     prediction_id: str = field(init=False)
+    valid_mask: tuple[bool, ...] = ()
 
     def __post_init__(self) -> None:
         candidate_ids = tuple(
@@ -210,8 +211,14 @@ class PredictedCostRows:
             for value in row
         ):
             raise ValueError("predicted variables must be finite in [0, 1]")
-        if any(not math.isfinite(value) for row in costs for value in row):
-            raise ValueError("predicted current costs must be finite")
+        valid = tuple(self.valid_mask) if self.valid_mask else (True,) * count
+        if len(valid) != count or any(type(value) is not bool for value in valid):
+            raise ValueError("prediction valid_mask must align and be boolean")
+        for row, is_valid in zip(costs, valid):
+            if (is_valid and any(not math.isfinite(value) for value in row)) or (
+                not is_valid and any(value != math.inf for value in row)
+            ):
+                raise ValueError("predicted current costs must be finite or explicit failed +inf rows")
         source = str(self.source).strip()
         if not source:
             raise ValueError("predicted cost source must be non-empty")
@@ -226,7 +233,8 @@ class PredictedCostRows:
                 "domain": _PREDICTION_DOMAIN,
                 "candidate_ids": candidate_ids,
                 "normalized_variables": rows,
-                "costs": costs,
+                "costs": [row if ok else None for row, ok in zip(costs, valid)],
+                "valid_mask": valid,
                 "interpretation_fingerprint": interpretation,
                 "state_signature": state_signature,
                 "source": source,
@@ -235,6 +243,7 @@ class PredictedCostRows:
         object.__setattr__(self, "candidate_ids", candidate_ids)
         object.__setattr__(self, "normalized_variables", rows)
         object.__setattr__(self, "costs", costs)
+        object.__setattr__(self, "valid_mask", valid)
         object.__setattr__(self, "interpretation_fingerprint", interpretation)
         object.__setattr__(self, "state_signature", state_signature)
         object.__setattr__(self, "source", source)
@@ -358,6 +367,9 @@ def prepare_search(
                     "candidate_id": row.candidate_id,
                     "row_id": row.row_id,
                     "interpretation_id": row.interpretation_id,
+                    "generation_index": row.generation_index,
+                    "optimization_index": row.optimization_index,
+                    "population_index": row.population_index,
                     "x": row.x,
                     "costs": row.costs,
                 }
@@ -604,6 +616,7 @@ def bind_surrogate_prediction(
         candidate_ids=tuple(row.candidate_id for row in selected_pool.candidates),
         normalized_variables=selected_pool.population,
         costs=prediction.costs,
+        valid_mask=prediction.valid_mask,
         interpretation_fingerprint=prediction.interpretation_fingerprint,
         state_signature=prediction.state_signature,
         source="surrogate-prediction",
@@ -623,6 +636,7 @@ def bind_predicted_costs(
     interpretation_fingerprint: str | None = None,
     state_signature: str | None = None,
     diagnostics: Mapping[str, object] | None = None,
+    valid_mask: Sequence[bool] = (),
 ) -> PredictedCostRows:
     """Bind custom/legacy deterministic current-cost rows at one explicit edge."""
 
@@ -637,14 +651,15 @@ def bind_predicted_costs(
             "posterior, or unbound surrogate values"
         )
     cost_rows = tuple(tuple(float(value) for value in row) for row in costs)
-    if any(not math.isfinite(value) for row in cost_rows for value in row):
+    validity = tuple(valid_mask) if valid_mask else (True,) * len(cost_rows)
+    if any(not math.isfinite(value) for row, ok in zip(cost_rows, validity) if ok for value in row):
         raise ValueError("predicted current costs must be finite")
     fallback_signature = _hash_json(
         {
             "domain": _PREDICTION_DOMAIN,
             "state_id": selected_pool.state.state_id,
             "candidate_ids": [row.candidate_id for row in selected_pool.candidates],
-            "costs": cost_rows,
+            "costs": [row if ok else None for row, ok in zip(cost_rows, validity)],
             "source": str(source),
         }
     )
@@ -652,6 +667,7 @@ def bind_predicted_costs(
         candidate_ids=tuple(row.candidate_id for row in selected_pool.candidates),
         normalized_variables=selected_pool.population,
         costs=cost_rows,
+        valid_mask=validity,
         interpretation_fingerprint=(
             fallback_signature
             if interpretation_fingerprint is None
@@ -677,7 +693,7 @@ def combine_predicted_cost_rows(
     groups = tuple(predictions)
     if not groups:
         raise ValueError("combined prediction requires at least one input")
-    by_id: dict[str, tuple[tuple[float, ...], tuple[float, ...]]] = {}
+    by_id = {}
     interpretation_fingerprint = ""
     state_signature = ""
     for prediction in groups:
@@ -691,14 +707,15 @@ def combine_predicted_cost_rows(
             or prediction.state_signature != state_signature
         ):
             raise ValueError("combined predictions use different fitted semantics")
-        for candidate_id, variables, costs in zip(
+        for candidate_id, variables, costs, valid in zip(
             prediction.candidate_ids,
             prediction.normalized_variables,
             prediction.costs,
+            prediction.valid_mask,
         ):
             if candidate_id in by_id:
                 raise ValueError("combined predictions repeat a candidate ID")
-            by_id[candidate_id] = (variables, costs)
+            by_id[candidate_id] = (variables, costs, valid)
 
     expected = {
         candidate.candidate_id: candidate.normalized_variables
@@ -719,11 +736,37 @@ def combine_predicted_cost_rows(
         source=source,
         interpretation_fingerprint=interpretation_fingerprint,
         state_signature=state_signature,
+        valid_mask=tuple(by_id[candidate_id][2] for candidate_id in ordered_ids),
         diagnostics={
             "combined_prediction_count": len(groups),
             "combined_candidate_count": len(ordered_ids),
             "ignored_prediction_count": len(set(by_id) - set(expected)),
         },
+    )
+
+
+def select_candidate_indices(
+    state: SearchState,
+    pool: CandidatePool,
+    indices: Sequence[int],
+    *,
+    source: str,
+) -> CandidateSelection:
+    """Select an ordered subset without imposing an environmental survival rule."""
+    selected_state = _require_state(state)
+    selected_pool = _require_pool(pool)
+    _require_pool_state(selected_state, selected_pool)
+    selected = tuple(indices)
+    if any(type(index) is not int or not 0 <= index < len(pool.candidates) for index in selected):
+        raise ValueError("selected candidate indices must be in range")
+    if len(set(selected)) != len(selected):
+        raise ValueError("selected candidate indices must be unique")
+    return _selection(
+        tuple(pool.candidates[index] for index in selected),
+        tuple(pool._records[index] for index in selected),
+        state=selected_state,
+        source=source,
+        diagnostics={"selected_count": len(selected)},
     )
 
 
@@ -1247,5 +1290,6 @@ __all__ = [
     "prepare_search",
     "search_candidates",
     "select_candidates",
+    "select_candidate_indices",
     "warm_start_candidates",
 ]

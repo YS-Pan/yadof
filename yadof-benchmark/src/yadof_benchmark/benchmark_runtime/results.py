@@ -476,6 +476,9 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
         },
         "issues": issues,
     }
+    if cell.get("top10_reference") is not None:
+        from ..perfect_protocol import collect_top10
+        result["top10_protocol"] = collect_top10(workspace, cell, records, rows)
     return json_safe(result)
 
 
@@ -544,6 +547,7 @@ def _pairing_summaries(
                         and generation_zero.get("complete")
                     ),
                     "cell_valid": bool(summary.get("valid")),
+                    "top10_budget_satisfied": bool(result and (result.get("top10_protocol") or {}).get("budget_satisfied")),
                 }
             )
 
@@ -562,7 +566,8 @@ def _pairing_summaries(
             ),
             "attempted_budget_matches": (
                 len(attempted_budgets) == 1 and None not in attempted_budgets
-            ),
+            ) or (all(item.get("top10_reference") for item in members)
+                  and all(item["top10_budget_satisfied"] for item in arms)),
             "generation_zero_population_matches": (
                 all(item["generation_zero_population_complete"] for item in arms)
                 and len(population_fingerprints) == 1
@@ -837,6 +842,8 @@ def _cell_summaries(
         )
         finite = counts.get("finite") if isinstance(counts, Mapping) else None
         attempt_count_complete = attempted == planned
+        if cell.get("top10_reference") is not None:
+            attempt_count_complete = bool(result and (result.get("top10_protocol") or {}).get("budget_satisfied"))
         finite_results_available = (
             isinstance(finite, int) and not isinstance(finite, bool) and finite > 0
         )

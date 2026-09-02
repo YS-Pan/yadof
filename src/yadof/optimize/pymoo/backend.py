@@ -222,13 +222,22 @@ def clone_algorithm(algorithm):
 def history_population(context: PymooContext, history: Sequence[HistoryRecord]):
     algorithm = new_algorithm(context)
     rows = [record for record in history if record.x]
-    if rows:
+    groups = {}
+    for row in rows:
+        group = (row.optimization_index or 0, row.generation_index or 0)
+        groups.setdefault(group, []).append(row)
+    for ordinal, group in enumerate(sorted(groups)):
+        batch = sorted(groups[group], key=lambda row: row.population_index or 0)
+        # Independent deterministic streams make real-generation replay exact,
+        # regardless of how many alpha asks or beta simulation calls were made.
+        algorithm.random_state = np.random.default_rng(context.seed + ordinal * 1009 + 701)
         algorithm.tell(
             infills=Population.new(
-                X=_x_matrix([record.x for record in rows], context.problem.variable_count),
-                F=_fitness_matrix([record.costs for record in rows], context.problem.objective_count),
+                X=_x_matrix([record.x for record in batch], context.problem.variable_count),
+                F=_fitness_matrix([record.costs for record in batch], context.problem.objective_count),
             )
         )
+    algorithm.random_state = np.random.default_rng(context.seed + context.generation_index * 1009)
     return algorithm
 
 
@@ -247,8 +256,11 @@ def _selected_population(context: PymooContext, algorithm, size: int) -> Populat
 
 def survivor_state_from_history(context: PymooContext, history: Sequence[HistoryRecord], size: int):
     algorithm = history_population(context, history)
-    selected = _selected_population(context, algorithm, size)
-    if len(selected) > 0:
+    # Already advanced once per real generation. A second survival would change
+    # NSGA-III normalization/niching and consume another random stream.
+    pop = getattr(algorithm, "pop", None)
+    selected = _selected_population(context, algorithm, size) if pop is not None and len(pop) > size else pop
+    if selected is not None and len(selected) > 0:
         algorithm.pop = selected
         set_optimum = getattr(algorithm, "_set_optimum", None)
         if callable(set_optimum):
@@ -372,7 +384,7 @@ def advance_population_with_records(
     for record in records:
         if not record.pred_costs:
             continue
-        individual = record.individual or Individual(X=np.asarray(record.x, dtype=float))
+        individual = copy.deepcopy(record.individual) if record.individual is not None else Individual(X=np.asarray(record.x, dtype=float))
         individual.set("X", np.asarray(record.x, dtype=float))
         individual.set("F", _fitness_matrix([record.pred_costs], context.problem.objective_count)[0])
         individuals.append(individual)

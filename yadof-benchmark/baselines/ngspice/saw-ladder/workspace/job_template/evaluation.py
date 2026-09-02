@@ -9,7 +9,9 @@ import time
 
 import numpy as np
 
-from ngspice_com import analyze, save_result, set_variables, solver_init
+from ngspice_com import analyze, save_result, set_variables, solver_init, NgspiceSimulationError
+
+PHYSICAL_FAILURE_TYPES = (NgspiceSimulationError,)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -97,4 +99,3 @@ def evaluate_rawdata(parameters, context):
         "simulator_stdout_tail": result.stdout[-2000:],
         "simulator_stderr_tail": result.stderr[-2000:],
     }
-

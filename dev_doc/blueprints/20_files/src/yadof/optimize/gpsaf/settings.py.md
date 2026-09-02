@@ -3,10 +3,10 @@
 ## Intent
 
 - Hold the private frozen alpha/beta/gamma/exploration snapshot constructed by
-  `gpsaf()`.
+  `gpsaf_settings()`.
 
 ## Invariants
 
-- Alpha and beta are non-negative integers; gamma and exploration are finite
-  fractions. Validation is eager and standard-library only.
+- Alpha and beta are non-negative integers; gamma is finite and nonnegative;
+  exploration is a finite fraction. Validation is eager and standard-library only.
 - Training freshness is deliberately absent because it remains core campaign policy.

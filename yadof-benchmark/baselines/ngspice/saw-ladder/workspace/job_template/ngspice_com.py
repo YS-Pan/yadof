@@ -32,6 +32,10 @@ class NgspiceError(RuntimeError):
     """Base error raised by the adapter."""
 
 
+class NgspiceSimulationError(NgspiceError):
+    """A solver-reported failure or time limit, distinct from an interface error."""
+
+
 class NgspiceRawFileError(NgspiceError):
     """Raised when an ngspice rawfile does not match the supported ASCII format."""
 
@@ -304,18 +308,18 @@ def analyze(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise NgspiceError(
+        raise NgspiceSimulationError(
             f"ngspice exceeded timeout={timeout!r} seconds\n{_log_tail(log_path)}"
         ) from exc
     except OSError as exc:
         raise NgspiceError(f"could not start ngspice executable {session.executable}: {exc}") from exc
 
     if completed.returncode != 0:
-        raise NgspiceError(
+        raise NgspiceSimulationError(
             f"ngspice exited with code {completed.returncode}\n{_log_tail(log_path)}"
         )
     if _log_has_error(log_path):
-        raise NgspiceError(f"ngspice reported an error\n{_log_tail(log_path)}")
+        raise NgspiceSimulationError(f"ngspice reported an error\n{_log_tail(log_path)}")
     if not raw_path.is_file() or raw_path.stat().st_size == 0:
         raise NgspiceError(f"ngspice did not create a non-empty rawfile\n{_log_tail(log_path)}")
     read_rawfile(raw_path)
@@ -590,4 +594,3 @@ __all__ = [
     "set_variables",
     "solver_init",
 ]
-

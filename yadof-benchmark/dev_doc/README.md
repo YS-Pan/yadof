@@ -36,6 +36,9 @@ Current invariants are:
   when attempts are complete and finite contract-valid metric evidence remains;
 - missing attempts, no finite evidence, contract failure, initial-population
   failure, or missing metric does invalidate a cell;
+- the opt-in top-10 reference protocol accepts a shorter GPSAF budget only when
+  durable real history independently proves the first strict crossing occurred
+  at that exact complete generation; all ordinary budgets stay unchanged;
 - same-baseline/same-seed arms require matching baseline input digest, planned and
   attempted budget, and generation-0 normalized population before pairing;
 - planning performs no simulator work and writes no execution evidence;

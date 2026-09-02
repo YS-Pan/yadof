@@ -301,6 +301,9 @@ normal generation completion waits for it, and abnormal campaign close cancels i
 
 `SurrogatePrediction` is immutable transient data: complete predicted rawData,
 current-snapshot costs, deterministic zero-width intervals, and bounded diagnostics.
+Explicit physical failures carry `raw_data=None`, `valid_mask=False`, and all
+`+inf` costs/point intervals; no sample is borrowed from another candidate.
+Valid rows still require complete rawData and finite costs.
 It never calls the recorder/finalizer and is not a real `CostTable` or a posterior
 sample. `fit_codec()`/`evaluate_oracle()` remain truth-encoding diagnostics and
 cannot be passed where an explicit deployable state is required.
@@ -606,6 +609,8 @@ from yadof.optimize import (
     by_objective_count,
     finish_explicit_surrogate_training,
     gpsaf_settings,
+    GPSAFErrorState,
+    initialize_gpsaf_error,
     pymoo_ga,
     pymoo_nsga3,
     select_gpsaf_generation,
@@ -618,18 +623,21 @@ def optimization_program(context):
     search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())
     surrogate = conditional_inr()
     settings = gpsaf_settings(alpha=3, beta=3, gamma=0.5)
+    error_state = GPSAFErrorState()
     with context.run_scope() as run:
         for generation_index in run.generations():
             with run.generation(generation_index) as step:
                 training = surrogate.training_data(
                     step.evidence_dataset(), step.cost_table()
                 )
+                initialize_gpsaf_error(surrogate, step.context, training, error_state)
                 selected = select_gpsaf_generation(
                     step.context,
                     search=search,
                     surrogate=surrogate,
                     settings=settings,
                     training_data=training,
+                    error_state=error_state,
                 )
                 evaluation_handle = start_evaluation(
                     step.prepare_evaluation(selected.population)
@@ -647,6 +655,8 @@ def optimization_program(context):
                         diagnostics.update(finish_explicit_surrogate_training(
                             surrogate, step.context
                         ))
+                error_state.observe(selected, evaluation.costs)
+                diagnostics.update(error_state.diagnostics())
                 step.commit(step.result(
                     population=selected.population,
                     costs=evaluation.costs,
@@ -734,14 +744,17 @@ generation boundary. Candidate IDs, rounded duplicate keys, and durable evidence
 IDs are separate. A `CandidateSelection` is only a real-evaluation handoff—nothing
 is recorded until the common evaluator/finalizer commits real evidence.
 
-Deterministic `PredictedCostRows` accepts only finite current-cost means aligned to
-one exact pool. It is not interchangeable with the real-history `CostTable`, the
+Deterministic `PredictedCostRows` accepts finite current-cost means aligned to
+one exact pool, or explicit failed rows with `valid_mask=False` and all `+inf`
+costs. It is not interchangeable with the real-history `CostTable`, the
 rawData-owning `SurrogatePrediction`, or posterior `JointObjectiveSamples`.
 Configured ask/refill exhaustion raises `InsufficientCandidatePoolError`; derived
 GPSAF/posterior paths may discard the entire partial choice and run a fresh complete
-real search, while failure of that real path remains explicit. GPSAF `gamma` keeps
-its existing factory, validation, identity, diagnostics, and behavior; the primitive
-split does not add it to selection mathematics.
+real search, while failure of that real path remains explicit. A
+`SurrogateContractError` propagates rather than becoming ordinary fallback.
+GPSAF `gamma` controls the cluster-size replacement probability. See
+[GPSAF mechanisms and adaptations](gpsaf.md) for the paper contract, error
+bootstrap, true-generation state replay and required explicit error-state calls.
 
 For an explicit structural posterior-assisted composition, set
 `OPTIMIZE_POPULATION_SIZE = 10` and make every control visible in the program

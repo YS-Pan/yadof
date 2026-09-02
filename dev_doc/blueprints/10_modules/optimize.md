@@ -30,7 +30,9 @@ they do not duplicate its recorder, evaluator, handle registry, or lock.
   `SearchState` values plus prepare/search/bind/select/advance/compose/full-real
   operations. It imports the concrete pymoo adapter only inside operations.
 - `gpsaf/` owns the generation-local typed GPSAF selector,
-  alpha/beta/exploration phases, explicit training start/finish helpers, and its
+  positional alpha tournaments, cloned beta advances, nearest-anchor clusters,
+  error-aware PKT, gamma replacement, run-owned error estimates, exploration,
+  explicit training start/finish helpers, and its
   retained private pymoo record adapter; it does not own real evaluation or
   generation commit.
 - `pymoo/` owns the concrete GA/NSGA-III adapter shared by GPSAF and real search.
@@ -62,7 +64,7 @@ and optional source evidence IDs remain separate. State is bound to strategy,
 generation, problem, seeds, archive precision, and interpretation snapshot; it is
 not pickleable or durable. Generation-boundary resume rebuilds from real history.
 
-`PredictedCostRows` aligns finite current-cost means to exact pool candidate IDs and
+`PredictedCostRows` aligns current-cost means and explicit validity to exact pool candidate IDs and
 is the only deterministic survival input. `CostTable`, `SurrogatePrediction`, and
 `JointObjectiveSamples` remain distinct owners/types. Selection commits only the
 search continuation; real evidence commits only after the common evaluator.
@@ -70,13 +72,14 @@ search continuation; real evidence commits only after the common evaluator.
 rows from one semantic prediction owner, including prediction supersets needed by
 beta anchors; it rejects missing, duplicate, or mixed-semantics rows.
 
-GPSAF alpha/beta pools are ranked using surrogate-predicted mean current costs
-through pymoo survival. Conditional-INR member min/max spread remains a diagnostic
-output at the surrogate/viewer boundary; GPSAF candidate records do not carry it,
-and it is not converted into optimizer noise, knockout probability, or a trust
-decision. A configured exploration quota keeps some candidates outside surrogate
-preference. Every selected row is validated by the real evaluator before becoming
-durable truth.
+Alpha uses independent positional feasibility/Pareto tournaments. Beta advances a
+cloned pymoo state, clusters every simulated infill at its nearest alpha anchor,
+and applies PKT plus the paper's cluster-density gamma probability. PKT adds
+independent noise using measured prediction error; ensemble min/max spread is
+unrelated. Programs explicitly bootstrap the error and update it from captured
+pre-evaluation predictions. A configured exploration quota keeps some candidates
+outside surrogate preference. Every selected row is validated by the real
+evaluator before becoming durable truth.
 
 For PCA/SVD, conditional-INR, and hierarchical-CAE, the workspace program freezes
 one explicit `SurrogateTrainingData` from the generation's evidence/cost views
@@ -162,7 +165,8 @@ History warm start joins the session's immutable evidence dataset and task-bound
 cost table by row identity. It consumes only successful committed original rows
 that carry a generation index, and carries candidate, row, design, and
 interpretation identity alongside the existing name/normalized-variable/cost
-fields. Unindexed standalone and pre-run smoke rows remain durable for diagnostics
+fields, plus optimization/generation/population labels for one real tell per
+generation during state reconstruction. Unindexed standalone and pre-run smoke rows remain durable for diagnostics
 and resource calibration but cannot turn a new generation-zero search into a
 midpoint warm start. `run_generations` supports start/resume,
 stable run and optimization

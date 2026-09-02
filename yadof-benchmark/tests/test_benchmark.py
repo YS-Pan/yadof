@@ -452,7 +452,7 @@ def test_complete_preset_and_mechanical_smoke_profile(tmp_path: Path) -> None:
 
 def test_blank_is_explicit_and_presets_are_discoverable(tmp_path: Path) -> None:
     presets = api.discover_presets()
-    assert list(presets) == ["portable", "complete", "blank"]
+    assert list(presets) == ["portable", "complete", "perfect", "blank"]
     assert presets["portable"]["default"] is True
     assert presets["complete"]["long_running"] is True
     assert presets["complete"]["cells"] == 18

@@ -24,7 +24,8 @@
   satisfies the lightweight deterministic-provider protocol, recovers only the
   exact caller-supplied training state, reconstructs full named rawData, and returns
   the deterministic DTO for explicit pool binding. It exposes no
-  posterior/readiness methods.
+  posterior/readiness methods. Its explicit `estimate_initial_error()` delegates
+  to independent five-fold, held-out rawData/cost fits without publishing a model.
 - Construct `hierarchical_cae()` from selector-keyed groups/layouts/axis encodings,
   one `data_filter_mode` selector that defaults to `none`, a mode-specific optional
   versioned `FrequencyFilter`, explicit device/training kwargs, and an internal

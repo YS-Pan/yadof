@@ -162,8 +162,13 @@ evaluation, starts training on the captured prior evidence, then explicitly
 waits/closes both lifecycles before commit. PCA/SVD, conditional-INR, and
 hierarchical-CAE implement the
 runtime-checkable deterministic component protocol; GPSAF binds each prediction
-DTO to exact pool candidate IDs before pymoo survival. No evaluator path exposes
-an after-submit callback.
+DTO to exact pool candidate IDs before positional tournaments or simulated pymoo
+advancement. Before selection, programs explicitly initialize error (PCA/SVD
+held-out folds, exact oracle zero, or documented prequential warmup). After real
+evaluation they update the last-five batch maximum-error average using the
+captured predictions. Selection itself does not fit. Training-free components
+can declare a current generation through the same pure freshness interface even
+with empty training data. No evaluator path exposes an after-submit callback.
 
 ## Generation-boundary task changes
 

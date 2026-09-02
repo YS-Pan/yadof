@@ -10,7 +10,7 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from chrono_com import worker_main
+from chrono_com import worker_main, PyChronoSimulationError
 from task_spec import (
     COUNTERWEIGHT_BLOCK_SIZE_M,
     GRAVITY_MPS2,
@@ -180,7 +180,7 @@ def run_task_model(
             f"{name}={clearance:.6g} m"
             for name, clearance in loaded_clearances.items()
         )
-        raise ValueError(
+        raise PyChronoSimulationError("physical_failure",
             "loaded mechanism intersects the ground before contact integration: "
             + details
         )
@@ -191,6 +191,9 @@ def run_task_model(
     # non-penetration constraint, not a compliant material model.  The former SMC
     # setup allowed fast constrained members to travel visibly below the plane.
     system = chrono.ChSystemNSC()
+    # Chrono 10.0.0 leaves this contact-container member uninitialized.
+    # Set the documented NSC default on every newly created system.
+    system.SetMinBounceSpeed(0.15)
     system.SetCollisionSystemType(chrono.ChCollisionSystem.Type_BULLET)
     system.SetGravitationalAcceleration(chrono.ChVector3d(0.0, 0.0, -GRAVITY_MPS2))
 

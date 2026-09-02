@@ -6,6 +6,8 @@ from yadof.optimize import (
     gpsaf_settings,
     pymoo_nsga3,
     select_gpsaf_generation,
+    GPSAFErrorState,
+    initialize_gpsaf_error,
     start_explicit_surrogate_training,
 )
 from yadof.surrogate import pca_svd
@@ -94,6 +96,7 @@ def optimization_program(context):
         gamma=0.5,
         exploration_fraction=0.1,
     )
+    error_state = GPSAFErrorState()
     with context.run_scope() as run:
         for generation_index in run.generations():
             with run.generation(generation_index) as step:
@@ -101,12 +104,14 @@ def optimization_program(context):
                     step.evidence_dataset(),
                     step.cost_table(),
                 )
+                initialize_gpsaf_error(surrogate, step.context, training, error_state)
                 selected = select_gpsaf_generation(
                     step.context,
                     search=search,
                     surrogate=surrogate,
                     settings=settings,
                     training_data=training,
+                    error_state=error_state,
                 )
                 evaluation_handle = start_evaluation(
                     step.prepare_evaluation(selected.population)
@@ -131,6 +136,8 @@ def optimization_program(context):
                                 step.context,
                             )
                         )
+                error_state.observe(selected, evaluation.costs)
+                diagnostics.update(error_state.diagnostics())
                 step.commit(
                     step.result(
                         population=selected.population,

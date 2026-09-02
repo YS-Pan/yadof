@@ -92,6 +92,11 @@
 - Real-only, GPSAF, and posterior fallback share one full-real primitive. Derived
   deterministic prediction, posterior samples, and real cost tables retain distinct
   types and cannot cross each other's selection boundaries.
+- GPSAF owns positional alpha tournaments, cloned beta search, nearest-anchor
+  clusters, error-aware PKT and gamma replacement. Its program owns an explicit
+  error estimator lifecycle; finite true generation history reconstructs the
+  underlying optimizer through one tell per generation. A declared physical
+  failure is distinct from a fatal prediction/interface contract error.
 - `task_snapshot` classifies frozen program sources away from the
   generation-reloaded interpretation/evaluation task copy. It merges program
   provenance into the complete source record while keeping the program and

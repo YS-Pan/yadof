@@ -28,6 +28,9 @@
   published direct NPZ paths plus bounded diagnostics.
 - `PyChronoError` preserves one stable failure category, return code, diagnostic
   tails, truncation flags, and any validated child error manifest.
+- Its `PyChronoSimulationError` subtype identifies explicit physical failures and
+  time limits. The worker preserves `physical_failure` separately from task or
+  protocol errors, allowing an oracle to reject programming faults visibly.
 
 ## Invariants
 

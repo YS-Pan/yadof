@@ -811,17 +811,8 @@ PCA_HELPER = '''\
 import numpy as np
 
 from yadof.optimize import (
-    advance_search,
-    bind_surrogate_prediction,
-    combine_candidate_pools,
-    combine_predicted_cost_rows,
-    compose_real_population,
-    continue_search_from,
-    fork_search_state,
-    full_real_search,
-    prepare_search,
-    search_candidates,
-    select_candidates,
+    full_real_search, select_gpsaf_generation, gpsaf_settings,
+    GPSAFErrorState, initialize_gpsaf_error,
 )
 
 def transformed_training_data(step, surrogate):
@@ -841,118 +832,22 @@ def transformed_training_data(step, surrogate):
         transform_id="numpy-reverse-v1",
     )
 
-def _predicted(surrogate, context, pool, training):
-    return bind_surrogate_prediction(
-        pool,
-        surrogate.predict_for_selection(context, pool.population, training),
-    )
-
-def select_population(
-    step,
-    search,
-    surrogate,
-    *,
-    alpha,
-    beta,
-    gamma,
-    exploration_fraction,
-):
+def select_population(step, search, surrogate, *, alpha, beta, gamma, exploration_fraction):
     context = step.context
-    diagnostics = {
-        "surrogate_alpha": int(alpha),
-        "surrogate_beta": int(beta),
-        "surrogate_gamma": float(gamma),
-        "exploration_fraction": float(exploration_fraction),
-        "surrogate_selected": False,
-    }
-    training = None
-    if context.history:
-        training = transformed_training_data(step, surrogate)
+    training = transformed_training_data(step, surrogate) if context.history else None
     if training is None or not surrogate.has_trained_state(context, training):
         selected = full_real_search(context, search, origin_prefix="program-gpsaf")
-        diagnostics.update(dict(selected.state.diagnostics))
-        diagnostics.update(dict(selected.diagnostics))
-        diagnostics["selection_mode"] = "full-real-warmup"
-        return selected, diagnostics
-
-    state = prepare_search(
-        context,
-        search,
-        population_size=context.population_size,
-        algorithm_seed=context.random_seed,
-        random_seed=context.random_seed + context.generation_index * 1009 + 17,
-        history_policy="survivor",
-    )
-    exploration_count = min(
-        context.population_size,
-        max(1, int(round(context.population_size * float(exploration_fraction)))),
-    )
-    target = context.population_size - exploration_count
-    exploration = search_candidates(
-        fork_search_state(state),
-        exploration_count,
-        origin="program-gpsaf-exploration",
-    )
-    current = continue_search_from(state, exploration.state)
-    alpha_pools = []
-    alpha_predictions = []
-    for index in range(int(alpha)):
-        pool = search_candidates(current, target, origin=f"program-gpsaf-alpha-{index}")
-        current = pool.state
-        alpha_pools.append(pool)
-        alpha_predictions.append(_predicted(surrogate, context, pool, training))
-    combined_alpha = combine_candidate_pools(current, tuple(alpha_pools))
-    combined_alpha_prediction = combine_predicted_cost_rows(
-        combined_alpha,
-        tuple(alpha_predictions),
-        source="program-gpsaf-alpha-prediction",
-    )
-    anchors = select_candidates(
-        current,
-        combined_alpha,
-        combined_alpha_prediction,
-        target,
-        source="program-gpsaf-alpha-selection",
-    )
-
-    beta_state = fork_search_state(anchors.state)
-    beta_pools = []
-    beta_predictions = []
-    for index in range(int(beta)):
-        pool = search_candidates(beta_state, target, origin=f"program-gpsaf-beta-{index}")
-        prediction = _predicted(surrogate, context, pool, training)
-        beta_pools.append(pool)
-        beta_predictions.append(prediction)
-        beta_state = advance_search(pool.state, pool, prediction)
-    combined_beta = combine_candidate_pools(beta_state, (anchors, *beta_pools))
-    combined_beta_prediction = combine_predicted_cost_rows(
-        combined_beta,
-        (combined_alpha_prediction, *beta_predictions),
-        source="program-gpsaf-beta-prediction",
-    )
-    selected_surrogate = select_candidates(
-        beta_state,
-        combined_beta,
-        combined_beta_prediction,
-        target,
-        source="program-gpsaf-beta-selection",
-    )
-    selected = compose_real_population(
-        selected_surrogate.state,
-        (selected_surrogate, exploration),
-        size=context.population_size,
-        source="program-gpsaf-selection",
-        refill_origin="program-gpsaf-refill",
-    )
-    diagnostics.update(dict(selected.state.diagnostics))
-    diagnostics.update({
-        "selection_mode": "explicit-pca-svd-gpsaf",
-        "surrogate_selected": True,
-        "alpha_batches": len(alpha_pools),
-        "beta_batches": len(beta_pools),
-        "exploration_count": len(exploration.candidates),
-        "selected_candidate_ids": tuple(row.candidate_id for row in selected.candidates),
-    })
+        return selected, {"surrogate_selected": False, "selection_mode": "full-real-warmup"}
+    errors = GPSAFErrorState()
+    initialize_gpsaf_error(surrogate, context, training, errors)
+    selected = select_gpsaf_generation(context, search=search, surrogate=surrogate,
+        settings=gpsaf_settings(alpha=alpha, beta=beta, gamma=gamma,
+                                exploration_fraction=exploration_fraction),
+        training_data=training, error_state=errors)
+    diagnostics = dict(selected.diagnostics)
+    diagnostics.update({"selection_mode": "explicit-pca-svd-gpsaf",
+                        "surrogate_selected": selected.surrogate_used,
+                        "beta_batches": diagnostics.get("beta_iterations", 0)})
     return selected, diagnostics
 '''
 

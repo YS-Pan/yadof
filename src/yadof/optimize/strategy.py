@@ -29,6 +29,9 @@ class HistoryRecord:
     row_id: str = ""
     design_key: str | None = None
     interpretation_id: str = ""
+    generation_index: int | None = None
+    optimization_index: int | None = None
+    population_index: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +127,9 @@ def history_records(
                 row_id=evidence.row_id,
                 design_key=evidence.design_key,
                 interpretation_id=cost.interpretation_id,
+                generation_index=evidence.record.get("generation_index"),
+                optimization_index=evidence.record.get("optimization_index"),
+                population_index=evidence.record.get("population_index"),
             )
         )
     return tuple(records)

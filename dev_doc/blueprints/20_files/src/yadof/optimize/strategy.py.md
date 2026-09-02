@@ -12,7 +12,8 @@
 - Adapt current session history by joining evidence and costs on row identity, then
   retain only successful committed original rows with a generation index and expose
   candidate/row/design/interpretation IDs alongside the compatible
-  `job_name/x/costs` fields. Unindexed smoke evidence remains durable outside this
+  `job_name/x/costs` fields. Carry optimization, generation and population indices
+  so replay preserves real-generation boundaries. Unindexed smoke evidence remains durable outside this
   optimizer-history adapter.
 
 ## Invariants

@@ -15,6 +15,14 @@ generation-snapshot registration. Close releases the runner, training input,
 thread, and snapshot lease. `SurrogatePrediction` owns complete immutable transient
 rawData, current-snapshot finite costs, exact zero-width intervals, semantic
 signatures, and bounded diagnostics; it is never evidence or a posterior draw.
+Explicit physical failures may carry no rawData and all positive-infinite costs
+with `valid_mask=False`. Every valid row remains complete and finite.
+`SurrogateContractError` distinguishes fatal implementation faults from an
+unavailable learned prediction. Invalid rows never borrow another row's sample.
+Freshness delegates to the component's pure latest-generation inspection even
+when supplied data is empty: a training-free real oracle can be current without
+inventing training samples. No state plus empty data remains skipped-no-data.
+Contract errors from that inspection propagate rather than becoming a fallback.
 `DeterministicPredictionProvider` is the lightweight runtime-checkable prediction
 edge for components that can produce that exact DTO for a candidate-selection
 pool. `DeterministicSurrogateComponent` extends it with validation, semantic

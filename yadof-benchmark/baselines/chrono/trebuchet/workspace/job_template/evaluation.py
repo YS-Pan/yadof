@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from chrono_com import run_pychrono
+from chrono_com import run_pychrono, PyChronoSimulationError
+
+PHYSICAL_FAILURE_TYPES = (PyChronoSimulationError,)
 
 
 DEFAULT_CHILD_TIMEOUT_SEC = 120.0
@@ -57,4 +59,3 @@ def evaluate_prepared(
         evaluation_id=str(context["evaluation_name"]),
     )
     return result.as_diagnostics()
-

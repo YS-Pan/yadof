@@ -12,7 +12,8 @@
 - Dispatch PCA/SVD, conditional-INR, and hierarchical-CAE through the typed
   prediction protocol and bind each prediction DTO to exact pool IDs. No path
   preserves rawData/member spread in `PredictedCostRows`.
-- Apply GPSAF exploration, exploitation, and replacement rules.
+- Apply positional alpha tournaments, nearest-alpha normalized-design clustering
+  of all beta candidates, per-cluster PKT and size-ratio-to-gamma replacement.
 - Return normalized populations through the common strategy contracts.
 
 ## I/O Format
@@ -32,6 +33,10 @@
   alpha algorithm branch.
 - Phases never materialize session evidence or own an after-submit callback;
   predicted rawData never enters the session.
+- Restore the real algorithm after beta while retaining duplicate bookkeeping.
+  Error scales come from explicit prequential state, never prediction intervals.
+  Missing scales hold beta until an observed error exists. The tournament stream
+  is deterministic per generation and separate from pymoo/random-refill streams.
 
 ## Mutability Profile
 - GPSAF phase policy may evolve, but real evaluation and durable history must

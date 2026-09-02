@@ -108,6 +108,10 @@ class PyChronoError(RuntimeError):
         return output
 
 
+class PyChronoSimulationError(PyChronoError):
+    """An explicitly identified physical simulation failure or time limit."""
+
+
 @dataclass(frozen=True, slots=True)
 class PyChronoResult:
     """Validated evidence and diagnostics from one completed child process."""
@@ -380,7 +384,8 @@ def run_pychrono(
             stderr_truncated=stderr_truncated,
         )
         if stop_category is not None:
-            raise PyChronoError(
+            error_class = PyChronoSimulationError if stop_category == "timeout" else PyChronoError
+            raise error_class(
                 stop_category,
                 "PyChrono child was cancelled"
                 if stop_category == "cancelled"
@@ -397,7 +402,12 @@ def run_pychrono(
                 and isinstance(manifest.get("error"), Mapping)
             ):
                 child_error = dict(manifest["error"])
-                raise PyChronoError(
+                error_class = (
+                    PyChronoSimulationError
+                    if child_error.get("code") == "physical_failure"
+                    else PyChronoError
+                )
+                raise error_class(
                     "child_reported_error",
                     str(child_error.get("message") or "PyChrono child reported an error"),
                     manifest=manifest,
@@ -554,7 +564,8 @@ def worker_main(
             raise TypeError("simulate() diagnostics must be a mapping or None")
     except Exception as exc:
         traceback.print_exc()
-        _write_worker_error(result_path, request_id, "task_error", str(exc))
+        code = "physical_failure" if isinstance(exc, PyChronoSimulationError) else "task_error"
+        _write_worker_error(result_path, request_id, code, str(exc))
         return 3
 
     try:
@@ -1334,6 +1345,7 @@ def _write_worker_error(
 
 
 __all__ = [
+    "PyChronoSimulationError",
     "MAX_DIAGNOSTIC_BYTES",
     "MAX_REQUEST_BYTES",
     "MAX_RESULT_BYTES",

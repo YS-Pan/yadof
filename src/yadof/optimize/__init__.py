@@ -20,6 +20,7 @@ from .gpsaf.assistance import (
     select_gpsaf_generation,
     start_explicit_surrogate_training,
 )
+from .gpsaf.errors import GPSAFErrorState, initialize_gpsaf_error
 from .posterior_assisted import (
     CalibratedApplicabilityGate,
     PosteriorGenerationSelection,
@@ -52,6 +53,7 @@ from .primitives import (
     prepare_search,
     search_candidates,
     select_candidates,
+    select_candidate_indices,
     warm_start_candidates,
 )
 from .qnehvi.acquisition import (
@@ -69,6 +71,9 @@ from .strategy import OptimizationResult
 # complete-method factory and is absent from ``__all__``.
 
 __all__ = [
+    "GPSAFErrorState",
+    "initialize_gpsaf_error",
+    "select_candidate_indices",
     "AllInfiniteGenerationError",
     "CalibratedApplicabilityGate",
     "CandidatePool",

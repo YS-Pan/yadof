@@ -790,6 +790,11 @@ def _execute_cell(
     python = str(spec["workflow"]["python"])
     try:
         _resource_check(cell.get("execution", {}))
+        from ..runtime_freeze import verify_runtime
+        verify_runtime(root)
+        if cell.get("top10_reference") is not None:
+            from ..perfect_protocol import prepare_control
+            prepare_control(root, spec, state, cell, workspace)
         check_root = cell_root / "commands" / "01-check"
         with _state_guard(state_lock):
             cell_state["active_command"] = check_root.relative_to(root).as_posix()

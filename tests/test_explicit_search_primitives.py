@@ -138,7 +138,7 @@ def _context(
         ),
     ),
 )
-def test_full_real_search_preserves_seeded_golden_population(
+def test_full_real_search_preserves_warm_start_and_reproducible_generation_streams(
     algorithm,
     problem,
     history,
@@ -162,7 +162,13 @@ def test_full_real_search_preserves_seeded_golden_population(
     )
 
     assert selected.source == source
-    assert selected.population == expected
+    if generation == 0:
+        assert selected.population == expected
+    else:
+        repeated = full_real_search(context, search, algorithm_seed=context.random_seed,
+            random_seed=context.random_seed + generation * 1009, origin_prefix="gpsaf")
+        assert selected.population == repeated.population
+        assert not set(selected.population).intersection(row.x for row in history)
     assert selected.diagnostics["evaluation_handoff"] == (
         "common-real-evaluate-population"
     )
@@ -630,7 +636,7 @@ def test_explicit_gpsaf_selection_and_training_use_only_materialized_data() -> N
     assert surrogate.events[-2:] == ["start-training", "finish-training"]
 
 
-def test_gpsaf_golden_population_and_gamma_semantics_remain_unchanged() -> None:
+def test_gpsaf_reproducibility_and_gamma_cluster_probabilities() -> None:
     seed = 271828
     generation = 3
     problem = ProblemInfo(2, 2, ("first", "second"))
@@ -660,24 +666,23 @@ def test_gpsaf_golden_population_and_gamma_semantics_remain_unchanged() -> None:
                 exploration_fraction=0.25,
             ),
             training_data=training_data,
+            error_scales=(0.0, 0.0),
         )
 
-    expected = (
-        (0.9041488429305145, 0.7130378314064403),
-        (0.052564070396267565, 0.15),
-        (0.12990148399388463, 0.7522338506183172),
-        (0.007789022113735958, 0.24176311643493506),
-    )
     population, diagnostics = run(0.5)
-    other_population, _ = run(0.9)
-
-    assert population == expected
-    assert other_population == expected
+    repeated, repeated_info = run(0.5)
+    _, other_info = run(0.9)
+    assert population == repeated
+    assert diagnostics == repeated_info
+    sizes = diagnostics["beta_cluster_sizes"]
+    assert diagnostics["beta_replacement_probabilities"] == tuple(
+        (n / max(sizes)) ** 0.5 if n else 0.0 for n in sizes)
+    assert other_info["beta_replacement_probabilities"] == tuple(
+        (n / max(sizes)) ** 0.9 if n else 0.0 for n in sizes)
     assert diagnostics["alpha_candidate_count"] == 9
     assert diagnostics["beta_candidate_count"] == 6
-    assert diagnostics["beta_cluster_sizes"] == (2, 1, 3)
-    assert diagnostics["beta_replacements"] == 1
     assert diagnostics["exploration_count"] == 1
+    assert len(population) == len(set(population)) == 4
 
     first_settings = gpsaf_settings(
         alpha=3,

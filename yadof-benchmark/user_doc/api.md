@@ -1,5 +1,9 @@
 # Python and command-line API
 
+
+For a sequential paired reference with strict cumulative top-10 stopping, use
+`compare(..., reference=..., stop_on_top10_reference=True)` and the strategy
+receipt contract in [perfect_surrogate.md](perfect_surrogate.md).
 ## `Benchmark.configure`
 
 ```python
