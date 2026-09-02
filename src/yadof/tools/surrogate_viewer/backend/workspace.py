@@ -20,6 +20,7 @@ from yadof.surrogate.conditional_inr.checkpoints import (
 )
 from yadof.surrogate.conditional_inr.runtime import strategy_signature_for_workspace
 
+from ..errors import NoCompatibleCheckpointError
 from .checkpoints import CheckpointPredictor, discover_checkpoints
 from .rawdata import (
     flatten_samples_for_schema,
@@ -94,11 +95,22 @@ class SurrogateWorkspace:
             strategy_signature=self.strategy_signature,
         )
         if not self.checkpoints:
-            raise FileNotFoundError(
+            raise NoCompatibleCheckpointError(
                 "no trained surrogate checkpoints are compatible with the "
                 f"active strategy {self.strategy_signature[:16]} below "
                 f"{self.config.workspace.surrogate_checkpoint_dir}; the selected "
-                "strategy may not use a surrogate"
+                "strategy may not use a surrogate",
+                details={
+                    "workspace": str(self.root),
+                    "strategy_signature": self.strategy_signature,
+                    "checkpoint_root": str(
+                        self.config.workspace.surrogate_checkpoint_dir
+                    ),
+                },
+                hints=(
+                    "Select a workspace whose active strategy has a committed "
+                    "viewer-compatible checkpoint.",
+                ),
             )
         component_names = {
             str(checkpoint.payload.get("component_namespace", ""))

@@ -38,8 +38,45 @@ checkpoint 代。它会做模型推理，但不会启动 workflow 或训练模�
 推理，因为一次 audit 本来就同时累计两类误差。`--sample-percent` 对每一代
 独立抽样且至少保留一个个体；`--random-seed` 让抽样可复现。`--progress`
 只写 stderr，stdout 仍可直接交给 JSON parser。JSON 中没有有限误差汇总的
-单元格使用 `null`。两个文字模式都默认检查当前目录，不创建 PNG 或 audit
-cache，也不导入 Tkinter 或打开窗口。
+单元格使用 `null`。`summary` 和 `audit` 都默认检查当前目录，不创建 PNG 或
+audit cache，也不导入 Tkinter 或打开窗口。
+
+## 单案例无窗口诊断
+
+AI agent 可以用 `inspect` 精确复现 GUI 中一个 checkpoint、一个已完成真实
+个体和一个 rawData 切片的比较：
+
+```powershell
+yadof view surrogate inspect --workspace "D:\path\to\workspace" `
+  --checkpoint-generation 9 --real-generation 12 --population-index 156 `
+  --rawdata response --plot-dimension Freq `
+  --fixed-coordinate Theta=0 --format json
+```
+
+也可以用 `--job-name NAME` 代替 generation/population 组合；两类 selector
+不能混用。checkpoint 默认为 `latest`。`--plot-dimension` 可重复零到两次，
+`--fixed-coordinate NAME=VALUE` 用于其余维度。省略绘图维度时，确定性默认值
+与 GUI 一致：优先 `Freq`，否则第一个维度；省略固定坐标时选择最接近零的
+stored-grid 坐标。JSON 会完整记录请求值、解析值、默认来源和 on-grid/off-grid
+状态。off-grid 位置没有 recorded truth，因此 `truth`、`error_summary` 为
+`null`，并带 warning。
+
+成功 JSON 的 `analysis` 是 `surrogate_case_inspection`，包含 workspace 的
+strategy/run/component identity、checkpoint identity/sample/member、真实结果、
+参数物理值/归一化值/单位、resolved query、prediction/truth、ensemble min/max、
+按名称对齐的 objectives、有限 MAE/RMSE/最大绝对误差及其坐标。所有非有限
+数值转成 `null`。selected plot 不超过 4096 个标量时内联数组；超过后只保留
+shape、有限统计及 `values_omitted=true`，避免淹没 agent context。
+
+默认不写文件。显式提供新的或空的 `--output DIRECTORY` 时，命令只在该目录
+写入 `manifest.json`、`data.npz`、纯 Agg 的 `plot.png`，一维时额外写
+`curve.csv`。二维 prediction/truth 共享色标；manifest 最后发布，并记录其他
+产物的相对路径、大小和 SHA-256。非空目录或已有产物不会被覆盖。
+
+`summary`、`audit`、`inspect` 在 argparse 成功后若发生 runtime failure，
+`--format json` 保证 stdout 为空，stderr 只有一个标准 JSON 对象；其
+`analysis` 为 `surrogate_tool_error`，并提供稳定 error code、message、details
+和 hints。文字模式则输出可操作的人类诊断，不泄漏 traceback。
 
 ## 启动桌面 GUI
 
@@ -149,6 +186,9 @@ heatmap 的 CUDA 推理会使用比普通单点预测更大的样本批次，以
 
 - `app.py`：窗口、后台任务和异常汇报的协调器；
 - `report.py`：无窗口 summary/audit 的稳定文本与 JSON 输出；
+- `inspection.py`：单案例 selector、推理、切片、统计和有界 payload；
+- `renderer.py`：只依赖 Matplotlib Figure/Agg 的 0D/1D/2D 证据图；
+- `errors.py`：terminal 模式共享的稳定结构化 runtime error；
 - `ui/interactive.py`、`ui/heatmap.py`：两个互相独立的标签页；
 - `ui/plots.py`：Matplotlib 绘图；
 - `backend/checkpoints.py`：通用 discovery/dispatch 与 conditional-INR 加载和批量推理；

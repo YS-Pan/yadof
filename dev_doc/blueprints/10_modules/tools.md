@@ -82,8 +82,14 @@ all-axis in-domain readout. Neither path claims recorded truth. UI modules consu
 immutable viewer values and render scalars, curves, or two-dimensional color plots.
 `report.py` turns backend metadata and selected audit matrices into stable terminal
 text or schema-versioned JSON, using `null` for missing finite aggregates and
-stderr for optional progress. The tool never trains, launches workflows, edits
-checkpoints, writes audit caches, or joins the non-GUI `view all` command.
+stderr for optional progress. `inspection.py` resolves one exact real case and
+builds a finite/null-safe payload with at most 4096 inline selected-plot scalars;
+`renderer.py` is a pure Figure/Agg 0D/1D/2D boundary and `errors.py` owns stable
+terminal runtime error payloads. Inspection writes nothing by default. Explicit
+output alone publishes full selected NPZ arrays, optional one-dimensional CSV, an
+Agg PNG, then a relative-path/size/SHA-256 manifest inside a new or empty directory
+without replacement. The tool never trains, launches workflows, edits checkpoints,
+writes audit caches, or joins the non-GUI `view all` command.
 
 The subpackage root is lightweight and resolves backend convenience exports lazily.
 Torch, Matplotlib, and Tkinter are loaded only when the viewer is actually used.

@@ -39,6 +39,11 @@ workspace/checkpoint/task metadata
 one complete cross-generation audit
   + exact metric/quantity selection
   -> stdout matrix report
+
+exact checkpoint + exact recorded result + resolved rawData slice
+  -> one normal backend prediction
+  -> bounded terminal diagnosis
+  -> optional collision-free NPZ/CSV/Agg-PNG evidence with manifest last
 ```
 
 ## End-To-End Responsibilities
@@ -66,6 +71,10 @@ one complete cross-generation audit
 12. Support cooperative stop and visible failure reporting.
 13. Print summary metadata without model loading or a window.
 14. Print selected audit matrices as text/JSON, keeping progress off stdout.
+15. Diagnose one exact real case as bounded text/JSON without a window, preserving
+    off-grid truth absence and current objective semantics.
+16. Export full selected arrays and a headless plot only when explicitly requested,
+    without overwriting or writing outside the selected evidence directory.
 
 ## Boundaries
 
@@ -115,14 +124,21 @@ no persistence recovery because the viewer writes no audit cache.
   fabricate recorded truth or modify the checkpoint.
 - Metric/quantity switching after a complete audit performs no model inference.
 - Cancellation never promotes partial aggregate state.
-- Terminal JSON replaces non-finite matrix cells with `null`; optional progress
-  goes only to stderr and reports are never persisted.
+- Terminal JSON replaces every non-finite value with `null`; optional progress
+  goes only to stderr. Summary/audit and inspect without output are never
+  persisted; explicit inspect evidence is separate from workspace state.
+- Successful inspect JSON inlines at most 4096 selected plot scalars. Runtime JSON
+  failures after parsing are a single structured stderr object with empty stdout.
+- Evidence images use Figure/Agg only, two-dimensional prediction/truth share a
+  color scale, existing output is never overwritten, and manifest publication is
+  the final step.
 
 ## Verification Boundary
 
 Unit tests cover checkpoint discovery, curve extraction, aggregate selection,
-sampling, cancellation, deterministic text/JSON reporting, and Tcl-popup ancestry
-handling. Compile/import/CLI smoke checks cover the installed nested module, lazy
-GUI/summary/audit registration, and artifact membership. Real-workspace checks
+sampling, cancellation, deterministic text/JSON reporting, exact-case selectors,
+bounded arrays, headless 0D/1D/2D artifacts, structured failures, and Tcl-popup
+ancestry handling. Compile/import/CLI smoke checks cover the installed nested module, lazy
+GUI/summary/audit/inspect registration, and artifact membership. Real-workspace checks
 cover yadof checkpoint compatibility and error-array shapes. Hidden Tk checks cover
 focus handlers and plot layout without launching a simulator.

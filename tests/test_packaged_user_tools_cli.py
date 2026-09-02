@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import builtins
+import json
 import os
 from pathlib import Path
 import runpy
@@ -238,6 +240,165 @@ def test_surrogate_viewer_cli_is_registered_without_loading_optional_modules():
     assert audit_args.metric == "both"
     assert audit_args.quantity == "rawdata:gain"
     assert audit_args.handler.__name__ == "_surrogate_report_command"
+
+    inspect_args = parser.parse_args(
+        [
+            "view",
+            "surrogate",
+            "inspect",
+            "--workspace",
+            "D:/work/viewer",
+            "--checkpoint-generation",
+            "9",
+            "--real-generation",
+            "12",
+            "--population-index",
+            "156",
+            "--rawdata",
+            "stress",
+            "--plot-dimension",
+            "phase",
+            "--plot-dimension",
+            "frequency",
+            "--fixed-coordinate",
+            "radius=0.25",
+            "--format",
+            "json",
+            "--output",
+            "D:/work/evidence",
+        ]
+    )
+    assert inspect_args.surrogate_action == "inspect"
+    assert inspect_args.checkpoint_generation == 9
+    assert inspect_args.real_generation == 12
+    assert inspect_args.population_index == 156
+    assert inspect_args.plot_dimensions == ["phase", "frequency"]
+    assert inspect_args.fixed_coordinates == [("radius", 0.25)]
+    assert inspect_args.output == Path("D:/work/evidence")
+    assert inspect_args.handler.__name__ == "_surrogate_report_command"
+
+    latest_by_job = parser.parse_args(
+        [
+            "view",
+            "surrogate",
+            "inspect",
+            "--job-name",
+            "job-1",
+            "--rawdata",
+            "stress",
+        ]
+    )
+    assert latest_by_job.checkpoint_generation == "latest"
+    assert latest_by_job.job_name == "job-1"
+    assert latest_by_job.output_format == "text"
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "view",
+                "surrogate",
+                "inspect",
+                "--job-name",
+                "job-1",
+                "--real-generation",
+                "12",
+                "--rawdata",
+                "stress",
+            ]
+        )
+
+
+def test_surrogate_inspect_help_never_imports_optional_or_gui_modules(
+    monkeypatch,
+    capsys,
+):
+    original_import = builtins.__import__
+    blocked: list[str] = []
+
+    def reject_optional(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.split(".", 1)[0] in {"torch", "matplotlib", "tkinter"}:
+            blocked.append(name)
+            raise AssertionError(f"help imported optional module {name}")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", reject_optional)
+    with pytest.raises(SystemExit) as caught:
+        cli_main(["view", "surrogate", "inspect", "--help"])
+
+    assert caught.value.code == 0
+    assert "--checkpoint-generation" in capsys.readouterr().out
+    assert blocked == []
+
+
+@pytest.mark.parametrize("action", ("summary", "audit", "inspect"))
+def test_surrogate_json_runtime_errors_use_one_stderr_object(
+    action,
+    monkeypatch,
+    capsys,
+):
+    from yadof.tools.surrogate_viewer.errors import SurrogateToolError
+    from yadof.tools.surrogate_viewer import inspection, report
+
+    def fail(*_args, **_kwargs):
+        raise SurrogateToolError(
+            "INFERENCE_FAILED",
+            "controlled failure",
+            details={"case": 7},
+            hints=("retry with another checkpoint",),
+        )
+
+    arguments = ["view", "surrogate", action, "--format", "json"]
+    if action == "summary":
+        monkeypatch.setattr(report, "render_workspace_summary", fail)
+    elif action == "audit":
+        monkeypatch.setattr(report, "render_error_audit", fail)
+        arguments.append("--progress")
+    else:
+        monkeypatch.setattr(inspection, "render_case_inspection", fail)
+        arguments.extend(
+            ["--job-name", "job-1", "--rawdata", "stress"]
+        )
+
+    assert cli_main(arguments) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert len(captured.err.strip().splitlines()) == 1
+    payload = json.loads(captured.err)
+    assert payload["schema_version"] == 1
+    assert payload["analysis"] == "surrogate_tool_error"
+    assert payload["error"] == {
+        "code": "INFERENCE_FAILED",
+        "details": {"case": 7},
+        "hints": ["retry with another checkpoint"],
+        "message": "controlled failure",
+    }
+
+
+def test_surrogate_summary_json_invalid_workspace_is_structured(
+    tmp_path,
+    capsys,
+):
+    missing = tmp_path / "missing-workspace"
+
+    assert cli_main(
+        [
+            "view",
+            "surrogate",
+            "summary",
+            "--workspace",
+            str(missing),
+            "--format",
+            "json",
+        ]
+    ) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    payload = json.loads(captured.err)
+    assert payload["error"]["code"] == "INVALID_WORKSPACE_CONFIG"
+    assert payload["error"]["details"]["operation"] == "summary"
+    assert payload["error"]["hints"]
 
 
 def test_view_all_prints_both_results_and_creates_both_images(capsys, tmp_path):

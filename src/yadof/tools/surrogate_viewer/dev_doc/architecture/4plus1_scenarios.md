@@ -54,12 +54,18 @@ neighbors without grid lines or gaps, and drawn with a one-line title.
    parameter/objective names, and rawData dimension spans without model inference.
 3. Optionally run `audit` with a deterministic seed, sample percentage, metric, and
    named quantity.
-4. Parse the row/column generations and selected error matrices from stdout.
+4. For one case, run `inspect` with one exact real selector, rawData, checkpoint,
+   and zero to two plot dimensions; parse the resolved query, prediction/truth,
+   ensemble, objectives, and error statistics.
+5. Optionally request a new evidence directory and validate its manifest hashes,
+   NPZ, Agg PNG, and one-dimensional CSV.
 
-Acceptance behavior: neither command imports or opens Tkinter, JSON contains only
-standard finite numbers or `null`, progress appears only on stderr, named-quantity
-errors list available choices, one `both` request performs one audit, and no
-workspace or package file changes.
+Acceptance behavior: no terminal mode imports or opens Tkinter, JSON contains only
+standard finite numbers or `null`, progress appears only on stderr, named-selector
+errors list available choices, one `both` request performs one audit, inspection
+stdout is bounded, and no workspace or package file changes. Explicit inspection
+export writes only its collision-free evidence directory and publishes no partial
+manifest.
 
 ## Stop A Long Audit
 
@@ -82,9 +88,9 @@ partial audit.
 
 ## Package And CLI Integration
 
-Install the yadof wheel with its `viewer` extra, confirm GUI, summary, and audit
+Install the yadof wheel with its `viewer` extra, confirm GUI, summary, audit, and inspect
 help work without opening a window, and launch the GUI only through its
 default/explicit command or nested module entry. Acceptance behavior: the wheel and
-sdist contain viewer code, terminal reporter, and this `dev_doc/`; `yadof --help`
+sdist contain viewer code, terminal reporter/inspection/renderer/errors, and this `dev_doc/`; `yadof --help`
 remains lightweight; `view all` never launches the GUI; the viewer writes no
 package or workspace files.

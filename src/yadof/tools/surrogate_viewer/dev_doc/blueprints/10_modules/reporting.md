@@ -2,8 +2,9 @@
 
 ## Intent
 
-Expose useful surrogate viewer metadata and cross-generation error results to
-humans and AI agents without requiring a desktop window or image interpretation.
+Expose useful surrogate viewer metadata, cross-generation error results, and one
+deterministic real-case diagnosis to humans and AI agents without requiring a
+desktop window or image interpretation.
 
 ## Functionalities
 
@@ -21,6 +22,15 @@ humans and AI agents without requiring a desktop window or image interpretation.
   repeating inference.
 - Render human-readable headings and tab-separated matrices or standard JSON.
 - Convert missing/non-finite matrix cells to JSON `null`.
+- Resolve one exact checkpoint, completed real result, rawData name, zero to two
+  plot dimensions, and every fixed coordinate before one backend prediction.
+- Preserve stored-grid truth/error and explicitly omit both for off-grid output.
+- Inline no more than 4096 selected plot scalars; retain shape/finite statistics
+  and an export hint above that bound.
+- On explicit output only, write full NPZ arrays, one-dimensional CSV, and a pure
+  Agg diagnostic PNG, then publish a hashed manifest last without replacement.
+- Normalize parsed-command runtime failures to stable text or one-object standard
+  JSON stderr while leaving failed JSON stdout empty.
 
 ## I/O Format
 
@@ -28,8 +38,10 @@ Both payloads contain `schema_version`, `analysis`, the resolved absolute
 workspace, and strategy/run/component scope. Summary payloads contain metadata
 lists. Audit payloads contain sample
 fraction/seed, axis generations, per-row sample counts, resolved quantity, and one
-or two matrices. Stdout contains only the final report; optional audit progress is
-a separate stderr concern owned by CLI routing.
+or two matrices. Inspection payloads add exact checkpoint/result/parameter/query
+identity, bounded prediction/truth/ensemble arrays, aligned objectives, error
+statistics, warnings, and artifacts. Stdout contains only the final report;
+optional audit progress is a separate stderr concern owned by CLI routing.
 
 ## Non-Obvious Techniques
 
@@ -40,10 +52,14 @@ a separate stderr concern owned by CLI routing.
   drift.
 - The reporting module imports the viewer backend only after CLI mode selection and
   never imports `app.py`, Tkinter, or Matplotlib.
+- `inspection.py` owns selectors and use-case state; `renderer.py` owns only
+  Figure/Agg drawing; `errors.py` owns stable error payloads. The renderer is
+  imported only for explicit export.
 
 ## Mutability Profile
 
 Presentation wording and additional backward-compatible payload fields may evolve.
 Stable contracts are schema identification, row/column generation meaning, exact
-quantity resolution, one inference pass for `both`, clean stdout, read-only
-workspace behavior, and no GUI import.
+selector resolution, one inference pass for `both` or one case, bounded standard
+JSON, clean stdout, read-only workspace behavior, collision-free explicit evidence,
+and no GUI import.

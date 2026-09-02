@@ -145,6 +145,9 @@ The optional read-only surrogate checkpoint viewer is installed below
 train models, run workflows, or write workspace state. Its interactive rawData
 view lets users choose zero, one, or two dimensions for scalar, curve, or filled
 two-dimensional color-contour display and set the remaining slice coordinates.
+The headless `summary`, `audit`, and single-case `inspect` modes provide stable
+text/JSON for agents; only an explicit `inspect --output` creates a separate
+hashed PNG/NPZ/CSV evidence directory.
 
 See [user_doc/README.md](user_doc/README.md) for the user-workflow guidance followed
 primarily by the user's AI agent, and [dev_doc/README.md](dev_doc/README.md) for

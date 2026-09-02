@@ -84,6 +84,27 @@ def _percentage(value: str) -> float:
     return parsed
 
 
+def _checkpoint_generation(value: str) -> int | str:
+    normalized = str(value).strip().casefold()
+    if normalized == "latest":
+        return "latest"
+    return _nonnegative_int(value)
+
+
+def _fixed_coordinate(value: str) -> tuple[str, float]:
+    name, separator, raw_value = str(value).partition("=")
+    name = name.strip()
+    if separator != "=" or not name or not raw_value.strip():
+        raise argparse.ArgumentTypeError("must use NAME=VALUE")
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("coordinate value must be numeric") from exc
+    if not math.isfinite(parsed):
+        raise argparse.ArgumentTypeError("coordinate value must be finite")
+    return name, parsed
+
+
 def _default_view_output_name(
     view_kind: str, *, now: datetime | None = None
 ) -> Path:
@@ -299,25 +320,27 @@ def _surrogate_viewer_command(args: argparse.Namespace) -> int:
 
 
 def _surrogate_report_command(args: argparse.Namespace) -> int:
+    output_format = str(args.output_format)
+    progress_lines: list[str] = []
     try:
+        from ..tools.surrogate_viewer.errors import (
+            format_surrogate_error,
+            normalize_surrogate_error,
+        )
         from ..tools.surrogate_viewer.report import (
             render_error_audit,
             render_workspace_summary,
         )
-    except ImportError as exc:
-        print(
-            "yadof: error: surrogate text reports require the optional "
-            f"'viewer' dependencies; install yadof[viewer] ({exc})",
-            file=sys.stderr,
-        )
-        return 1
+        if args.surrogate_action == "inspect":
+            from ..tools.surrogate_viewer.inspection import (
+                render_case_inspection,
+            )
 
-    workspace = args.workspace or Path(".")
-    try:
+        workspace = args.workspace or Path(".")
         if args.surrogate_action == "summary":
             output = render_workspace_summary(
                 workspace,
-                output_format=args.output_format,
+                output_format=output_format,
             )
         elif args.surrogate_action == "audit":
             progress = None
@@ -327,11 +350,11 @@ def _surrogate_report_command(args: argparse.Namespace) -> int:
                     total: int,
                     message: str,
                 ) -> None:
-                    print(
-                        f"surrogate audit: {completed}/{total} {message}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
+                    line = f"surrogate audit: {completed}/{total} {message}"
+                    if output_format == "json":
+                        progress_lines.append(line)
+                    else:
+                        print(line, file=sys.stderr, flush=True)
 
             output = render_error_audit(
                 workspace,
@@ -339,20 +362,50 @@ def _surrogate_report_command(args: argparse.Namespace) -> int:
                 random_seed=args.random_seed,
                 metric=args.metric,
                 quantity=args.quantity,
-                output_format=args.output_format,
+                output_format=output_format,
                 progress=progress,
+            )
+        elif args.surrogate_action == "inspect":
+            output = render_case_inspection(
+                workspace,
+                checkpoint_generation=args.checkpoint_generation,
+                job_name=getattr(args, "job_name", None),
+                real_generation=getattr(args, "real_generation", None),
+                population_index=getattr(args, "population_index", None),
+                rawdata_name=args.rawdata,
+                plot_dimension_names=args.plot_dimensions or (),
+                fixed_coordinates=args.fixed_coordinates or (),
+                output_format=output_format,
+                output=args.output,
             )
         else:  # pragma: no cover - parser owns the action choices.
             raise ValueError(
                 f"unsupported surrogate report: {args.surrogate_action}"
             )
-    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-        print(
-            f"yadof: error: could not create surrogate "
-            f"{args.surrogate_action} report: {exc}",
-            file=sys.stderr,
-        )
+    except Exception as exc:
+        try:
+            normalized = normalize_surrogate_error(
+                exc,
+                operation=str(args.surrogate_action),
+            )
+            formatted = format_surrogate_error(
+                normalized,
+                output_format=output_format,
+            )
+        except Exception:  # pragma: no cover - lightweight error path is fixed.
+            formatted = (
+                '{"schema_version":1,"analysis":"surrogate_tool_error",'
+                '"error":{"code":"INTERNAL_ERROR","message":'
+                '"The surrogate tool did not complete.","details":{},'
+                '"hints":[]}}'
+                if output_format == "json"
+                else "[INTERNAL_ERROR] The surrogate tool did not complete."
+            )
+        prefix = "" if output_format == "json" else "yadof: error: "
+        print(prefix + formatted, file=sys.stderr)
         return 1
+    for line in progress_lines:
+        print(line, file=sys.stderr)
     write_text(output)
     return 0
 
@@ -789,6 +842,84 @@ def build_parser() -> argparse.ArgumentParser:
         help="write inference progress to stderr",
     )
     surrogate_audit.set_defaults(handler=_surrogate_report_command)
+
+    surrogate_inspect = surrogate_modes.add_parser(
+        "inspect",
+        help="diagnose one checkpoint against one completed real result",
+        description=(
+            "Reproduce one surrogate prediction/truth rawData slice and current "
+            "objective comparison without opening a window. JSON arrays are "
+            "bounded; --output explicitly creates a self-contained PNG/NPZ/CSV "
+            "evidence directory."
+        ),
+    )
+    surrogate_inspect.add_argument(
+        "--workspace",
+        type=Path,
+        default=argparse.SUPPRESS,
+        help="workspace to inspect (default: current directory)",
+    )
+    surrogate_inspect.add_argument(
+        "--checkpoint-generation",
+        type=_checkpoint_generation,
+        default="latest",
+        metavar="N|latest",
+        help="checkpoint generation (default: latest)",
+    )
+    real_selector = surrogate_inspect.add_mutually_exclusive_group(required=True)
+    real_selector.add_argument(
+        "--job-name",
+        help="exact completed real-result job name",
+    )
+    real_selector.add_argument(
+        "--real-generation",
+        type=_nonnegative_int,
+        help="completed real-result optimization generation",
+    )
+    surrogate_inspect.add_argument(
+        "--population-index",
+        type=_nonnegative_int,
+        help="population index paired with --real-generation",
+    )
+    surrogate_inspect.add_argument(
+        "--rawdata",
+        required=True,
+        metavar="NAME",
+        help="exact rawData output name",
+    )
+    surrogate_inspect.add_argument(
+        "--plot-dimension",
+        dest="plot_dimensions",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help=(
+            "rawData dimension to plot; repeat at most twice (default: GUI "
+            "frequency/first-axis choice)"
+        ),
+    )
+    surrogate_inspect.add_argument(
+        "--fixed-coordinate",
+        dest="fixed_coordinates",
+        action="append",
+        type=_fixed_coordinate,
+        default=None,
+        metavar="NAME=VALUE",
+        help="fixed coordinate for an unplotted rawData dimension; repeatable",
+    )
+    surrogate_inspect.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="report encoding (default: text)",
+    )
+    surrogate_inspect.add_argument(
+        "--output",
+        type=Path,
+        help="new or empty evidence directory for manifest/NPZ/PNG/optional CSV",
+    )
+    surrogate_inspect.set_defaults(handler=_surrogate_report_command)
 
     all_views = view_subparsers.add_parser(
         "all",

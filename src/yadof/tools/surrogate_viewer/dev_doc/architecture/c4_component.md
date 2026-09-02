@@ -31,6 +31,12 @@
   selection and relative, absolute, or both derived matrices;
 - text/JSON formatters: TSV-like generation matrices for terminal reading and
   schema-versioned JSON with non-finite cells normalized to `null`.
+- case-inspection use case: exact checkpoint/real-result/rawData/dimension
+  resolution, one `predict_one()` call, stored/off-grid plot selection, bounded
+  finite statistics, optional evidence publication, and human/JSON formatting;
+- headless evidence renderer: Figure plus `FigureCanvasAgg` scalar, curve, surface,
+  shared prediction/truth color scale, ensemble range, and objective comparison;
+- terminal errors: viewer-local typed failures normalized to stable JSON/text codes.
 
 ## Backend Components
 
@@ -56,6 +62,14 @@ app.py
 report.py
   -> backend public exports
   -> NumPy / JSON formatting
+
+inspection.py
+  -> backend public exports
+  -> errors.py
+  -> renderer.py only for explicit PNG export
+
+renderer.py
+  -> Matplotlib Figure / backend_agg only
 
 ui/*
   -> backend data contracts/facade
@@ -112,5 +126,8 @@ and scheduling facade.
   lazily.
 - Terminal output carries complete immutable report payloads only; progress never
   contaminates stdout and report formatting never mutates an audit.
+- One inspection resolves exactly one checkpoint and real result, and all selected
+  arrays come from that one backend prediction. Off-grid truth/error are absent,
+  never interpolated or fabricated.
 - Checkpoint discovery and report identity use the active strategy plus declared
   run/component namespace; retained inactive artifacts are never combined.

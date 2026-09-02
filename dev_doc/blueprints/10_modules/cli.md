@@ -76,12 +76,16 @@ surface rather than the legacy flat compatibility module.
 optionally receives one workspace and loads `yadof.tools.surrogate_viewer.app`
 only inside its handler. Its `summary` mode prints checkpoint/history/task/rawData
 metadata without model inference, while `audit` prints selected cross-generation
-error matrices after one backend inference pass. Both terminal modes support text
-and schema-versioned JSON, default to the current directory, never open Tkinter,
-and keep optional progress on stderr. All modes report missing `viewer`
-dependencies without a traceback and never participate in `view all`. Parser
-construction and every `view surrogate ... --help` path must succeed in a
-core-only installation.
+error matrices after one backend inference pass. `inspect` resolves one exact
+checkpoint and completed real result, calls the normal backend prediction once,
+and prints one bounded rawData/objective diagnosis; explicit `--output` alone
+creates its collision-free NPZ/optional CSV/Agg-PNG evidence directory. All
+terminal modes support text and schema-versioned JSON, default to the current
+directory, never open Tkinter, and keep optional progress on stderr. After parsing,
+JSON runtime failures leave stdout empty and produce one stable structured stderr
+object. All modes report missing `viewer` dependencies without a traceback and
+never participate in `view all`. Parser construction and every
+`view surrogate ... --help` path must succeed in a core-only installation.
 
 ## Invariants
 

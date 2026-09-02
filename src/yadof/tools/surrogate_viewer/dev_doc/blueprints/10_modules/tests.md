@@ -30,6 +30,14 @@ optimization, or full model audit in the default suite.
 - Check cooperative cancellation before work begins.
 - Check PCA/SVD deterministic prediction, stored-grid plot, per-item audit,
   one-member shape, artifact immutability, and incompatible-manifest isolation.
+- Check exact job and generation/population selection, missing/ambiguous cases,
+  checkpoint/rawData/dimension/fixed-coordinate errors, default query resolution,
+  and on-grid/off-grid truth semantics.
+- Check finite/null-safe bounded inspection JSON plus 0D/1D/2D Agg export,
+  readable NPZ/PNG/one-dimensional CSV, manifest hashes, collision refusal, failed
+  render cleanup, and zero writes without output.
+- Check summary/audit/inspect runtime JSON failures have empty stdout and one stable
+  stderr object, while all help paths import no Torch, Matplotlib, or Tkinter.
 
 ## I/O Format
 
@@ -41,10 +49,11 @@ under test.
 ## Non-Obvious Techniques
 
 - Maintained tests live in yadof's top-level `tests/test_surrogate_viewer.py` and
-  use the repository's standard pytest temporary-root configuration.
+  `tests/test_surrogate_inspection.py` and use the repository's standard pytest
+  temporary-root configuration.
 - Viewer-specific tests skip as a group when optional Torch or Matplotlib
   dependencies are unavailable; parser/help/artifact tests still run core-only.
-- CLI parser tests construct GUI, summary, and audit actions without importing the
+- CLI parser tests construct GUI, summary, audit, and inspect actions without importing the
   optional viewer modules.
 - GUI module imports may be tested without opening a visible window. A hidden Tk
   smoke is appropriate for component behavior but should not make the default

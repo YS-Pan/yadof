@@ -7,6 +7,9 @@ src/yadof/tools/surrogate_viewer/
   __init__.py               lazy optional backend exports
   app.py                    desktop coordinator and module GUI entry
   report.py                 terminal summary/audit payloads and formatting
+  inspection.py             exact-case selection, inference, bounded payload/export
+  renderer.py               pure Figure/Agg scalar, curve, and surface evidence
+  errors.py                 stable terminal runtime error taxonomy/formatting
   __main__.py               python -m yadof.tools.surrogate_viewer entry
   backend/
     __init__.py             public viewer-backend exports
@@ -24,6 +27,7 @@ src/yadof/tools/surrogate_viewer/
     widgets.py              shared toggles, scrolling, and keyboard controls
   dev_doc/                  relatively independent viewer documentation
 tests/test_surrogate_viewer.py
+tests/test_surrogate_inspection.py
 tests/test_explicit_surrogate_fit.py
 ```
 
@@ -44,6 +48,11 @@ tests/test_explicit_surrogate_fit.py
   dependencies load only after the viewer is selected.
 - Keep terminal stdout limited to the final text/JSON value and route optional
   progress to stderr.
+- Keep `inspection.py` as the single-case use case: it may call the backend but
+  must not duplicate model inference. Keep `renderer.py` free of pyplot, Tkinter,
+  backend_tkagg, workspace loading, and selector logic.
+- Publish explicit inspection evidence only inside a new or empty destination,
+  with the manifest last and bounded JSON independent from full NPZ arrays.
 - Treat unrelated dirty-worktree changes as user-owned.
 
 ## Dependency And Installation Rules
@@ -63,10 +72,12 @@ The default focused checks are:
 & "..\.venv\Scripts\python.exe" -m compileall -q `
   src\yadof\tools\surrogate_viewer
 & "..\.venv\Scripts\python.exe" -m pytest tests\test_surrogate_viewer.py -q
+& "..\.venv\Scripts\python.exe" -m pytest tests\test_surrogate_inspection.py -q
 & "..\.venv\Scripts\python.exe" -m yadof.tools.surrogate_viewer --help
 & "..\.venv\Scripts\yadof.exe" view surrogate --help
 & "..\.venv\Scripts\yadof.exe" view surrogate summary --help
 & "..\.venv\Scripts\yadof.exe" view surrogate audit --help
+& "..\.venv\Scripts\yadof.exe" view surrogate inspect --help
 ```
 
 Changes to checkpoint loading or audit inference should also run a small seeded

@@ -85,6 +85,22 @@ reuses the one complete aggregate rather than repeating inference. Requested
 progress is written to stderr; stdout contains only the final report. A failed
 audit returns no partial report and writes nothing to the workspace.
 
+`inspect` resolves `latest` or one exact checkpoint generation and exactly one
+completed real result by job name or generation/population pair. It resolves an
+exact rawData name, zero to two named plot axes, and every remaining fixed axis
+using explicit values or the GUI's nearest-zero default, then calls
+`predict_one()` once. Stored-grid output is sliced from the full prediction and
+recorded truth; off-grid output uses the backend's plot-only prediction and exposes
+no truth/error. Arrays up to 4096 scalars are inline; larger arrays retain only
+shape/statistics. Without `--output` the process stops after formatting. With an
+explicit new or empty destination it stages NPZ/optional CSV/Agg PNG, publishes
+them without replacement, and publishes `manifest.json` last.
+
+After argparse succeeds, terminal failures are normalized by typed viewer errors.
+JSON mode discards partial audit progress and writes exactly one standard error
+object to stderr while leaving stdout empty; text mode emits the same code with
+actionable details and hints.
+
 ## Cancellation And Previous Results
 
 The Stop button sets a thread-safe event. The backend checks it before and after

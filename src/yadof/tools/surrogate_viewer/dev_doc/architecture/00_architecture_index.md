@@ -3,9 +3,10 @@
 The surrogate viewer is an optional, read-only `yadof.tools` application around
 one explicit yadof workspace. `yadof view surrogate` launches it separately from
 non-GUI history views. Its default mode presents interactive checkpoint
-predictions and a cross-generation error audit in a desktop window; its `summary`
-and `audit` modes expose metadata and selected error matrices as terminal text or
-JSON. No mode trains a model or changes workspace evidence.
+predictions and a cross-generation error audit in a desktop window; its `summary`,
+`audit`, and `inspect` modes expose metadata, selected error matrices, or one exact
+case as terminal text/JSON. No mode trains a model or changes workspace evidence;
+only explicit `inspect --output` creates a separate evidence directory.
 
 The primary data paths are:
 
@@ -28,6 +29,11 @@ sampled recorded individuals + real rawData
 workspace checkpoint + task + recorded metadata
   -> bounded non-inference summary
   -> terminal text or schema-versioned JSON
+
+checkpoint + exact recorded result + resolved rawData query
+  -> one PredictionResult through the normal backend
+  -> bounded prediction/truth/ensemble/error payload
+  -> optional manifest + NPZ + Agg PNG + one-dimensional CSV
 ```
 
 Core invariants are:
@@ -40,6 +46,10 @@ Core invariants are:
   inference.
 - Terminal JSON contains no non-standard NaN values; missing finite cells are
   represented as `null`, and optional progress stays on stderr.
+- Parsed terminal runtime failures emit one schema-versioned error object on
+  stderr and no stdout. Inspection arrays are bounded to 4096 inline scalars.
+- Evidence export never overwrites existing content, publishes its manifest last,
+  and imports neither Tkinter nor a Tk Matplotlib backend.
 - Private yadof checkpoint/rawData dependencies remain isolated in `backend/`.
 - One view dispatches to one compatible active conditional-INR, experimental
   hierarchical-CAE, or deterministic PCA/SVD checkpoint namespace; it never

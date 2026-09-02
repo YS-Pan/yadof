@@ -50,6 +50,7 @@ wheel acceptance workflow. From the yadof repository root, focused checks are:
 ```powershell
 & "..\.venv\Scripts\python.exe" -m yadof.tools.surrogate_viewer --help
 & "..\.venv\Scripts\python.exe" -m pytest tests/test_surrogate_viewer.py -q
+& "..\.venv\Scripts\python.exe" -m pytest tests/test_surrogate_inspection.py -q
 ```
 
 The viewer imports the regularly installed yadof package from that environment.
@@ -69,6 +70,11 @@ The viewer is read-only with respect to a selected yadof workspace:
 - it loads checkpoint artifacts and performs prediction/audit inference;
 - it calculates displayed costs through the selected workspace's current task;
 - it does not train models, launch a simulator, edit checkpoints, or write history.
+
+Terminal `summary` and `audit`, plus `inspect` without output, write nothing.
+Explicit `inspect --output` may create only its new or empty evidence directory;
+that directory is derived tool output, never workspace evidence or checkpoint
+state.
 
 The viewer deliberately depends on package-internal yadof checkpoint/model/rawData
 mechanisms. Those imports remain isolated below `backend/`; UI modules consume only

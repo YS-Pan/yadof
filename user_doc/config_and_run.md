@@ -391,6 +391,12 @@ yadof view surrogate audit --workspace PATH [--sample-percent 10] `
   [--random-seed N] [--metric relative|absolute|both] `
   [--quantity all-costs|cost:NAME|all-rawdata|rawdata:NAME] `
   [--format text|json] [--progress]
+yadof view surrogate inspect --workspace PATH `
+  [--checkpoint-generation N|latest] `
+  (--job-name NAME | --real-generation N --population-index N) `
+  --rawdata NAME [--plot-dimension NAME] [--plot-dimension NAME] `
+  [--fixed-coordinate NAME=VALUE] [--format text|json] `
+  [--output NEW_OR_EMPTY_DIRECTORY]
 yadof history clear --workspace PATH --yes
 yadof task adapters
 yadof task copy-adapter test_com.py --workspace PATH
@@ -483,7 +489,7 @@ performance-not-accepted. Their full-grid decoder remains authoritative for the
 objective bars, audit, optimizer, and posterior; the coordinate path is a read-only
 viewer/off-grid capability and does not imply that Gate 0 v5 passed.
 
-The two terminal modes are intended for people and AI agents that need analysis
+The three terminal modes are intended for people and AI agents that need analysis
 without a window:
 
 - `summary` does not load a model. It prints checkpoint generations/member counts,
@@ -497,9 +503,36 @@ without a window:
   aggregate matrices from the single inference pass. JSON represents missing
   finite aggregates as `null`. `--progress` writes status to stderr so stdout
   remains clean for text or JSON capture.
+- `inspect` deterministically reproduces one checkpoint/real-result/rawData slice.
+  Select the real result by exact `--job-name` or by the complete
+  `--real-generation` plus `--population-index` pair. Checkpoint `latest` is the
+  default. Plot dimensions and fixed coordinates use exact rawData dimension
+  names; omitted plot dimensions select `Freq` when present or the first axis,
+  while omitted fixed values select the stored coordinate nearest zero. The
+  resolved defaults, stored-grid/off-grid status, parameter values, objective
+  comparison, ensemble range, finite error statistics, and any warning are all
+  recorded in the result. Off-grid queries have no recorded truth, so `truth` and
+  `error_summary` are `null`.
 
-Both report modes default to the current directory when `--workspace` is omitted.
-They write no PNG, cache, checkpoint, history, or other workspace file. The
+`inspect --format json` inlines coordinates and selected prediction/truth/ensemble
+arrays only when the selected plot has at most 4096 scalar values. Larger plots
+retain shapes and finite statistics, set `values_omitted=true`, and direct the
+caller to explicit evidence export. Non-finite values are always JSON `null`,
+never `NaN` or `Infinity`.
+
+Without `--output`, `inspect` creates no PNG, cache, manifest, or other file. With
+an explicit new or empty directory it writes `manifest.json`, `data.npz`, and a
+pure Matplotlib/Agg `plot.png`; one-dimensional selections also receive
+`curve.csv`. The manifest records relative artifact paths, sizes, and SHA-256
+digests and is published only after every other artifact succeeds. Existing
+non-empty output directories and existing artifact names are never overwritten.
+
+All terminal modes default to the current directory when `--workspace` is omitted.
+`summary` and `audit` always write nothing; `inspect` writes only its explicitly
+requested output directory. None changes configuration, history, recorded data,
+or checkpoints. For a parsed command using `--format json`, a runtime failure
+leaves stdout empty and writes one schema-versioned `surrogate_tool_error` object
+to stderr with stable `code`, `message`, `details`, and `hints` fields. The
 surrogate tool never joins `view all`, starts a workflow, or changes training and
 checkpoint artifacts. Install the `viewer` extra before using any of its modes.
 

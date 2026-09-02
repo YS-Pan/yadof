@@ -164,11 +164,14 @@ for separately authorized real adapter smoke or performance work.
   isolation without Miniforge or PyChrono, plus a Windows physical scratch longer
   than the traditional process current-directory limit launched through a cleaned
   short alias;
-- lazy `view surrogate` GUI/summary/audit registration and help, viewer
-  wheel/sdist/dev_doc/report membership, deterministic text/JSON summary and audit
+- lazy `view surrogate` GUI/summary/audit/inspect registration and help, viewer
+  wheel/sdist/dev_doc/report/inspection/renderer/error membership, deterministic
+  text/JSON summary and audit
   encoding, checkpoint discovery, 0D/1D/2D rawData slice extraction from
   higher-rank data, arbitrary fixed-coordinate controls, method-specific
-  stored-grid/off-grid surrogate-query compatibility, hierarchical checkpoint
+  stored-grid/off-grid surrogate-query compatibility, exact single-case selectors,
+  bounded finite inspection JSON, collision-free headless artifacts, stable JSON
+  runtime failures, hierarchical checkpoint
   discovery/dispatch, aggregate selection, sampling, and cancellation
   when optional dependencies are installed.
 
