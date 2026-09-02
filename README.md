@@ -1,164 +1,197 @@
 # yadof
 
-yadof is an installable, task-agnostic optimization framework for expensive local
-or HTCondor workflows. The current packaged release is **0.5.1**. Evaluation
-history uses immutable standard-ZIP segments plus immutable metadata events.
+**Optimize expensive simulations with reusable data and a strategy you can edit.**
 
-Its durable modeling contract is:
+yadof is a Python framework for engineers and researchers running simulation-based
+design studies. It runs evaluations locally or on an existing HTCondor cluster,
+preserves their raw outputs, and provides surrogate models and search components
+that you compose in ordinary Python.
+
+Use it for problems such as antenna design, circuit tuning, and multibody
+dynamics, where each simulation matters and the design objectives may evolve.
+
+[**Release 0.5.1**](https://github.com/YS-Pan/yadof/releases/tag/v0.5.1) ·
+Python **3.10+** ·
+[Quick start](#try-the-starter-task) ·
+[User guide](user_doc/README.md) ·
+[Examples](examples/README.md)
+
+## Why yadof?
+
+An expensive simulation often produces a whole curve or field. yadof keeps that
+data separately from the function that scores it. For example, an antenna's saved
+frequency response can be evaluated against a revised bandwidth target without
+rerunning the simulator, provided the recorded data still fits the task.
+
+```mermaid
+flowchart LR
+    P["Design parameters"] --> R["Real simulation"]
+    R --> D["Saved raw outputs"]
+    D --> C["Current cost function"]
+    P --> S["Surrogate model"]
+    S --> Q["Predicted raw outputs"]
+    Q --> C
+```
+
+Surrogates learn from recorded parameter/output pairs. Both real and predicted
+outputs pass through the current task's cost function.
+
+- **Reuse what you have measured.** Preserve scalars, curves, and fields, then
+  recalculate objectives from compatible history as requirements change.
+- **Own the optimization loop.** Write candidate selection, real evaluation,
+  training, and their ordering in `submit/optimization.py`. Complete examples
+  cover real-only search, sequential training, and overlapping training with
+  evaluation.
+- **Keep a trace of each run.** Recorded evidence and generation snapshots support
+  inspection, diagnosis, and continuation at completed generation boundaries.
+  Cost and timing views show results and failures; checkpoint tools compare
+  surrogate predictions with recorded observations.
+
+## Try the starter task
+
+Use a Python 3.10+ environment. Download
+[`yadof-0.5.1-py3-none-any.whl`](https://github.com/YS-Pan/yadof/releases/download/v0.5.1/yadof-0.5.1-py3-none-any.whl)
+into your current directory, then install it:
+
+```powershell
+python -m pip install "./yadof-0.5.1-py3-none-any.whl[surrogate,plot]"
+python -m yadof version
+```
+
+The `surrogate` extra supplies PyTorch for the default optimization program;
+`plot` supplies Matplotlib for the result plots. See the
+[installation guide](user_doc/package_foundation.md) for other extras and
+installation options.
+
+The unmodified starter calculates `response = input_value ** 2` for a parameter
+in `[-1, 1]`. It needs no external simulator. Use a new `my-study` directory:
+
+```powershell
+python -m yadof init ./my-study
+python -m yadof check --workspace ./my-study
+python -m yadof smoke-test --workspace ./my-study --mode local
+python -m yadof run --workspace ./my-study --mode local --generations 1 --population-size 8 --no-smoke-test
+python -m yadof view all --workspace ./my-study
+```
+
+You should see:
+
+- A successful static check and one midpoint smoke evaluation with cost about
+  `0.1`, the starter's normalized cost at its target.
+- One completed optimization generation with eight evaluated candidates.
+- Nine recorded results, including the separate smoke evaluation, and cost/time
+  PNGs under `my-study/.yadof/tool_output/`.
+
+Raw evaluation evidence is stored under `my-study/recorded_data/`. This small run
+demonstrates execution, recording, and inspection; it does not establish surrogate
+quality or optimization performance. The explicit generation limit matters:
+`run` defaults to **50 generations** when it is omitted.
+
+## Work with an AI coding agent
+
+The intended workflow is a human directing an AI coding agent: you define the
+engineering problem, objectives, and execution budget; the agent authors the
+workspace and follows the installed documentation. The project was developed and
+verified with [OpenAI Codex](https://openai.com/codex/).
+
+Open the intended writable workspace in your agent, using the Python environment
+where yadof is installed. A useful starting prompt is:
 
 ```text
-normalized variables -> rawData -> current task cost
+Set up a yadof workspace for the simulation described below.
+
+Before making changes, run:
+python -m yadof docs show user README.md
+
+Follow that document's routing and execution policy.
+
+Simulation and input files: ...
+Design variables, ranges, and constraints: ...
+Outputs to preserve and objectives to optimize: ...
+Expected time per evaluation and execution budget: ...
+Allowed concurrency and workspace location: ...
 ```
 
-## AI-agent-first use
+The installed user guide is version-matched and written primarily for the agent
+acting on your instructions. It covers task authoring, validation, and when a run
+needs explicit authorization. The same CLI and Python APIs are available for
+direct use. More task prompts are in [prompt examples](user_doc/example_prompts/README.md).
 
-yadof is designed to be operated with an AI coding agent at the center of the
-workflow. Install an AI agent on the computer before preparing a yadof task. The
-recommended agent is [OpenAI Codex](https://openai.com/codex/get-started/) because
-the author developed and verified this package with Codex.
+## Define your simulation
 
-Open the intended writable workspace in the agent, then give it the task together
-with this starter:
+A workspace contains the task-specific code. yadof supplies the shared execution,
+recording, optimization, and analysis machinery.
 
-> Complete the task below. Before you begin, run `python -m yadof docs show user README.md` and follow its instructions, reading any referenced documentation or installed yadof code needed for the task.
+| What you define | Workspace file |
+| --- | --- |
+| Parameters, ranges, and feasibility constraints | `job_template/parameters_constraints.py` |
+| How to run the simulator and collect raw outputs | `job_template/workflow.py` |
+| How raw outputs become normalized minimization objectives | `submit/calc_cost.py` |
+| Search, evaluation, surrogate training, and their ordering | `submit/optimization.py` |
+| Execution mode, concurrency, and timeouts | `config.py` |
 
-The installed, version-matched user documents are written primarily for that
-user-directed AI agent: they tell it which files it may edit, what it must read, and
-which validation command to run. The human user normally directs, sets execution
-limits, and reviews this work rather than executing every documented step
-personally; the user documentation lets the agent run understood bounded work while
-reserving long or consequential runs for explicit authorization. A reserved blank
-prompt is available at
-[user_doc/example_prompts/01_task_setup.md](user_doc/example_prompts/01_task_setup.md);
-the surrounding [prompt examples directory](user_doc/example_prompts/README.md) is
-ready for additional examples.
+Start with the [task-authoring guide](user_doc/optimization_workflow.md).
+[Adapters](user_doc/adapters/README.md) are available for HFSS, ngspice, and Project
+Chrono; simulator software and licenses come from your environment.
 
-## Install and run
+For an edited or external task, the standalone smoke command requires
+`--real-task`. Follow the [smoke and run guide](user_doc/config_and_run.md) to
+choose an execution budget and inspect the result before a longer campaign.
 
-Install the wheel into the Python environment used on the submit machine:
+Task corrections can reuse meaningful historical data. Parameter names, order,
+and count, plus the objective count, must remain stable within that workflow;
+structural changes need a new workspace. The run guide explains generation
+snapshots, which edits take effect at generation boundaries, and how to continue
+a completed run. Use a separate workspace for each concurrent campaign.
 
-```powershell
-python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[surrogate]"
-python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[viewer]"
-```
+## Choose the program and execution mode
 
-The default workspace's `submit/optimization.py` composes conditional INR.
-`init` and `check` validate the program statically without importing Torch;
-`run` requires the `surrogate` extra to execute that component (the `viewer`
-extra includes the same Torch runtime). A core-only installation can run an
-existing workspace whose program selects no surrogate component. Workspaces
-using the former `build_optimization()` entry must follow the
-[0.5 migration guide](user_doc/migration_0_5.md).
+The starter combines GA for one objective or NSGA-III for multiple objectives,
+GPSAF surrogate assistance, and a conditional implicit neural representation
+(INR) model. These choices and their settings are visible in the workspace's
+Python program.
 
-Ask the AI agent to initialize and author the task, or use the underlying commands
-directly:
+The [optimization program examples](user_doc/optimization_program_examples.md)
+show how to use real evaluations alone, change training order, or select different
+history for search and surrogate training. A real-only program can run with the
+core package; the starter's surrogate requires the extra installed above.
 
-```powershell
-yadof init .\work\my-study
-yadof check --workspace .\work\my-study
-yadof smoke-test --workspace .\work\my-study --real-task
-yadof run --workspace .\work\my-study
-yadof view all --workspace .\work\my-study
-yadof view surrogate --workspace .\work\my-study
-```
+| Mode | Evaluation contract |
+| --- | --- |
+| `local` | Run a prepared workflow in a subprocess for each candidate, retaining job files. This is the starter's mode. |
+| `fast` | Run an explicit `evaluation.py` kernel in reusable, isolated local worker processes. The starter needs that kernel before using this mode. |
+| `distributed` | Submit prepared workflows to an existing HTCondor pool. Worker machines need the task's simulator environment; they do not need yadof installed. |
 
-`yadof run` now runs **50 generations by default**. Use `--generations N` to
-override that count. The standalone smoke command prints its workspace, backend,
-jobs directory, and no-timeout warning before execution starts, then reports the
-final costs or an actionable failure.
+See [configuration and execution](user_doc/config_and_run.md) for worker limits,
+timeouts, and cluster requirements.
 
-### Local concurrency
+Surrogate benefit depends on the task and budget. PCA/SVD is available for
+diagnostics. Hierarchical CAE and posterior/qNEHVI work are experimental; the
+current [posterior example](examples/optimization-programs/posterior_assisted_fallback.md)
+uses full real evaluation because posterior-driven selection is blocked by its
+readiness checks.
 
-Local mode previously defaulted to one concurrent simulation. The packaged default
-cap is now **8**. For a batch with enough candidates, yadof uses the explicit
-`LOCAL_EVALUATION_MAX_WORKERS` value without reducing it from detected CPU,
-memory, or disk capacity. Population size remains the natural upper bound on
-simultaneously useful work.
+## Inspect results and go further
 
-Local workflows are monitored as process trees, so simulator child processes are
-included. Their measurements and HTCondor measurements use the same recorded
-resource fields and shared calibration algorithm. `HTCONDOR_REQUEST_CPUS`,
-`HTCONDOR_REQUEST_MEMORY`, and `HTCONDOR_REQUEST_DISK` remain the initial per-job
-resource hints when no usable history exists. With resource observation enabled,
-`--progress` prints the selected local worker count and advisory CPU/memory/disk
-capacities. Those observations do not override the user-configured cap.
+`view all` produces cost and timing summaries and plots. The installation above
+also supports the read-only surrogate checkpoint tools. Once a run has trained a
+model, you can explore its predictions as scalars, curves, and field slices.
+The terminal `summary`, `audit`, and `inspect` commands work without a window;
+the desktop explorer additionally requires Tkinter. See
+[history and tools](user_doc/config_and_run.md#history-and-tools).
 
-## Reference development environment
+| Next step | Start here |
+| --- | --- |
+| Explore a complete HFSS task or the five optimization programs | [Source examples](examples/README.md) |
+| Compare strategies across repeatable studies | [yadof-benchmark](yadof-benchmark/user_doc/README.md), installed separately |
+| Migrate a workspace using `build_optimization()` | [0.5 migration guide](user_doc/migration_0_5.md) |
+| Understand the release history | [Version history](dev_doc/history.md) |
+| Change yadof or contribute | [Development guide](dev_doc/README.md) |
 
-The current packaged line was developed and tested on this machine snapshot,
-detected on 2026-07-29:
+The source examples are tracked in this repository and excluded from wheel and
+sdist artifacts. The independent `yadof-benchmark` package owns benchmark
+orchestration and packaged baselines; installing yadof alone does not install it.
 
-| Component | Detected version |
-|---|---|
-| Operating system | Windows 11 Pro 25H2, build 26200.8875, x86-64 |
-| ANSYS Electronics Desktop | 2024 R1 (`2024.1.0.1`) |
-| Python | CPython 3.13.11 in the repository sibling `.venv` |
-| NumPy / pymoo | 2.2.6 / 0.6.2 |
-| psutil | 7.2.2 |
-| PyAEDT | 0.24.1 |
-| HTCondor | 25.4.0 |
-| PyTorch / Matplotlib | 2.10.0+cu128 / 3.11.1 |
-| pytest | 9.1.1 |
-
-This is a reproducibility snapshot, not a claim that every listed version is a
-minimum requirement. See
-[dev_doc/development_environment.md](dev_doc/development_environment.md) for paths,
-detection details, and the package's declared compatibility boundary.
-
-## Benchmark package
-
-The repository develops the independent
-[yadof-benchmark](yadof-benchmark/user_doc/README.md) distribution beside yadof.
-It depends only on public yadof behavior and owns its console command, packaged
-self-describing baselines, documentation, and focused tests. Installing `yadof`
-alone does not install benchmark orchestration; installing `yadof-benchmark`
-declares the matching yadof dependency.
-
-Create a code-first workspace, edit its complete `benchmark.py`, and start with the
-read-only plan:
-
-```powershell
-$workspace = (yadof-benchmark init .\benchmarks\comparison |
-  ConvertFrom-Json).workspace
-yadof-benchmark baselines
-yadof-benchmark plan --workspace $workspace
-```
-
-The Python workflow declares complete optimization strategies, comparisons, and
-postprocessors. Initialization defaults to the portable preset; `complete` and
-`blank` are explicit choices. One benchmark workspace owns one execution, with
-results directly under that root and no resume command. Another execution uses
-another initialized workspace. Read
-[the workspace contract](yadof-benchmark/user_doc/workspace.md) and apply the normal
-cost/risk policy before starting real work.
-
-## Package and workspace boundary
-
-The package owns framework code, defaults, worker support, templates, adapters,
-tools, and documentation. A workspace owns `config.py`, fixed `submit/`,
-`job_template/`, jobs,
-recorded raw evidence, surrogate checkpoints, logs, and tool output. Package files
-are treated as read-only and there is no `project.*` compatibility namespace.
-Cross-task invariant code belongs in yadof; workspace
-`job_template/workflow.py`, `submit/calc_cost.py`, and
-`submit/optimization.py`
-contain only behavior that can change with the optimization task and call package
-helpers for everything else.
-
-The optional read-only surrogate checkpoint viewer is installed below
-`yadof.tools.surrogate_viewer` and launched explicitly with
-`yadof view surrogate`. It reads checkpoints and recorded evidence but does not
-train models, run workflows, or write workspace state. Its interactive rawData
-view lets users choose zero, one, or two dimensions for scalar, curve, or filled
-two-dimensional color-contour display and set the remaining slice coordinates.
-The headless `summary`, `audit`, and single-case `inspect` modes provide stable
-text/JSON for agents; only an explicit `inspect --output` creates a separate
-hashed PNG/NPZ/CSV evidence directory.
-
-See [user_doc/README.md](user_doc/README.md) for the user-workflow guidance followed
-primarily by the user's AI agent, and [dev_doc/README.md](dev_doc/README.md) for
-architecture and contribution rules. The checked-in
-[examples](examples/README.md) preserve complete reference workspaces, including
-the former HFSS task; examples are tracked in Git but excluded from wheel and sdist
-artifacts. The top-level benchmark automation follows the same distribution
-exclusion but remains runnable directly from a source checkout.
+For compatibility and the tested machine snapshot, see
+[the development environment](dev_doc/development_environment.md). For questions
+or reproducible bug reports, [open an issue](https://github.com/YS-Pan/yadof/issues).
