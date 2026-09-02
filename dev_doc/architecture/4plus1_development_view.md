@@ -98,6 +98,8 @@ belongs in the workspace submit-side definition.
 
 - `user_doc/` owns task-authoring, runtime use, adapter use, and execution-authority
   guidance.
+- `dev_doc/history.md` provides a concise, maintained overview of major-version
+  milestones, linked from the developer README.
 - `dev_doc/architecture/` contains only high-level current system relationships,
   flows, persistence/recovery rules, and core invariants.
 - `dev_doc/blueprints/` contains selectively read implementation and module

@@ -32,6 +32,9 @@ tools are installed yadof documentation audiences.
 
 - `README.md`: entry point for mandatory reading order, environment, validation,
   cross-module maintenance, and links to detailed contracts.
+- `history.md`: concise, maintained major-version history linked from the README;
+  each version summarizes its main capabilities and code organization, while
+  detailed completed changes remain in `change_records/`.
 - `development_environment.md`: dated machine/tool/package reproducibility snapshot
   that is explicitly separate from declared compatibility requirements.
 - `skill/`: module-specific contracts for user documentation, architecture,

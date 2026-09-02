@@ -3,6 +3,8 @@
 `dev_doc/` stores the project documents that help an AI or human maintainer understand
 what the project is, how it is shaped, and why it changed over time.
 
+For a concise overview of major-version milestones, see [history.md](history.md).
+
 The repository root remains the authoritative editable source for `dev_doc/` and
 `user_doc/`. Package builds map both trees into read-only `yadof` wheel resources;
 installed `yadof docs list|show|bundle` discovers and reads them without assuming a
