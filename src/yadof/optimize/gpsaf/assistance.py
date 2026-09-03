@@ -75,6 +75,7 @@ def select_gpsaf_generation(
         "surrogate_beta": settings.beta,
         "surrogate_gamma": settings.gamma,
         "exploration_fraction": settings.exploration_fraction,
+        "infill_selection": settings.infill_selection,
         "surrogate_training_content_digest": training_data.content_digest,
         "surrogate_training_provenance_digest": training_data.provenance_digest,
         "surrogate_training_row_ids": training_data.row_ids,

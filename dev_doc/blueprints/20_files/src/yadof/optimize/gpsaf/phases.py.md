@@ -14,6 +14,9 @@
   preserves rawData/member spread in `PredictedCostRows`.
 - Apply positional alpha tournaments, nearest-alpha normalized-design clustering
   of all beta candidates, per-cluster PKT and size-ratio-to-gamma replacement.
+- Optionally select the completed anchor/beta pool through `coverage.py`, using
+  supplied finite real history and bound predicted means. Original PKT/gamma
+  choices provide fallback order; exploration remains a separate quota.
 - Return normalized populations through the common strategy contracts.
 
 ## I/O Format
@@ -37,6 +40,8 @@
   Error scales come from explicit prequential state, never prediction intervals.
   Missing scales hold beta until an observed error exists. The tournament stream
   is deterministic per generation and separate from pymoo/random-refill streams.
+- Coverage never adds prediction requests or simulated tells. An inactive beta
+  keeps alpha selection; the default cluster policy retains its random stream.
 
 ## Mutability Profile
 - GPSAF phase policy may evolve, but real evaluation and durable history must

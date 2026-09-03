@@ -207,6 +207,12 @@ continuation, candidate/design/evidence identity separation, wrong-root rejectio
 bounded exhaustion, typed prediction separation, pymoo ask/tell/survival ownership,
 warm-start/later offspring, and unchanged GPSAF gamma selection semantics.
 
+`test_gpsaf_hypervolume.py` checks the optional coverage policy against small
+geometric examples, real-history conditioning, marginal batch selection, finite
+penalties and invalid fallback, unchanged prediction requests, exploration quota,
+candidate/prediction binding and inactive-beta behavior. Physical optimization
+performance remains separate recorded research evidence.
+
 ## Acceptance
 
 Build a wheel, force-reinstall without editable/PYTHONPATH shortcuts, verify

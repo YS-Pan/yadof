@@ -18,6 +18,9 @@
 - Return `GPSAFGenerationSelection` with population/source/surrogate-use/diagnostics
   and immutable pre-evaluation predicted costs for explicit error observation;
   it cannot evaluate or commit. Caller-owned `GPSAFErrorState` supplies PKT scales.
+- Record the requested `infill_selection` policy in diagnostics. Beta phase
+  diagnostics distinguish the applied cluster or history-hypervolume selection;
+  inactive beta retains the alpha result under its existing readiness gate.
 - Expose explicit start/finish training helpers so the workspace program can start
   evaluation first, start training on prior immutable evidence, and close both
   lifecycles before commit.
@@ -33,7 +36,8 @@
 
 ## Mutability Profile
 - Keep only irreducible alpha/beta/exploration and staggered-component coordination.
-- Alpha, beta, gamma, and exploration arrive as one immutable factory-owned GPSAF
+- Alpha, beta, gamma, exploration, and infill selection arrive as one immutable
+  factory-owned GPSAF
   snapshot; no phase reads ambient algorithm config. `gamma` enters the
   cluster-size replacement probability. Contract errors propagate; unavailable
   learned state may use ordinary fallback. Error bootstrap is a separate explicit

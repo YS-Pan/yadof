@@ -13,7 +13,8 @@
   identity.
 - Lazy-load concrete pymoo implementation only when a selected operation runs.
 - Expose `gpsaf_settings()` as the validated immutable settings surface for a
-  program's generation-local selector.
+  program's generation-local selector, including the explicit `cluster` or
+  `hypervolume` infill policy without changing the cluster default.
 - Give each public factory an explicit keyword-only configuration surface. Construct
   and eagerly validate private frozen settings without accepting a settings object,
   unrestricted kwargs, or ambient algorithm config.

@@ -186,14 +186,16 @@ def gpsaf_settings(
     beta: int = 3,
     gamma: float = 0.5,
     exploration_fraction: float = 0.10,
+    infill_selection: str = "cluster",
 ) -> GPSAFSettings:
-    """Build the retained GPSAF parameters without creating a strategy loop."""
+    """Build GPSAF settings, with optional history-based hypervolume infill."""
 
     return create_gpsaf_settings(
         alpha=alpha,
         beta=beta,
         gamma=gamma,
         exploration_fraction=exploration_fraction,
+        infill_selection=infill_selection,
     )
 
 

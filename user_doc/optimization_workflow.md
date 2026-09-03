@@ -752,9 +752,13 @@ Configured ask/refill exhaustion raises `InsufficientCandidatePoolError`; derive
 GPSAF/posterior paths may discard the entire partial choice and run a fresh complete
 real search, while failure of that real path remains explicit. A
 `SurrogateContractError` propagates rather than becoming ordinary fallback.
-GPSAF `gamma` controls the cluster-size replacement probability. See
+GPSAF `gamma` controls the cluster-size replacement probability. The optional
+`gpsaf_settings(infill_selection="hypervolume")` selects a completed beta batch by
+predicted coverage relative to supplied real history; the default remains
+`"cluster"`. See
 [GPSAF mechanisms and adaptations](gpsaf.md) for the paper contract, error
-bootstrap, true-generation state replay and required explicit error-state calls.
+bootstrap, coverage policy, true-generation state replay and required explicit
+error-state calls.
 
 For an explicit structural posterior-assisted composition, set
 `OPTIMIZE_POPULATION_SIZE = 10` and make every control visible in the program

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..._component_settings import integer, real
+from ..._component_settings import integer, real, text
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +13,7 @@ class GPSAFSettings:
     beta: int
     gamma: float
     exploration_fraction: float
+    infill_selection: str = "cluster"
 
 
 def create_settings(
@@ -21,6 +22,7 @@ def create_settings(
     beta: int,
     gamma: float,
     exploration_fraction: float,
+    infill_selection: str = "cluster",
 ) -> GPSAFSettings:
     factory = "gpsaf_settings"
     return GPSAFSettings(
@@ -33,6 +35,10 @@ def create_settings(
             exploration_fraction,
             minimum=0.0,
             maximum=1.0,
+        ),
+        infill_selection=text(
+            factory, "infill_selection", infill_selection,
+            choices=("cluster", "hypervolume"),
         ),
     )
 

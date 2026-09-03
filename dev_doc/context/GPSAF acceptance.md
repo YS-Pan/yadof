@@ -1,6 +1,6 @@
 # GPSAF paper-to-implementation acceptance
 
-Authority: the full supplied `GPSAF original paper.tex`, especially Algorithm 2,
+Authority: the full supplied `GPSAF original full paper.tex`, especially Algorithm 2,
 Algorithm 3 and the sections on alpha, beta, replacement and surrogate management.
 Read the whole paper; its benchmark rankings are not implementation gates.
 

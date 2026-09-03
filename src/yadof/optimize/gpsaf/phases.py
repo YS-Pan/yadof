@@ -28,6 +28,7 @@ from ..primitives import (
     select_candidate_indices,
 )
 from ..strategy import GenerationContext, HistoryRecord, Population
+from .coverage import select_hypervolume_indices
 from .tournament import tournament_winner, probabilistic_knockout, replacement_probabilities
 
 
@@ -245,6 +246,15 @@ def run_beta_phase(
             if rng.random() < probabilities[position]:
                 chosen = local_indices[winner]
         indices.append(chosen)
+    coverage_info = {}
+    if settings.infill_selection == "hypervolume":
+        indices, coverage_info = select_hypervolume_indices(
+            combined_prediction.costs,
+            combined_prediction.valid_mask,
+            [row.costs for row in generation_context.history],
+            len(anchors.candidates),
+            indices,
+        )
     final_selection = select_candidate_indices(
         real_state, combined_pool, indices, source="gpsaf-beta-selection"
     )
@@ -265,9 +275,14 @@ def run_beta_phase(
         "beta_replacements": int(replacements),
         "beta_cluster_size_max": max(cluster_sizes, default=0),
         "beta_cluster_sizes": cluster_sizes,
-        "beta_selection": "nearest-alpha-cluster-pkt-gamma-replacement",
+        "beta_selection": (
+            "history-hypervolume-greedy"
+            if settings.infill_selection == "hypervolume"
+            else "nearest-alpha-cluster-pkt-gamma-replacement"
+        ),
         "beta_pool_size": len(combined_pool.candidates),
         "beta_selected_count": len(final_selection.candidates),
+        **coverage_info,
     }
 
 

@@ -22,6 +22,31 @@ The selection contract follows Blank and Deb's
   a largest nonempty cluster always replaces it. `gamma` is finite and nonnegative.
   A beta winner need not dominate the alpha anchor: PKT selects within its cluster.
 
+`gpsaf_settings(infill_selection="cluster")` is the default selection policy above.
+The optional `infill_selection="hypervolume"` replaces a completed beta batch with
+greedy predicted hypervolume coverage relative to the finite real history supplied
+by the generation context. Its pool contains the alpha anchors and every beta
+candidate. Pymoo computes hypervolume with a fixed all-one reference point, matching
+the task's normalized `[0, 1]` minimization costs. Each selected candidate updates
+the reference archive before the next marginal gain is computed. Exact gain ties
+use pool order; gains at or below `1e-12` end greedy selection.
+
+When positive gains run out, fill the remaining slots with valid original
+PKT/gamma choices in their original order, then other valid pool candidates, then
+invalid candidates if necessary to keep the requested batch size. Finite `1.0`
+penalties remain valid. The configured unassisted exploration quota is composed
+after this selection. Alpha and beta ask counts, the genetic operators, and the
+restored real optimizer state retain their existing semantics. If beta is disabled
+or still waiting for an error estimate, selection uses the alpha result.
+
+This policy uses deterministic predicted means; it does not integrate predictive
+uncertainty or replace the posterior-assisted/qNEHVI workflow. PKT error scales and
+gamma still determine the fallback order. Use it explicitly when coverage of the
+normalized objective space is the intended selection criterion, and validate it
+with the chosen surrogate and task. A perfect-oracle experiment does not establish
+performance for learned models. Exact hypervolume also adds selection computation;
+reduced selected-evaluation counts do not imply lower total oracle cost.
+
 Programs own one `GPSAFErrorState` per run. After materializing prior real training
 data, explicitly call
 `initialize_gpsaf_error(surrogate, step.context, training, error_state)`, then pass

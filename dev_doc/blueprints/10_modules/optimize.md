@@ -32,6 +32,7 @@ they do not duplicate its recorder, evaluator, handle registry, or lock.
 - `gpsaf/` owns the generation-local typed GPSAF selector,
   positional alpha tournaments, cloned beta advances, nearest-anchor clusters,
   error-aware PKT, gamma replacement, run-owned error estimates, exploration,
+  optional predicted hypervolume coverage in `gpsaf/coverage.py`,
   explicit training start/finish helpers, and its
   retained private pymoo record adapter; it does not own real evaluation or
   generation commit.
@@ -80,6 +81,14 @@ unrelated. Programs explicitly bootstrap the error and update it from captured
 pre-evaluation predictions. A configured exploration quota keeps some candidates
 outside surrogate preference. Every selected row is validated by the real
 evaluator before becoming durable truth.
+
+The explicit `infill_selection="hypervolume"` policy greedily selects from alpha
+anchors and all beta candidates relative to supplied finite real history. Pymoo
+owns fixed-unit-reference hypervolume and nondominated sorting. Valid original
+PKT/gamma choices then remaining valid candidates fill zero-gain slots before
+invalid rows. It adds no predictions or beta advances, keeps the exploration
+quota, and leaves the default `cluster` policy unchanged. This is deterministic
+mean-based selection, separate from posterior acquisition.
 
 For PCA/SVD, conditional-INR, and hierarchical-CAE, the workspace program freezes
 one explicit `SurrogateTrainingData` from the generation's evidence/cost views
