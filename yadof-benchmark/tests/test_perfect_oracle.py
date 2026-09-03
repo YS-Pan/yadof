@@ -124,6 +124,94 @@ def test_declared_physical_failure_is_inf_without_fabricated_rawdata(oracle_cont
     assert all(v == math.inf for row in prediction.costs for v in row)
     assert oracle.diagnostics()["oracle_simulation_failures"] == 2
     assert len(list_records(oracle_context.config.workspace)) == 0
+    import json
+    audit = oracle_context.config.workspace.root / "oracle_audit/events.jsonl"
+    event = json.loads(audit.read_text(encoding="utf-8").splitlines()[-1])
+    assert [c["normalized_variables"] for c in event["failed_candidates"]] == [list(row) for row in rows]
+    assert all("impossible geometry" in c["error"] for c in event["failed_candidates"])
+
+
+def test_physical_failures_continue_through_later_gpsaf_generations(tmp_path):
+    import shutil
+    from pathlib import Path
+    from yadof.job_template import assign_parameters
+    from yadof.optimize import run_generations
+    from yadof_benchmark.runtime_freeze import task_fingerprint
+
+    preset = Path(init_workspace(tmp_path / "preset", preset="perfect")["workspace"])
+    materialize_baseline(discover_baselines()["test-com/synthetic-antenna"], tmp_path / "cell")
+    workspace = tmp_path / "cell/workspace"
+    shutil.copyfile(preset / "resources/strategies/top10-perfect-gpsaf/optimization.py",
+                    workspace / "submit/optimization.py")
+    names = get_parameter_names(workspace)
+    midpoint = assign_parameters(workspace, (0.5,) * len(names))[0]
+    # The same deterministic task failure is seen by oracle and real workers.
+    # It exercises failed candidate isolation, not a permissive oracle-only mock.
+    with (workspace / "job_template/evaluation.py").open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\nclass NumericalFailure(RuntimeError):\n    pass\n"
+            "PHYSICAL_FAILURE_TYPES = (NumericalFailure,)\n"
+            "_finite_evaluation = evaluate_rawdata\n"
+            "def evaluate_rawdata(parameters, context):\n"
+            f"    if parameters[{midpoint.name!r}] > {float(midpoint.value)!r}:\n"
+            "        raise NumericalFailure('numerical divergence')\n"
+            "    return _finite_evaluation(parameters, context)\n"
+        )
+    with (workspace / "config.py").open("a", encoding="utf-8") as stream:
+        stream.write("\nOPTIMIZE_POPULATION_SIZE = 12\nOPTIMIZE_SMOKE_TEST_ENABLED = False\nFAST_EVALUATION_MAX_WORKERS = 2\n")
+    atomic_write_json(workspace / "benchmark_control.json", {"root": str(tmp_path),
+        "reference": False, "threshold": 0.0, "task_files": task_fingerprint(workspace)})
+    results = run_generations(workspace, 3, start_generation=0)
+    assert len(results) == 3 and all(r.surrogate_used for r in results[1:])
+    records = list_records(workspace)
+    assert len(records) == 36
+    assert any(r["status"] == "error" for r in records)
+    final = results[-1].diagnostics
+    assert final["oracle_simulation_failures"] > 0
+    assert final["oracle_contract_errors"] == 0
+    assert final["oracle_simulation_evaluations"] == 132
+    assert final["oracle_selected_bitwise_matches"] == 22
+    assert final["oracle_recorded_in_history"] is False
+
+
+@pytest.fixture
+def chrono_worker(monkeypatch):
+    import runpy
+    import sys
+    directory = discover_baselines()["chrono/trebuchet"].workspace / "job_template"
+    monkeypatch.syspath_prepend(str(directory))
+    for name in ("chrono_com", "task_spec"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    return SimpleNamespace(**runpy.run_path(str(directory / "chrono_worker.py")))
+
+
+@pytest.mark.parametrize("invalid", [math.nan, math.inf, -math.inf])
+def test_chrono_divergent_state_is_a_typed_candidate_failure(chrono_worker, invalid):
+    import numpy as np
+    failure = chrono_worker.PyChronoSimulationError
+    with pytest.raises(failure, match="numerical divergence: ball state"):
+        chrono_worker._require_finite_state("ball state", (1.0, invalid, 0.0))
+    with pytest.raises(failure, match="history values"):
+        chrono_worker._resample_phase_history(
+            np.array([0.0, 1.0]), np.array([[0.0], [invalid]]), total_time_s=1.0)
+    link = SimpleNamespace(GetReaction2=lambda: SimpleNamespace(force=SimpleNamespace(Length=lambda: invalid)))
+    with pytest.raises(failure, match="constraint reaction"):
+        chrono_worker._reaction_magnitude(link)
+
+
+def test_chrono_state_checks_do_not_hide_interface_or_shape_errors(chrono_worker):
+    import numpy as np
+    with pytest.raises(AttributeError):
+        chrono_worker._reaction_magnitude(object())
+    with pytest.raises(TypeError):
+        chrono_worker._require_finite_state("ball state", (object(),))
+    with pytest.raises(RuntimeError, match="incompatible shapes") as error:
+        chrono_worker._resample_phase_history(
+            np.array([0.0, 1.0]), np.array([[0.0]]), total_time_s=1.0)
+    assert not isinstance(error.value, chrono_worker.PyChronoSimulationError)
+    finite = chrono_worker._resample_phase_history(
+        np.array([0.0, 1.0]), np.array([[2.0], [2.0]]), total_time_s=1.0)
+    assert np.all(finite == 2.0)
 
 
 def test_metric_uses_cumulative_formal_top_ten_and_strict_crossing(tmp_path):
@@ -150,3 +238,4 @@ def test_installed_perfect_preset_has_complete_paired_matrix(tmp_path):
     assert len(spec["cells"]) == 6
     assert all(c["population"] == 200 and c["generations"] == 50 and c["seed"] == 101 for c in spec["cells"])
     assert all(c["top10_reference"] == "real-nsga3" for c in spec["cells"])
+    assert spec["workflow"]["postprocessors"][0]["run_on_failure"] is True

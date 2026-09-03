@@ -51,6 +51,15 @@ GROUND_COLLISION_FAMILY = 0
 MOVING_COLLISION_FAMILY = 1
 
 
+def _require_finite_state(label: str, values) -> None:
+    """Classify divergent simulator output before task input guards consume it."""
+
+    if not all(math.isfinite(float(value)) for value in values):
+        raise PyChronoSimulationError(
+            "physical_failure", f"numerical divergence: {label} must be finite"
+        )
+
+
 def _vector(chrono, x: float, z: float, y: float = 0.0):
     return chrono.ChVector3d(float(x), float(y), float(z))
 
@@ -68,9 +77,10 @@ def _elevation_deg(vector) -> float:
 
 
 def _unit_xz(vector) -> tuple[float, float]:
+    _require_finite_state("model direction", (vector.x, vector.z))
     length = _length_xz(vector)
     if length <= 1e-12:
-        raise RuntimeError("zero-length model direction")
+        raise PyChronoSimulationError("physical_failure", "zero-length model direction")
     return float(vector.x) / length, float(vector.z) / length
 
 
@@ -88,10 +98,9 @@ def _save_npz(rawdata_dir: Path, filename: str, **payload: object) -> None:
 
 
 def _reaction_magnitude(link) -> float:
-    try:
-        return float(link.GetReaction2().force.Length())
-    except Exception:
-        return 0.0
+    reaction = float(link.GetReaction2().force.Length())
+    _require_finite_state("constraint reaction", (reaction,))
+    return reaction
 
 
 def _set_ball_mass(chrono, ball, mass_kg: float) -> None:
@@ -124,10 +133,10 @@ def _resample_phase_history(
     duration = float(total_time_s)
     if matrix.ndim != 2 or matrix.shape[0] != times.size:
         raise RuntimeError("history times and values have incompatible shapes")
-    if times.size == 0 or not np.all(np.isfinite(times)):
-        raise RuntimeError("history times must be nonempty and finite")
-    if not np.all(np.isfinite(matrix)):
-        raise RuntimeError("history values must be finite")
+    if times.size == 0:
+        raise RuntimeError("history times must be nonempty")
+    _require_finite_state("history times", times)
+    _require_finite_state("history values", matrix.flat)
     if duration <= 0.0 or not math.isfinite(duration):
         raise RuntimeError("normalized history duration must be finite and positive")
     if np.any(np.diff(times) < 0.0):
@@ -373,6 +382,11 @@ def run_task_model(
         current_pivot = arm.TransformPointLocalToParent(arm_pivot_local)
         current_hinge = hanger.TransformPointLocalToParent(hanger_hinge_local)
         current_cw = hanger.TransformPointLocalToParent(cw_center_local)
+        _require_finite_state(
+            "mechanism positions",
+            (value for point in (current_arm_tip, current_pivot, current_hinge, current_cw)
+             for value in (point.x, point.y, point.z)),
+        )
         return (
             current_arm_tip,
             current_pivot,
@@ -501,6 +515,7 @@ def run_task_model(
                 flush=True,
             )
         time_s = float(system.GetChTime())
+        _require_finite_state("integration time", (time_s,))
         record_release_history = not released
         (
             current_arm_tip,
@@ -527,6 +542,11 @@ def run_task_model(
         )
         ball_position = ball.GetPos()
         ball_velocity = ball.GetPosDt()
+        _require_finite_state(
+            f"ball state at t={time_s:.9g}s",
+            (ball_position.x, ball_position.y, ball_position.z,
+             ball_velocity.x, ball_velocity.y, ball_velocity.z),
+        )
         runway_reattached_this_step = False
         if (
             runway is not None
@@ -591,6 +611,7 @@ def run_task_model(
                 ],
                 dtype=np.float64,
             )
+            _require_finite_state("structural stress", stress_sample)
 
         if arm_locked:
             drop_angle = _drop_angle_deg(
@@ -617,6 +638,7 @@ def run_task_model(
             if runway is None:
                 raise RuntimeError("launch runway state is inconsistent")
             support_reaction = float(runway.GetReaction2().force.x)
+            _require_finite_state("launch-runway support reaction", (support_reaction,))
             minimum_runway_support_reaction = min(
                 minimum_runway_support_reaction,
                 support_reaction,
@@ -735,17 +757,18 @@ def run_task_model(
     if release_kinematics.shape != (
         RELEASE_PHASE_SAMPLE_COUNT,
         len(RELEASE_KINEMATICS_CHANNEL_NAMES),
-    ) or not np.all(np.isfinite(release_kinematics)):
+    ):
         raise RuntimeError("simulation produced invalid release kinematics")
     if stress.shape != (
         RELEASE_PHASE_SAMPLE_COUNT,
         len(STRESS_HISTORY_CHANNEL_NAMES),
-    ) or not np.all(np.isfinite(stress)):
-        raise RuntimeError("simulation produced invalid stress history")
-    if summary.shape != (len(RELEASE_SUMMARY_NAMES),) or not np.all(
-        np.isfinite(summary)
     ):
+        raise RuntimeError("simulation produced invalid stress history")
+    if summary.shape != (len(RELEASE_SUMMARY_NAMES),):
         raise RuntimeError("simulation produced invalid release summary")
+    _require_finite_state("release kinematics", release_kinematics.flat)
+    _require_finite_state("stress history", stress.flat)
+    _require_finite_state("release summary", summary)
 
     if animation_trajectory is not None and animation_time_axis is not None:
         if next_sample < animation_time_axis.size:
@@ -769,8 +792,7 @@ def run_task_model(
                 flight.samples,
                 dtype=np.float64,
             )
-        if not np.all(np.isfinite(animation_trajectory)):
-            raise RuntimeError("simulation produced invalid animation trajectory")
+        _require_finite_state("animation trajectory", animation_trajectory.flat)
 
     diagnostics = {
         "model": MODEL_NAME,

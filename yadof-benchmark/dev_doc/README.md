@@ -36,6 +36,11 @@ Current invariants are:
   when attempts are complete and finite contract-valid metric evidence remains;
 - missing attempts, no finite evidence, contract failure, initial-population
   failure, or missing metric does invalidate a cell;
+- task-owned Chrono guards classify nonfinite simulator state as an individual
+  numerical failure; oracle audit retains failed normalized candidates;
+- workflow postprocessors opt into failed-cell summaries with `run_on_failure`;
+  ordinary callbacks are skipped after incomplete collection, and a summary
+  cannot turn a failed execution into success;
 - the opt-in top-10 reference protocol accepts a shorter GPSAF budget only when
   durable real history independently proves the first strict crossing occurred
   at that exact complete generation; all ordinary budgets stay unchanged;

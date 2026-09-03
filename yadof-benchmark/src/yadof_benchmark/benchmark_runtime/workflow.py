@@ -198,7 +198,11 @@ class Benchmark:
         self,
         postprocessor_id: str,
         callback: Callable[[object], object],
+        *,
+        run_on_failure: bool = False,
     ) -> "Benchmark":
+        if not isinstance(run_on_failure, bool):
+            raise BenchmarkError("postprocessor run_on_failure must be a boolean")
         if not inspect.isfunction(callback):
             raise BenchmarkError("postprocessor callback must be a top-level function")
         if callback.__name__ == "<lambda>" or callback.__qualname__ != callback.__name__:
@@ -207,6 +211,7 @@ class Benchmark:
             PostprocessorSpec(
                 id=_id(postprocessor_id, label="postprocessor id"),
                 callback=callback.__name__,
+                run_on_failure=run_on_failure,
             )
         )
         return self

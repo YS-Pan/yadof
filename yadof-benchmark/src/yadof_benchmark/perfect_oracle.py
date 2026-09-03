@@ -150,6 +150,10 @@ class PerfectSimulationOracle:
             )
             self._audit(context, {"event": "prediction", "generation": context.generation_index + 1,
                                   "rows": len(rows), "physical_failures": len(rows) - len(successful),
+                                  "failed_candidates": [
+                                      {"index": i, "normalized_variables": rows[i], "error": error}
+                                      for i, (sample, error) in enumerate(outcomes) if sample is None
+                                  ],
                                   "errors": [error for _, error in outcomes if error], **self.diagnostics()})
             return prediction
         except SurrogateContractError:

@@ -105,14 +105,23 @@ def execute_postprocessors(
     if not items:
         return True
     fail_fast = bool(spec["workflow"].get("fail_fast", False))
+    cells_complete = bool(state["cells"]) and all(
+        cell["status"] == "collected" for cell in state["cells"].values()
+    )
     succeeded = True
     for item in items:
+        if not cells_complete and not item.get("run_on_failure", False):
+            item_state = state["postprocessors"][str(item["id"])]
+            item_state.update(status="skipped", finished_utc=utc_now(),
+                              skip_reason="requires every cell to be collected")
+            save_state(workspace, state)
+            continue
         if not _run_one(workspace, item, state, event_sink):
             succeeded = False
             if fail_fast:
                 break
     return succeeded and all(
-        item["status"] == "succeeded"
+        item["status"] in {"succeeded", "skipped"}
         for item in state["postprocessors"].values()
     )
 

@@ -191,6 +191,11 @@ A command, storage, visualization, collection, or workflow postprocessor failure
 is retained in `state.json` and makes the overall status non-successful. Create
 a new workspace after correcting the problem.
 
+Workflow postprocessors normally require all cells to be collected. A callback
+registered with `run_on_failure=True` may summarize failed or incomplete cells
+after scheduling ends; default callbacks are then marked `skipped`. Such a
+summary does not override cell failure or relax the evidence-validity rules.
+
 A cell timeout stops the child process tree, records
 `process_tree_cleanup=requested-and-parent-exited`, fails that cell, and—when
 `fail_fast=False`—continues independent cells. Any timeout still makes the final

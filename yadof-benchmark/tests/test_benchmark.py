@@ -1119,6 +1119,40 @@ def test_postprocessor_has_one_direct_output_directory(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("run_on_failure", [False, True])
+def test_failure_summary_runs_only_when_declared_and_preserves_failure(
+    tmp_path: Path, run_on_failure: bool,
+) -> None:
+    _baseline(tmp_path)
+    workspace = _workspace(
+        tmp_path / "failure-summary", strategies=("alpha", "beta"),
+        postprocess_source=(
+            "def make_summary(context):\n"
+            "    from yadof_benchmark.perfect_protocol import write_summary\n"
+            "    return write_summary(context)\n"
+        ),
+    )
+    source = workspace / "benchmark.py"
+    source.write_text(source.read_text(encoding="utf-8").replace(
+        'benchmark.postprocess("summary", make_summary)',
+        f'benchmark.postprocess("summary", make_summary, run_on_failure={run_on_failure})'), encoding="utf-8")
+
+    def collector(_workspace, cell):
+        if cell["id"] == "c0001":
+            raise BenchmarkError("simulation command did not complete")
+        return _cell_result(cell, 0.25)
+
+    state = _execute(tmp_path, workspace, collector=collector)
+    assert state["status"] == "failed"
+    assert state["cells"]["c0002"]["status"] == "collected"
+    summary = workspace / "reports/perfect-surrogate-summary.json"
+    assert summary.exists() is run_on_failure
+    assert state["postprocessors"]["summary"]["status"] == ("succeeded" if run_on_failure else "skipped")
+    if run_on_failure:
+        assert [row["status"] for row in read_json(summary)["comparisons"]] == ["failed", "collected"]
+        assert read_json(workspace / "results.json")["execution_status"] == "failed"
+
+
 def test_inspect_is_read_only(tmp_path: Path) -> None:
     _baseline(tmp_path)
     workspace = _workspace(tmp_path / "inspect", strategies=("alpha",))

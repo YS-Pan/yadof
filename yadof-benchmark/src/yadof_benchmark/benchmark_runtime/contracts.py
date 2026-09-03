@@ -159,6 +159,7 @@ class ComparisonSpec:
 class PostprocessorSpec:
     id: str
     callback: str
+    run_on_failure: bool = False
 
 
 @dataclass(frozen=True)
@@ -286,7 +287,8 @@ class RunSpec:
                 "strategies": strategies,
                 "comparisons": comparisons,
                 "postprocessors": [
-                    {"id": item.id, "callback": item.callback}
+                    {"id": item.id, "callback": item.callback,
+                     "run_on_failure": item.run_on_failure}
                     for item in self.workflow.postprocessors
                 ],
                 "fail_fast": self.workflow.fail_fast,

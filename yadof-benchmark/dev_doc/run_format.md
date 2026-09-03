@@ -92,7 +92,11 @@ also carry the full display label.
 After a terminal cell, aggregate results and reports are atomically republished
 before a FIFO scheduler slot is refilled. A required visualization is part of
 collection. Optional workflow postprocessors run once only after all cells
-collect.
+collect by default. A `run_on_failure=true` declaration in
+`spec.json.workflow.postprocessors` instead permits a callback after scheduling
+ends with failed/incomplete cells. In that case ordinary callbacks have
+`status=skipped`, a finish timestamp and a `skip_reason`. Publication failures
+remain fatal and do not invoke callbacks against incomplete published evidence.
 
 Final status is `completed` only when every cell is collected and valid and all
 registered workflow postprocessors succeed. Individual failed/non-finite

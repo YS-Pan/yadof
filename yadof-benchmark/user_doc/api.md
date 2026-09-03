@@ -89,6 +89,14 @@ def summarize(context: PostprocessContext):
 benchmark.postprocess("summary", summarize)
 ```
 
+`postprocess(..., run_on_failure=True)` opts a callback into execution after
+failed or incomplete cells. Such a callback must handle missing cell results.
+The default is `False`: these callbacks require all cells to be collected and
+are marked `skipped` when that condition fails. The option is recorded in the
+expanded plan. A successful failure-summary callback never changes a failed
+benchmark to a successful one. An interrupted process or a fatal publication
+error can prevent postprocessing altogether.
+
 `PostprocessContext` provides:
 
 - `workspace`

@@ -50,7 +50,8 @@ There is no execution container below the workspace and no recovery branch.
 - `progress.py` reads active command evidence and estimates timing from the
   current workspace only.
 - `postprocessing.py` invokes live workspace callbacks once into
-  `postprocessing/<id>/`.
+  `postprocessing/<id>/`. Explicit `run_on_failure` callbacks may consume an
+  incomplete terminal matrix; other callbacks are skipped in that case.
 - `launch.py` creates an optional Windows console process for the same installed
   CLI. A visible detached launch is hosted by a persistent PowerShell process so
   the final terminal output remains available after the benchmark command exits;
@@ -136,6 +137,13 @@ It deliberately does not require `completed == attempted` or
 evaluation counts, and valid affected cells carry
 `simulation_errors_tolerated=true`. Diagnostics do not by themselves invalidate
 a cell.
+
+The task model identifies numerical divergence in Chrono-produced state with
+`PyChronoSimulationError`, separate from configuration, API and schema faults.
+Oracle and formal workers therefore share per-candidate failure semantics.
+Oracle prediction events retain failed normalized candidates without entering
+the formal recorder. The perfect summary explicitly accepts failed cells and
+cannot change their validity or terminal status.
 
 ## Persistence
 

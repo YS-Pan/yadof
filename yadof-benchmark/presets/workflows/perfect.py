@@ -14,4 +14,4 @@ def build_benchmark(benchmark: Benchmark) -> None:
     benchmark.compare("paired-top10", baselines=["chrono/trebuchet", "ngspice/saw-ladder", "test-com/synthetic-antenna"],
                       strategies=["real-nsga3", "perfect-gpsaf"], reference="real-nsga3",
                       seeds=[101], population=200, generations=50, stop_on_top10_reference=True)
-    benchmark.postprocess("perfect-summary", final_summary)
+    benchmark.postprocess("perfect-summary", final_summary, run_on_failure=True)

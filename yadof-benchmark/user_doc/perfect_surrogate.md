@@ -45,6 +45,15 @@ launch and protocol errors. ngspice distinguishes solver/time-limit errors from
 interface errors. Import, programming, rawData and cost errors propagate as
 `SurrogateContractError`. All-one finite costs are valid and never an error signal.
 
+The Chrono model also identifies numerical divergence in simulator-produced
+positions, velocities, reactions and histories before they reach task-input
+guards. These are failed candidates, just like impossible geometry or an
+individual timeout: selection continues with `valid_mask=False`, no rawData and
+`+inf` costs. The formal evaluation applies the same failure contract. A failed
+candidate does not stop the comparison. Shape/API errors, missing evidence and
+an all-infinite formal generation remain visible stopping conditions. This is
+not a blanket conversion of arbitrary exceptions into predictions.
+
 Chrono's trebuchet model explicitly calls `SetMinBounceSpeed(0.15)` after every
 `ChSystemNSC()` creation. This sets the documented NSC default, avoiding the
 uninitialized contact-container member in Chrono 10.0.0. The model and bundled
@@ -53,10 +62,15 @@ adapter copies are included in the wheel and therefore in newly created cells.
 Oracle screening lives only in memory and `oracle_audit/events.jsonl`. It never
 enters formal history, evaluation budgets or the top-ten metric. The audit records
 oracle simulation counts, physical failures, contract errors, and selected/actual
-cost correspondence. `experiment_metrics/gNNNN.json` and `latest.json` record
+cost correspondence. Prediction events also retain each failed candidate's
+index, normalized parameters and bounded error text for reproduction, outside
+the formal history. `experiment_metrics/gNNNN.json` and `latest.json` record
 formal counts, failures/nonfinite counts and the cumulative metric after each
 committed generation. `reports/perfect-surrogate-summary.json` and `.md` contain
 the final matrix summary, including failed cells.
+The perfect preset registers this summary with `run_on_failure=True`; it runs
+after the scheduler terminates even if a cell failed. Failed comparisons remain
+failed, and ordinary postprocessors that require complete collection are skipped.
 
 Before a full run, use an independent required complete-preset smoke workspace
 and a small integration workspace that reaches assisted generations. Keep both
@@ -77,3 +91,10 @@ Launch with the documented `run --detach --hidden` when a background process is
 desired. Verify the complete matrix, live controller, and a real-evaluation
 progress/log artifact in a short bounded check. Once verified, hand off; final
 results are produced automatically without an agent or periodic monitoring.
+
+To repeat only Chrono, initialize a new `perfect` workspace and change the
+comparison's `baselines` to `["chrono/trebuchet"]`. Keep both strategy
+registrations, `reference="real-nsga3"`, the paired seed/budget, the stopping
+protocol and the final-summary registration. Run both arms from fresh history;
+do not continue or overwrite an earlier failed workspace. Keep validation data
+outside this new measured workspace.

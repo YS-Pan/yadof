@@ -1228,7 +1228,7 @@ def execute_workspace(
     cells_complete = bool(state["cells"]) and all(
         item["status"] == "collected" for item in state["cells"].values()
     )
-    if cells_complete:
+    if cells_complete or spec["workflow"].get("postprocessors"):
         state["status"] = "postprocessing"
         save_state(root, state)
         publication = _publish_or_fail(
@@ -1242,7 +1242,7 @@ def execute_workspace(
             root, spec, state, event_sink=event_sink
         )
         cells_valid = _publication_cells_valid(publication, state)
-        state["status"] = "completed" if processed and cells_valid else "failed"
+        state["status"] = "completed" if cells_complete and processed and cells_valid else "failed"
         if not cells_valid:
             state["validity_error"] = (
                 "one or more collected cells are invalid; see cell validity reports"
