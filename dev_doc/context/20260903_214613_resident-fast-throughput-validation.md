@@ -109,4 +109,6 @@ Chrono 成功吞吐的冷/稳态/端到端中位数分别为旧版3.080/3.042/2.
 
 ## Context到期审查
 
-先枚举全部context，再完整阅读五份指定候选及GPSAF论文实现对照。五份候选均仍有独立的跨会话证据，确认过期0、不确定0，未发生归档移动。详细逐项判断见[配套报告的审查表](20260903_214613_greedy-hv-perfect-surrogate-crossings.md#context到期审查)。旧并发扫描不能作为常驻版最优worker数证明，本次固定4workers测量也不能取代那次扫描。[审查收据](../../../temp/20260903_resident_fast_hv/CONTEXT_REVIEW.json)和[审查前文件身份](../../../temp/20260903_resident_fast_hv/CONTEXT_REVIEW_INPUTS.json)记录理由与原文/附件哈希；原论文、旧报告及图表保持原位、原字节。
+用户在本报告完成后要求移除已经失去当前参考用途的旧性能 context。复审已将旧正式 benchmark、旧 fast 并发扫描、天线配置筛选、SAW/Chrono 配置迁移四份报告及两张附图原样移入 `dev_doc/obsolete/context/`。旧计时不再作为常驻版性能依据；当前吞吐使用本报告的固定候选对照，当前 GPSAF 正式结果使用[配套六单元报告](20260903_214613_greedy-hv-perfect-surrogate-crossings.md)。本次没有重新扫描常驻版的最优 worker 数。
+
+仍保留 [greedy-HV 五种子机制验证](20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)，其证据直接解释当前采用的选择机制。逐项理由和原件位置见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。此前运行目录内的 `CONTEXT_REVIEW.json` 与 `CONTEXT_REVIEW_INPUTS.json` 是首次审查的冻结收据，保持不变，不再代表当前归档状态。

@@ -1,5 +1,7 @@
 # Chrono 完美 oracle GPSAF：机制、结构消融与独立验收
 
+当前适用范围（2026-09-03 复审）：本文继续保存当前 greedy-HV 机制的同池消融及五个独立种子证据。研究时的版本为 0.5.1、默认 cluster；当前 0.6.0 已默认 `infill_selection="hypervolume"`，以[GPSAF 用户规范](../../user_doc/gpsaf.md)为准。本文的 P20/β10 研究结果不等于当前 P200/β3 的正式预算或墙钟性能；后者见[六单元正式报告](20260903_214613_greedy-hv-perfect-surrogate-crossings.md)和[常驻 fast 吞吐对照](20260903_214613_resident-fast-throughput-validation.md)。旧 cluster 配置筛选及旧执行通路计时已移出活跃 context，见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。
+
 本轮找到达到预注册标准的改进：可选的历史 HV 贪心选择。在五个新的配对种子、每臂 1000 次入选尝试下，相对强 NSGA-III P20 的 HV 配对相对增益中位数为 53.48%，绝对增益中位数为 0.238121，top-10 平均成本相对变化中位数为 -42.40%。全部冻结门槛通过。
 
 主要证据是：候选池已产生大量改善点，但原聚类/PKT 筛选没有保留多数覆盖收益；同池反事实、真实轨迹消融与独立验证依次检验了这一解释。另有 beta 失败值影响归一化的实现适配风险，不能将两者混成一个原因。结论限于当前精确 oracle、参数域与预算；没有验证学习型 surrogate 的收益，也没有证明实际运行加速。
@@ -246,7 +248,7 @@ A 相对强对照的配对 HV 相对增益中位数为 26.59%、绝对增益中�
 
 ## C3：保留的正式实现与独立冻结
 
-新增可选 `gpsaf_settings(infill_selection="hypervolume")`，默认仍为 `"cluster"`。只有 beta 已完成并且误差状态可用时，对同一 anchors+全 beta 池使用预测成本均值、有效掩码及真实累计历史，以固定全一参考点逐点选择边际 HV 最大者。使用递减边际收益的 lazy greedy；精确相等按池顺序，增益不大于 1e-12 后停止。剩余位置依次取有效原 PKT/gamma 结果、其他有效池点、必要的无效点，保证批量；有限 1.0 仍有效。探索配额、alpha、beta ask/tell 次数、遗传算子及真实状态恢复均保留。
+本研究在 0.5.1 新增可选 `gpsaf_settings(infill_selection="hypervolume")`，当时默认仍为 `"cluster"`；0.6.0 已将 hypervolume 设为默认。只有 beta 已完成并且误差状态可用时，对同一 anchors+全 beta 池使用预测成本均值、有效掩码及真实累计历史，以固定全一参考点逐点选择边际 HV 最大者。使用递减边际收益的 lazy greedy；精确相等按池顺序，增益不大于 1e-12 后停止。剩余位置依次取有效原 PKT/gamma 结果、其他有效池点、必要的无效点，保证批量；有限 1.0 仍有效。探索配额、alpha、beta ask/tell 次数、遗传算子及真实状态恢复均保留。
 
 它是显式覆盖选择变体，不是宣称原 GPSAF 论文规定必须最大化 HV，也不是 qNEHVI 或不确定性感知采集函数。代码没有 benchmark 名称、已知最优点、oracle 真值接口或物理模型依赖。预测点只进入私有临时覆盖前沿，不进入真实历史。PKT/误差/gamma 仍用于无正增益时的 fallback 顺序。没有将未证实稳定有益的 beta 重启或 F 行为改成公共默认。
 
@@ -260,7 +262,7 @@ A 相对强对照的配对 HV 相对增益中位数为 26.59%、绝对增益中�
 
 ## 使用范围、安装验证与交付身份
 
-本次只新增可选的 infill_selection，原 cluster 默认保持。Chrono 的复现配置为共同初始 200、随后 P20/B20，以及上述不变遗传算子：
+本研究当时只新增可选的 infill_selection，并保持 cluster 默认；该默认值随后已由 0.6.0 的 hypervolume 取代。Chrono 的研究复现配置为共同初始 200、随后 P20/B20，以及上述不变遗传算子：
 
 ```python
 from yadof.optimize import gpsaf_settings

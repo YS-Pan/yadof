@@ -115,17 +115,10 @@ Python3.13.11、NumPy2.5.2、pymoo0.6.2、psutil7.2.2；外部PyChrono10.0.0、n
 
 ## Context到期审查
 
-本次由用户明确触发；在六单元终态和独立核验后进行。先枚举既有context文件（20份文档/图表/论文及空的`.gitkeep`），再完整阅读下表6份Markdown，其中前5份为指定候选。其余离线rawData/模型及posterior校准文档不属于本次所替代的命题，未据日期或文件名判定过期。原论文是来源材料，保持不变。
+用户在本报告完成后明确要求移除已经过时的性能 context。复审已将旧正式 benchmark、旧 fast 并发扫描、天线配置筛选、SAW/Chrono 配置迁移四份报告及两张附图原样归档到 `dev_doc/obsolete/context/`，不再作为当前 GPSAF 性能、配置推荐或常驻 fast 计时依据。归档原因、文件映射与验证见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。
 
-| 评估文档 | 仍有用的主张与证据 | 结论及理由 | 精确替代范围 / 新证据 |
-|---|---|---|---|
-| [9/2 complete 正式结果](20260902_082800_yadof-benchmark-formal-results-summary.md) | 18单元、3种子、P200/G25 的 PCA/SVD 学习代理与真实搜索；含训练耗时和来源限制。 | **保留**。本次是单seed、精确oracle、G50阈值比较，没有重新检验学习代理或三seed汇总；旧测量仍解释此前性能问题。 | 新正式核验补充另一种实验，未使旧结果失效。 |
-| [9/2 并发倍数扫描](20260902_114845_yadof-benchmark-simulator-concurrency-tuning.md) | 旧fast的多档worker扫描、CPU观测及2/2/1倍数的来源。 | **保留**。本次固定4workers吞吐对照没有重做并发扫描；正式实验继续采用2/2/1。旧绝对耗时不能预测常驻版，也未证明新的最优倍数。 | 现行会话生命周期由0.6迁移指南替代；历史扫描与倍数来源仍保留。 |
-| [9/3 天线内存配置研究](20260903_091320_synthetic-gpsaf-memory-tuning.md) | 54个纯内存perfect研究单元；共同200初始化后P20、α1/β10，四个独立留出seed。 | **保留**。本次P200、α3/β3、seed101、完整recording且重新评估选中点，与旧预算结构、seed及复用成本口径不同；无法替代多seed配置证据。 | 旧脚本的模块级调用只属于冻结0.5.1身份，迁移须遵循0.6接口；历史数值未失效。 |
-| [9/3 SAW/Chrono 配置迁移](20260903_121353_saw-chrono-gpsaf-configuration-transfer.md) | P20、β10、600/1000预算与三个留出seed的α对照；保留强P20反例及缓存账本。 | **保留**。本次既未比较α1/α3，也未运行强P20或三个留出seed；新的三个越线点不解决配置排序的反转。 | 生产常驻实现替代研究接入方式，未替代其多seed配置/预算结论。 |
-| [9/3 HV机制与五seed验收](20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md) | 同池反事实、结构消融、P20/β10和701–705五个独立seed；含F归一化风险与领域反例。 | **保留**。本次复用已保留的HV机制，单seed/P200/β3不能替代独立五seed证据；未测试或修复F与beta重启方向。 | C3及使用范围中的cluster默认陈述已由0.6公共设置和迁移指南取代；实验和机制解释仍有效。 |
-| [GPSAF论文实现对照](GPSAF%20acceptance.md) | 论文机制到代码/测试的映射、显式工作流适配及oracle隔离要求。 | **保留**。显式cluster、公共alpha/beta骨架及错误/状态契约继续适用，当前测试保持这些回归。 | 默认策略的现行规范是用户指南；此对照及原论文作为来源材料保留。 |
+当前性能入口为本报告及[resident-fast 吞吐对照](20260903_214613_resident-fast-throughput-validation.md)。[greedy-HV 机制与五种子验证](20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)继续保留：它验证的正是当前采用的 HV 选择机制，提供本次单种子实验没有重做的同池消融和独立多种子证据；其中默认值的现行说明已更新。[GPSAF 论文实现对照](GPSAF%20acceptance.md)、原论文及离线 rawData/模型、posterior 校准证据也继续保留，其用途没有被本次选择器和执行通路升级取代。
 
-结论：五份指定候选全部保留，确认过期0、不确定0；另保留GPSAF验收对照。未移动文件，因此没有归档目标、附件搬迁或因基址改变而产生的链接映射。全部21个既有文件（含空的`.gitkeep`）保持原位及原字节，详见[审查前哈希清单](../../../temp/20260903_resident_fast_hv/CONTEXT_REVIEW_INPUTS.json)与[逐项审查收据](../../../temp/20260903_resident_fast_hv/CONTEXT_REVIEW.json)。
+归档不把旧实验改写为错误，也不把本次 perfect oracle 结果外推成学习型 surrogate 的新性能结论。旧 PCA/SVD 配置的结果不能评价当前默认 greedy-HV GPSAF；学习型代理在新默认下的收益仍需相应实验。常驻版最优 worker 数也尚未重新扫描。当前行为以[0.6迁移说明](../../user_doc/migration_0_6.md)和[GPSAF规范](../../user_doc/gpsaf.md)为准。
 
-替代关系限定到现行协议和默认值：[0.6迁移说明](../../user_doc/migration_0_6.md)、[当前GPSAF规范](../../user_doc/gpsaf.md)和[resident吞吐证据](20260903_214613_resident-fast-throughput-validation.md)负责新的行为/计时。旧版本研究代码的复现要恢复其冻结身份，不能把旧模块级入口当成0.6接口。五seed机制结果、P20配置研究、并发扫描以及学习代理的负向观察都没有被本次P200单seed实验消除。
+首次审查的 [CONTEXT_REVIEW.json](../../../temp/20260903_resident_fast_hv/CONTEXT_REVIEW.json)及[审查前文件身份](../../../temp/20260903_resident_fast_hv/CONTEXT_REVIEW_INPUTS.json)保持冻结原样；其中“全部保留”记录的是当时决定，已由本次用户要求和复审归档取代。
