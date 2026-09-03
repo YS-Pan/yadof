@@ -50,7 +50,7 @@ def surrogate_training_view(step):
 def optimization_program(context):
     search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())
     surrogate = pca_svd(rank=8, device="cpu", seed=101)
-    settings = gpsaf_settings()
+    settings = gpsaf_settings(infill_selection="hypervolume")
     training_enabled = settings.alpha > 1 or settings.beta > 0
     with context.run_scope() as run:
         for generation_index in run.generations():

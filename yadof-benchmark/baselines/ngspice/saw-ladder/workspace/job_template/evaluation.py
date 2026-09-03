@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 
-from ngspice_com import analyze, save_result, set_variables, solver_init, NgspiceSimulationError
+from ngspice_com import analyze, rawdata_payload, read_rawfile, set_variables, solver_init, NgspiceSimulationError
 
 PHYSICAL_FAILURE_TYPES = (NgspiceSimulationError,)
 
@@ -35,12 +35,7 @@ def _ngspice_parameters(parameters: Mapping[str, object]) -> dict[str, str]:
     return output
 
 
-def _memory_payload(path: Path) -> dict[str, object]:
-    with np.load(path, allow_pickle=False) as data:
-        return {name: data[name].copy() for name in data.files}
-
-
-def evaluate_rawdata(parameters, context):
+def _evaluate_rawdata(parameters, context):
     """Run one isolated AC analysis and return S21/S11 dB curves in memory."""
 
     scratch_dir = Path(context["scratch_dir"]).resolve()
@@ -75,27 +70,37 @@ def evaluate_rawdata(parameters, context):
         "bvd_q": 1000.0,
         "ladder_order": 9,
     }
-    output_paths = []
+    payloads = {}
+    plot = read_rawfile(result.rawfile)
     for vector, output_name in (("v(s21)", "s21_db"), ("v(s11)", "s11_db")):
-        output_paths.append(
-            Path(
-                save_result(
-                    result,
+        filename, payload = rawdata_payload(
+                    plot,
                     vector,
                     component="db20",
-                    out_dir=scratch_dir,
                     output_name=output_name,
                     metadata={**common_metadata, "s_parameter": output_name[:3].upper()},
-                )
-            )
         )
+        payloads[filename] = payload
 
-    return {
-        path.name: _memory_payload(path) for path in output_paths
-    }, {
+    return payloads, {
         "simulator": "ngspice",
         "simulator_returncode": result.returncode,
         "simulator_elapsed_sec": time.monotonic() - started,
         "simulator_stdout_tail": result.stdout[-2000:],
         "simulator_stderr_tail": result.stderr[-2000:],
     }
+
+
+YADOF_FAST_API = "yadof.fast.session/v1"
+
+
+class _EvaluationSession:
+    def evaluate_rawdata(self, parameters, context):
+        return _evaluate_rawdata(parameters, context)
+
+    def close(self):
+        pass
+
+
+def create_evaluation_session(context):
+    return _EvaluationSession()

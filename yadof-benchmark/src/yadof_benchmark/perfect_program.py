@@ -14,7 +14,7 @@ def run_program(context, *, perfect):
                         reference_direction_method="das-dennis", reference_direction_partitions=None)
     surrogate = PerfectSimulationOracle() if perfect else None
     errors = GPSAFErrorState()
-    settings = gpsaf_settings(alpha=3, beta=3, gamma=0.5, exploration_fraction=0.1)
+    settings = gpsaf_settings(infill_selection="hypervolume", alpha=3, beta=3, gamma=0.5, exploration_fraction=0.1)
     with context.run_scope() as run:
         for generation in run.generations():
             with run.generation(generation) as step:

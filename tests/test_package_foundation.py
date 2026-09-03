@@ -300,7 +300,7 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
             optimization_source = optimization_path.read_text(encoding="utf-8")
             optimization_path.write_text(
                 optimization_source.replace(
-                    "settings = gpsaf_settings()",
+                    'settings = gpsaf_settings(infill_selection="hypervolume")',
                     "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
                 ),
                 encoding="utf-8",
@@ -491,7 +491,7 @@ def test_package_metadata_and_source_resources() -> None:
         "botorch>=0.18,<0.19",
     ]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.5.1"
+    assert yadof.__version__ == "0.6.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(

@@ -33,77 +33,69 @@ not import yadof from workflow or assigned parameter code: yadof is intentionall
 not sent to execute nodes. `worker_misc` becomes importable after yadof prepares the
 job; importing an unprepared workspace workflow should remain non-executing.
 
-Fast does not execute `workflow.py`. It requires sibling `evaluation.py` and calls
-`evaluate_rawdata(parameters, context)` inside a reusable isolated worker process.
-Keep one task algorithm by importing that kernel from ordinary `workflow.py` and
-only adapting its returned memory payloads to job-local files there.
+Fast does not execute `workflow.py`. It loads the sibling task module once per
+resident worker and calls its versioned session interface. Prepared workflows call
+the same session and only adapt memory payloads to job-local files.
 
 ## Shared Fast/Prepared Kernel
 
-`evaluation.py` must not import yadof or calculate costs:
+`evaluation.py` imports neither yadof nor cost code:
 
 ```python
-from __future__ import annotations
-
 import json
 import numpy as np
 
+YADOF_FAST_API = "yadof.fast.session/v1"
 
-def evaluate_rawdata(parameters, context):
-    value = float(parameters["input_value"])
-    response = np.asarray(value * value, dtype=float)
-    return {
-        "response.npz": {
+class EvaluationSession:
+    def evaluate_rawdata(self, parameters, context):
+        value = float(parameters["input_value"])
+        response = np.asarray(value * value, dtype=float)
+        return {"response.npz": {
             "values": response,
-            "metadata": json.dumps(
-                {
-                    "schema_version": 1,
-                    "rawdata_name": "response",
-                    "shape": list(response.shape),
-                }
-            ),
-        }
-    }, {"simulator_returncode": 0}
+            "metadata": json.dumps({"schema_version": 1,
+                                    "rawdata_name": "response", "shape": []}),
+        }}, {"simulator_returncode": 0}
+
+    def close(self):
+        pass
+
+def create_evaluation_session(context):
+    return EvaluationSession()
 ```
 
-`parameters` and `context` are read-only mappings. Context keys include
-`evaluation_name`, `scratch_dir`, `environment`, `timeout_sec`, `run_id`,
-`optimization_index`, `generation_index`, and `population_index`; none is a job
-path. Return diagnostics as JSON-compatible values. A task exception, worker exit,
-or timeout affects only this individual and causes worker replacement.
+Both mappings are read-only. Candidate context contains `evaluation_name`,
+`scratch_dir`, `environment`, `timeout_sec`, run/generation/population identities
+and the task signature. Factory context instead supplies `session_dir` for resources
+that survive candidate scratch cleanup. [Migration](migration_0_6.md) defines the
+failure classifications, bounded cleanup and generation invalidation contract.
 
-The prepared `workflow.py` wrapper can call the same kernel:
+The prepared `workflow.py` wrapper uses the identical kernel:
 
 ```python
-from types import MappingProxyType
 import numpy as np
-from evaluation import evaluate_rawdata
+from evaluation import create_evaluation_session
 from parameters_constraints import get_parameters
 
-
 def _evaluate(context):
-    parameters = MappingProxyType(
-        {parameter.name: float(parameter.value) for parameter in get_parameters()}
-    )
-    items, _diagnostics = evaluate_rawdata(
-        parameters,
-        MappingProxyType(
-            {
-                "evaluation_name": context.base_dir.name,
-                "scratch_dir": context.temp_dir,
-                "environment": MappingProxyType({}),
-            }
-        ),
-    )
-    for filename, payload in items.items():
-        np.savez_compressed(context.raw_data_dir / filename, **payload)
+    session = create_evaluation_session({"session_dir": context.temp_dir,
+                                         "environment": {}})
+    try:
+        items, diagnostics = session.evaluate_rawdata(
+            {p.name: float(p.value) for p in get_parameters()},
+            {"evaluation_name": context.base_dir.name, "scratch_dir": context.temp_dir,
+             "environment": {}, "timeout_sec": 60.0})
+        for filename, payload in items.items():
+            np.savez_compressed(context.raw_data_dir / filename, **payload)
+    finally:
+        session.close()
 ```
 
-For an external subprocess, use `context["scratch_dir"]` as its explicit working
-directory, merge `context["environment"]` into a copied environment, capture the
-actual return code/stderr/elapsed time in task diagnostics, and parse required
-outputs into memory before returning. The scratch directory can involve real disk
-I/O, but it is never a durable job, evidence, or recovery path.
+Wrap this callback with `worker_misc.run_workflow()`. Rebuild/reset the simulation
+for every call, use explicit scratch and child environment paths, and retain no
+candidate output in the session. Scratch can involve disk I/O but is never durable
+evidence. A worker exception, crash, timeout or cancellation remains isolated by
+the common evaluator; durable recording and current cost interpretation are unchanged.
 
 ## Minimal Skeleton
 

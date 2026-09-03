@@ -19,6 +19,9 @@
   the synchronous cost tuple.
 - Create durable per-candidate cancelled results for work skipped before prepare or
   run; retain preparation, execution, timeout, and recorder failure distinctions.
+- Resolve the formal fast pool from the campaign's named evaluation resources.
+  Handle close releases a generation lease; campaign close owns resident worker
+  teardown. Private standalone sessions retain the same finalization boundary.
 
 ## Invariants
 

@@ -32,13 +32,23 @@ def _workspace(tmp_path: Path, name: str = "workspace") -> Path:
 
 
 def _write_evaluation(root: Path, body: str) -> None:
+    body = body.replace("def evaluate_rawdata(", "def _kernel(")
     (root / "job_template/evaluation.py").write_text(
         "from __future__ import annotations\n"
         "import json\n"
         "import numpy as np\n"
         f"{body}\n",
+        # A fixture session still exercises the same versioned lifecycle.
         encoding="utf-8",
     )
+    with (root / "job_template/evaluation.py").open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\nYADOF_FAST_API = 'yadof.fast.session/v1'\n"
+            "class Session:\n"
+            "    evaluate_rawdata = staticmethod(_kernel)\n"
+            "    def close(self):\n        pass\n"
+            "def create_evaluation_session(context):\n    return Session()\n"
+        )
 
 
 def _rawdata_result_expression(value_expression: str = "value") -> str:
@@ -184,15 +194,18 @@ def test_fast_and_local_can_share_one_task_kernel(tmp_path: Path) -> None:
         "from __future__ import annotations\n"
         "from types import MappingProxyType\n"
         "import numpy as np\n"
-        "from evaluation import evaluate_rawdata\n"
+        "from evaluation import create_evaluation_session\n"
         "from parameters_constraints import get_parameters\n"
         "def _evaluate(context):\n"
         "    values = MappingProxyType({p.name: float(p.value) for p in get_parameters()})\n"
-        "    items = evaluate_rawdata(values, MappingProxyType({\n"
+        "    session = create_evaluation_session({'session_dir': context.temp_dir})\n"
+        "    try:\n"
+        "        items = session.evaluate_rawdata(values, MappingProxyType({\n"
         "        'evaluation_name': 'prepared-job',\n"
         "        'scratch_dir': context.base_dir,\n"
         "        'environment': MappingProxyType({}),\n"
-        "    }))\n"
+        "        }))\n"
+        "    finally:\n        session.close()\n"
         "    if isinstance(items, tuple):\n"
         "        items = items[0]\n"
         "    for name, payload in items.items():\n"
@@ -343,6 +356,7 @@ def test_fast_simulator_failure_isolated_and_success_descendants_are_reaped(
 
 def test_fast_contract_is_required_by_check_and_startup(tmp_path: Path) -> None:
     root = _workspace(tmp_path)
+    (root / "job_template/evaluation.py").unlink()
     (root / "config.py").write_text(
         "EVALUATION_MODE = 'fast'\n", encoding="utf-8"
     )

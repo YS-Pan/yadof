@@ -9,5 +9,6 @@
 
 - Alpha and beta are non-negative integers; gamma is finite and nonnegative;
   exploration is a finite fraction. Validation is eager and standard-library only.
-- Infill selection is an explicit `cluster` (default) or `hypervolume` choice.
+- Infill selection defaults to `hypervolume`; explicit `cluster` retains the
+  original PKT/gamma policy. Omitted and explicit hypervolume settings are equal.
 - Training freshness is deliberately absent because it remains core campaign policy.

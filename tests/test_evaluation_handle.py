@@ -60,12 +60,19 @@ def _write_sleeping_fast_task(root: Path, seconds: float = 30.0) -> None:
         "import json\n"
         "import time\n"
         "import numpy as np\n"
-        "def evaluate_rawdata(parameters, context):\n"
+        "def _kernel(parameters, context):\n"
+        "    import os\n"
+        "    context['scratch_dir'].joinpath('started.pid').write_text(str(os.getpid()), encoding='utf-8')\n"
         f"    time.sleep({float(seconds)!r})\n"
         "    response = np.asarray(float(parameters['input_value']), dtype=float)\n"
         "    return {'response.npz': {'values': response, 'metadata': json.dumps({\n"
         "        'schema_version': 1, 'rawdata_name': 'response', 'shape': []\n"
-        "    })}}\n",
+        "    })}}\n"
+        "YADOF_FAST_API = 'yadof.fast.session/v1'\n"
+        "class Session:\n"
+        "    evaluate_rawdata = staticmethod(_kernel)\n"
+        "    def close(self):\n        pass\n"
+        "def create_evaluation_session(context):\n    return Session()\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -286,7 +293,7 @@ def test_fast_cancel_stops_active_worker_and_drains_queued_candidate(
         )
     )
     scratch = root / ".yadof/fast_scratch"
-    _wait_for(lambda: scratch.is_dir() and bool(tuple(scratch.iterdir())))
+    _wait_for(lambda: bool(tuple(scratch.glob("session-*/candidate_*/started.pid"))))
     assert handle.cancel() is True
     result = handle.wait(15.0)
     assert [row.status for row in result.rows] == ["cancelled", "cancelled"]

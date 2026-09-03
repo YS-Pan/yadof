@@ -9,7 +9,7 @@ import numpy as np
 from test_com import evaluate_raw_data
 
 
-def evaluate_rawdata(parameters, context):
+def _evaluate_rawdata(parameters, context):
     del context
     blocks = evaluate_raw_data(parameters, profile="hfss_like")
     payloads: dict[str, dict[str, object]] = {}
@@ -24,3 +24,18 @@ def evaluate_rawdata(parameters, context):
         payloads[f"{name}.npz"] = payload
     return payloads, {"simulator": "test_com", "profile": "hfss_like"}
 
+
+
+YADOF_FAST_API = "yadof.fast.session/v1"
+
+
+class _EvaluationSession:
+    def evaluate_rawdata(self, parameters, context):
+        return _evaluate_rawdata(parameters, context)
+
+    def close(self):
+        pass
+
+
+def create_evaluation_session(context):
+    return _EvaluationSession()

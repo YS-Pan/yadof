@@ -13,6 +13,10 @@
       "destination": "job_template/parameters_constraints.py"
     },
     {
+      "source": "workspace/job_template/evaluation.py",
+      "destination": "job_template/evaluation.py"
+    },
+    {
       "source": "workspace/job_template/workflow.py",
       "destination": "job_template/workflow.py"
     },

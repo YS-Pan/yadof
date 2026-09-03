@@ -494,23 +494,21 @@ def _unit_for_kind(kind: str) -> str:
     }.get(str(kind).lower(), "")
 
 
-def save_result(
-    result_or_rawfile: NgspiceRunResult | str | Path,
+def rawdata_payload(
+    result_or_rawfile: NgspiceRunResult | NgspicePlot | str | Path,
     vector: str,
     *,
     component: str = "real",
-    out_dir: str | Path = "rawData",
     output_name: str | None = None,
     metadata: Mapping[str, object] | None = None,
-) -> str:
-    """Export one ngspice vector as a float yadof rawData ``.npz`` file."""
+) -> tuple[str, dict[str, object]]:
+    """Construct the same complete rawData payload without an NPZ round trip."""
 
-    rawfile = (
-        result_or_rawfile.rawfile
-        if isinstance(result_or_rawfile, NgspiceRunResult)
-        else Path(result_or_rawfile)
-    )
-    plot = read_rawfile(rawfile)
+    if isinstance(result_or_rawfile, NgspicePlot):
+        plot = result_or_rawfile
+    else:
+        rawfile = result_or_rawfile.rawfile if isinstance(result_or_rawfile, NgspiceRunResult) else Path(result_or_rawfile)
+        plot = read_rawfile(rawfile)
     variable_index = plot.variable_index(vector)
     variable = plot.variables[variable_index]
     selected_component = str(component).strip().lower()
@@ -519,9 +517,6 @@ def save_result(
     rawdata_name = _sanitize_filename(output_name or f"{variable.name}_{selected_component}")
     if rawdata_name.lower().endswith(".npz"):
         rawdata_name = rawdata_name[:-4]
-    output_dir = Path(out_dir).expanduser().resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{rawdata_name}.npz"
 
     extra_arrays: dict[str, np.ndarray] = {}
     axis_names: list[str] = []
@@ -566,14 +561,32 @@ def save_result(
             "ngspice_scale_vector": plot.variables[0].name if data.shape else None,
         }
     )
+    return f"{rawdata_name}.npz", {
+        "data": data,
+        "metadata": np.asarray(json.dumps(rawdata_metadata, ensure_ascii=True, default=str)),
+        **extra_arrays,
+    }
+
+
+def save_result(
+    result_or_rawfile: NgspiceRunResult | str | Path,
+    vector: str,
+    *,
+    component: str = "real",
+    out_dir: str | Path = "rawData",
+    output_name: str | None = None,
+    metadata: Mapping[str, object] | None = None,
+) -> str:
+    """Publish the memory payload as one atomic task-owned NPZ file."""
+
+    filename, payload = rawdata_payload(result_or_rawfile, vector, component=component,
+                                       output_name=output_name, metadata=metadata)
+    output_dir = Path(out_dir).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / filename
     temporary_path = output_path.with_name(output_path.name + ".tmp.npz")
     try:
-        np.savez_compressed(
-            temporary_path,
-            data=data,
-            metadata=json.dumps(rawdata_metadata, ensure_ascii=True, default=str),
-            **extra_arrays,
-        )
+        np.savez_compressed(temporary_path, **payload)
         os.replace(temporary_path, output_path)
     finally:
         temporary_path.unlink(missing_ok=True)
@@ -589,6 +602,7 @@ __all__ = [
     "NgspiceVariable",
     "analyze",
     "read_rawfile",
+    "rawdata_payload",
     "save_result",
     "set_para",
     "set_variables",

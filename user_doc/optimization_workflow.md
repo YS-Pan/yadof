@@ -68,36 +68,25 @@ dependency.
 
 ### Fast-compatible shared task kernel
 
-Use fast only for computations or local simulators whose result can be returned as
-memory rawData. Add `job_template/evaluation.py` with:
+Fast uses the explicit `yadof.fast.session/v1` lifecycle. Declare `YADOF_FAST_API`
+and `create_evaluation_session(context)` in `job_template/evaluation.py`. The returned
+object provides `evaluate_rawdata(parameters, context)` and `close()`. The framework
+loads the module and creates the session once per worker, then reuses it across
+candidates and compatible generations. See [migration_0_6.md](migration_0_6.md) for
+ownership, invalidation, failure and migration details, and
+[workflow_typical_patterns.md](workflow_typical_patterns.md) for a complete example.
 
-```python
-def evaluate_rawdata(parameters, context):
-    # parameters is a read-only {name: assigned_float} mapping.
-    # context includes evaluation_name, scratch_dir, environment, and identities.
-    return {
-        "response.npz": {
-            "values": response_array,
-            "metadata": metadata_json,
-        }
-    }, {"simulator_returncode": 0}
-```
+The factory receives `session_dir`; each evaluation receives its own `scratch_dir`
+and read-only assigned parameters. Rebuild/reset physical state for every candidate.
+Return unique direct `.npz` basenames mapped to complete schema-valid memory arrays,
+plus optional JSON diagnostics. Neither return value contains objective costs.
+Parse any simulator files into memory before returning and bound session resources.
 
-Names must be unique direct `.npz` basenames. Every payload follows the same schema
-as file rawData, diagnostics must be JSON-serializable, and neither return value may
-contain objective costs. Put the simulation algorithm in this kernel and make
-ordinary `workflow.py` call it and save each payload under its job-local
-`rawData/`; do not maintain two algorithms.
-
-The fast context has no job path. `scratch_dir` is the only candidate-specific
-filesystem exception. Pass it explicitly as a simulator working directory and pass
-`{**os.environ, **dict(context["environment"])}` explicitly to subprocesses. Parse
-all needed output into memory before returning. The parent reaps simulator
-descendants that remain after a task response and removes scratch after success,
-task error, timeout, or worker crash. Do not treat scratch as history,
-checkpoint, or recoverable job state. Prefer local/distributed when a task needs a
-durable job directory, detailed job-local files, remote execution, or recovery from
-large intermediate files.
+Ordinary `workflow.py` creates one session, evaluates once, writes those same arrays
+to its job-local `rawData/`, and closes in `finally`. This keeps one physical kernel
+across execution modes. A simulator can retain internal files or a one-shot process;
+describe that limitation explicitly. Use local/distributed when durable job-local
+intermediates, remote execution, or detailed job recovery are needed.
 
 ## 3. rawData and cost
 
@@ -752,10 +741,10 @@ Configured ask/refill exhaustion raises `InsufficientCandidatePoolError`; derive
 GPSAF/posterior paths may discard the entire partial choice and run a fresh complete
 real search, while failure of that real path remains explicit. A
 `SurrogateContractError` propagates rather than becoming ordinary fallback.
-GPSAF `gamma` controls the cluster-size replacement probability. The optional
+GPSAF `gamma` controls the cluster-size replacement probability. The default
 `gpsaf_settings(infill_selection="hypervolume")` selects a completed beta batch by
-predicted coverage relative to supplied real history; the default remains
-`"cluster"`. See
+predicted coverage relative to supplied real history. Explicit `"cluster"`
+retains the original PKT/gamma selection. See
 [GPSAF mechanisms and adaptations](gpsaf.md) for the paper contract, error
 bootstrap, coverage policy, true-generation state replay and required explicit
 error-state calls.

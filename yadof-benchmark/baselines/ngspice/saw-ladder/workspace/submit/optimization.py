@@ -42,7 +42,7 @@ def optimization_program(context):
         bootstrap_members=True,
         bootstrap_fraction=1.0,
     )
-    settings = gpsaf_settings(alpha=1, beta=0)
+    settings = gpsaf_settings(infill_selection="hypervolume", alpha=1, beta=0)
     training_enabled = settings.alpha > 1 or settings.beta > 0
     error_state = GPSAFErrorState()
     with context.run_scope() as run:

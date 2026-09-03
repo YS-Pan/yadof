@@ -153,3 +153,11 @@ def _evaluate(context) -> None:
 Wrap this task callback with the standard job-local
 `worker_misc.run_workflow()` lifecycle as described in
 [Typical workflow patterns](../workflow_typical_patterns.md).
+
+
+For resident fast task interfaces, `rawdata_payload(result_or_plot, vector, ...)`
+returns `(filename, payload)` using the same conversion and metadata as
+`save_result()`, without writing and reloading NPZ. Parse a rawfile once with
+`read_rawfile()` and pass the resulting `NgspicePlot` for multiple vectors.
+Ngspice still executes one batch subprocess per candidate; only the task module
+and eligible session resources remain resident.

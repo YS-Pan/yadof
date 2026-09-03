@@ -70,7 +70,7 @@ def _workspace(tmp_path: Path, name: str, *, surrogate: bool = False) -> Path:
         f"surrogate = conditional_inr({component_arguments})",
     )
     source = source.replace(
-        "settings = gpsaf_settings()",
+        'settings = gpsaf_settings(infill_selection="hypervolume")',
         f"settings = gpsaf_settings({gpsaf_arguments})",
     )
     optimization_path.write_text(source, encoding="utf-8")

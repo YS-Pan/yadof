@@ -2,7 +2,7 @@
 
 ## Intent
 
-- Select an optional GPSAF batch by deterministic predicted hypervolume coverage
+- Select the default GPSAF batch by deterministic predicted hypervolume coverage
   relative to the supplied real history, using the existing finite candidate pool.
 
 ## Contract

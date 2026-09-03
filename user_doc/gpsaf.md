@@ -1,6 +1,6 @@
 # GPSAF mechanisms and workflow adaptations
 
-The selection contract follows Blank and Deb's
+Alpha, beta, and the explicit cluster policy follow Blank and Deb's
 [GPSAF paper](https://arxiv.org/abs/2204.04054), Sections III-A/B and Algorithms 2/3.
 
 - Alpha asks `alpha` batches without advancing the real algorithm. Each position
@@ -22,8 +22,9 @@ The selection contract follows Blank and Deb's
   a largest nonempty cluster always replaces it. `gamma` is finite and nonnegative.
   A beta winner need not dominate the alpha anchor: PKT selects within its cluster.
 
-`gpsaf_settings(infill_selection="cluster")` is the default selection policy above.
-The optional `infill_selection="hypervolume"` replaces a completed beta batch with
+`gpsaf_settings()` defaults to `infill_selection="hypervolume"`. Explicit
+`gpsaf_settings(infill_selection="cluster")` retains the selection policy above.
+The default replaces a completed beta batch with
 greedy predicted hypervolume coverage relative to the finite real history supplied
 by the generation context. Its pool contains the alpha anchors and every beta
 candidate. Pymoo computes hypervolume with a fixed all-one reference point, matching
@@ -41,8 +42,7 @@ or still waiting for an error estimate, selection uses the alpha result.
 
 This policy uses deterministic predicted means; it does not integrate predictive
 uncertainty or replace the posterior-assisted/qNEHVI workflow. PKT error scales and
-gamma still determine the fallback order. Use it explicitly when coverage of the
-normalized objective space is the intended selection criterion, and validate it
+gamma still determine the fallback order. Validate coverage selection
 with the chosen surrogate and task. A perfect-oracle experiment does not establish
 performance for learned models. Exact hypervolume also adds selection computation;
 reduced selected-evaluation counts do not imply lower total oracle cost.

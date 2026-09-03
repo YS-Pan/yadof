@@ -56,13 +56,17 @@ lifecycle metadata.
 
 ## Fast backend
 
-`fast_runner.py` maintains a bounded pool of non-daemon spawn workers so a kernel
+`fast_runner.py` maintains campaign-owned bounded non-daemon spawn workers so a kernel
 may launch external simulator descendants. Each worker handles one candidate at a
 time and returns a mapping of unique direct `.npz` basenames to validated in-memory
 payloads plus JSON diagnostics. A bounded pipe holds at most one result per worker;
 the parent admits each completion to the population coordinator before assigning
 more work, and count/byte target commits may expose several ordered results
-together. Every worker uses the generation's immutable task snapshot. There is no
+together. Workers load the task once and construct one versioned evaluation session.
+Compatible sessions survive generations; the pool key includes the evaluation
+fingerprint, environment, worker cap and timeout. A changed key closes the old pool.
+Cost-only changes reuse it. Every call uses the current immutable candidate context.
+There is no
 `prepare_job()`, job-template copy, assigned parameter file, workflow process, or
 fake job path. `fast_resources.py` bounds useful concurrency by population, trusts
 the configured cap, and records declared per-worker CPU/memory/scratch disk against
@@ -70,9 +74,12 @@ current host capacity only as advisory diagnostics.
 
 The parent owns candidate scratch creation/cleanup, records worker/machine/timing
 and process-tree diagnostics, enforces the hard timeout, and uses shared
-`process_control.py` to reap remaining descendants after every response or kill a
-timed-out/crashed worker tree. A failure discards that worker and creates a
-replacement. A successful worker is reused after descendant cleanup. Fast worker
+`process_control.py` to kill timed-out/crashed/cancelled worker trees and reap
+remaining descendants at session close. Successful calls and explicitly declared
+physical failures retain usable sessions, including simulator descendants. Other
+task errors replace the worker; idle crashes are detected before reassignment.
+Standalone calls own and close their pool. Campaign shutdown closes pools before
+snapshot deletion, after generation handles are closed. Fast worker
 plans are stored in evaluation metadata, not emitted once per generation as CLI
 progress. No backend exposes a submission callback.
 

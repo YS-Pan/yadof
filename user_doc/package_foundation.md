@@ -14,10 +14,10 @@ Install a built wheel into the Python environment used by submit and local worke
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.5.1-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[qnehvi]"
-python -m pip install ".\dist\yadof-0.5.1-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.6.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[qnehvi]"
+python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[viewer]"
 ```
 
 The default template's declared `submit/optimization.py` program composes
@@ -75,7 +75,7 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-The current package version is `0.5.1`. Recorded history uses immutable
+The current package version is `0.6.0`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
 The core wheel also exposes `yadof.recorded_data.EvidenceDataset` and `CostTable`.
@@ -234,7 +234,7 @@ or installed
 `yadof.job_template` helpers for every cross-task invariant.
 
 Fast mode is the third explicit backend beside local and distributed. It requires
-task-owned `evaluation.py:evaluate_rawdata()`, runs it in reusable crash-isolated
+task-owned `evaluation.py:create_evaluation_session()` and its versioned session, runs it in reusable crash-isolated
 processes on the submit machine, and creates no durable `jobs/<candidate>/`
 directory. A simulator may use the configured fast scratch root, but each candidate
 scratch is temporary, isolated, and cleaned; it is not evidence or a recovery point.

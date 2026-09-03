@@ -347,22 +347,19 @@ def materialize_job_parameters(
 
 
 def validate_fast_task(workspace: WorkspaceLike) -> Path:
-    """Require the explicit fast task kernel without running an evaluation."""
+    """Require the resident fast contract without constructing a task session."""
+
+    from .fast_session import validate_session_module
 
     context = _workspace(workspace)
     source_path = context.job_template_dir / f"{FAST_EVALUATION_MODULE_NAME}.py"
     if not source_path.is_file():
         raise FileNotFoundError(
             "fast evaluation requires task kernel "
-            f"{source_path} defining evaluate_rawdata(parameters, context)"
+            f"{source_path} declaring YADOF_FAST_API and create_evaluation_session(context)"
         )
     with task_module(context, FAST_EVALUATION_MODULE_NAME) as module:
-        evaluate_rawdata = getattr(module, "evaluate_rawdata", None)
-        if not callable(evaluate_rawdata):
-            raise TypeError(
-                f"{source_path} must define callable "
-                "evaluate_rawdata(parameters, context)"
-            )
+        validate_session_module(module)
     return source_path
 
 

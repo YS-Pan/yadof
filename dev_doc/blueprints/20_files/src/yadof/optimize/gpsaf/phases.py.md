@@ -41,7 +41,7 @@
   Missing scales hold beta until an observed error exists. The tournament stream
   is deterministic per generation and separate from pymoo/random-refill streams.
 - Coverage never adds prediction requests or simulated tells. An inactive beta
-  keeps alpha selection; the default cluster policy retains its random stream.
+  keeps alpha selection; explicit cluster selection retains its random stream.
 
 ## Mutability Profile
 - GPSAF phase policy may evolve, but real evaluation and durable history must

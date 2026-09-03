@@ -5,7 +5,8 @@ simulation oracle on Chrono trebuchet, ngspice SAW ladder, and synthetic antenna
 Seed is 101, population is 200. The reference runs all 50 generations (10,000
 formal evaluations). GPSAF stops at its first strictly lower cumulative top-10
 mean, or after generation 50. The initial design is generation 1 and is paired
-between strategies. Alpha=3, beta=3, gamma=0.5 and exploration=0.10; operator
+between strategies. Alpha=3, beta=3, gamma=0.5, exploration=0.10 and explicit
+`infill_selection="hypervolume"` select the retained greedy-HV policy; operator
 settings are explicit in each strategy's identity.
 
 Each individual's avg cost is the arithmetic mean of its objectives. At each
@@ -27,7 +28,7 @@ still require equal complete attempted budgets. Paired initial designs and task
 digests remain required; early stopping does not establish performance robustness.
 
 The oracle is the installable `yadof_benchmark.perfect_oracle.PerfectSimulationOracle`.
-It calls the baseline's frozen `evaluate_rawdata` kernel and the same assigned
+It calls the baseline's frozen resident-session `evaluate_rawdata` kernel and the same assigned
 parameters/current cost chain as formal evaluation. It passes
 `StructuredRawDataSample.cost_items()` payloads to that cost interface. It performs
 no training and does not load the growing rawData archive for model fitting.
@@ -98,3 +99,12 @@ registrations, `reference="real-nsga3"`, the paired seed/budget, the stopping
 protocol and the final-summary registration. Run both arms from fresh history;
 do not continue or overwrite an earlier failed workspace. Keep validation data
 outside this new measured workspace.
+
+
+The oracle uses a separate campaign-owned fast session pool and the same physical
+failure classification as formal evaluation. Its memory results have no recording
+consumer and never enter formal history. Pool size follows the resolved baseline
+worker cap; compatible sessions survive selection calls and generations. Campaign
+close and task-definition invalidation close both pools. Diagnostics report query
+rows, new physical kernel calls, zero cache hits (no result cache), and oracle wall
+time separately from formal attempts.

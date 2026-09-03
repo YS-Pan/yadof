@@ -55,7 +55,8 @@ python -m yadof docs bundle user
    local/distributed smoke, start/resume, history, and viewing commands.
 
 Users upgrading an existing workspace must first read
-[migration_0_5.md](migration_0_5.md). When a source checkout is available,
+[migration_0_6.md](migration_0_6.md), and [migration_0_5.md](migration_0_5.md)
+when upgrading from before that release. When a source checkout is available,
 [optimization_program_examples.md](optimization_program_examples.md) indexes the
 copyable program references that accompany this release.
 

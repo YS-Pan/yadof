@@ -6,23 +6,22 @@ No evaluation-manager request, recorder or optimization history is created here.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
 from pathlib import Path
 import struct
-import tempfile
 import threading
+import time
 from types import MappingProxyType, SimpleNamespace
 
 from yadof.evaluate_manager.fast_resources import plan_fast_workers
+from yadof.evaluate_manager.fast_runner import FastWorkerPool, run_fast_population
 from yadof.job_template import (
     StructuredRawDataSample, assign_parameters, calculate_costs_from_raw_data,
     validate_named_rawdata_items,
 )
 from yadof.surrogate import SurrogateContractError, SurrogatePrediction, SurrogateTrainingData
-from yadof.task_loader import task_module
 
 
 def _json_cost(row):
@@ -35,6 +34,8 @@ class PerfectSimulationOracle:
         self._calls = self._simulations = self._failures = self._errors = 0
         self._matched = 0
         self._workers = 0
+        self._queries = self._kernel_calls = 0
+        self._wall_seconds = 0.0
 
     def validate(self, config, problem):
         if config.EVALUATION_MODE != "fast" or problem.objective_count < 1:
@@ -70,60 +71,41 @@ class PerfectSimulationOracle:
         # no fitted approximation to cross-validate. Selected rows are audited.
         return (0.0,) * context.problem.objective_count
 
-    def _one(self, evaluator, failure_types, context, parameters, index, scratch):
-        with self._lock:
-            self._simulations += 1
-        try:
-            with tempfile.TemporaryDirectory(prefix=f"p{index:04d}-", dir=scratch) as directory:
-                task_context = MappingProxyType({
-                    "evaluation_name": f"oracle-g{context.generation_index:04d}-p{index:04d}",
-                    "scratch_dir": Path(directory),
-                    "timeout_sec": float(context.config.EVALUATION_TIMEOUT_SEC),
-                    "environment": MappingProxyType({}),
-                    "run_id": context.run_id,
-                    "optimization_index": context.optimization_index,
-                    "generation_index": context.generation_index,
-                    "population_index": index,
-                    "task_static_signature": context.snapshot.evaluation_fingerprint,
-                })
-                output = evaluator(parameters, task_context)
-                if isinstance(output, tuple):
-                    from collections.abc import Mapping
-                    if len(output) != 2 or not isinstance(output[1], Mapping):
-                        raise TypeError("fast evaluation must return rawData or (rawData, diagnostics)")
-                    output = output[0]
-                sample = StructuredRawDataSample.from_items(validate_named_rawdata_items(output))
-                return sample, ""
-        except failure_types as exc:
-            with self._lock:
-                self._failures += 1
-            return None, f"{type(exc).__name__}: {exc}"[:1000]
+    def _outcome(self, result):
+        self._simulations += 1
+        self._kernel_calls += int(bool(result.metadata.get("kernel_invoked")))
+        if result.status == "done":
+            return StructuredRawDataSample.from_items(result.raw_data_items), ""
+        error = f"{result.metadata.get('error_type', result.status)}: {result.metadata.get('error_message', '')}"[:1000]
+        if result.status == "timeout" or result.metadata.get("physical_failure"):
+            self._failures += 1
+            return None, error
+        raise SurrogateContractError(f"perfect oracle task contract failure: {error}")
 
     def predict_for_selection(self, context, population, training_data=None):
         if not isinstance(training_data, SurrogateTrainingData):
             raise SurrogateContractError("perfect oracle requires explicit SurrogateTrainingData")
         rows = tuple(tuple(float(value) for value in row) for row in population)
+        started = time.monotonic()
         try:
             self._calls += 1
+            self._queries += len(rows)
             assigned = tuple(MappingProxyType({p.name: float(p.value) for p in assign_parameters(
                 context.config.workspace, row)}) for row in rows)
             plan = plan_fast_workers(context.config, population_size=len(rows),
                                      configured_max=int(context.config.FAST_EVALUATION_MAX_WORKERS))
             self._workers = int(plan.worker_count)
-            scratch = context.config.workspace.fast_evaluation_scratch_dir / "perfect-oracle"
-            scratch.mkdir(parents=True, exist_ok=True)
-            with task_module(context.config.workspace, "evaluation") as module:
-                failure_types = getattr(module, "PHYSICAL_FAILURE_TYPES", ())
-                if not isinstance(failure_types, tuple) or any(
-                    not isinstance(t, type) or not issubclass(t, Exception) or t in (Exception, BaseException)
-                    for t in failure_types
-                ):
-                    raise TypeError("PHYSICAL_FAILURE_TYPES must explicitly list specific exception types")
-                with ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="perfect-oracle") as pool:
-                    futures = [pool.submit(self._one, module.evaluate_rawdata, failure_types,
-                                           context, parameters, i, scratch)
-                               for i, parameters in enumerate(assigned)]
-                    outcomes = tuple(future.result() for future in futures)
+            # This common runner emits memory evidence but has no recorder of its
+            # own. Only the formal API installs a recording/finalization consumer.
+            results = [None] * len(rows)
+            run_fast_population(
+                context.config, rows, timeout_sec=float(context.config.EVALUATION_TIMEOUT_SEC),
+                env=None, max_workers=self._workers, run_id=context.run_id,
+                optimization_index=context.optimization_index, generation_index=context.generation_index,
+                on_result=lambda index, result: results.__setitem__(index, result),
+                pool=context.session.evaluation_resource("perfect-oracle-fast", FastWorkerPool),
+            )
+            outcomes = tuple(self._outcome(result) for result in results)
             successful = [i for i, (sample, _) in enumerate(outcomes) if sample is not None]
             computed = calculate_costs_from_raw_data(
                 context.config.workspace,
@@ -156,8 +138,6 @@ class PerfectSimulationOracle:
                                   ],
                                   "errors": [error for _, error in outcomes if error], **self.diagnostics()})
             return prediction
-        except SurrogateContractError:
-            raise
         except Exception as exc:
             self._errors += 1
             try:
@@ -166,6 +146,8 @@ class PerfectSimulationOracle:
             except Exception as audit_error:
                 raise SurrogateContractError(f"oracle audit persistence failed: {audit_error}") from exc
             raise SurrogateContractError(f"perfect oracle {type(exc).__name__}: {exc}") from exc
+        finally:
+            self._wall_seconds += time.monotonic() - started
 
     def verify_selected(self, context, selected, actual_costs):
         if selected.predicted_costs and len(selected.predicted_costs) != len(actual_costs):
@@ -193,4 +175,7 @@ class PerfectSimulationOracle:
         return {"oracle_prediction_calls": self._calls, "oracle_simulation_evaluations": self._simulations,
                 "oracle_simulation_failures": self._failures, "oracle_contract_errors": self._errors,
                 "oracle_selected_bitwise_matches": self._matched, "oracle_worker_count": self._workers,
+                "oracle_queries": self._queries, "oracle_cache_hits": 0,
+                "oracle_new_physical_kernel_calls": self._kernel_calls,
+                "oracle_wall_seconds": self._wall_seconds,
                 "oracle_recorded_in_history": False}

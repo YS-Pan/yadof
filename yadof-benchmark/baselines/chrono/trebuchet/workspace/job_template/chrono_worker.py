@@ -10,7 +10,7 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from chrono_com import worker_main, PyChronoSimulationError
+from chrono_com import resident_worker_main, PyChronoSimulationError
 from task_spec import (
     COUNTERWEIGHT_BLOCK_SIZE_M,
     GRAVITY_MPS2,
@@ -89,12 +89,8 @@ def _drop_angle_deg(initial: tuple[float, float], current: tuple[float, float]) 
     return math.degrees(math.acos(cosine))
 
 
-def _save_npz(rawdata_dir: Path, filename: str, **payload: object) -> None:
-    target = rawdata_dir / filename
-    partial = target.with_name(target.name + ".part")
-    with partial.open("wb") as stream:
-        np.savez_compressed(stream, **payload)
-    os.replace(partial, target)
+def _store_rawdata(rawdata: dict, filename: str, **payload: object) -> None:
+    rawdata[filename] = payload
 
 
 def _reaction_magnitude(link) -> float:
@@ -843,7 +839,7 @@ def run_task_model(
 
 
 def _save_scalar_rawdata(
-    rawdata_dir: Path,
+    rawdata: dict,
     field: tuple[str, str, str],
     value: float,
     **extra_metadata: object,
@@ -859,8 +855,8 @@ def _save_scalar_rawdata(
         "model": MODEL_NAME,
         **extra_metadata,
     }
-    _save_npz(
-        rawdata_dir,
+    _store_rawdata(
+        rawdata,
         f"{rawdata_name}.npz",
         values=values,
         metadata=np.asarray(json.dumps(metadata, separators=(",", ":"))),
@@ -869,7 +865,7 @@ def _save_scalar_rawdata(
 
 
 def _save_phase_curve_rawdata(
-    rawdata_dir: Path,
+    rawdata: dict,
     field: tuple[str, str, str],
     values: np.ndarray,
     phase_axis: np.ndarray,
@@ -898,8 +894,8 @@ def _save_phase_curve_rawdata(
         "model": MODEL_NAME,
         **extra_metadata,
     }
-    _save_npz(
-        rawdata_dir,
+    _store_rawdata(
+        rawdata,
         f"{rawdata_name}.npz",
         values=curve,
         axis_release_phase=phase_axis,
@@ -908,7 +904,7 @@ def _save_phase_curve_rawdata(
     return rawdata_name, list(curve.shape)
 
 
-def simulate(request: Mapping[str, object], rawdata_dir: Path) -> Mapping[str, object]:
+def simulate(request: Mapping[str, object]):
     # The external runtime boundary is deliberate: yadof is not installed here.
     import pychrono as chrono
 
@@ -921,9 +917,10 @@ def simulate(request: Mapping[str, object], rawdata_dir: Path) -> Mapping[str, o
     if summary.shape != (len(RELEASE_SUMMARY_NAMES),):
         raise RuntimeError("release summary does not match its semantic fields")
 
+    rawdata: dict[str, dict[str, object]] = {}
     rawdata_shapes: dict[str, list[int]] = {}
     name, shape = _save_scalar_rawdata(
-        rawdata_dir,
+        rawdata,
         TOTAL_TIME_RAWDATA_FIELD,
         float(result["total_time_s"]),
         endpoint="release_or_simulation_cutoff",
@@ -933,7 +930,7 @@ def simulate(request: Mapping[str, object], rawdata_dir: Path) -> Mapping[str, o
     summary_values = dict(zip(RELEASE_SUMMARY_NAMES, summary, strict=True))
     for field in RELEASE_SUMMARY_RAWDATA_FIELDS:
         name, shape = _save_scalar_rawdata(
-            rawdata_dir,
+            rawdata,
             field,
             float(summary_values[field[1]]),
         )
@@ -941,7 +938,7 @@ def simulate(request: Mapping[str, object], rawdata_dir: Path) -> Mapping[str, o
 
     for index, field in enumerate(RELEASE_KINEMATICS_RAWDATA_FIELDS):
         name, shape = _save_phase_curve_rawdata(
-            rawdata_dir,
+            rawdata,
             field,
             release_kinematics[:, index],
             phase_axis,
@@ -950,7 +947,7 @@ def simulate(request: Mapping[str, object], rawdata_dir: Path) -> Mapping[str, o
 
     for index, field in enumerate(STRESS_HISTORY_RAWDATA_FIELDS):
         name, shape = _save_phase_curve_rawdata(
-            rawdata_dir,
+            rawdata,
             field,
             stress[:, index],
             phase_axis,
@@ -965,8 +962,8 @@ def simulate(request: Mapping[str, object], rawdata_dir: Path) -> Mapping[str, o
             "rawdata_shapes": rawdata_shapes,
         }
     )
-    return diagnostics
+    return rawdata, diagnostics
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main(simulate))
+    raise SystemExit(resident_worker_main(simulate))

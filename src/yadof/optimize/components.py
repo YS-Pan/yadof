@@ -186,9 +186,9 @@ def gpsaf_settings(
     beta: int = 3,
     gamma: float = 0.5,
     exploration_fraction: float = 0.10,
-    infill_selection: str = "cluster",
+    infill_selection: str = "hypervolume",
 ) -> GPSAFSettings:
-    """Build GPSAF settings, with optional history-based hypervolume infill."""
+    """Build GPSAF settings with greedy history-based hypervolume infill by default."""
 
     return create_gpsaf_settings(
         alpha=alpha,

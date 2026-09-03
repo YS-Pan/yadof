@@ -481,6 +481,7 @@ class CampaignSession:
         self._generation_handles: set[object] = set()
         self._generation_handle_snapshots: dict[object, GenerationTaskSnapshot] = {}
         self._generation_handle_policies: dict[object, str] = {}
+        self._evaluation_resources: dict[str, object] = {}
         self._interpretation_counters = InterpretationCounters()
         self._committed_owned_count_limit = int(
             config.HISTORY_UNPUBLISHED_MAX_CANDIDATES
@@ -537,9 +538,47 @@ class CampaignSession:
         except Exception:
             snapshot.close()
             raise
+        if (self.current_snapshot is not None and
+                self.current_snapshot.evaluation_fingerprint != snapshot.evaluation_fingerprint):
+            try:
+                self._close_evaluation_resources()
+            except BaseException:
+                snapshot.close()
+                raise
         self._snapshots.append(snapshot)
         self.current_snapshot = snapshot
         return snapshot
+
+    def evaluation_resource(self, name: str, factory):
+        """Own one lazily created, closeable resource per evaluation definition.
+
+        Handles still belong to one generation. Idle evaluation resources may live
+        across generations, but never across a changed evaluation fingerprint or
+        campaign close. Resource implementations serialize their own requests.
+        """
+
+        with self._state_lock:
+            if self._closed or self._closing:
+                raise RuntimeError("campaign session is closing or closed")
+            if name not in self._evaluation_resources:
+                resource = factory()
+                if not callable(getattr(resource, "close", None)):
+                    raise TypeError("evaluation resource must define close()")
+                self._evaluation_resources[name] = resource
+            return self._evaluation_resources[name]
+
+    def _close_evaluation_resources(self) -> None:
+        with self._state_lock:
+            resources = tuple(self._evaluation_resources.values())
+            self._evaluation_resources.clear()
+        errors = []
+        for resource in resources:
+            try:
+                resource.close()
+            except BaseException as exc:
+                errors.append(exc)
+        if errors:
+            raise errors[-1]
 
     def _register_generation_handle(
         self,
@@ -953,6 +992,10 @@ class CampaignSession:
                     close()
                 except BaseException as exc:  # Finish every owned cleanup obligation.
                     errors.append(exc)
+            try:
+                self._close_evaluation_resources()
+            except BaseException as exc:
+                errors.append(exc)
             try:
                 self._writer.shutdown()
             except BaseException as exc:  # Preserve cleanup before propagating failure.

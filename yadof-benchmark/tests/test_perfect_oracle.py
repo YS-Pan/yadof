@@ -24,14 +24,16 @@ def oracle_context(tmp_path):
     workspace = tmp_path / "cell/workspace"
     with (workspace / "config.py").open("a", encoding="utf-8") as stream:
         stream.write("\nFAST_EVALUATION_MAX_WORKERS = 2\n")
-    snapshot = create_generation_snapshot(load_config(workspace))
+    from yadof.recorded_data.session import CampaignSession
+    session = CampaignSession(load_config(workspace))
+    snapshot = session.begin_generation(load_config(workspace))
     context = SimpleNamespace(config=snapshot.config, snapshot=snapshot,
         problem=SimpleNamespace(objective_count=get_objective_count(snapshot.config.workspace)),
-        generation_index=1, optimization_index=0, run_id="oracle-test")
+        generation_index=1, optimization_index=0, run_id="oracle-test", session=session)
     try:
         yield context
     finally:
-        snapshot.close()
+        session.close()
 
 
 def _inputs(context):
@@ -108,14 +110,13 @@ def test_all_one_is_valid_but_cost_interface_exception_is_fatal(oracle_context, 
 
 
 def test_declared_physical_failure_is_inf_without_fabricated_rawdata(oracle_context, monkeypatch):
-    class PhysicsFailure(RuntimeError):
-        pass
-    def failed(*args):
-        raise PhysicsFailure("impossible geometry")
-    @contextmanager
-    def fake_module(*args):
-        yield SimpleNamespace(PHYSICAL_FAILURE_TYPES=(PhysicsFailure,), evaluate_rawdata=failed)
-    monkeypatch.setattr(oracle_module, "task_module", fake_module)
+    from yadof.evaluate_manager.types import JobResult
+    def failed(config, population, *, on_result, **kwargs):
+        for index, row in enumerate(population):
+            on_result(index, JobResult(job_name=f"p{index}", job_dir=None, status="error", unnormalized_variables=(),
+                normalized_variables=row, metadata={"physical_failure": True,
+                "kernel_invoked": True, "error_type": "PhysicsFailure", "error_message": "impossible geometry"}))
+    monkeypatch.setattr(oracle_module, "run_fast_population", failed)
     training, rows = _inputs(oracle_context)
     oracle = PerfectSimulationOracle()
     prediction = oracle.predict_for_selection(oracle_context, rows, training)
@@ -151,11 +152,12 @@ def test_physical_failures_continue_through_later_gpsaf_generations(tmp_path):
         stream.write(
             "\nclass NumericalFailure(RuntimeError):\n    pass\n"
             "PHYSICAL_FAILURE_TYPES = (NumericalFailure,)\n"
-            "_finite_evaluation = evaluate_rawdata\n"
-            "def evaluate_rawdata(parameters, context):\n"
+            "_finite_evaluation = _EvaluationSession.evaluate_rawdata\n"
+            "def _failed_evaluation(self, parameters, context):\n"
             f"    if parameters[{midpoint.name!r}] > {float(midpoint.value)!r}:\n"
             "        raise NumericalFailure('numerical divergence')\n"
-            "    return _finite_evaluation(parameters, context)\n"
+            "    return _finite_evaluation(self, parameters, context)\n"
+            "_EvaluationSession.evaluate_rawdata = _failed_evaluation\n"
         )
     with (workspace / "config.py").open("a", encoding="utf-8") as stream:
         stream.write("\nOPTIMIZE_POPULATION_SIZE = 12\nOPTIMIZE_SMOKE_TEST_ENABLED = False\nFAST_EVALUATION_MAX_WORKERS = 2\n")

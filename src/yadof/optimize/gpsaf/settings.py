@@ -13,7 +13,7 @@ class GPSAFSettings:
     beta: int
     gamma: float
     exploration_fraction: float
-    infill_selection: str = "cluster"
+    infill_selection: str = "hypervolume"
 
 
 def create_settings(
@@ -22,7 +22,7 @@ def create_settings(
     beta: int,
     gamma: float,
     exploration_fraction: float,
-    infill_selection: str = "cluster",
+    infill_selection: str = "hypervolume",
 ) -> GPSAFSettings:
     factory = "gpsaf_settings"
     return GPSAFSettings(

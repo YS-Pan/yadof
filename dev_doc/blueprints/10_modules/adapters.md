@@ -48,11 +48,13 @@ required beyond yadof's core NumPy dependency.
 ## External Python simulator boundary
 
 The self-contained `chrono_com.py` resource resolves only the configured absolute
-interpreter and crosses the process/runtime boundary through bounded versioned JSON
-and schema-compatible NPZ. It isolates scratch, environment, and process trees;
-validates child evidence; and preserves backend-equivalent publication. Its
-`worker_main()` helper lets task-owned `chrono_worker.py` import PyChrono only after
-request validation. Neither runtime imports the other's framework, and no
+interpreter. `PyChronoSession` crosses the resident process boundary through bounded
+versioned JSON headers and complete numeric-array bytes, without an NPZ round trip.
+`resident_worker_main()` loads the native runtime once and invokes a fresh physical
+calculation with candidate-owned scratch each time. The one-shot `run_pychrono()`
+and `worker_main()` pair retains its JSON/NPZ contract. Both isolate environment and
+process trees, validate complete rawData, and preserve backend-equivalent publication.
+Neither runtime imports the other's framework, and no
 Conda/yadof dependency is added.
 
 The high-level process boundary is part of root architecture. Task-authoring usage

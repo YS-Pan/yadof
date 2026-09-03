@@ -11,3 +11,9 @@ subtype in `PHYSICAL_FAILURE_TYPES` so a real oracle can represent physical
 failures consistently without masking programming or deployment faults.
 
 Keep the benchmark's copied standalone adapter synchronized with this resource.
+
+`rawdata_payload()` converts a run result, parsed plot, or rawfile to one named
+schema-valid memory payload. A task can parse a plot once and export multiple
+vectors without an NPZ read/write round trip. `save_result()` uses the same
+conversion before atomic file publication. Each simulation still launches one
+ngspice batch process; no resident solver state or result cache is introduced.

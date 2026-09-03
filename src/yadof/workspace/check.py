@@ -200,7 +200,7 @@ def _check_task(config: LoadedConfig, findings: list[CheckFinding]) -> None:
                 findings,
                 "ok",
                 "fast task kernel",
-                f"callable evaluate_rawdata() in {kernel_path}",
+                f"versioned resident evaluation session in {kernel_path}",
             )
 
     workflow_path = config.workspace.job_template_dir / "workflow.py"

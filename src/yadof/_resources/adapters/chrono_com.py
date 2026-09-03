@@ -14,17 +14,21 @@ validated the request.
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import math
 import os
+import queue
 import re
 import shutil
 import signal
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
 import uuid
@@ -38,6 +42,8 @@ import numpy as np
 
 PROTOCOL = "yadof.pychrono-subprocess"
 PROTOCOL_VERSION = 1
+SESSION_PROTOCOL = "yadof.pychrono-session/v1"
+MAX_MEMORY_BYTES = 67_108_864
 RAWDATA_SCHEMA_VERSION = 1
 MAX_REQUEST_BYTES = 1_048_576
 MAX_RESULT_BYTES = 262_144
@@ -592,6 +598,316 @@ def worker_main(
         _write_worker_error(result_path, request_id, "publication_error", str(exc))
         return 4
     return 0
+
+
+def _write_frame(stream, header, payload=b""):
+    encoded = _encode_json({"session_protocol": SESSION_PROTOCOL, **header},
+                           maximum=MAX_REQUEST_BYTES, category="request_invalid")
+    if len(payload) > MAX_MEMORY_BYTES:
+        raise PyChronoError("rawdata_invalid", "resident rawData exceeds the memory limit")
+    stream.write(struct.pack("!IQ", len(encoded), len(payload)))
+    stream.write(encoded)
+    stream.write(payload)
+    stream.flush()
+
+
+def _read_exact(stream, count):
+    parts = []
+    while count:
+        part = stream.read(count)
+        if not part:
+            raise EOFError("resident child closed its transport")
+        parts.append(part)
+        count -= len(part)
+    return b"".join(parts)
+
+
+def _read_frame(stream):
+    header_size, data_size = struct.unpack("!IQ", _read_exact(stream, 12))
+    if not 0 < header_size <= MAX_REQUEST_BYTES or data_size > MAX_MEMORY_BYTES:
+        raise PyChronoError("result_malformed", "resident frame exceeds its bounds")
+    header = _decode_json(_read_exact(stream, header_size), maximum=MAX_REQUEST_BYTES,
+                          category="result_malformed")
+    if header.get("session_protocol") != SESSION_PROTOCOL:
+        raise PyChronoError("result_malformed", "resident protocol mismatch")
+    return header, _read_exact(stream, data_size)
+
+
+def _encode_memory(rawdata):
+    if not isinstance(rawdata, Mapping) or not rawdata:
+        raise PyChronoError("rawdata_invalid", "resident kernel must return named rawData")
+    entries, buffers, total = [], [], 0
+    for name, payload in sorted(rawdata.items()):
+        if not isinstance(name, str) or Path(name).name != name or "\\" in name or not name.endswith(".npz"):
+            raise PyChronoError("rawdata_invalid", "rawData names must be direct NPZ basenames")
+        item = _validate_payload(name, payload)
+        arrays = []
+        for key, value in item.items():
+            array = np.asarray(value)
+            if not isinstance(key, str) or array.dtype.kind not in "biufcSU":
+                raise PyChronoError("rawdata_invalid", "unsupported resident array key or dtype")
+            size = int(array.nbytes)
+            total += size
+            if total > MAX_MEMORY_BYTES:
+                raise PyChronoError("rawdata_invalid", "resident rawData exceeds the memory limit")
+            arrays.append({"key": key, "dtype": array.dtype.str, "shape": list(array.shape), "bytes": size})
+            buffers.append(array.tobytes(order="C"))
+        entries.append({"name": name, "arrays": arrays})
+    return entries, b"".join(buffers)
+
+
+def _decode_memory(entries, payload):
+    if not isinstance(entries, list) or not entries:
+        raise PyChronoError("rawdata_invalid", "resident result has no rawData entries")
+    rawdata, offset = {}, 0
+    for entry in entries:
+        name = entry["name"]
+        if (not isinstance(name, str) or Path(name).name != name or "\\" in name
+                or not name.endswith(".npz") or name in rawdata):
+            raise PyChronoError("rawdata_invalid", "duplicate or invalid resident rawData name")
+        item = {}
+        for descriptor in entry["arrays"]:
+            key, shape = descriptor["key"], descriptor["shape"]
+            dtype = np.dtype(descriptor["dtype"])
+            if (not isinstance(key, str) or key in item or dtype.kind not in "biufcSU"
+                    or not isinstance(shape, list) or len(shape) > 32
+                    or any(type(value) is not int or value < 0 for value in shape)):
+                raise PyChronoError("rawdata_invalid", "invalid resident array descriptor")
+            size = math.prod(shape) * dtype.itemsize
+            if size != descriptor["bytes"] or offset + size > len(payload):
+                raise PyChronoError("rawdata_invalid", "resident array length mismatch")
+            item[key] = np.frombuffer(payload, dtype=dtype, count=math.prod(shape), offset=offset).reshape(shape).copy()
+            offset += size
+        rawdata[name] = _validate_payload(name, item)
+    if offset != len(payload):
+        raise PyChronoError("rawdata_invalid", "unexpected resident payload tail")
+    return rawdata
+
+
+class PyChronoSession:
+    """One external interpreter, serial requests, and complete in-memory rawData.
+
+    A handled physical failure leaves the process reusable. Timeout/crash closes
+    the process and the next request starts a clean replacement. Nothing caches a
+    candidate's numerical output. The task rebuilds its physical system each time.
+    """
+
+    def __init__(self, worker, *, scratch_root, interpreter=None, environment=None):
+        self.worker = _resolved_worker(worker)
+        self.environment = dict(environment or {})
+        self.interpreter = resolve_interpreter(interpreter, environment=_child_environment(environment))
+        root = _scratch_root(scratch_root, self.interpreter)
+        self.scratch = Path(tempfile.mkdtemp(prefix="pychrono-session-", dir=root)).resolve()
+        self.launch_alias = None
+        self.process = None
+        self._threads = []
+        self._lock = threading.RLock()
+        self._closed = False
+        self._stderr = b""
+        self._stderr_bytes = 0
+        self._calls = 0
+
+    def _start(self):
+        # A resident child can switch to its explicit scratch after startup.
+        # No external junction can outlive a force-killed owning worker.
+        launch = self.scratch
+        if os.name == "nt" and len(str(launch)) > _WINDOWS_MAX_CURRENT_DIRECTORY_CHARS:
+            launch = Path(tempfile.gettempdir()).resolve()
+        try:
+            self.process = subprocess.Popen(
+                [str(self.interpreter), "-u", str(self.worker), "--resident"],
+                # Windows venv launchers also need short bootstrap TEMP/TMP.
+                # The child switches both variables to owned candidate scratch.
+                cwd=str(launch), env=_child_environment(self.environment, scratch=launch, interpreter=self.interpreter),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                start_new_session=os.name != "nt",
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+            )
+        except OSError as exc:
+            raise PyChronoError("launch_failed", f"could not start resident PyChrono: {exc}") from exc
+        self._responses = queue.Queue(maxsize=1)
+        self._stderr = b""
+        self._stderr_bytes = 0
+
+        def read_responses(stream, responses):
+            try:
+                while True:
+                    responses.put(_read_frame(stream))
+            except BaseException as exc:
+                # At most one outstanding request; do not keep a dead reader
+                # blocked behind the final response while the owner closes.
+                try:
+                    responses.put_nowait(exc)
+                except queue.Full:
+                    pass
+
+        def read_diagnostics(stream):
+            while True:
+                part = stream.read1(4096)
+                if not part:
+                    return
+                self._stderr_bytes += len(part)
+                self._stderr = (self._stderr + part)[-MAX_DIAGNOSTIC_BYTES:]
+
+        self._threads = [
+            threading.Thread(target=read_responses, args=(self.process.stdout, self._responses), daemon=True),
+            threading.Thread(target=read_diagnostics, args=(self.process.stderr,), daemon=True),
+        ]
+        for thread in self._threads:
+            thread.start()
+        # Keep long scratch paths off the Windows venv-launcher command line.
+        _write_frame(self.process.stdin, {"session_dir": str(self.scratch)})
+
+    def evaluate_rawdata(self, parameters, *, timeout=None, evaluation_id=None, backend="fast"):
+        with self._lock:
+            if self._closed:
+                raise PyChronoError("session_closed", "PyChrono session is closed")
+            started = time.monotonic()
+            timeout = _timeout_value(timeout)
+            request = build_request(parameters, backend=backend, evaluation_id=evaluation_id)
+            try:
+                if self.process is None:
+                    self._start()
+                elif self.process.poll() is not None:
+                    raise PyChronoError("child_process_error", "resident child exited between evaluations")
+                _write_frame(self.process.stdin, {"request": request})
+                remaining = None if timeout is None else max(0.0, timeout - (time.monotonic() - started))
+                try:
+                    response = self._responses.get(timeout=remaining)
+                except queue.Empty as exc:
+                    raise PyChronoSimulationError("timeout", f"PyChrono child exceeded timeout={timeout:g} seconds") from exc
+                if isinstance(response, BaseException):
+                    raise PyChronoError("child_process_error", f"resident transport failed: {response}") from response
+                header, payload = response
+                if header.get("request_id") != request["request_id"]:
+                    raise PyChronoError("result_malformed", "resident result request identity mismatch")
+                if header.get("status") == "error":
+                    error = header.get("error", {})
+                    error_class = PyChronoSimulationError if error.get("code") == "physical_failure" else PyChronoError
+                    raise error_class("child_reported_error", str(error.get("message", "resident task error")),
+                                      details={"child_error": error})
+                if header.get("status") != "ok" or not isinstance(header.get("diagnostics"), Mapping):
+                    raise PyChronoError("result_malformed", "invalid resident result status or diagnostics")
+                try:
+                    rawdata = _decode_memory(header.get("rawdata"), payload)
+                except (KeyError, TypeError, ValueError, OverflowError) as exc:
+                    raise PyChronoError("rawdata_invalid", f"invalid resident memory descriptor: {exc}") from exc
+                self._calls += 1
+                return rawdata, {
+                    "backend": backend, "session_protocol": SESSION_PROTOCOL,
+                    "request_id": request["request_id"], "resident_pid": self.process.pid,
+                    "resident_successful_calls": self._calls, "elapsed_sec": time.monotonic() - started,
+                    "child": dict(header["diagnostics"]), "rawdata_files": sorted(rawdata),
+                    "stderr_tail": self._stderr.decode("utf-8", errors="replace"),
+                    "stderr_truncated": self._stderr_bytes > MAX_DIAGNOSTIC_BYTES,
+                }
+            except BaseException as exc:
+                if not isinstance(exc, PyChronoSimulationError) or exc.category == "timeout":
+                    self._stop_process()
+                if isinstance(exc, PyChronoError):
+                    exc.stderr_tail = self._stderr.decode("utf-8", errors="replace")
+                    raise
+                if isinstance(exc, (OSError, EOFError)):
+                    raise PyChronoError("child_process_error", str(exc)) from exc
+                raise
+
+    def _stop_process(self):
+        process, self.process = self.process, None
+        if process is not None:
+            try:
+                process.stdin.close()
+                process.wait(timeout=0.5)
+            except (OSError, subprocess.TimeoutExpired):
+                _terminate_process_tree(process)
+                process.wait(timeout=_TERMINATION_WAIT_SEC)
+            for thread in self._threads:
+                thread.join(timeout=1.0)
+            for stream in (process.stdout, process.stderr):
+                stream.close()
+            self._threads = []
+        if self.launch_alias is not None:
+            self.launch_alias.rmdir()
+            self.launch_alias = None
+
+    def close(self):
+        with self._lock:
+            if not self._closed:
+                try:
+                    self._stop_process()
+                finally:
+                    self._closed = True
+                    error = _remove_scratch(self.scratch)
+                    if error:
+                        raise PyChronoError("cleanup_failed", error)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+def resident_worker_main(simulate, argv=None):
+    """Serve a task's memory kernel in one interpreter; never unpickle input.
+
+    ``simulate(request)`` returns (named rawData, JSON diagnostics). Native and
+    Python stdout go to bounded parent diagnostics, away from the binary channel.
+    Each call gets fresh temporary scratch and must construct a fresh system.
+    """
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--resident", action="store_true", required=True)
+    parser.parse_args(argv)
+    sys.stdout.flush()
+    transport = os.fdopen(os.dup(sys.stdout.fileno()), "wb", buffering=0)
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+    initial, initial_payload = _read_frame(sys.stdin.buffer)
+    if initial_payload or not isinstance(initial.get("session_dir"), str):
+        raise PyChronoError("request_invalid", "resident session initialization is invalid")
+    base = Path(initial["session_dir"]).resolve(strict=True)
+    if not base.is_dir():
+        raise PyChronoError("request_invalid", "resident session scratch must be a directory")
+    os.chdir(base)
+    try:
+        while True:
+            try:
+                header, payload = _read_frame(sys.stdin.buffer)
+            except EOFError:
+                return 0
+            request = header.get("request")
+            if payload or not isinstance(request, Mapping):
+                raise PyChronoError("request_invalid", "invalid resident request")
+            _validate_request_document(request)
+            response = {"request_id": request["request_id"]}
+            data = b""
+            try:
+                with tempfile.TemporaryDirectory(prefix="candidate-", dir=base) as scratch:
+                    os.chdir(scratch)
+                    os.environ["TMP"] = os.environ["TEMP"] = scratch
+                    try:
+                        rawdata, diagnostics = simulate(request)
+                        if not isinstance(diagnostics, Mapping):
+                            raise TypeError("resident diagnostics must be a mapping")
+                        entries, data = _encode_memory(rawdata)
+                        response.update(status="ok", rawdata=entries, diagnostics=dict(diagnostics))
+                    finally:
+                        os.chdir(base)
+                        os.environ["TMP"] = os.environ["TEMP"] = str(base)
+            except Exception as exc:
+                response.update(status="error", error={
+                    "code": "physical_failure" if isinstance(exc, PyChronoSimulationError) else "task_error",
+                    "type": type(exc).__name__, "message": str(exc)[:4000],
+                    "traceback_tail": traceback.format_exc()[-8000:],
+                })
+                data = b""
+            finally:
+                # SWIG ownership may contain cycles; do not accumulate systems.
+                gc.collect()
+            _write_frame(transport, response, data)
+            # Do not keep the last candidate alive across the next simulation.
+            rawdata = diagnostics = entries = response = data = None
+    finally:
+        transport.close()
 
 
 def _parameter_mapping(
@@ -1161,6 +1477,12 @@ def _validate_npz(path: Path) -> dict[str, object]:
             payload = {key: archive[key].copy() for key in archive.files}
     except Exception as exc:
         raise PyChronoError("rawdata_invalid", f"invalid NPZ {path.name}: {exc}") from exc
+    return _validate_payload(path.name, payload)
+
+
+def _validate_payload(name: str, payload: Mapping[str, object]) -> dict[str, object]:
+    path = Path(name)
+    payload = dict(payload)
     if "metadata" not in payload:
         raise PyChronoError("rawdata_invalid", f"{path.name} has no metadata")
     metadata_array = np.asarray(payload["metadata"])
@@ -1345,6 +1667,9 @@ def _write_worker_error(
 
 
 __all__ = [
+    "SESSION_PROTOCOL",
+    "PyChronoSession",
+    "resident_worker_main",
     "PyChronoSimulationError",
     "MAX_DIAGNOSTIC_BYTES",
     "MAX_REQUEST_BYTES",

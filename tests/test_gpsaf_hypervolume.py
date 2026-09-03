@@ -26,11 +26,12 @@ from test_explicit_search_primitives import (
 
 def test_hypervolume_settings_are_explicit_and_validated():
     default = gpsaf_settings()
-    explicit = gpsaf_settings(infill_selection="cluster")
+    explicit = gpsaf_settings(infill_selection="hypervolume")
     assert default == explicit
     controlled = gpsaf_settings(infill_selection=" HYPERVOLUME ")
     assert asdict(controlled)["infill_selection"] == "hypervolume"
-    assert default != controlled
+    assert default == controlled
+    assert default != gpsaf_settings(infill_selection="cluster")
     with pytest.raises(ValueError, match="gpsaf_settings.*infill_selection"):
         gpsaf_settings(infill_selection="unknown")
     with pytest.raises(TypeError, match="gpsaf_settings.*infill_selection"):
@@ -118,6 +119,14 @@ def test_hypervolume_infill_keeps_queries_exploration_and_prediction_bindings(mo
     for row, predicted in zip(selected.population[:-1], selected.predicted_costs[:-1]):
         assert predicted == predictions[row]
     assert context.history == HISTORY_MULTI
+    default = select_gpsaf_generation(
+        context, search=pymoo_nsga3(), surrogate=_GoldenDeterministicSurrogate(),
+        settings=gpsaf_settings(alpha=3, beta=2, exploration_fraction=0.25),
+        training_data=training, error_state=GPSAFErrorState(initial_error=(0.0, 0.0)),
+    )
+    assert default.population == selected.population
+    assert default.predicted_costs == selected.predicted_costs
+    assert default.diagnostics == selected.diagnostics
 
 
 @pytest.mark.parametrize("beta,errors", ((0, (0.0, 0.0)), (2, None)))

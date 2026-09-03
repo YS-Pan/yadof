@@ -34,7 +34,7 @@ def _workspace(tmp_path: Path, *, smoke: bool = False) -> Path:
     optimization_path = root / "submit/optimization.py"
     optimization_path.write_text(
         optimization_path.read_text(encoding="utf-8").replace(
-            "settings = gpsaf_settings()",
+            'settings = gpsaf_settings(infill_selection="hypervolume")',
             "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
         ),
         encoding="utf-8",

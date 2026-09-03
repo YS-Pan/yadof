@@ -44,8 +44,10 @@ returns immutable finalized rows, cancel signals transport-specific cleanup, and
 close releases the generation lease. The synchronous population and smoke APIs are
 facades over this same lifecycle.
 
-- **Fast evaluation** runs task-owned evaluators in reusable isolated local worker
-  processes and returns named memory-backed rawData. It creates no durable
+- **Fast evaluation** runs versioned task sessions in campaign-owned isolated local
+  worker processes. Compatible task and simulator sessions survive generations;
+  close/invalidation reaps their process trees. Each candidate returns named
+  memory-backed rawData through the common finalizer. It creates no durable
   per-candidate job directory.
 - **Local evaluation** creates a prepared job and launches its task workflow on the
   submit host.

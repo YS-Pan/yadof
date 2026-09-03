@@ -34,7 +34,7 @@ def _small_workspace(root: Path) -> Path:
     source = source.replace('"beta": 3', '"beta": 0')
     source = source.replace('"exploration_fraction": 0.10', '"exploration_fraction": 0.0')
     source = source.replace(
-        "settings = gpsaf_settings()",
+        'settings = gpsaf_settings(infill_selection="hypervolume")',
         "settings = gpsaf_settings(alpha=1, beta=0, exploration_fraction=0.0)",
     )
     optimization_path.write_text(source, encoding="utf-8")

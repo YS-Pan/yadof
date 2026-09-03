@@ -212,7 +212,10 @@ metadata. Submit-side code strictly restores/validates it before persistence.
 
 Parameter assignment, fast worker/task, preparation, workflow, timeout, submit,
 hold, archive, validation, recording, and cost failures remain per individual. A
-failed fast worker/process tree is killed and replaced. Standard memory/disk holds may trigger bounded
+crashed, timed-out or cancelled fast worker tree is killed and replaced. Declared
+physical failures retain a usable resident session; other task errors replace it.
+Compatible campaign-owned sessions survive generations and close before snapshot
+teardown. Standard memory/disk holds may trigger bounded
 fresh-cluster retries; other failures do not. Population order/objective width is
 stable regardless of completion order.
 

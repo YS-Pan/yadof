@@ -10,11 +10,15 @@ that you compose in ordinary Python.
 Use it for problems such as antenna design, circuit tuning, and multibody
 dynamics, where each simulation matters and the design objectives may evolve.
 
-[**Release 0.5.1**](https://github.com/YS-Pan/yadof/releases/tag/v0.5.1) ·
+**Source version 0.6.0** ·
 Python **3.10+** ·
 [Quick start](#try-the-starter-task) ·
 [User guide](user_doc/README.md) ·
 [Examples](examples/README.md)
+
+Version 0.6 introduces resident fast task sessions and makes greedy hypervolume
+the default GPSAF selection policy. Existing fast workspaces should follow the
+[migration guide](user_doc/migration_0_6.md).
 
 ## Why yadof?
 
@@ -49,12 +53,13 @@ outputs pass through the current task's cost function.
 
 ## Try the starter task
 
-Use a Python 3.10+ environment. Download
-[`yadof-0.5.1-py3-none-any.whl`](https://github.com/YS-Pan/yadof/releases/download/v0.5.1/yadof-0.5.1-py3-none-any.whl)
-into your current directory, then install it:
+Use a Python 3.10+ environment. From this source checkout, build and install the
+current wheel:
 
 ```powershell
-python -m pip install "./yadof-0.5.1-py3-none-any.whl[surrogate,plot]"
+python -m pip install build
+python -m build --wheel
+python -m pip install "./dist/yadof-0.6.0-py3-none-any.whl[surrogate,plot]"
 python -m yadof version
 ```
 

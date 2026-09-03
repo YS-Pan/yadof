@@ -608,7 +608,7 @@ def test_explicit_gpsaf_selection_and_training_use_only_materialized_data() -> N
         context,
         search=pymoo_nsga3(reference_direction_partitions=3),
         surrogate=surrogate,
-        settings=gpsaf_settings(
+        settings=gpsaf_settings(infill_selection="cluster",
             alpha=2,
             beta=1,
             gamma=0.5,
@@ -659,7 +659,7 @@ def test_gpsaf_reproducibility_and_gamma_cluster_probabilities() -> None:
             generation_index=generation,
             population_size=4,
             seed=seed,
-            settings=create_gpsaf_settings(
+            settings=create_gpsaf_settings(infill_selection="cluster",
                 alpha=3,
                 beta=2,
                 gamma=gamma,
@@ -684,13 +684,13 @@ def test_gpsaf_reproducibility_and_gamma_cluster_probabilities() -> None:
     assert diagnostics["exploration_count"] == 1
     assert len(population) == len(set(population)) == 4
 
-    first_settings = gpsaf_settings(
+    first_settings = gpsaf_settings(infill_selection="cluster",
         alpha=3,
         beta=2,
         gamma=0.5,
         exploration_fraction=0.25,
     )
-    second_settings = gpsaf_settings(
+    second_settings = gpsaf_settings(infill_selection="cluster",
         alpha=3,
         beta=2,
         gamma=0.9,

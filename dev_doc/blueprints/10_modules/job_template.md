@@ -20,11 +20,15 @@ objective, posterior model, or acquisition rule.
   lifecycle/error metadata, execute-side `execute_machine`, rawData preparation,
   and flat `rawData.zip`. The task file must not duplicate these mechanisms or
   write cost.
-- Optional `job_template/evaluation.py` declares fast compatibility through callable
-  `evaluate_rawdata(parameters, context)`. It receives a read-only named-value
+- Optional `job_template/evaluation.py` declares `YADOF_FAST_API` as
+  `yadof.fast.session/v1` and exports `create_evaluation_session(context)`.
+  `fast_session.py` validates the declaration and owns the loaded module/session
+  context. The object has `evaluate_rawdata(parameters, context)` and `close()`;
+  the module-level legacy function alone is rejected. Each call receives a read-only named-value
   mapping and a context without job paths, then returns unique direct `.npz`
   basenames mapped to schema-valid memory payloads plus optional JSON diagnostics.
-  A normal `workflow.py` may call the same kernel and serialize those payloads so
+  A normal `workflow.py` creates a session, calls the same kernel, closes it in
+  `finally`, and serializes those payloads so
   fast/local task algorithms do not drift.
 - `submit/calc_cost.py` reports objective names and contains task-specific rawData
   interpretation, objective definitions, thresholds, and calculators. It cannot

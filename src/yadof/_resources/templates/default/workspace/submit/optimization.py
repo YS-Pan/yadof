@@ -26,6 +26,7 @@ YADOF_OPTIMIZATION_PROGRAM = {
         "beta": 3,
         "gamma": 0.5,
         "exploration_fraction": 0.10,
+        "infill_selection": "hypervolume",
     },
     "capabilities": ("real-evaluation", "conditional-inr", "gpsaf"),
 }
@@ -34,7 +35,7 @@ YADOF_OPTIMIZATION_PROGRAM = {
 def optimization_program(context):
     search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())
     surrogate = conditional_inr()
-    settings = gpsaf_settings()
+    settings = gpsaf_settings(infill_selection="hypervolume")
     training_enabled = settings.alpha > 1 or settings.beta > 0
     error_state = GPSAFErrorState()
     with context.run_scope() as run:

@@ -35,6 +35,11 @@
   retain their normal-boundary `wait`/`cancel` policy, reject a later generation
   while any registered handle remains open, expose `finish_generation()`, and
   cancel/close all handles before writer shutdown and snapshot deletion.
+- Lazily own named closeable evaluation resources. Compatible fast pools survive
+  generation boundaries; a changed evaluation fingerprint closes all such pools
+  before the next generation. Cost-only interpretation does not invalidate them.
+  Close resources after handles and before recorder/snapshot teardown, surfacing
+  cleanup errors rather than silently losing them.
 
 ## Invariants
 

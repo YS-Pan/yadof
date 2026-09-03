@@ -18,6 +18,7 @@ EXPECTED_WORKSPACE_FILES = {
     ".yadof/workspace.json",
     "config.py",
     "job_template/parameters_constraints.py",
+    "job_template/evaluation.py",
     "job_template/workflow.py",
     "submit/calc_cost.py",
     "submit/optimization.py",

@@ -367,7 +367,7 @@ def _dispatch_fast(
     snapshot: GenerationTaskSnapshot,
     cancel_event: threading.Event,
 ) -> tuple[JobResult, ...]:
-    from .fast_runner import run_fast_population
+    from .fast_runner import FastWorkerPool, run_fast_population
 
     validate_fast_task(config.workspace)
     rows = tuple(population)
@@ -393,6 +393,7 @@ def _dispatch_fast(
             generation_index=generation_index,
             on_result=coordinator.accept,
             cancel_event=cancel_event,
+            pool=session.evaluation_resource("formal-fast", FastWorkerPool),
         )
         finalized = coordinator.finish()
     except BaseException:

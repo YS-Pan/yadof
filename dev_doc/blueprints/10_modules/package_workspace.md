@@ -34,8 +34,9 @@ the fixed lifecycle metadata. The generic cost module demonstrates package
 files, task and optimization-source contracts, disjoint paths, and optional static rawData diagnostics.
 It parses the exact literal program declaration without importing or executing the
 source.
-When fast is selected, check also requires callable task-owned
-`evaluation.py:evaluate_rawdata()` and a scratch path disjoint from task/jobs/history.
+When fast is selected, check also requires the task-owned, versioned
+`evaluation.py` session factory and a scratch path disjoint from
+task/jobs/history. The template shares its session kernel with the prepared workflow.
 Additional user-created directories for task helpers, debugging evidence, and
 exported artifacts may coexist below the workspace root. Init/check do not reject
 or claim them, configured reserved paths retain their framework meaning, and only

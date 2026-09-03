@@ -183,8 +183,11 @@ disables the timeout and caps fast at one worker.
 
 `FAST_EVALUATION_SCRATCH_DIR` defaults to `.yadof/fast_scratch`. It may be absolute
 or workspace-relative but must not overlap `submit`, `job_template`, `jobs`,
-`recorded_data`, checkpoints, logs, or tool output. Candidate subdirectories are temporary and normally leave the root
-empty. A cleanup failure is persisted as `scratch_cleanup_error`; inspect it rather
+`recorded_data`, checkpoints, logs, or tool output. Candidate subdirectories are temporary. Campaign-owned session directories remain
+while compatible workers are idle between generations and are removed on close.
+Task/model/adapter or simulation configuration changes invalidate sessions at the
+next generation boundary; cost-only source changes retain simulation resources.
+See [migration_0_6.md](migration_0_6.md). A cleanup failure is persisted as `scratch_cleanup_error`; inspect it rather
 than silently deleting evidence elsewhere. Fast subprocess environment overrides
 are applied only inside a worker evaluation and restored before worker reuse.
 
@@ -308,7 +311,7 @@ An optimization program and its declared helpers are different: their
 bytes are frozen once for the complete `yadof run` command. To load a program edit,
 let the current command stop at a complete generation, then start a new command at
 the exact next generation. The removed 0.4.x factory path is not reloaded or
-accepted by 0.5.0.
+accepted by the current release.
 
 The corrected task is allowed to define a different optimization problem. Yadof
 does not evaluate “scientific equivalence” between the old and new versions. It

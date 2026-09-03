@@ -97,9 +97,10 @@
   error estimator lifecycle; finite true generation history reconstructs the
   underlying optimizer through one tell per generation. A declared physical
   failure is distinct from a fatal prediction/interface contract error.
-  Its opt-in hypervolume infill policy uses bound predicted means and supplied
+  Its default greedy-hypervolume infill policy uses bound predicted means and supplied
   real history to cover the fixed unit reference box through pymoo indicators;
-  it adds no surrogate evaluations or durable evidence.
+  it adds no surrogate evaluations or durable evidence. Explicit cluster selection
+  retains the paper-derived PKT/gamma policy and its random stream.
 - `task_snapshot` classifies frozen program sources away from the
   generation-reloaded interpretation/evaluation task copy. It merges program
   provenance into the complete source record while keeping the program and

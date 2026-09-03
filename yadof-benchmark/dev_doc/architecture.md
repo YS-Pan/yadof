@@ -145,6 +145,20 @@ Oracle prediction events retain failed normalized candidates without entering
 the formal recorder. The perfect summary explicitly accepts failed cells and
 cannot change their validity or terminal status.
 
+Perfect screening uses a distinct campaign-owned `FastWorkerPool` through the
+same versioned task-session interface and immutable candidate protocol as formal
+fast evaluation. Its completion consumer computes current cost from
+`StructuredRawDataSample.cost_items()` without a recorder. Compatible interpreter
+and native sessions survive prediction calls/generations; each simulation remains
+a fresh physical call. Query rows, physical calls, zero cache hits and wall time
+are audited separately from formal attempts. Interface faults abort prediction;
+only typed physical failure or timeout can become an invalid prediction.
+
+The perfect GPSAF strategy explicitly freezes greedy-HV infill, matching the
+framework default while preserving alpha=3, beta=3, gamma=0.5, exploration=0.10
+and the existing genetic operators. A paired reference supplies the strict final
+cumulative top-ten threshold. Screening never changes that formal budget or metric.
+
 ## Persistence
 
 All mutable lifecycle state is atomically written to `state.json`. Command logs

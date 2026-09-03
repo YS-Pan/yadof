@@ -207,7 +207,16 @@ continuation, candidate/design/evidence identity separation, wrong-root rejectio
 bounded exhaustion, typed prediction separation, pymoo ask/tell/survival ownership,
 warm-start/later offspring, and unchanged GPSAF gamma selection semantics.
 
-`test_gpsaf_hypervolume.py` checks the optional coverage policy against small
+`test_resident_fast_sessions.py` checks module/session reuse, A/B/A independence,
+physical-failure recovery, cost-only reload, model/config invalidation, legacy
+protocol rejection, idle-crash replacement and campaign cleanup.
+`test_pychrono_resident_contract.py` uses deterministic fake physical resources to
+check external-runtime reuse, bounded native diagnostics, timeout/crash/contract
+classification, replacement and long Windows scratch without external junctions.
+The evaluation-handle tests cover active cancellation through the same pool.
+
+`test_gpsaf_hypervolume.py` checks omitted settings against explicit hypervolume
+selection and checks the default coverage policy against small
 geometric examples, real-history conditioning, marginal batch selection, finite
 penalties and invalid fallback, unchanged prediction requests, exploration quota,
 candidate/prediction binding and inactive-beta behavior. Physical optimization

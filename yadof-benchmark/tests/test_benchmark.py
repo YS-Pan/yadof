@@ -1794,4 +1794,4 @@ def test_timeout_fails_one_cell_continues_independent_cell_and_fails_workspace(
 
 
 def test_distribution_version() -> None:
-    assert benchmark.__version__ == "0.5.0"
+    assert benchmark.__version__ == "0.6.0"

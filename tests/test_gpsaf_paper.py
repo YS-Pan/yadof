@@ -54,7 +54,7 @@ def test_gamma_controls_cluster_replacement():
     assert replacement_probabilities((0, 1, 4), 1.0) == (0.0, 0.25, 1.0)
     assert replacement_probabilities((0, 1, 4), 0.0) == (0.0, 1.0, 1.0)
     assert replacement_probabilities((0, 0), 0.5) == (0.0, 0.0)
-    assert gpsaf_settings(gamma=2.0).gamma == 2.0
+    assert gpsaf_settings(infill_selection="cluster", gamma=2.0).gamma == 2.0
 
 
 def test_alpha_only_competes_at_corresponding_positions():
@@ -68,7 +68,7 @@ def test_alpha_only_competes_at_corresponding_positions():
             self.calls += 1
             return replace(prediction, costs=costs, intervals=tuple(tuple((v, v) for v in r) for r in costs))
     selected, _, info = run_alpha_phase(base, 2, surrogate=Provider(), generation_context=context,
-        settings=gpsaf_settings(alpha=2), training_data=SurrogateTrainingData(("a", "b"), (), ()))
+        settings=gpsaf_settings(infill_selection="cluster", alpha=2), training_data=SurrogateTrainingData(("a", "b"), (), ()))
     assert info["alpha_selected_indices"] == (0, 3)  # pooled survival would select 0, 2
     assert len(selected.population) == 2
 
@@ -77,7 +77,7 @@ def test_beta_clusters_all_advances_without_leaking_simulated_state():
     context = _context(ProblemInfo(2, 2, ("a", "b")), history=HISTORY_MULTI, generation=1, seed=11)
     base = prepare_search(context, pymoo_nsga3())
     provider, training = _GoldenDeterministicSurrogate(), SurrogateTrainingData(("a", "b"), (), ())
-    settings = gpsaf_settings(alpha=2, beta=3, gamma=0)
+    settings = gpsaf_settings(infill_selection="cluster", alpha=2, beta=3, gamma=0)
     anchors, prediction, _ = run_alpha_phase(base, 4, surrogate=provider, generation_context=context, settings=settings, training_data=training)
     real_pop = anchors.state._runtime.algorithm.pop.get("F").copy()
     real_gen = anchors.state._runtime.algorithm.n_gen
@@ -113,7 +113,7 @@ def test_gamma_changes_actual_beta_replacement_for_controlled_clusters(monkeypat
     from yadof.optimize.gpsaf import phases
     context = _context(ProblemInfo(2, 2, ("a", "b")), history=HISTORY_MULTI, generation=1)
     provider, training = _GoldenDeterministicSurrogate(), SurrogateTrainingData(("a", "b"), (), ())
-    settings = gpsaf_settings(alpha=2, beta=3, gamma=0.5)
+    settings = gpsaf_settings(infill_selection="cluster", alpha=2, beta=3, gamma=0.5)
     anchors, prediction, _ = run_alpha_phase(prepare_search(context, pymoo_nsga3()), 4,
         surrogate=provider, generation_context=context, settings=settings, training_data=training)
     monkeypatch.setattr(phases, "assign_clusters", lambda a, c: [list(c[:3]), list(c[3:]), [], []])
@@ -140,7 +140,7 @@ def test_contract_errors_do_not_turn_into_real_fallback():
     with pytest.raises(SurrogateContractError, match="broken cost"):
         surrogate_population(HISTORY_MULTI, generation_context=context, search=pymoo_nsga3(),
             surrogate=Broken(), generation_index=1, population_size=4, seed=101,
-            settings=gpsaf_settings(), training_data=SurrogateTrainingData(("a", "b"), (), ()), error_scales=(0, 0))
+            settings=gpsaf_settings(infill_selection="cluster", ), training_data=SurrogateTrainingData(("a", "b"), (), ()), error_scales=(0, 0))
 
 
 def test_replay_advances_once_per_real_generation():

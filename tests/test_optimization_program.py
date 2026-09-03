@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import numpy as np
 
-def evaluate_rawdata(parameters, context):
+def _kernel(parameters, context):
     del context
     value = float(parameters["input_value"])
     response = np.asarray(value * value, dtype=float)
@@ -43,6 +43,13 @@ def evaluate_rawdata(parameters, context):
             }),
         }
     }
+YADOF_FAST_API = "yadof.fast.session/v1"
+class Session:
+    evaluate_rawdata = staticmethod(_kernel)
+    def close(self):
+        pass
+def create_evaluation_session(context):
+    return Session()
 '''
 
 

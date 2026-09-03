@@ -34,7 +34,7 @@ YADOF_OPTIMIZATION_PROGRAM = {
 def optimization_program(context):
     search = by_objective_count(single=pymoo_ga(), multi=pymoo_nsga3())
     surrogate = conditional_inr()
-    settings = gpsaf_settings(alpha=3, beta=3)
+    settings = gpsaf_settings(infill_selection="hypervolume", alpha=3, beta=3)
     error_state = GPSAFErrorState()
     with context.run_scope() as run:
         for generation_index in run.generations():

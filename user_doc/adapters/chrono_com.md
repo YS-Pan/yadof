@@ -130,29 +130,50 @@ Wrap `_evaluate` with the normal `worker_misc.run_workflow()` lifecycle. The chi
 scratch is unique and is removed on success or failure; it is never durable
 evidence.
 
-## Fast evaluation
+## Resident fast evaluation
 
-Fast mode loads validated NPZ arrays into memory and publishes no job folder:
+Use `PyChronoSession` inside the versioned task session. Its external interpreter
+survives requests while each request reconstructs the physical system. No candidate
+rawData NPZ files are needed on this route:
 
 ```python
 from pathlib import Path
+from chrono_com import PyChronoSession, PyChronoSimulationError
 
-from chrono_com import run_pychrono
+YADOF_FAST_API = "yadof.fast.session/v1"
+PHYSICAL_FAILURE_TYPES = (PyChronoSimulationError,)
 
+class EvaluationSession:
+    def __init__(self, context):
+        self.runtime = PyChronoSession(
+            Path(__file__).with_name("chrono_worker.py"),
+            scratch_root=context["session_dir"], environment=context["environment"])
 
-def evaluate_rawdata(parameters, context):
-    result = run_pychrono(
-        Path(__file__).with_name("chrono_worker.py"),
-        parameters,
-        scratch_root=Path(context["scratch_dir"]) / "pychrono",
-        backend="fast",
-        load_rawdata=True,
-        timeout=context.get("timeout_sec"),
-        environment=context.get("environment"),
-        evaluation_id=context["evaluation_name"],
-    )
-    return result.rawdata, result.as_diagnostics()
+    def evaluate_rawdata(self, parameters, context):
+        return self.runtime.evaluate_rawdata(parameters, timeout=context["timeout_sec"],
+                                            evaluation_id=context["evaluation_name"])
+
+    def close(self):
+        self.runtime.close()
+
+def create_evaluation_session(context):
+    return EvaluationSession(context)
 ```
+
+The child entry calls `resident_worker_main(simulate)`, where `simulate(request)`
+returns `(named_rawData_mapping, diagnostics)`. It uses the same task-owned physical
+function as prepared workflows. Rebuild every Chrono system with its required
+deterministic settings; never warm-start from the previous candidate.
+
+The `yadof.pychrono-session/v1` wire format is bounded JSON descriptors plus array
+bytes, not pickle. RawData schema validation precedes publication. Native stdout is
+separated from the binary transport; diagnostics retain at most 64 KiB. The parent
+owns process-tree closure, while each request has fresh temporary scratch. Physical
+failures preserve the session when possible; timeout/crash requires a fresh process.
+
+The one-shot `run_pychrono()` / file-callback `worker_main()` API remains available
+for tasks that need that adapter capability. It is not a fallback for the removed
+module-level fast task contract.
 
 The adapter removes inherited `PYTHONPATH`, disables user-site and bytecode writes,
 and points `TEMP`/`TMP` at the unique candidate scratch without mutating the parent
@@ -162,12 +183,17 @@ child `PATH` starts with the resolved runtime prefix plus its
 `Library/mingw-w64/bin`, `Library/usr/bin`, `Library/bin`, `Scripts`, and `bin`
 directories, then retains the inherited child `PATH`.
 
-Windows launches also use a unique short directory junction for the child-visible
+One-shot Windows launches also use a unique short directory junction for the child-visible
 working directory, request/result paths, and `TEMP`/`TMP`. The real candidate
 scratch and evidence remain under the caller-selected scratch root, and the adapter
 removes the junction before cleaning that scratch. Workspace, run, strategy, and
 evaluation names therefore do not need manual shortening to keep the PyChrono child
 below the Windows current-directory path limit.
+
+Resident launches instead pass the selected session directory through the initial
+bounded protocol frame and change into it inside the child. A short initial working
+directory and bootstrap `TEMP`/`TMP` avoid launcher limits without creating an external junction that could
+survive forced worker cancellation.
 
 ## Failures and diagnostics
 

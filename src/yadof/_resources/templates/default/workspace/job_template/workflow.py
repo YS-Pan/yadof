@@ -2,29 +2,23 @@
 
 from __future__ import annotations
 
-import json
-
 import numpy as np
 
+from evaluation import create_evaluation_session
 from parameters_constraints import get_parameters
 
 
 def _evaluate(context) -> int:
-    from worker_misc import rawdata_metadata
-
-    values = np.asarray([parameter.value for parameter in get_parameters()], dtype=float)
-    if not np.all(np.isfinite(values)):
-        raise ValueError("starter workflow requires assigned finite parameter values")
-
-    response = np.asarray(float(np.mean(values**2)), dtype=float)
-    np.savez(
-        context.raw_data_dir / "response.npz",
-        values=response,
-        metadata=json.dumps(
-            rawdata_metadata("response", response.shape),
-            sort_keys=True,
-        ),
-    )
+    session = create_evaluation_session({"session_dir": context.temp_dir, "environment": {}})
+    try:
+        payloads = session.evaluate_rawdata(
+            {parameter.name: float(parameter.value) for parameter in get_parameters()},
+            {"evaluation_name": context.base_dir.name, "scratch_dir": context.temp_dir, "environment": {}},
+        )
+        for filename, payload in payloads.items():
+            np.savez(context.raw_data_dir / filename, **payload)
+    finally:
+        session.close()
     return 0
 
 

@@ -25,6 +25,7 @@ from .api import (
     validate_fast_task,
 )
 from .parameters_constraints_class import Parameter
+from .fast_session import FAST_SESSION_API, TaskEvaluationSession, open_evaluation_session
 from .rawdata_contract import (
     RAWDATA_SCHEMA_VERSION,
     NamedRawDataItem,
@@ -51,6 +52,9 @@ from .rawdata_template import (
 )
 
 __all__ = [
+    "FAST_SESSION_API",
+    "TaskEvaluationSession",
+    "open_evaluation_session",
     "FAST_EVALUATION_MODULE_NAME",
     "CostInterpreter",
     "CostNonFiniteError",

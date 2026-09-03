@@ -43,9 +43,15 @@ already observed by the backend remains completed evidence.
 
 ## Backend processes
 
-- **Fast:** reusable local workers receive assigned values and an isolated
-  candidate context, load task evaluator code, and return named memory rawData.
-  Worker crash, timeout, or task failure affects only that candidate and worker.
+- **Fast:** campaign-owned workers load the versioned task module and create its
+  evaluation session once. Compatible sessions survive candidates and generations;
+  each candidate receives immutable assigned values and fresh scratch, and returns
+  named memory rawData. Declared physical failure keeps a usable session; other
+  task errors replace the worker. Crash, timeout and cancellation reap its tree.
+  Evaluation-definition/environment/worker-limit changes invalidate the affected
+  pool; cost-only reinterpretation does not. Campaign close reaps all pools before
+  removing snapshots. External Chrono interpreters may remain resident, but every
+  physical call constructs a fresh system and returns complete arrays in memory.
 - **Local:** the submit host prepares a self-contained job and launches its task
   workflow as a subprocess. Process-tree cleanup and job diagnostics remain local
   backend responsibilities.

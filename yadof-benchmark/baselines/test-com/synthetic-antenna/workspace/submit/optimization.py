@@ -44,7 +44,7 @@ def optimization_program(context):
         bootstrap_members=True,
         bootstrap_fraction=1.0,
     )
-    settings = gpsaf_settings(
+    settings = gpsaf_settings(infill_selection="hypervolume",
         alpha=3,
         beta=3,
         exploration_fraction=0.15,

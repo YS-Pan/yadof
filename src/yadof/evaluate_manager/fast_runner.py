@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime
 import hashlib
@@ -29,9 +29,9 @@ from ..job_template import (
     NamedRawDataItem,
     assign_parameters,
     get_parameter_definition_signature,
+    open_evaluation_session,
     validate_named_rawdata_items,
 )
-from ..task_loader import task_module
 from ..workspace import WorkspaceContext
 from .fast_resources import plan_fast_workers, validate_fast_configuration
 from .job_result import tail
@@ -70,7 +70,73 @@ class _WorkerSlot:
     index: int
     process: multiprocessing.Process
     connection: Any
+    session_dir: Path
     active: _ActiveTask | None = None
+    aborted: bool = False
+
+
+class FastWorkerPool:
+    """Campaign-owned, bounded pool of resident task sessions; no result cache."""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.slots: list[_WorkerSlot] = []
+        self.key = None
+        self.root: Path | None = None
+        self.scratch_root: Path | None = None
+        self.scratch_existed = True
+        self.closed = False
+
+    def prepare(self, config, worker_count, task_signature, env, timeout_sec):
+        key = (task_signature, worker_count, timeout_sec,
+               tuple(sorted({**os.environ, **dict(env or {})}.items())))
+        if self.closed:
+            raise RuntimeError("fast worker pool is closed")
+        if self.key != key or not self.slots:
+            self.reset()
+            self.scratch_root = validate_fast_configuration(config)
+            self.scratch_existed = self.scratch_root.exists()
+            self.scratch_root.mkdir(parents=True, exist_ok=True)
+            self.root = Path(tempfile.mkdtemp(prefix="session-", dir=self.scratch_root))
+            context = multiprocessing.get_context("spawn")
+            try:
+                for index in range(worker_count):
+                    self.slots.append(_spawn_worker(context, index, config.workspace, self.root))
+            except BaseException:
+                self.reset()
+                raise
+            self.key = key
+        return self.slots
+
+    def reset(self) -> None:
+        errors = []
+        for slot in self.slots:
+            try:
+                _stop_worker(slot)
+            except BaseException as exc:
+                errors.append(exc)
+        self.slots = []
+        self.key = None
+        if self.root is not None:
+            error = _cleanup_scratch(self.root)
+            if error:
+                errors.append(RuntimeError(error))
+            self.root = None
+        if self.scratch_root is not None and not self.scratch_existed:
+            try:
+                self.scratch_root.rmdir()
+            except OSError:
+                pass
+        if errors:
+            raise errors[-1]
+
+    def close(self) -> None:
+        with self.lock:
+            if not self.closed:
+                try:
+                    self.reset()
+                finally:
+                    self.closed = True
 
 
 def run_fast_population(
@@ -85,8 +151,32 @@ def run_fast_population(
     generation_index: int | None,
     on_result: ResultConsumer,
     cancel_event: threading.Event | None = None,
+    pool: FastWorkerPool | None = None,
 ) -> None:
     """Execute and stream results to the submit-side recording boundary."""
+
+    owned = pool is None
+    pool = FastWorkerPool() if pool is None else pool
+    with pool.lock:
+        try:
+            _run_fast_population(
+                config, population, timeout_sec=timeout_sec, env=env,
+                max_workers=max_workers, run_id=run_id,
+                optimization_index=optimization_index, generation_index=generation_index,
+                on_result=on_result, cancel_event=cancel_event, pool=pool,
+            )
+        except BaseException:
+            pool.reset()
+            raise
+        finally:
+            if owned:
+                pool.close()
+
+
+def _run_fast_population(
+    config, population, *, timeout_sec, env, max_workers, run_id,
+    optimization_index, generation_index, on_result, cancel_event, pool,
+) -> None:
 
     scratch_root = validate_fast_configuration(config)
     task_signature = _fast_task_signature(config)
@@ -156,16 +246,14 @@ def run_fast_population(
         configured_max=max_workers,
     )
     plan_metadata = plan.metadata()
-    scratch_existed = scratch_root.exists()
-    scratch_root.mkdir(parents=True, exist_ok=True)
     context = multiprocessing.get_context("spawn")
-    slots = [
-        _spawn_worker(context, slot_index, config.workspace)
-        for slot_index in range(plan.worker_count)
-    ]
+    slots = pool.prepare(config, plan.worker_count, task_signature, env, timeout_sec)
+    scratch_root = pool.root
     try:
         while pending or any(slot.active is not None for slot in slots):
-            for slot in slots:
+            for slot_index, slot in enumerate(tuple(slots)):
+                if slot.active is None and not slot.process.is_alive():
+                    slot = slots[slot_index] = _replace_worker(context, slot, config.workspace)
                 if (
                     slot.active is None
                     and pending
@@ -235,10 +323,6 @@ def run_fast_population(
                         continue
                     if response is not None:
                         _observe_worker_tree(slot)
-                        terminate_descendants(
-                            slot.process.pid,
-                            known_descendant_pids=active.observed_pids,
-                        )
                         result = _result_from_worker_response(
                             slot,
                             response,
@@ -252,7 +336,7 @@ def run_fast_population(
                         result = _with_cleanup_diagnostic(result, cleanup_error)
                         on_result(active.task.index, result)
                         slot.active = None
-                        if result.status != "done":
+                        if result.status != "done" and not response.get("physical_failure"):
                             slots[slot_index] = _replace_worker(
                                 context, slot, config.workspace
                             )
@@ -267,6 +351,7 @@ def run_fast_population(
                     and timeout_sec is not None
                     and elapsed >= float(timeout_sec)
                 ):
+                    slot.aborted = True
                     terminate_process_tree(
                         slot.process.pid,
                         known_descendant_pids=active.observed_pids,
@@ -349,6 +434,7 @@ def run_fast_population(
                     if active is None:
                         continue
                     _observe_worker_tree(slot)
+                    slot.aborted = True
                     terminate_process_tree(
                         slot.process.pid,
                         known_descendant_pids=active.observed_pids,
@@ -390,30 +476,29 @@ def run_fast_population(
                     )
                 break
     finally:
-        for slot in slots:
-            _stop_worker(slot)
-        if not scratch_existed:
-            try:
-                scratch_root.rmdir()
-            except OSError:
-                pass
+        if cancel_event is not None and cancel_event.is_set():
+            for slot in slots:
+                slot.aborted = True
+            pool.reset()
 
 
 def _spawn_worker(
     context: multiprocessing.context.BaseContext,
     slot_index: int,
     workspace: WorkspaceContext,
+    session_root: Path,
 ) -> _WorkerSlot:
+    session_dir = Path(tempfile.mkdtemp(prefix=f"worker-{slot_index}-", dir=session_root))
     parent_connection, child_connection = context.Pipe(duplex=True)
     process = context.Process(
         target=_fast_worker_main,
-        args=(child_connection, workspace),
+        args=(child_connection, workspace, session_dir),
         name=f"yadof-fast-worker-{slot_index}",
         daemon=False,
     )
     process.start()
     child_connection.close()
-    return _WorkerSlot(slot_index, process, parent_connection)
+    return _WorkerSlot(slot_index, process, parent_connection, session_dir)
 
 
 def _replace_worker(
@@ -422,10 +507,12 @@ def _replace_worker(
     workspace: WorkspaceContext,
 ) -> _WorkerSlot:
     _stop_worker(slot)
-    return _spawn_worker(context, slot.index, workspace)
+    return _spawn_worker(context, slot.index, workspace, slot.session_dir.parent)
 
 
 def _stop_worker(slot: _WorkerSlot) -> None:
+    known = set(process_tree_pids(slot.process.pid))
+    asked_to_close = slot.process.is_alive() and slot.active is None
     if slot.process.is_alive() and slot.active is None:
         try:
             slot.connection.send(None)
@@ -433,7 +520,7 @@ def _stop_worker(slot: _WorkerSlot) -> None:
             pass
         slot.process.join(timeout=2.0)
     if slot.process.is_alive():
-        known = slot.active.observed_pids if slot.active is not None else ()
+        known.update(slot.active.observed_pids if slot.active is not None else ())
         terminate_process_tree(
             slot.process.pid,
             known_descendant_pids=known,
@@ -446,6 +533,8 @@ def _stop_worker(slot: _WorkerSlot) -> None:
         raise RuntimeError(
             f"fast worker process {slot.process.pid} survived forced cleanup"
         )
+    exitcode = slot.process.exitcode
+    terminate_descendants(slot.process.pid, known_descendant_pids=known)
     try:
         slot.connection.close()
     except OSError:
@@ -457,6 +546,11 @@ def _stop_worker(slot: _WorkerSlot) -> None:
             slot.process.close()
         except (OSError, ValueError):
             pass
+    cleanup_error = _cleanup_scratch(slot.session_dir)
+    if cleanup_error:
+        raise RuntimeError(cleanup_error)
+    if asked_to_close and not slot.aborted and exitcode != 0:
+        raise RuntimeError(f"fast task session did not close cleanly; worker exitcode={exitcode}")
 
 
 def _assign_task(
@@ -516,7 +610,9 @@ def _observe_worker_tree(slot: _WorkerSlot) -> None:
     )
 
 
-def _fast_worker_main(connection: Any, workspace: WorkspaceContext) -> None:
+def _fast_worker_main(connection: Any, workspace: WorkspaceContext, session_dir: Path) -> None:
+    stack = ExitStack()
+    holder = []
     try:
         while True:
             request = connection.recv()
@@ -528,26 +624,29 @@ def _fast_worker_main(connection: Any, workspace: WorkspaceContext) -> None:
                     "worker_started_at": _now_text(),
                 }
             )
-            response = _execute_worker_request(workspace, request)
+            response = _execute_worker_request(workspace, request, stack, holder, session_dir)
             connection.send(response)
-            if str(response.get("status")) != "done":
+            if str(response.get("status")) != "done" and not response.get("physical_failure"):
                 return
     except (EOFError, BrokenPipeError, OSError):
         return
     finally:
         try:
+            stack.close()
+        finally:
             connection.close()
-        except OSError:
-            pass
 
 
 def _execute_worker_request(
     workspace: WorkspaceContext,
     request: Mapping[str, object],
+    stack: ExitStack,
+    holder: list,
+    session_dir: Path,
 ) -> dict[str, object]:
     started_monotonic = time.monotonic()
-    stdout_buffer = StringIO()
-    stderr_buffer = StringIO()
+    stdout_buffer = _BoundedText()
+    stderr_buffer = _BoundedText()
     environment = {
         str(key): str(value)
         for key, value in dict(request.get("environment") or {}).items()
@@ -574,10 +673,15 @@ def _execute_worker_request(
             _temporary_environment(environment),
             redirect_stdout(stdout_buffer),
             redirect_stderr(stderr_buffer),
-            task_module(workspace, "evaluation") as module,
         ):
-            evaluate_rawdata = getattr(module, "evaluate_rawdata")
-            output = evaluate_rawdata(
+            if not holder:
+                holder.append(stack.enter_context(open_evaluation_session(workspace, {
+                    "session_dir": session_dir,
+                    "environment": MappingProxyType(environment),
+                    "timeout_sec": request.get("timeout_sec"),
+                    "task_static_signature": request.get("task_static_signature"),
+                })))
+            output = holder[0].evaluate_rawdata(
                 parameters,
                 MappingProxyType(context_values),
             )
@@ -586,6 +690,7 @@ def _execute_worker_request(
         task_diagnostics = _json_diagnostics(diagnostics)
         return {
             "status": "done",
+            "kernel_invoked": True,
             "raw_data_items": raw_data_items,
             "task_diagnostics": task_diagnostics,
             "worker_pid": os.getpid(),
@@ -598,6 +703,8 @@ def _execute_worker_request(
     except BaseException as exc:  # noqa: BLE001 - worker failure is data.
         return {
             "status": "error",
+            "physical_failure": bool(holder and isinstance(exc, holder[0].physical_failure_types)),
+            "kernel_invoked": bool(holder),
             "failure_stage": "task_kernel",
             "error_type": type(exc).__name__,
             "error_message": str(exc),
@@ -609,6 +716,18 @@ def _execute_worker_request(
             "worker_stdout_tail": tail(stdout_buffer.getvalue()),
             "worker_stderr_tail": tail(stderr_buffer.getvalue()),
         }
+
+
+class _BoundedText(StringIO):
+    """Capture only the diagnostic tail, even for a long-lived noisy task."""
+
+    def write(self, value: str) -> int:
+        length = len(value)
+        kept = (self.getvalue() + value[-8000:])[-8000:]
+        self.seek(0)
+        self.truncate()
+        super().write(kept)
+        return length
 
 
 def _split_task_output(

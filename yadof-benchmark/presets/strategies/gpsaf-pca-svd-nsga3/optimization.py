@@ -90,7 +90,7 @@ def optimization_program(context):
         fit_intercept=True,
         constant_atol=1e-12,
     )
-    settings = gpsaf_settings(
+    settings = gpsaf_settings(infill_selection="hypervolume",
         alpha=3,
         beta=3,
         gamma=0.5,
