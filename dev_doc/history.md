@@ -27,3 +27,12 @@
 
 进一步发展了灵活的 `optimization.py`，由用户用 Python 显式编排优化流程。流程中可以
 插入任意任务所需的代码，按需要组织数据处理、候选选择、评估与代理模型训练等步骤。
+
+## 0.6.0：常驻 fast 会话与 GPSAF 覆盖选择
+
+fast mode 改用版本化的会话接口，由 campaign 统一持有 worker pool 和可复用的外部解释器
+会话，减少候选与代际之间的重复初始化，同时保持每次候选独立重建物理系统。
+
+GPSAF 将基于真实历史和预测均值的 greedy hypervolume 设为默认 infill selection，原有的
+cluster/PKT 路径继续作为显式选项。独立的 `yadof-benchmark` 同步升级到 0.6.0，旧 fast
+workspace 需要迁移到新的会话式评估接口。
