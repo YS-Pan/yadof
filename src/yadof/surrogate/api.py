@@ -7,6 +7,10 @@ from typing import Mapping
 
 from .._component_settings import text
 
+from .amplitude_gp.component import AmplitudeGPComponent, amplitude_gp
+from .amplitude_gp.settings import AmplitudeGPSettings
+from .amplitude_gp.types import AmplitudeGPState
+
 from .hierarchical_cae.schema import (
     normalize_axis_encodings,
     normalize_field_layouts,
@@ -1275,6 +1279,7 @@ def wait_for_pending_training(*args, **kwargs):
 
 
 def deactivate_workspace(*args, **kwargs):
+    from .amplitude_gp.scheduler import deactivate_workspace as amplitude
     from .conditional_inr.scheduler import deactivate_workspace as conditional
     from .hierarchical_cae.scheduler import deactivate_workspace as hierarchical
     from .linear_subspace.scheduler import deactivate_workspace as linear_subspace
@@ -1282,9 +1287,14 @@ def deactivate_workspace(*args, **kwargs):
     conditional_status = conditional(*args, **kwargs)
     hierarchical(*args, **kwargs)
     linear_subspace(*args, **kwargs)
+    amplitude(*args, **kwargs)
     return conditional_status
 
 __all__ = [
+    "AmplitudeGPComponent",
+    "AmplitudeGPSettings",
+    "AmplitudeGPState",
+    "amplitude_gp",
     "APPLICABILITY_CALIBRATED",
     "APPLICABILITY_NOT_APPLICABLE",
     "APPLICABILITY_UNCALIBRATED",

@@ -16,6 +16,10 @@
   committed rows use durable references rather than retained envelopes.
 - Build a snapshot-bound `CostTable`, reuse same-fingerprint transient hints, and
   update only the session interpretation cache without rewriting evidence.
+- Own a weak decoded-sample/schema index shared by live dataset views. Keep it
+  across generation and interpretation changes, clear it during close, and never
+  cache normalized variables or costs in sample entries. Retained training values
+  remain usable after session close; pending evidence still has no sample loader.
 - Expose transient named rawData samples, including exact direct `.npz` basenames,
   for schema adapters that must freeze selector identity. This read view neither
   changes persistence nor retains a second evidence store.

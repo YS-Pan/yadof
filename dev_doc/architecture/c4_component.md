@@ -15,6 +15,10 @@
   views, current-cost dispatch, and task checking.
 - RawData templates describe exact named evidence fields for consumers that need a
   stable schema.
+- Templates own shared read-only axes and metadata; structured samples isolate
+  external mutation and may share immutable main arrays across training values.
+  Recorded-data dataset/campaign weak indexes reuse live decoded samples, while
+  fitting backends own separate writable numerical workspaces.
 - Cost projection converts complete schema-compatible predicted rawData through a
   frozen current task interpreter. It does not own task objective policy or record
   predictions.
@@ -79,10 +83,14 @@
   public contracts and lazy optional dependencies. Its public materialization
   layer identity-joins evidence/cost rows into immutable training values, separates
   exact mathematical content identity from bounded lineage/provenance, and gives
-  explicit fits a generation-scoped handle lifecycle. PCA/SVD, conditional-INR,
+  explicit fits a generation-scoped handle lifecycle. Amplitude/shape GP, PCA/SVD, conditional-INR,
   and hierarchical-CAE implement one runtime-checkable deterministic component
   boundary and consume caller-owned training data for freshness, prediction, and
   scheduling.
+  The independent amplitude/shape GP owns per-field minimum/span/shape transforms,
+  a bounded cost-elite/coverage GP subset, and numeric-only checkpoints under
+  `amplitude-gp`. Training priority identity includes the cost interpretation;
+  explicit raw-state prediction projects costs under the supplied snapshot.
   Hierarchical CAE owns its
   training-data filtering implementations below its private package and selects
   them through one component-local mode whose default is no filtering; the current

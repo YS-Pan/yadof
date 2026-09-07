@@ -62,6 +62,14 @@ already observed by the backend remains completed evidence.
 Backend-specific resource observations may inform later concurrency, requests, or
 timeouts, but do not alter evidence meaning.
 
+Training materialization after publication reuses live immutable samples through
+one campaign weak index. Only absent samples are decoded; discarded training
+inputs do not keep a second history alive. Exact schemas share static axes and
+metadata. Cost/range edits still reinterpret evidence at generation boundaries.
+Amplitude GP normalizes and centers one private float64 field buffer in place,
+then releases it before processing the next field. This submit-side flow is common
+to fast, local, and distributed evidence and has no additional disk cache.
+
 ## Derived candidate selection
 
 A rawData-first surrogate consumes recorded real evidence. Posterior-capable
@@ -165,8 +173,12 @@ never starts or waits for a fit. It may use the newest compatible state within t
 declared lag; PCA/SVD reconstructs that state's exact historical row subset from
 the current view and rehashes it before recovery. The program starts real
 evaluation, starts training on the captured prior evidence, then explicitly
-waits/closes both lifecycles before commit. PCA/SVD, conditional-INR, and
+waits/closes both lifecycles before commit. Amplitude/shape GP, PCA/SVD, conditional-INR, and
 hierarchical-CAE implement the
+shared explicit deterministic lifecycle. The amplitude/shape GP additionally
+binds training-priority cost interpretation in its checkpoint identity; a
+program reproducing its development schedule waits for a current-prefix fit
+before assisted selection. These components implement the
 runtime-checkable deterministic component protocol; GPSAF binds each prediction
 DTO to exact pool candidate IDs before positional tournaments or simulated pymoo
 advancement. Before selection, programs explicitly initialize error (PCA/SVD

@@ -25,6 +25,7 @@ from .dataset import (
     EvidenceDataset,
     InterpretationStatus,
     _LiveEvidenceInput,
+    _RawDataSampleCache,
     _evidence_dataset_from_live,
     calculate_cost_table,
 )
@@ -463,6 +464,7 @@ class CampaignSession:
         self._lock.acquire()
         self._state_lock = threading.RLock()
         self._close_lock = threading.Lock()
+        self._rawdata_sample_cache = _RawDataSampleCache()
         catalog = catalog_snapshot(self.storage)
         self._rows: dict[str, _SessionRow] = {
             reference.candidate_id: _SessionRow(
@@ -845,7 +847,7 @@ class CampaignSession:
                 for candidate_id, row in self._rows.items()
             )
             diagnostics = tuple(dict(item) for item in self.catalog_diagnostics)
-        return _evidence_dataset_from_live(workspace, inputs, diagnostics)
+        return _evidence_dataset_from_live(workspace, inputs, diagnostics, self._rawdata_sample_cache)
 
     def cost_table(
         self, snapshot: GenerationTaskSnapshot | None = None
@@ -1002,6 +1004,7 @@ class CampaignSession:
                 errors.append(exc)
             finally:
                 self._release_campaign_lock()
+                self._rawdata_sample_cache.clear()
                 for snapshot in self._snapshots:
                     snapshot.close()
                 with self._state_lock:

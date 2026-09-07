@@ -125,7 +125,7 @@ class SurrogateTrainingData:
                 {"contract": "yadof.empty-surrogate-training-schema", "version": 1}
             )
         else:
-            template = RawDataSchemaTemplate.from_items(samples[0].items)
+            template = RawDataSchemaTemplate.from_items(samples[0])
             samples = tuple(template.validate_sample(sample) for sample in samples)
             schema_signature = template.signature
             _validate_numeric_targets(samples)
@@ -219,7 +219,7 @@ def materialize_training_data(
         if cost.status != InterpretationStatus.SUCCEEDED or cost.normalized_variables is None:
             raise ValueError(f"training row {row_id!r} has no successful interpretation")
         variables.append(tuple(float(value) for value in cost.normalized_variables))
-        samples.append(StructuredRawDataSample.from_items(evidence.load_rawdata()))
+        samples.append(evidence._load_sample())
         evidence_ids.append(evidence.evidence_id)
         statuses.append(f"{evidence.evidence_state.value}:{cost.status.value}")
         lineage_rows.append(tuple(step.as_dict() for step in evidence.lineage))
@@ -708,7 +708,7 @@ def _training_content_digest(
         matrix = np.zeros((len(variables), len(parameter_names)), dtype="<f8")
     matrix = np.ascontiguousarray(matrix, dtype="<f8")
     _update_json(digest, {"shape": list(matrix.shape), "statuses": list(statuses), "mask": list(mask)})
-    digest.update(matrix.tobytes(order="C"))
+    digest.update(matrix)
     for sample in samples:
         for item in sample.items:
             key = resolve_main_array_key(item.payload)
@@ -723,7 +723,7 @@ def _training_content_digest(
                     "shape": list(canonical.shape),
                 },
             )
-            digest.update(canonical.tobytes(order="C"))
+            digest.update(canonical)
     return digest.hexdigest()
 
 

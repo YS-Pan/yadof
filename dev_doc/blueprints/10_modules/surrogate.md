@@ -48,8 +48,21 @@ generation.
 
 ## Source structure
 
+The independent `amplitude_gp()` component implements the same explicit
+deterministic lifecycle. Per-field minimum/asinh, span/log and normalized-shape
+PCA maps use bounded ARD Matérn GPs. Only owned prior rows supply targets and
+current-cost training priorities. Its no-pickle state binds the priority
+interpretation as well as content, settings, strategy, schema and runtime.
+Selection can reuse exact unchanged older rows under the configured lag;
+state-only prediction always reprojects with the supplied current snapshot.
+It exposes no initial error estimator or posterior capability. Development
+performance evidence is distinct from independent confirmation.
+
 - Parent `__init__.py` and `api.py` own only the lightweight public component,
   posterior protocol exports, and lazy forwarding surface.
+- `amplitude_gp/` owns its immutable settings, lazy public component, numeric
+  field model, state DTO, atomic JSON/NPZ checkpoints, snapshot-bound runtime and
+  one-worker scheduler. Optional SciPy/scikit-learn dependencies belong to `gp`.
 - `posterior.py` owns runtime-checkable surrogate/sampler/posterior protocols,
   persistent draw containers, JSON-safe support diagnostics, semantic capability
   identity, and the draw/candidate-chunk streaming projection helper. It imports no
@@ -185,6 +198,12 @@ masked, or non-finite main targets. C/F source layout canonicalizes to the same
 digest, while dtype, shape, row order, duplicates, status, mask, or numeric content
 changes it. Source identity, lineage, and optional transform ID change only the
 provenance digest.
+
+The materializer shares immutable samples across views and generations while
+consumers retain them. Static axes and metadata belong to exact schema templates.
+Mutable algorithm workspaces belong to the fitting backend; amplitude GP consumes
+one float64 field matrix for both normalization and PCA centering. Neither memory
+optimization changes evidence publication, task reinterpretation, or row policy.
 
 PCA/SVD `start_fit()` creates one non-daemon owner-thread handle. Cooperative cancellation
 checks bracket model fitting and checkpoint publication; atomic commit is the

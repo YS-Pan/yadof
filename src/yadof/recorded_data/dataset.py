@@ -7,14 +7,17 @@ from enum import StrEnum
 import hashlib
 import json
 import math
+import threading
 from types import MappingProxyType
 from typing import Callable, Mapping, Sequence
+from weakref import WeakValueDictionary
 
 import numpy as np
 
 from ..config import load_config
 from ..job_template import api as job_template_api
 from ..job_template.rawdata_contract import NamedRawDataItem
+from ..job_template.rawdata_template import RawDataSchemaTemplate, StructuredRawDataSample
 from ..task_snapshot import GenerationTaskSnapshot, create_generation_snapshot
 from ..workspace import WorkspaceContext, resolve_workspace
 from .paths import WorkspaceLike, recorded_data_paths
@@ -29,6 +32,38 @@ from .utils import json_ready
 
 Progress = Callable[[int, int, str], None]
 MAX_DIAGNOSTIC_CHARS = 4096
+
+
+class _RawDataSampleCache:
+    """Share live immutable training samples without retaining discarded history."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._samples: WeakValueDictionary[tuple, StructuredRawDataSample] = WeakValueDictionary()
+        self._schemas: WeakValueDictionary[str, RawDataSchemaTemplate] = WeakValueDictionary()
+
+    def load(self, reference: SegmentReference) -> StructuredRawDataSample:
+        with self._lock:
+            stat = reference.segment_path.stat()
+            key = (reference.segment_path, reference.candidate_id, reference.rawdata_members,
+                   stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+            sample = self._samples.get(key)
+            if sample is not None:
+                return sample
+            sample = StructuredRawDataSample.from_items(load_reference_rawdata(reference))
+            schema = RawDataSchemaTemplate.from_items(sample)
+            shared_schema = self._schemas.get(schema.signature)
+            if shared_schema is None:
+                shared_schema = schema
+                self._schemas[schema.signature] = schema
+            sample = shared_schema.validate_sample(sample)
+            self._samples[key] = sample
+            return sample
+
+    def clear(self) -> None:
+        with self._lock:
+            self._samples.clear()
+            self._schemas.clear()
 
 
 class EvidenceState(StrEnum):
@@ -100,6 +135,9 @@ class RawDataHandle:
         repr=False,
         compare=False,
     )
+    _sample_loader: Callable[[], StructuredRawDataSample] | None = field(
+        default=None, repr=False, compare=False,
+    )
 
     def __post_init__(self) -> None:
         names = tuple(str(name) for name in self.filenames)
@@ -122,6 +160,11 @@ class RawDataHandle:
                 f"expected {self.filenames!r}, got {loaded_names!r}"
             )
         return items
+
+    def _load_sample(self) -> StructuredRawDataSample:
+        if self._sample_loader is not None:
+            return self._sample_loader()
+        return StructuredRawDataSample.from_items(self.load())
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,13 +273,19 @@ class EvidenceRow:
         return 0 if handle is None else handle.estimated_bytes
 
     def load_rawdata(self) -> tuple[NamedRawDataItem, ...]:
+        return self._require_rawdata_handle().load()
+
+    def _load_sample(self) -> StructuredRawDataSample:
+        return self._require_rawdata_handle()._load_sample()
+
+    def _require_rawdata_handle(self) -> RawDataHandle:
         handle = self._rawdata_handle
         if handle is None:
             raise RuntimeError(
                 f"rawData is unavailable for evidence row {self.row_id} "
                 f"in state {self.evidence_state.value}"
             )
-        return handle.load()
+        return handle
 
 
 @dataclass(frozen=True, slots=True)
@@ -505,6 +554,7 @@ def get_evidence_dataset(workspace: WorkspaceLike) -> EvidenceDataset:
     storage = recorded_data_paths(context)
     catalog = discover_catalog(storage)
     parameter_names = tuple(job_template_api.get_parameter_names(context))
+    sample_cache = _RawDataSampleCache()
     rows = tuple(
         _row_from_record(
             parameter_names,
@@ -512,6 +562,7 @@ def get_evidence_dataset(workspace: WorkspaceLike) -> EvidenceDataset:
             record=reference.record,
             evidence_state=EvidenceState.COMMITTED,
             reference=reference,
+            sample_cache=sample_cache,
         )
         for reference in catalog.references
     )
@@ -796,6 +847,7 @@ def _evidence_dataset_from_live(
     workspace: WorkspaceContext,
     inputs: Sequence[_LiveEvidenceInput],
     diagnostics: Sequence[Mapping[str, object]],
+    sample_cache: _RawDataSampleCache,
 ) -> EvidenceDataset:
     parameter_names = tuple(job_template_api.get_parameter_names(workspace))
     rows = tuple(
@@ -805,6 +857,7 @@ def _evidence_dataset_from_live(
             record=item.record,
             evidence_state=_evidence_state(item.evidence_state),
             reference=item.reference,
+            sample_cache=sample_cache,
             interpretation_state=item.interpretation_state,
             normalized_variables=item.normalized_variables,
             costs=item.costs,
@@ -823,6 +876,7 @@ def _row_from_record(
     record: Mapping[str, object],
     evidence_state: EvidenceState,
     reference: SegmentReference | None,
+    sample_cache: _RawDataSampleCache,
     interpretation_state: str = "uninterpreted",
     normalized_variables: Sequence[float] | None = None,
     costs: Sequence[float] | None = None,
@@ -843,6 +897,7 @@ def _row_from_record(
             sum(size for _filename, _member, size in reference.rawdata_members),
             str(reference.segment_path),
             lambda selected=reference: load_reference_rawdata(selected),
+            lambda selected=reference: sample_cache.load(selected),
         )
     hint = None
     selected_interpretation_state = str(interpretation_state)

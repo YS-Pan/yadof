@@ -64,6 +64,12 @@ never merges them. Selection, filtering, copying, and cost joins preserve row
 identity. Durable and committed-live rows hold only lazy `SegmentReference`-backed
 rawData handles; pending rows have no readable handle.
 
+Training may reuse immutable decoded samples through a campaign/dataset-owned weak
+index keyed by durable evidence and current segment file identity. Static values
+are shared only after exact schema validation. Releasing all sample consumers
+allows reclamation; the index is neither a second evidence store nor an
+interpretation cache. Public mutable rawData reads keep independent ownership.
+
 `CostTable` binds ordered interpretation rows to the task interpretation
 fingerprint and objective schema. Successful rows contain finite costs of the
 declared width. Failed, not-applicable, and missing rows keep `None` costs plus

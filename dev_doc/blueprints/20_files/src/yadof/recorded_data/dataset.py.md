@@ -15,6 +15,15 @@
   immutable JSON-safe metadata and bounded diagnostics.
 - Keep committed rawData behind lazy `SegmentReference` loaders; selection, copy,
   filtering, and joins perform no decode.
+- Give training a private immutable sample loader. One weak sample/schema index
+  belongs to a standalone dataset or its campaign. Keys include durable candidate
+  identity, segment path/member identity and file stat identity/size/timestamps;
+  missing or changed segments cannot hit old entries. Serialize cache misses.
+  Keep public `load_rawdata()` as an independent mutable load and keep cost
+  interpretation separate from this training cache.
+- Weak entries expire with their consumers. A materialized sample owns its schema,
+  which keeps canonical static values and one template row alive; the registry
+  itself does not pin an extra complete history.
 - Derive transient owned rawData rows with deterministic
   parent/operation/parameter/ordinal/content lineage.
 - Calculate one objective-schema/fingerprint-bound `CostTable` through one frozen

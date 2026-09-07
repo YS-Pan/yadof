@@ -281,6 +281,22 @@ that semantic digest. The separate `provenance_digest` binds ordered source IDs,
 lineage, statuses, and transform intent. Recovery always requires the exact content
 value, so reusing a transform label cannot recover the wrong mathematics.
 
+Training inputs share read-only samples, axes, and metadata. Caller-owned mutable
+arrays are isolated when first converted; subsequent training values can reuse
+the same immutable samples. Use `sample.as_mapping()` for an independent mutable
+copy when implementing a transform. Treat every array and mapping inside a
+structured sample as read-only, including its shape and dtype.
+
+Within a campaign, repeated materialization reuses decoded committed rows while
+an earlier training value still holds them. Keep the previous `training` value
+until the next assignment (`training = surrogate.training_data(...)`) completes
+to obtain this reuse. The index holds weak references: releasing all consumers
+reclaims the samples, and a later request decodes them again. Standalone dataset
+views share within that dataset; a fresh independent catalog query has its own
+index. Current costs and normalized parameters are still rebuilt from the selected
+task interpretation. This behavior applies equally to fast, local, and distributed
+evidence. It adds no disk cache, memory mapping, benchmark setting, or worker API.
+
 For an asynchronous standalone fit, call `start_fit()` and always `wait()`/`close()`
 the returned `TrainingHandle` (or use it as a context manager). Wait timeouts do not
 cancel. Cancellation is cooperative around the decomposition kernel and before
@@ -681,6 +697,12 @@ names in `config.py` fail as unknown settings instead of being translated or
 ignored.
 
 For a deterministic low-rank baseline, explicitly replace only the surrogate
+component. The independent [amplitude/shape GP](amplitude_gp.md) is another
+opt-in rawData component selected with `amplitude_gp()`; its successful
+development schedule fits current prior evidence before every assisted selection.
+Its separate `gp` extra and cost-priority checkpoint rules are documented there.
+
+For the linear PCA/SVD baseline, explicitly select the `pca_svd()`
 component. PCA centers each recorded field on its training mean; SVD is
 uncentered. Both fit fields independently, map normalized parameters to low-rank
 coefficients with ridge regression, reconstruct complete named rawData, and let

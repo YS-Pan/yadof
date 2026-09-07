@@ -1,3 +1,4 @@
+from . import amplitude_gp as _amplitude_gp_package
 from . import conditional_inr as _conditional_inr_package
 from . import hierarchical_cae as _hierarchical_cae_package
 from . import linear_subspace as _linear_subspace_package
@@ -16,6 +17,10 @@ from .training import (
     materialize_training_data,
 )
 from .api import (
+    AmplitudeGPComponent,
+    AmplitudeGPSettings,
+    AmplitudeGPState,
+    amplitude_gp,
     APPLICABILITY_CALIBRATED,
     APPLICABILITY_NOT_APPLICABLE,
     APPLICABILITY_UNCALIBRATED,
@@ -89,6 +94,10 @@ from .api import (
 # ``yadof.surrogate.conditional_inr`` callable after private implementation imports.
 
 __all__ = [
+    "AmplitudeGPComponent",
+    "AmplitudeGPSettings",
+    "AmplitudeGPState",
+    "amplitude_gp",
     "SurrogateContractError",
     "APPLICABILITY_CALIBRATED",
     "APPLICABILITY_NOT_APPLICABLE",

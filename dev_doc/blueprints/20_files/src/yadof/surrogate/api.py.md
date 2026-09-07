@@ -9,6 +9,12 @@
   projection helper without importing an optional backend.
 
 ## Functionalities
+- Re-export `amplitude_gp()`, its frozen explicit settings, component and fitted
+  state from the independent private package. The factory remains lightweight;
+  validation and fit load only its selected GP dependencies. The component
+  consumes owned rows, returns full rawData/current-cost DTOs and exposes no
+  posterior or initial GPSAF error estimator. Global workspace deactivation also
+  drains its pending worker and cache while retaining existing return semantics.
 - Construct `conditional_inr()` with validation, semantic identity, explicit
   training-data materialization, scheduler gate/start/finish, readiness, and typed
   rawData prediction methods required by generation-local GPSAF.

@@ -32,6 +32,12 @@ The opt-in `pca_svd()` baseline uses the same `surrogate` extra. Importing its
 factory remains lightweight; selecting, validating, or fitting it requires Torch.
 It does not require scikit-learn and does not add a posterior capability.
 
+The independent opt-in `amplitude_gp()` component uses the `gp` extra
+(SciPy, scikit-learn and threadpoolctl). It predicts complete named rawData
+with deterministic amplitude/shape Gaussian processes and does not require Torch.
+See [amplitude_gp.md](amplitude_gp.md) for its settings, evidence limits,
+current-cost semantics and explicit checkpoint/training lifecycle.
+
 The separate `qnehvi` extra supplies the optional BoTorch numerical backend for the
 opt-in `qnehvi()` acquisition and `posterior_assisted_selector()` component. It is not a
 package default. It declares Torch directly and BoTorch 0.18.x; that BoTorch series

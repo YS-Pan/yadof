@@ -29,38 +29,34 @@ class RawDataTemplateError(RawDataContractError):
         super().__init__(message, error_type="schema_incompatible")
 
 
+class _WeakReferenceable:
+    __slots__ = ("__weakref__",)
+
+
 @dataclass(frozen=True, slots=True)
-class StructuredRawDataSample:
+class StructuredRawDataSample(_WeakReferenceable):
     """One complete in-memory rawData sample with direct ``.npz`` names."""
 
     items: tuple[NamedRawDataItem, ...]
+    _template: RawDataSchemaTemplate | None = field(default=None, init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        validated = _validated_named_items(self.items)
+        ordered = sorted(validated, key=lambda item: _selector_sort_key(
+            (item.filename, resolve_main_array_key(item.payload))))
+        object.__setattr__(self, "items", tuple(
+            NamedRawDataItem(item.filename, _freeze_mapping(item.payload))
+            for item in ordered
+        ))
 
     @classmethod
     def from_items(
         cls,
-        items: Mapping[str, Mapping[str, object]]
-        | Sequence[NamedRawDataItem],
+        items: RawDataSampleLike,
     ) -> "StructuredRawDataSample":
-        validated = _validated_named_items(items)
-        ordered = tuple(
-            sorted(
-                validated,
-                key=lambda item: (
-                    item.filename.casefold(),
-                    item.filename,
-                    resolve_main_array_key(item.payload),
-                ),
-            )
-        )
-        return cls(
-            tuple(
-                NamedRawDataItem(
-                    item.filename,
-                    _freeze_mapping(item.payload),
-                )
-                for item in ordered
-            )
-        )
+        if isinstance(items, cls):
+            return items
+        return cls(_validated_named_items(items) if isinstance(items, Mapping) else tuple(items))
 
     @property
     def field_selectors(self) -> tuple[RawDataFieldSelector, ...]:
@@ -97,7 +93,13 @@ class RawDataFieldTemplate:
     filename: str
     main_key: str
     payload: Mapping[str, object]
-    _descriptor: Mapping[str, object] = field(repr=False)
+    _descriptor: Mapping[str, object] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        payload = _freeze_mapping(self.payload)
+        object.__setattr__(self, "payload", payload)
+        object.__setattr__(self, "_descriptor", MappingProxyType(
+            _field_descriptor(self.filename, self.main_key, payload)))
 
     @property
     def selector(self) -> RawDataFieldSelector:
@@ -113,7 +115,7 @@ class RawDataFieldTemplate:
 
 
 @dataclass(frozen=True, slots=True)
-class RawDataSchemaTemplate:
+class RawDataSchemaTemplate(_WeakReferenceable):
     """Exact fixed-schema template for structured posterior rawData samples.
 
     Field identity is the pair ``(NPZ basename including .npz, resolved main
@@ -152,24 +154,19 @@ class RawDataSchemaTemplate:
     @classmethod
     def from_items(
         cls,
-        items: Mapping[str, Mapping[str, object]]
-        | Sequence[NamedRawDataItem],
+        items: RawDataSampleLike,
     ) -> "RawDataSchemaTemplate":
         sample = StructuredRawDataSample.from_items(items)
+        if sample._template is not None:
+            return sample._template
         fields = []
         for item in sample.items:
             main_key = resolve_main_array_key(item.payload)
-            descriptor = _field_descriptor(
-                item.filename,
-                main_key,
-                item.payload,
-            )
             fields.append(
                 RawDataFieldTemplate(
                     filename=item.filename,
                     main_key=main_key,
                     payload=item.payload,
-                    _descriptor=MappingProxyType(descriptor),
                 )
             )
         return cls(tuple(fields))
@@ -196,7 +193,7 @@ class RawDataSchemaTemplate:
 
         rebuilt: dict[str, dict[str, object]] = {}
         for field_template in self.fields:
-            payload = _thaw_mapping(field_template.payload)
+            payload = dict(field_template.payload)
             predicted = np.asarray(main_arrays[field_template.selector])
             template_main = np.asarray(
                 field_template.payload[field_template.main_key]
@@ -211,7 +208,7 @@ class RawDataSchemaTemplate:
                     f"rawData field {field_template.selector!r} dtype mismatch: "
                     f"expected {template_main.dtype}, got {predicted.dtype}"
                 )
-            payload[field_template.main_key] = predicted.copy()
+            payload[field_template.main_key] = predicted
             rebuilt[field_template.filename] = payload
         return self.validate_sample(rebuilt)
 
@@ -221,9 +218,9 @@ class RawDataSchemaTemplate:
     ) -> StructuredRawDataSample:
         """Validate one complete sample against the exact frozen template."""
 
-        structured = StructuredRawDataSample.from_items(
-            sample.items if isinstance(sample, StructuredRawDataSample) else sample
-        )
+        structured = StructuredRawDataSample.from_items(sample)
+        if structured._template is self:
+            return structured
         actual = {selector: item for selector, item in zip(
             structured.field_selectors,
             structured.items,
@@ -250,8 +247,18 @@ class RawDataSchemaTemplate:
                     f"rawData field {field_template.selector!r} does not match "
                     "the frozen shape/dtype/axis/metadata template"
                 )
-            ordered_items.append(item)
-        return StructuredRawDataSample(tuple(ordered_items))
+            # Static values belong to the schema; each row keeps its own main array.
+            payload = dict(field_template.payload)
+            payload[field_template.main_key] = item.payload[field_template.main_key]
+            ordered_items.append(NamedRawDataItem(item.filename, payload))
+        result = object.__new__(StructuredRawDataSample)
+        # Both mappings are frozen, so share the canonical nested metadata as well.
+        object.__setattr__(result, "items", tuple(
+            NamedRawDataItem(item.filename, MappingProxyType(dict(item.payload)))
+            for item in ordered_items
+        ))
+        object.__setattr__(result, "_template", self)
+        return result
 
 
 def _validated_named_items(
@@ -342,7 +349,7 @@ def _value_descriptor(value: object) -> object:
         "array": {
             "dtype": contiguous.dtype.str,
             "shape": list(contiguous.shape),
-            "sha256": hashlib.sha256(contiguous.tobytes()).hexdigest(),
+            "sha256": hashlib.sha256(contiguous).hexdigest(),
         }
     }
 
@@ -357,9 +364,19 @@ def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
 
 def _freeze_value(value: object) -> object:
     if isinstance(value, np.ndarray):
-        copied = value.copy()
-        copied.setflags(write=False)
-        return copied
+        if np.ma.isMaskedArray(value):
+            raise RawDataTemplateError("structured rawData arrays cannot be masked")
+        if value.dtype.hasobject:
+            raise RawDataTemplateError("structured rawData arrays cannot use object dtype")
+        base = value
+        while isinstance(base, np.ndarray):
+            if base.flags.writeable:
+                break
+            base = base.base
+        if isinstance(base, bytes):
+            return value
+        # An immutable backing store also prevents setflags(write=True).
+        return np.frombuffer(value.tobytes(order="C"), dtype=value.dtype).reshape(value.shape)
     if isinstance(value, Mapping):
         return _freeze_mapping(value)
     if isinstance(value, list):
@@ -367,10 +384,10 @@ def _freeze_value(value: object) -> object:
     if isinstance(value, tuple):
         return tuple(_freeze_value(item) for item in value)
     if isinstance(value, np.generic):
-        copied = np.asarray(value).copy()
-        copied.setflags(write=False)
-        return copied
-    return value
+        return _freeze_value(np.asarray(value))
+    if value is None or isinstance(value, (str, bytes, int, float, bool)):
+        return value
+    raise RawDataTemplateError(f"unsupported rawData value {type(value).__name__}")
 
 
 def _thaw_mapping(value: Mapping[str, object]) -> dict[str, object]:

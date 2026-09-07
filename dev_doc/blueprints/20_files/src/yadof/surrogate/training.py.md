@@ -4,10 +4,14 @@
 
 Own backend-neutral explicit surrogate values without importing Torch.
 `SurrogateTrainingData` accepts only fully materialized normalized rows and complete
-structured rawData, owns immutable copies, validates finite real main targets, and
+structured rawData, shares owned immutable samples, validates finite real main targets, and
 separates a domain-versioned semantic content digest from JSON-safe provenance.
 `materialize_training_data()` strictly joins Stage 2 evidence and cost rows by
 identity; it never records or silently substitutes a failed row.
+It reads through the evidence handle's private shared-sample path, uses a retained
+schema template when available, and hashes contiguous arrays without allocating
+full byte copies. Mutable caller inputs are isolated on first construction;
+reordered/subset training values retain safe sample references.
 
 `TrainingHandle` owns one non-daemon fit thread, cached terminal result/failure,
 wait timeout, cooperative cancellation, context-manager cleanup, and optional exact

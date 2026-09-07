@@ -80,12 +80,20 @@ terminal output remains reviewable; hidden detach remains automatic.
   values but import the optional pymoo adapter only inside operations. Public state,
   pool, prediction, and selection DTOs never expose pymoo objects.
 - Concrete optional numerical backends load only after their component is selected.
+- The independent amplitude/shape GP lives entirely in `surrogate/amplitude_gp/`
+  and uses the separate `gp` extra. Its public deterministic contract shares
+  owned training values, handles and prediction DTOs with retained components;
+  it does not alter their models or the search/GPSAF implementation.
 - Hierarchical-CAE training-data filtering is component-local: implementations live
   below `surrogate/hierarchical_cae/data_filtering/`, and its factory exposes one
   explicit mode selector that defaults to no filtering; the current opt-in
   implementation is named `frequency`.
 - Core runtime never imports optional tools, administrator code, benchmark code, or
   concrete workspace projects.
+- Immutable rawData ownership/static sharing belongs to `job_template`; weak
+  decoded-sample indexing belongs to `recorded_data`; writable training-buffer
+  reuse belongs to each numerical surrogate backend. Benchmark programs use the
+  same materialization and fit APIs without a separate cache implementation.
 - Distributed workflows use job-local modules and deliberately provisioned
   dependencies; they do not import yadof.
 
