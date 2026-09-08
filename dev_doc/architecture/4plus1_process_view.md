@@ -53,8 +53,12 @@ already observed by the backend remains completed evidence.
   removing snapshots. External Chrono interpreters may remain resident, but every
   physical call constructs a fresh system and returns complete arrays in memory.
 - **Local:** the submit host prepares a self-contained job and launches its task
-  workflow as a subprocess. Process-tree cleanup and job diagnostics remain local
-  backend responsibilities.
+  workflow as a subprocess. Before worker startup it reads one immutable parameter
+  template from the generation snapshot. Worker assignments and their static
+  hashes use that template without acquiring the task import lock held by the
+  coordinator's cost interpreter. Later preparation can overlap committed-result
+  interpretation without cyclic waiting. Process-tree cleanup and job diagnostics
+  remain local backend responsibilities.
 - **Distributed:** the submit host prepares the same logical job, HTCondor executes
   it under administrator policy, and returned evidence is restored and validated
   before entering the common finalizer.

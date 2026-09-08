@@ -42,6 +42,14 @@ runtime package/archive/config.
 
 ## Local backend
 
+Local dispatch reads parameter definitions once from the frozen generation task
+before creating workers. Jobs receive independent assignments from that template,
+and static hashing uses its definition signature. Worker preparation never needs
+the task import lock while the coordinator retains its batch cost interpreter;
+success finalization and later job preparation can therefore overlap. Template
+loading failures become durable per-candidate preparation errors; cancellation
+still wins before preparation. Worker counts and result ordering are unchanged.
+
 `local_runner.py` directly runs job-local `workflow.py` with bounded concurrency and
 per-job timeout, kills the process tree on timeout or cancellation, rejects
 `cost.json`, validates

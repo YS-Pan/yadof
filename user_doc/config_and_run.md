@@ -162,6 +162,12 @@ CPU/memory/disk capacities, calibration source, and sample count. A temporary
 Disabling `LOCAL_RESOURCE_AUTODETECT_ENABLED` suppresses adaptive observation and
 calibration; it does not change worker-count authority.
 
+Each local batch uses the generation's frozen parameter definitions and gives
+each job its own assigned values. Successful results can be recorded and costed
+while later jobs are still being prepared. Individual preparation, simulator,
+and timeout failures remain durable failed attempts; they do not prevent the
+remaining candidates from completing.
+
 ## Fast concurrency, timeout, and scratch
 
 `EVALUATION_MODE = "fast"` selects reusable process-isolated workers on the current

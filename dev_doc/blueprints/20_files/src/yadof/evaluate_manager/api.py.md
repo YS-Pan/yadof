@@ -22,6 +22,10 @@
 - Resolve the formal fast pool from the campaign's named evaluation resources.
   Handle close releases a generation lease; campaign close owns resident worker
   teardown. Private standalone sessions retain the same finalization boundary.
+- Freeze local parameter definitions before worker startup. Workers derive
+  independent assignments and definition hashes without importing task modules
+  while the owner holds its result-finalization interpreter. A template-loading
+  error remains a durable preparation failure for each uncancelled candidate.
 
 ## Invariants
 

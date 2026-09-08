@@ -15,7 +15,11 @@ from typing import Iterable, Mapping
 
 from .._version import __version__
 from ..config import LoadedConfig, load_config
-from ..job_template import get_parameter_definition_signature, materialize_job_parameters
+from ..job_template import (
+    JobParameterTemplate,
+    get_parameter_definition_signature,
+    materialize_job_parameters,
+)
 from ..workspace import WorkspaceContext, resolve_workspace
 from ..workspace.manifest import WorkspaceMarkerError, read_workspace_marker
 from .types import JobSpec
@@ -132,6 +136,7 @@ def prepare_job(
     optimization_index: int | None = None,
     generation_index: int | None = None,
     population_index: int | None = None,
+    _parameter_template: JobParameterTemplate | None = None,
 ) -> JobSpec:
     """Prepare one workspace-owned job from package and task inputs."""
 
@@ -153,6 +158,7 @@ def prepare_job(
         effective.workspace,
         normalized_values,
         job_dir=job_dir,
+        parameter_template=_parameter_template,
     )
 
     workspace_identity = _workspace_identity(effective.workspace)
@@ -163,7 +169,10 @@ def prepare_job(
     )
     _copy_package_worker_files(job_dir)
     (job_dir / RAW_DATA_DIR_NAME).mkdir(exist_ok=True)
-    job_static_hash = prepared_job_static_hash(job_dir)
+    signature = (
+        None if _parameter_template is None else _parameter_template.definition_signature()
+    )
+    job_static_hash = _prepared_job_static_hash(job_dir, parameter_signature=signature)
 
     evaluation_context = _evaluation_context(
         run_id=run_id,
@@ -255,6 +264,12 @@ def effective_worker_config_summary(
 def prepared_job_static_hash(job_dir: str | Path) -> str:
     """Return a stable static-input hash that ignores assigned parameter values."""
 
+    return _prepared_job_static_hash(job_dir)
+
+
+def _prepared_job_static_hash(
+    job_dir: str | Path, *, parameter_signature: dict[str, object] | None = None
+) -> str:
     root = Path(job_dir).resolve()
     digest = hashlib.sha256()
     files = sorted(
@@ -265,7 +280,7 @@ def prepared_job_static_hash(job_dir: str | Path) -> str:
         rel_path = path.relative_to(root)
         if _is_hash_excluded(rel_path):
             continue
-        data = _static_file_bytes(path, rel_path, root)
+        data = _static_file_bytes(path, rel_path, root, parameter_signature)
         digest.update(b"FILE\n")
         digest.update(rel_path.as_posix().encode("utf-8"))
         digest.update(b"\n")
@@ -339,11 +354,19 @@ def _sanitize_name(value: str) -> str:
     return name or "job"
 
 
-def _static_file_bytes(path: Path, rel_path: Path, root: Path) -> bytes:
+def _static_file_bytes(
+    path: Path,
+    rel_path: Path,
+    root: Path,
+    parameter_signature: dict[str, object] | None = None,
+) -> bytes:
     if rel_path.as_posix().lower() != "parameters_constraints.py":
         return path.read_bytes()
-    job_workspace = WorkspaceContext.from_path(root, job_template_dir=".")
-    signature = get_parameter_definition_signature(job_workspace)
+    if parameter_signature is None:
+        job_workspace = WorkspaceContext.from_path(root, job_template_dir=".")
+        signature = get_parameter_definition_signature(job_workspace)
+    else:
+        signature = parameter_signature
     return json.dumps(
         signature,
         ensure_ascii=True,

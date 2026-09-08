@@ -15,6 +15,7 @@ from ..workspace import WorkspaceContext, resolve_workspace
 from .cost_misc import RawVariables, calculate_costs as _calculate_costs
 from .parameters_constraints_class import (
     Parameter,
+    RangeElement,
     denormalize_values,
     normalize_values,
 )
@@ -42,6 +43,42 @@ class TaskDefinition:
     @property
     def objective_count(self) -> int:
         return len(self.objective_names)
+
+
+@dataclass(frozen=True, slots=True)
+class JobParameterTemplate:
+    """Owned parameter definitions for concurrent jobs from one frozen task."""
+
+    source_directory: Path
+    parameter_specs: tuple[tuple[str, tuple[RangeElement, ...], str], ...]
+    constraints: tuple[str, ...]
+
+    def parameters(self) -> tuple[Parameter, ...]:
+        """Create independent mutable values; workers never share assignments."""
+        return tuple(
+            Parameter(name, ranges, unit=unit)
+            for name, ranges, unit in self.parameter_specs
+        )
+
+    def definition_signature(self) -> dict[str, object]:
+        return {
+            "parameters": tuple(parameter.to_dict() for parameter in self.parameters()),
+            "constraints": self.constraints,
+        }
+
+
+def freeze_job_parameters(workspace: WorkspaceLike) -> JobParameterTemplate:
+    """Read a task once before parallel job preparation and cost interpretation."""
+    context = _workspace(workspace)
+    parameters, constraints = _parameter_payload(context)
+    return JobParameterTemplate(
+        context.job_template_dir.resolve(),
+        tuple(
+            (parameter.name, parameter.ranges, parameter.unit)
+            for parameter in parameters
+        ),
+        constraints,
+    )
 
 
 class CostObjectiveWidthError(ValueError):
@@ -243,6 +280,12 @@ def assign_parameters(
     """Create an in-memory assigned snapshot using canonical task semantics."""
 
     parameters, _constraints = _parameter_payload(workspace)
+    return _assign_parameters(parameters, normalized_variables)
+
+
+def _assign_parameters(
+    parameters: tuple[Parameter, ...], normalized_variables: Sequence[float]
+) -> tuple[Parameter, ...]:
     normalized_values = tuple(float(value) for value in normalized_variables)
     if len(normalized_values) != len(parameters):
         raise ValueError(
@@ -325,11 +368,19 @@ def materialize_job_parameters(
     normalized_variables: Sequence[float],
     *,
     job_dir: str | os.PathLike[str],
+    parameter_template: JobParameterTemplate | None = None,
 ) -> tuple[float, ...]:
     """Write an assigned parameter snapshot into an explicit job directory."""
 
-    _parameters, constraints = _parameter_payload(workspace)
-    assigned = assign_parameters(workspace, normalized_variables)
+    if parameter_template is None:
+        parameters, constraints = _parameter_payload(workspace)
+    else:
+        if not isinstance(parameter_template, JobParameterTemplate):
+            raise TypeError("parameter_template must be a JobParameterTemplate")
+        if parameter_template.source_directory != _workspace(workspace).job_template_dir.resolve():
+            raise ValueError("parameter template belongs to a different task source")
+        parameters, constraints = parameter_template.parameters(), parameter_template.constraints
+    assigned = _assign_parameters(parameters, normalized_variables)
 
     destination = Path(job_dir).resolve() / PARAMETERS_FILE_NAME
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -468,10 +519,12 @@ __all__ = [
     "FAST_EVALUATION_MODULE_NAME",
     "PARAMETERS_FILE_NAME",
     "TaskDefinition",
+    "JobParameterTemplate",
     "assign_parameters",
     "calculate_cost",
     "calculate_costs_from_raw_data",
     "denormalize_variables",
+    "freeze_job_parameters",
     "get_constraints",
     "get_objective_count",
     "get_objective_names",

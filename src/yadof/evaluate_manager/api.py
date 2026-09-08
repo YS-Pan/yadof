@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from ..config import LoadedConfig, load_config
-from ..job_template import get_objective_count, get_variable_count, validate_fast_task
+from ..job_template import (
+    JobParameterTemplate,
+    freeze_job_parameters,
+    get_objective_count,
+    get_variable_count,
+    validate_fast_task,
+)
 from ..workspace import WorkspaceContext
 from ..recorded_data.session import CampaignSession, RecordingError
 from ..task_snapshot import GenerationTaskSnapshot
@@ -456,9 +462,21 @@ def _dispatch_local(
             generation_index=generation_index,
             worker_plan_metadata=worker_plan_metadata,
             cancel_event=cancel_event,
+            parameter_template=parameter_template,
+            parameter_error=parameter_error,
         )
 
     try:
+        # Finalization keeps one task interpreter until the batch completes.
+        # Resolve job definitions before it can acquire the import namespace lock;
+        # workers then prepare independent assignments without another task import.
+        parameter_template = None
+        parameter_error = None
+        if population_rows and not cancel_event.is_set():
+            try:
+                parameter_template = freeze_job_parameters(config.workspace)
+            except Exception as exc:  # noqa: BLE001 - preserve per-candidate failures.
+                parameter_error = exc
         worker_count = worker_plan.worker_count
         if worker_count <= 1 or len(population_rows) <= 1:
             for index, row in enumerate(population_rows):
@@ -519,6 +537,8 @@ def _evaluate_one_local(
     generation_index: int | None,
     worker_plan_metadata: Mapping[str, object],
     cancel_event: threading.Event,
+    parameter_template: JobParameterTemplate | None = None,
+    parameter_error: Exception | None = None,
 ) -> tuple[int, JobResult]:
     job: JobSpec | None = None
     result: JobResult | None = None
@@ -534,23 +554,28 @@ def _evaluate_one_local(
             optimization_index=optimization_index,
             generation_index=generation_index,
         )
-    try:
-        job = prepare_job(
-            config.workspace,
-            population_row,
-            config=config,
-            mode="local",
-            timeout_sec=timeout_sec,
-            run_id=run_id,
-            optimization_index=optimization_index,
-            generation_index=generation_index,
-            population_index=index,
-        )
-    except Exception as exc:  # noqa: BLE001 - isolate one candidate.
+    preparation_error = parameter_error
+    if preparation_error is None:
+        try:
+            job = prepare_job(
+                config.workspace,
+                population_row,
+                config=config,
+                mode="local",
+                timeout_sec=timeout_sec,
+                run_id=run_id,
+                optimization_index=optimization_index,
+                generation_index=generation_index,
+                population_index=index,
+                _parameter_template=parameter_template,
+            )
+        except Exception as exc:  # noqa: BLE001 - isolate one candidate.
+            preparation_error = exc
+    if preparation_error is not None:
         failure = _failed_result(
             stage="prepare",
             engine="local",
-            exc=exc,
+            exc=preparation_error,
             population_row=population_row,
             index=index,
             jobs_dir=config.workspace.jobs_dir,

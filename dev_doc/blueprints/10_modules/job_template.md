@@ -44,13 +44,22 @@ objective, posterior model, or acquisition rule.
 
 ## Parameter handoff
 
-Canonical definitions are fresh-loaded for every assignment. `assign_parameters()`
-validates normalized values and denormalizes through ranges/levels in memory.
+Point-in-time assignment calls fresh-load canonical definitions. Local batch
+dispatch instead calls `freeze_job_parameters()` before starting workers or
+interpreting results. The resulting immutable `JobParameterTemplate` owns the
+source directory, parameter range/unit specifications and constraints; it creates
+independent mutable parameters for each job. Reuse is explicit and scoped to the
+same task snapshot directory. `assign_parameters()` and template-backed
+materialization share the same normalized-value validation and range/level
+denormalization.
 Prepared-job materialization adapts that same assigned snapshot and writes it atomically as a
 self-contained `parameters_constraints.py` in the job. The assigned snapshot has a
 small local `Parameter` representation and imports no yadof, so execute nodes do not
 receive the package. Static hashing interprets that representation through fields,
-not class identity.
+not class identity. A template-backed job hashes the same frozen definition
+signature without importing the generated module while another thread owns the
+cost interpreter's task namespace. Direct preparation still fresh-loads task
+definitions; a later generation creates a fresh template.
 
 ## rawData contract
 
