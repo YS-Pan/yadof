@@ -80,13 +80,22 @@ def test_external_failure_classification_and_clean_replacement(resident, failure
     assert after["child"]["calls"] == 1
 
 
-def test_resident_long_scratch_has_no_external_junction(resident, tmp_path):
+@pytest.mark.parametrize("path_units,unicode_part", [
+    (258, ""), (259, ""), (300, ""), (259, "\U0001f52c" * 20),
+])
+def test_resident_long_scratch_has_no_external_junction(resident, tmp_path, path_units, unicode_part):
     adapter, original = resident
-    root = tmp_path
-    while len(str(root)) < 300:
-        root = root / ("long-task-scratch-" * 3)
+    root = tmp_path / ("scratch" + unicode_part)
+    # mkdtemp appends one separator, the prefix, and its eight-character token.
+    root_units = path_units - 1 - len("pychrono-session-") - 8
+    while root_units - len(str(root).encode("utf-16-le")) // 2 > 120:
+        root /= "d" * 100
+    remaining = root_units - len(str(root).encode("utf-16-le")) // 2 - 1
+    assert remaining > 0
+    root /= "d" * remaining
     with adapter["PyChronoSession"](original.worker, scratch_root=root, interpreter=sys.executable) as session:
-        payload, diagnostics = session.evaluate_rawdata({"x": 2}, timeout=5)
+        assert len(str(session.scratch).encode("utf-16-le")) // 2 == path_units
+        payload, diagnostics = session.evaluate_rawdata({"x": 2}, timeout=15)
         assert np.array_equal(payload["response.npz"]["values"], np.array([2., 4.]))
         assert session.launch_alias is None
         assert diagnostics["resident_pid"]

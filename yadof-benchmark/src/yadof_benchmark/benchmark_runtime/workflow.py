@@ -14,6 +14,7 @@ from .contracts import (
     BenchmarkError,
     BUDGET_PROFILES,
     ComparisonSpec,
+    DEFAULT_CELL_CONCURRENCY,
     DEFAULT_GENERATIONS,
     DEFAULT_POPULATION,
     DEFAULT_SEEDS,
@@ -58,7 +59,7 @@ class Benchmark:
         self._name = fallback or "benchmark"
         self._evidence: str | None = None
         self._fail_fast: bool | None = None
-        self._cell_concurrency = 1
+        self._cell_concurrency = DEFAULT_CELL_CONCURRENCY
         self._representative_generation_seconds: float | None = None
         self._python = Path(sys.executable).resolve()
         self._strategies: list[StrategySpec] = []
@@ -124,6 +125,10 @@ class Benchmark:
         name: str | None = None,
         sources: Mapping[str, str | Path] | None = None,
         slow_surrogate: bool = False,
+        population: int | None = None,
+        batch_size: int | None = None,
+        initial_population: int | None = None,
+        generations: int | None = None,
     ) -> "Benchmark":
         selected_id = _id(strategy_id, label="strategy id")
         selected_name = str(name or selected_id).strip()
@@ -144,6 +149,13 @@ class Benchmark:
                 source=None if source is None else self._path(source),
                 sources=MappingProxyType(mapped),
                 slow_surrogate=slow_surrogate,
+                **{
+                    key: None if value is None else _positive(value, label=key)
+                    for key, value in {
+                        "population": population, "batch_size": batch_size,
+                        "initial_population": initial_population, "generations": generations,
+                    }.items()
+                },
             )
         )
         return self
@@ -157,6 +169,8 @@ class Benchmark:
         seeds: Sequence[int] | None = None,
         population: int | None = None,
         generations: int | None = None,
+        batch_size: int | None = None,
+        initial_population: int | None = None,
         reference: str | None = None,
         stop_on_top10_reference: bool = False,
     ) -> "Benchmark":
@@ -189,6 +203,8 @@ class Benchmark:
                     else _positive(generations, label="generations")
                 ),
                 reference=reference,
+                batch_size=None if batch_size is None else _positive(batch_size, label="batch_size"),
+                initial_population=None if initial_population is None else _positive(initial_population, label="initial_population"),
                 stop_on_top10_reference=stop_on_top10_reference,
             )
         )
@@ -243,10 +259,9 @@ class Benchmark:
             if not isinstance(comparison.stop_on_top10_reference, bool):
                 raise BenchmarkError("stop_on_top10_reference must be boolean")
             if comparison.stop_on_top10_reference and (
-                self._cell_concurrency != 1 or comparison.reference is None
-                or comparison.strategy_ids[0] != comparison.reference
+                comparison.reference is None
             ):
-                raise BenchmarkError("top-10 stopping requires cell_concurrency=1 and the reference strategy first")
+                raise BenchmarkError("top-10 stopping requires a reference strategy")
             missing = sorted(set(comparison.strategy_ids) - known)
             if missing:
                 raise BenchmarkError(
@@ -313,14 +328,17 @@ def apply_budget_profile(
             f"budget profile must be one of {', '.join(BUDGET_PROFILES)}: {profile!r}"
         )
     comparisons = request.comparisons
+    strategies = request.strategies
     if selected == "smoke":
         comparisons = tuple(
             replace(comparison, generations=1)
             for comparison in request.comparisons
         )
+        strategies = tuple(replace(strategy, generations=1) for strategy in strategies)
     return replace(
         request,
         comparisons=comparisons,
+        strategies=strategies,
         budget_profile=selected,
     )
 

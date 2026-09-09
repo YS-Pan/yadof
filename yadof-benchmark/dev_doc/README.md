@@ -36,6 +36,8 @@ Current invariants are:
   when attempts are complete and finite contract-valid metric evidence remains;
 - missing attempts, no finite evidence, contract failure, initial-population
   failure, or missing metric does invalidate a cell;
+- explicit non-physical task/infrastructure failures in public evaluation
+  metadata invalidate collection even when other candidates have finite costs;
 - task-owned Chrono guards classify nonfinite simulator state as an individual
   numerical failure; oracle audit retains failed normalized candidates;
 - workflow postprocessors opt into failed-cell summaries with `run_on_failure`;
@@ -47,10 +49,18 @@ Current invariants are:
 - same-baseline/same-seed arms require matching baseline input digest, planned and
   attempted budget, and generation-0 normalized population before pairing;
 - planning performs no simulator work and writes no execution evidence;
-- cell concurrency and baseline simulation concurrency are separate controls;
+- cell concurrency defaults to four in the builder and runnable presets, and
+  remains separate from baseline simulation concurrency;
   baseline manifests store only a finite positive physical-core multiplier,
   while cell state records the host detection and resolved worker count;
-- terminal result publication is a fatal persistence boundary before FIFO refill;
+- child native thread limits are applied before import, and benchmark-local
+  commit-memory protection stops resource exhaustion independently of cell
+  failure policy;
+- the internal executor's optional capacity policy adjusts only future
+  admissions, records every capacity revision, and reuses completed references
+  within the same execution; it does not create a resume or attempt mechanism;
+- terminal result publication is a fatal persistence boundary before admitting
+  another dependency-ready cell;
 - yadof `evaluation` snapshots are the only source of evaluation percentage;
   command heartbeats expose elapsed/activity state without inventing completion;
 - timeout handling stops the child process tree, records cleanup, continues

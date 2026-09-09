@@ -16,6 +16,8 @@
   baseline, and enforce freshness plus typed readiness.
 - Reserve an explicit real exploration quota; a calibrated applicability gate
   excludes below-threshold exploitation and audits low/boundary exploration.
+- Validate acquisition/exploration quota against real batch B, independently of
+  retained P. Initial/full-real fallback follows the shared I/B result contract.
 - Create one persistent schema-bearing sampler, stream current-cost projection by
   chunks, select qNEHVI exploitation, and return the combined unique population as
   `PosteriorGenerationSelection` for program-owned real evaluation.

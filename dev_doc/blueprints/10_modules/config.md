@@ -1,5 +1,9 @@
 # Module blueprint: config
 
+Core optimization budgets distinguish retained `OPTIMIZE_POPULATION_SIZE` from
+optional-positive `OPTIMIZE_BATCH_SIZE` and `OPTIMIZE_INITIAL_POPULATION_SIZE`.
+The latter two default to `None`, resolved to P at the generation boundary.
+
 ## Responsibility and precedence
 
 `yadof.config` owns framework-generic defaults and returns immutable `LoadedConfig`.

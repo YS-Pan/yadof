@@ -57,6 +57,8 @@ def _plan_summary(
 ) -> dict[str, Any]:
     cells = list(spec.cells)
     populations = [cell.population for cell in cells]
+    batches = [cell.batch_size or cell.population for cell in cells]
+    initials = [cell.initial_population or cell.population for cell in cells]
     generations = [cell.generations for cell in cells]
     replication_scopes = sorted({cell.replication_scope for cell in cells})
     simulation_concurrency = [
@@ -116,6 +118,10 @@ def _plan_summary(
         "budget": {
             "population_min": min(populations, default=0),
             "population_max": max(populations, default=0),
+            "batch_size_min": min(batches, default=0),
+            "batch_size_max": max(batches, default=0),
+            "initial_population_min": min(initials, default=0),
+            "initial_population_max": max(initials, default=0),
             "generations_min": min(generations, default=0),
             "generations_max": max(generations, default=0),
             "contains_slow_surrogate": any(

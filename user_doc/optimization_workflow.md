@@ -818,7 +818,7 @@ evaluation. Backend/projection failures have the same full-real fallback;
 `low_support_policy="reject"` is instead an explicit campaign-stopping gate.
 
 The qNEHVI batch must equal population size minus
-`ceil(population_size * exploration_fraction)`, with at least one real exploration
+`ceil(batch_size * exploration_fraction)`, with at least one real exploration
 point and at least one exploitation point. The candidate pool, posterior draws,
 chunk size, batch/restarts, reference point, support rule, exploration fraction,
 objective names, and component identities all enter the semantic strategy

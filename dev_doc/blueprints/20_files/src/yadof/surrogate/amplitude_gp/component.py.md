@@ -1,5 +1,8 @@
 # Blueprint: surrogate/amplitude_gp/component.py
 
+Expose `field_workers=` as explicit execution capacity alongside scientific
+parameters. It passes unchanged to fitting while preserving scientific identity.
+
 ## Contract
 
 Provide the lightweight immutable `AmplitudeGPComponent` and explicit

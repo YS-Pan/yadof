@@ -1,5 +1,12 @@
 # Module blueprint: optimize
 
+Retained population P, subsequent real batch B and initial sampling I are
+independent core budgets. `GenerationContext.evaluation_size` is I for generation
+zero and B thereafter. Search roots bind all three sizes; pymoo n_offsprings is B,
+survival/reference directions use P, and initialization samples I before restoring
+P. GPSAF and posterior real-selection quotas use the evaluation count; shared
+full-real fallback obeys the same contract. Default omitted B/I remain P.
+
 ## Responsibility
 
 `yadof.optimize` owns workspace-explicit campaign/generation APIs, common
@@ -150,7 +157,7 @@ identity. A blocker immediately selects a complete real-search population. An
 eligible path freezes the finite unique nondominated real baseline, applies the
 surrogate freshness gate, proposes one unique history-informed pymoo pool, obtains
 candidate-aligned runtime readiness, and reserves
-`ceil(population * exploration_fraction)` real exploration rows. Calibrated
+`ceil(batch_size * exploration_fraction)` real exploration rows. Calibrated
 applicability excludes below-threshold exploitation and prioritizes low/boundary
 real exploration only according to the sealed gate identity.
 

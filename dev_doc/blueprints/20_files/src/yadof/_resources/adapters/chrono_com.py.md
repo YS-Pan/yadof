@@ -18,7 +18,9 @@
   framing before returning memory rawData. It does not serialize NPZ between calls.
 - Send the owned session directory in the initial frame. When a long Windows TEMP
   would stall a venv launcher, bootstrap with a short temporary root, then switch
-  the child to owned candidate scratch. No resident junction is created.
+  the child to owned candidate scratch. The launch-directory bound is 258 UTF-16
+  units, reserving the appended separator and NUL; 259-unit paths already need
+  the short bootstrap. No resident junction is created.
 - Session close drains/terminates/reaps the child, closes pipes/readers and removes
   scratch. Physical errors retain the child; protocol errors, crash and timeout
   close it so later evaluation starts a fresh process.

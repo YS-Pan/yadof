@@ -12,6 +12,7 @@ import os
 import platform
 import shutil
 import sys
+import time
 import uuid
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
@@ -141,13 +142,30 @@ def write_new_json(path: str | Path, value: Any) -> None:
     write_new_text(path, _serialized(value))
 
 
+def _replace_after_readers_close(source: Path, target: Path) -> None:
+    # Windows readers/virus scanners can briefly deny rename/delete sharing.
+    # Keep the old complete file until replacement succeeds; never unlink it.
+    deadline = time.monotonic() + 2.0
+    delay = 0.01
+    while True:
+        try:
+            os.replace(source, target)
+            return
+        except OSError as exc:
+            remaining = deadline - time.monotonic()
+            if getattr(exc, "winerror", None) not in {5, 32, 33} or remaining <= 0:
+                raise
+            time.sleep(min(delay, remaining))
+            delay = min(delay * 2, 0.1)
+
+
 def atomic_write_text(path: str | Path, text: str) -> None:
     target = Path(path)
     temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary.write_text(text, encoding="utf-8", newline="\n")
-        os.replace(temporary, target)
+        _replace_after_readers_close(temporary, target)
     except OSError as exc:
         try:
             temporary.unlink(missing_ok=True)

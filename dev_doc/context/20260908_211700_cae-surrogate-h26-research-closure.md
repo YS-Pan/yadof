@@ -16,10 +16,12 @@ The frozen research protocol used ordinary NSGA-III with 200 candidates and 50
 generations as its reference. Each true candidate score is the arithmetic mean of
 its objective costs, using `math.fsum`. Q is the mean of the ten lowest finite
 true scores in cumulative formal history. Crossing requires Q strictly below the
-paired ordinary reference at a complete 200-attempt batch boundary, within 1.5
-times the paired perfect-surrogate crossing budget, rounded down to a full batch.
-Failed/nonfinite attempts are charged; fewer than ten finite scores or an undefined
-crossing cannot pass. Seeds 101/401/402/403 are development evidence only.
+paired ordinary reference at a complete 200-attempt batch boundary under
+the frozen per-cell caps listed below. Failed/nonfinite attempts are charged;
+fewer than ten finite scores or an undefined crossing cannot pass. The caps
+and pass labels record the closed historical experiment; its single-seed
+perfect-surrogate gates have been superseded and are not current thresholds.
+Seeds 101/401/402/403 are development evidence only.
 
 H26 used one frozen joint multioutput residual forest on all baselines, with 256
 aligned complete-response members and actual splits across multiple rawData field
@@ -30,14 +32,14 @@ residual preparation capacity 1024, and all 256 trees were retained. NSGA-III,
 GPSAF and INR in these completed runs were unchanged. The read-only rawData
 sharing and reusable training buffers introduced by b392949 were reused.
 
-| Baseline | Seed | Ordinary R | Perfect N | H26 first N | Cap | Final Q | Pass |
-|---|---:|---:|---:|---:|---:|---:|---|
-| Chrono | 101 | 0.198523288029 | 1600 | undefined | 2400 | 0.231179151231 | no |
-| SAW | 101 | 0.219988488842 | 3800 | 4000 | 5600 | 0.156492428791 | yes |
-| test_com | 101 | 0.290199969926 | 3600 | 5400 | 5400 | 0.289989069423 | yes |
-| Chrono | 401 | 0.181925330978 | 2200 | undefined | 3200 | 0.249272683749 | no |
-| SAW | 401 | 0.270359315942 | 2200 | undefined | 3200 | 0.280038919559 | no |
-| test_com | 401 | 0.289821014631 | 4200 | 5200 | 6200 | 0.287267346214 | yes |
+| Baseline | Seed | Ordinary R | H26 first N | Cap | Final Q | Pass |
+|---|---:|---:|---:|---:|---:|---|
+| Chrono | 101 | 0.198523288029 | undefined | 2400 | 0.231179151231 | no |
+| SAW | 101 | 0.219988488842 | 4000 | 5600 | 0.156492428791 | yes |
+| test_com | 101 | 0.290199969926 | 5400 | 5400 | 0.289989069423 | yes |
+| Chrono | 401 | 0.181925330978 | undefined | 3200 | 0.249272683749 | no |
+| SAW | 401 | 0.270359315942 | undefined | 3200 | 0.280038919559 | no |
+| test_com | 401 | 0.289821014631 | 5200 | 6200 | 0.287267346214 | yes |
 
 H26 passed 3/6 development cases. The run completed all 26,000 attempts: 25,811
 finite and 189 charged failures (Chrono 101: 99; Chrono 401: 90). All 130 full-batch
@@ -125,3 +127,5 @@ See [the preparation fix record](../change_records/20260907_192303_unblock-paral
 - `astra-h26-postexit-runtime-audit-complete-20260908.json`: SHA256 `e8ff4bebdc85c09e0ec8427df8bcbb63b95b0f343a06be97c4ce895b74592af7`.
 - `astra-h26-inverse-cache-parity-closure-20260908.json`: SHA256 `7f8f008c13fd4c2b055d9ec5a173c4d1c0b2dfa254e55c99207578a51e9a88a0`.
 - Detailed history: `cae-surrogate-continuation-20260907.md`; amended scope: `cae-surrogate-stop-after-active-20260908.md`; reused test output: `astra-reused-installed-validation-20260908.json`.
+
+Current perfect-surrogate comparison: [five-seed P/B baseline](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md).

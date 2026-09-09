@@ -1,7 +1,7 @@
 # Python and command-line API
 
 
-For a sequential paired reference with strict cumulative top-10 stopping, use
+For a paired reference with strict cumulative top-10 stopping, use
 `compare(..., reference=..., stop_on_top10_reference=True)` and the strategy
 receipt contract in [perfect_surrogate.md](perfect_surrogate.md).
 ## `Benchmark.configure`
@@ -18,6 +18,9 @@ benchmark.configure(
 ```
 
 `evidence` is required and must be `"structural"` or `"performance"`.
+`cell_concurrency` defaults to four active cells. An explicit positive integer
+overrides it; `None` preserves the current setting. This is separate from each
+baseline's physical-core multiplier for simulation workers.
 `python` defaults to the interpreter running yadof-benchmark and should normally
 remain unchanged.
 
@@ -72,8 +75,30 @@ wins. No evidence-class scale floor is imposed. A performance comparison with on
 seed is labeled exploratory; pass multiple seeds for multi-seed descriptive
 evidence.
 
-All arms in one comparison use the same population, generations, and seeds so
-paired evidence has equal planned and attempted budgets.
+`batch_size=None` and `initial_population=None` both default to the resolved
+population. Population P controls retained survivors; B controls each subsequent
+formal batch; I controls the initial design. A cell's planned evaluations are
+`I + (generations - 1) * B`.
+
+`strategy()` also accepts `population=`, `batch_size=`, `initial_population=` and
+`generations=`. Explicit strategy values override comparison values, enabling
+P/B sweeps using the same program. Unspecified B and I fall back to that arm's P.
+All arms share seeds. Use an explicit common `initial_population` in `compare()`
+and choose generation counts giving the same formal budget. Pair validation
+still requires equal planned budgets, actual initial designs and task digests.
+Ordinary comparisons also require equal attempted budgets. The declared top-10
+protocol permits verified early completion. The smoke budget profile sets every
+arm's generations to one, including strategy overrides.
+
+```python
+benchmark.strategy("p200-b20", "resources/strategies/gpsaf/optimization.py",
+                   population=200, batch_size=20, generations=491)
+benchmark.strategy("p50-b200", "resources/strategies/gpsaf/optimization.py",
+                   population=50, batch_size=200, generations=50)
+benchmark.compare("budget", baselines=["test-com/synthetic-antenna"],
+                  strategies=["p200-b20", "p50-b200"], initial_population=200,
+                  seeds=[101, 102, 103])
+```
 
 ## Workflow postprocessors
 

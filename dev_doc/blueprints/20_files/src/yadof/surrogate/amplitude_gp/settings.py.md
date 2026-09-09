@@ -1,5 +1,9 @@
 # Blueprint: surrogate/amplitude_gp/settings.py
 
+`field_workers` is positive integral execution capacity, default one. It is
+excluded from scientific semantic parameters so changing CPU capacity preserves
+compatible checkpoints. Effective field concurrency is retained in fit diagnostics.
+
 ## Contract
 
 One frozen, slotted `AmplitudeGPSettings` owns every scientific factory parameter.
@@ -10,5 +14,5 @@ real transforms and scales, bounded fractions and supported Matérn smoothness.
 Reject booleans as numbers. Positive ordered kernel bounds must enclose their
 initial values; canonicalize accepted bounds to tuples and numeric values to
 built-in types. The shared default is immutable. `semantic_parameters()` returns
-JSON-compatible complete settings; no mutable global model policy, backend
+JSON-compatible scientific settings, excluding field-worker capacity; no mutable global model policy, backend
 imports or workspace reads occur here.

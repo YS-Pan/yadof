@@ -69,7 +69,8 @@ def test_training_free_oracle_is_fresh_with_empty_data_and_zero_lag(oracle_conte
     assert result.ready and result.lag == 0
 
 
-def test_installed_perfect_program_really_uses_alpha_beta_and_matches_formal_rows(tmp_path):
+@pytest.mark.parametrize("population,batch,initial", [(12, 12, 12), (12, 4, 20), (4, 12, 20)])
+def test_installed_perfect_program_really_uses_alpha_beta_and_matches_formal_rows(tmp_path, population, batch, initial):
     import shutil
     from pathlib import Path
     from yadof.optimize import run_generations
@@ -79,19 +80,21 @@ def test_installed_perfect_program_really_uses_alpha_beta_and_matches_formal_row
     workspace = tmp_path / "cell/workspace"
     shutil.copyfile(source, workspace / "submit/optimization.py")
     with (workspace / "config.py").open("a", encoding="utf-8") as stream:
-        stream.write("\nOPTIMIZE_POPULATION_SIZE = 12\nOPTIMIZE_SMOKE_TEST_ENABLED = False\nFAST_EVALUATION_MAX_WORKERS = 2\n")
+        stream.write(f"\nOPTIMIZE_POPULATION_SIZE = {population}\nOPTIMIZE_BATCH_SIZE = {batch}\nOPTIMIZE_INITIAL_POPULATION_SIZE = {initial}\nOPTIMIZE_SMOKE_TEST_ENABLED = False\nFAST_EVALUATION_MAX_WORKERS = 2\n")
     from yadof_benchmark.runtime_freeze import task_fingerprint
     atomic_write_json(workspace / "benchmark_control.json", {"root": str(tmp_path),
         "reference": False, "threshold": 0.0, "task_files": task_fingerprint(workspace)})
     results = run_generations(workspace, 2, start_generation=0)
     assert len(results) == 2 and results[1].surrogate_used
     diagnostics = results[1].diagnostics
-    assert diagnostics["alpha_candidate_count"] == 33
-    assert diagnostics["beta_iterations"] == 3 and diagnostics["beta_candidate_count"] == 33
-    assert diagnostics["oracle_simulation_evaluations"] == 66
-    assert diagnostics["oracle_selected_bitwise_matches"] == 11
+    exploitation = batch - max(1, round(batch * 0.1))
+    assert diagnostics["alpha_candidate_count"] == 3 * exploitation
+    assert diagnostics["beta_iterations"] == 3 and diagnostics["beta_candidate_count"] == 3 * exploitation
+    assert diagnostics["oracle_simulation_evaluations"] == 6 * exploitation
+    assert diagnostics["oracle_selected_bitwise_matches"] == exploitation
     assert diagnostics["oracle_contract_errors"] == 0
-    assert len(list_records(workspace)) == 24
+    assert len(list_records(workspace)) == initial + batch
+    assert [len(result.population) for result in results] == [initial, batch]
 
 
 def test_all_one_is_valid_but_cost_interface_exception_is_fatal(oracle_context, monkeypatch):
@@ -219,7 +222,8 @@ def test_chrono_state_checks_do_not_hide_interface_or_shape_errors(chrono_worker
 def test_metric_uses_cumulative_formal_top_ten_and_strict_crossing(tmp_path):
     atomic_write_json(tmp_path / "benchmark_control.json", {"reference": False, "threshold": 0.5})
     context = SimpleNamespace(config=SimpleNamespace(workspace=SimpleNamespace(root=tmp_path)),
-                              generation_index=0, population_size=10, history=())
+                              generation_index=0, population_size=10, batch_size=10,
+                              initial_population_size=10, history=())
     assert not record_generation(context, ((0.5, 0.5),) * 10)
     context.generation_index = 1
     context.history = tuple(SimpleNamespace(costs=(0.5, 0.5)) for _ in range(10))
@@ -238,6 +242,7 @@ def test_installed_perfect_preset_has_complete_paired_matrix(tmp_path):
     initialized = init_workspace(tmp_path / "experiment", preset="perfect")
     spec = plan_workspace(initialized["workspace"]).to_dict()
     assert len(spec["cells"]) == 6
+    assert spec["workflow"]["cell_concurrency"] == 4
     assert all(c["population"] == 200 and c["generations"] == 50 and c["seed"] == 101 for c in spec["cells"])
     assert all(c["top10_reference"] == "real-nsga3" for c in spec["cells"])
     assert spec["workflow"]["postprocessors"][0]["run_on_failure"] is True

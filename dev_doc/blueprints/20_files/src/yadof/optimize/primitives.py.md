@@ -31,6 +31,8 @@
 - `search_candidates()` clones input state, delegates ask to pymoo, applies one
   bounded unique refill policy, and returns an exact pool plus next state. Exhaustion
   raises `InsufficientCandidatePoolError`; partial success is never returned.
+- `full_real_search()` prepares retained P and returns I initial or B later real
+  candidates. Search root identity binds the resolved P/B/I budgets independently.
 - `bind_surrogate_prediction()` consumes the Stage 4 DTO. The explicit legacy
   binder accepts only plain deterministic current-cost rows and rejects real,
   posterior, and unbound surrogate owners.

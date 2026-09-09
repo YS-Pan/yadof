@@ -165,7 +165,7 @@ def _workspace(
     slow: tuple[str, ...] = (),
     postprocess_source: str = "",
     fail_fast: bool = False,
-    cell_concurrency: int = 1,
+    cell_concurrency: int | None = 1,
 ) -> Path:
     root = Path(api.init_workspace(requested)["workspace"])
     for name in strategies:
@@ -401,6 +401,7 @@ def test_init_creates_single_execution_workspace(tmp_path: Path) -> None:
     assert "population=12" in source
     assert "generations=2" in source
     assert (root / ".benchmark" / "preset.json").is_file()
+    assert api.plan_workspace(root).workflow.cell_concurrency == 4
 
 
 def test_complete_preset_and_mechanical_smoke_profile(tmp_path: Path) -> None:
@@ -409,6 +410,7 @@ def test_complete_preset_and_mechanical_smoke_profile(tmp_path: Path) -> None:
     smoke = api.plan_workspace(root, budget_profile="smoke")
 
     assert len(complete.cells) == 18
+    assert complete.workflow.cell_concurrency == smoke.workflow.cell_concurrency == 4
     assert {cell.population for cell in complete.cells} == {200}
     assert {cell.generations for cell in complete.cells} == {25}
     assert {cell.execution["timeout_seconds"] for cell in complete.cells} == {7200}
@@ -485,12 +487,14 @@ def test_default_budget_depends_on_slow_surrogate_and_defaults_to_one_seed(
     standard = _workspace(
         tmp_path / "standard",
         strategies=("alpha",),
+        cell_concurrency=None,
         seeds=None,
         population=None,
         generations=None,
     )
     standard_plan = _plan(tmp_path, standard)
     comparison = standard_plan.workflow.comparisons[0]
+    assert standard_plan.workflow.cell_concurrency == 4
     assert comparison.seeds == (DEFAULT_SEED,)
     assert comparison.population == DEFAULT_POPULATION
     assert comparison.generations == DEFAULT_GENERATIONS
@@ -531,6 +535,7 @@ def test_explicit_budget_and_seed_list_are_respected_without_scale_floor(
     plan = _plan(tmp_path, workspace)
     comparison = plan.workflow.comparisons[0]
 
+    assert plan.workflow.cell_concurrency == 1
     assert comparison.seeds == (1, 2, 3)
     assert comparison.population == 3
     assert comparison.generations == 2
@@ -552,7 +557,7 @@ def test_packaged_baselines_use_tuned_physical_core_multipliers() -> None:
         ]
         for baseline_id, manifest in manifests.items()
     } == {
-        "chrono/trebuchet": 2.0,
+        "chrono/trebuchet": 1.0,
         "ngspice/saw-ladder": 2.0,
         "test-com/synthetic-antenna": 1.0,
     }
@@ -1073,6 +1078,29 @@ def test_individual_simulation_errors_do_not_invalidate_cell(tmp_path: Path) -> 
     assert cell["simulation_errors_tolerated"] is True
     assert cell["issues"] == ["one simulation recorded status=error"]
     assert inspect_workspace(workspace)["validity"]["simulation_errors_tolerated"] == 1
+
+
+def test_explicit_task_failure_cannot_be_collected_as_a_simulation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yadof import recorded_data
+    from yadof_benchmark.benchmark_runtime.results import collect_cell
+
+    _baseline(tmp_path)
+    workspace = _workspace(tmp_path / "launch-failure", strategies=("alpha",))
+    monkeypatch.setattr(recorded_data, "list_records", lambda _workspace: [
+        {"status": "completed", "job_name": "finite-candidate"},
+        {"status": "error", "job_name": "failed-launch", "job_metadata": {
+            "physical_failure": False, "error_type": "PyChronoError",
+            "error_message": "launch_failed: [WinError 267] invalid directory",
+        }},
+    ])
+    state = _execute(tmp_path, workspace, collector=collect_cell)
+    assert state["status"] == "failed"
+    cell = state["cells"]["c0001"]
+    assert cell["status"] == "failed"
+    assert "1 non-physical task/infrastructure failure(s)" in cell["error"]
+    assert "WinError 267" in cell["error"]
 
 
 def test_missing_attempted_evaluations_still_invalidates_cell(tmp_path: Path) -> None:

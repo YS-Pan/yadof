@@ -1,6 +1,6 @@
 # Chrono 完美 oracle GPSAF：机制、结构消融与独立验收
 
-当前适用范围（2026-09-03 复审）：本文继续保存当前 greedy-HV 机制的同池消融及五个独立种子证据。研究时的版本为 0.5.1、默认 cluster；当前 0.6.0 已默认 `infill_selection="hypervolume"`，以[GPSAF 用户规范](../../user_doc/gpsaf.md)为准。本文的 P20/β10 研究结果不等于当前 P200/β3 的正式预算或墙钟性能；后者见[六单元正式报告](20260903_214613_greedy-hv-perfect-surrogate-crossings.md)和[常驻 fast 吞吐对照](20260903_214613_resident-fast-throughput-validation.md)。旧 cluster 配置筛选及旧执行通路计时已移出活跃 context，见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。
+当前适用范围（2026-09-03 复审）：本文继续保存当前 greedy-HV 机制的同池消融及五个独立种子证据。研究时的版本为 0.5.1、默认 cluster；当前 0.6.0 已默认 `infill_selection="hypervolume"`，以[GPSAF 用户规范](../../user_doc/gpsaf.md)为准。本文的 P20/β10 研究结果不等于当前 P200/β3 的正式预算或墙钟性能；后者见[五种子 P/B 正式基准](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)和[常驻 fast 吞吐对照](20260903_214613_resident-fast-throughput-validation.md)。旧 cluster 配置筛选及旧执行通路计时已移出活跃 context，见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。
 
 本轮找到达到预注册标准的改进：可选的历史 HV 贪心选择。在五个新的配对种子、每臂 1000 次入选尝试下，相对强 NSGA-III P20 的 HV 配对相对增益中位数为 53.48%，绝对增益中位数为 0.238121，top-10 平均成本相对变化中位数为 -42.40%。全部冻结门槛通过。
 

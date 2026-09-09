@@ -1,5 +1,11 @@
 # GPSAF mechanisms and workflow adaptations
 
+Retained population P, subsequent real batch B, and initial design I are independent;
+see [config_and_run.md](config_and_run.md). Search survival/reference directions
+use P. Alpha and beta operate on the assisted part of B after reserving real
+exploration. Initial and unavailable-surrogate fallback generations use the
+same I/B evaluation contract as ordinary search.
+
 Alpha, beta, and the explicit cluster policy follow Blank and Deb's
 [GPSAF paper](https://arxiv.org/abs/2204.04054), Sections III-A/B and Algorithms 2/3.
 

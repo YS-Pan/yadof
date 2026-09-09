@@ -11,10 +11,17 @@ import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import nullcontext
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from .contracts import BenchmarkError, BenchmarkStorageError, CommandResult
+from .capacity import CapacityPolicy, cell_with_capacity, validate_capacity_decision
+from .concurrency import detect_physical_cores
+from .memory_guard import (
+    BenchmarkResourceError, NATIVE_THREAD_LIMITS, ResourceCancellation,
+    cancel_on_error, child_environment,
+)
 from .postprocessing import execute_postprocessors
 from .results import collect_cell, publish_results
 from .storage import (
@@ -181,7 +188,9 @@ def _emit_child_progress(
 
     generations = max(1, _command_integer(command, "--generations") or 1)
     population = max(1, _command_integer(command, "--population-size") or 1)
-    planned = generations * population
+    batch_size = _command_integer(command, "--batch-size") or population
+    initial_population = _command_integer(command, "--initial-population-size") or population
+    planned = initial_population + (generations - 1) * batch_size
     for _ in range(4096):
         try:
             snapshot = snapshots.get_nowait()
@@ -313,12 +322,15 @@ def _stop_process_tree(process: subprocess.Popen[str]) -> None:
             pass
 
 
-def _start_process(command: Sequence[str], cwd: Path) -> subprocess.Popen[str]:
+def _start_process(command: Sequence[str], cwd: Path, *, resource_guard=None) -> subprocess.Popen[str]:
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    if resource_guard is not None:
+        resource_guard.check()
     try:
-        return subprocess.Popen(
+        process = subprocess.Popen(
             list(command),
             cwd=cwd,
+            env=child_environment(),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -330,7 +342,16 @@ def _start_process(command: Sequence[str], cwd: Path) -> subprocess.Popen[str]:
             start_new_session=os.name != "nt",
         )
     except OSError as exc:
+        if getattr(exc, "winerror", None) in {8, 14, 1455}:
+            raise BenchmarkResourceError(f"cannot start command due to memory exhaustion: {exc}") from exc
         raise BenchmarkError(f"cannot start command: {exc}") from exc
+    if resource_guard is not None:
+        try:
+            resource_guard.assign(process)
+        except BaseException:
+            _stop_process_tree(process)
+            raise
+    return process
 
 
 def _drain(
@@ -503,6 +524,7 @@ def run_logged(
             "cwd": str(cwd),
             "started_utc": started_utc,
             "timeout_seconds": timeout_seconds,
+            "native_thread_limits": dict(NATIVE_THREAD_LIMITS),
         },
     )
     started = time.monotonic()
@@ -513,7 +535,9 @@ def run_logged(
     output_lines: queue.Queue[tuple[str, str]] | None = (
         queue.Queue(maxsize=4096) if stream_child_output else None
     )
-    process = _start_process(command, cwd)
+    process = _start_process(command, cwd, resource_guard=(
+        cancel_event if isinstance(cancel_event, ResourceCancellation) else None
+    ))
     _emit(
         event_sink,
         event="command-started",
@@ -648,6 +672,15 @@ def _run_command(
 
 def _command_failure(label: str, result: CommandResult) -> BenchmarkError:
     suffix = " after timeout" if result.timed_out else ""
+    stderr = Path(result.stderr)
+    if stderr.is_file():
+        with stderr.open("rb") as stream:
+            stream.seek(max(0, stderr.stat().st_size - 65536))
+            tail = stream.read().decode("utf-8", errors="replace")
+        if re.search(r"MemoryError|WinError\s+(?:8|14|1455)\b|paging file is too small|not enough memory", tail, re.IGNORECASE):
+            return BenchmarkResourceError(
+                f"{label} failed due to memory exhaustion; stopped all cells; see {result.stderr}"
+            )
     return BenchmarkError(
         f"{label} failed with exit code {result.returncode}{suffix}; "
         f"see {result.stderr}"
@@ -829,6 +862,10 @@ def _execute_cell(
             str(cell["generations"]),
             "--population-size",
             str(cell["population"]),
+            "--batch-size",
+            str(cell.get("batch_size") or cell["population"]),
+            "--initial-population-size",
+            str(cell.get("initial_population") or cell["population"]),
             "--random-seed",
             str(cell["seed"]),
             "--no-smoke-test",
@@ -862,7 +899,7 @@ def _execute_cell(
             cell_state["finished_utc"] = utc_now()
             save_state(root, state)
         return True
-    except BenchmarkStorageError:
+    except (BenchmarkStorageError, BenchmarkResourceError):
         raise
     except Exception as exc:
         with _state_guard(state_lock):
@@ -910,6 +947,9 @@ def _collect_succeeded(
             cell.get("display_label", cell["id"]),
         )
         result["runtime_seconds"] = cell_state.get("runtime_seconds", 0.0)
+        if "capacity_revision" in cell_state:
+            result["capacity_revision"] = cell_state["capacity_revision"]
+            result["simulation_concurrency"] = deepcopy(cell_state["simulation_concurrency"])
         result["visualizations"] = _render_cell_outputs(
             root,
             cell_root,
@@ -941,7 +981,7 @@ def _collect_succeeded(
             **progress,
         )
         return True
-    except BenchmarkStorageError:
+    except (BenchmarkStorageError, BenchmarkResourceError):
         raise
     except Exception as exc:
         with _state_guard(state_lock):
@@ -1096,6 +1136,7 @@ def execute_workspace(
     collector: Collector = collect_cell,
     event_sink: EventSink | None = None,
     stream_child_output: bool = False,
+    capacity_policy: CapacityPolicy | None = None,
 ) -> dict[str, Any]:
     root = Path(workspace).resolve()
     spec, state = load_execution(root)
@@ -1117,8 +1158,12 @@ def execute_workspace(
         max(1, int(spec["workflow"].get("cell_concurrency", 1))),
         max(1, len(pending)),
     )
+    physical_cores = None
+    capacity = {"cell_concurrency": cell_concurrency,
+                "baseline_physical_core_multipliers": {}, "reason": ""}
+    policy_completed_count = -1
     state_lock = threading.RLock()
-    cancel_event = threading.Event()
+    cancel_event = ResourceCancellation() if command_runner is run_logged else threading.Event()
     event_queue: queue.Queue[Mapping[str, Any]] = queue.Queue()
     worker_sink: EventSink | None = event_queue.put if event_sink is not None else None
 
@@ -1132,16 +1177,91 @@ def execute_workspace(
                 return
 
     active: dict[Future[bool], str] = {}
+    # A threshold may be consumed only after its reference's publication barrier.
+    dependencies = {}
+    for cell_id, cell in cell_by_id.items():
+        reference = cell.get("top10_reference")
+        if reference and cell["strategy"] != reference:
+            dependencies[cell_id] = next(
+                other_id for other_id, other in cell_by_id.items()
+                if (other["comparison"], other["baseline"], other["seed"], other["strategy"])
+                == (cell["comparison"], cell["baseline"], cell["seed"], reference)
+            )
+    published: set[str] = set()
     stop_admission = False
+
+    def update_capacity() -> None:
+        nonlocal capacity, policy_completed_count, physical_cores
+        if capacity_policy is None:
+            return
+        if physical_cores is None:
+            physical_cores = detect_physical_cores()
+        with state_lock:
+            completed_count = sum(item["status"] in {"collected", "failed"}
+                                  for item in state["cells"].values())
+            if completed_count == policy_completed_count:
+                return
+            context = {"workspace": str(root), "physical_cores": physical_cores,
+                       "maximum_cell_concurrency": cell_concurrency,
+                       "completed_cells": completed_count,
+                       "current_capacity": deepcopy(capacity),
+                       "cells": deepcopy(state["cells"])}
+        decision = validate_capacity_decision(
+            capacity_policy(context), maximum_cells=cell_concurrency,
+            baselines=spec["baselines"],
+        )
+        policy_completed_count = completed_count
+        with state_lock:
+            history = state.setdefault("capacity_history", [])
+            if history and decision == capacity:
+                return
+            capacity = decision
+            revision = {**deepcopy(capacity), "revision": len(history) + 1,
+                        "utc": utc_now(), "completed_cells": completed_count,
+                        "physical_cores": physical_cores}
+            history.append(revision)
+            state["effective_cell_concurrency"] = capacity["cell_concurrency"]
+            save_state(root, state)
+        _emit(event_sink, event="capacity-changed", **revision)
+
     try:
+        if isinstance(cancel_event, ResourceCancellation):
+            cancel_event.start()
+            state["resource_protection"] = cancel_event.metadata()
+            save_state(root, state)
         with ThreadPoolExecutor(
             max_workers=cell_concurrency,
             thread_name_prefix="yadof-benchmark-cell",
-        ) as executor:
+        ) as executor, cancel_on_error(cancel_event):
             while pending or active:
-                while pending and len(active) < cell_concurrency and not stop_admission:
-                    cell_id = pending.pop(0)
+                if isinstance(cancel_event, ResourceCancellation):
+                    cancel_event.raise_if_failed()
+                try:
+                    update_capacity()
+                except Exception:
+                    cancel_event.set()
+                    raise
+                while pending and len(active) < capacity["cell_concurrency"] and not stop_admission:
+                    if isinstance(cancel_event, ResourceCancellation):
+                        cancel_event.check()
+                    ready_indices = [index for index, item in enumerate(pending)
+                                     if item not in dependencies or dependencies[item] in published]
+                    if capacity_policy is None:
+                        ready = next(iter(ready_indices), None)
+                    else:
+                        # Balance ready baselines while a resource policy learns their capacities.
+                        active_baselines = [cell_by_id[item]["baseline"] for item in active.values()]
+                        ready = min(ready_indices, key=lambda index: (
+                            active_baselines.count(cell_by_id[pending[index]]["baseline"]), index
+                        ), default=None)
+                    if ready is None:
+                        break
+                    cell_id = pending.pop(ready)
                     cell = cell_by_id[cell_id]
+                    if capacity_policy is not None:
+                        cell = cell_with_capacity(cell, capacity)
+                        with state_lock:
+                            state["cells"][cell_id]["capacity_revision"] = state["capacity_history"][-1]["revision"]
                     execution = cell.get("execution", {})
                     simulation = execution.get("simulation_concurrency", {})
                     resource = execution.get("resource", {})
@@ -1156,6 +1276,8 @@ def execute_workspace(
                         strategy=cell.get("strategy"),
                         seed=cell.get("seed"),
                         population=int(cell["population"]),
+                        batch_size=int(cell.get("batch_size") or cell["population"]),
+                        initial_population=int(cell.get("initial_population") or cell["population"]),
                         generations=int(cell["generations"]),
                         planned_evaluations=int(cell["planned_evaluations"]),
                         timeout_seconds=int(execution.get("timeout_seconds", 7200)),
@@ -1213,6 +1335,7 @@ def execute_workspace(
                     except Exception:
                         cancel_event.set()
                         raise
+                    published.add(cell_id)
                     if fail_fast and (
                         not succeeded
                         or not _publication_cell_valid(publication, cell_id)
@@ -1220,10 +1343,44 @@ def execute_workspace(
                         stop_admission = True
                         cancel_event.set()
             drain_events()
-    except Exception:
+            if isinstance(cancel_event, ResourceCancellation):
+                cancel_event.raise_if_failed()
+    except BaseException as exc:
         cancel_event.set()
         drain_events()
+        # A command/state persistence error can bypass normal cell completion.
+        # The executor has joined cancelled workers before this terminal write.
+        with state_lock:
+            state["status"] = "failed"
+            state["finished_utc"] = state.get("finished_utc") or utc_now()
+            state["execution_error"] = {
+                "utc": utc_now(),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+            if isinstance(cancel_event, ResourceCancellation):
+                state["resource_protection"] = cancel_event.metadata()
+            for cell_state in state["cells"].values():
+                started = cell_state.get("created_utc") is not None
+                if started and cell_state["status"] not in {"collected", "failed"}:
+                    cell_state["status"] = "failed"
+                    cell_state["finished_utc"] = state["finished_utc"]
+                    cell_state["error"] = (
+                        cell_state.get("error")
+                        or f"execution stopped: {type(exc).__name__}: {exc}"
+                    )
+                cell_state["active_command"] = None
+            try:
+                save_state(root, state)
+            except Exception as persistence_exc:
+                raise BenchmarkStorageError(
+                    f"{type(exc).__name__}: {exc}; could not persist failed state: "
+                    f"{type(persistence_exc).__name__}: {persistence_exc}"
+                ) from exc
         raise
+    finally:
+        if isinstance(cancel_event, ResourceCancellation):
+            state["resource_protection"] = cancel_event.metadata()
+            cancel_event.close()
 
     cells_complete = bool(state["cells"]) and all(
         item["status"] == "collected" for item in state["cells"].values()

@@ -1,6 +1,6 @@
 # 常驻 fast 迁移与固定候选吞吐对照
 
-本证据集记录2026-09-03的resident-fast迁移、固定候选吞吐对照及安装验收。配套的[greedy-HV perfect六单元报告](20260903_214613_greedy-hv-perfect-surrogate-crossings.md)记录已独立核验的正式实验与本次context到期审查。
+本证据集记录 2026-09-03 的 resident-fast 迁移、固定候选吞吐对照及安装验收。当前 perfect-surrogate 比较使用[五种子 P/B 正式基准](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)；原来的配套六单元 perfect 结果已归档。
 
 ## 已验证的结论
 
@@ -109,6 +109,6 @@ Chrono 成功吞吐的冷/稳态/端到端中位数分别为旧版3.080/3.042/2.
 
 ## Context到期审查
 
-用户在本报告完成后要求移除已经失去当前参考用途的旧性能 context。复审已将旧正式 benchmark、旧 fast 并发扫描、天线配置筛选、SAW/Chrono 配置迁移四份报告及两张附图原样移入 `dev_doc/obsolete/context/`。旧计时不再作为常驻版性能依据；当前吞吐使用本报告的固定候选对照，当前 GPSAF 正式结果使用[配套六单元报告](20260903_214613_greedy-hv-perfect-surrogate-crossings.md)。本次没有重新扫描常驻版的最优 worker 数。
+用户在本报告完成后要求移除已经失去当前参考用途的旧性能 context。复审已将旧正式 benchmark、旧 fast 并发扫描、天线配置筛选、SAW/Chrono 配置迁移四份报告及两张附图原样移入 `dev_doc/obsolete/context/`。旧计时不再作为常驻版性能依据；当前吞吐使用本报告的固定候选对照，当前 GPSAF 正式结果使用[五种子 P/B 正式基准](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)。本次没有重新扫描常驻版的最优 worker 数。
 
 仍保留 [greedy-HV 五种子机制验证](20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)，其证据直接解释当前采用的选择机制。逐项理由和原件位置见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。此前运行目录内的 `CONTEXT_REVIEW.json` 与 `CONTEXT_REVIEW_INPUTS.json` 是首次审查的冻结收据，保持不变，不再代表当前归档状态。

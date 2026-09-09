@@ -94,7 +94,7 @@ def _generation_zero_population(
     generation_zero = [
         item for item in records if _metadata_int(item, "generation_index") == 0
     ]
-    expected = int(cell["population"])
+    expected = int(cell.get("initial_population") or cell["population"])
     try:
         normalized = {
             str(name): tuple(float(value) for value in values)
@@ -339,6 +339,23 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
         records = list(recorded_data.list_records(workspace))
     except Exception as exc:
         raise BenchmarkError(f"public record collection failed: {exc}") from exc
+    task_failures = [
+        item for item in records
+        if item.get("status") != "completed"
+        and isinstance(item.get("job_metadata"), Mapping)
+        and item["job_metadata"].get("physical_failure") is False
+    ]
+    if task_failures:
+        examples = "; ".join(
+            f"{item.get('job_name', '')}: "
+            f"{item['job_metadata'].get('error_type', 'task failure')}: "
+            f"{str(item['job_metadata'].get('error_message', ''))[:200]}"
+            for item in task_failures[:3]
+        )
+        raise BenchmarkError(
+            f"{len(task_failures)} non-physical task/infrastructure failure(s) "
+            f"invalidate the cell: {examples}"
+        )
     try:
         extensions = list(recorded_data.list_optimization_metadata(workspace))
     except Exception as exc:
@@ -418,6 +435,8 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
                 "seed": cell["seed"],
                 "population": cell["population"],
                 "generations": cell["generations"],
+                "batch_size": cell.get("batch_size") or cell["population"],
+                "initial_population": cell.get("initial_population") or cell["population"],
                 "job": row.get("job_name"),
                 "generation": row.get("generation_index"),
                 "objectives": dict(zip(names, costs)),
@@ -448,6 +467,8 @@ def collect_cell(workspace: Path, cell: Mapping[str, Any]) -> dict[str, Any]:
         "seed": cell["seed"],
         "budget": {
             "population": cell["population"],
+            "batch_size": cell.get("batch_size") or cell["population"],
+            "initial_population": cell.get("initial_population") or cell["population"],
             "generations": cell["generations"],
             "planned_evaluations": planned,
         },
@@ -619,8 +640,6 @@ def _comparisons(
             cell["comparison"],
             cell["baseline"],
             cell["seed"],
-            cell["population"],
-            cell["generations"],
         )
         groups[key].append(cell)
     output: list[dict[str, Any]] = []
@@ -675,8 +694,10 @@ def _comparisons(
                     "comparison": key[0],
                     "baseline": key[1],
                     "seed": key[2],
-                    "population": key[3],
-                    "generations": key[4],
+                    "population": item_spec["population"],
+                    "generations": item_spec["generations"],
+                    "batch_size": item_spec.get("batch_size") or item_spec["population"],
+                    "initial_population": item_spec.get("initial_population") or item_spec["population"],
                     "strategy": item_spec["strategy"],
                     "reference": reference,
                     "cell_valid": bool(summary.get("valid")),
@@ -726,6 +747,8 @@ def _cross_seed_aggregates(
                 item["strategy"],
                 item["population"],
                 item["generations"],
+                item["batch_size"],
+                item["initial_population"],
             )
         ].append(item)
     output: list[dict[str, Any]] = []
@@ -751,6 +774,8 @@ def _cross_seed_aggregates(
                 "strategy": key[4],
                 "population": key[5],
                 "generations": key[6],
+                "batch_size": key[7],
+                "initial_population": key[8],
                 "seed_count_total": len(rows),
                 "seed_count_included": len(eligible),
                 "included_seeds": sorted(int(item["seed"]) for item in eligible),
@@ -778,7 +803,7 @@ def _cross_seed_aggregates(
 def _csv_text(rows: list[Mapping[str, Any]]) -> str:
     fields = [
         "cell", "display_label", "evidence", "replication_scope", "comparison", "baseline", "strategy",
-        "seed", "population", "generations", "job", "generation", "objectives",
+        "seed", "population", "batch_size", "initial_population", "generations", "job", "generation", "objectives",
         "average_objective", "metadata",
     ]
     return _table_csv(rows, fields)
@@ -1225,7 +1250,8 @@ def publish_results(
             comparisons,
             [
                 "evidence", "replication_scope", "cell", "display_label", "comparison", "baseline",
-                "seed", "strategy", "reference", "cell_valid", "pairing_valid",
+                "seed", "strategy", "population", "batch_size", "initial_population", "generations",
+                "reference", "cell_valid", "pairing_valid",
                 "aggregate_eligible", "planned_evaluations",
                 "attempted_evaluations", "completed_evaluations",
                 "finite_evaluations", "final_hypervolume", "hypervolume_auc",
@@ -1302,7 +1328,7 @@ def publish_results(
             aggregates,
             [
                 "evidence", "replication_scope", "comparison", "baseline",
-                "strategy", "population", "generations", "seed_count_total",
+                "strategy", "population", "batch_size", "initial_population", "generations", "seed_count_total",
                 "seed_count_included", "included_seeds", "excluded_seeds",
                 "counts", "final_hypervolume", "hypervolume_auc_normalized",
                 "notice",
@@ -1382,6 +1408,9 @@ def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
             if item.get("error")
         }
     )
+    execution_error = state.get("execution_error")
+    if isinstance(execution_error, Mapping) and execution_error.get("error"):
+        errors["workspace"] = str(execution_error["error"])
     report_path = root / "reports" / "descriptive-results.json"
     report = read_json(report_path) if report_path.is_file() else {}
     reported_cells = (
@@ -1416,6 +1445,7 @@ def inspect_workspace(workspace: str | Path) -> dict[str, Any]:
         }
         for key, value in sorted(errors.items())
     ]
+    anomalies.sort(key=lambda item: item["scope"] != "workspace")
     workspace_terminal = state.get("status") in {"completed", "failed"}
     for item in reported_cells:
         # Planned and active cells are expected to be incomplete while a

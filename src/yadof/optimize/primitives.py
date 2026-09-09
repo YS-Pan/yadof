@@ -356,6 +356,8 @@ def prepare_search(
             "snapshot_interpretation_fingerprint": snapshot_fingerprint,
             "generation_index": int(context.generation_index),
             "population_size": size,
+            "batch_size": pymoo_context.batch_size,
+            "initial_population_size": pymoo_context.initial_population_size,
             "variable_count": int(context.problem.variable_count),
             "objective_count": int(context.problem.objective_count),
             "algorithm_seed": selected_algorithm_seed,
@@ -1028,13 +1030,18 @@ def full_real_search(
 ) -> CandidateSelection:
     """Compose the sole complete real-only/fallback search path."""
 
-    size = int(context.population_size if population_size is None else population_size)
+    survivor_size = int(context.population_size if population_size is None else population_size)
+    configured_size = (
+        context.config.OPTIMIZE_INITIAL_POPULATION_SIZE
+        if context.generation_index <= 0 else context.config.OPTIMIZE_BATCH_SIZE
+    )
+    size = survivor_size if configured_size is None else int(configured_size)
     history = tuple(context.history)
     warm_start = bool(history and int(context.generation_index) <= 0)
     state = prepare_search(
         context,
         search,
-        population_size=size,
+        population_size=survivor_size,
         algorithm_seed=algorithm_seed,
         random_seed=random_seed,
         history_policy="warm-start" if warm_start else "survivor",

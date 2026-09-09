@@ -634,7 +634,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--population-size",
         type=_positive_int,
         default=None,
-        help="temporary population-size override",
+        help="retained evolutionary population size (P)",
+    )
+    run_parser.add_argument(
+        "--batch-size", type=_positive_int, default=None,
+        help="new real evaluations per generation after initialization (default: population size)",
+    )
+    run_parser.add_argument(
+        "--initial-population-size", type=_positive_int, default=None,
+        help="initial real design count (default: population size)",
     )
     run_parser.add_argument(
         "--random-seed",

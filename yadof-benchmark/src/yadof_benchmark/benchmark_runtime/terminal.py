@@ -612,6 +612,8 @@ def _event_message(event: Mapping[str, Any]) -> str | None:
             f"{prefix}[cell] {event.get('cell')} started; "
             f"{event.get('display_label', event.get('cell'))}; "
             f"population={event.get('population')} generations={event.get('generations')} "
+            f"batch={event.get('batch_size', event.get('population'))} "
+            f"initial={event.get('initial_population', event.get('population'))} "
             f"planned={event.get('planned_evaluations')} "
             f"timeout={event.get('timeout_seconds')}s "
             f"simulator={event.get('simulator_mode')} workers={worker}{resource}"

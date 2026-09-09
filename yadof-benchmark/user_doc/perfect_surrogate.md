@@ -18,14 +18,34 @@ does not count as a crossing. No extra generations or automatic retuning occur.
 If no crossing occurs, the summary records `50 代内未超过`.
 
 `Benchmark.compare(..., stop_on_top10_reference=True)` declares this opt-in
-stopping protocol. It requires `reference` to be the first strategy and
-`cell_concurrency=1`. Strategies must publish generation receipts with
+stopping protocol. It requires a declared `reference`. `cell_concurrency` may
+exceed one: each candidate waits only for its matching baseline/seed reference
+to finish collection and publication. Independent references and ready candidates
+can run together. A failed reference prevents its candidates from launching real
+evaluation. Strategies must publish generation receipts with
 `yadof_benchmark.perfect_protocol.record_generation`. The executor supplies
 `benchmark_control.json` before the command starts. Collected real records
 independently recompute every metric and validate that the budget was either the
 full declared budget or exactly the first strict crossing. Other comparisons
 still require equal complete attempted budgets. Paired initial designs and task
 digests remain required; early stopping does not establish performance robustness.
+P/B sweeps can use strategy budget overrides from [api.md](api.md). Keep a shared
+explicit I, seed list and maximum formal budget; report
+`first_strictly_better_evaluations`, not generations multiplied by P. A run that
+does not cross is censored at its maximum budget. Include such runs in the
+denominator and median calculation; a median beyond the cap is reported as
+greater than the cap, not computed from successful runs alone. Accurate oracle
+predictions provide an empirical reference, not a mathematical upper bound on
+every stochastic trajectory or on a different selection metric.
+
+When the seed list is split between workspaces, retain each seed's complete
+reference/candidate group and the same settings and budget in every workspace.
+Merge the `comparisons` arrays from their
+`reports/perfect-surrogate-summary.json` files, then pass those rows to
+`yadof_benchmark.perfect_protocol.crossing_summary` to pool individual crossings.
+Check that every baseline/strategy/P/B/I/seed appears exactly once and that the
+full intended seed list is present. Keep failed and censored rows in this input;
+workspace medians cannot be combined into the overall median.
 
 The oracle is the installable `yadof_benchmark.perfect_oracle.PerfectSimulationOracle`.
 It calls the baseline's frozen resident-session `evaluate_rawdata` kernel and the same assigned

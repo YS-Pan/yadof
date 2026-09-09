@@ -47,3 +47,6 @@
   last published boundary.
 - Program source changes are provenance; declared semantic identity changes select
   a distinct compatibility namespace.
+- API P/B/I overrides pass through validated generation config. Commit count is
+  `GenerationContext.evaluation_size`, independent of retained P; real attempt
+  counts and diagnostics retain the actual generation budget.

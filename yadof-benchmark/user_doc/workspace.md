@@ -105,15 +105,20 @@ Every workflow must call:
 benchmark.configure(
     name="my-comparison",
     evidence="structural",  # or "performance"
-    cell_concurrency=1,
+    cell_concurrency=4,
 )
 ```
 
-Cell concurrency is a FIFO limit and defaults to one. Baseline simulation-worker
+Cell concurrency limits simultaneously active cells and defaults to four. Ready
+cells start in declaration order; a top-10 candidate waits for its own paired
+reference while independent cells can proceed. Baseline simulation-worker
 concurrency is a separate task-adapter multiplier of the runtime host's physical
 core count. The plan retains the multiplier while cell state records its resolved
-worker count. Increase either only after reviewing simulator licenses, CPU,
-memory, and storage; yadof does not reduce an explicitly resolved worker cap.
+worker count. These are general benchmark controls, including ordinary and
+surrogate strategies. Four cells with multiplier `1.0` request four times the
+physical-core count in simulation workers when all four can run. Each simulation
+worker uses one native numerical thread. See [execution.md](execution.md) for
+throughput tuning and the benchmark's host-memory protection.
 
 Structural workflows fail fast by default; performance workflows continue
 independent cells by default so completed expensive evidence is retained.

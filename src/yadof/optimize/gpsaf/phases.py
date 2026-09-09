@@ -332,8 +332,9 @@ def surrogate_population(
             history_policy="survivor",
         )
         diagnostics.update(dict(base_state.diagnostics))
-        exploration_count = _exploration_count(settings, population_size)
-        surrogate_target = max(0, int(population_size) - exploration_count)
+        batch_size = generation_context.evaluation_size
+        exploration_count = _exploration_count(settings, batch_size)
+        surrogate_target = max(0, batch_size - exploration_count)
         exploration_pool = None
         main_state = base_state
         if exploration_count > 0:
@@ -357,12 +358,13 @@ def surrogate_population(
             selected = compose_real_population(
                 exploration_pool.state,
                 (exploration_pool,),
-                size=population_size,
+                size=batch_size,
                 source="gpsaf-surrogate-selection",
                 refill_origin="gpsaf_exploration_refill",
             )
             diagnostics.update(dict(selected.state.diagnostics))
             diagnostics["search_selection_source"] = selected.source
+            diagnostics["_prediction_rows"] = (None,) * len(selected.population)
             return selected.population, diagnostics
 
         anchors, alpha_prediction, alpha_info = run_alpha_phase(
@@ -399,7 +401,7 @@ def surrogate_population(
         selected = compose_real_population(
             final_selection.state,
             groups,
-            size=population_size,
+            size=batch_size,
             source="gpsaf-surrogate-selection",
             refill_origin="gpsaf_exploration_refill",
         )

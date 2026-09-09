@@ -1,0 +1,624 @@
+{
+  "seeds": [
+    1101,
+    1102,
+    1103,
+    1104,
+    1105
+  ],
+  "groups": [
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 20,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        780,
+        820,
+        960
+      ],
+      "crossings_by_seed": {
+        "1101": 3880,
+        "1102": 820,
+        "1103": 560,
+        "1104": 960,
+        "1105": 780
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 20,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        650,
+        700,
+        800
+      ],
+      "crossings_by_seed": {
+        "1101": 800,
+        "1102": 700,
+        "1103": 1650,
+        "1104": 600,
+        "1105": 650
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 20,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1200,
+        1200,
+        1400
+      ],
+      "crossings_by_seed": {
+        "1101": 1200,
+        "1102": 1400,
+        "1103": 1200,
+        "1104": 1000,
+        "1105": 2600
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 50,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        860,
+        1060,
+        1700
+      ],
+      "crossings_by_seed": {
+        "1101": 1060,
+        "1102": 2500,
+        "1103": 860,
+        "1104": 1700,
+        "1105": 740
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 50,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1250,
+        1450,
+        2250
+      ],
+      "crossings_by_seed": {
+        "1101": 850,
+        "1102": 1250,
+        "1103": 5850,
+        "1104": 1450,
+        "1105": 2250
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 50,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1200,
+        1400,
+        1600
+      ],
+      "crossings_by_seed": {
+        "1101": 1600,
+        "1102": 1200,
+        "1103": 1600,
+        "1104": 1400,
+        "1105": 1000
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 200,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2320,
+        2460,
+        3180
+      ],
+      "crossings_by_seed": {
+        "1101": 1560,
+        "1102": 2320,
+        "1103": 3820,
+        "1104": 3180,
+        "1105": 2460
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 200,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2150,
+        2850,
+        3000
+      ],
+      "crossings_by_seed": {
+        "1101": 3000,
+        "1102": 1850,
+        "1103": 2850,
+        "1104": 3200,
+        "1105": 2150
+      }
+    },
+    {
+      "baseline": "chrono/trebuchet",
+      "population": 200,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2800,
+        3000,
+        4000
+      ],
+      "crossings_by_seed": {
+        "1101": 3000,
+        "1102": 2800,
+        "1103": 4000,
+        "1104": 2800,
+        "1105": 4000
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 20,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        780,
+        1080,
+        1600
+      ],
+      "crossings_by_seed": {
+        "1101": 1080,
+        "1102": 680,
+        "1103": 8040,
+        "1104": 1600,
+        "1105": 780
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 20,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 3,
+      "quartiles": [
+        1100,
+        4850,
+        null
+      ],
+      "crossings_by_seed": {
+        "1101": null,
+        "1102": 1100,
+        "1103": null,
+        "1104": 4850,
+        "1105": 1100
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 20,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 4,
+      "quartiles": [
+        3000,
+        3800,
+        5000
+      ],
+      "crossings_by_seed": {
+        "1101": null,
+        "1102": 1600,
+        "1103": 3800,
+        "1104": 5000,
+        "1105": 3000
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 50,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1300,
+        1300,
+        1560
+      ],
+      "crossings_by_seed": {
+        "1101": 1300,
+        "1102": 820,
+        "1103": 5560,
+        "1104": 1300,
+        "1105": 1560
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 50,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1050,
+        1450,
+        1950
+      ],
+      "crossings_by_seed": {
+        "1101": 1950,
+        "1102": 900,
+        "1103": 2450,
+        "1104": 1050,
+        "1105": 1450
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 50,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1800,
+        2800,
+        3000
+      ],
+      "crossings_by_seed": {
+        "1101": 3000,
+        "1102": 1200,
+        "1103": 1800,
+        "1104": 4200,
+        "1105": 2800
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 200,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2320,
+        2480,
+        2520
+      ],
+      "crossings_by_seed": {
+        "1101": 2320,
+        "1102": 1640,
+        "1103": 2520,
+        "1104": 3120,
+        "1105": 2480
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 200,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2150,
+        2300,
+        5650
+      ],
+      "crossings_by_seed": {
+        "1101": 6250,
+        "1102": 1250,
+        "1103": 2300,
+        "1104": 2150,
+        "1105": 5650
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "population": 200,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2400,
+        2800,
+        3600
+      ],
+      "crossings_by_seed": {
+        "1101": 3600,
+        "1102": 2400,
+        "1103": 2800,
+        "1104": 3600,
+        "1105": 1800
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 20,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        640,
+        720,
+        740
+      ],
+      "crossings_by_seed": {
+        "1101": 740,
+        "1102": 740,
+        "1103": 640,
+        "1104": 720,
+        "1105": 580
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 20,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        850,
+        850,
+        900
+      ],
+      "crossings_by_seed": {
+        "1101": 850,
+        "1102": 900,
+        "1103": 850,
+        "1104": 700,
+        "1105": 900
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 20,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1400,
+        1400,
+        1600
+      ],
+      "crossings_by_seed": {
+        "1101": 1600,
+        "1102": 1600,
+        "1103": 1400,
+        "1104": 1400,
+        "1105": 1400
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 50,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1080,
+        1100,
+        1120
+      ],
+      "crossings_by_seed": {
+        "1101": 1100,
+        "1102": 1120,
+        "1103": 1080,
+        "1104": 1020,
+        "1105": 1320
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 50,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1150,
+        1300,
+        1450
+      ],
+      "crossings_by_seed": {
+        "1101": 1450,
+        "1102": 1450,
+        "1103": 1300,
+        "1104": 1000,
+        "1105": 1150
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 50,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        1800,
+        1800,
+        1800
+      ],
+      "crossings_by_seed": {
+        "1101": 1800,
+        "1102": 1600,
+        "1103": 1800,
+        "1104": 1800,
+        "1105": 1800
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 200,
+      "batch_size": 20,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2320,
+        2480,
+        2520
+      ],
+      "crossings_by_seed": {
+        "1101": 2320,
+        "1102": 2960,
+        "1103": 2480,
+        "1104": 2200,
+        "1105": 2520
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 200,
+      "batch_size": 50,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        2650,
+        2750,
+        2800
+      ],
+      "crossings_by_seed": {
+        "1101": 3450,
+        "1102": 2800,
+        "1103": 2750,
+        "1104": 2650,
+        "1105": 2450
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "population": 200,
+      "batch_size": 200,
+      "runs": 5,
+      "crossings": 5,
+      "quartiles": [
+        3400,
+        3600,
+        4200
+      ],
+      "crossings_by_seed": {
+        "1101": 4200,
+        "1102": 4200,
+        "1103": 3600,
+        "1104": 3000,
+        "1105": 3400
+      }
+    }
+  ],
+  "references": [
+    {
+      "baseline": "chrono/trebuchet",
+      "runs": 5,
+      "median": 0.18203361323879785,
+      "minimum": 0.15631116224834535,
+      "maximum": 0.19358046776470117,
+      "by_seed": {
+        "1101": 0.19358046776470117,
+        "1102": 0.18489737605359974,
+        "1103": 0.15631116224834535,
+        "1104": 0.1702057361087258,
+        "1105": 0.18203361323879785
+      }
+    },
+    {
+      "baseline": "ngspice/saw-ladder",
+      "runs": 5,
+      "median": 0.24571287831455968,
+      "minimum": 0.19462020008876296,
+      "maximum": 0.2725218240201241,
+      "by_seed": {
+        "1101": 0.2273689894218927,
+        "1102": 0.2725218240201241,
+        "1103": 0.24603808012072856,
+        "1104": 0.19462020008876296,
+        "1105": 0.24571287831455968
+      }
+    },
+    {
+      "baseline": "test-com/synthetic-antenna",
+      "runs": 5,
+      "median": 0.29199253545234455,
+      "minimum": 0.2904199390541635,
+      "maximum": 0.29406151282915877,
+      "by_seed": {
+        "1101": 0.2908259760995244,
+        "1102": 0.2904199390541635,
+        "1103": 0.2929914758100574,
+        "1104": 0.29406151282915877,
+        "1105": 0.29199253545234455
+      }
+    }
+  ],
+  "totals": {
+    "formal_evaluations": 455740,
+    "finite_evaluations": 449647,
+    "failures_or_nonfinite": 6093,
+    "oracle_evaluations": 1505196
+  },
+  "protocol": {
+    "I": 200,
+    "formal_cap": 10000,
+    "alpha": 3,
+    "beta": 3,
+    "gamma": 0.5,
+    "exploration_fraction": 0.1,
+    "selection": "greedy-hypervolume",
+    "reference": "same-baseline/same-seed real NSGA-III P200/B200/I200/G50",
+    "metric": "first complete formal batch with cumulative best-ten objective-mean strictly below paired R",
+    "censoring": "null crossing/quantile means >10000, not missing or zero",
+    "quartiles": "nearest-rank empirical inverse CDF; ranks 2/3/4 of five"
+  },
+  "audit_sources": [
+    {
+      "path": "temp/pb-infrastructure-20260908/20260908_231745-perfect-study/20260908_231745-formal-block-1/verification/summary.json",
+      "sha256": "3f38d5cd59aa5381dd35aea1e183b8f833fe78fab08501fb0665ea13d2ef8a04"
+    },
+    {
+      "path": "temp/pb-infrastructure-20260908/20260908_231745-perfect-study/20260908_231745-formal-block-2/verification-retained-five-seeds/summary.json",
+      "sha256": "c3c58e3f6769f2e5967903ec8688f79df0d84f4f1335be79a1f7ff1ded265bb7"
+    },
+    {
+      "path": "temp/pb-infrastructure-20260908/20260909-five-seed-revision/20260909_111853-formal-adaptive-commit-safe/verification-retained-saw/summary.json",
+      "sha256": "868293f343cda3269f860031b1cd6a044795a6e4c8633663111f50a8880e25dc"
+    },
+    {
+      "path": "temp/pb-infrastructure-20260908/20260909-five-seed-revision/20260909_131610-formal-chrono-repair/verification/summary.json",
+      "sha256": "f149c508c822f1393545309f19ce1a24feebda59d284480cce4217774a83606d"
+    }
+  ],
+  "comparison_sources": [
+    {
+      "workspace": "temp/pb-infrastructure-20260908/20260908_231745-perfect-study/20260908_231745-formal-block-1",
+      "source": "temp/pb-infrastructure-20260908/20260908_231745-perfect-study/20260908_231745-formal-block-1/reports/perfect-surrogate-summary.json"
+    },
+    {
+      "workspace": "temp/pb-infrastructure-20260908/20260908_231745-perfect-study/20260908_231745-formal-block-2",
+      "source": "original retained cells/*/result.json",
+      "reason": "Workspace interrupted before final perfect-summary postprocessor; old outputs unchanged."
+    },
+    {
+      "workspace": "temp/pb-infrastructure-20260908/20260909-five-seed-revision/20260909_111853-formal-adaptive-commit-safe",
+      "source": "temp/pb-infrastructure-20260908/20260909-five-seed-revision/20260909_111853-formal-adaptive-commit-safe/reports/perfect-surrogate-summary.json"
+    },
+    {
+      "workspace": "temp/pb-infrastructure-20260908/20260909-five-seed-revision/20260909_131610-formal-chrono-repair",
+      "source": "temp/pb-infrastructure-20260908/20260909-five-seed-revision/20260909_131610-formal-chrono-repair/reports/perfect-surrogate-summary.json"
+    }
+  ]
+}

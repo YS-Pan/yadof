@@ -1,5 +1,10 @@
 # Module blueprint: cli
 
+`run --population-size` controls retained P; `--batch-size` and
+`--initial-population-size` independently override B/I without rewriting config.
+All three resolved sizes appear in the run summary, and generation commits use
+the actual I/B count.
+
 ## Responsibility
 
 `yadof.cli` is the installed, repository-independent command package. Public `main`

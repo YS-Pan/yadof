@@ -225,6 +225,8 @@ def execute_frozen_program(
     *,
     start_generation: int = 0,
     population_size: int | None = None,
+    batch_size: int | None = None,
+    initial_population_size: int | None = None,
     variable_count: int | None = None,
     random_seed: int | None = None,
     run_id: str | None = None,
@@ -235,6 +237,13 @@ def execute_frozen_program(
     """Execute one frozen explicit program and always release its source snapshot."""
 
     try:
+        config_overrides = dict(config_overrides or {})
+        if population_size is not None:
+            config_overrides["OPTIMIZE_POPULATION_SIZE"] = population_size
+        if batch_size is not None:
+            config_overrides["OPTIMIZE_BATCH_SIZE"] = batch_size
+        if initial_population_size is not None:
+            config_overrides["OPTIMIZE_INITIAL_POPULATION_SIZE"] = initial_population_size
         initial_config = load_config(
             frozen.workspace,
             overrides=config_overrides,
@@ -696,6 +705,10 @@ def _program_diagnostics(
             "strategy_signature": program.program_signature,
             "strategy_identity": dict(program.program_identity),
             "program_api": PROGRAM_API,
+            "retained_population_size": generation.population_size,
+            "batch_size": generation.batch_size,
+            "initial_population_size": generation.initial_population_size,
+            "evaluation_size": generation.evaluation_size,
             "program_entry": program._frozen.spec.entry,
             "program_capabilities": program.program_capabilities,
             "program_source_fingerprint": program.program_source_fingerprint,
@@ -721,9 +734,9 @@ def _validate_result(result: OptimizationResult, context: GenerationContext) -> 
         raise ValueError("committed result generation does not match the active step")
     population = tuple(result.population)
     costs = tuple(result.costs)
-    if len(population) != context.population_size or len(costs) != len(population):
+    if len(population) != context.evaluation_size or len(costs) != len(population):
         raise ValueError(
-            "committed population/cost count must equal the configured population size"
+            "committed population/cost count must equal the generation evaluation size"
         )
     for row in population:
         if len(row) != context.problem.variable_count or any(

@@ -20,6 +20,10 @@ def run_command(args) -> int:
     overrides = {}
     if args.mode is not None:
         overrides["EVALUATION_MODE"] = args.mode
+    if args.batch_size is not None:
+        overrides["OPTIMIZE_BATCH_SIZE"] = args.batch_size
+    if args.initial_population_size is not None:
+        overrides["OPTIMIZE_INITIAL_POPULATION_SIZE"] = args.initial_population_size
     try:
         config = load_config(args.workspace, overrides=overrides)
     except (ConfigError, OSError, TypeError, ValueError) as exc:
@@ -145,6 +149,9 @@ def _print_run_summary(
         f"{config.OPTIMIZE_RANDOM_SEED if random_seed is None else random_seed}",
         flush=True,
     )
+    selected_population = config.OPTIMIZE_POPULATION_SIZE if population_size is None else population_size
+    print(f"Evaluation batch size: {config.OPTIMIZE_BATCH_SIZE or selected_population}", flush=True)
+    print(f"Initial population size: {config.OPTIMIZE_INITIAL_POPULATION_SIZE or selected_population}", flush=True)
     print(f"Generation count: {generations}", flush=True)
     print(f"Start generation: {start_generation}", flush=True)
     print(f"Smoke test: {smoke_enabled} ({smoke_source})", flush=True)

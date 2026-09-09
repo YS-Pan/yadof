@@ -14,7 +14,8 @@ and validate paths.
 
 Common core workspace settings include `EVALUATION_MODE`, `EVALUATION_TIMEOUT_SEC`,
 `LOCAL_EVALUATION_MAX_WORKERS`, `FAST_EVALUATION_MAX_WORKERS`,
-`FAST_EVALUATION_SCRATCH_DIR`, `OPTIMIZE_POPULATION_SIZE`,
+`FAST_EVALUATION_SCRATCH_DIR`, `OPTIMIZE_POPULATION_SIZE`, `OPTIMIZE_BATCH_SIZE`,
+`OPTIMIZE_INITIAL_POPULATION_SIZE`,
 `OPTIMIZE_SMOKE_TEST_ENABLED`, `OPTIMIZE_RANDOM_SEED`,
 `OPTIMIZE_ARCHIVE_KEY_DECIMALS`, `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG`, and
 HTCondor request/calibration/timeout settings. Search, GPSAF, and surrogate model
@@ -67,11 +68,39 @@ value from `config.py` to the corresponding factory call in
 | `SURROGATE_INR_BOOTSTRAP_MEMBERS` | `conditional_inr(bootstrap_members=...)` |
 | `SURROGATE_INR_BOOTSTRAP_FRACTION` | `conditional_inr(bootstrap_fraction=...)` |
 
-`OPTIMIZE_POPULATION_SIZE`, `OPTIMIZE_RANDOM_SEED`,
+`OPTIMIZE_POPULATION_SIZE`, `OPTIMIZE_BATCH_SIZE`,
+`OPTIMIZE_INITIAL_POPULATION_SIZE`, `OPTIMIZE_RANDOM_SEED`,
 `OPTIMIZE_ARCHIVE_KEY_DECIMALS`, and
 `OPTIMIZE_SURROGATE_MAX_TRAINING_LAG` remain core campaign settings. The surrogate
 viewer selects its own available device automatically; a component `device=` value
 controls that component's training and checkpoint recovery.
+
+`OPTIMIZE_POPULATION_SIZE` is the retained search population P.
+`OPTIMIZE_BATCH_SIZE` is the number B of new formal evaluations after generation
+zero; `OPTIMIZE_INITIAL_POPULATION_SIZE` is the initial design count I. Both new
+settings default to `None`, meaning P, and otherwise require a positive integer.
+GA, NSGA-III and GPSAF support both B < P and B > P. Reference directions and
+survival use P; GPSAF exploration and assisted selection divide B. History keeps
+all formal attempts and does not shrink to the retained population. A surviving
+individual reuses its original real evidence; retaining it in another generation
+does not simulate or record it again. `recorded_data` stores each new real result
+once, and `view cost` plots that record once with its original evaluation
+generation. Generation regions therefore contain I initial attempts and B later
+attempts, rather than P copies of each generation's survivors. Failed/non-finite
+attempts remain recorded but may have no plottable cost point.
+
+For example, `yadof run --workspace PATH --population-size 200 --batch-size 20
+--initial-population-size 200 --generations 491 --no-smoke-test` requests 10,000
+formal evaluations. Starting at generation zero, the budget is I + (G - 1) × B.
+The explicit optimization program owns stopping; GA/NSGA-III do not impose an
+additional backend convergence or generation limit on that program.
+The Python `run_generations()` and `run_one_generation()` APIs accept
+`batch_size=` and `initial_population_size=` alongside `population_size=`.
+Custom programs can read `step.context.evaluation_size` for the current generation,
+`batch_size` for later generations and `initial_population_size` for generation
+zero. A committed result must contain exactly that generation's evaluation count.
+For paired P/B experiments, declare the same I and seed in every arm so the
+initial designs match; changing P alone otherwise changes the default I.
 
 An explicitly selected `posterior_assisted_selector()` component keeps its pool, draw,
 chunk, qNEHVI batch/restart/support, and real-exploration controls in

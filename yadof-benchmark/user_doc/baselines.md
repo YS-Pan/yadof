@@ -41,11 +41,18 @@ reports record the detected physical cores, multiplier, rounding rule, and
 resolved worker count. Detection failure is explicit rather than silently using
 logical cores.
 
-Packaged defaults are `2.0` for `chrono/trebuchet`, `2.0` for
-`ngspice/saw-ladder`, and `1.0` for `test-com/synthetic-antenna`. These defaults
-come from short 200-individual, one-generation throughput trials. A custom
-baseline may use another positive multiplier, including a value below one when
-that is faster or safer on its simulator.
+Packaged defaults are `1.0` for `chrono/trebuchet`, `2.0` for
+`ngspice/saw-ladder`, and `1.0` for `test-com/synthetic-antenna`, paired with the
+workflow default of four active cells. This requests four times the physical-core
+count for Chrono/antenna and eight times that count for SAW when all four cells
+can run. Multiple workers cover simulator waiting time while native numerical
+pools stay at one thread per worker.
+
+Chrono and SAW were calibrated independently using small batches of formal
+perfect-surrogate cells. The selected multipliers balance observed throughput
+with committed memory; the higher Chrono multiplier needed fewer active cells
+under the memory budget. These are starting points, not universal optima. A custom
+baseline may use another positive multiplier, including a value below one.
 
 This host-adaptive simulator limit is separate from workflow
 `cell_concurrency`. yadof treats the resolved fast/local worker cap as the user's

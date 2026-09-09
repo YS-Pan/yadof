@@ -13,7 +13,12 @@ Allocate one C-contiguous float64 target per field and fill it row by row direct
 from immutable samples. `fit_field()` consumes that private buffer: subtract/divide
 in place, then let randomized PCA center it with `copy=False`. Constant-span rows
 remain zero. Release the target and its last row view before allocating the next
-field. Prediction normalization remains non-mutating. Never mutate shared input
+field in each worker. Optional bounded `field_workers` runs independent fields in
+threads under one enclosing numerical-thread scope, sharing only immutable inputs.
+Store outputs in schema order. Failure signals peer cancellation and joins every
+worker before returning; no partial model is published. Parallel workers use
+normal process warnings instead of racing process-global warning capture contexts;
+serial fits retain field warning lists. Prediction normalization remains non-mutating. Never mutate shared input
 samples, reduce precision, or truncate the full-prefix codec to save memory.
 
 ## Prediction and state

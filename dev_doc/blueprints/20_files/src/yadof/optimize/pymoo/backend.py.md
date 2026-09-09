@@ -1,5 +1,17 @@
 # File blueprint: src/yadof/optimize/pymoo/backend.py
 
+Retain P-sized survivors independently of B offspring and I initial samples.
+GA/NSGA-III receive `n_offsprings=B`. The first uninitialized ask temporarily uses
+I as pymoo sampling size and restores P in `finally` before any tell. History
+replay remains one tell per real generation, preserving P survival. Reduce an
+indexed initial batch larger than P immediately after its tell, before replaying
+later groups, so discarded initial individuals cannot reappear during recovery.
+Legacy unindexed warm-start history retains its established path. Diagnostics
+record all resolved sizes; both B < P and B > P are legal.
+Use pymoo `NoTermination` for private ask/tell algorithms: yadof's explicit
+program owns the budget/stop decision. Backend default convergence or iteration
+limits must not finalize long history replay or stop a small-B campaign early.
+
 ## Intent
 - Isolate optional pymoo imports and adapters used by optimization algorithms.
 

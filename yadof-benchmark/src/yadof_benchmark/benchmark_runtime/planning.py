@@ -287,8 +287,12 @@ def plan_workflow(
                             baseline_id=baseline.id,
                             strategy_id=strategy.id,
                             seed=seed,
-                            population=comparison.population,
-                            generations=comparison.generations,
+                            population=strategy.population or comparison.population,
+                            generations=strategy.generations or comparison.generations,
+                            batch_size=(strategy.batch_size or comparison.batch_size
+                                        or strategy.population or comparison.population),
+                            initial_population=(strategy.initial_population or comparison.initial_population
+                                                or strategy.population or comparison.population),
                             evidence=request.evidence,
                             replication_scope=replication_scope(
                                 request.evidence, len(comparison.seeds)

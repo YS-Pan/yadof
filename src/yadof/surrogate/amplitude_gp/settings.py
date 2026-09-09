@@ -27,11 +27,12 @@ class AmplitudeGPSettings:
     span_floor_relative: float = 1e-6
     minimum_scale_quantile: float = 0.75
     minimum_scale_std_fraction: float = 0.05
+    field_workers: int = 1
 
     def __post_init__(self):
         for name, lower in (("shape_rank", 1), ("gp_max_rows", 2),
                             ("minimum_training_samples", 2), ("optimizer_iterations", 1),
-                            ("random_seed", 0)):
+                            ("random_seed", 0), ("field_workers", 1)):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, Integral) or value < lower:
                 raise ValueError(f"amplitude_gp {name} must be an integer >= {lower}")
@@ -67,7 +68,10 @@ class AmplitudeGPSettings:
             object.__setattr__(self, name, (low, high))
 
     def semantic_parameters(self):
-        return asdict(self)
+        values = asdict(self)
+        # Execution capacity does not change fitted mathematics or checkpoints.
+        values.pop("field_workers")
+        return values
 
 
 DEFAULT_AMPLITUDE_GP_SETTINGS = AmplitudeGPSettings()

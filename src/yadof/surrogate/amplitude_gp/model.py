@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
+import threading
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 from sklearn.decomposition import PCA
@@ -101,7 +104,7 @@ class ResponseMap:
         return values[:, None] if values.ndim == 1 else values
 
 
-def fit_map(x, target, rows, *, scalar, settings, cancel_event=None):
+def fit_map(x, target, rows, *, scalar, settings, cancel_event=None, capture_warnings=True):
     check_cancelled(cancel_event)
     target = np.asarray(target)
     if np.max(np.ptp(target, axis=0)) <= settings.constant_tolerance:
@@ -115,12 +118,17 @@ def fit_map(x, target, rows, *, scalar, settings, cancel_event=None):
         result, value, _ = fmin_l_bfgs_b(objective, theta, bounds=bounds,
             maxiter=settings.optimizer_iterations, factr=settings.optimizer_factr)
         return result, value
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
+    # Python warning filters are process-global on supported runtimes. Parallel
+    # fields emit normal stderr warnings instead of racing nested catch contexts.
+    with warnings.catch_warnings(record=True) if capture_warnings else nullcontext(()) as caught:
+        if capture_warnings:
+            warnings.simplefilter("always")
         model = GaussianProcessRegressor(kernel=kernel, alpha=settings.alpha, normalize_y=scalar,
             optimizer=optimizer, random_state=settings.random_seed).fit(x[rows], target[rows]/scale)
     diagnostics = {"kernel": str(model.kernel_),
         "warnings": list(dict.fromkeys(str(w.message) for w in caught))[:20]}
+    if not capture_warnings:
+        diagnostics["warning_capture"] = "process-stderr"
     check_cancelled(cancel_event)
     mean = GaussianMean(model.kernel_, model.X_train_, model.alpha_,
                         model._y_train_mean, model._y_train_std)
@@ -146,14 +154,15 @@ class FieldModel:
         return restore_amplitude(shape, low, span)
 
 
-def fit_field(x, target, rows, *, settings=DEFAULT_AMPLITUDE_GP_SETTINGS, cancel_event=None):
+def fit_field(x, target, rows, *, settings=DEFAULT_AMPLITUDE_GP_SETTINGS, cancel_event=None,
+              capture_warnings=True):
     """Consume the caller-owned writable float64 target as the shape/PCA buffer."""
     low, span, shape = split_amplitude(target, out=target)
     center = float(np.median(low))
     scale = max(float(np.quantile(np.abs(low-center), settings.minimum_scale_quantile)),
                 settings.minimum_scale_std_fraction*float(np.std(low)), settings.numerical_floor)
     low_z = np.arcsinh((low-center)/scale)
-    kwargs = {"settings": settings, "cancel_event": cancel_event}
+    kwargs = {"settings": settings, "cancel_event": cancel_event, "capture_warnings": capture_warnings}
     minimum = fit_map(x, low_z, rows, scalar=True, **kwargs)
     if np.max(span) == 0:
         span_map = None
@@ -217,21 +226,48 @@ def fit_amplitude_model(data, ordering, costs, *, settings=DEFAULT_AMPLITUDE_GP_
     samples = tuple(data.raw_data[i] for i in ordering)
     rows = subset(x, costs, settings.gp_max_rows, settings.elite_fraction)
     schema = RawDataSchemaTemplate.from_items(samples[0])
-    fields, reports = [], []
+    workers = min(settings.field_workers, len(schema.fields))
+    fields, reports = [None] * len(schema.fields), [None] * len(schema.fields)
+    stopped = threading.Event()
+    class FitCancellation:
+        def is_set(self):
+            return stopped.is_set() or (cancel_event is not None and cancel_event.is_set())
+    cancellation = FitCancellation()
+    def fit_one(index):
+        field = schema.fields[index]
+        check_cancelled(cancellation)
+        begin = time.perf_counter()
+        target = np.empty((len(samples), int(np.prod(field.main_shape))), dtype=np.float64)
+        for row, sample in zip(target, samples, strict=True):
+            row[:] = np.asarray(sample.items[index].payload[field.main_key]).reshape(-1)
+        model = fit_field(x, target, rows, settings=settings, cancel_event=cancellation,
+                          capture_warnings=workers == 1)
+        del row, target
+        report = {**model.diagnostics, "selector": list(field.selector),
+                  "fit_wall_sec": time.perf_counter() - begin}
+        return model, report
+
+    # One numerical-thread scope covers the complete executor lifetime; workers
+    # never enter overlapping threadpoolctl contexts or copy shared rawData.
     with threadpool_limits(limits=1):
-        for index, field in enumerate(schema.fields):
-            check_cancelled(cancel_event)
-            begin = time.perf_counter()
-            target = np.empty((len(samples), int(np.prod(field.main_shape))), dtype=np.float64)
-            for row, sample in zip(target, samples, strict=True):
-                row[:] = np.asarray(sample.items[index].payload[field.main_key]).reshape(-1)
-            model = fit_field(x, target, rows, settings=settings, cancel_event=cancel_event)
-            del row, target
-            fields.append(model)
-            report = {**model.diagnostics, "selector": list(field.selector),
-                "fit_wall_sec": time.perf_counter()-begin}
-            reports.append(report)
+        if workers == 1:
+            for index in range(len(schema.fields)):
+                fields[index], reports[index] = fit_one(index)
+        else:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="amplitude-field") as executor:
+                futures = {executor.submit(fit_one, index): index for index in range(len(schema.fields))}
+                try:
+                    for future in as_completed(futures):
+                        index = futures[future]
+                        fields[index], reports[index] = future.result()
+                except BaseException:
+                    stopped.set()
+                    for future in futures:
+                        future.cancel()
+                    raise
+    check_cancelled(cancel_event)
     diagnostics = {"gp_fit_rows": len(rows), "training_rows": len(x),
         "gp_row_ids": [data.row_ids[ordering[i]] for i in rows], "fields": reports,
+        "field_workers": workers,
         "model_fit_wall_sec": time.perf_counter()-start}
     return AmplitudeModel(schema, tuple(fields), diagnostics)

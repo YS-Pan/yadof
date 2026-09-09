@@ -1,5 +1,9 @@
 # File blueprint: src/yadof/optimize/gpsaf/phases.py
 
+The search root retains P while real exploration plus assisted selection totals
+the generation's I/B evaluation count. Alpha/beta target the assisted quota;
+composing the final real batch must not substitute retained P for that quota.
+
 ## Intent
 - Implement the GPSAF algorithm phases while leaving campaign orchestration and
   real-evaluation recording to the common optimization layer.

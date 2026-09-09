@@ -148,6 +148,12 @@ forks, and bind continuation to the exact strategy, problem, seeds, archive
 precision, and interpretation snapshot. Selection is only a search-state commit
 point; it cannot commit evidence.
 
+Search survivor capacity P is independent of subsequent formal batch B and
+initial design count I. Omitted B/I resolve to P. Pymoo owns sampling and
+survival; only the initial ask uses I as its temporary sampling capacity, restored
+to P before tell. Formal result validation uses I at generation zero and B later.
+GPSAF exploration and assisted quotas divide the current formal batch.
+
 ## Invariants
 
 - Fast, local, and distributed execution converge before evidence-first

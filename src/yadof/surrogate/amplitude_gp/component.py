@@ -94,6 +94,7 @@ def amplitude_gp(
     span_floor_relative: float = _DEFAULT.span_floor_relative,
     minimum_scale_quantile: float = _DEFAULT.minimum_scale_quantile,
     minimum_scale_std_fraction: float = _DEFAULT.minimum_scale_std_fraction,
+    field_workers: int = _DEFAULT.field_workers,
 ) -> AmplitudeGPComponent:
     """Build the opt-in amplitude/shape GP with explicit scientific parameters."""
     return AmplitudeGPComponent(AmplitudeGPSettings(
@@ -106,4 +107,5 @@ def amplitude_gp(
         constant_tolerance=constant_tolerance, numerical_floor=numerical_floor,
         span_floor_relative=span_floor_relative, minimum_scale_quantile=minimum_scale_quantile,
         minimum_scale_std_fraction=minimum_scale_std_fraction,
+        field_workers=field_workers,
     ))

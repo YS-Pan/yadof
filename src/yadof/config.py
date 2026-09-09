@@ -95,6 +95,8 @@ _CORE_SETTING_SPECS: tuple[SettingSpec, ...] = (
     _spec("HTCONDOR_ENVIRONMENT", "USERPROFILE=._home HOME=._home TEMP=._tmp TMP=._tmp", "string"),
     # Optimizer.
     _spec("OPTIMIZE_POPULATION_SIZE", 200, "positive_int"),
+    _spec("OPTIMIZE_BATCH_SIZE", None, "optional_positive_int"),
+    _spec("OPTIMIZE_INITIAL_POPULATION_SIZE", None, "optional_positive_int"),
     _spec("OPTIMIZE_SMOKE_TEST_ENABLED", True, "bool"),
     _spec("OPTIMIZE_RANDOM_SEED", 20260624, "nonnegative_int"),
     _spec("OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10, "nonnegative_int"),
@@ -195,6 +197,10 @@ def _validate_value(name: str, value: object) -> object:
         if not isinstance(value, bool):
             raise ConfigError(f"{name} must be bool, got {type(value).__name__}")
         return value
+    if kind == "optional_positive_int":
+        if value is None:
+            return None
+        kind = "positive_int"
     if kind in {"positive_int", "nonnegative_int"}:
         if isinstance(value, bool) or not isinstance(value, int):
             raise ConfigError(f"{name} must be an integer, got {type(value).__name__}")

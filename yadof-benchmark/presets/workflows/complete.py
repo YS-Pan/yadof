@@ -7,7 +7,7 @@ def build_benchmark(benchmark: Benchmark) -> None:
         name="complete-packaged-baseline-pca-svd-performance",
         evidence="performance",
         fail_fast=False,
-        cell_concurrency=1,
+        cell_concurrency=4,
     )
     benchmark.strategy(
         "real-only-nsga3",

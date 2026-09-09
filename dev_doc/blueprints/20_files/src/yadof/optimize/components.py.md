@@ -11,6 +11,8 @@
 - Validate objective compatibility and backend distribution availability.
 - Report deterministic adapter/backend/version/algorithm/controlled-parameter
   identity.
+- Add resolved non-default B/I to controlled identity; explicit B/I equal to P
+  preserve the identity of omitted defaults.
 - Lazy-load concrete pymoo implementation only when a selected operation runs.
 - Expose `gpsaf_settings()` as the validated immutable settings surface for a
   program's generation-local selector, including the explicit `cluster` or

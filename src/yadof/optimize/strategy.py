@@ -60,6 +60,22 @@ class GenerationContext:
     strategy_signature: str
     strategy_identity: Mapping[str, object]
 
+    @property
+    def batch_size(self) -> int:
+        """Number of new real evaluations after initialization."""
+        value = self.config.OPTIMIZE_BATCH_SIZE
+        return self.population_size if value is None else int(value)
+
+    @property
+    def initial_population_size(self) -> int:
+        value = self.config.OPTIMIZE_INITIAL_POPULATION_SIZE
+        return self.population_size if value is None else int(value)
+
+    @property
+    def evaluation_size(self) -> int:
+        """This generation's budget, distinct from retained survivor capacity."""
+        return self.initial_population_size if self.generation_index <= 0 else self.batch_size
+
 
 def semantic_strategy_signature(
     identity: Mapping[str, object],

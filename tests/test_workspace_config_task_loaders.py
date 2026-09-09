@@ -170,6 +170,8 @@ def test_config_preserves_explicit_context_paths_until_file_override(tmp_path: P
     [
         ("UNKNOWN_SETTING = 1\n", "unknown config setting"),
         ("OPTIMIZE_POPULATION_SIZE = 'many'\n", "must be an integer"),
+        ("OPTIMIZE_BATCH_SIZE = 0\n", "must be >= 1"),
+        ("OPTIMIZE_INITIAL_POPULATION_SIZE = True\n", "must be an integer"),
         (
             "EVALUATION_MODE = 'cluster'\n",
             "must be one of",

@@ -19,6 +19,9 @@
 ## Invariants
 
 - No concrete pymoo or Torch type crosses this boundary.
+- `population_size` is retained P. `batch_size` and `initial_population_size`
+  resolve optional config B/I against P; `evaluation_size` selects I at generation
+  zero and B thereafter. No caller needs to infer evaluation count from P.
 - Program source is frozen once by `program.py`. Package config/registries never
   select a competing complete method.
 - Surrogate predictions cannot become accepted results without real evaluation.

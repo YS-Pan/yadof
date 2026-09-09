@@ -171,18 +171,18 @@ class PosteriorAssistedSelector:
         exploitation = require_posterior_exploitation_surrogate(self.surrogate)
         self.acquisition.validate(config, problem)
 
-        population_size = int(config.OPTIMIZE_POPULATION_SIZE)
+        population_size = int(config.OPTIMIZE_BATCH_SIZE or config.OPTIMIZE_POPULATION_SIZE)
         exploration_count = _exploration_count(
             population_size, self.exploration_fraction
         )
         if self.candidate_pool_size < population_size:
             raise ValueError(
-                "candidate_pool_size must be at least OPTIMIZE_POPULATION_SIZE"
+                "candidate_pool_size must be at least the real evaluation batch size"
             )
         expected_batch = population_size - exploration_count
         if self.acquisition.batch_size != expected_batch:
             raise ValueError(
-                "qNEHVI batch_size must equal population size minus the explicit "
+                "qNEHVI batch_size must equal real evaluation batch size minus the explicit "
                 f"exploration quota ({expected_batch})"
             )
         identity = dict(exploitation.exploitation_semantic_identity(config, problem))
@@ -362,9 +362,9 @@ class PosteriorAssistedSelector:
             )
 
         exploration_count = _exploration_count(
-            context.population_size, self.exploration_fraction
+            context.evaluation_size, self.exploration_fraction
         )
-        if context.population_size - exploration_count != self.acquisition.batch_size:
+        if context.evaluation_size - exploration_count != self.acquisition.batch_size:
             raise QNEHVIConfigurationError(
                 "runtime population size changed the pre-registered qNEHVI/exploration split"
             )
@@ -427,7 +427,7 @@ class PosteriorAssistedSelector:
             candidates[index].normalized_variables for index in exploration
         )
         population = chosen_exploitation + chosen_exploration
-        if len(population) != context.population_size or len(set(population)) != len(
+        if len(population) != context.evaluation_size or len(set(population)) != len(
             population
         ):
             raise RuntimeError(

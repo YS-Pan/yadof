@@ -13,6 +13,7 @@ from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.core.individual import Individual
 from pymoo.core.population import Population
 from pymoo.core.problem import Problem
+from pymoo.core.termination import NoTermination
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
@@ -51,6 +52,8 @@ class PymooContext:
     baseline_optimizer: str
     problem_adapter: Problem
     reference_directions: ReferenceDirectionInfo | None = None
+    batch_size: int | None = None
+    initial_population_size: int | None = None
 
 
 class UnitBoxProblem(Problem):
@@ -154,7 +157,7 @@ def _make_algorithm(context: PymooContext):
             raise ValueError("pymoo GA requires exactly one objective")
         return GA(
             pop_size=int(context.population_size),
-            n_offsprings=int(context.population_size),
+            n_offsprings=int(context.batch_size or context.population_size),
             sampling=FloatRandomSampling(),
             crossover=crossover,
             mutation=mutation,
@@ -169,7 +172,7 @@ def _make_algorithm(context: PymooContext):
     return NSGA3(
         ref_dirs=context.reference_directions.directions,
         pop_size=int(context.population_size),
-        n_offsprings=int(context.population_size),
+        n_offsprings=int(context.batch_size or context.population_size),
         sampling=FloatRandomSampling(),
         crossover=crossover,
         mutation=mutation,
@@ -197,6 +200,8 @@ def make_context(
         config=config,
         problem=problem,
         population_size=int(population_size),
+        batch_size=int(config.OPTIMIZE_BATCH_SIZE or population_size),
+        initial_population_size=int(config.OPTIMIZE_INITIAL_POPULATION_SIZE or population_size),
         seed=int(seed),
         generation_index=int(generation_index),
         search_algorithm=selected_algorithm,
@@ -211,7 +216,10 @@ def make_context(
 
 def new_algorithm(context: PymooContext):
     algorithm = _make_algorithm(context)
-    algorithm.setup(context.problem_adapter, seed=int(context.seed), verbose=False)
+    # Yadof's explicit program owns stopping. Backend convergence/default limits
+    # must not terminate ask/tell or finalize a history replay without a start time.
+    algorithm.setup(context.problem_adapter, seed=int(context.seed), verbose=False,
+                    termination=NoTermination())
     return algorithm
 
 
@@ -237,6 +245,13 @@ def history_population(context: PymooContext, history: Sequence[HistoryRecord]):
                 F=_fitness_matrix([record.costs for record in batch], context.problem.objective_count),
             )
         )
+        # Pymoo's initial tell keeps every supplied initial individual. When
+        # I > P, truncate here before replaying any later real generation, so
+        # a longer replay cannot resurrect discarded initial survivors.
+        if (any(row.generation_index is not None for row in batch)
+                and len(algorithm.pop) > context.population_size):
+            algorithm.pop = _selected_population(context, algorithm, context.population_size)
+            algorithm._set_optimum()
     algorithm.random_state = np.random.default_rng(context.seed + context.generation_index * 1009)
     return algorithm
 
@@ -324,7 +339,16 @@ def generate_candidate_pool(
     decimals = int(getattr(context.config, "OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10))
     for _attempt in range(attempts):
         output_stats["ask_attempt_count"] = int(output_stats["ask_attempt_count"]) + 1
-        infills = state.ask()
+        # Pymoo uses pop_size for its initial sampling as well as survival.
+        # Override sampling capacity only during the ask, then restore P before
+        # any tell. This gives all P/B arms the same seeded initial design.
+        survivor_size = state.pop_size
+        if not state.is_initialized:
+            state.pop_size = context.initial_population_size or survivor_size
+        try:
+            infills = state.ask()
+        finally:
+            state.pop_size = survivor_size
         records = records_from_population(context, infills, origin)
         output_stats["ask_candidate_count"] = (
             int(output_stats["ask_candidate_count"]) + len(records)
@@ -452,6 +476,9 @@ def diagnostics(context: PymooContext) -> dict[str, object]:
         "objective_count": int(context.problem.objective_count),
         "objective_names": tuple(context.problem.objective_names),
         "variable_count": int(context.problem.variable_count),
+        "retained_population_size": int(context.population_size),
+        "batch_size": int(context.batch_size or context.population_size),
+        "initial_population_size": int(context.initial_population_size or context.population_size),
     }
     if context.reference_directions is not None:
         out.update(

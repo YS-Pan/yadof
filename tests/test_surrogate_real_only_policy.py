@@ -436,6 +436,8 @@ def test_optimizer_records_discard_member_spread() -> None:
     config = SimpleNamespace(
         OPTIMIZE_ARCHIVE_KEY_DECIMALS=10,
         OPTIMIZE_POPULATION_SIZE=1,
+        OPTIMIZE_BATCH_SIZE=None,
+        OPTIMIZE_INITIAL_POPULATION_SIZE=None,
     )
     context = SimpleNamespace(
         config=config,

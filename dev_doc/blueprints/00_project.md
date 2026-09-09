@@ -119,12 +119,14 @@ hot-change contract; structural dimension changes are future work.
   propagated through human-facing and evidence surfaces.
   Omitted budgets resolve to seed 101, population 200, and 50 generations, or 15
   generations when any selected strategy declares `slow_surrogate=True`.
-  Explicit budgets are preserved. Individual simulation failures are counted and
+  Explicit arm P/B/I/generation overrides are preserved; formal budget is
+  I + (G - 1) B. Individual simulation failures are counted and
   may be tolerated when attempted budget, finite evidence, task contracts,
   generation-0 pairing, and final metric remain valid. Same-case paired
   comparisons require matching baseline input digest, planned/attempted budget,
   and initial normalized population. A terminal cell publishes aggregate evidence
-  before FIFO refill. Cell concurrency and baseline worker concurrency remain
+  before admitting more ready cells. A top-10 dependent waits for its paired
+  reference's publication, while independent cells can overlap. Cell concurrency and baseline worker concurrency remain
   separate. Results/reports/visualizations are direct workspace outputs with
   short filenames. Actual yadof evaluation snapshots drive progress; command
   heartbeats expose only elapsed/activity state. Timeout cleanup stops the process

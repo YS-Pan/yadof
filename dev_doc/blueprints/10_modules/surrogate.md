@@ -63,6 +63,9 @@ performance evidence is distinct from independent confirmation.
 - `amplitude_gp/` owns its immutable settings, lazy public component, numeric
   field model, state DTO, atomic JSON/NPZ checkpoints, snapshot-bound runtime and
   one-worker scheduler. Optional SciPy/scikit-learn dependencies belong to `gp`.
+  Inside one fit, optional `field_workers` parallelizes independent fields with
+  private mutable buffers and shared immutable evidence. This resource limit is
+  excluded from scientific/checkpoint identity; cancellation joins field workers.
 - `posterior.py` owns runtime-checkable surrogate/sampler/posterior protocols,
   persistent draw containers, JSON-safe support diagnostics, semantic capability
   identity, and the draw/candidate-chunk streaming projection helper. It imports no

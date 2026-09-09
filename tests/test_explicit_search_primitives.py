@@ -63,6 +63,8 @@ def _config(*, population_size: int = 4, decimals: int = 10):
     return SimpleNamespace(
         OPTIMIZE_ARCHIVE_KEY_DECIMALS=decimals,
         OPTIMIZE_POPULATION_SIZE=population_size,
+        OPTIMIZE_BATCH_SIZE=None,
+        OPTIMIZE_INITIAL_POPULATION_SIZE=None,
         OPTIMIZE_SURROGATE_MAX_TRAINING_LAG=1,
     )
 
@@ -81,6 +83,9 @@ def _context(
         config=_config(population_size=population_size, decimals=decimals),
         generation_index=generation,
         population_size=population_size,
+        batch_size=population_size,
+        initial_population_size=population_size,
+        evaluation_size=population_size,
         random_seed=seed,
         history=tuple(history),
         problem=problem,

@@ -16,6 +16,9 @@
 - Stop positive-gain selection at `1e-12`, then use valid original infill choices,
   remaining valid pool order and finally invalid rows to fill the requested count.
   A finite cost of one is valid and can be retained by fallback.
+- Skip HV backend calls for rectangles outside the unit reference or dominated
+  by the current private front: their marginal gain is exactly zero. This does
+  not remove candidates from fallback or change greedy order/tie handling.
 - Return candidate indices and bounded gain/reference diagnostics. No surrogate,
   simulator, benchmark, rawData, real evaluator or recorder is accessed.
 - Predicted candidates temporarily extend only the private coverage front. They

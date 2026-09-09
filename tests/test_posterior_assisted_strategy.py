@@ -230,6 +230,8 @@ def _problem() -> ProblemInfo:
 def _config(population_size: int = 2):
     return SimpleNamespace(
         OPTIMIZE_POPULATION_SIZE=population_size,
+        OPTIMIZE_BATCH_SIZE=None,
+        OPTIMIZE_INITIAL_POPULATION_SIZE=None,
         OPTIMIZE_ARCHIVE_KEY_DECIMALS=10,
     )
 
@@ -240,6 +242,7 @@ def _context(*, history=(), population_size: int = 2):
         config=config,
         generation_index=1,
         population_size=population_size,
+        evaluation_size=population_size,
         random_seed=17,
         history=tuple(history),
         problem=_problem(),

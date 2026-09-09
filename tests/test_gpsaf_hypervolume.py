@@ -60,6 +60,50 @@ def test_batch_coverage_recomputes_marginal_gain_after_each_choice():
     assert info["coverage_reference_point"] == (1.0, 1.0)
 
 
+@pytest.mark.parametrize("objectives", [2, 3, 5])
+def test_fast_zero_gain_checks_match_exhaustive_greedy(objectives):
+    from pymoo.indicators.hv import HV
+    indicator = HV(ref_point=np.ones(objectives))
+    for seed in range(12):
+        rng = np.random.default_rng(seed)
+        costs = rng.uniform(-0.1, 1.2, (24, objectives))
+        history = rng.uniform(0, 1, (10, objectives))
+        valid = [True] * 23 + [False]
+        costs[-1] = math.inf
+        fallback = [7, 23, 2, 0]
+        front = history.copy()
+        expected = []
+        for _ in range(8):
+            base = float(indicator(front))
+            gains = [(max(0., float(indicator(np.vstack((front, row)))) - base), i)
+                     for i, row in enumerate(costs) if valid[i] and i not in expected]
+            gain, index = max(gains, key=lambda item: (item[0], -item[1]))
+            if gain <= 1e-12:
+                break
+            expected.append(index)
+            front = np.vstack((front, costs[index]))
+        for is_valid in (True, False):
+            for index in fallback + list(range(len(costs))):
+                if valid[index] == is_valid and index not in expected and len(expected) < 8:
+                    expected.append(index)
+        selected, _ = select_hypervolume_indices(costs, valid, history, 8, fallback)
+        assert selected == tuple(expected)
+
+
+def test_dominated_pool_avoids_per_candidate_hypervolume_calls(monkeypatch):
+    from pymoo.indicators.hv import HV
+    calls = []
+    original = HV.__call__
+    def counted(self, *args, **kwargs):
+        calls.append(1)
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(HV, "__call__", counted)
+    selected, _ = select_hypervolume_indices([(0.5, 0.5)] * 200,
+        [True] * 200, [(0.1, 0.1)], 20, list(reversed(range(200))))
+    assert selected == tuple(reversed(range(180, 200)))
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize("count", (4, 5))
 def test_no_gain_fallback_keeps_finite_penalties_and_defers_failures(count):
     costs = ((0.2, 0.7), (0.7, 0.2), (0.6, 0.6), (1.0, 0.0), (math.inf, math.inf))

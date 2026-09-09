@@ -72,6 +72,13 @@ class PymooSearch:
             "refill_attempts": self.settings.refill_attempts,
             "archive_key_decimals": int(config.OPTIMIZE_ARCHIVE_KEY_DECIMALS),
         }
+        # Omitted or explicitly equivalent budgets retain the established identity.
+        for name, value in (
+            ("batch_size", config.OPTIMIZE_BATCH_SIZE),
+            ("initial_population_size", config.OPTIMIZE_INITIAL_POPULATION_SIZE),
+        ):
+            if value is not None and int(value) != int(config.OPTIMIZE_POPULATION_SIZE):
+                controlled[name] = int(value)
         if selected == "nsga3":
             controlled.update(
                 {

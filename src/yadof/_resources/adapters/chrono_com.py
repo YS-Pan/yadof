@@ -50,7 +50,8 @@ MAX_RESULT_BYTES = 262_144
 MAX_DIAGNOSTIC_BYTES = 65_536
 _POLL_INTERVAL_SEC = 0.05
 _TERMINATION_WAIT_SEC = 5.0
-_WINDOWS_MAX_CURRENT_DIRECTORY_CHARS = 259
+# CreateProcess needs room for an appended backslash and the terminating NUL.
+_WINDOWS_MAX_CURRENT_DIRECTORY_CHARS = 258
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _HANDLED_CHILD_EXIT_CODES = {2, 3, 4}
 
@@ -711,7 +712,7 @@ class PyChronoSession:
         # A resident child can switch to its explicit scratch after startup.
         # No external junction can outlive a force-killed owning worker.
         launch = self.scratch
-        if os.name == "nt" and len(str(launch)) > _WINDOWS_MAX_CURRENT_DIRECTORY_CHARS:
+        if os.name == "nt" and not _windows_launch_directory_fits(launch):
             launch = Path(tempfile.gettempdir()).resolve()
         try:
             self.process = subprocess.Popen(
@@ -1176,7 +1177,7 @@ def _launch_scratch(scratch: Path) -> tuple[Path, Path | None]:
     alias: Path | None = None
     try:
         alias = Path(tempfile.mkdtemp(prefix="yadof-pychrono-launch-")).resolve()
-        if len(str(alias)) > _WINDOWS_MAX_CURRENT_DIRECTORY_CHARS:
+        if not _windows_launch_directory_fits(alias):
             raise OSError(
                 "the Windows temporary directory is too long for a child launch alias"
             )
@@ -1188,13 +1189,18 @@ def _launch_scratch(scratch: Path) -> tuple[Path, Path | None]:
                 alias.rmdir()
             except OSError:
                 pass
-        if len(str(scratch)) <= _WINDOWS_MAX_CURRENT_DIRECTORY_CHARS:
+        if _windows_launch_directory_fits(scratch):
             return scratch, None
         raise PyChronoError(
             "launch_failed",
             "could not create a short Windows launch alias for the candidate "
             f"scratch: {exc}",
         ) from exc
+
+
+def _windows_launch_directory_fits(path: Path) -> bool:
+    # Windows counts UTF-16 units, so supplementary characters occupy two.
+    return len(str(path).encode("utf-16-le", errors="surrogatepass")) // 2 <= _WINDOWS_MAX_CURRENT_DIRECTORY_CHARS
 
 
 def _set_windows_junction(alias: Path, target: Path) -> None:

@@ -7,7 +7,7 @@ def build_benchmark(benchmark: Benchmark) -> None:
         name="portable-canonical-strategy-smoke",
         evidence="structural",
         fail_fast=True,
-        cell_concurrency=1,
+        cell_concurrency=4,
     )
     benchmark.strategy(
         "real-only-nsga3",

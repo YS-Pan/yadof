@@ -32,11 +32,22 @@ def select_hypervolume_indices(
     reference = np.ones(candidate_costs.shape[1])
     indicator = HV(ref_point=reference)
     value = float(indicator(front))
+    zero_gain = np.any(candidate_costs >= reference, axis=1)
+    for survivor in front:
+        zero_gain |= np.all(survivor <= candidate_costs, axis=1)
     selected: list[int] = []
     heap: list[tuple[float, int, int]] = []
+    def marginal_gain(index: int) -> float:
+        candidate = candidate_costs[index]
+        # A dominated rectangle or one outside the reference contributes exactly
+        # zero. Avoid calling the HV backend for these common late-run cases.
+        if zero_gain[index]:
+            return 0.0
+        return max(0.0, float(indicator(np.vstack((front, candidate)))) - value)
+
     for index, is_valid in enumerate(valid):
         if is_valid:
-            gain = max(0.0, float(indicator(np.vstack((front, candidate_costs[index])))) - value)
+            gain = marginal_gain(index)
             heapq.heappush(heap, (-gain, index, 0))
 
     gains: list[float] = []
@@ -44,7 +55,7 @@ def select_hypervolume_indices(
         negative_gain, index, iteration = heapq.heappop(heap)
         # Coverage is submodular: an earlier marginal gain is an upper bound.
         if iteration != len(selected):
-            gain = max(0.0, float(indicator(np.vstack((front, candidate_costs[index])))) - value)
+            gain = marginal_gain(index)
             heapq.heappush(heap, (-gain, index, len(selected)))
             continue
         if -negative_gain <= 1e-12:
@@ -54,6 +65,8 @@ def select_hypervolume_indices(
         front = np.vstack((front, candidate_costs[index]))
         front = front[sorting.do(front, only_non_dominated_front=True)]
         value = float(indicator(front))
+        # The covered region only grows, so prior zero-gain flags stay valid.
+        zero_gain |= np.all(candidate_costs[index] <= candidate_costs, axis=1)
 
     ordered = list(fallback) + list(range(len(candidate_costs)))
     for is_valid in (True, False):

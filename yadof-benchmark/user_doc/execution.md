@@ -166,16 +166,79 @@ population 200 and sets generations to one.
 - Explicit `seeds`, `population`, or `generations` override these defaults.
 
 The slow-surrogate default deliberately keeps generations in the 10-20 range.
-Population is not reduced automatically because paired strategies must use the
-same population and evaluation budget. Use explicit values after inspecting the
+Population is not reduced automatically. Paired strategies must have matching
+initial designs and formal budgets; P/B may differ through explicit arm overrides.
+Use explicit values after inspecting the
 plan when a task needs a different tradeoff.
+
+## Improving throughput
+
+The default is `benchmark.configure(cell_concurrency=4)`, including the packaged
+portable, complete and perfect workflows. Independent cells can cover time spent
+waiting for simulators, selection, collection or publication. Top-10 comparisons
+support this too: only each candidate's paired reference is a dependency.
+
+There are two general capacity controls. `cell_concurrency` caps active cells;
+the copied baseline's `execution.simulation_concurrency.physical_core_multiplier`
+sets workers per cell to `max(1, floor(physical_cores * multiplier))`. For example,
+four cells with multiplier `1.0` on eight physical cores request 32 concurrent
+simulations. A multiplier of `2.0` requests 64 across four such cells. Waiting
+and startup time can make these oversubscribed settings faster than matching the
+logical-core count. A cell may retain additional idle formal/oracle worker pools;
+this calculation describes active simulation capacity, not total process count.
+
+Keep the baseline-specific defaults as a starting point. When changing capacity,
+try a few small batches of the already planned cells with different multipliers
+in fresh workspaces, keeping each same-seed reference and all candidate arms
+together. Retain capped noncrossings in the statistics and report invalid runs
+separately. Compare complete
+wall time and memory as well as CPU use; different P/B combinations and stopping
+lengths make unpaired cell timings descriptive. An exact speed comparison needs
+the same seeds and budgets. A baseline that benefits from more workers need not
+share the multiplier of another simulator.
+
+Keep native BLAS/OpenMP pools at one thread for many independent CPU workers;
+the benchmark child launcher sets this before starting each command, and spawned
+simulator descendants inherit it. This also avoids large per-process native
+thread buffers consuming Windows commit memory despite low resident RAM usage.
+The effective environment limits are recorded in each command's `started.json`.
+Increasing every
+parallelism control at once can slow the run through contention and memory growth.
+
+Benchmark execution reserves host memory as well as CPU capacity. On Windows it
+checks system committed memory and its current limit, rather than treating free
+physical RAM as sufficient. A shared Windows job limits private committed memory
+for cell command trees to the smaller of 60% of the initial system commit limit
+and the initially available commit minus a 20% system reserve (at least 2 GiB).
+An independent watchdog stops admission and cancels commands if global commit
+headroom falls below that reserve, or available physical memory falls below 10%
+(at least 1 GiB). Memory exhaustion is fatal even with `fail_fast=False`;
+ordinary simulator failures keep their existing treatment. The runner records
+`resource_protection` in `state.json`. This changes no system page-file settings.
+
+Put known long baselines first in `compare(baselines=[...])` to reduce the final
+tail when ready work is otherwise comparable. Keep the resident `fast` baseline
+adapters: they reuse simulator sessions across batches. No custom process-pool
+implementation is needed in a strategy. Low total CPU/GPU activity can also mean
+a serial Python or numerical step occupies one core; GPU utilization is relevant
+only for components that actually execute on the GPU.
+
+For a large matrix, divide the seed list between a few fresh workspaces and keep
+every same-seed reference and candidate arm together. Run one workspace at a time
+with the chosen cell concurrency. Publication rewrites the cumulative per-point
+reports after each cell, so smaller matrices reduce repeated report work and the
+largest report held in memory. Preserve the original full seed list and budgets.
+Combine individual seed results for final statistics; never average or take the
+median of workspace medians. Each workspace still needs its normal collection
+and postprocessing outputs.
 
 ## Failure and validity
 
 `yadof run` is invoked with `--fail-on-all-infinite`. Individual simulation
 failures are allowed. A collected cell is valid when:
 
-- attempted evaluations equal the planned evaluation count;
+- attempted evaluations equal the planned count, or exactly the first strict
+  crossing under the explicitly declared top-10 stopping protocol;
 - at least one finite result exists;
 - objective and rawData contracts match;
 - the complete generation-0 normalized population is available;
@@ -187,9 +250,22 @@ publishes failed and non-finite counts plus
 attempts, no finite result, broken contracts, missing initial-population evidence,
 or missing metric still invalidate the cell.
 
+An evaluator's explicit `physical_failure=False` marks a task or infrastructure
+fault, such as a simulator process that could not start. Collection rejects the
+cell even if other candidates produced finite results; it must not become an
+ordinary failed-design penalty or weaken a paired reference.
+
 A command, storage, visualization, collection, or workflow postprocessor failure
 is retained in `state.json` and makes the overall status non-successful. Create
 a new workspace after correcting the problem.
+
+On Windows, a reader can briefly prevent atomic replacement of a JSON report.
+Publication automatically retries access/sharing/lock conflicts for up to two
+seconds while preserving the previous complete file. Persistent storage errors
+still stop execution. The runner records the primary scheduler failure as
+`execution_error` and attempts to save terminal failed state after cancelling
+active commands. If the storage remains unwritable, use the process exit and
+error log even when the last readable state still says `running`.
 
 Workflow postprocessors normally require all cells to be collected. A callback
 registered with `run_on_failure=True` may summarize failed or incomplete cells

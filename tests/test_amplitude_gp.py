@@ -109,6 +109,7 @@ def test_public_component_defaults_identity_and_lazy_backends():
     {"elite_fraction": 0}, {"elite_fraction": 1}, {"matern_nu": True},
     {"length_scale_bounds": (0, 1)}, {"noise_level": float("nan")},
     {"kernel_amplitude_bounds": (2, 3)}, {"constant_tolerance": -1},
+    {"field_workers": 0}, {"field_workers": True}, {"field_workers": 1.5},
 ])
 def test_invalid_settings_fail_before_training(kwargs):
     with pytest.raises(ValueError):
@@ -137,6 +138,8 @@ def test_fit_full_rawdata_checkpoint_and_current_cost_roundtrip(workspace, compo
         runtime.reset_workspace_state(workspace)
         recovered = component.recover(workspace, data, snapshot=snapshot)
         assert recovered is not None and recovered.state_signature == state.state_signature
+        resized = replace(component, settings=replace(component.settings, field_workers=2))
+        assert resized.recover(workspace, data, snapshot=snapshot).state_signature == state.state_signature
         actual = component.predict(recovered, expected.normalized_variables, snapshot=snapshot)
         assert actual.costs == expected.costs
         for a, b in zip(actual.raw_data, expected.raw_data, strict=True):

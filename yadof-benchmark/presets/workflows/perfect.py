@@ -8,7 +8,7 @@ def final_summary(context):
 
 
 def build_benchmark(benchmark: Benchmark) -> None:
-    benchmark.configure(name="perfect-gpsaf-top10", evidence="performance", fail_fast=False, cell_concurrency=1)
+    benchmark.configure(name="perfect-gpsaf-top10", evidence="performance", fail_fast=False, cell_concurrency=4)
     benchmark.strategy("real-nsga3", "resources/strategies/top10-real-nsga3/optimization.py", name="NSGA-III")
     benchmark.strategy("perfect-gpsaf", "resources/strategies/top10-perfect-gpsaf/optimization.py", name="GPSAF with perfect surrogate")
     benchmark.compare("paired-top10", baselines=["chrono/trebuchet", "ngspice/saw-ladder", "test-com/synthetic-antenna"],

@@ -17,6 +17,7 @@ DEFAULT_SEED = 101
 DEFAULT_SEEDS = (DEFAULT_SEED,)
 DEFAULT_POPULATION = 200
 DEFAULT_GENERATIONS = 50
+DEFAULT_CELL_CONCURRENCY = 4
 SLOW_SURROGATE_GENERATIONS = 15
 
 
@@ -132,6 +133,10 @@ class StrategySpec:
     source: Path | None
     sources: Mapping[str, Path]
     slow_surrogate: bool = False
+    population: int | None = None
+    batch_size: int | None = None
+    initial_population: int | None = None
+    generations: int | None = None
 
     def source_for(self, baseline_id: str) -> Path:
         selected = self.sources.get(baseline_id, self.source)
@@ -153,6 +158,8 @@ class ComparisonSpec:
     reference: str | None
     contains_slow_surrogate: bool = False
     stop_on_top10_reference: bool = False
+    batch_size: int | None = None
+    initial_population: int | None = None
 
 
 @dataclass(frozen=True)
@@ -200,10 +207,14 @@ class CellSpec:
     execution: Mapping[str, Any]
     contract: Mapping[str, Any]
     top10_reference: str | None = None
+    batch_size: int | None = None
+    initial_population: int | None = None
 
     @property
     def planned_evaluations(self) -> int:
-        return self.population * self.generations
+        return (self.initial_population or self.population) + (self.generations - 1) * (
+            self.batch_size or self.population
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -214,6 +225,8 @@ class CellSpec:
             "strategy": self.strategy_id,
             "seed": self.seed,
             "population": self.population,
+            "batch_size": self.batch_size or self.population,
+            "initial_population": self.initial_population or self.population,
             "generations": self.generations,
             "evidence": self.evidence,
             "replication_scope": self.replication_scope,
@@ -253,6 +266,10 @@ class RunSpec:
                     key: str(value) for key, value in sorted(item.sources.items())
                 },
                 "slow_surrogate": item.slow_surrogate,
+                "population": item.population,
+                "batch_size": item.batch_size,
+                "initial_population": item.initial_population,
+                "generations": item.generations,
             }
             for item in self.workflow.strategies
         ]
@@ -268,6 +285,8 @@ class RunSpec:
                     "strategies": list(item.strategy_ids),
                     "seeds": list(item.seeds),
                     "population": item.population,
+                    "batch_size": item.batch_size,
+                    "initial_population": item.initial_population,
                     "generations": item.generations,
                     "contains_slow_surrogate": item.contains_slow_surrogate,
                     "replication_scope": scope,
@@ -351,6 +370,7 @@ def cell_display_label(
 __all__ = [
     "BASELINE_FORMAT",
     "BUDGET_PROFILES",
+    "DEFAULT_CELL_CONCURRENCY",
     "DEFAULT_GENERATIONS",
     "DEFAULT_POPULATION",
     "DEFAULT_SEED",

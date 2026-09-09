@@ -52,7 +52,7 @@ costs cause a fit error rather than silent relabeling.
 Training retains shared read-only rawData and one canonical set of static axes
 and metadata per schema. Fitting builds one writable float64 matrix for the
 current field, reuses it for unit-range normalization and PCA centering, and
-releases it before the next field. The input samples remain read-only; sample
+releases it before the next field by default. The input samples remain read-only; sample
 counts, GP row selection, precision, and decomposition settings are unchanged.
 This reduces duplicate arrays, but full-field PCA and GP workspaces still require
 memory proportional to the selected data and model dimensions. Cross-generation
@@ -61,8 +61,9 @@ decode reuse follows the training-input lifetime described in
 
 ## Explicit parameters
 
-All factory parameters are keyword-only, immutable and included in semantic
-identity. These are the defaults:
+All factory parameters are keyword-only and immutable. Scientific parameters are
+included in semantic identity; execution capacity is recorded in fit diagnostics.
+These are the defaults:
 
 | Parameters | Default |
 | --- | --- |
@@ -75,6 +76,7 @@ identity. These are the defaults:
 | `constant_tolerance`, `numerical_floor` | 1e-12, 1e-12 |
 | `span_floor_relative` | 1e-6 |
 | `minimum_scale_quantile`, `minimum_scale_std_fraction` | 0.75, 0.05 |
+| `field_workers` (execution capacity) | 1 |
 
 The kernel is constant amplitude times an ARD Matérn kernel, plus independent
 white noise. Each fit uses one L-BFGS-B start and the declared bounds/iteration
@@ -83,6 +85,18 @@ minus one, and field width; randomized PCA uses the component seed. Fits and
 predictions limit numerical thread pools to one thread. Cost intervals are
 zero-width point intervals. The component exposes no calibrated uncertainty,
 posterior sampler, applicability probability, or qNEHVI readiness.
+
+Use `amplitude_gp(field_workers=2)` to fit two independent response fields at once.
+The input data is shared read-only; each active field needs its own full-prefix
+float64/PCA workspace. This trades extra memory for CPU throughput without changing
+rows, ranks, GP optimization, precision, field order or predictions. Start with two
+workers and measure fit time and peak memory before increasing it. The effective
+count cannot exceed the number of fields. Numerical libraries still use one
+thread per field, and failure/cancellation closes all workers before returning.
+Parallel fits send library warnings to the process log; serial fits retain their
+per-field warning lists. Field-worker capacity is excluded from the model's
+scientific settings identity. Existing program and task source checks still
+apply, including when the setting is changed by editing a frozen program.
 
 ## Fit, state, prediction and scheduling
 
@@ -174,8 +188,9 @@ meaning of the fitted content digest.
 
 One frozen research implementation with these defaults and synchronous
 pre-selection fitting passed all three seed-101 development targets: Chrono at
-2200 formal attempts, SAW at 2600 and test_com at 5200. The corresponding ratios
-to perfect-surrogate first crossing were 1.375, 0.6842105263 and 1.4444444444.
+2200 formal attempts, SAW at 2600 and test_com at 5200. Its historical
+single-seed perfect-surrogate ratios are superseded by the replicated P/B study
+and are not current acceptance thresholds.
 These are development results, not independent multi-seed confirmation or
 installed-component acceptance. Integration reproduction and preregistered
 paired confirmation remain required before a broader performance claim.

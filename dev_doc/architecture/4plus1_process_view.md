@@ -70,8 +70,10 @@ Training materialization after publication reuses live immutable samples through
 one campaign weak index. Only absent samples are decoded; discarded training
 inputs do not keep a second history alive. Exact schemas share static axes and
 metadata. Cost/range edits still reinterpret evidence at generation boundaries.
-Amplitude GP normalizes and centers one private float64 field buffer in place,
-then releases it before processing the next field. This submit-side flow is common
+Amplitude GP normalizes and centers one private float64 buffer per active field
+in place, then releases that buffer. Optional `field_workers` fits independent
+fields concurrently under one single-thread numerical scope; the owning fit joins
+all workers before returning or reporting failure. This submit-side flow is common
 to fast, local, and distributed evidence and has no additional disk cache.
 
 ## Derived candidate selection
