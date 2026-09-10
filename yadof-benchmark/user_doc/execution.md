@@ -126,6 +126,50 @@ available, run in the foreground and clearly state that no separate visible
 window can be created; do not silently fall back to a sandbox-owned detached
 process.
 
+## Low-cost monitoring for agents
+
+Long benchmarks can run for hours. When the user requests monitoring or terminal
+results, the main agent must delegate monitoring to a low-cost subagent with no
+inherited conversation context (`fork_turns="none"`, or the host equivalent).
+In September 2026 select `gpt-5.6-luna` with low reasoning effort. At a later date,
+choose the then-available inexpensive monitoring model occupying that same role;
+do not silently substitute the main expensive model. If delegation is unavailable,
+report that limitation and use the user's approved sparse fallback.
+
+Give the monitor a self-contained assignment containing the exact workspace,
+interpreter, launch receipt/PID, inspect command, output location and stop rule.
+It checks one bounded read-only `inspect` snapshot every five minutes. It stays
+active and waits between checks; one observation followed by a final response is
+not a continuing monitor. Retain observation timestamps in task-owned monitoring
+evidence so gaps remain visible. It never trains, changes inputs, restarts work,
+reinstalls packages, or performs broad history/response audits.
+
+The main agent uses long event waits and requests a compact summary at most once
+per hour while nothing actionable changes. It must not independently poll the
+benchmark. At the hourly boundary it may read the monitor’s latest saved bounded
+summary without launching another inspect. A running state file alone does not
+prove liveness; diagnose suspected process loss using an exact child PID from the
+command log and a process query, rather than unrelated Python processes. Completion, failure, lost process/progress, or required user action
+should wake it immediately. Do not send routine five-minute user updates. Where
+the host limits a single wait duration, chain quiet event waits without adding
+benchmark reads or model-generated status messages; shorter wait slices do not
+change the five-minute inspection and hourly summary cadence.
+
+A tool returning a live session/cell identifier has yielded an observation
+window; this is not a process exit or an agent time limit. Continue waiting on
+that same handle until a final exit code or explicit terminal evidence arrives.
+Do not start duplicate waits or samplers to obtain another status message.
+A helper process can retain the five-minute sampling cadence while an agent turn
+is idle, but it cannot by itself provide agent notifications. If the monitor ends
+its turn early, report that interruption and the resulting notification delay;
+the main agent may re-contact the same low-cost monitor at its hourly cadence.
+Never describe a live helper alone as an actively waiting agent.
+
+Terminal evidence, not disappearance of a console or a launch receipt, ends the
+monitor. Send terminal status, validity counts and report paths to the main agent,
+then stop. A terminal failure stays failed; the main agent owns diagnosis and any
+new authorized execution. A monitoring gap must be reported honestly.
+
 ## One workspace, one execution
 
 `run` writes the execution directly into the workspace. To execute again,

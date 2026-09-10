@@ -35,7 +35,7 @@
 
 基础 Hierarchical CAE benchmark、PCA/SVD measured study、详细数值表、artifact/receipt
 位置、数值限制和联合解释已迁移到
-[CAE/PCA-SVD measured evidence context](../context/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)。
+[CAE/PCA-SVD measured evidence context](../context/surrogate-research-20260830-20260910/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)。
 该 context 是实验事实与解释的跨 session 保存位置；本文只保留会改变未来执行决策的摘要。
 
 ### 已验证事实

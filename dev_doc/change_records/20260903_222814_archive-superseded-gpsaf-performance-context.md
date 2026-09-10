@@ -19,8 +19,8 @@
 
 ## 继续保留与更新
 
-- [当前六单元正式结果](../context/20260903_214613_greedy-hv-perfect-surrogate-crossings.md)与[resident-fast 吞吐报告](../context/20260903_214613_resident-fast-throughput-validation.md)删除“旧报告全部保持活跃”的结论，改为本次复审状态；运行时首次审查收据保持历史原样。
-- [greedy-HV 机制与五种子验证](../context/20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)保留，因为当前仍采用该机制，其同池消融、P20/β10 独立五种子、失败归一化风险及领域反例没有被 P200/β3 单种子正式运行替代。更新现行默认值及实验适用范围，保留全部测量数值。
+- [当前六单元正式结果](../context/20260903_214613_greedy-hv-perfect-surrogate-crossings.md)与[resident-fast 吞吐报告](../context/surrogate-research-20260830-20260910/20260903_214613_resident-fast-throughput-validation.md)删除“旧报告全部保持活跃”的结论，改为本次复审状态；运行时首次审查收据保持历史原样。
+- [greedy-HV 机制与五种子验证](../context/surrogate-research-20260830-20260910/20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)保留，因为当前仍采用该机制，其同池消融、P20/β10 独立五种子、失败归一化风险及领域反例没有被 P200/β3 单种子正式运行替代。更新现行默认值及实验适用范围，保留全部测量数值。
 - GPSAF 论文/验收对照及离线模型、rawData、posterior 校准 context 保持不变。选择器和执行通路改进没有替代它们的研究对象或当前用途。
 
 归档不否定旧实验的历史真实性，也不把 perfect oracle 的表现外推为学习代理效果。当前默认值以用户规范为准，实验结论继续受各自 seed、预算、模型及计时边界限制。

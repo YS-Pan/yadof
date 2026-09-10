@@ -1,12 +1,12 @@
 # Chrono 完美 oracle GPSAF：机制、结构消融与独立验收
 
-当前适用范围（2026-09-03 复审）：本文继续保存当前 greedy-HV 机制的同池消融及五个独立种子证据。研究时的版本为 0.5.1、默认 cluster；当前 0.6.0 已默认 `infill_selection="hypervolume"`，以[GPSAF 用户规范](../../user_doc/gpsaf.md)为准。本文的 P20/β10 研究结果不等于当前 P200/β3 的正式预算或墙钟性能；后者见[五种子 P/B 正式基准](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)和[常驻 fast 吞吐对照](20260903_214613_resident-fast-throughput-validation.md)。旧 cluster 配置筛选及旧执行通路计时已移出活跃 context，见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。
+当前适用范围（2026-09-03 复审）：本文继续保存当前 greedy-HV 机制的同池消融及五个独立种子证据。研究时的版本为 0.5.1、默认 cluster；当前 0.6.0 已默认 `infill_selection="hypervolume"`，以[GPSAF 用户规范](../../../user_doc/gpsaf.md)为准。本文的 P20/β10 研究结果不等于当前 P200/β3 的正式预算或墙钟性能；后者见[五种子 P/B 正式基准](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)和[常驻 fast 吞吐对照](20260903_214613_resident-fast-throughput-validation.md)。旧 cluster 配置筛选及旧执行通路计时已移出活跃 context，见[复审归档记录](../../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。
 
 本轮找到达到预注册标准的改进：可选的历史 HV 贪心选择。在五个新的配对种子、每臂 1000 次入选尝试下，相对强 NSGA-III P20 的 HV 配对相对增益中位数为 53.48%，绝对增益中位数为 0.238121，top-10 平均成本相对变化中位数为 -42.40%。全部冻结门槛通过。
 
 主要证据是：候选池已产生大量改善点，但原聚类/PKT 筛选没有保留多数覆盖收益；同池反事实、真实轨迹消融与独立验证依次检验了这一解释。另有 beta 失败值影响归一化的实现适配风险，不能将两者混成一个原因。结论限于当前精确 oracle、参数域与预算；没有验证学习型 surrogate 的收益，也没有证明实际运行加速。
 
-[实验产物与复现入口](../../../temp/20260903_chrono_gpsaf_mechanism/README.md)；[全部统计](../../../temp/20260903_chrono_gpsaf_mechanism/FINAL_STATISTICS.json)；[冻结身份](../../../temp/20260903_chrono_gpsaf_mechanism/C3_FREEZE.json)；[两套成本账本](../../../temp/20260903_chrono_gpsaf_mechanism/COST_LEDGERS.json)。本文件与图表可随源码/文档包阅读，较大的原始产物保留在所选外层工作区的 `temp/20260903_chrono_gpsaf_mechanism/`。
+[实验产物与复现入口](../../../../temp/20260903_chrono_gpsaf_mechanism/README.md)；[全部统计](../../../../temp/20260903_chrono_gpsaf_mechanism/FINAL_STATISTICS.json)；[冻结身份](../../../../temp/20260903_chrono_gpsaf_mechanism/C3_FREEZE.json)；[两套成本账本](../../../../temp/20260903_chrono_gpsaf_mechanism/COST_LEDGERS.json)。本文件与图表可随源码/文档包阅读，较大的原始产物保留在所选外层工作区的 `temp/20260903_chrono_gpsaf_mechanism/`。
 
 ## 五个独立种子：所有主结果
 
@@ -279,4 +279,4 @@ settings = gpsaf_settings(
 
 C3 相关测试为 41 passed in 11.47s；C5 全套已安装包测试为 **491 passed in 100.93s (0:01:40)**，退出码 0，禁用 pytest 缓存并使用独立工具临时目录。测试期间代码与冻结 optimize/job-template 哈希一致。随后只将本报告和图表等文档装入刷新 wheel，保持这些算法/物理源字节不变，并核对安装资源与文档链接。benchmark 包没有代码或文档改动，复用已验证的 0.5.0 安装。
 
-代码、测试、用户指南、架构和对应蓝图与本报告一起提交。包含已审阅的预存论文纯更名和 acceptance 链接修正，没有丢弃历史证据。提交起点为 `97c50ef`，实验实现由 C3_FREEZE 的完整文件 SHA 确定；提交后的精确 hash、fetch/领先落后计数及是否按 main/behind=0/ahead≥5 规则推送，记录在外层产物 [GIT_COMPLETION.json](../../../temp/20260903_chrono_gpsaf_mechanism/GIT_COMPLETION.json)，避免把提交 hash 写回它自身。最终 [MANIFEST.json](../../../temp/20260903_chrono_gpsaf_mechanism/MANIFEST.json) 与 [便携包](../../../temp/20260903_chrono_gpsaf_mechanism/artifact_bundle.zip) 包含完整入选数据、阶段追踪、配置、统计、图表、源码脚本和核对过的 wheel。
+代码、测试、用户指南、架构和对应蓝图与本报告一起提交。包含已审阅的预存论文纯更名和 acceptance 链接修正，没有丢弃历史证据。提交起点为 `97c50ef`，实验实现由 C3_FREEZE 的完整文件 SHA 确定；提交后的精确 hash、fetch/领先落后计数及是否按 main/behind=0/ahead≥5 规则推送，记录在外层产物 [GIT_COMPLETION.json](../../../../temp/20260903_chrono_gpsaf_mechanism/GIT_COMPLETION.json)，避免把提交 hash 写回它自身。最终 [MANIFEST.json](../../../../temp/20260903_chrono_gpsaf_mechanism/MANIFEST.json) 与 [便携包](../../../../temp/20260903_chrono_gpsaf_mechanism/artifact_bundle.zip) 包含完整入选数据、阶段追踪、配置、统计、图表、源码脚本和核对过的 wheel。

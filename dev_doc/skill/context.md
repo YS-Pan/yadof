@@ -16,18 +16,27 @@ record their stable location, identity, conditions, and relevant findings.
 
 ## Filename-First Reading Contract
 
-Every agent performing a `dev_doc/` context pass, including an agent handling a
-delegated subtask, must recursively enumerate every filename and relative path
-under `../context/`. This mandatory pass reads names only: do not open, preview,
-search, grep, summarize, or otherwise inspect file contents.
+Every agent performing a `dev_doc/` context pass, including a delegated subtask,
+lists only the immediate file and directory names under `../context/`. Do not
+recursively enumerate directories, list their internal filenames, open files,
+preview, search, grep, or summarize contents during this default pass. A directory
+name is a discovery hint with the same status as a filename.
+
+Enter a directory only when its name indicates information needed for the current
+task, a selected document links to a specific descendant, or the user explicitly
+requests that directory's review. Inside a selected directory, list only its
+immediate children and apply the same rule again. A direct document link permits
+reading that document, not enumerating its siblings. For example, in PowerShell
+`Get-ChildItem -LiteralPath dev_doc/context -Name` performs the default pass;
+`rg --files dev_doc/context` and `Get-ChildItem -Recurse` do not.
 
 After the task's information needs are known, read a context document in full only
 when its filename makes it reasonably likely that the document contains relevant
 information. Read only the matching documents. If no filename indicates likely
 relevance, continue without opening any context document.
 
-Listing a filename does not make its contents current fact, authorize work, or
-trigger an expiry review.
+Listing a file or directory name does not make its contents current fact, authorize
+work, or trigger an expiry review.
 
 ## Naming And Content Contract
 
@@ -43,6 +52,21 @@ identity or location, observations, limitations, and provenance for a later agen
 to use the information without the originating session. Distinguish verified facts
 from interpretations, assumptions, and unresolved questions when that distinction
 affects later use.
+
+## Topic Directories And Research Closure
+
+Related documents and attachments may be grouped in a descriptively named topic
+directory. Prefer a subject plus date span, such as
+`surrogate-research-20260830-20260910/`. Grouping or shelving research is not an
+expiry judgment: retained evidence can stay inside `context/` while research is
+paused. Keep a concise time-named synthesis directly under `context/` when the
+user requests one; it may link to detailed evidence within the topic directory.
+It must distinguish delivered behavior, development evidence and unresolved goals.
+
+Preserve source filenames and substantive evidence during a requested regrouping.
+Verify source/destination containment, reject collisions, move related attachments
+together, and repair relocation-dependent links (including path-only repairs in
+historical records). Do not change historical findings or delete runtime evidence.
 
 ## Expiry And Archival Contract
 

@@ -72,7 +72,7 @@ setting:
 - [Posterior calibration and qNEHVI structural evidence](20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)
   records `19 smooth / 181 chatter-or-failure` Chrono labels for a prior exact-state
   calibration study.
-- The [parked noise-robust Hierarchical CAE extension](../toDo/20260828_082308_noise-robust-regime-specialized-surrogate.md)
+- The [parked noise-robust Hierarchical CAE extension](../../toDo/20260828_082308_noise-robust-regime-specialized-surrogate.md)
   preserves earlier evidence that Chrono roughness behaves more like a
   parameter-induced chatter/failure regime than independent measurement noise.
 

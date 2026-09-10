@@ -113,9 +113,10 @@ belongs in the workspace submit-side definition.
 - `dev_doc/blueprints/` contains selectively read implementation and module
   contracts.
 - `dev_doc/context/` preserves time-named cross-session experimental and working
-  context. Every agent lists its filenames without opening them, then reads only a
-  task-relevant document whose name indicates a likely match. Expiry is assessed
-  only on explicit user instruction.
+  context, including grouped research directories. Default discovery lists only
+  immediate file/directory names, without internal filenames or contents. A name
+  match or explicit link permits targeted descent/reading. A root synthesis can
+  link to shelved evidence; grouping is distinct from explicit expiry review.
 - `dev_doc/change_records/` preserves substantive completed decisions and
   implementation history; its `minor/` child keeps localized low-risk records out
   of that primary listing. `toDo/` preserves active future work.
@@ -156,3 +157,10 @@ obsolete material from every other source moves to `obsolete/other/`.
 Task-authoring changes update user documentation;
 administrator procedure changes update `admin_tool/admin_doc/`. Repository changes
 preserve workspace evidence and unrelated worktree modifications.
+
+
+Research-derived retrieval-response code is isolated under its own surrogate
+package and optional `retrieval` dependency group. Its explicit examples and the
+independent 36-cell `surrogate-complete` preset preserve the original 18-cell
+`complete` preset. Long-run monitoring is delegated to a context-free low-cost
+agent; user documentation owns cadence and terminal handoff details.

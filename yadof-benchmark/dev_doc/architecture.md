@@ -236,3 +236,13 @@ account or session. Its visible console stays open after success or failure unti
 the user types `exit` or closes it. Documentation therefore makes the host-account
 launch requirement an agent responsibility rather than embedding account-switching
 machinery in the package.
+
+
+## Research-derived component comparison
+
+The independent `surrogate-complete` preset expands to 36 standard-budget cells,
+adding explicit pre-selection fits of amplitude GP and retrieval response to
+the real/PCA matrix. Each arm gets P200/B200/I200/G25 and three fixed seeds, with
+two active cells. It consumes installed public components and owns no model code.
+The ordinary complete preset remains 18 cells. Agent monitoring follows the
+version-matched user guide's low-cost context-free five-minute/hourly policy.

@@ -7,6 +7,9 @@ from typing import Mapping
 
 from .._component_settings import text
 
+from .retrieval_response.component import RetrievalResponseComponent, retrieval_response
+from .retrieval_response.settings import RetrievalResponseSettings
+from .retrieval_response.types import RetrievalResponseState
 from .amplitude_gp.component import AmplitudeGPComponent, amplitude_gp
 from .amplitude_gp.settings import AmplitudeGPSettings
 from .amplitude_gp.types import AmplitudeGPState
@@ -1279,6 +1282,7 @@ def wait_for_pending_training(*args, **kwargs):
 
 
 def deactivate_workspace(*args, **kwargs):
+    from .retrieval_response.scheduler import deactivate_workspace as retrieval
     from .amplitude_gp.scheduler import deactivate_workspace as amplitude
     from .conditional_inr.scheduler import deactivate_workspace as conditional
     from .hierarchical_cae.scheduler import deactivate_workspace as hierarchical
@@ -1288,9 +1292,11 @@ def deactivate_workspace(*args, **kwargs):
     hierarchical(*args, **kwargs)
     linear_subspace(*args, **kwargs)
     amplitude(*args, **kwargs)
+    retrieval(*args, **kwargs)
     return conditional_status
 
 __all__ = [
+    "RetrievalResponseComponent", "RetrievalResponseSettings", "RetrievalResponseState", "retrieval_response",
     "AmplitudeGPComponent",
     "AmplitudeGPSettings",
     "AmplitudeGPState",

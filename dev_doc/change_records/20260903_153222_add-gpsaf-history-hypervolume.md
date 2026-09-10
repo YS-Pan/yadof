@@ -13,7 +13,7 @@
 
 ## Rationale And Evidence
 
-五个独立配对种子、主预算 1000 的结果：通过全部冻结标准。相对强 P20 的 HV 配对相对增益中位数 +53.48%，绝对增益中位数 +0.238121，top-10 相对成本变化中位数 -42.40%。完整各种子、反例、置信区间、领域限制、成本和复现入口见[中文研究 context](../context/20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)。
+五个独立配对种子、主预算 1000 的结果：通过全部冻结标准。相对强 P20 的 HV 配对相对增益中位数 +53.48%，绝对增益中位数 +0.238121，top-10 相对成本变化中位数 -42.40%。完整各种子、反例、置信区间、领域限制、成本和复现入口见[中文研究 context](../context/surrogate-research-20260830-20260910/20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)。
 
 原默认路径的 400 点与历史原轨迹逐位一致，正式新策略的 600 点与研究原型轨迹逐位一致（X/F/代次/rawData 哈希）；相关测试 41 passed in 11.47s，全套已安装包测试 491 passed in 100.93s (0:01:40)。按开发指南构建并 force-reinstall wheel，安装来源为目标环境 site-packages；最后的文档刷新保持已验收算法文件哈希不变。
 

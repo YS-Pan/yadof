@@ -1,3 +1,4 @@
+from . import retrieval_response as _retrieval_response_package
 from . import amplitude_gp as _amplitude_gp_package
 from . import conditional_inr as _conditional_inr_package
 from . import hierarchical_cae as _hierarchical_cae_package
@@ -17,6 +18,10 @@ from .training import (
     materialize_training_data,
 )
 from .api import (
+    RetrievalResponseComponent,
+    RetrievalResponseSettings,
+    RetrievalResponseState,
+    retrieval_response,
     AmplitudeGPComponent,
     AmplitudeGPSettings,
     AmplitudeGPState,
@@ -94,6 +99,7 @@ from .api import (
 # ``yadof.surrogate.conditional_inr`` callable after private implementation imports.
 
 __all__ = [
+    "RetrievalResponseComponent", "RetrievalResponseSettings", "RetrievalResponseState", "retrieval_response",
     "AmplitudeGPComponent",
     "AmplitudeGPSettings",
     "AmplitudeGPState",

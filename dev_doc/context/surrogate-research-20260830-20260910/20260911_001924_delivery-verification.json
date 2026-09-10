@@ -1,0 +1,122 @@
+{
+  "software": {
+    "date": "2026-09-10",
+    "yadof": {
+      "version": "0.6.0",
+      "wheel_sha256_at_benchmark_launch": "95c68f8f31c2a8d7cdde3a4b0ed1fc131c2c9c460e0f3991112805e28e86e26f",
+      "installed_origin": ".venv/Lib/site-packages/yadof/__init__.py",
+      "pytest": {
+        "passed": 593,
+        "failed": 0,
+        "warnings": 2,
+        "seconds": 118.03
+      },
+      "warnings": "Two existing Gaussian-process kernel-bound convergence warnings in amplitude GP parallel tests."
+    },
+    "yadof_benchmark": {
+      "version": "0.6.0",
+      "wheel_sha256_at_benchmark_launch": "27a2dbac9bb7b0948f8785aec87d9c2ecee4796f1535cfa4b123b0a1f555135b",
+      "installed_origin": ".venv/Lib/site-packages/yadof_benchmark/__init__.py",
+      "pytest": {
+        "passed": 97,
+        "failed": 0,
+        "seconds": 23.81
+      }
+    },
+    "pytest_policy": "Fresh task-unique basetemp under tool temporary directory; cache provider disabled; no PYTHONPATH source injection; original processes followed to exit 0.",
+    "earlier_failures_resolved": [
+      "Two new fixtures corrected for failed-record rawData and static schema axis selection.",
+      "Existing example index and required documentation headings updated for new examples.",
+      "Public preset CLI option added; new CLI test uses the returned timestamped workspace path.",
+      "Scratch Windows multiprocessing harness gained a main guard and sufficient H9 training rows; successful checks used fresh workspaces."
+    ]
+  },
+  "numerical_parity": {
+    "prototype_sha256": "86af811c1b81d795ea234e9c0f344b18b946a5c4a5fffd46168adb096f49cd8c",
+    "training_rows": 32,
+    "default_total_gradient_steps": 200,
+    "retained_context_latents_exact": true,
+    "predictions": [
+      {
+        "queries": 1,
+        "exact_all_fields": true,
+        "sha256": "807411b433156fd600b79f5c032f5f1138549345f700abb20af019e75a42b5db"
+      },
+      {
+        "queries": 127,
+        "exact_all_fields": true,
+        "sha256": "eedde5b08bd845609fb9b7a9654fb5c810fcdef9372ad82906eb26c22ce4fac2"
+      },
+      {
+        "queries": 128,
+        "exact_all_fields": true,
+        "sha256": "137b9eb752f1aff0ae36dc28e074a93013239b29549424489c146a800dc53eed"
+      },
+      {
+        "queries": 129,
+        "exact_all_fields": true,
+        "sha256": "47defccde5b9f08f3a242f033b99705a79b49df22d80ca230706a899e84ec587"
+      }
+    ]
+  },
+  "program_acceptance": [
+    {
+      "component": "amplitude_gp",
+      "generations": 2,
+      "attempts": 128,
+      "second_generation_surrogate_used": true
+    },
+    {
+      "component": "retrieval_response",
+      "generations": 2,
+      "attempts": 128,
+      "second_generation_surrogate_used": true
+    }
+  ],
+  "plan_acceptance": {
+    "cells": 36,
+    "source_and_policy_match": true,
+    "smoke_attempts": 7200,
+    "measured_attempts": 180000,
+    "only_budget_and_workspace_differ": true
+  },
+  "archive_preservation": {
+    "verified_original_files": 23,
+    "prose_and_data_preserved": true,
+    "only_location_and_markdown_relative_targets_changed": true
+  },
+  "monitor_intervals": [
+    {
+      "file": "smoke-observations.jsonl",
+      "observations": 3,
+      "first_utc": "2026-09-10T08:02:31.375015+00:00",
+      "last_utc": "2026-09-10T08:12:56.288278+00:00",
+      "median_interval_seconds": 312.4566315,
+      "max_interval_seconds": 313.007673
+    },
+    {
+      "file": "complete-observations.jsonl",
+      "observations": 34,
+      "first_utc": "2026-09-10T08:13:50.437793+00:00",
+      "last_utc": "2026-09-10T11:00:04.939454+00:00",
+      "median_interval_seconds": 300.344695,
+      "max_interval_seconds": 339.925066
+    },
+    {
+      "file": "remaining-smoke-observations.jsonl",
+      "observations": 2,
+      "first_utc": "2026-09-10T11:06:49.310442+00:00",
+      "last_utc": "2026-09-10T11:11:49.524260+00:00",
+      "median_interval_seconds": 300.213818,
+      "max_interval_seconds": 300.213818
+    },
+    {
+      "file": "remaining-complete-observations.jsonl",
+      "observations": 61,
+      "first_utc": "2026-09-10T11:12:48.948302+00:00",
+      "last_utc": "2026-09-10T16:13:09.309277+00:00",
+      "median_interval_seconds": 300.32226,
+      "max_interval_seconds": 300.561154
+    }
+  ]
+}

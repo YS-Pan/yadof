@@ -8,7 +8,7 @@
 契约、production integration 决定、simulator 授权或新的模型默认值。
 
 已完成的原任务归档于
-[offline filtered Chrono surrogate validation TODO](../obsolete/todo/20260830_151259_validate-filtered-chrono-surrogates-offline.md)。
+[offline filtered Chrono surrogate validation TODO](../../obsolete/todo/20260830_151259_validate-filtered-chrono-surrogates-offline.md)。
 实验没有修改 benchmark source、recorded history、cost、optimizer、yadof package 或 simulator
 状态，也没有读取 `c0004`。
 
@@ -20,14 +20,14 @@
 
 主要复核入口：
 
-- [source receipt](../../../temp/20260830_152530-chrono-filter-surrogate-validation/source-receipt.json)
-- [frozen filter plan](../../../temp/20260830_152530-chrono-filter-surrogate-validation/filter-plan.json)
-- [paired metrics](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/metrics.json)
-- [summary](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/summary.md)
-- [viewer validation](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/viewer-validation/validation.json)
-- [GUI observations](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/gui-observations.md)
-- [fixed test selections](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/selected-test-designs.json)
-- [derived-data map](../../../temp/20260830_152530-chrono-filter-surrogate-validation/derived-data/filtered-sample-map.jsonl)
+- [source receipt](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/source-receipt.json)
+- [frozen filter plan](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/filter-plan.json)
+- [paired metrics](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/metrics.json)
+- [summary](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/summary.md)
+- [viewer validation](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/viewer-validation/validation.json)
+- [GUI observations](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/gui-observations.md)
+- [fixed test selections](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/selected-test-designs.json)
+- [derived-data map](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/derived-data/filtered-sample-map.jsonl)
 
 来源是已完成 benchmark 的 `c0003`、design seed `20260830`、model seed `154538516`。
 本次使用 installed yadof `0.4.2`、Python `3.13.11`、Torch `2.10.0+cu128`、SciPy
@@ -123,8 +123,8 @@ component namespace 的 checkpoint、generation 12/13 共 295 个 completed resu
 与 raw truth peak 位置不一致的窄 spike；filtered CAE chatter 大幅下降，但仍漏掉主要 peak。
 raw/filtered INR 本来较平滑，也同样漏掉大 peak。双字段、同轴同 y-scale 的固定 PNG 为：
 
-- [generation 12 / individual 156](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/overlays/12_156_screenshot-generation-12-population-156.png)
-- [largest narrow-peak score](../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/overlays/12_168_largest-narrow-peak-score.png)
+- [generation 12 / individual 156](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/overlays/12_156_screenshot-generation-12-population-156.png)
+- [largest narrow-peak score](../../../../temp/20260830_152530-chrono-filter-surrogate-validation/reports/overlays/12_168_largest-narrow-peak-score.png)
 
 视觉平滑不代表物理正确。unlock、release、contact/recontact 或 collision 的来源仍未验证。
 

@@ -147,9 +147,9 @@ def _parser() -> argparse.ArgumentParser:
     init_preset = init.add_mutually_exclusive_group()
     init_preset.add_argument(
         "--preset",
-        choices=("portable", "complete"),
+        choices=("portable", "complete", "surrogate-complete"),
         help=(
-            "select portable or the explicit long-running complete preset "
+            "select portable, the explicit long-running complete preset, or surrogate-complete "
             "(default: portable)"
         ),
     )

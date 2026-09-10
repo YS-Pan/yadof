@@ -70,7 +70,7 @@ Chrono 成功吞吐的冷/稳态/端到端中位数分别为旧版3.080/3.042/2.
 
 完整资料见外层 `temp/20260903_resident_fast_hv/`：`OLD_FREEZE.json`、`OLD_NATIVE_IDENTITY.json`、`NEW_FAST_FREEZE.json`、`PHYSICAL_EQUIVALENCE.json`、`THROUGHPUT_COMPARISON.json`、各版本 `*-wheels/` 与源码归档、全部测量工作区，以及固定的 `probe_program.py` / `measure_throughput.py` / `compare_throughput.py`。正式 HV 基准使用单独的 `FORMAL_WORKSPACE.json`、`formal-source.zip`、`formal-wheels/` 和 `runtime_lock.json`。
 
-这是跨会话证据；当前行为以[迁移指南](../../user_doc/migration_0_6.md)、[fast用户契约](../../user_doc/optimization_workflow.md)和架构为准。
+这是跨会话证据；当前行为以[迁移指南](../../../user_doc/migration_0_6.md)、[fast用户契约](../../../user_doc/optimization_workflow.md)和架构为准。
 
 ## 吞吐完整重复值
 
@@ -101,14 +101,14 @@ Chrono 成功吞吐的冷/稳态/端到端中位数分别为旧版3.080/3.042/2.
 & ".\.venv\Scripts\python.exe" ".\temp\20260903_resident_fast_hv\compare_throughput.py"
 ```
 
-输入、完整参数、计时边界及脚本SHA见[旧版冻结](../../../temp/20260903_resident_fast_hv/OLD_FREEZE.json)与[接受的新fast冻结](../../../temp/20260903_resident_fast_hv/NEW_FAST_FREEZE.json)；[仿真器原生身份](../../../temp/20260903_resident_fast_hv/OLD_NATIVE_IDENTITY.json)、[真实物理等价核验](../../../temp/20260903_resident_fast_hv/PHYSICAL_EQUIVALENCE.json)、[全部逐次测量与比较](../../../temp/20260903_resident_fast_hv/THROUGHPUT_COMPARISON.json)保留机器可读结果。源快照和wheel分别位于[旧源码](../../../temp/20260903_resident_fast_hv/old-source.zip)、[新fast源码](../../../temp/20260903_resident_fast_hv/new-fast-source.zip)、[旧wheel目录](../../../temp/20260903_resident_fast_hv/old-wheels/)及[新fast wheel目录](../../../temp/20260903_resident_fast_hv/new-fast-wheels/)。
+输入、完整参数、计时边界及脚本SHA见[旧版冻结](../../../../temp/20260903_resident_fast_hv/OLD_FREEZE.json)与[接受的新fast冻结](../../../../temp/20260903_resident_fast_hv/NEW_FAST_FREEZE.json)；[仿真器原生身份](../../../../temp/20260903_resident_fast_hv/OLD_NATIVE_IDENTITY.json)、[真实物理等价核验](../../../../temp/20260903_resident_fast_hv/PHYSICAL_EQUIVALENCE.json)、[全部逐次测量与比较](../../../../temp/20260903_resident_fast_hv/THROUGHPUT_COMPARISON.json)保留机器可读结果。源快照和wheel分别位于[旧源码](../../../../temp/20260903_resident_fast_hv/old-source.zip)、[新fast源码](../../../../temp/20260903_resident_fast_hv/new-fast-source.zip)、[旧wheel目录](../../../../temp/20260903_resident_fast_hv/old-wheels)及[新fast wheel目录](../../../../temp/20260903_resident_fast_hv/new-fast-wheels)。
 
-生命周期与真实物理检查包括成本重新解释、模型/config代际失效、超时/崩溃替换、主动取消、关闭/进程树清理、跨工作区隔离及未构造会话的静态验证。完整安装包测试日志为[yadof实验前验收](../../../temp/20260903_resident_fast_hv/yadof-full-tests-fixed.log)和[benchmark实验前验收](../../../temp/20260903_resident_fast_hv/benchmark-full-tests-fixed.log)。结构门槛的独立收据是[18单元smoke](../../../temp/20260903_resident_fast_hv/SMOKE_VERIFICATION.json)与[6单元alpha/beta集成](../../../temp/20260903_resident_fast_hv/INTEGRATION_VERIFICATION.json)。
+生命周期与真实物理检查包括成本重新解释、模型/config代际失效、超时/崩溃替换、主动取消、关闭/进程树清理、跨工作区隔离及未构造会话的静态验证。完整安装包测试日志为[yadof实验前验收](../../../../temp/20260903_resident_fast_hv/yadof-full-tests-fixed.log)和[benchmark实验前验收](../../../../temp/20260903_resident_fast_hv/benchmark-full-tests-fixed.log)。结构门槛的独立收据是[18单元smoke](../../../../temp/20260903_resident_fast_hv/SMOKE_VERIFICATION.json)与[6单元alpha/beta集成](../../../../temp/20260903_resident_fast_hv/INTEGRATION_VERIFICATION.json)。
 
-正式实验结束并通过独立核验后才刷新最终文档wheel。[最终安装与代码字节核对](../../../temp/20260903_resident_fast_hv/FINAL_INSTALLATION.json)记录最终wheel指纹、导入来源、文档可见性及最后的验收结果；它与测量时的冻结wheel身份分开保存。[Git交付收据](../../../temp/20260903_resident_fast_hv/GIT_COMPLETION.json)记录最终提交和按既定规则进行的fetch/count/push结果。
+正式实验结束并通过独立核验后才刷新最终文档wheel。[最终安装与代码字节核对](../../../../temp/20260903_resident_fast_hv/FINAL_INSTALLATION.json)记录最终wheel指纹、导入来源、文档可见性及最后的验收结果；它与测量时的冻结wheel身份分开保存。[Git交付收据](../../../../temp/20260903_resident_fast_hv/GIT_COMPLETION.json)记录最终提交和按既定规则进行的fetch/count/push结果。
 
 ## Context到期审查
 
 用户在本报告完成后要求移除已经失去当前参考用途的旧性能 context。复审已将旧正式 benchmark、旧 fast 并发扫描、天线配置筛选、SAW/Chrono 配置迁移四份报告及两张附图原样移入 `dev_doc/obsolete/context/`。旧计时不再作为常驻版性能依据；当前吞吐使用本报告的固定候选对照，当前 GPSAF 正式结果使用[五种子 P/B 正式基准](20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)。本次没有重新扫描常驻版的最优 worker 数。
 
-仍保留 [greedy-HV 五种子机制验证](20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)，其证据直接解释当前采用的选择机制。逐项理由和原件位置见[复审归档记录](../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。此前运行目录内的 `CONTEXT_REVIEW.json` 与 `CONTEXT_REVIEW_INPUTS.json` 是首次审查的冻结收据，保持不变，不再代表当前归档状态。
+仍保留 [greedy-HV 五种子机制验证](20260903_153222_chrono-gpsaf-mechanism-and-independent-validation.md)，其证据直接解释当前采用的选择机制。逐项理由和原件位置见[复审归档记录](../../change_records/20260903_222814_archive-superseded-gpsaf-performance-context.md)。此前运行目录内的 `CONTEXT_REVIEW.json` 与 `CONTEXT_REVIEW_INPUTS.json` 是首次审查的冻结收据，保持不变，不再代表当前归档状态。

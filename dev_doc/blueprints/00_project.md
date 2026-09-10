@@ -254,10 +254,11 @@ architecture/blueprints. Task modules call package support for invariant behavio
 and package modules do not hard-code task-variable simulator or objective policy.
 Developer maintenance performs a bounded pre-completion check of active automatic
 toDos against already in-scope evidence; recurring automatic toDos remain active
-after a single matching occurrence. Every developer context pass enumerates all
-`dev_doc/context/` filenames without opening their contents; a full read requires a
-task-relevant filename match, and expiry is assessed only on explicit user
-instruction.
+after a single matching occurrence. Developer context discovery lists only
+immediate names under `dev_doc/context/`, including directory names. Internal
+filenames and contents remain unread until a task-relevant name or explicit link
+justifies descent. Topic grouping preserves evidence and is distinct from expiry,
+which is assessed only on explicit user instruction.
 
 A simulator-specific Python/Conda environment remains an external runtime. The
 packaged `chrono_com.py` resource implements the PyChrono v1 boundary: it selects

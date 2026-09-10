@@ -60,8 +60,8 @@ Commit-exhaustion and Chrono launch failures remain preserved and excluded as
 specified before pooling. Perfect queried-pool predictions are an empirical
 comparator, not a mathematical upper bound on every search trajectory or metric.
 
-- [P/B, throughput, memory and installed acceptance context](../context/20260908_224400_population-batch-and-throughput-validation.md)
-- [Five-seed perfect-surrogate P/B baseline](../context/20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)
+- [P/B, throughput, memory and installed acceptance context](../context/surrogate-research-20260830-20260910/20260908_224400_population-batch-and-throughput-validation.md)
+- [Five-seed perfect-surrogate P/B baseline](../context/surrogate-research-20260830-20260910/20260909_152719_five-seed-perfect-surrogate-pb-baseline.md)
 - [Benchmark execution contract](../../yadof-benchmark/user_doc/execution.md)
 
 The shared checkout's earlier preparation concurrency fix and H26 closure were

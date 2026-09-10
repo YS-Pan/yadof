@@ -257,3 +257,8 @@ continuing with missing history.
 The generic template contains no simulator, vendor, concrete model, or fixed
 objective. Use `yadof task adapters` and `yadof task copy-adapter NAME --workspace
 PATH` to copy only a selected packaged adapter into user-owned task files.
+
+
+The optional `retrieval_response()` component requires `yadof[retrieval]`.
+See [its component guide](retrieval_response.md) for fixed CPU runtime,
+settings, recovery and experimental evidence limits.

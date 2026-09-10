@@ -15,7 +15,7 @@
 
 GA/NSGA-III、GPSAF 和 posterior 分支已使用独立的保留量与评估量。长历史回放由显式 program 控制终止，避免 pymoo 默认终止条件截断 B 较小时的回放。初始 I>P 的历史先按 P 做生存选择，后续回放不会让已淘汰的初始个体重新进入种群。
 
-验证覆盖 9 组 P/B 的 GPSAF 组合、三组公开 API 的 P/B/I 关系、真实存活成员、记录 ID 唯一性、view-cost 行数与 HV 评估边界，以及 GA/NSGA-III 的 1100 代历史回放。测试见 [P/B 集成测试](../../tests/test_independent_population_batch.py)。
+验证覆盖 9 组 P/B 的 GPSAF 组合、三组公开 API 的 P/B/I 关系、真实存活成员、记录 ID 唯一性、view-cost 行数与 HV 评估边界，以及 GA/NSGA-III 的 1100 代历史回放。测试见 [P/B 集成测试](../../../tests/test_independent_population_batch.py)。
 
 ## 完整 benchmark 的容量对照
 
@@ -35,8 +35,8 @@ GA/NSGA-III、GPSAF 和 posterior 分支已使用独立的保留量与评估量�
 
 证据位于外层工作区 `temp/pb-infrastructure-20260908/`：
 
-- [四路各两进程的完整比对](../../../temp/pb-infrastructure-20260908/speed-4cells-2workers.json)
-- [四路各四进程的完整比对](../../../temp/pb-infrastructure-20260908/speed-4cells-4workers.json)
+- [四路各两进程的完整比对](../../../../temp/pb-infrastructure-20260908/speed-4cells-2workers.json)
+- [四路各四进程的完整比对](../../../../temp/pb-infrastructure-20260908/speed-4cells-4workers.json)
 - 原始运行：`20260908_212144-speed-serial`、`20260908_212145-speed-parallel`、`20260908_221743-speed-parallel-four-workers`；各含 `runtime_lock.json`、保存的 wheel/源码补丁、`verification/summary.json`、原始输出与资源采样。
 
 ## 固定真实数据的 GP 字段并行
@@ -63,15 +63,15 @@ greedy-HV 对已知不可能增加 HV 的候选跳过重复后端计算，包括
 | 混合晚期历史 | 16.670 | 5.152 | 3.236× |
 | 全部被支配的晚期历史 | 9.251 | 2.129 | 4.346× |
 
-这是毫秒级选择器微测量，不能当作整个 benchmark 的提速。证据为 [hv-shortcuts.json](../../../temp/pb-infrastructure-20260908/hv-shortcuts.json)。
+这是毫秒级选择器微测量，不能当作整个 benchmark 的提速。证据为 [hv-shortcuts.json](../../../../temp/pb-infrastructure-20260908/hv-shortcuts.json)。
 
 benchmark 的 top-10 配对比较现在支持并行调度：只等待同 baseline/种子的 reference 发布，独立单元可并行；reference 无效时不启动其依赖候选。用户只需设置 `benchmark.configure(cell_concurrency=...)` 并调整复制 baseline 的 `physical_core_multiplier`。保留 resident fast adapter，不要求策略实现自建进程池。
 
-大矩阵可以按种子划分为少量完整工作区，保留每个种子的所有策略及参考，逐工作区运行，再合并逐种子的原始 crossing。原因是每收集一个单元会重写累计逐点报告；已有六单元 H26 的 `results.json` 在 26000 次尝试下为 82,613,054 字节。分块减少最大报告大小与重复发布工作，但不改变实验种子、预算或统计样本。不能合并工作区中位数来代替总体中位数。简单用法见 [benchmark 执行说明](../../yadof-benchmark/user_doc/execution.md)。
+大矩阵可以按种子划分为少量完整工作区，保留每个种子的所有策略及参考，逐工作区运行，再合并逐种子的原始 crossing。原因是每收集一个单元会重写累计逐点报告；已有六单元 H26 的 `results.json` 在 26000 次尝试下为 82,613,054 字节。分块减少最大报告大小与重复发布工作，但不改变实验种子、预算或统计样本。不能合并工作区中位数来代替总体中位数。简单用法见 [benchmark 执行说明](../../../yadof-benchmark/user_doc/execution.md)。
 
 ## 大矩阵暴露的 Windows 状态发布问题
 
-随后对 90 单元同矩阵进行一代结构验收时，Windows 原子替换 `state.json` 返回 `WinError 5`。该错误使控制器取消其余三个后处理进程，产生几乎同时的 exit 15；这些是取消后的次生错误。控制器实际 exit 1，而最后的状态文件仍为 `running`。原工作区有 48 个 collected、3 个 failed、1 个 checked、38 个 planned，全部原样保留，不作为算法性能样本。环境升级前已核验原 runtime lock，并保存了[失败边界](../../../temp/pb-infrastructure-20260908/20260908_220850-perfect-study/20260908_220850-formal-block-1-smoke/provenance/storage-failure-boundary.json)。
+随后对 90 单元同矩阵进行一代结构验收时，Windows 原子替换 `state.json` 返回 `WinError 5`。该错误使控制器取消其余三个后处理进程，产生几乎同时的 exit 15；这些是取消后的次生错误。控制器实际 exit 1，而最后的状态文件仍为 `running`。原工作区有 48 个 collected、3 个 failed、1 个 checked、38 个 planned，全部原样保留，不作为算法性能样本。环境升级前已核验原 runtime lock，并保存了[失败边界](../../../../temp/pb-infrastructure-20260908/20260908_220850-perfect-study/20260908_220850-formal-block-1-smoke/provenance/storage-failure-boundary.json)。
 
 修复在遇到 Windows access/sharing/lock 冲突时进行最多两秒的有界重试，保留旧完整文件直到替换成功；不删除目标文件，不改变 ACL。其他 I/O 错误立即传播，持续占用仍会失败。致命调度错误会取消并等待活动命令退出，写入 `execution_error` 和终态，将已经开始但未正常结束的单元标记为 failed；`inspect` 优先显示主因。如果存储持续不可写，调用者仍收到包含原始错误和终态写入错误的信息。
 

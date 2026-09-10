@@ -139,3 +139,9 @@ explicit workspace instead of deriving mutable paths from package location.
 
 Detailed module and exceptional-file behavior belongs in `../blueprints/`, which
 is read selectively for the component being changed.
+
+
+The opt-in retrieval-response surrogate shares the explicit deterministic
+fit/state/predict boundary. It owns joint neighbor-response learning and a separate
+numeric checkpoint namespace. Only prior rawData trains it; current costs remain
+snapshot projections. It supplies no posterior and introduces no evaluation path.

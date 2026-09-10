@@ -116,7 +116,7 @@ benchmark tests. After the separate infrastructure task updated the shared
 installation, its successful installed-package regressions were reused: yadof
 571 tests (two GP convergence warnings), benchmark 72 tests. These later runs
 include the preparation regression tests and do not validate H26 scientifically.
-See [the preparation fix record](../change_records/20260907_192303_unblock-parallel-local-preparation.md).
+See [the preparation fix record](../../change_records/20260907_192303_unblock-parallel-local-preparation.md).
 
 ## Durable evidence identities
 

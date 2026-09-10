@@ -54,9 +54,11 @@ def create_evaluation_session(context):
 
 
 OPTIMIZATION_PROGRAM_EXAMPLES = (
+    "amplitude_gp",
     "overlapped_surrogate",
     "posterior_assisted_fallback",
     "real_only",
+    "retrieval_response",
     "sequential_surrogate",
     "split_cost_surrogate_data",
 )

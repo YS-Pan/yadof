@@ -29,7 +29,7 @@
 - `conditional_inr_posterior()` 已提供有限 ensemble compatibility adapter，但仍是
   uncalibrated capability。`hierarchical_cae()` 已有 coherent finite member draws；旧 exact
   states 仍没有可迁移 calibrated capability，详见
-  [posterior/qNEHVI evidence context](../context/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)。
+  [posterior/qNEHVI evidence context](../context/surrogate-research-20260830-20260910/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)。
 - public `qnehvi()` 和 `posterior_assisted_selector()` 已实现 fixed real Pareto baseline、candidate
   chunk projection、显式 real exploration、common real evaluator、typed readiness、soft
   full-real fallback 与 hard-stop 边界。BoTorch 只拥有 qLogNEHVI 数值计算。
@@ -88,10 +88,10 @@ search；可靠记录和显式 hard-stop 错误不得被 fallback 吞掉。
 详细实验条件、artifact/receipt 位置、frozen hashes、数值结果和证据限制已迁移到两个
 跨 session context 文档：
 
-- [CAE/PCA-SVD measured evidence](../context/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
+- [CAE/PCA-SVD measured evidence](../context/surrogate-research-20260830-20260910/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
   保存基础 CAE 24-cell benchmark、PCA/SVD oracle/deployable study 和 nonlinear
   representation 收益解释。
-- [Posterior calibration/qNEHVI structural evidence](../context/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)
+- [Posterior calibration/qNEHVI structural evidence](../context/surrogate-research-20260830-20260910/20260830_143110_posterior-calibration-qnehvi-structural-evidence.md)
   保存 v8 exact-state held-out calibration、v9 blocked-readiness real canary、v10 9-cell
   structural run 和未运行 formal optimization 的边界。
 

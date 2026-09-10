@@ -53,10 +53,10 @@ optional summaries. When collecting project context, follow this order:
    obsolete rules before treating an automatic toDo as active. Once normal task
    scope and findings are known, perform the contract's bounded automatic-trigger
    check before reporting completion.
-5. Read the [context-document contract](skill/context.md), then recursively list
-   every filename and relative path under `context/` without reading file content.
-   Read a matching context document in full only when the current task needs
-   information that its filename indicates it is likely to contain.
+5. Read the [context-document contract](skill/context.md), then list only the
+   immediate file and directory names under `context/`. Do not list names inside
+   child directories by default. Enter a matching directory or read a matching
+   document only when its name or an explicit link establishes task relevance.
 6. List the complete `blueprints/` tree and perform the targeted reading pass
    defined by the [blueprint contract](skill/blueprints.md).
 7. Apply the [change-record contract](skill/change_records.md). Its substantive

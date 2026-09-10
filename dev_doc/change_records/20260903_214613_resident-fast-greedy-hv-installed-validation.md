@@ -16,7 +16,7 @@
 
 新正式perfect使用seed101、P200、NSGA-III全50代、GPSAF α3/β3/γ0.5/探索0.1及原遗传设置。6/6有效完成；独立核验39000次正式尝试、45360次oracle物理调用、配对初始种群、全轨迹首次越线及完整领域输出。Chrono/SAW/天线首次越线为8/19/18代，正式预算减少84%/62%/64%；oracle成本及实际命令耗时另列，未据此作普遍加速声明。
 
-新证据报告：[常驻fast与吞吐](../context/20260903_214613_resident-fast-throughput-validation.md)、[HV perfect与到期审查](../context/20260903_214613_greedy-hv-perfect-surrogate-crossings.md)。五份指定旧context全部保留；没有整篇失效依据，原文、图表和论文未移动或修改。
+新证据报告：[常驻fast与吞吐](../context/surrogate-research-20260830-20260910/20260903_214613_resident-fast-throughput-validation.md)、[HV perfect与到期审查](../context/20260903_214613_greedy-hv-perfect-surrogate-crossings.md)。五份指定旧context全部保留；没有整篇失效依据，原文、图表和论文未移动或修改。
 
 最终文档wheel刷新在终态核验后进行。最终安装身份、文件内容一致性与验收记录见[安装收据](../../../temp/20260903_resident_fast_hv/FINAL_INSTALLATION.json)；Git提交、fetch计数及条件推送见[Git收据](../../../temp/20260903_resident_fast_hv/GIT_COMPLETION.json)。大运行证据留在任务拥有的外层temp目录，未加入Git。
 

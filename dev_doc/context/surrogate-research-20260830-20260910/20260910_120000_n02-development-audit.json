@@ -1,0 +1,2242 @@
+{
+  "format": "sg50.development-long-independent-audit.v1",
+  "created_utc": "2026-09-10T01:40:10.787346+00:00",
+  "stage": "development",
+  "confirmation_eligible": false,
+  "native_root_status_unchanged": "failed",
+  "declared_cells": 15,
+  "verified_cells": 15,
+  "verified_development": true,
+  "statistics": [
+    {
+      "format": "sg50.paired-crossings.v1",
+      "baseline": "test-com/synthetic-antenna",
+      "paired_runs": 5,
+      "convention": {
+        "name": "empirical nearest-rank order statistics, no interpolation",
+        "ranks_for_five": {
+          "minimum": 1,
+          "q1": 2,
+          "median": 3,
+          "q3": 4,
+          "maximum": 5
+        }
+      },
+      "censoring_policy": {
+        "observation": "N > cap",
+        "counts": "positive integers",
+        "derived_bound": "N >= cap+1 is a lower bound, never an imputed crossing",
+        "unknown_upper": "No finite upper bound; no eventual-crossing assumption or infinity substitution",
+        "ratio_scope": "Bounds on finite ratios compatible with the evidence; infinity/infinity is never computed",
+        "arithmetic": "exact rational; approximate fields are display-only"
+      },
+      "learned": {
+        "runs": 5,
+        "crossed": 5,
+        "censored": 0,
+        "crossing_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "text": "1",
+          "approximate": 1.0
+        },
+        "observations": [
+          {
+            "kind": "exact",
+            "attempts": 6000,
+            "relation": "N = 6000"
+          },
+          {
+            "kind": "exact",
+            "attempts": 3900,
+            "relation": "N = 3900"
+          },
+          {
+            "kind": "exact",
+            "attempts": 5000,
+            "relation": "N = 5000"
+          },
+          {
+            "kind": "exact",
+            "attempts": 3300,
+            "relation": "N = 3300"
+          },
+          {
+            "kind": "exact",
+            "attempts": 2850,
+            "relation": "N = 2850"
+          }
+        ],
+        "quantiles": {
+          "minimum": {
+            "lower": {
+              "numerator": 2850,
+              "denominator": 1,
+              "text": "2850",
+              "approximate": 2850.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 2850,
+              "denominator": 1,
+              "text": "2850",
+              "approximate": 2850.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 2850,
+              "denominator": 1,
+              "text": "2850",
+              "approximate": 2850.0
+            },
+            "display": "2850"
+          },
+          "q1": {
+            "lower": {
+              "numerator": 3300,
+              "denominator": 1,
+              "text": "3300",
+              "approximate": 3300.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 3300,
+              "denominator": 1,
+              "text": "3300",
+              "approximate": 3300.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 3300,
+              "denominator": 1,
+              "text": "3300",
+              "approximate": 3300.0
+            },
+            "display": "3300"
+          },
+          "median": {
+            "lower": {
+              "numerator": 3900,
+              "denominator": 1,
+              "text": "3900",
+              "approximate": 3900.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 3900,
+              "denominator": 1,
+              "text": "3900",
+              "approximate": 3900.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 3900,
+              "denominator": 1,
+              "text": "3900",
+              "approximate": 3900.0
+            },
+            "display": "3900"
+          },
+          "q3": {
+            "lower": {
+              "numerator": 5000,
+              "denominator": 1,
+              "text": "5000",
+              "approximate": 5000.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 5000,
+              "denominator": 1,
+              "text": "5000",
+              "approximate": 5000.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 5000,
+              "denominator": 1,
+              "text": "5000",
+              "approximate": 5000.0
+            },
+            "display": "5000"
+          },
+          "maximum": {
+            "lower": {
+              "numerator": 6000,
+              "denominator": 1,
+              "text": "6000",
+              "approximate": 6000.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 6000,
+              "denominator": 1,
+              "text": "6000",
+              "approximate": 6000.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 6000,
+              "denominator": 1,
+              "text": "6000",
+              "approximate": 6000.0
+            },
+            "display": "6000"
+          }
+        }
+      },
+      "perfect": {
+        "runs": 5,
+        "crossed": 5,
+        "censored": 0,
+        "crossing_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "text": "1",
+          "approximate": 1.0
+        },
+        "observations": [
+          {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1300,
+            "relation": "N = 1300"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1000,
+            "relation": "N = 1000"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1150,
+            "relation": "N = 1150"
+          }
+        ],
+        "quantiles": {
+          "minimum": {
+            "lower": {
+              "numerator": 1000,
+              "denominator": 1,
+              "text": "1000",
+              "approximate": 1000.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1000,
+              "denominator": 1,
+              "text": "1000",
+              "approximate": 1000.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1000,
+              "denominator": 1,
+              "text": "1000",
+              "approximate": 1000.0
+            },
+            "display": "1000"
+          },
+          "q1": {
+            "lower": {
+              "numerator": 1150,
+              "denominator": 1,
+              "text": "1150",
+              "approximate": 1150.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1150,
+              "denominator": 1,
+              "text": "1150",
+              "approximate": 1150.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1150,
+              "denominator": 1,
+              "text": "1150",
+              "approximate": 1150.0
+            },
+            "display": "1150"
+          },
+          "median": {
+            "lower": {
+              "numerator": 1300,
+              "denominator": 1,
+              "text": "1300",
+              "approximate": 1300.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1300,
+              "denominator": 1,
+              "text": "1300",
+              "approximate": 1300.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1300,
+              "denominator": 1,
+              "text": "1300",
+              "approximate": 1300.0
+            },
+            "display": "1300"
+          },
+          "q3": {
+            "lower": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "display": "1450"
+          },
+          "maximum": {
+            "lower": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "display": "1450"
+          }
+        }
+      },
+      "pairs": [
+        {
+          "pair_id": 1101,
+          "learned": {
+            "kind": "exact",
+            "attempts": 6000,
+            "relation": "N = 6000"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 120,
+              "denominator": 29,
+              "text": "120/29",
+              "approximate": 4.137931034482759
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 120,
+              "denominator": 29,
+              "text": "120/29",
+              "approximate": 4.137931034482759
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 120,
+              "denominator": 29,
+              "text": "120/29",
+              "approximate": 4.137931034482759
+            },
+            "display": "120/29"
+          }
+        },
+        {
+          "pair_id": 1102,
+          "learned": {
+            "kind": "exact",
+            "attempts": 3900,
+            "relation": "N = 3900"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 78,
+              "denominator": 29,
+              "text": "78/29",
+              "approximate": 2.689655172413793
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 78,
+              "denominator": 29,
+              "text": "78/29",
+              "approximate": 2.689655172413793
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 78,
+              "denominator": 29,
+              "text": "78/29",
+              "approximate": 2.689655172413793
+            },
+            "display": "78/29"
+          }
+        },
+        {
+          "pair_id": 1103,
+          "learned": {
+            "kind": "exact",
+            "attempts": 5000,
+            "relation": "N = 5000"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1300,
+            "relation": "N = 1300"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 50,
+              "denominator": 13,
+              "text": "50/13",
+              "approximate": 3.8461538461538463
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 50,
+              "denominator": 13,
+              "text": "50/13",
+              "approximate": 3.8461538461538463
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 50,
+              "denominator": 13,
+              "text": "50/13",
+              "approximate": 3.8461538461538463
+            },
+            "display": "50/13"
+          }
+        },
+        {
+          "pair_id": 1104,
+          "learned": {
+            "kind": "exact",
+            "attempts": 3300,
+            "relation": "N = 3300"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1000,
+            "relation": "N = 1000"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 33,
+              "denominator": 10,
+              "text": "33/10",
+              "approximate": 3.3
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 33,
+              "denominator": 10,
+              "text": "33/10",
+              "approximate": 3.3
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 33,
+              "denominator": 10,
+              "text": "33/10",
+              "approximate": 3.3
+            },
+            "display": "33/10"
+          }
+        },
+        {
+          "pair_id": 1105,
+          "learned": {
+            "kind": "exact",
+            "attempts": 2850,
+            "relation": "N = 2850"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1150,
+            "relation": "N = 1150"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 57,
+              "denominator": 23,
+              "text": "57/23",
+              "approximate": 2.4782608695652173
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 57,
+              "denominator": 23,
+              "text": "57/23",
+              "approximate": 2.4782608695652173
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 57,
+              "denominator": 23,
+              "text": "57/23",
+              "approximate": 2.4782608695652173
+            },
+            "display": "57/23"
+          }
+        }
+      ],
+      "ratio_of_medians": {
+        "lower": {
+          "numerator": 3,
+          "denominator": 1,
+          "text": "3",
+          "approximate": 3.0
+        },
+        "lower_inclusive": true,
+        "upper": {
+          "numerator": 3,
+          "denominator": 1,
+          "text": "3",
+          "approximate": 3.0
+        },
+        "upper_inclusive": true,
+        "is_exact": true,
+        "exact": {
+          "numerator": 3,
+          "denominator": 1,
+          "text": "3",
+          "approximate": 3.0
+        },
+        "display": "3"
+      },
+      "median_of_paired_ratios": {
+        "lower": {
+          "numerator": 33,
+          "denominator": 10,
+          "text": "33/10",
+          "approximate": 3.3
+        },
+        "lower_inclusive": true,
+        "upper": {
+          "numerator": 33,
+          "denominator": 10,
+          "text": "33/10",
+          "approximate": 3.3
+        },
+        "upper_inclusive": true,
+        "is_exact": true,
+        "exact": {
+          "numerator": 33,
+          "denominator": 10,
+          "text": "33/10",
+          "approximate": 3.3
+        },
+        "display": "33/10"
+      },
+      "paired_ratio_quantiles": {
+        "minimum": {
+          "lower": {
+            "numerator": 57,
+            "denominator": 23,
+            "text": "57/23",
+            "approximate": 2.4782608695652173
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 57,
+            "denominator": 23,
+            "text": "57/23",
+            "approximate": 2.4782608695652173
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 57,
+            "denominator": 23,
+            "text": "57/23",
+            "approximate": 2.4782608695652173
+          },
+          "display": "57/23"
+        },
+        "q1": {
+          "lower": {
+            "numerator": 78,
+            "denominator": 29,
+            "text": "78/29",
+            "approximate": 2.689655172413793
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 78,
+            "denominator": 29,
+            "text": "78/29",
+            "approximate": 2.689655172413793
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 78,
+            "denominator": 29,
+            "text": "78/29",
+            "approximate": 2.689655172413793
+          },
+          "display": "78/29"
+        },
+        "median": {
+          "lower": {
+            "numerator": 33,
+            "denominator": 10,
+            "text": "33/10",
+            "approximate": 3.3
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 33,
+            "denominator": 10,
+            "text": "33/10",
+            "approximate": 3.3
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 33,
+            "denominator": 10,
+            "text": "33/10",
+            "approximate": 3.3
+          },
+          "display": "33/10"
+        },
+        "q3": {
+          "lower": {
+            "numerator": 50,
+            "denominator": 13,
+            "text": "50/13",
+            "approximate": 3.8461538461538463
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 50,
+            "denominator": 13,
+            "text": "50/13",
+            "approximate": 3.8461538461538463
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 50,
+            "denominator": 13,
+            "text": "50/13",
+            "approximate": 3.8461538461538463
+          },
+          "display": "50/13"
+        },
+        "maximum": {
+          "lower": {
+            "numerator": 120,
+            "denominator": 29,
+            "text": "120/29",
+            "approximate": 4.137931034482759
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 120,
+            "denominator": 29,
+            "text": "120/29",
+            "approximate": 4.137931034482759
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 120,
+            "denominator": 29,
+            "text": "120/29",
+            "approximate": 4.137931034482759
+          },
+          "display": "120/29"
+        }
+      },
+      "acceptance": {
+        "rule": "median(learned N) <= 2 * median(perfect N)",
+        "multiplier": 2,
+        "decision": "fail",
+        "reason": "The learned median must exceed twice the perfect median for every value compatible with the bounds.",
+        "used_crossing_rate_gate": false,
+        "used_paired_ratio_median_gate": false,
+        "confidence_claim": null
+      }
+    },
+    {
+      "format": "sg50.paired-crossings.v1",
+      "baseline": "chrono/trebuchet",
+      "paired_runs": 5,
+      "convention": {
+        "name": "empirical nearest-rank order statistics, no interpolation",
+        "ranks_for_five": {
+          "minimum": 1,
+          "q1": 2,
+          "median": 3,
+          "q3": 4,
+          "maximum": 5
+        }
+      },
+      "censoring_policy": {
+        "observation": "N > cap",
+        "counts": "positive integers",
+        "derived_bound": "N >= cap+1 is a lower bound, never an imputed crossing",
+        "unknown_upper": "No finite upper bound; no eventual-crossing assumption or infinity substitution",
+        "ratio_scope": "Bounds on finite ratios compatible with the evidence; infinity/infinity is never computed",
+        "arithmetic": "exact rational; approximate fields are display-only"
+      },
+      "learned": {
+        "runs": 5,
+        "crossed": 5,
+        "censored": 0,
+        "crossing_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "text": "1",
+          "approximate": 1.0
+        },
+        "observations": [
+          {
+            "kind": "exact",
+            "attempts": 750,
+            "relation": "N = 750"
+          },
+          {
+            "kind": "exact",
+            "attempts": 2150,
+            "relation": "N = 2150"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1900,
+            "relation": "N = 1900"
+          },
+          {
+            "kind": "exact",
+            "attempts": 5150,
+            "relation": "N = 5150"
+          },
+          {
+            "kind": "exact",
+            "attempts": 800,
+            "relation": "N = 800"
+          }
+        ],
+        "quantiles": {
+          "minimum": {
+            "lower": {
+              "numerator": 750,
+              "denominator": 1,
+              "text": "750",
+              "approximate": 750.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 750,
+              "denominator": 1,
+              "text": "750",
+              "approximate": 750.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 750,
+              "denominator": 1,
+              "text": "750",
+              "approximate": 750.0
+            },
+            "display": "750"
+          },
+          "q1": {
+            "lower": {
+              "numerator": 800,
+              "denominator": 1,
+              "text": "800",
+              "approximate": 800.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 800,
+              "denominator": 1,
+              "text": "800",
+              "approximate": 800.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 800,
+              "denominator": 1,
+              "text": "800",
+              "approximate": 800.0
+            },
+            "display": "800"
+          },
+          "median": {
+            "lower": {
+              "numerator": 1900,
+              "denominator": 1,
+              "text": "1900",
+              "approximate": 1900.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1900,
+              "denominator": 1,
+              "text": "1900",
+              "approximate": 1900.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1900,
+              "denominator": 1,
+              "text": "1900",
+              "approximate": 1900.0
+            },
+            "display": "1900"
+          },
+          "q3": {
+            "lower": {
+              "numerator": 2150,
+              "denominator": 1,
+              "text": "2150",
+              "approximate": 2150.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 2150,
+              "denominator": 1,
+              "text": "2150",
+              "approximate": 2150.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 2150,
+              "denominator": 1,
+              "text": "2150",
+              "approximate": 2150.0
+            },
+            "display": "2150"
+          },
+          "maximum": {
+            "lower": {
+              "numerator": 5150,
+              "denominator": 1,
+              "text": "5150",
+              "approximate": 5150.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 5150,
+              "denominator": 1,
+              "text": "5150",
+              "approximate": 5150.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 5150,
+              "denominator": 1,
+              "text": "5150",
+              "approximate": 5150.0
+            },
+            "display": "5150"
+          }
+        }
+      },
+      "perfect": {
+        "runs": 5,
+        "crossed": 5,
+        "censored": 0,
+        "crossing_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "text": "1",
+          "approximate": 1.0
+        },
+        "observations": [
+          {
+            "kind": "exact",
+            "attempts": 850,
+            "relation": "N = 850"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1250,
+            "relation": "N = 1250"
+          },
+          {
+            "kind": "exact",
+            "attempts": 5850,
+            "relation": "N = 5850"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          {
+            "kind": "exact",
+            "attempts": 2250,
+            "relation": "N = 2250"
+          }
+        ],
+        "quantiles": {
+          "minimum": {
+            "lower": {
+              "numerator": 850,
+              "denominator": 1,
+              "text": "850",
+              "approximate": 850.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 850,
+              "denominator": 1,
+              "text": "850",
+              "approximate": 850.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 850,
+              "denominator": 1,
+              "text": "850",
+              "approximate": 850.0
+            },
+            "display": "850"
+          },
+          "q1": {
+            "lower": {
+              "numerator": 1250,
+              "denominator": 1,
+              "text": "1250",
+              "approximate": 1250.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1250,
+              "denominator": 1,
+              "text": "1250",
+              "approximate": 1250.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1250,
+              "denominator": 1,
+              "text": "1250",
+              "approximate": 1250.0
+            },
+            "display": "1250"
+          },
+          "median": {
+            "lower": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "display": "1450"
+          },
+          "q3": {
+            "lower": {
+              "numerator": 2250,
+              "denominator": 1,
+              "text": "2250",
+              "approximate": 2250.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 2250,
+              "denominator": 1,
+              "text": "2250",
+              "approximate": 2250.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 2250,
+              "denominator": 1,
+              "text": "2250",
+              "approximate": 2250.0
+            },
+            "display": "2250"
+          },
+          "maximum": {
+            "lower": {
+              "numerator": 5850,
+              "denominator": 1,
+              "text": "5850",
+              "approximate": 5850.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 5850,
+              "denominator": 1,
+              "text": "5850",
+              "approximate": 5850.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 5850,
+              "denominator": 1,
+              "text": "5850",
+              "approximate": 5850.0
+            },
+            "display": "5850"
+          }
+        }
+      },
+      "pairs": [
+        {
+          "pair_id": 1101,
+          "learned": {
+            "kind": "exact",
+            "attempts": 750,
+            "relation": "N = 750"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 850,
+            "relation": "N = 850"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 15,
+              "denominator": 17,
+              "text": "15/17",
+              "approximate": 0.8823529411764706
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 15,
+              "denominator": 17,
+              "text": "15/17",
+              "approximate": 0.8823529411764706
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 15,
+              "denominator": 17,
+              "text": "15/17",
+              "approximate": 0.8823529411764706
+            },
+            "display": "15/17"
+          }
+        },
+        {
+          "pair_id": 1102,
+          "learned": {
+            "kind": "exact",
+            "attempts": 2150,
+            "relation": "N = 2150"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1250,
+            "relation": "N = 1250"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 43,
+              "denominator": 25,
+              "text": "43/25",
+              "approximate": 1.72
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 43,
+              "denominator": 25,
+              "text": "43/25",
+              "approximate": 1.72
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 43,
+              "denominator": 25,
+              "text": "43/25",
+              "approximate": 1.72
+            },
+            "display": "43/25"
+          }
+        },
+        {
+          "pair_id": 1103,
+          "learned": {
+            "kind": "exact",
+            "attempts": 1900,
+            "relation": "N = 1900"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 5850,
+            "relation": "N = 5850"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 38,
+              "denominator": 117,
+              "text": "38/117",
+              "approximate": 0.3247863247863248
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 38,
+              "denominator": 117,
+              "text": "38/117",
+              "approximate": 0.3247863247863248
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 38,
+              "denominator": 117,
+              "text": "38/117",
+              "approximate": 0.3247863247863248
+            },
+            "display": "38/117"
+          }
+        },
+        {
+          "pair_id": 1104,
+          "learned": {
+            "kind": "exact",
+            "attempts": 5150,
+            "relation": "N = 5150"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 103,
+              "denominator": 29,
+              "text": "103/29",
+              "approximate": 3.5517241379310347
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 103,
+              "denominator": 29,
+              "text": "103/29",
+              "approximate": 3.5517241379310347
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 103,
+              "denominator": 29,
+              "text": "103/29",
+              "approximate": 3.5517241379310347
+            },
+            "display": "103/29"
+          }
+        },
+        {
+          "pair_id": 1105,
+          "learned": {
+            "kind": "exact",
+            "attempts": 800,
+            "relation": "N = 800"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 2250,
+            "relation": "N = 2250"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 16,
+              "denominator": 45,
+              "text": "16/45",
+              "approximate": 0.35555555555555557
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 16,
+              "denominator": 45,
+              "text": "16/45",
+              "approximate": 0.35555555555555557
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 16,
+              "denominator": 45,
+              "text": "16/45",
+              "approximate": 0.35555555555555557
+            },
+            "display": "16/45"
+          }
+        }
+      ],
+      "ratio_of_medians": {
+        "lower": {
+          "numerator": 38,
+          "denominator": 29,
+          "text": "38/29",
+          "approximate": 1.3103448275862069
+        },
+        "lower_inclusive": true,
+        "upper": {
+          "numerator": 38,
+          "denominator": 29,
+          "text": "38/29",
+          "approximate": 1.3103448275862069
+        },
+        "upper_inclusive": true,
+        "is_exact": true,
+        "exact": {
+          "numerator": 38,
+          "denominator": 29,
+          "text": "38/29",
+          "approximate": 1.3103448275862069
+        },
+        "display": "38/29"
+      },
+      "median_of_paired_ratios": {
+        "lower": {
+          "numerator": 15,
+          "denominator": 17,
+          "text": "15/17",
+          "approximate": 0.8823529411764706
+        },
+        "lower_inclusive": true,
+        "upper": {
+          "numerator": 15,
+          "denominator": 17,
+          "text": "15/17",
+          "approximate": 0.8823529411764706
+        },
+        "upper_inclusive": true,
+        "is_exact": true,
+        "exact": {
+          "numerator": 15,
+          "denominator": 17,
+          "text": "15/17",
+          "approximate": 0.8823529411764706
+        },
+        "display": "15/17"
+      },
+      "paired_ratio_quantiles": {
+        "minimum": {
+          "lower": {
+            "numerator": 38,
+            "denominator": 117,
+            "text": "38/117",
+            "approximate": 0.3247863247863248
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 38,
+            "denominator": 117,
+            "text": "38/117",
+            "approximate": 0.3247863247863248
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 38,
+            "denominator": 117,
+            "text": "38/117",
+            "approximate": 0.3247863247863248
+          },
+          "display": "38/117"
+        },
+        "q1": {
+          "lower": {
+            "numerator": 16,
+            "denominator": 45,
+            "text": "16/45",
+            "approximate": 0.35555555555555557
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 16,
+            "denominator": 45,
+            "text": "16/45",
+            "approximate": 0.35555555555555557
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 16,
+            "denominator": 45,
+            "text": "16/45",
+            "approximate": 0.35555555555555557
+          },
+          "display": "16/45"
+        },
+        "median": {
+          "lower": {
+            "numerator": 15,
+            "denominator": 17,
+            "text": "15/17",
+            "approximate": 0.8823529411764706
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 15,
+            "denominator": 17,
+            "text": "15/17",
+            "approximate": 0.8823529411764706
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 15,
+            "denominator": 17,
+            "text": "15/17",
+            "approximate": 0.8823529411764706
+          },
+          "display": "15/17"
+        },
+        "q3": {
+          "lower": {
+            "numerator": 43,
+            "denominator": 25,
+            "text": "43/25",
+            "approximate": 1.72
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 43,
+            "denominator": 25,
+            "text": "43/25",
+            "approximate": 1.72
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 43,
+            "denominator": 25,
+            "text": "43/25",
+            "approximate": 1.72
+          },
+          "display": "43/25"
+        },
+        "maximum": {
+          "lower": {
+            "numerator": 103,
+            "denominator": 29,
+            "text": "103/29",
+            "approximate": 3.5517241379310347
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 103,
+            "denominator": 29,
+            "text": "103/29",
+            "approximate": 3.5517241379310347
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 103,
+            "denominator": 29,
+            "text": "103/29",
+            "approximate": 3.5517241379310347
+          },
+          "display": "103/29"
+        }
+      },
+      "acceptance": {
+        "rule": "median(learned N) <= 2 * median(perfect N)",
+        "multiplier": 2,
+        "decision": "pass",
+        "reason": "The learned-median upper bound is at most twice the perfect-median lower bound.",
+        "used_crossing_rate_gate": false,
+        "used_paired_ratio_median_gate": false,
+        "confidence_claim": null
+      }
+    },
+    {
+      "format": "sg50.paired-crossings.v1",
+      "baseline": "ngspice/saw-ladder",
+      "paired_runs": 5,
+      "convention": {
+        "name": "empirical nearest-rank order statistics, no interpolation",
+        "ranks_for_five": {
+          "minimum": 1,
+          "q1": 2,
+          "median": 3,
+          "q3": 4,
+          "maximum": 5
+        }
+      },
+      "censoring_policy": {
+        "observation": "N > cap",
+        "counts": "positive integers",
+        "derived_bound": "N >= cap+1 is a lower bound, never an imputed crossing",
+        "unknown_upper": "No finite upper bound; no eventual-crossing assumption or infinity substitution",
+        "ratio_scope": "Bounds on finite ratios compatible with the evidence; infinity/infinity is never computed",
+        "arithmetic": "exact rational; approximate fields are display-only"
+      },
+      "learned": {
+        "runs": 5,
+        "crossed": 3,
+        "censored": 2,
+        "crossing_rate": {
+          "numerator": 3,
+          "denominator": 5,
+          "text": "3/5",
+          "approximate": 0.6
+        },
+        "observations": [
+          {
+            "kind": "right_censored",
+            "cap": 10000,
+            "relation": "N > 10000",
+            "minimum_possible_integer_N": 10001,
+            "minimum_is_observed_crossing": false
+          },
+          {
+            "kind": "exact",
+            "attempts": 1650,
+            "relation": "N = 1650"
+          },
+          {
+            "kind": "right_censored",
+            "cap": 10000,
+            "relation": "N > 10000",
+            "minimum_possible_integer_N": 10001,
+            "minimum_is_observed_crossing": false
+          },
+          {
+            "kind": "exact",
+            "attempts": 1350,
+            "relation": "N = 1350"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1250,
+            "relation": "N = 1250"
+          }
+        ],
+        "quantiles": {
+          "minimum": {
+            "lower": {
+              "numerator": 1250,
+              "denominator": 1,
+              "text": "1250",
+              "approximate": 1250.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1250,
+              "denominator": 1,
+              "text": "1250",
+              "approximate": 1250.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1250,
+              "denominator": 1,
+              "text": "1250",
+              "approximate": 1250.0
+            },
+            "display": "1250"
+          },
+          "q1": {
+            "lower": {
+              "numerator": 1350,
+              "denominator": 1,
+              "text": "1350",
+              "approximate": 1350.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1350,
+              "denominator": 1,
+              "text": "1350",
+              "approximate": 1350.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1350,
+              "denominator": 1,
+              "text": "1350",
+              "approximate": 1350.0
+            },
+            "display": "1350"
+          },
+          "median": {
+            "lower": {
+              "numerator": 1650,
+              "denominator": 1,
+              "text": "1650",
+              "approximate": 1650.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1650,
+              "denominator": 1,
+              "text": "1650",
+              "approximate": 1650.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1650,
+              "denominator": 1,
+              "text": "1650",
+              "approximate": 1650.0
+            },
+            "display": "1650"
+          },
+          "q3": {
+            "lower": {
+              "numerator": 10001,
+              "denominator": 1,
+              "text": "10001",
+              "approximate": 10001.0
+            },
+            "lower_inclusive": true,
+            "upper": null,
+            "upper_inclusive": false,
+            "is_exact": false,
+            "exact": null,
+            "display": ">= 10001; no finite upper bound"
+          },
+          "maximum": {
+            "lower": {
+              "numerator": 10001,
+              "denominator": 1,
+              "text": "10001",
+              "approximate": 10001.0
+            },
+            "lower_inclusive": true,
+            "upper": null,
+            "upper_inclusive": false,
+            "is_exact": false,
+            "exact": null,
+            "display": ">= 10001; no finite upper bound"
+          }
+        }
+      },
+      "perfect": {
+        "runs": 5,
+        "crossed": 5,
+        "censored": 0,
+        "crossing_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "text": "1",
+          "approximate": 1.0
+        },
+        "observations": [
+          {
+            "kind": "exact",
+            "attempts": 1950,
+            "relation": "N = 1950"
+          },
+          {
+            "kind": "exact",
+            "attempts": 900,
+            "relation": "N = 900"
+          },
+          {
+            "kind": "exact",
+            "attempts": 2450,
+            "relation": "N = 2450"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1050,
+            "relation": "N = 1050"
+          },
+          {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          }
+        ],
+        "quantiles": {
+          "minimum": {
+            "lower": {
+              "numerator": 900,
+              "denominator": 1,
+              "text": "900",
+              "approximate": 900.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 900,
+              "denominator": 1,
+              "text": "900",
+              "approximate": 900.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 900,
+              "denominator": 1,
+              "text": "900",
+              "approximate": 900.0
+            },
+            "display": "900"
+          },
+          "q1": {
+            "lower": {
+              "numerator": 1050,
+              "denominator": 1,
+              "text": "1050",
+              "approximate": 1050.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1050,
+              "denominator": 1,
+              "text": "1050",
+              "approximate": 1050.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1050,
+              "denominator": 1,
+              "text": "1050",
+              "approximate": 1050.0
+            },
+            "display": "1050"
+          },
+          "median": {
+            "lower": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1450,
+              "denominator": 1,
+              "text": "1450",
+              "approximate": 1450.0
+            },
+            "display": "1450"
+          },
+          "q3": {
+            "lower": {
+              "numerator": 1950,
+              "denominator": 1,
+              "text": "1950",
+              "approximate": 1950.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 1950,
+              "denominator": 1,
+              "text": "1950",
+              "approximate": 1950.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 1950,
+              "denominator": 1,
+              "text": "1950",
+              "approximate": 1950.0
+            },
+            "display": "1950"
+          },
+          "maximum": {
+            "lower": {
+              "numerator": 2450,
+              "denominator": 1,
+              "text": "2450",
+              "approximate": 2450.0
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 2450,
+              "denominator": 1,
+              "text": "2450",
+              "approximate": 2450.0
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 2450,
+              "denominator": 1,
+              "text": "2450",
+              "approximate": 2450.0
+            },
+            "display": "2450"
+          }
+        }
+      },
+      "pairs": [
+        {
+          "pair_id": 1101,
+          "learned": {
+            "kind": "right_censored",
+            "cap": 10000,
+            "relation": "N > 10000",
+            "minimum_possible_integer_N": 10001,
+            "minimum_is_observed_crossing": false
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1950,
+            "relation": "N = 1950"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 10001,
+              "denominator": 1950,
+              "text": "10001/1950",
+              "approximate": 5.128717948717949
+            },
+            "lower_inclusive": true,
+            "upper": null,
+            "upper_inclusive": false,
+            "is_exact": false,
+            "exact": null,
+            "display": ">= 10001/1950; no finite upper bound"
+          }
+        },
+        {
+          "pair_id": 1102,
+          "learned": {
+            "kind": "exact",
+            "attempts": 1650,
+            "relation": "N = 1650"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 900,
+            "relation": "N = 900"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 11,
+              "denominator": 6,
+              "text": "11/6",
+              "approximate": 1.8333333333333333
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 11,
+              "denominator": 6,
+              "text": "11/6",
+              "approximate": 1.8333333333333333
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 11,
+              "denominator": 6,
+              "text": "11/6",
+              "approximate": 1.8333333333333333
+            },
+            "display": "11/6"
+          }
+        },
+        {
+          "pair_id": 1103,
+          "learned": {
+            "kind": "right_censored",
+            "cap": 10000,
+            "relation": "N > 10000",
+            "minimum_possible_integer_N": 10001,
+            "minimum_is_observed_crossing": false
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 2450,
+            "relation": "N = 2450"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 10001,
+              "denominator": 2450,
+              "text": "10001/2450",
+              "approximate": 4.082040816326531
+            },
+            "lower_inclusive": true,
+            "upper": null,
+            "upper_inclusive": false,
+            "is_exact": false,
+            "exact": null,
+            "display": ">= 10001/2450; no finite upper bound"
+          }
+        },
+        {
+          "pair_id": 1104,
+          "learned": {
+            "kind": "exact",
+            "attempts": 1350,
+            "relation": "N = 1350"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1050,
+            "relation": "N = 1050"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 9,
+              "denominator": 7,
+              "text": "9/7",
+              "approximate": 1.2857142857142858
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 9,
+              "denominator": 7,
+              "text": "9/7",
+              "approximate": 1.2857142857142858
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 9,
+              "denominator": 7,
+              "text": "9/7",
+              "approximate": 1.2857142857142858
+            },
+            "display": "9/7"
+          }
+        },
+        {
+          "pair_id": 1105,
+          "learned": {
+            "kind": "exact",
+            "attempts": 1250,
+            "relation": "N = 1250"
+          },
+          "perfect": {
+            "kind": "exact",
+            "attempts": 1450,
+            "relation": "N = 1450"
+          },
+          "learned_over_perfect": {
+            "lower": {
+              "numerator": 25,
+              "denominator": 29,
+              "text": "25/29",
+              "approximate": 0.8620689655172413
+            },
+            "lower_inclusive": true,
+            "upper": {
+              "numerator": 25,
+              "denominator": 29,
+              "text": "25/29",
+              "approximate": 0.8620689655172413
+            },
+            "upper_inclusive": true,
+            "is_exact": true,
+            "exact": {
+              "numerator": 25,
+              "denominator": 29,
+              "text": "25/29",
+              "approximate": 0.8620689655172413
+            },
+            "display": "25/29"
+          }
+        }
+      ],
+      "ratio_of_medians": {
+        "lower": {
+          "numerator": 33,
+          "denominator": 29,
+          "text": "33/29",
+          "approximate": 1.1379310344827587
+        },
+        "lower_inclusive": true,
+        "upper": {
+          "numerator": 33,
+          "denominator": 29,
+          "text": "33/29",
+          "approximate": 1.1379310344827587
+        },
+        "upper_inclusive": true,
+        "is_exact": true,
+        "exact": {
+          "numerator": 33,
+          "denominator": 29,
+          "text": "33/29",
+          "approximate": 1.1379310344827587
+        },
+        "display": "33/29"
+      },
+      "median_of_paired_ratios": {
+        "lower": {
+          "numerator": 11,
+          "denominator": 6,
+          "text": "11/6",
+          "approximate": 1.8333333333333333
+        },
+        "lower_inclusive": true,
+        "upper": {
+          "numerator": 11,
+          "denominator": 6,
+          "text": "11/6",
+          "approximate": 1.8333333333333333
+        },
+        "upper_inclusive": true,
+        "is_exact": true,
+        "exact": {
+          "numerator": 11,
+          "denominator": 6,
+          "text": "11/6",
+          "approximate": 1.8333333333333333
+        },
+        "display": "11/6"
+      },
+      "paired_ratio_quantiles": {
+        "minimum": {
+          "lower": {
+            "numerator": 25,
+            "denominator": 29,
+            "text": "25/29",
+            "approximate": 0.8620689655172413
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 25,
+            "denominator": 29,
+            "text": "25/29",
+            "approximate": 0.8620689655172413
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 25,
+            "denominator": 29,
+            "text": "25/29",
+            "approximate": 0.8620689655172413
+          },
+          "display": "25/29"
+        },
+        "q1": {
+          "lower": {
+            "numerator": 9,
+            "denominator": 7,
+            "text": "9/7",
+            "approximate": 1.2857142857142858
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 9,
+            "denominator": 7,
+            "text": "9/7",
+            "approximate": 1.2857142857142858
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 9,
+            "denominator": 7,
+            "text": "9/7",
+            "approximate": 1.2857142857142858
+          },
+          "display": "9/7"
+        },
+        "median": {
+          "lower": {
+            "numerator": 11,
+            "denominator": 6,
+            "text": "11/6",
+            "approximate": 1.8333333333333333
+          },
+          "lower_inclusive": true,
+          "upper": {
+            "numerator": 11,
+            "denominator": 6,
+            "text": "11/6",
+            "approximate": 1.8333333333333333
+          },
+          "upper_inclusive": true,
+          "is_exact": true,
+          "exact": {
+            "numerator": 11,
+            "denominator": 6,
+            "text": "11/6",
+            "approximate": 1.8333333333333333
+          },
+          "display": "11/6"
+        },
+        "q3": {
+          "lower": {
+            "numerator": 10001,
+            "denominator": 2450,
+            "text": "10001/2450",
+            "approximate": 4.082040816326531
+          },
+          "lower_inclusive": true,
+          "upper": null,
+          "upper_inclusive": false,
+          "is_exact": false,
+          "exact": null,
+          "display": ">= 10001/2450; no finite upper bound"
+        },
+        "maximum": {
+          "lower": {
+            "numerator": 10001,
+            "denominator": 1950,
+            "text": "10001/1950",
+            "approximate": 5.128717948717949
+          },
+          "lower_inclusive": true,
+          "upper": null,
+          "upper_inclusive": false,
+          "is_exact": false,
+          "exact": null,
+          "display": ">= 10001/1950; no finite upper bound"
+        }
+      },
+      "acceptance": {
+        "rule": "median(learned N) <= 2 * median(perfect N)",
+        "multiplier": 2,
+        "decision": "pass",
+        "reason": "The learned-median upper bound is at most twice the perfect-median lower bound.",
+        "used_crossing_rate_gate": false,
+        "used_paired_ratio_median_gate": false,
+        "confidence_claim": null
+      }
+    }
+  ],
+  "errors": [],
+  "scope": "Separate independent artifact. Native collector results/status and historical attempts are unchanged.",
+  "source_summary_sha256": "745b94c86818784544fafcf3a772dbea50575e552362980834a0bae3b3b5ef08",
+  "records": [
+    {
+      "cell": "c0001",
+      "baseline": "test-com/synthetic-antenna",
+      "seed": 1101,
+      "actual_attempts": 6000,
+      "finite": 6000,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 6000,
+      "final_top10": 0.2907537811337426
+    },
+    {
+      "cell": "c0002",
+      "baseline": "test-com/synthetic-antenna",
+      "seed": 1102,
+      "actual_attempts": 3900,
+      "finite": 3900,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 3900,
+      "final_top10": 0.29034461740977974
+    },
+    {
+      "cell": "c0003",
+      "baseline": "test-com/synthetic-antenna",
+      "seed": 1103,
+      "actual_attempts": 5000,
+      "finite": 5000,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 5000,
+      "final_top10": 0.29284372382424845
+    },
+    {
+      "cell": "c0004",
+      "baseline": "test-com/synthetic-antenna",
+      "seed": 1104,
+      "actual_attempts": 3300,
+      "finite": 3300,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 3300,
+      "final_top10": 0.2936357854725994
+    },
+    {
+      "cell": "c0005",
+      "baseline": "test-com/synthetic-antenna",
+      "seed": 1105,
+      "actual_attempts": 2850,
+      "finite": 2850,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 2850,
+      "final_top10": 0.2919734131685344
+    },
+    {
+      "cell": "c0006",
+      "baseline": "chrono/trebuchet",
+      "seed": 1101,
+      "actual_attempts": 750,
+      "finite": 686,
+      "failed_or_nonfinite": 64,
+      "first_crossing_N": 750,
+      "final_top10": 0.1821873304590804
+    },
+    {
+      "cell": "c0007",
+      "baseline": "chrono/trebuchet",
+      "seed": 1102,
+      "actual_attempts": 2150,
+      "finite": 1996,
+      "failed_or_nonfinite": 154,
+      "first_crossing_N": 2150,
+      "final_top10": 0.1847722807907402
+    },
+    {
+      "cell": "c0008",
+      "baseline": "chrono/trebuchet",
+      "seed": 1103,
+      "actual_attempts": 1900,
+      "finite": 1753,
+      "failed_or_nonfinite": 147,
+      "first_crossing_N": 1900,
+      "final_top10": 0.15590083211371722
+    },
+    {
+      "cell": "c0009",
+      "baseline": "chrono/trebuchet",
+      "seed": 1104,
+      "actual_attempts": 5150,
+      "finite": 4930,
+      "failed_or_nonfinite": 220,
+      "first_crossing_N": 5150,
+      "final_top10": 0.17017520642595824
+    },
+    {
+      "cell": "c0010",
+      "baseline": "chrono/trebuchet",
+      "seed": 1105,
+      "actual_attempts": 800,
+      "finite": 715,
+      "failed_or_nonfinite": 85,
+      "first_crossing_N": 800,
+      "final_top10": 0.17425834938819146
+    },
+    {
+      "cell": "c0011",
+      "baseline": "ngspice/saw-ladder",
+      "seed": 1101,
+      "actual_attempts": 10000,
+      "finite": 10000,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": null,
+      "final_top10": 0.23400988117779256
+    },
+    {
+      "cell": "c0012",
+      "baseline": "ngspice/saw-ladder",
+      "seed": 1102,
+      "actual_attempts": 1650,
+      "finite": 1650,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 1650,
+      "final_top10": 0.26974864788112823
+    },
+    {
+      "cell": "c0013",
+      "baseline": "ngspice/saw-ladder",
+      "seed": 1103,
+      "actual_attempts": 10000,
+      "finite": 10000,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": null,
+      "final_top10": 0.2541265572448728
+    },
+    {
+      "cell": "c0014",
+      "baseline": "ngspice/saw-ladder",
+      "seed": 1104,
+      "actual_attempts": 1350,
+      "finite": 1350,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 1350,
+      "final_top10": 0.19312905396188224
+    },
+    {
+      "cell": "c0015",
+      "baseline": "ngspice/saw-ladder",
+      "seed": 1105,
+      "actual_attempts": 1250,
+      "finite": 1250,
+      "failed_or_nonfinite": 0,
+      "first_crossing_N": 1250,
+      "final_top10": 0.24296965105934673
+    }
+  ]
+}

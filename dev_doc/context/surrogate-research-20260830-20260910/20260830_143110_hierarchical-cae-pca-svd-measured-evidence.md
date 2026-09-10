@@ -9,11 +9,11 @@ blueprints、用户指令和活动 TODO 优先于本文。
 
 本文从以下活动 TODO 迁出详细实验结果：
 
-- [Hierarchical CAE 证据驱动研究](../toDo/20260830_120818_hierarchical-cae-evidence-led-research.md)
-- [Posterior-assisted EHVI/qNEHVI](../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)
+- [Hierarchical CAE 证据驱动研究](../../toDo/20260830_120818_hierarchical-cae-evidence-led-research.md)
+- [Posterior-assisted EHVI/qNEHVI](../../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)
 
 拆分和首次联合解释的 tracked provenance 见
-[2026-08-30 12:18 change record](../change_records/20260830_121831_split-cae-ehvi-todo-and-reassess-benchmark.md)。
+[2026-08-30 12:18 change record](../../change_records/20260830_121831_split-cae-ehvi-todo-and-reassess-benchmark.md)。
 
 ## Artifact 身份与位置
 
@@ -25,11 +25,11 @@ blueprints、用户指令和活动 TODO 优先于本文。
 
 迁移时已核对的主要文件：
 
-- [spec.json](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/spec.json)
-- [state.json](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/state.json)
-- [gate plan](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/resources/gate_plan.json)
-- [gate result](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/postprocessing/base-hierarchical-cae-performance-gate/gate-result.json)
-- [postprocessor summary](../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/postprocessing/base-hierarchical-cae-performance-gate/summary.md)
+- [spec.json](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/spec.json)
+- [state.json](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/state.json)
+- [gate plan](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/resources/gate_plan.json)
+- [gate result](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/postprocessing/base-hierarchical-cae-performance-gate/gate-result.json)
+- [postprocessor summary](../../../../temp/20260830_094718-hierarchical-cae-base-performance-measured-visible-20260830/postprocessing/base-hierarchical-cae-performance-gate/summary.md)
 
 ### PCA/SVD measured study
 
@@ -45,14 +45,14 @@ rule 或 simulation result，也没有重跑 simulator。
 
 迁移时已核对的主要文件：
 
-- [recovery receipt](../../../temp/20260830_073509-pca-svd-analysis-recovery/recovery-receipt.json)
-- [measured summary](../../../temp/20260830_073509-pca-svd-analysis-recovery/reports/pca-svd-measured-summary.md)
-- [analysis JSON](../../../temp/20260830_073509-pca-svd-analysis-recovery/postprocessing/pca-svd-analysis/analysis.json)
-- [metrics CSV](../../../temp/20260830_073509-pca-svd-analysis-recovery/postprocessing/pca-svd-analysis/metrics.csv)
-- [pre-test gate](../../../temp/20260830_073509-pca-svd-analysis-recovery/postprocessing/pca-svd-analysis/pretest-gate.json)
+- [recovery receipt](../../../../temp/20260830_073509-pca-svd-analysis-recovery/recovery-receipt.json)
+- [measured summary](../../../../temp/20260830_073509-pca-svd-analysis-recovery/reports/pca-svd-measured-summary.md)
+- [analysis JSON](../../../../temp/20260830_073509-pca-svd-analysis-recovery/postprocessing/pca-svd-analysis/analysis.json)
+- [metrics CSV](../../../../temp/20260830_073509-pca-svd-analysis-recovery/postprocessing/pca-svd-analysis/metrics.csv)
+- [pre-test gate](../../../../temp/20260830_073509-pca-svd-analysis-recovery/postprocessing/pca-svd-analysis/pretest-gate.json)
 
 Tracked completion provenance 见
-[PCA/SVD completion record](../change_records/20260830_074344_complete-pca-svd-measured-evidence.md)。
+[PCA/SVD completion record](../../change_records/20260830_074344_complete-pca-svd-measured-evidence.md)。
 外层 `temp/` artifact 是 ignored workspace evidence；若以后移动或清理，应以 tracked record、
 本文件所列 hashes 和仍可访问的 receipt 共同核对，不把单一路径存在性当作科学有效性。
 

@@ -7,7 +7,7 @@ calibration、v9 blocked-readiness real canary 和 v10 structural release run。
 queue、性能接受、exploitation 授权、正式 optimization-quality 证据或默认策略推荐。
 
 活动工作入口是
-[Posterior-assisted EHVI/qNEHVI TODO](../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)。
+[Posterior-assisted EHVI/qNEHVI TODO](../../toDo/20260828_121904_surrogate-qnehvi-remaining-work.md)。
 当前 architecture、blueprints、code 和用户指令优先于本文；旧 preregistration 中的 gate/status
 只保持对应 experiment 的历史含义。
 
@@ -15,12 +15,12 @@ queue、性能接受、exploitation 授权、正式 optimization-quality 证据�
 
 ### Tracked provenance
 
-- [v8 calibration change record](../change_records/20260828_010422_coherent-posterior-calibration-framework-fail-closed.md)
-- [v8 archived handoff](../obsolete/todo/20260827_082609_coherent-posterior-sampling-calibration.md)
-- [v9 qNEHVI framework change record](../change_records/20260828_020622_qnehvi-posterior-assisted-framework.md)
-- [v9 archived handoff](../obsolete/todo/20260827_082611_qnehvi-acquisition-strategy.md)
-- [v10 integrated release change record](../change_records/20260828_032749_integrated-acceptance-release-framework.md)
-- [v10 archived handoff](../obsolete/todo/20260827_082612_validate-new-surrogate-and-qnehvi.md)
+- [v8 calibration change record](../../change_records/20260828_010422_coherent-posterior-calibration-framework-fail-closed.md)
+- [v8 archived handoff](../../obsolete/todo/20260827_082609_coherent-posterior-sampling-calibration.md)
+- [v9 qNEHVI framework change record](../../change_records/20260828_020622_qnehvi-posterior-assisted-framework.md)
+- [v9 archived handoff](../../obsolete/todo/20260827_082611_qnehvi-acquisition-strategy.md)
+- [v10 integrated release change record](../../change_records/20260828_032749_integrated-acceptance-release-framework.md)
+- [v10 archived handoff](../../obsolete/todo/20260827_082612_validate-new-surrogate-and-qnehvi.md)
 
 历史文件提到的 `benchmark_automation/preregistrations/20260828-*` 目录已不在迁移时的当前
 HEAD；不得把那些旧相对路径写成仍可访问的 current artifact。v8/v9 的可追溯身份由上述
@@ -33,10 +33,10 @@ append-only records、archived handoffs、commit/signature/hash 和冻结结果�
 
 迁移时已核对：
 
-- [report.md](../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/report.md)
-- [report.json](../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/report.json)
-- [run spec](../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/run_spec.json)
-- [collection](../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/evidence/collect-0001/collection.json)
+- [report.md](../../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/report.md)
+- [report.json](../../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/report.json)
+- [run spec](../../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/run_spec.json)
+- [collection](../../../temp/20260827_192319-082612-v10-structural-release-5762ec48fe39/evidence/collect-0001/collection.json)
 
 该 evidence tree 含 mixed-ACL cell workspace；根级 report/spec/collection 是本上下文的首选
 入口。若 ignored tree 以后被清理，以 tracked v10 change record/archived handoff 为 provenance，

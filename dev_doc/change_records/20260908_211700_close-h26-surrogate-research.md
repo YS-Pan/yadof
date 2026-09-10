@@ -4,7 +4,7 @@ The user ended further research after the two active benchmarks. Both completed,
 their original process exits and failed attempts were preserved, and the final
 development and compute-parity results were audited without new experiments.
 
-Added a concise [research closure context](../context/20260908_211700_cae-surrogate-h26-research-closure.md)
+Added a concise [research closure context](../context/surrogate-research-20260830-20260910/20260908_211700_cae-surrogate-h26-research-closure.md)
 with the frozen metric/budget contract, all six H26 development outcomes, exact
 cache parity, evidence identities and the post-completion package-replacement
 audit amendment. H26 passed 3/6 development cases; the nine fresh confirmations

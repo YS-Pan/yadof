@@ -343,3 +343,26 @@ training success/failure events share a bounded writer, and their posterior
 adapters share seeded permutation-cycle member selection. Each component retains
 its own scheduler semantics behind the common typed lifecycle; no callback-heavy
 shared scheduler abstraction is introduced.
+
+
+## Retrieval response component
+
+`retrieval_response/` owns the independent experimental N02 component: immutable
+settings and lightweight factory/state types; exact per-field min/asinh,
+span/log and PCA codecs; cKDTree parameter retrieval with explicit self-identity
+exclusion; one shared two-hidden-layer SiLU correction/attention network over all
+response codes; and a deterministic mean-latent full-response decoder. Retain
+the reference's exact PCA fit_transform context codes, float64 retrieval and
+per-member float32 inference followed by ordered float64 averaging. The default
+probe/final workload is 8 + 2*96 optimizer steps and validation is diagnostic only.
+Costs never select model targets or neighbors. There is no posterior capability.
+
+Runtime owns exact/lagged recovery and snapshot cost projection, atomic namespaced
+JSON/NPZ schema/code/context/tensor publication, no-pickle strict loading, explicit
+training handles and one scheduled fit per workspace/strategy/settings. State
+identity binds parameters/content/schema/settings/backends; cost-only changes can
+retain a model. Physical-record coordinate reconciliation uses exact proofs.
+CPU-only seeding and a component-local numerical lock restore RNG/thread state;
+different concurrent backends require process isolation. Cancellation checks safe
+boundaries and waits for native kernels. Main imports remain backend-light. The
+viewer has no retrieval adapter; typed prediction is the inspection surface.

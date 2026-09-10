@@ -112,6 +112,6 @@ perfect 不能单独证明测试有错，也不能据此宣布算法更优。五
 仍不是严格上界或独立算法接受标准；新算法应做同协议的配对重复比较。
 
 完整审计、未舍入结果及原始运行索引见外层工作区
-[`temp/pb-infrastructure-20260908/20260909-five-seed-revision/five-seed-final-results/summary.json`](../../../temp/pb-infrastructure-20260908/20260909-five-seed-revision/five-seed-final-results/summary.json) 和
-[`audited-cells.json`](../../../temp/pb-infrastructure-20260908/20260909-five-seed-revision/five-seed-final-results/audited-cells.json)。
+[`temp/pb-infrastructure-20260908/20260909-five-seed-revision/five-seed-final-results/summary.json`](../../../../temp/pb-infrastructure-20260908/20260909-five-seed-revision/five-seed-final-results/summary.json) 和
+[`audited-cells.json`](../../../../temp/pb-infrastructure-20260908/20260909-five-seed-revision/five-seed-final-results/audited-cells.json)。
 本文件与配套数据保留足够的逐种子基准供后续任务读取；大型 rawData 不进入 Git。

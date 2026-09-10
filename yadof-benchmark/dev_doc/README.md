@@ -77,3 +77,6 @@ Current invariants are:
 Current readers preserve legacy workspaces that lack preset provenance or
 `display_label` by reporting `legacy-unrecorded` provenance and deriving a label
 from baseline, strategy, and seed fields.
+
+For explicitly requested long-run monitoring, use the low-cost, context-free
+subagent policy in [user execution guide](../user_doc/execution.md#low-cost-monitoring-for-agents): five-minute monitor inspections and hourly main-agent summaries.

@@ -62,3 +62,15 @@ List or read the installed documents with:
 yadof-benchmark docs list
 yadof-benchmark docs show execution.md
 ```
+
+For explicitly requested long-run monitoring, use the low-cost, context-free
+subagent policy in [execution.md](execution.md#low-cost-monitoring-for-agents): five-minute monitor inspections and hourly main-agent summaries.
+
+
+`init --preset surrogate-complete` adds amplitude/shape GP and experimental
+retrieval response to the complete comparison: three baselines × four strategies
+× seeds 101/102/103 = 36 cells, each P200/B200/I200/G25 (5000 formal attempts).
+It uses two concurrent cells and the normal 7200-second per-cell timeout. Install
+`yadof[gp,retrieval]`. Run its unchanged matrix with `--budget-profile smoke` in a
+separate workspace first. These are descriptive standard-budget results, not the
+historical P50 median-to-perfect confirmation. `complete` remains 18 cells.

@@ -234,3 +234,12 @@ For benchmark-runner changes, run its focused unit suite with a fresh absolute
 `--basetemp` and disabled pytest cache, then use an external temporary study to
 exercise the no-write `plan` from the repository root. Do not launch a measured
 study as generic acceptance.
+
+
+Retrieval-response coverage includes explicit defaults/lazy imports, strict input
+bounds, complete schema/static metadata, identity-based neighbor exclusion,
+held-out probe isolation, exact context-code/tensor recovery, cost reinterpretation,
+corrupt payload/path rejection, failed-row exclusion, cancellation and CPU RNG
+restoration. Default-prototype parity is separate task-owned numerical acceptance.
+The 36-cell surrogate-complete preset must retain uniform budgets and identical
+non-budget smoke inputs; this does not alter complete's 18-cell contract.

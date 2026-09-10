@@ -454,7 +454,7 @@ def test_complete_preset_and_mechanical_smoke_profile(tmp_path: Path) -> None:
 
 def test_blank_is_explicit_and_presets_are_discoverable(tmp_path: Path) -> None:
     presets = api.discover_presets()
-    assert list(presets) == ["portable", "complete", "perfect", "blank"]
+    assert list(presets) == ["portable", "complete", "surrogate-complete", "perfect", "blank"]
     assert presets["portable"]["default"] is True
     assert presets["complete"]["long_running"] is True
     assert presets["complete"]["cells"] == 18
@@ -1823,3 +1823,27 @@ def test_timeout_fails_one_cell_continues_independent_cell_and_fails_workspace(
 
 def test_distribution_version() -> None:
     assert benchmark.__version__ == "0.6.0"
+
+
+def test_surrogate_complete_keeps_uniform_budget_and_smoke_matrix(tmp_path):
+    root = Path(api.init_workspace(tmp_path / "research", preset="surrogate-complete")["workspace"])
+    measured = api.plan_workspace(root)
+    smoke = api.plan_workspace(root, budget_profile="smoke")
+    assert len(measured.cells) == len(smoke.cells) == 36
+    assert measured.workflow.cell_concurrency == 2
+    assert {c.population for c in measured.cells} == {200}
+    assert {c.generations for c in measured.cells} == {25}
+    assert {c.generations for c in smoke.cells} == {1}
+    assert {c.strategy_id for c in measured.cells} == {
+        "real-only-nsga3", "gpsaf-pca-svd-nsga3", "gpsaf-amplitude-gp-nsga3", "gpsaf-retrieval-response-nsga3"}
+    assert [(c.baseline_id,c.strategy_id,c.seed,c.strategy_digest) for c in measured.cells] == [
+        (c.baseline_id,c.strategy_id,c.seed,c.strategy_digest) for c in smoke.cells]
+
+
+def test_surrogate_complete_can_be_initialized_from_public_cli(tmp_path, capsys):
+    root = tmp_path / "research-cli"
+    assert cli.main(["init", str(root), "--preset", "surrogate-complete"]) == 0
+    created = json.loads(capsys.readouterr().out)
+    assert created["preset"]["id"] == "surrogate-complete"
+    root = Path(created["workspace"])
+    assert len(api.plan_workspace(root).cells) == 36

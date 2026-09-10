@@ -49,9 +49,10 @@ tools are installed yadof documentation audiences.
   substantive records live at the root and localized low-risk records under
   `minor/`.
 - `context/`: time-named cross-session experimental evidence and working context.
-  Every agent recursively enumerates filenames and relative paths without reading
-  contents, then reads a document in full only when the task needs information its
-  filename likely identifies. Expiry review never runs implicitly.
+  Every agent lists only immediate file/directory names, without enumerating child
+  filenames or reading contents. Task-relevant names or selected direct links
+  permit one-level descent or a full document read. Topic directories can shelve
+  related evidence beneath a root synthesis; grouping is not expiry review.
 - `toDo/`: unresolved work recorded as standalone handoffs. Each active document
   embeds the task-specific problem, intent, evidence, material operating envelope,
   decision status, scope, and completion meaning needed by a maintainer who lacks
@@ -131,9 +132,9 @@ are affected.
   user reference and is explicitly identified as external to yadof behavior.
 - Automatic toDos are always evaluated within established task scope; they neither
   require accidental discovery nor authorize an unrelated repository-wide search.
-- Context document names are always enumerated, but their contents are read only on
-  a task-relevant filename match and their expiry is never judged without explicit
-  user instruction.
+- Only immediate context file/directory names are enumerated by default. Child
+  names and contents require task relevance or an explicit link/request; expiry
+  is never judged without explicit user instruction.
 - Root `dev_doc/` is the exclusive repository owner of context, toDo, obsolete, and
   both change-record tiers; nested tool/benchmark developer trees link to these
   contracts instead of duplicating them.

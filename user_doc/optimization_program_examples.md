@@ -21,3 +21,10 @@ Initialize a real workspace first, copy exactly one program to
 `submit/optimization.py`, bring along none of the example directory as runtime data,
 and run `yadof check --workspace PATH`. The examples do not supply `config.py`,
 `calc_cost.py`, `job_template/`, rawData, simulator assets, or credentials.
+
+
+- [`amplitude_gp.py`](../examples/optimization-programs/amplitude_gp.py) fits the
+  installed amplitude/shape GP with two independent field workers before selection.
+- [`retrieval_response.py`](../examples/optimization-programs/retrieval_response.py)
+  uses the experimental joint neighbor-response component with the same explicit
+  pre-selection schedule. Both retain configurable P/B/I and real failure records.

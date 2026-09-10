@@ -1,7 +1,7 @@
 # 离线滤波 Chrono benchmark 并对比 CAE/INR surrogate
 
 > 已于 2026-08-30 完成。结果与证据边界见
-> [Chrono filtered-target surrogate 离线证据](../../context/20260830_155700_chrono-filtered-surrogate-offline-evidence.md)。
+> [Chrono filtered-target surrogate 离线证据](../../context/surrogate-research-20260830-20260910/20260830_155700_chrono-filtered-surrogate-offline-evidence.md)。
 
 ## 状态、来源与目标
 
@@ -49,7 +49,7 @@ Chrono 对应两个只读 cell：
 
 ### 尖峰与 viewer 事实
 
-- [Chrono/SAW 尖峰对比 context](../../context/20260830_143418_surrogate-spikes-chrono-vs-saw.md)
+- [Chrono/SAW 尖峰对比 context](../../context/surrogate-research-20260830-20260910/20260830_143418_surrogate-spikes-chrono-vs-saw.md)
   保存了原始截图和证据限制。Chrono 图中的
   `trebuchet_arm_combined_normal_stress` real curve 有少量窄高峰，surrogate curve 有更多分布
   在全 phase 轴上的窄峰 chatter。
@@ -64,7 +64,7 @@ Chrono 对应两个只读 cell：
 - 原 benchmark postprocessor 保存了 CAE artifact，但没有保存 conditional-INR artifact。
   因此 raw-INR control 和 filtered-INR 都需离线重训。此前 SAW viewer 已验证同样的重训路径
   可以精确复现 benchmark INR metrics；这只是可复用操作先例，不是 Chrono 结果证据。
-- [CAE/PCA-SVD measured context](../../context/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
+- [CAE/PCA-SVD measured context](../../context/surrogate-research-20260830-20260910/20260830_143110_hierarchical-cae-pca-svd-measured-evidence.md)
   已记录当前 CAE 在 Chrono 的 rawData、worst-field 和 ranking 明显弱于 INR。本文不得用
   filtered experiment 改写该 raw benchmark 结论。
 

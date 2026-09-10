@@ -29,6 +29,7 @@ keywords = ["optimization", "simulation", "surrogate-model", "workflow"]
 [project.optional-dependencies]
 surrogate = ["torch>=2.2,<3"]
 gp = ["scipy>=1.11,<2", "scikit-learn>=1.4,<2", "threadpoolctl>=3.2,<4"]
+retrieval = ["torch>=2.2,<3", "scipy>=1.11,<2", "scikit-learn>=1.4,<2", "threadpoolctl>=3.2,<4"]
 qnehvi = [
     "torch>=2.4,<3",
     "botorch>=0.18,<0.19",

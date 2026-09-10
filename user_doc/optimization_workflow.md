@@ -941,3 +941,8 @@ persist its sentinel, and a missing/pending row does not become history. A histo
 publication failure stops the campaign before another generation and is never an
 ordinary candidate `inf`. `--fail-on-all-infinite` stops after the first generation
 with no finite objective.
+
+
+The experimental [retrieval response component](retrieval_response.md) implements
+the same explicit deterministic fit/state/predict lifecycle. It learns joint
+neighbor-response corrections from own-prior rawData and provides no posterior.
