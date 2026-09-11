@@ -14,7 +14,8 @@ dynamics, where each simulation matters and the design objectives may evolve.
 Python **3.10+** ·
 [Quick start](#try-the-starter-task) ·
 [User guide](user_doc/README.md) ·
-[Examples](examples/README.md)
+[Examples](examples/README.md) ·
+[Benchmark results](#compare-optimization-programs)
 
 Version 0.6 introduces resident fast task sessions and makes greedy hypervolume
 the default GPSAF selection policy. Existing fast workspaces should follow the
@@ -157,9 +158,21 @@ GPSAF surrogate assistance, and a conditional implicit neural representation
 Python program.
 
 The [optimization program examples](user_doc/optimization_program_examples.md)
-show how to use real evaluations alone, change training order, or select different
-history for search and surrogate training. A real-only program can run with the
-core package; the starter's surrogate requires the extra installed above.
+show how to use real evaluations alone, change training order, select different
+history for search and surrogate training, or choose an optional response model.
+Population size, real evaluation batch size, and surrogate search iterations can
+be configured independently. A real-only program can run with the core package;
+the starter's surrogate requires the extra installed above.
+
+| Optional component | What it learns | Dependency extra | Copyable program |
+| --- | --- | --- | --- |
+| [Amplitude/shape GP](user_doc/amplitude_gp.md) | Response minimum, span, and low-rank shape using Gaussian processes | `gp` | [amplitude_gp.py](examples/optimization-programs/amplitude_gp.py) |
+| [Retrieval response](user_doc/retrieval_response.md), experimental | Joint corrections to neighboring recorded responses | `retrieval` | [retrieval_response.py](examples/optimization-programs/retrieval_response.py) |
+
+Both components reconstruct raw outputs before applying the current cost
+function. Their examples fit on completed history before candidate selection;
+the amplitude GP example uses two independent field workers. Choose the
+corresponding extra when installing the wheel.
 
 | Mode | Evaluation contract |
 | --- | --- |
@@ -176,6 +189,37 @@ current [posterior example](examples/optimization-programs/posterior_assisted_fa
 uses full real evaluation because posterior-driven selection is blocked by its
 readiness checks.
 
+## Compare optimization programs
+
+The separately installed [yadof-benchmark](yadof-benchmark/README.md) compares
+complete optimization programs on packaged Chrono, ngspice SAW, and synthetic
+antenna baselines. Its `surrogate-complete` preset compares real-only search,
+PCA/SVD, amplitude GP, and retrieval response across three seeds: **36 cells,
+5000 real attempts per cell**. The original `complete` preset remains 18 cells.
+See the [execution guide](yadof-benchmark/user_doc/execution.md) for environment
+requirements, a separate smoke workspace, and long-run monitoring.
+
+The September 2026 installed-package comparison completed all 36 cells with
+180000 attempted evaluations. Final Q (best-ten mean cost, lower is better),
+reported as the median across three paired seeds:
+
+| Baseline | Real-only | PCA/SVD | Amplitude GP | Retrieval response |
+| --- | ---: | ---: | ---: | ---: |
+| Chrono | 0.214376 | 0.214922 | 0.190732 | 0.182822 |
+| SAW | 0.275309 | 0.252925 | 0.174787 | 0.186106 |
+| Antenna | 0.307846 | 0.309583 | 0.290596 | 0.306597 |
+
+Amplitude GP improved Q in all nine paired comparisons. Retrieval response
+improved all Chrono and SAW seeds, with almost no median paired benefit on
+antenna. Median optimization times for all surrogate programs exceeded real-only
+on these inexpensive simulators; model overhead and task-specific gains still matter. These reused
+seeds provide descriptive evidence, not proof of general speedup. The
+[full report](dev_doc/context/surrogate-research-20260830-20260910/20260911_001924_installed-surrogate-benchmark.md)
+includes per-seed costs, timings, and the interruption that required preserving
+the complete Chrono group and rerunning the other two groups in a fresh workspace.
+The [research summary](dev_doc/context/20260910_120000_surrogate-research-summary-and-delivery.md)
+separates delivered components from unresolved research goals.
+
 ## Inspect results and go further
 
 `view all` produces cost and timing summaries and plots. The installation above
@@ -183,11 +227,13 @@ also supports the read-only surrogate checkpoint tools. Once a run has trained a
 model, you can explore its predictions as scalars, curves, and field slices.
 The terminal `summary`, `audit`, and `inspect` commands work without a window;
 the desktop explorer additionally requires Tkinter. See
-[history and tools](user_doc/config_and_run.md#history-and-tools).
+[history and tools](user_doc/config_and_run.md#history-and-tools). Viewer support
+depends on the component; retrieval response currently exposes its predictions
+through the Python API.
 
 | Next step | Start here |
 | --- | --- |
-| Explore a complete HFSS task or the five optimization programs | [Source examples](examples/README.md) |
+| Explore a complete HFSS task or copyable optimization programs | [Source examples](examples/README.md) |
 | Compare strategies across repeatable studies | [yadof-benchmark](yadof-benchmark/user_doc/README.md), installed separately |
 | Migrate a workspace using `build_optimization()` | [0.5 migration guide](user_doc/migration_0_5.md) |
 | Understand the release history | [Version history](dev_doc/history.md) |

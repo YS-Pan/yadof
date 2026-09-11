@@ -50,7 +50,13 @@ Markdown guide:
 - `split_cost_surrogate_data.py` keeps full optimizer history while training on an
   explicit evidence subset;
 - `posterior_assisted_fallback.py` demonstrates the current typed qNEHVI readiness
-  block and honest full-real fallback.
+  block and honest full-real fallback;
+- [`amplitude_gp.py`](optimization-programs/amplitude_gp.py) fits the
+  amplitude/shape GP before selection, with two independent field workers
+  ([guide](optimization-programs/amplitude_gp.md), `gp` extra);
+- [`retrieval_response.py`](optimization-programs/retrieval_response.py) fits
+  the experimental joint neighbor-response model before selection
+  ([guide](optimization-programs/retrieval_response.md), `retrieval` extra).
 
 Copy one Python file into a complete initialized workspace as
 `submit/optimization.py`, review its program identity and dependencies, and run

@@ -26,6 +26,21 @@ explicit complete preset contains 18 cells at population 200 and 25 generations;
 `--budget-profile smoke` mechanically keeps that matrix and sets generations to
 one. `init --blank` is the explicit custom-authoring path.
 
+`init --preset surrogate-complete` selects the extended **36-cell** comparison:
+three baselines, seeds 101/102/103, and real-only, PCA/SVD, amplitude/shape GP,
+and experimental retrieval-response programs. Each cell uses population 200,
+real batch size 200, 200 surrogate search iterations, and 25 generations
+(5000 real attempts), with two concurrent cells and a 7200-second cell timeout.
+Install the `gp` and `retrieval` yadof extras and configure the external
+simulators as described in the [user guide](user_doc/README.md). Use a separate
+workspace for its mechanically derived smoke profile.
+
+The [September 2026 result](../dev_doc/context/surrogate-research-20260830-20260910/20260911_001924_installed-surrogate-benchmark.md)
+covers 36 valid cells and 180000 real attempts. It reports quality, model
+overhead, pairing checks, and the external interruption/replacement protocol.
+This is a descriptive comparison of complete programs, not a universal
+surrogate acceptance result.
+
 Custom comparisons default to seed `101`, population `200`, and `50` generations.
 Mark a strategy `slow_surrogate=True` when it repeatedly trains a slow model such
 as a neural network; a comparison containing such a strategy defaults to `15`
@@ -59,6 +74,13 @@ visible. Use host execution plus `--detach` for a visible independent console.
 The visible console remains open after the benchmark finishes so its final output
 can be reviewed; type `exit` or close it when done. `--hidden` is only an explicit
 user-selected exception and exits automatically.
+
+For an explicitly monitored long run, follow the
+[low-cost monitoring policy](user_doc/execution.md#low-cost-monitoring-for-agents):
+a low-cost subagent with no inherited context inspects every five minutes;
+the main agent waits and retrieves a compact summary at most once per hour.
+The policy specifies the September 2026 model choice, future equivalents,
+terminal notifications, and honest reporting of monitoring gaps.
 
 Each cell has a short path such as `cells/c0001`. Its full baseline, strategy,
 and seed display label appears in terminal output, `spec.json`, state, inspect,
