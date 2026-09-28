@@ -419,6 +419,35 @@ per-individual diagnostics.
 
 ## History and tools
 
+### Windows HTCondor GUI
+
+The optional desktop launcher `yadof-gui --workspace PATH` opens the yadof
+HTCondor control window without a console. The installed package also includes
+`yadof/tools/condor_gui.pyw` for a direct `pythonw.exe` launch. Select one explicit
+initialized workspace in the window before starting a campaign or using history
+views.
+
+Set a zero-based start generation and a positive number of generations, then press
+**开始优化**. This runs the same `yadof run --workspace PATH
+--start-generation N --generations M` command as the CLI. The **停止优化** button
+stops the launched process tree and then runs `condor_rm -all`. That Condor command
+removes **all jobs owned by the current Condor identity**, including jobs not
+submitted by this GUI. Use the button only when that scope is intended.
+
+The slot table queries `condor_status` immediately and every 10 seconds by
+default; the interval can be changed in seconds. It shows Name, Activity, Cpus,
+Memory(MB), Disk(MB), and CpusUsage. Disk is converted from Condor's KiB attribute
+to MiB for the displayed MB column. Select a slot and press **Drain 选中机器** to
+send a graceful `condor_drain` request for its whole `Machine`; pool authorization
+determines whether the request succeeds.
+
+**viewcost** and **viewtime** invoke the existing cost and time tools, save a PNG
+under the workspace's configured tool-output directory, and open it. Install the
+optional `yadof[plot]` dependencies for these PNG actions. The
+**viewerror** button uses the time tool's failure rows to show recorded error
+types and messages; there is no separate `view_error` tool. These views do not
+launch task evaluation.
+
 ```powershell
 yadof view cost --workspace PATH [--status completed] [-o NAME.png] [--summary-only]
 yadof view time --workspace PATH [--status all] [-o NAME.png] [--summary-only]

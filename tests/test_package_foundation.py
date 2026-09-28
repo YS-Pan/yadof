@@ -180,7 +180,10 @@ def _verify_external_workspace_commands(wheel_path: Path) -> None:
         ).create(environment_dir)
         python_executable, yadof_executable = _venv_commands(environment_dir)
         install = _run(
-            [str(python_executable), "-m", "pip", "install", "--no-deps", str(wheel_path)],
+            [
+                str(python_executable), "-m", "pip", "install",
+                "--force-reinstall", "--no-deps", str(wheel_path),
+            ],
             cwd=external_root,
         )
         assert install.returncode == 0, install.stdout + install.stderr
@@ -761,6 +764,8 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
             "yadof/tools/cost_viewer/dev_doc/README.md"
         ) in wheel_names
         assert "yadof/tools/view_time.py" in wheel_names
+        assert "yadof/tools/condor_gui.py" in wheel_names
+        assert "yadof/tools/condor_gui.pyw" in wheel_names
         assert "yadof/tools/surrogate_viewer/__init__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/__main__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/app.py" in wheel_names
@@ -889,6 +894,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
             name.endswith("/src/yadof/tools/cost_viewer/api.py")
             for name in sdist_names
         )
+        assert any(name.endswith("/src/yadof/tools/condor_gui.pyw") for name in sdist_names)
         assert any(
             name.endswith("/src/yadof/tools/cost_viewer/dev_doc/README.md")
             for name in sdist_names

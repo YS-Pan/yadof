@@ -94,5 +94,6 @@ interpretation, may help select candidates, and never publish predicted rawData.
 - Real-evaluation cost begins only after the corresponding evidence publication
   receipt is committed; cost remains replayable derived state.
 - The recorder is the only durable candidate-evidence publisher.
-- Tools are read-only consumers unless their command explicitly owns a separate
-  user-selected output artifact.
+- History views are read-only consumers unless their command explicitly owns a
+  separate user-selected output artifact. The user-launched Condor GUI is a
+  separate operational controller with explicit run, stop, and drain actions.

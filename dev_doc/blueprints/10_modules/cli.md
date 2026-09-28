@@ -7,6 +7,10 @@ the actual I/B count.
 
 ## Responsibility
 
+The separate `yadof-gui` Windows GUI script is owned by `yadof.tools.condor_gui`,
+not by the `yadof` argparse tree. It launches the existing `yadof run` command for
+optimization and calls existing history tools for views.
+
 `yadof.cli` is the installed, repository-independent command package. Public `main`
 and `build_parser` route version, documentation, workspace initialization/checking,
 standalone smoke, optimization run/resume, history/view, the optional surrogate

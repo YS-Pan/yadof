@@ -3,11 +3,25 @@
 ## Boundary
 
 `yadof.tools` is optional, user-launched, workspace-explicit functionality. Core
-optimization/evaluation never imports it. Tools read public task/recorded APIs,
-present diagnostics, and write only user-requested workspace tool output or
-confirmed task edits. Pool/system administration remains under `admin_tool/`.
+optimization/evaluation never imports it. History tools read public task/recorded
+APIs, present diagnostics, and write only user-requested workspace tool output or
+confirmed task edits. Pool installation and configuration remain under
+`admin_tool/`; the explicitly launched Condor GUI may send a user-authorized
+machine drain or job removal request through the installed Condor client.
 
 ## Views and history
+
+The Windows `condor_gui.py` desktop controller and its double-clickable `.pyw`
+launcher live in `tools` but are explicitly operational, not passive history
+viewers. The installed `yadof-gui` GUI script opens one explicit workspace, starts
+the existing `yadof run` CLI in a child process with visible generation bounds,
+stops that child process tree before running the user-requested global
+`condor_rm -all`, and sends graceful `condor_drain` for a selected machine. Condor
+status polling uses tab-delimited ClassAd attributes and converts Disk KiB to a
+displayed MB value. Tk events stay on the main thread; queries, tool views, and
+commands run on workers and report through a queue. Cost/time buttons call their
+existing tool APIs. The error button displays failure rows from `view_time` rather
+than adding a parallel history interpreter.
 
 Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected

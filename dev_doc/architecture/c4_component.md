@@ -121,8 +121,9 @@
 
 - `cli` routes explicit commands and workspace arguments.
 - `tools` contains optional inspection, history, adapter-copy, and task-support
-  utilities. Integrated viewer subtrees own their detailed developer documentation
-  and remain outside core execution.
+  utilities. Its explicit Windows Condor GUI is an operational shell over existing
+  optimization and history APIs plus pool commands, outside core execution.
+  Integrated viewer subtrees own their detailed developer documentation.
 
 ## Dependency direction
 
