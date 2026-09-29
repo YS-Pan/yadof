@@ -9,6 +9,9 @@ code, generic templates/adapters, and version-matched documentation. The top-lev
 `yadof-benchmark/` project is a separate distribution with its own installed
 package resources and console entry point; it is not a yadof package resource or
 implicit yadof workspace.
+The repository-root `condor_gui.pyw` is only a source-checkout launcher. Packaging
+copies it into the wheel's `yadof/tools/` path; the GUI implementation remains
+under `src/yadof/`.
 
 The current package version is 0.5.1. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.

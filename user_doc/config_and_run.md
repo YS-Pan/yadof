@@ -422,10 +422,11 @@ per-individual diagnostics.
 ### Windows HTCondor GUI
 
 The optional desktop launcher `yadof-gui --workspace PATH` opens the yadof
-HTCondor control window without a console. The installed package also includes
-`yadof/tools/condor_gui.pyw` for a direct `pythonw.exe` launch. Select one explicit
-initialized workspace in the window before starting a campaign or using history
-views.
+HTCondor control window without a console. In a source checkout, double-click
+`condor_gui.pyw` at the repository root using a Python environment with yadof
+installed. The wheel also includes that launcher at `yadof/tools/condor_gui.pyw`.
+Select one explicit initialized workspace in the window before starting a campaign
+or using history views.
 
 Set a zero-based start generation and a positive number of generations, then press
 **开始优化**. This runs the same `yadof run --workspace PATH

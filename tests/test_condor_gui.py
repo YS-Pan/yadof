@@ -16,6 +16,7 @@ from yadof.tools import condor_gui
 def test_installed_gui_launcher_is_packaged() -> None:
     import yadof
 
+    assert (Path(__file__).resolve().parents[1] / "condor_gui.pyw").is_file()
     assert (Path(yadof.__file__).parent / "tools" / "condor_gui.pyw").is_file()
     assert any(
         entry.name == "yadof-gui" and entry.value == "yadof.tools.condor_gui:main"

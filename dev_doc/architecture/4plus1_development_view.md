@@ -4,6 +4,7 @@
 
 ```text
 src/yadof/                 installed framework source
+condor_gui.pyw             source-checkout Windows GUI launcher
 tests/                     generic installed-package verification
 dev_doc/                   developer current-view, context, toDo, and history docs
 user_doc/                  installed task-authoring and runtime workflow
@@ -16,7 +17,8 @@ yadof-benchmark/           independent benchmark distribution, resources, docs/t
 temp/                      ignored scratch and generated source-checkout evidence
 ```
 
-Framework code lives only under `src/yadof/`. Runtime workspaces normally live
+Framework implementation lives only under `src/yadof/`; the root `.pyw` only imports
+its installed GUI entry point. Runtime workspaces normally live
 outside package source. Root `dev_doc/` and `user_doc/` are authoritative sources
 mapped into installed read-only resources. Administrator resources, examples, and
 benchmark automation remain source-checkout concerns.

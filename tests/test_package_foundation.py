@@ -894,7 +894,10 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
             name.endswith("/src/yadof/tools/cost_viewer/api.py")
             for name in sdist_names
         )
-        assert any(name.endswith("/src/yadof/tools/condor_gui.pyw") for name in sdist_names)
+        assert any(
+            name.count("/") == 1 and name.endswith("/condor_gui.pyw")
+            for name in sdist_names
+        )
         assert any(
             name.endswith("/src/yadof/tools/cost_viewer/dev_doc/README.md")
             for name in sdist_names

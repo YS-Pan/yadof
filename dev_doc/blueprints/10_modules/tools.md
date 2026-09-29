@@ -11,9 +11,11 @@ machine drain or job removal request through the installed Condor client.
 
 ## Views and history
 
-The Windows `condor_gui.py` desktop controller and its double-clickable `.pyw`
-launcher live in `tools` but are explicitly operational, not passive history
-viewers. The installed `yadof-gui` GUI script opens one explicit workspace, starts
+The Windows `condor_gui.py` desktop controller lives in `tools`. Its thin
+double-clickable `condor_gui.pyw` source-checkout launcher lives at the repository
+root and is packaged into `yadof/tools/` in the wheel. These entry points are
+explicitly operational, not passive history viewers. The installed `yadof-gui`
+GUI script opens one explicit workspace, starts
 the existing `yadof run` CLI in a child process with visible generation bounds,
 stops that child process tree before running the user-requested global
 `condor_rm -all`, and sends graceful `condor_drain` for a selected machine. Condor

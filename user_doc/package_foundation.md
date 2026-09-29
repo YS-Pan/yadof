@@ -169,6 +169,12 @@ discovers backend executables, but never installs or configures software.
 
 ## Workspace layout
 
+The source directory `src/yadof/workspace/` implements yadof's workspace creation
+and validation; it is not a task workspace. Create a separate writable directory
+with `yadof init`. Place task workflow code in `job_template/workflow.py`,
+submit-side optimization and cost code in `submit/`, and models or other assets
+needed by execute-side workflows under `job_template/`.
+
 ```text
 study-a/
   .yadof/workspace.json
