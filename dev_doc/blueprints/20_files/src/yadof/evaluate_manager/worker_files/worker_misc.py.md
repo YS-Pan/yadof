@@ -20,9 +20,10 @@ management, and distributed transfer without importing yadof on an execute node.
 - `WorkflowContext` supplies the fixed base/rawData/archive/metadata/temp paths and
   captured runtime provenance to task-specific callbacks.
 - `run_workflow()` writes running state, prepares rawData, invokes task work,
-  packages output on success/error, invokes optional task-specific cleanup, writes
-  done/error metadata, removes standard worker profile/temp directories, and
-  re-raises the primary failure.
+  packages output on success/error, invokes optional task-specific cleanup, ensures
+  a top-level `batch.log` exists (creating an empty placeholder only when the
+  simulator did not produce one), writes done/error metadata, removes standard
+  worker profile/temp directories, and re-raises the primary failure.
 - `write_json()` atomically replaces workflow metadata through a `.tmp` file.
 - `prepare_rawdata_dir()` creates/clears the output directory, rejects nested
   directories, and removes a stale transfer zip.
@@ -50,6 +51,8 @@ logic. Its archive is transport-only; durable archival remains recorded_data's j
 - Execute-machine identity is sampled by `run_workflow()` in the workflow process
   on the execute node and returned in `individual_metadata.json`; submit-side
   ClassAds and task metadata cannot supply or override it.
+- `batch.log` is ensured after task cleanup so simulator-owned logging can create
+  the file normally; a missing simulator log becomes an empty transferable file.
 - Helper failures remain visible to workflow/Condor rather than silently omitting
   invalid output.
 - Cross-task invariant worker behavior is implemented here, never copied into

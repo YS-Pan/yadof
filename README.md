@@ -64,6 +64,9 @@ python -m pip install "./dist/yadof-0.6.0-py3-none-any.whl[surrogate,plot]"
 python -m yadof version
 ```
 
+On Windows, installation also places `condor_gui.pyw` in that Python environment's
+`Scripts` directory. Double-click it to open the GUI using that installation.
+
 The `surrogate` extra supplies PyTorch for the default optimization program;
 `plot` supplies Matplotlib for the result plots. See the
 [installation guide](user_doc/package_foundation.md) for other extras and

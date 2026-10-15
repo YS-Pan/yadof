@@ -16,6 +16,7 @@ from pathlib import Path
 
 
 RAWDATA_SCHEMA_VERSION = 1
+_BATCH_LOG_FILE_NAME = "batch.log"
 _WORKFLOW_METADATA_KEYS = {
     "ended_at",
     "error_message",
@@ -285,6 +286,16 @@ def run_workflow(
                     file=sys.stderr,
                     flush=True,
                 )
+
+    try:
+        batch_log_path = base_dir / _BATCH_LOG_FILE_NAME
+        if not batch_log_path.is_file():
+            batch_log_path.touch(exist_ok=True)
+    except Exception as exc:
+        if primary_error is None:
+            primary_error = (exc, exc.__traceback__, _exception_text(exc))
+        else:
+            secondary_errors.append(f"batch.log placeholder creation failed: {exc}")
 
     _remove_runtime_dirs(context)
 

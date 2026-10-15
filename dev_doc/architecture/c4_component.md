@@ -123,6 +123,13 @@
 - `tools` contains optional inspection, history, adapter-copy, and task-support
   utilities. Its explicit Windows Condor GUI is an operational shell over existing
   optimization and history APIs plus pool commands, outside core execution.
+  Folder selection, workspace initialization and confirmed reset are independent
+  GUI actions. Selection changes only the current directory; initialization delegates
+  to the installed `init` CLI in the GUI's environment for that directory.
+  Initialization owns starter publication, workspace identity and no-overwrite rules.
+  A confirmed workspace reset preserves task definitions and identity while clearing
+  evidence, optimization resume state and derived model state. It holds the same
+  workspace campaign lock throughout mutation so a new campaign cannot race cleanup.
   Integrated viewer subtrees own their detailed developer documentation.
 
 ## Dependency direction

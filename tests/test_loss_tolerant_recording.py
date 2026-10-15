@@ -578,6 +578,8 @@ def test_full_unpublished_budget_backpressures_instead_of_dropping(
         time.sleep(0.01)
     assert producer.is_alive()
     assert session.counters()["backpressure_waits"] == 1
+    # Windows GetTickCount64 may otherwise measure this real blocked wait as zero.
+    time.sleep(2 * time.get_clock_info("monotonic").resolution)
     release.set()
     producer.join(5.0)
     assert not producer.is_alive()

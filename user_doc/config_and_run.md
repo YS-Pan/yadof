@@ -413,41 +413,109 @@ state; the viewer reports that no compatible active checkpoints exist.
 The Windows distributed submit contract runs `workflow.py` directly with
 `transfer_executable=True`, `load_profile=True`, and `run_as_owner=False`. Input
 transfer contains the task/job files and `worker_misc.py`, never a yadof runtime
-package. Output transfer returns `rawData.zip` plus `individual_metadata.json` and
-does not return `rawData/`. Missing, nested, or malformed zip contents become
-per-individual diagnostics.
+package. Output transfer returns `rawData.zip`, `individual_metadata.json`, and
+`batch.log`; it does not return `rawData/`. The worker preserves a simulator-created
+`batch.log` or creates an empty placeholder after task cleanup when none was produced,
+so ordinary workflow success and task errors still provide every explicitly listed
+output. Missing, nested, or malformed zip contents become per-individual diagnostics.
 
 ## History and tools
 
 ### Windows HTCondor GUI
 
 The optional desktop launcher `yadof-gui --workspace PATH` opens the yadof
-HTCondor control window without a console. In a source checkout, double-click
-`condor_gui.pyw` at the repository root using a Python environment with yadof
-installed. The wheel also includes that launcher at `yadof/tools/condor_gui.pyw`.
-Select one explicit initialized workspace in the window before starting a campaign
-or using history views.
+HTCondor control window without a console. Ordinary pip installation also places
+`condor_gui.pyw` in that Python environment's `Scripts` directory. Double-click it
+to use that installation's `yadof-gui.exe`; it works even when Windows associates
+`.pyw` with another Python. No extra installer or source checkout is required.
+In a source checkout, double-click `condor_gui.pyw` at the repository root. It
+prefers `.venv` inside the checkout, then `.venv` in its parent directory, and
+otherwise uses the Python that opened it. Install yadof into the selected
+environment first. Windows file associations may initially invoke another Python;
+the launcher forwards its arguments to the selected interpreter before importing
+yadof. The wheel's separate portable launcher at
+`yadof/tools/condor_gui.pyw` resolves its installed environment's Scripts entry.
+The `yadof-gui` entry point uses the environment in which
+that entry point is installed.
+Without `--workspace`, `yadof-gui` initially selects `workspace` under the process
+working directory. The source-checkout `condor_gui.pyw` instead selects an adjacent
+`workspace` directory when one exists, even if Windows starts the process from
+another working directory. The window provides three independent actions:
+
+- **选择文件夹…** opens a directory chooser and immediately selects that folder.
+  It creates no workspace files and runs no initialization command. Cancelling the
+  chooser keeps the current selection. Editing the path directly or passing
+  `--workspace PATH` likewise selects a directory without initializing it.
+- **初始化 workspace** runs `python -m yadof init PATH` for the currently selected
+  directory with the GUI's own Python environment. It does not open a chooser or
+  switch directories. Initialization creates the workspace marker and default
+  task/configuration files. For an already initialized workspace, `init` validates
+  its initialization without changing files or history. Conflicting starter files
+  cause an error instead of being overwritten; the selected directory is retained.
+- **清空 workspace** performs the confirmed history reset described below.
+
+The selected directory must be initialized before starting a campaign, clearing
+data, or using history views. These operations prompt for explicit initialization
+when the marker is missing; they do not initialize the directory automatically.
+
+**清空 workspace** shows the selected workspace and its configured deletion paths
+and requires a separate confirmation, with **No** selected by default. It removes
+all jobs, the entire configured `recorded_data/` directory's contents (including
+metadata, surrogate training events, and any extra files placed there), all retained
+surrogate checkpoints, and `.yadof/optimization/` resume state. Configuration, task
+sources, models in `job_template/`, the workspace marker, and general tool outputs
+are preserved. Jobs and recorded-data directories are recreated empty; the start
+generation resets to `0` and the progress bar resets after successful cleanup.
+Deletion cannot be undone. If deletion fails partway, inspect the reported error
+and retry after resolving it; the GUI does not report success or reset the start
+generation on failure.
+
+Folder selection, initialization and clearing are disabled while this GUI is
+starting/running optimization, initializing a workspace, stopping, generating a
+history view, or clearing data. A campaign started elsewhere in the selected workspace also blocks
+clearing through the same OS lock, which remains held throughout deletion. Full GUI
+clearing rejects configured deletion paths outside the workspace and paths overlapping task sources,
+the workspace marker, configuration, or campaign lock. Stop the campaign before
+clearing. Unlike this full GUI reset, CLI `history clear` preserves extra files
+below `recorded_data/`.
 
 Set a zero-based start generation and a positive number of generations, then press
 **开始优化**. This runs the same `yadof run --workspace PATH
---start-generation N --generations M` command as the CLI. The **停止优化** button
+--start-generation N --generations M` command as the CLI. The **启用 smoke job**
+checkbox is checked by default. Checked adds `--smoke-test`; unchecked adds
+`--no-smoke-test`. This choice overrides `OPTIMIZE_SMOKE_TEST_ENABLED` for that
+launch without editing the workspace configuration. The **停止优化** button
 stops the launched process tree and then runs `condor_rm -all`. That Condor command
 removes **all jobs owned by the current Condor identity**, including jobs not
 submitted by this GUI. Use the button only when that scope is intended.
 
+The progress bar uses HTCondor's `pending=N/M` progress when available: `M-N` is
+the number of jobs no longer pending, and `M` is the current batch size. The label
+shows the remaining count and the generation number/index; during the pre-run smoke
+job it shows the smoke batch when the distributed runner reports pending progress.
+Fast/local evaluation uses yadof's completed outcome count for generations. The bar
+resets when a new generation begins.
+
 The slot table queries `condor_status` immediately and every 10 seconds by
-default; the interval can be changed in seconds. It shows Name, Activity, Cpus,
-Memory(MB), Disk(MB), and CpusUsage. Disk is converted from Condor's KiB attribute
-to MiB for the displayed MB column. Select a slot and press **Drain 选中机器** to
-send a graceful `condor_drain` request for its whole `Machine`; pool authorization
-determines whether the request succeeds.
+default; the interval can be changed in seconds. It shows Name, Machine, Activity,
+Cpus, Memory(MB), Disk(MB), and CpusUsage. Disk is converted from Condor's KiB
+attribute to MiB for the displayed MB column. Select a slot and press **Drain
+选中机器** to choose `graceful`, `quick`, or `fast`, then send the matching
+`condor_drain` request to the slot's `Machine` attribute. If HTCondor cannot locate
+the StartD by that Machine value, the GUI retries with that same ClassAd's full
+`MyAddress`. **取消 Drain 选中机器** sends `condor_drain -cancel` to the same
+Machine value, with the same address fallback. Pool authorization and StartD
+reachability determine whether either request succeeds.
 
 **viewcost** and **viewtime** invoke the existing cost and time tools, save a PNG
 under the workspace's configured tool-output directory, and open it. Install the
 optional `yadof[plot]` dependencies for these PNG actions. The
-**viewerror** button uses the time tool's failure rows to show recorded error
-types and messages; there is no separate `view_error` tool. These views do not
-launch task evaluation.
+**viewerror** button uses the time tool's failure rows to show the event time,
+execute worker, job name, error type, and message. Click any column heading to
+sort it; click again to reverse the order. Double-click a row to open that job's
+folder under the workspace's configured jobs directory. If the folder has been
+removed, the GUI reports that it is unavailable. There is no separate
+`view_error` tool. These views do not launch task evaluation.
 
 ```powershell
 yadof view cost --workspace PATH [--status completed] [-o NAME.png] [--summary-only]

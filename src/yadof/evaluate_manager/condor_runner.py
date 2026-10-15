@@ -658,7 +658,8 @@ def write_condor_submit_file(
             "should_transfer_files = YES",
             "when_to_transfer_output = ON_EXIT",
             "transfer_executable = True",
-            f"transfer_output_files = {RAW_DATA_TRANSFER_ZIP_NAME},{INDIVIDUAL_METADATA_FILE_NAME}",
+            f"transfer_output_files = {RAW_DATA_TRANSFER_ZIP_NAME},"
+            f"{INDIVIDUAL_METADATA_FILE_NAME},{_BATCH_LOG_FILE_NAME}",
         ]
     )
     if inputs:

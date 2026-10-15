@@ -67,7 +67,9 @@ packages = ["src/yadof"]
 [tool.hatch.build.targets.wheel.force-include]
 "dev_doc" = "yadof/_resources/docs/dev_doc"
 "user_doc" = "yadof/_resources/docs/user_doc"
-"condor_gui.pyw" = "yadof/tools/condor_gui.pyw"
+
+[tool.hatch.build.targets.wheel.shared-scripts]
+"src/yadof/tools/condor_gui.pyw" = "condor_gui.pyw"
 
 [tool.hatch.build.targets.sdist]
 include = [

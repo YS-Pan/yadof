@@ -18,10 +18,19 @@ temp/                      ignored scratch and generated source-checkout evidenc
 ```
 
 Framework implementation lives only under `src/yadof/`; the root `.pyw` only imports
-its installed GUI entry point. Runtime workspaces normally live
+its installed GUI entry point. The launcher prefers a checkout-local `.venv`, then
+a sibling `.venv`, and otherwise uses the Python that opened it. Install yadof
+into the selected environment before launching. Runtime workspaces normally live
 outside package source. Root `dev_doc/` and `user_doc/` are authoritative sources
 mapped into installed read-only resources. Administrator resources, examples, and
 benchmark automation remain source-checkout concerns.
+
+The portable installed `src/yadof/tools/condor_gui.pyw` launcher is also shipped as
+a wheel shared script. Ordinary pip installation places it beside the generated
+`yadof-gui.exe` in `Scripts/`. It forwards arguments to that executable, binding
+the GUI to the installed environment regardless of Windows `.pyw` associations.
+The packaged copy resolves the same environment's `Scripts/` entry. Neither
+installed entry depends on the source checkout or a fixed drive.
 
 The independent benchmark distribution exposes one `benchmark.py` per
 timestamped workspace. Initialization defaults to a packaged portable preset;

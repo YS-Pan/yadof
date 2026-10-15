@@ -955,15 +955,12 @@ class _PopulationProgress:
     ) -> None:
         self.total = max(0, int(total))
         self.mode = str(mode)
-        self.phase = (
-            str(phase)
-            if phase is not None
-            else (
-                f"generation {int(generation_index)}"
-                if generation_index is not None
-                else "population"
-            )
-        )
+        if generation_index is not None and phase in (None, "evaluation"):
+            self.phase = f"generation {int(generation_index)}"
+        elif phase is not None:
+            self.phase = str(phase)
+        else:
+            self.phase = "population"
         self._enabled = _progress_enabled()
         self._outcomes: dict[int, bool] = {}
         self._last_state: tuple[int, int] | None = None

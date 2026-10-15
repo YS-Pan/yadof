@@ -6,6 +6,11 @@ The submit host contains the installed yadof distribution and one or more writab
 workspaces. Local and fast evaluation run on this host. Distributed evaluation also
 requires HTCondor client access, but scheduler deployment remains outside yadof.
 
+Normal wheel installation places `condor_gui.pyw` beside `yadof-gui.exe` in the
+Windows Python environment's `Scripts/` directory. Double-clicking the `.pyw`
+invokes that executable and its installed framework, independently of the source
+checkout, fixed drive letters, and the Python chosen by file associations.
+
 Submit-side workspace job staging is distinct from execute-host scratch. Local
 capacity observations may influence concurrency, but they are planning inputs rather
 than task evidence.

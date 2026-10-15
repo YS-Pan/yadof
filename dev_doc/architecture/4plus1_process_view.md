@@ -61,7 +61,9 @@ already observed by the backend remains completed evidence.
   remain local backend responsibilities.
 - **Distributed:** the submit host prepares the same logical job, HTCondor executes
   it under administrator policy, and returned evidence is restored and validated
-  before entering the common finalizer.
+  before entering the common finalizer. The copied worker lifecycle ensures a
+  top-level `batch.log` exists after task cleanup, preserving any simulator log or
+  creating an empty file when none was produced.
 
 Backend-specific resource observations may inform later concurrency, requests, or
 timeouts, but do not alter evidence meaning.

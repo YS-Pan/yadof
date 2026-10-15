@@ -20,6 +20,17 @@ python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[qnehvi]"
 python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[viewer]"
 ```
 
+On Windows, the same pip installation automatically places `condor_gui.pyw` in
+the Python environment's `Scripts` directory, beside `yadof-gui.exe`. Double-click
+the `.pyw` file to open the GUI with this installation's code. For example, an
+environment at `D:\.venv` gets `D:\.venv\Scripts\condor_gui.pyw`. The launcher calls
+the neighboring executable, so a Windows `.pyw` association with another Python
+does not select another yadof installation. No extra setup step is required.
+Reinstalling updates the launcher; uninstalling removes it with the package.
+The launcher depends on its installed directory layout; create a shortcut to it
+if you want to launch it from elsewhere. To locate the normal environment's
+Scripts directory, run `python -c "import sysconfig; print(sysconfig.get_path('scripts'))"`.
+
 The default template's declared `submit/optimization.py` program composes
 conditional INR. `init` and `check` validate that source statically without
 importing Torch or executing the program. Install the `surrogate` extra (or

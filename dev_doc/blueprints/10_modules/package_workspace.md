@@ -9,11 +9,22 @@ code, generic templates/adapters, and version-matched documentation. The top-lev
 `yadof-benchmark/` project is a separate distribution with its own installed
 package resources and console entry point; it is not a yadof package resource or
 implicit yadof workspace.
-The repository-root `condor_gui.pyw` is only a source-checkout launcher. Packaging
-copies it into the wheel's `yadof/tools/` path; the GUI implementation remains
-under `src/yadof/`.
+The repository-root `condor_gui.pyw` is only a source-checkout launcher. It selects
+a checkout-local `.venv`, then a sibling `.venv`, otherwise the current Python;
+the selected environment must contain the installed yadof distribution. The
+portable installed launcher is maintained under `src/yadof/tools/condor_gui.pyw`.
+Hatch's wheel `shared-scripts` mapping also places it in `.data/scripts/`, so
+ordinary pip installation publishes `Scripts/condor_gui.pyw` automatically.
+Both copies remain pip-managed artifacts, replaced and removed with the package.
+On Windows the script forwards exact arguments and the exit code through its
+own installation's generated `yadof-gui.exe`, without importing yadof through
+the potentially unrelated interpreter selected by `.pyw` file associations.
+The package copy derives the Scripts location from its standard global/venv or
+user-site layout. Missing entries fail rather than choosing another environment.
+Non-Windows invocation uses the installed Python GUI entry directly. No fixed
+drive, source checkout, extra installation script or workspace mutation is needed.
 
-The current package version is 0.5.1. Recorded history uses immutable standard-ZIP
+The current package version is 0.6.0. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Workspace contract

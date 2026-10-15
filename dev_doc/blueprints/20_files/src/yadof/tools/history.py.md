@@ -17,18 +17,27 @@
 - Deactivate the active strategy's surrogate component, waiting for pending work
   and releasing memory before deleting all retained derived checkpoint and active
   optimization-state namespaces.
-- Acquire a non-active campaign check before mutation.
+- Acquire and hold the campaign OS lock through deactivation, deletion, and empty
+  directory recreation; release it even on failure. An inactivity probe alone is
+  insufficient because another campaign could start after the probe.
 - Clear job entries, remove the checkpoint tree and the framework-owned
   `segments/` and `metadata/` directories, and finally recreate an empty jobs
-  directory. Other recorded-data entries remain untouched.
+  directory. Other recorded-data entries remain untouched by default.
+- With explicit `all_recorded_data=True`, remove the entire configured record root
+  and recreate it empty, including user-added entries in that root. Require every
+  deletion target to stay inside the workspace; reject overlaps with configuration,
+  task sources, marker or lock before any deletion. Nested symlinks/junctions are
+  removed without traversing their destinations.
 
 ## I/O Format
 
-- Input: a workspace-like value and explicit confirmation.
+- Input: a workspace-like value, explicit confirmation, and optional full
+  recorded-data reset (default false).
 - Output: a dictionary containing the resolved workspace, count of deleted job
   entries, whether checkpoints were deleted, and exact removed record targets.
-- The workspace marker, `config.py`, `submit/`, `job_template/`, and general tool-output files
-  are not deletion targets.
+- The workspace marker, `config.py`, `submit/`, `job_template/`, and general
+  tool-output files are not deletion targets. Failures may leave partial cleanup;
+  callers must not report success or a completed reset on exception.
 
 ## Non-Obvious Techniques
 

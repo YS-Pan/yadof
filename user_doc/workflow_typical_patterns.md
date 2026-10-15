@@ -21,7 +21,9 @@ A good workflow does these things:
 
 `run_workflow()` owns `individual_metadata.json`, `execute_machine`, timestamps,
 running/done/error status, exception diagnostics, standard job paths, rawData
-preparation, flat `rawData.zip`, and re-raising task failures. The installed package
+preparation, flat `rawData.zip`, and re-raising task failures. After task cleanup it
+also ensures top-level `batch.log` exists, preserving simulator output or creating
+an empty placeholder when the simulator did not write one. The installed package
 copies this stable helper into each prepared job. Do not place your own
 `worker_misc.py` or
 case-variant equivalent in workspace `job_template/`: that filename is reserved and

@@ -13,17 +13,71 @@ machine drain or job removal request through the installed Condor client.
 
 The Windows `condor_gui.py` desktop controller lives in `tools`. Its thin
 double-clickable `condor_gui.pyw` source-checkout launcher lives at the repository
-root and is packaged into `yadof/tools/` in the wheel. These entry points are
-explicitly operational, not passive history viewers. The installed `yadof-gui`
+root. The portable installed launcher lives under `src/yadof/tools/` and is
+published both in the package and beside `yadof-gui.exe` in `Scripts/` by ordinary
+wheel installation. On Windows it calls that environment's generated executable,
+preserving arguments and exit status even when `.pyw` file associations select
+another Python. The package copy derives the same Scripts location from its
+site-packages layout. A missing executable never falls back to another environment.
+The source-checkout `.pyw` prefers `.venv` in the checkout, then in its parent,
+and otherwise uses its current interpreter. It forwards exact arguments to the
+selected environment before importing yadof. An interpreter already in the same
+environment does not relaunch. These relative conventions require yadof to be
+installed in that environment and contain no machine-specific path. The installed
+`yadof-gui` entry point retains its own installation environment.
+These entry points are explicitly operational, not passive history viewers.
+The installed `yadof-gui`
 GUI script opens one explicit workspace, starts
 the existing `yadof run` CLI in a child process with visible generation bounds,
+prefilling the process working directory's `workspace` folder when no path is
+supplied. The checkout launcher prefers its adjacent `workspace` directory when
+present, since Windows double-click launches may start in another directory. The
+**选择文件夹…** button only opens a directory chooser and selects its result;
+cancellation retains the selection and no files or worker commands are created.
+The separate **初始化 workspace** button executes the installed
+`python -m yadof init PATH` CLI for the current path on a worker using the GUI's
+console interpreter. It does not choose or switch directories. Queued completion
+restores controls and reports success or the CLI error. Initialized workspaces use
+the CLI's idempotent validation, preserving task edits and history; conflicts are
+not overwritten. Run, clear and history views require a workspace marker and
+prompt for explicit initialization when it is missing, without automatic setup.
+**清空 workspace** previews the selected root
+and configured jobs, recorded-data, checkpoint, and optimization-state paths in a
+default-No confirmation.
+It calls `clear_history(confirm=True, all_recorded_data=True)` on a worker and
+resets start generation to zero and progress only after successful completion.
+This explicit full reset deletes even extra entries below recorded data, while
+the normal history-clear API/CLI retains them. Configuration, task sources, marker,
+and general tool output survive. The GUI blocks workspace edits, launching and
+clearing during initialization, startup, running, stopping, views or clearing,
+including the interval before the subprocess-start event arrives. Views are
+serialized and cannot overlap initialization or clearing; queued worker results
+release controls on the Tk thread. Cleanup errors warn about possible partial
+deletion and leave the generation unchanged.
+The controller maps a default-checked **启用 smoke job** checkbox to an explicit
+`--smoke-test` or `--no-smoke-test` override for each launch without modifying
+workspace configuration. It parses the child's generation-scoped population
+progress lines on the Tk event thread to update a determinate bar. HTCondor's
+`pending=N/T` line drives the bar as `(T-N)/T` and labels the remaining count;
+generation outcome lines provide the fast/local fallback. Smoke batches use their
+own pending count, then the next generation resets the bar.
+It
 stops that child process tree before running the user-requested global
-`condor_rm -all`, and sends graceful `condor_drain` for a selected machine. Condor
-status polling uses tab-delimited ClassAd attributes and converts Disk KiB to a
-displayed MB value. Tk events stay on the main thread; queries, tool views, and
-commands run on workers and report through a queue. Cost/time buttons call their
-existing tool APIs. The error button displays failure rows from `view_time` rather
-than adding a parallel history interpreter.
+`condor_rm -all`, and supports selected-mode drain and cancellation for a machine.
+Condor
+status polling uses tab-delimited ClassAd attributes, displays both Name and
+Machine, and converts Disk KiB to a displayed MB value. Drain mode selection offers
+graceful, quick, and fast; drain and cancel-drain commands both target the selected
+slot's `Machine` attribute, with cancellation sent as `condor_drain -cancel`. If
+HTCondor cannot locate the StartD by that Machine value, retry the same command
+with the selected ClassAd's full `MyAddress`.
+Tk events stay on the main thread; queries, tool views, and commands run on workers
+and report through a queue. Cost/time buttons call their existing tool APIs. The
+error button displays failure rows from `view_time` rather than adding a parallel
+history interpreter. Its sortable table retains typed event times and worker-
+machine identities; each row resolves its job name beneath the configured
+workspace jobs root so a double-click opens that exact folder. Missing or escaping
+folders cannot be opened.
 
 Cost/time views derive current values from public history/task APIs and write
 relative outputs below the configured tool directory. Cost supports selected
@@ -79,8 +133,10 @@ subpackage; `tools/view_cost.py` is only the compatibility import facade.
 `view all` invokes cost and time with their normal defaults, prints two labeled
 summaries, and uses one timestamp for the two default image names. The
 views do not mutate durable evidence. History clear requires explicit confirmation,
-resolves and validates exact workspace-owned segment and event targets, refuses
-while the campaign OS lock is held, and avoids package or unrelated paths.
+resolves and validates exact generated targets, holds the campaign OS lock throughout
+mutation, refuses an active campaign, and protects task sources, configuration,
+workspace marker and the lock itself. Full recorded-data clearing additionally
+requires every deletion target to remain inside the selected workspace.
 
 ## Surrogate checkpoint viewer
 
