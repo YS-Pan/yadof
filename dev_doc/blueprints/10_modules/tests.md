@@ -141,6 +141,21 @@ for separately authorized real adapter smoke or performance work.
   full-real backend fallback, support hard stop, and recorder-failure propagation.
   This validates framework behavior, not acquisition or optimizer performance;
 - CLI/docs, integrated cost/time views including grouped `view all`,
+  installed `.pyw` publication through ordinary wheel/pip installation, exact
+  argument and exit-code forwarding, venv/global/user-site layouts, refusal to
+  fall back to another environment, and execution through a different Python in
+  Unicode/space paths without source-checkout dependencies,
+  independent GUI directory selection without commands or files, cancellation,
+  explicit installed CLI initialization of the current Unicode path without a
+  chooser, empty-path rejection, uninitialized run/clear/view rejection without
+  automatic setup, idempotency/history preservation,
+  conflict/launch/CLI failure handling, default-No full-reset confirmation,
+  initialization/startup/running/stopping/view/clear exclusion, reset success/failure controls,
+  configured deletion paths, campaign-lock ownership through deletion and failure,
+  external-path refusal, nested junction isolation and preservation of task sources,
+  independent queue removal via `condor_rm -all` without workspace/process mutation,
+  duplicate-request blocking and success/error control recovery, and slot `JobId`
+  association/string preservation/missing-value handling across refreshes,
   the 50-generation run default, default-on run progress with an explicit quiet
   override, per-generation successful/error/remaining outcome counts, streamed
   distributed result notification, flushed pre-execution standalone-smoke feedback,

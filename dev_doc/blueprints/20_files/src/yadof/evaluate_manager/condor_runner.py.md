@@ -47,10 +47,14 @@
   `transfer_input_files`; selected task/support inputs are transferred from the job
   folder. No yadof package, wheel, runtime archive, or worker config is transferred.
   The submit file explicitly declares
-  `transfer_output_files = rawData.zip,individual_metadata.json`, so Condor does not
-  return `rawData/`. Calculated `request_cpus`, `request_memory`, and `request_disk`
-  values are emitted. Normal jobs emit `allowed_execute_duration`; smoke jobs omit
-  it. Condor-native resource retry directives are not emitted.
+  `transfer_output_files = rawData.zip,individual_metadata.json,batch.log`, so
+  Condor returns worker metadata and the solver batch log without returning
+  `rawData/`. The worker lifecycle creates an empty `batch.log` after task cleanup
+  when the solver did not produce one, keeping the explicit output present on normal
+  success and task-error paths. Calculated `request_cpus`,
+  `request_memory`, and `request_disk` values are emitted. Normal jobs emit
+  `allowed_execute_duration`; smoke jobs omit it. Condor-native resource retry
+  directives are not emitted.
 - `environment` is emitted as one quoted HTCondor environment string. Entries must be whitespace-separated inside that quoted string; semicolon-separated entries are not valid for the current submit style.
 
 ## Non-Obvious Techniques

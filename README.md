@@ -10,16 +10,16 @@ that you compose in ordinary Python.
 Use it for problems such as antenna design, circuit tuning, and multibody
 dynamics, where each simulation matters and the design objectives may evolve.
 
-**Source version 0.6.0** ·
+**Source version 0.7.0** ·
 Python **3.10+** ·
 [Quick start](#try-the-starter-task) ·
 [User guide](user_doc/README.md) ·
 [Examples](examples/README.md) ·
 [Benchmark results](#compare-optimization-programs)
 
-Version 0.6 introduces resident fast task sessions and makes greedy hypervolume
-the default GPSAF selection policy. Existing fast workspaces should follow the
-[migration guide](user_doc/migration_0_6.md).
+Version 0.7 adds an offline Windows MSI with a private `yadof_env` runtime and
+improves the HTCondor GUI for workspace selection, progress and queue controls.
+Upgrades from before 0.6 still require the [fast-workspace migration guide](user_doc/migration_0_6.md).
 
 ## Why yadof?
 
@@ -54,15 +54,22 @@ outputs pass through the current task's cost function.
 
 ## Try the starter task
 
-Use a Python 3.10+ environment. From this source checkout, build and install the
-current wheel:
+On Windows x64, download the MSI from the [0.7.0 release](https://github.com/YS-Pan/yadof/releases/tag/v0.7.0).
+It installs the GUI, CLI and private Python dependencies; HTCondor, frp and solver
+packages are provisioned separately. See the [installer guide](admin_tool/windows_installer/README.md).
+
+For a wheel installation, use a Python 3.10+ environment. From this source
+checkout, build and install the current wheel:
 
 ```powershell
 python -m pip install build
 python -m build --wheel
-python -m pip install "./dist/yadof-0.6.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install "./dist/yadof-0.7.0-py3-none-any.whl[surrogate,plot]"
 python -m yadof version
 ```
+
+On Windows, installation also places `condor_gui.pyw` in that Python environment's
+`Scripts` directory. Double-click it to open the GUI using that installation.
 
 The `surrogate` extra supplies PyTorch for the default optimization program;
 `plot` supplies Matplotlib for the result plots. See the

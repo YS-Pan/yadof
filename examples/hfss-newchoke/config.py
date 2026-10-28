@@ -9,11 +9,11 @@ EVALUATION_TIMEOUT_SEC = 12 * 60 * 60
 OPTIMIZE_SMOKE_TEST_ENABLED = True
 
 HTCONDOR_REQUEST_CPUS = 2
-HTCONDOR_REQUEST_MEMORY = "6GB"
-HTCONDOR_REQUEST_DISK = "5GB"
+HTCONDOR_REQUEST_MEMORY = "3GB"
+HTCONDOR_REQUEST_DISK = "2GB"
 # "auto" calibrates each generation from the smoke test or preceding generation.
 HTCONDOR_JOB_TIMEOUT_MODE = "auto"  # "auto" or "fixed"
-HTCONDOR_JOB_TIMEOUT_SEC = 60 * 60
+HTCONDOR_JOB_TIMEOUT_SEC = 35 * 60
 # Multiplies every effective disk request after automatic calibration.
 HTCONDOR_REQUEST_DISK_MULTIPLIER = 1.0
 HTCONDOR_REQUIREMENTS = '(OpSys == "WINDOWS") && (TARGET.YADOF_RAMDISK =?= True)'

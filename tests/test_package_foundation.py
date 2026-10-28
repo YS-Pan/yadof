@@ -494,7 +494,7 @@ def test_package_metadata_and_source_resources() -> None:
         "botorch>=0.18,<0.19",
     ]
     assert metadata["tool"]["hatch"]["version"]["path"] == "src/yadof/_version.py"
-    assert yadof.__version__ == "0.6.0"
+    assert yadof.__version__ == "0.7.0"
 
     assert read_documentation_entry("dev").startswith("# dev_doc README")
     assert read_documentation_entry("user").startswith(
@@ -766,6 +766,7 @@ def test_wheel_sdist_and_clean_external_install(tmp_path: Path) -> None:
         assert "yadof/tools/view_time.py" in wheel_names
         assert "yadof/tools/condor_gui.py" in wheel_names
         assert "yadof/tools/condor_gui.pyw" in wheel_names
+        assert any(name.endswith(".data/scripts/condor_gui.pyw") for name in wheel_names)
         assert "yadof/tools/surrogate_viewer/__init__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/__main__.py" in wheel_names
         assert "yadof/tools/surrogate_viewer/app.py" in wheel_names

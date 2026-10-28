@@ -8,7 +8,7 @@ The existing CAE and conditional INR components remain available.
 Install the `gp` extra in the environment used to run yadof:
 
 ```powershell
-python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[gp]"
+python -m pip install ".\dist\yadof-0.7.0-py3-none-any.whl[gp]"
 ```
 
 This extra supplies SciPy, scikit-learn and threadpoolctl. The component does not

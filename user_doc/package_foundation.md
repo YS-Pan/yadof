@@ -10,15 +10,40 @@ version-matched reading order before it edits anything.
 
 ## Install
 
+The Windows x64 MSI release installs the GUI, CLI and a self-contained private
+Python prefix named `yadof_env`. It defaults to
+`%LOCALAPPDATA%\Programs\Yadof`; its desktop and Start menu shortcuts open the GUI.
+The CLI is `<installation>\yadof_env\Scripts\yadof.exe`, and the interpreter is
+`<installation>\yadof_env\Scripts\python.exe`. No Python installation or environment
+activation is required. Keep writable workspaces outside the installation folder.
+
+The MSI includes framework numerical, surrogate and viewer dependencies, but
+excludes HTCondor, frp, PyAEDT and other solver dependencies. It isolates Python
+packages from system and user environments and leaves existing solver runtimes
+and Python file associations alone. Distributed tasks still use their separately
+provisioned worker environments. Administrator build and deployment details are in
+the source checkout's `admin_tool/windows_installer/README.md`.
+
 Install a built wheel into the Python environment used by submit and local worker
 processes. Add extras only for features you use:
 
 ```powershell
-python -m pip install .\dist\yadof-0.6.0-py3-none-any.whl
-python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[surrogate,plot]"
-python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[qnehvi]"
-python -m pip install ".\dist\yadof-0.6.0-py3-none-any.whl[viewer]"
+python -m pip install .\dist\yadof-0.7.0-py3-none-any.whl
+python -m pip install ".\dist\yadof-0.7.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install ".\dist\yadof-0.7.0-py3-none-any.whl[qnehvi]"
+python -m pip install ".\dist\yadof-0.7.0-py3-none-any.whl[viewer]"
 ```
+
+On Windows, the same pip installation automatically places `condor_gui.pyw` in
+the Python environment's `Scripts` directory, beside `yadof-gui.exe`. Double-click
+the `.pyw` file to open the GUI with this installation's code. For example, an
+environment at `D:\.venv` gets `D:\.venv\Scripts\condor_gui.pyw`. The launcher calls
+the neighboring executable, so a Windows `.pyw` association with another Python
+does not select another yadof installation. No extra setup step is required.
+Reinstalling updates the launcher; uninstalling removes it with the package.
+The launcher depends on its installed directory layout; create a shortcut to it
+if you want to launch it from elsewhere. To locate the normal environment's
+Scripts directory, run `python -c "import sysconfig; print(sysconfig.get_path('scripts'))"`.
 
 The default template's declared `submit/optimization.py` program composes
 conditional INR. `init` and `check` validate that source statically without
@@ -81,7 +106,7 @@ desktop GUI; the `summary` and `audit` text modes do not open Tkinter. The viewe
 submit-side, read-only inspection software and is never copied into distributed
 jobs.
 
-The current package version is `0.6.0`. Recorded history uses immutable
+The current package version is `0.7.0`. Recorded history uses immutable
 standard-ZIP segments and immutable metadata event files.
 
 The core wheel also exposes `yadof.recorded_data.EvidenceDataset` and `CostTable`.

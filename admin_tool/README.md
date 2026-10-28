@@ -14,11 +14,17 @@ worker resources, and execution directories.
 
 ## Contents
 
+- `windows_installer/`: source-checkout builder for the offline Windows x64 MSI
+  and private `yadof_env`, excluding pool tools and solver dependencies. Start with
+  `windows_installer/README.md`.
 - `admin_doc/`: administrator deployment, configuration, troubleshooting, and
   historical reference documentation. Start with `admin_doc/README.md`.
 - `htcondor_pool/`: executable Windows scripts for setting up, configuring, and
   diagnosing HTCondor manager and worker machines. Start with
   `htcondor_pool/README.md`.
+- `htcondor_config/`: numbered Windows LAN setup scripts that add management,
+  submission, and execution capabilities without dropping existing roles or
+  declared resources. Start with `htcondor_config/README.md`.
 - `pychrono_runtime/`: executable scripts for the pinned, auditable all-users
   Miniforge and PyChrono installation workflow. The canonical procedure is in
   `admin_doc/pychrono/README.md`.

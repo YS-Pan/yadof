@@ -98,7 +98,7 @@ _CORE_SETTING_SPECS: tuple[SettingSpec, ...] = (
     _spec("OPTIMIZE_BATCH_SIZE", None, "optional_positive_int"),
     _spec("OPTIMIZE_INITIAL_POPULATION_SIZE", None, "optional_positive_int"),
     _spec("OPTIMIZE_SMOKE_TEST_ENABLED", True, "bool"),
-    _spec("OPTIMIZE_RANDOM_SEED", 20260624, "nonnegative_int"),
+    _spec("OPTIMIZE_RANDOM_SEED", 1145141919810, "nonnegative_int"),
     _spec("OPTIMIZE_ARCHIVE_KEY_DECIMALS", 10, "nonnegative_int"),
     _spec("OPTIMIZE_SURROGATE_MAX_TRAINING_LAG", 1, "nonnegative_int"),
     # Cross-component viewer diagnostic policy.

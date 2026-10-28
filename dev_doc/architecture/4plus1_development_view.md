@@ -10,6 +10,7 @@ dev_doc/                   developer current-view, context, toDo, and history do
 user_doc/                  installed task-authoring and runtime workflow
 admin_tool/
   admin_doc/               source-checkout administrator documentation
+  windows_installer/       offline Windows MSI/private-runtime build and acceptance
   htcondor_pool/           HTCondor configuration and diagnosis tool
   pychrono_runtime/        PyChrono provisioning and validation tools
 examples/                  source-checkout reference workspaces
@@ -18,10 +19,19 @@ temp/                      ignored scratch and generated source-checkout evidenc
 ```
 
 Framework implementation lives only under `src/yadof/`; the root `.pyw` only imports
-its installed GUI entry point. Runtime workspaces normally live
+its installed GUI entry point. This machine's `.pyw` pins the sibling
+`D:\.venv\Scripts\pythonw.exe` so double-click runtime and development wheel
+acceptance use the same installed framework copy. Runtime workspaces normally live
 outside package source. Root `dev_doc/` and `user_doc/` are authoritative sources
 mapped into installed read-only resources. Administrator resources, examples, and
 benchmark automation remain source-checkout concerns.
+
+The portable installed `src/yadof/tools/condor_gui.pyw` launcher is also shipped as
+a wheel shared script. Ordinary pip installation places it beside the generated
+`yadof-gui.exe` in `Scripts/`. It forwards arguments to that executable, binding
+the GUI to the installed environment regardless of Windows `.pyw` associations.
+The packaged copy resolves the same environment's `Scripts/` entry. Neither
+installed entry depends on the source checkout or a fixed drive.
 
 The independent benchmark distribution exposes one `benchmark.py` per
 timestamped workspace. Initialization defaults to a packaged portable preset;

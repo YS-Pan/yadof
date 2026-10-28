@@ -11,6 +11,18 @@ office or personal Windows workstations. Those machines are used by different
 people, have different interactive owners, and may each act as a submit machine or
 an execute machine.
 
+## Node Capabilities
+
+Central management (`COLLECTOR`/`NEGOTIATOR`), local submission (`SCHEDD`), and
+execution (`STARTD`) are independent capabilities that may coexist on one host.
+Multiple submit hosts can share one pool while retaining separate job queues.
+The numbered LAN scripts under `../../htcondor_config/` add capabilities and
+preserve existing services, declared resources, and flocking settings. Their
+primary-role marker does not replace the effective `DAEMON_LIST` capability list.
+An additive operation must not silently retarget an existing node to a different
+primary manager. Explicit leave is the boundary for removing roles or switching
+primary pools. See `../../htcondor_config/README.md` for the script combinations.
+
 ## Identity Policy
 
 The distributed backend must target HTCondor's execute-side slot-user model:
@@ -60,7 +72,7 @@ getenv = False
 environment = "USERPROFILE=._home HOME=._home APPDATA=._appdata LOCALAPPDATA=._localappdata TEMP=._tmp TMP=._tmp ..."
 load_profile = True
 run_as_owner = False
-transfer_output_files = rawData.zip,individual_metadata.json
+transfer_output_files = rawData.zip,individual_metadata.json,batch.log
 ```
 
 The environment string may also carry task runtime settings such as
@@ -76,9 +88,10 @@ Each execute workstation should be configured so its slot users can:
 - read installed Python, PyAEDT, and simulator dependencies;
 - write the HTCondor execute scratch directory;
 - load enough Windows profile and system environment state for AEDT/PyAEDT startup;
-- create and return required job-local `rawData.zip` and
-  `individual_metadata.json` through the explicit output list. The zip contains
-  direct `.npz` members and HTCondor does not return `rawData/`.
+- create and return required job-local `rawData.zip`, `individual_metadata.json`,
+  and `batch.log` through the explicit output list. The copied worker creates an
+  empty `batch.log` after task cleanup if the simulator did not produce it. The zip
+  contains direct `.npz` members and HTCondor does not return `rawData/`.
 
 Workers that run HFSS 2024.1 must also exclude `OMP_THREAD_LIMIT` from
 `STARTER_NUM_THREADS_ENV_VARS`. Keep the other standard thread variables so they

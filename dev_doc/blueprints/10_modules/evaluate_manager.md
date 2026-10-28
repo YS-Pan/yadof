@@ -100,14 +100,19 @@ transport-specific adapters over the same public handle state.
 ## Distributed backend
 
 `condor_runner.py` writes Windows direct-workflow submit files, selects only needed
-job inputs, explicitly returns `rawData.zip` plus individual metadata instead of the
-`rawData/` directory, restores only unique direct `.npz` archive members, validates
-them, queries queue/history ClassAds, derives active execution wall-clock from
-submit-side event logs, retains the active/last timeout execution site's machine
-and slot as source-labeled fallback provenance, and removes terminal
+job inputs, explicitly returns `rawData.zip`, individual metadata, and `batch.log`
+instead of the `rawData/` directory, restores only unique direct `.npz` archive
+members, validates them, queries queue/history ClassAds, derives active execution
+wall-clock from submit-side event logs, retains the active/last timeout execution
+site's machine and slot as source-labeled fallback provenance, and removes terminal
 held/timed-out jobs when needed. A per-job timeout becomes locally final even when
 bounded `condor_rm` cleanup fails. Normal policy is `run_as_owner=False`,
 `load_profile=True`; pool repair is outside the module.
+
+The copied worker lifecycle creates an empty top-level `batch.log` after task cleanup
+only when the simulator did not create that file, so the explicit output list remains
+present on ordinary workflow success and task-error paths without pre-creating or
+interfering with a simulator-owned log.
 
 On handle cancellation, distributed submission stops, an already terminal/output-
 ready job is collected normally, and every remaining submission receives bounded
@@ -119,6 +124,9 @@ Distributed completion callbacks enter the same coordinator used by fast and loc
 contains a persistence branch or publication fallback.
 
 When CLI progress is active, the manager owns one backend-neutral population bar.
+An optimization batch labels that output with its zero-based generation index;
+the standalone smoke retains its separate phase label. The counts represent
+terminal outcomes, including failures, even when candidates run concurrently.
 Fast reports after current-cost finalization; local reports each completed future;
 distributed receives terminal results through the Condor runner's result callback.
 Preparation failures count immediately. Each population index is idempotent, and
