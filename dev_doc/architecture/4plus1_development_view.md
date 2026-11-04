@@ -5,11 +5,13 @@
 ```text
 src/yadof/                 installed framework source
 condor_gui.pyw             source-checkout Windows GUI launcher
+admin_config.pyw           administrator cluster GUI launcher (also shipped in MSI)
 tests/                     generic installed-package verification
 dev_doc/                   developer current-view, context, toDo, and history docs
 user_doc/                  installed task-authoring and runtime workflow
 admin_tool/
   admin_doc/               source-checkout administrator documentation
+  cluster_config/          resource, LAN and FRP STCP administrator GUI/backend
   windows_installer/       offline Windows MSI/private-runtime build and acceptance
   htcondor_pool/           HTCondor configuration and diagnosis tool
   pychrono_runtime/        PyChrono provisioning and validation tools

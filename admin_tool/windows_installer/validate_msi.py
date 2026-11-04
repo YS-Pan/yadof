@@ -66,6 +66,14 @@ from yadof.tools import condor_gui
 condor_gui.query_status = lambda: []
 controller = condor_gui.CondorGUI(root, pathlib.Path(sys.argv[1])/'gui workspace')
 root.update(); root.destroy()
+sys.path.insert(0, str(prefix.parent))
+from admin_tool.cluster_config.app import AdminApp
+root = tk.Tk(); root.withdraw()
+admin = AdminApp(root, poll=False)
+root.update()
+assert len(admin.tabs.tabs()) == 3
+assert 'Machine' not in admin.status_table['columns']
+root.destroy()
 import yadof
 assert pathlib.Path(yadof.__file__).is_relative_to(prefix)
 result = {'python':sys.version,'executable':sys.executable,'yadof':yadof.__version__,'yadof_origin':yadof.__file__,'numpy':np.__version__,'torch':torch.__version__,'torch_cuda':torch.version.cuda,'matplotlib':matplotlib.__version__,'sklearn':sklearn.__version__,'isolated':sys.flags.isolated,'user_site':site.ENABLE_USER_SITE,'package_count':len(versions),'tk_gui':True}
@@ -94,12 +102,65 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--msi", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
+    parser.add_argument("--isolated-copy", action="store_true", help="Test a QA identity copy without replacing the user's installation")
     args = parser.parse_args()
     work = args.work.resolve()
     work.relative_to((ROOT / "temp").resolve())
     work.mkdir(parents=True, exist_ok=False)
     msi = args.msi.resolve()
     manifest = json.loads(msi.with_suffix(".manifest.json").read_text(encoding="utf-8"))
+    published_msi = msi
+    if args.isolated_copy:
+        import msilib
+        msi = work / "isolated-qa.msi"
+        shutil.copy2(published_msi, msi)
+        family = uuid.uuid4()
+        product_code = "{" + str(uuid.uuid4()).upper() + "}"
+        upgrade_code = "{" + str(family).upper() + "}"
+        label = "Yadof QA " + family.hex[:8]
+        db = msilib.OpenDatabase(str(msi), msilib.MSIDBOPEN_TRANSACT)
+        def update(table, column, value, where, expected):
+            view = db.OpenView(f"UPDATE `{table}` SET `{column}` = ? WHERE `{where}` = ?")
+            record = msilib.CreateRecord(2)
+            record.SetString(1, value)
+            record.SetString(2, expected)
+            view.Execute(record)
+            view.Close()
+        update("Property", "Value", product_code, "Property", "ProductCode")
+        update("Property", "Value", upgrade_code, "Property", "UpgradeCode")
+        update("Property", "Value", label, "Property", "ProductName")
+        view = db.OpenView("SELECT * FROM `Upgrade`")
+        view.Execute(None)
+        upgrades = []
+        while (record := view.Fetch()) is not None:
+            upgrades.append((upgrade_code, record.GetString(2) or None, record.GetString(3) or None,
+                record.GetString(4) or None, record.GetInteger(5), record.GetString(6) or None, record.GetString(7)))
+        view.Close()
+        view = db.OpenView("DELETE FROM `Upgrade`")
+        view.Execute(None); view.Close()
+        msilib.add_data(db, "Upgrade", upgrades)
+        for table in ("Registry", "RegLocator"):
+            update(table, "Key", "Software\\" + label + "\\Installer", "Key", r"Software\Yadof\Installer")
+        update("Directory", "DefaultDir", label, "Directory", "StartMenuDir")
+        view = db.OpenView("SELECT `Component`,`ComponentId` FROM `Component`")
+        view.Execute(None)
+        components = []
+        while (record := view.Fetch()) is not None:
+            components.append(record.GetString(1))
+        view.Close()
+        for component in components:
+            update("Component", "ComponentId", "{" + str(uuid.uuid5(family, component)).upper() + "}", "Component", component)
+        for shortcut in ("DesktopGUI", "StartGUI", "StartAdmin"):
+            update("Shortcut", "Name", label + (" Admin" if shortcut == "StartAdmin" else ""), "Shortcut", shortcut)
+        summary = db.GetSummaryInformation(20)
+        summary.SetProperty(msilib.PID_REVNUMBER, "{" + str(uuid.uuid4()).upper() + "}")
+        summary.Persist()
+        del summary
+        db.Commit(); db.Close()
+        del db, view, record
+        import gc
+        gc.collect()
+        manifest = {**manifest, "product_code": product_code, "upgrade_code": upgrade_code}
     product = manifest["product_code"]
     installer = ctypes.WinDLL("msi")
     installer.MsiQueryProductStateW.argtypes = [ctypes.c_wchar_p]
@@ -131,6 +192,7 @@ def main():
         run(["msiexec.exe", "/i", msi, "/qn", "/norestart", f"INSTALLDIR={destination}", "/L*v", work / "install.log"], work, "install")
         run([cli, "version"], work, "version")
         run([destination / "yadof_env/Scripts/yadof-gui.exe", "--help"], work, "gui-launcher")
+        run([destination / "yadof_env/Scripts/yadof-admin.exe", "--smoke-test"], work, "admin-launcher")
         # Foreign Python settings must not make the private runtime import them.
         foreign = work / "foreign-python"
         foreign.mkdir()
@@ -197,7 +259,7 @@ def main():
     assert (workspace / ".yadof/workspace.json").is_file()
     assert unknown.read_text(encoding="utf-8") == "retain unknown files"
     assert installer.MsiQueryProductStateW(product) == -1
-    (work / "acceptance.json").write_text(json.dumps({"msi":str(msi), "sha256":manifest["sha256"], "product_code":product,
+    (work / "acceptance.json").write_text(json.dumps({"msi":str(published_msi), "sha256":manifest["sha256"], "isolated_qa_copy":args.isolated_copy, "product_code":product,
         "status":"passed", "checks":["installation", "CLI", "GUI launcher and Tk controller", "dependency/native imports", "isolation", "installed docs", "task init/check", "local smoke", "one four-individual generation", "repair", "same-version upgrade", "uninstall", "external and unknown data preserved"]},indent=2), encoding="utf-8")
     print(f"Acceptance passed: {work / 'acceptance.json'}", flush=True)
 

@@ -30,7 +30,11 @@ internal static class Launcher
             string prefix = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".."));
 #if GUI
             string python = Path.Combine(prefix, "Scripts", "pythonw.exe");
+#if ADMIN
+            var arguments = new StringBuilder("-X utf8 -B -s " + Quote(Path.Combine(prefix, "..", "admin_config.pyw")));
+#else
             var arguments = new StringBuilder("-X utf8 -B -s -m yadof.tools.condor_gui");
+#endif
 #else
             string python = Path.Combine(prefix, "Scripts", "python.exe");
             var arguments = new StringBuilder("-X utf8 -B -s -m yadof");

@@ -22,7 +22,7 @@ user-site layout. Missing entries fail rather than choosing another environment.
 Non-Windows invocation uses the installed Python GUI entry directly. No fixed
 drive, source checkout, extra installation script or workspace mutation is needed.
 
-The current package version is 0.7.0. Recorded history uses immutable standard-ZIP
+The current package version is 0.8.0. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Windows MSI deployment

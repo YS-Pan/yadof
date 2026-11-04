@@ -10,7 +10,7 @@ that you compose in ordinary Python.
 Use it for problems such as antenna design, circuit tuning, and multibody
 dynamics, where each simulation matters and the design objectives may evolve.
 
-**Source version 0.7.0** ·
+**Source version 0.8.0** ·
 Python **3.10+** ·
 [Quick start](#try-the-starter-task) ·
 [User guide](user_doc/README.md) ·
@@ -54,7 +54,7 @@ outputs pass through the current task's cost function.
 
 ## Try the starter task
 
-On Windows x64, download the MSI from the [0.7.0 release](https://github.com/YS-Pan/yadof/releases/tag/v0.7.0).
+On Windows x64, download the MSI from the [0.8.0 release](https://github.com/YS-Pan/yadof/releases/tag/v0.8.0).
 It installs the GUI, CLI and private Python dependencies; HTCondor, frp and solver
 packages are provisioned separately. See the [installer guide](admin_tool/windows_installer/README.md).
 
@@ -64,7 +64,7 @@ checkout, build and install the current wheel:
 ```powershell
 python -m pip install build
 python -m build --wheel
-python -m pip install "./dist/yadof-0.7.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install "./dist/yadof-0.8.0-py3-none-any.whl[surrogate,plot]"
 python -m yadof version
 ```
 

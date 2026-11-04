@@ -19,6 +19,18 @@ allows a prepared task to import its own sibling modules. Launchers locate Pytho
 relative to themselves; no activation, PATH or `.py` association changes occur.
 They require the Windows-provided .NET Framework 4.x on Windows 10/11 x64.
 
+The Start menu also offers **Yadof Cluster Configuration**. It launches the separate
+administrator `admin_config.pyw` using the private runtime. Administrator code is
+staged outside site-packages and is not added to the pip wheel. Opening it requests
+UAC; installing the MSI does not configure HTCondor or FRP.
+
+When the original audited build prefix is unavailable, `--installed-source PATH
+--source-manifest FILE` reconstructs the previous private runtime from an existing
+installation. Every copied file must match the published release file manifest;
+unknown files are excluded. The new wheel replaces all previous yadof-owned package
+files, and the new manifest records the reference manifest digest. This operation
+only reads the existing installation.
+
 ## Included versions and exclusions
 
 The A2094 audit of 2026-10-27 fixes Python 3.11.15, NumPy 2.4.6, psutil 7.2.2,
@@ -54,7 +66,7 @@ Then, from the repository root:
 
 ```powershell
 & '..\.venv\Scripts\python.exe' admin_tool/windows_installer/build_msi.py `
-    --wheel dist/yadof-0.7.0-py3-none-any.whl `
+    --wheel dist/yadof-0.8.0-py3-none-any.whl `
     --work temp/msi-a2094-build `
     --zig temp/toolchains/zig-x86_64-windows-0.14.1/zig.exe
 ```
@@ -83,7 +95,7 @@ Signing requires a publisher certificate and is separate from local construction
 ## Installation and servicing
 
 ```powershell
-msiexec /i yadof-0.7.0-a2094-win-x64.msi /qn INSTALLDIR="D:\Apps\Yadof" /L*v install.log
+msiexec /i yadof-0.8.0-a2094-win-x64.msi /qn INSTALLDIR="D:\Apps\Yadof" /L*v install.log
 ```
 
 The MSI owns its installed program files and shortcuts. Repair and uninstall are
@@ -104,7 +116,7 @@ campaign is needed for that acceptance.
 
 ```powershell
 & '..\.venv\Scripts\python.exe' admin_tool/windows_installer/validate_msi.py `
-    --msi dist/yadof-0.7.0-a2094-win-x64.msi `
+    --msi dist/yadof-0.8.0-a2094-win-x64.msi `
     --work temp/msi-qa
 ```
 

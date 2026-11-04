@@ -221,6 +221,42 @@ def prepare_payload(wheel: Path, work: Path, runtime_source: Path, reference_sit
     return payload, info
 
 
+def payload_from_installation(wheel: Path, work: Path, source: Path, manifest: Path):
+    """Reproduce the audited runtime using only hash-verified release-owned files."""
+    previous = json.loads(manifest.read_text(encoding="utf-8"))
+    payload = work / "payload"
+    payload.mkdir(exist_ok=False)
+    for item in previous["files"]:
+        relative = PurePosixPath(item["path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("Unsafe source manifest member")
+        original = source.joinpath(*relative.parts)
+        if not original.is_file() or sha256(original) != item["sha256"]:
+            raise ValueError(f"Installed reference differs from release manifest: {relative}")
+        # The new wheel owns the complete yadof package and distribution metadata.
+        if relative.parts[:3] == ("yadof_env", "Lib", "site-packages") and len(relative.parts) > 3:
+            if relative.parts[3] == "yadof" or relative.parts[3].startswith("yadof-"):
+                continue
+        copy_file(original, payload.joinpath(*relative.parts))
+    prefix = payload / "yadof_env"
+    install_wheel(wheel, prefix)
+    info = json.loads((payload / "dependency-manifest.json").read_text(encoding="utf-8"))
+    info.update(wheel=wheel.name, wheel_sha256=sha256(wheel),
+                runtime_reference_manifest_sha256=sha256(manifest))
+    (payload / "dependency-manifest.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
+    return payload, info
+
+
+def stage_admin(payload: Path):
+    copy_file(ROOT / "admin_config.pyw", payload / "admin_config.pyw")
+    for path in (ROOT / "admin_tool/cluster_config").glob("*"):
+        if path.suffix in {".py", ".ps1", ".md"} and not path.name.startswith("test_"):
+            copy_file(path, payload / "admin_tool/cluster_config" / path.name)
+    compiler = Path(os.environ["WINDIR"]) / "Microsoft.NET/Framework64/v4.0.30319/csc.exe"
+    run([compiler, "/nologo", "/optimize+", "/platform:x64", "/target:winexe", "/define:GUI,ADMIN",
+         "/reference:System.Windows.Forms.dll", f"/out:{payload / 'yadof_env/Scripts/yadof-admin.exe'}", HERE / "Launcher.cs"])
+
+
 def identifier(prefix: str, path: str) -> str:
     return prefix + hashlib.sha256(path.lower().encode("utf-8")).hexdigest()[:28]
 
@@ -411,6 +447,9 @@ def build_database(payload: Path, work: Path, destination: Path, version: str, f
     gui_id = identifier("F", "yadof_env/Scripts/yadof-gui.exe")
     msi.add_data(db, "Shortcut", [(name, directory, "Yadof", "Shortcuts", f"[#{gui_id}]", None, "Yadof desktop GUI", None, None, None, 1, "PersonalFolder")
                                    for name, directory in (("DesktopGUI", "DesktopFolder"), ("StartGUI", "StartMenuDir"))])
+    admin_id = identifier("F", "yadof_env/Scripts/yadof-admin.exe")
+    msi.add_data(db, "Shortcut", [("StartAdmin", "StartMenuDir", "Yadof Cluster Configuration", "Shortcuts",
+                                  f"[#{admin_id}]", None, "HTCondor and STCP configuration", None, None, None, 1, "PersonalFolder")])
     msi.add_data(db, "RemoveFile", [("RemoveStartMenuDir", "Shortcuts", None, "StartMenuDir", 2)])
     add_dialogs(msi, db)
     db.Commit()
@@ -435,6 +474,8 @@ def main():
     parser.add_argument("--zig", type=Path, required=True, help="Path to the pinned Zig 0.14.1 compiler; build-time only")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--reuse-payload", action="store_true", help="Rebuild MSI from this work directory's already-staged payload")
+    parser.add_argument("--installed-source", type=Path, help="Read-only previous installation verified against --source-manifest")
+    parser.add_argument("--source-manifest", type=Path, help="Published file manifest for the previous installation")
     args = parser.parse_args()
     if os.name != "nt" or sys.version_info[:3] != (3, 11, 15):
         parser.error("Use the audited Windows x64 CPython 3.11.15 builder")
@@ -446,8 +487,13 @@ def main():
         info = json.loads((payload / "dependency-manifest.json").read_text(encoding="utf-8"))
         if info["wheel_sha256"] != sha256(args.wheel):
             raise ValueError("The staged payload belongs to a different wheel; use a new work directory")
+    elif args.installed_source:
+        if not args.source_manifest:
+            parser.error("--installed-source requires --source-manifest")
+        payload, info = payload_from_installation(args.wheel.resolve(), work, args.installed_source.resolve(), args.source_manifest.resolve())
     else:
         payload, info = prepare_payload(args.wheel.resolve(), work, args.runtime_source.resolve(), args.reference_site)
+    stage_admin(payload)
     for name, version in {**BASELINE, **ADDITIONAL}.items():
         if info["packages"].get(name) != version:
             raise ValueError(f"Staged payload does not match the version pin for {name}")

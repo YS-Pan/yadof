@@ -14,6 +14,10 @@ worker resources, and execution directories.
 
 ## Contents
 
+- `../admin_config.pyw` and `cluster_config/`: Windows configuration UI for local
+  resources, LAN membership and bidirectional FRP STCP, with native validation,
+  backups and service rollback. See [cluster_config/README.md](cluster_config/README.md).
+
 - `windows_installer/`: source-checkout builder for the offline Windows x64 MSI
   and private `yadof_env`, excluding pool tools and solver dependencies. Start with
   `windows_installer/README.md`.
