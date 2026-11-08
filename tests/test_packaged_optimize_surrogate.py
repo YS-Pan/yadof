@@ -124,8 +124,8 @@ def test_surrogate_viewer_orders_mapped_history_by_parameter_declaration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from yadof.tools.surrogate_viewer.backend import SurrogateWorkspace
-    from yadof.tools.surrogate_viewer.backend import workspace as viewer_workspace
+    from yadof.tools.yadof_tools.surrogate_viewer.backend import SurrogateWorkspace
+    from yadof.tools.yadof_tools.surrogate_viewer.backend import workspace as viewer_workspace
 
     viewer = object.__new__(SurrogateWorkspace)
     viewer.root = tmp_path
@@ -466,7 +466,7 @@ def test_surrogate_state_checkpoint_and_cost_policy_are_workspace_scoped(tmp_pat
     assert returned.artifact_dir == artifact_dir
 
     # Viewer validates B against B's persisted config even while current training config is A.
-    from yadof.tools.surrogate_viewer.backend.checkpoints import (
+    from yadof.tools.yadof_tools.surrogate_viewer.backend.checkpoints import (
         CheckpointPredictor,
         discover_checkpoints,
     )
@@ -502,7 +502,7 @@ def test_strategy_switch_isolates_and_recovers_conditional_inr_weights(
     from yadof.optimize.state import read_active_strategy_state
     from yadof.surrogate import conditional_inr, wait_for_pending_training
     from yadof.surrogate.conditional_inr import runtime
-    from yadof.tools.surrogate_viewer.backend.workspace import SurrogateWorkspace
+    from yadof.tools.yadof_tools.surrogate_viewer.backend.workspace import SurrogateWorkspace
 
     workspace = _workspace(tmp_path, "strategy_state", surrogate=True)
     config_path = workspace / "config.py"

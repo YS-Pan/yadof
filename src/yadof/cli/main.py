@@ -121,7 +121,7 @@ def _run_view(
     progress=None,
 ) -> tuple[str, Path | None]:
     if view_kind == "cost":
-        from ..tools.cost_viewer import view_cost
+        from yadof.tools.yadof_tools.cost_viewer import view_cost
 
         return view_cost(
             workspace,
@@ -130,7 +130,7 @@ def _run_view(
             progress=progress,
         )
     if view_kind == "time":
-        from ..tools.view_time import view_time
+        from yadof.tools.yadof_tools.view_time import view_time
 
         return view_time(workspace, status=status, output_path=output_path)
     raise ValueError(f"unsupported view kind: {view_kind}")
@@ -301,7 +301,7 @@ def _surrogate_viewer_command(args: argparse.Namespace) -> int:
     if args.workspace is not None:
         viewer_args.extend(("--workspace", str(args.workspace)))
     try:
-        from ..tools.surrogate_viewer.app import main as viewer_main
+        from yadof.tools.yadof_tools.surrogate_viewer.app import main as viewer_main
     except ImportError as exc:
         print(
             "yadof: error: the surrogate viewer requires the optional "
@@ -323,16 +323,16 @@ def _surrogate_report_command(args: argparse.Namespace) -> int:
     output_format = str(args.output_format)
     progress_lines: list[str] = []
     try:
-        from ..tools.surrogate_viewer.errors import (
+        from yadof.tools.yadof_tools.surrogate_viewer.errors import (
             format_surrogate_error,
             normalize_surrogate_error,
         )
-        from ..tools.surrogate_viewer.report import (
+        from yadof.tools.yadof_tools.surrogate_viewer.report import (
             render_error_audit,
             render_workspace_summary,
         )
         if args.surrogate_action == "inspect":
-            from ..tools.surrogate_viewer.inspection import (
+            from yadof.tools.yadof_tools.surrogate_viewer.inspection import (
                 render_case_inspection,
             )
 
@@ -437,7 +437,7 @@ def _history_clear_command(args: argparse.Namespace) -> int:
     ):
         return 1
     try:
-        from ..tools.history import clear_history
+        from yadof.tools.yadof_tools._shared.history import clear_history
 
         summary = clear_history(args.workspace, confirm=True)
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -450,7 +450,7 @@ def _history_clear_command(args: argparse.Namespace) -> int:
 
 
 def _task_adapters_command(_args: argparse.Namespace) -> int:
-    from ..tools.adapters import list_adapters
+    from yadof.tools.yadof_tools._shared.adapters import list_adapters
 
     names = list_adapters()
     write_text("\n".join(names) if names else "No bundled adapters are available.")
@@ -459,7 +459,7 @@ def _task_adapters_command(_args: argparse.Namespace) -> int:
 
 def _task_copy_adapter_command(args: argparse.Namespace) -> int:
     try:
-        from ..tools.adapters import copy_adapter
+        from yadof.tools.yadof_tools._shared.adapters import copy_adapter
 
         result = copy_adapter(args.workspace, args.adapter)
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -480,7 +480,7 @@ def _task_hfss_extract_parameters_command(args: argparse.Namespace) -> int:
     ):
         return 1
     try:
-        from ..tools.hfss import extract_parameters
+        from yadof.tools.user_tools.aedt_parameters import extract_parameters
 
         result = extract_parameters(
             args.workspace,

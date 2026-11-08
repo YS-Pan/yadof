@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import yadof.tools.view_cost as view_cost
-from yadof.tools.cost_viewer import plotting
-from yadof.tools.cost_viewer.types import ProgressMessage
+import yadof.tools.yadof_tools.cost_viewer as view_cost
+from yadof.tools.yadof_tools.cost_viewer import plotting
+from yadof.tools.yadof_tools.cost_viewer.types import ProgressMessage
 
 
 class FakeRecordedDataApi:
@@ -100,7 +100,7 @@ def fake_task_interpreter(monkeypatch):
         yield FakeCostInterpreter()
 
     monkeypatch.setattr(
-        "yadof.tools.cost_viewer.history.job_template_api.task_cost_interpreter",
+        "yadof.tools.yadof_tools.cost_viewer.history.job_template_api.task_cost_interpreter",
         open_interpreter,
     )
 

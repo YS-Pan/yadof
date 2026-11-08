@@ -13,8 +13,8 @@ bounded low-cost workflows autonomously, while long or consequential runs requir
 explicit user authorization and detached-run handling.
 
 The integrated cost and surrogate viewers retain relatively independent developer
-trees at `src/yadof/tools/cost_viewer/dev_doc/` and
-`src/yadof/tools/surrogate_viewer/dev_doc/`. Those trees ship with their tool
+trees at `src/yadof/tools/yadof_tools/cost_viewer/dev_doc/` and
+`src/yadof/tools/yadof_tools/surrogate_viewer/dev_doc/`. Those trees ship with their tool
 packages and own viewer-specific architecture, blueprints, and terminology; the
 root developer README links to them instead of duplicating those contracts.
 The independent `yadof-benchmark` package owns a compact developer tree containing

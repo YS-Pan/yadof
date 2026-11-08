@@ -6,6 +6,7 @@
 src/yadof/                 installed framework source
 condor_gui.pyw             source-checkout Windows GUI launcher
 admin_config.pyw           administrator cluster GUI launcher (also shipped in MSI)
+aedt_parameters_gui.pyw    source-checkout AEDT parameter GUI launcher
 tests/                     generic installed-package verification
 dev_doc/                   developer current-view, context, toDo, and history docs
 user_doc/                  installed task-authoring and runtime workflow
@@ -28,12 +29,19 @@ outside package source. Root `dev_doc/` and `user_doc/` are authoritative source
 mapped into installed read-only resources. Administrator resources, examples, and
 benchmark automation remain source-checkout concerns.
 
-The portable installed `src/yadof/tools/condor_gui.pyw` launcher is also shipped as
+The portable installed `src/yadof/tools/yadof_tools/console/condor_gui.pyw` launcher is also shipped as
 a wheel shared script. Ordinary pip installation places it beside the generated
 `yadof-gui.exe` in `Scripts/`. It forwards arguments to that executable, binding
 the GUI to the installed environment regardless of Windows `.pyw` associations.
 The packaged copy resolves the same environment's `Scripts/` entry. Neither
 installed entry depends on the source checkout or a fixed drive.
+
+The root `aedt_parameters_gui.pyw` likewise contains only installed-tool launch
+logic. It selects the sibling `.venv` when available and passes its own directory
+to `tools/user_tools/aedt_parameters_gui.pyw` for the default backup location. The text parser
+and publication mechanism remain under `tools/user_tools/aedt_parameters/parameter_extraction.py`.
+The wheel's tools-folder AEDT launcher binds to its own installation runtime and
+keeps its default backups in user data outside the package.
 
 The independent benchmark distribution exposes one `benchmark.py` per
 timestamped workspace. Initialization defaults to a packaged portable preset;
@@ -82,6 +90,26 @@ AI-agent guidance therefore requires host execution under the interactive human
 account; a sandbox-owned detached console is not presented as visible. The visible
 detached console is persistent after benchmark success or failure so its final
 terminal output remains reviewable; hidden detach remains automatic.
+
+
+The optional desktop tools have two installed categories:
+
+```text
+tools/
+  yadof_tools/
+    viewcost.pyw, viewtime.pyw, viewerror.pyw, surrogateviewer.pyw
+    cost_viewer/, view_time/, view_error/, surrogate_viewer/
+    console/                 main HTCondor GUI
+    _shared/                 runtime gateway, desktop coordinator, workspace APIs
+  user_tools/
+    aedt_parameters_gui.pyw   complete AEDT desktop UI
+    aedt_parameters/         CLI-shared parser and atomic publication
+```
+
+Folder entries bind to their owning installation before importing tool backends.
+The main GUI and standalone history entries share one result coordinator and one
+failure table. Package code remains immutable; derived images belong to workspace
+tool output and AEDT backups belong to an explicit user directory.
 
 ## Package dependency discipline
 

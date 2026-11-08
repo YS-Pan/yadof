@@ -26,6 +26,6 @@ if __name__ == "__main__":
             *args,
         ]))
 
-    from yadof.tools.condor_gui import main
+    from yadof.tools.yadof_tools.console import main
 
     raise SystemExit(main(args))

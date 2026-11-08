@@ -11,6 +11,23 @@ machine drain or job removal request through the installed Condor client.
 
 ## Views and history
 
+The installed `tools/` root contains two toolboxes. `yadof_tools/` exposes
+`viewcost.pyw`, `viewtime.pyw`, `viewerror.pyw`, and `surrogateviewer.pyw` directly;
+their implementations live in `cost_viewer/`, `view_time/`, `view_error/`, and
+`surrogate_viewer/`. The `console/` folder owns the main controller, and `_shared/`
+owns the common runtime gateway, desktop result coordinator and workspace tools.
+Every folder entry binds to its own installed Python before importing yadof.
+Cost/time/error entries accept `--workspace` or show a folder chooser, use a worker
+for existing read-only APIs, and present the result on the Tk thread. Cancelling
+selection creates no files. PNG views open their generated image; error view
+reuses the controller's sortable failure table. The surrogate entry dispatches to
+the existing viewer application. CLI commands use these same backend packages.
+The Python import paths are rooted at `yadof.tools.yadof_tools` in this release.
+
+`user_tools/` contains the functional AEDT desktop script plus its CLI-shared
+`aedt_parameters/` parser/publication package. Its Tk application is implemented
+in the single `aedt_parameters_gui.pyw`, not in a second GUI module.
+
 The Windows `condor_gui.py` desktop controller lives in `tools`. Its thin
 double-clickable `condor_gui.pyw` source-checkout launcher lives at the repository
 root. The portable installed launcher lives under `src/yadof/tools/` and is
@@ -61,8 +78,19 @@ progress lines on the Tk event thread to update a determinate bar. HTCondor's
 `pending=N/T` line drives the bar as `(T-N)/T` and labels the remaining count;
 generation outcome lines provide the fast/local fallback. Smoke batches use their
 own pending count, then the next generation resets the bar.
-It
-stops that child process tree before running the user-requested global
+Beside the bar, **仿真总耗时** shows the elapsed duration of the current GUI launch,
+including startup, smoke and all generations. Each accepted **开始优化** resets
+the monotonic start time and display; the Tk event pump updates it independently
+of progress output and pool refresh. **停止优化** freezes the value immediately;
+normal/failed child exit and launch failure also freeze it. The frozen value stays
+visible until another start. Format durations below one day as `HH:MM:SS`, and
+one day or longer as `D+HH:MM:SS`, with unbounded day count and two-digit remainder
+fields. This is GUI-session state, not recorded per-job timing or a resume value.
+The independent **tools** button opens that installation's `yadof/tools` category
+root in Windows Explorer. It needs no
+workspace and remains available during optimization; opening errors use the normal
+GUI error display.
+The controller stops that child process tree before running the user-requested global
 `condor_rm -all`, and supports selected-mode drain and cancellation for a machine.
 The independent **清空队列** button shares the `condor_rm -all` command helper
 with stop, works without a workspace, and never stops the optimizer process or
@@ -138,8 +166,9 @@ normalized reference `(1, ..., 1)`. Each cumulative calculation retains only its
 nondominated front before invoking the HV indicator. Plot styling and label
 placement may evolve as long as the two series remain distinguishable and the
 scientific values are unchanged. Cost
-history implementation lives in the reusable `tools/cost_viewer/`
-subpackage; `tools/view_cost.py` is only the compatibility import facade.
+history implementation lives in the reusable `tools/yadof_tools/cost_viewer/`
+subpackage. Its `__init__.py` is the single public import surface, including the
+previous diagnostic helper names; the separate flat cost facade is removed.
 `view all` invokes cost and time with their normal defaults, prints two labeled
 summaries, and uses one timestamp for the two default image names. The
 views do not mutate durable evidence. History clear requires explicit confirmation,
@@ -150,7 +179,7 @@ requires every deletion target to remain inside the selected workspace.
 
 ## Surrogate checkpoint viewer
 
-`tools/surrogate_viewer/` is an optional, relatively independent inspection
+`tools/yadof_tools/surrogate_viewer/` is an optional, relatively independent inspection
 subtree. It loads one explicit workspace, predicts saved checkpoint
 rawData/current costs, compares selected recorded individuals, and calculates
 cancellable in-memory cross-generation error aggregates. Its backend alone adapts
@@ -200,9 +229,35 @@ and optimization attributes embedded in `VariableProp(...)`; it uses `Min`/`Max`
 for continuous variables and discrete `Level` values before attempting a PyAEDT
 fallback.
 
+The independent AEDT GUI accepts an explicit project file and backup directory
+without workspace initialization. Its root `aedt_parameters_gui.pyw` forwards to
+the sibling installed `.venv` when present, then calls
+`tools.hfss.parameter_gui.main(script_dir=...)`. Direct module launch defaults the
+backup root to the working directory. The GUI offers editable project/backup
+paths, native file/directory choosers, a read-only variable preview and explicit
+export. File work runs on a worker; queue polling and all Tk changes stay on the
+main thread. Busy controls prevent overlapping writes and close during publication.
+Export always reparses, generates a fresh module with empty constraints, backs up
+arbitrary old bytes outside the installed package, and atomically replaces the
+project-adjacent parameter file. Preview and export read only Include-checked
+records in `OptimizationSetup1/Variables`; their ranges and units come from that
+same block. Missing, empty or ambiguous target blocks are errors. Other setups
+and global VariableProp attributes are not fallback sources. It never falls back
+to PyAEDT.
+
+The wheel includes `tools/user_tools/aedt_parameters_gui.pyw` in the user toolbox
+opened through the main GUI's **tools** button. It resolves its owning prefix's
+`Scripts/pythonw.exe` (or global-prefix `pythonw.exe`) before importing yadof,
+forwarding itself and arguments when Windows selected another Python. Missing
+runtime resolution fails rather than falling back to an unrelated environment.
+This installed entry passes `%LOCALAPPDATA%/Yadof` as the GUI's default backup
+root, producing user-owned `parameters_backup` outside immutable site-packages.
+It creates no backup directory until an export actually needs a backup.
+
 ## Invariants
 
-- Every command takes an explicit workspace and respects effective output paths.
+- Campaign commands take an explicit workspace; project exporters take an explicit
+  project and caller-selected backup path.
 - No concrete project/design/objective assumptions enter generic framework tools.
 - Potentially destructive history/task edits are previewed/confirmed and recoverable
   through backup where applicable.

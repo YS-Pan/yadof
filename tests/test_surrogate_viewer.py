@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("matplotlib")
 torch = pytest.importorskip("torch")
 
-from yadof.tools.surrogate_viewer.backend import (
+from yadof.tools.yadof_tools.surrogate_viewer.backend import (
     AuditCancelled,
     CrossGenerationErrorAudit,
     DimensionSpec,
@@ -30,14 +30,14 @@ from yadof.tools.surrogate_viewer.backend import (
     sample_real_results_by_generation,
     _check_cancelled,
 )
-from yadof.tools.surrogate_viewer.app import _is_widget_descendant
-from yadof.tools.surrogate_viewer.report import (
+from yadof.tools.yadof_tools.surrogate_viewer.app import _is_widget_descendant
+from yadof.tools.yadof_tools.surrogate_viewer.report import (
     build_error_audit_report,
     build_workspace_summary,
     format_error_audit_report,
     format_workspace_summary,
 )
-from yadof.tools.surrogate_viewer.ui.interactive import InteractiveTab
+from yadof.tools.yadof_tools.surrogate_viewer.ui.interactive import InteractiveTab
 
 
 def _raw_item(name: str, data: np.ndarray) -> dict[str, object]:

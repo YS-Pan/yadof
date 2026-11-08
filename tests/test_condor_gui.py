@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from yadof.tools import condor_gui
+from yadof.tools.yadof_tools import console as condor_gui
 
 
 def test_checkout_launcher_prefers_adjacent_workspace(tmp_path, monkeypatch) -> None:
@@ -35,9 +35,9 @@ def test_installed_gui_launcher_is_packaged() -> None:
     import yadof
 
     assert (Path(__file__).resolve().parents[1] / "condor_gui.pyw").is_file()
-    assert (Path(yadof.__file__).parent / "tools" / "condor_gui.pyw").is_file()
+    assert (Path(yadof.__file__).parent / "tools/yadof_tools/console/condor_gui.pyw").is_file()
     assert any(
-        entry.name == "yadof-gui" and entry.value == "yadof.tools.condor_gui:main"
+        entry.name == "yadof-gui" and entry.value == "yadof.tools.yadof_tools.console:main"
         for entry in importlib.metadata.entry_points(group="gui_scripts")
     )
 
@@ -93,6 +93,8 @@ def test_start_passes_smoke_checkbox_selection_to_run_cli(smoke_test, monkeypatc
     launches = []
     workspace = Path("C:/study with spaces")
     app = object.__new__(condor_gui.CondorGUI)
+    app.elapsed_started_at = None
+    app.elapsed_var = SimpleNamespace(set=lambda value: None)
     app._workspace = lambda: workspace
     app.start_var = SimpleNamespace(get=lambda: "2")
     app.generations_var = SimpleNamespace(get=lambda: "3")
@@ -147,6 +149,7 @@ def test_gui_progress_tracks_actual_generation_output(monkeypatch, capsys) -> No
     assert condor_gui.parse_generation_progress("[yadof] smoke (distributed) [#] 1/1") is None
 
     app = object.__new__(condor_gui.CondorGUI)
+    app.elapsed_started_at = None
     app.events = queue.Queue()
     for line in lines:
         app.events.put(("log", line))
@@ -275,6 +278,7 @@ def test_run_exit_waits_for_condor_rm_before_reenabling_start() -> None:
             pass
 
     app = object.__new__(condor_gui.CondorGUI)
+    app.elapsed_started_at = None
     app.events = queue.Queue()
     app.events.put(("run_finished", 1))
     app.start_button = Widget()
@@ -335,6 +339,116 @@ def synchronous_gui_workers(monkeypatch):
             Thread=lambda *, target, args=(), daemon: SimpleNamespace(start=lambda: target(*args)),
         ),
     )
+
+
+@pytest.mark.parametrize(("seconds", "expected"), (
+    (0, "00:00:00"),
+    (59.9, "00:00:59"),
+    (60, "00:01:00"),
+    (3600, "01:00:00"),
+    (86399, "23:59:59"),
+    (86400, "1+00:00:00"),
+    (90061, "1+01:01:01"),
+    (864000, "10+00:00:00"),
+))
+def test_elapsed_time_format(seconds, expected):
+    assert condor_gui.format_elapsed_time(seconds) == expected
+
+
+@pytest.mark.parametrize("running", (False, True))
+def test_tools_button_opens_installed_tool_directory_without_workspace(
+    workspace_gui, monkeypatch, running,
+):
+    import yadof
+
+    app, _ = workspace_gui
+    app.workspace_var.set("")
+    app.running = running
+    app._update_workspace_controls()
+    opened = []
+    monkeypatch.setattr(condor_gui.os, "startfile", opened.append, raising=False)
+
+    app.tools_button.invoke()
+
+    assert opened == [Path(yadof.__file__).resolve().parent / "tools"]
+
+
+def test_tools_button_reports_open_failure(workspace_gui, monkeypatch):
+    app, _ = workspace_gui
+    errors = []
+    app._error = errors.append
+
+    def fail(path):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(condor_gui.os, "startfile", fail, raising=False)
+    app.tools_button.invoke()
+    assert errors == ["无法打开 tools 文件夹：permission denied"]
+
+
+def test_elapsed_timer_starts_stops_and_resets_on_restart(
+    workspace_gui, monkeypatch, synchronous_gui_workers,
+):
+    app, _ = workspace_gui
+    now = [100.0]
+    monkeypatch.setattr(condor_gui.time, "monotonic", lambda: now[0])
+    launches, stops = [], []
+    monkeypatch.setattr(app, "_run_worker", lambda *args: launches.append(args))
+    monkeypatch.setattr(app, "_stop_worker", lambda process: stops.append(process))
+    assert app.elapsed_var.get() == "仿真总耗时：00:00:00"
+    app.start_button.invoke()
+    assert launches and app.elapsed_started_at == 100.0
+    now[0] += 90061.8
+    app._drain_events()
+    assert app.elapsed_var.get() == "仿真总耗时：1+01:01:01"
+
+    process = SimpleNamespace(pid=123, poll=lambda: None)
+    app.events.put(("run_started", process))
+    app._drain_events()
+    now[0] += 2
+    app.stop_button.invoke()
+    assert stops == [process]
+    assert app.elapsed_started_at is None
+    assert app.elapsed_var.get() == "仿真总耗时：1+01:01:03"
+    now[0] += 100
+    app.events.put(("run_finished", 0))
+    app.events.put(("stopped", "removed"))
+    app._drain_events()
+    assert app.elapsed_var.get() == "仿真总耗时：1+01:01:03"
+
+    app.start_button.invoke()
+    assert len(launches) == 2
+    assert app.elapsed_var.get() == "仿真总耗时：00:00:00"
+    now[0] += 3
+    app._drain_events()
+    assert app.elapsed_var.get() == "仿真总耗时：00:00:03"
+
+
+@pytest.mark.parametrize(("event", "payload"), (
+    ("run_finished", 0),
+    ("run_finished", 1),
+    ("run_error", "launch failed"),
+))
+def test_elapsed_timer_freezes_after_run_exit_or_launch_failure(
+    workspace_gui, monkeypatch, synchronous_gui_workers, event, payload,
+):
+    app, _ = workspace_gui
+    now = [100.0]
+    monkeypatch.setattr(condor_gui.time, "monotonic", lambda: now[0])
+    app._run_worker = lambda *args: None
+    errors = []
+    app._error = errors.append
+    app.start()
+    now[0] += 7
+    app.events.put((event, payload))
+    app._drain_events()
+    assert app.elapsed_started_at is None
+    assert app.elapsed_var.get() == "仿真总耗时：00:00:07"
+    now[0] += 30
+    app._drain_events()
+    assert app.elapsed_var.get() == "仿真总耗时：00:00:07"
+    assert not app.running
+    assert bool(errors) == (event == "run_error")
 
 
 @pytest.mark.parametrize("outcome", ("removed", RuntimeError("permission denied")))
@@ -681,7 +795,8 @@ def test_clear_refuses_active_external_campaign_and_restores_controls(
 
 
 def test_failure_rows_keep_worker_and_job_folder(tmp_path, monkeypatch) -> None:
-    from yadof.tools import view_time
+    from yadof.tools.yadof_tools import view_time
+    from yadof.tools.yadof_tools import view_error
 
     jobs_dir = tmp_path / "custom_jobs"
     job_dir = jobs_dir / "j1"
@@ -691,7 +806,7 @@ def test_failure_rows_keep_worker_and_job_folder(tmp_path, monkeypatch) -> None:
         {"failed": True, "event_time": datetime(2026, 9, 30, 12, 5), "job_name": "j1",
          "computer": "DESKTOP-A2091", "error_type": "timeout", "error_message": "exceeded"},
     ])
-    monkeypatch.setattr(condor_gui, "load_config", lambda workspace: SimpleNamespace(
+    monkeypatch.setattr(view_error, "load_config", lambda workspace: SimpleNamespace(
         workspace=SimpleNamespace(jobs_dir=jobs_dir),
     ))
     rows = condor_gui.failure_rows(tmp_path)
@@ -774,7 +889,7 @@ def test_failure_window_sorts_every_column_and_opens_selected_job(tmp_path, monk
 
 
 def test_failure_rows_are_empty_before_any_timing_record(monkeypatch) -> None:
-    from yadof.tools import view_time
+    from yadof.tools.yadof_tools import view_time
 
     def no_rows(workspace):
         raise view_time.ViewTimeError("No recorded timing rows found in recorded_data")
@@ -786,7 +901,8 @@ def test_failure_rows_are_empty_before_any_timing_record(monkeypatch) -> None:
 @pytest.mark.parametrize("kind", ("cost", "time"))
 def test_view_worker_calls_existing_tool_api(kind, monkeypatch) -> None:
     import matplotlib
-    from yadof.tools import cost_viewer, view_time
+    from yadof.tools.yadof_tools import cost_viewer
+    from yadof.tools.yadof_tools import view_time
 
     calls = []
 

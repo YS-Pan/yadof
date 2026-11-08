@@ -6,7 +6,7 @@ import subprocess
 import pytest
 
 from yadof.recorded_data.campaign_lock import CampaignActiveError, CampaignLock
-from yadof.tools import history
+from yadof.tools.yadof_tools._shared import history
 from yadof.workspace.init import init_workspace
 
 

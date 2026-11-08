@@ -73,7 +73,7 @@ def test_public_api_records_actual_generation_budgets(tmp_path, p, b, initial):
     from collections import Counter
     from yadof.optimize import run_generations
     from yadof.recorded_data import list_records
-    from yadof.tools.cost_viewer import build_rows, hypervolume_series
+    from yadof.tools.yadof_tools.cost_viewer import build_rows, hypervolume_series
     from test_optimization_program import _workspace, _real_program
     program = _real_program().replace(
         "diagnostics.update(dict(selected.diagnostics))",

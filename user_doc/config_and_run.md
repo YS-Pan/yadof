@@ -434,7 +434,7 @@ explicitly selects `D:\.venv\Scripts\pythonw.exe`, the same environment used for
 development wheel installation and tests. Windows file associations may initially
 invoke another Python; the launcher forwards its arguments to the D-drive
 interpreter before importing yadof. The wheel's separate portable launcher at
-`yadof/tools/condor_gui.pyw` resolves its installed environment's Scripts entry.
+`yadof/tools/yadof_tools/console/condor_gui.pyw` resolves its installed environment's Scripts entry.
 The `yadof-gui` entry point uses the environment in which
 that entry point is installed.
 Without `--workspace`, `yadof-gui` initially selects `workspace` under the process
@@ -499,6 +499,34 @@ shows the remaining count and the generation number/index; during the pre-run sm
 job it shows the smoke batch when the distributed runner reports pending progress.
 Fast/local evaluation uses yadof's completed outcome count for generations. The bar
 resets when a new generation begins.
+
+**仿真总耗时** beside the progress bar measures elapsed time from each accepted
+**开始优化** click, including startup, smoke and all generations. **停止优化**
+freezes the displayed value when clicked; natural completion or launch/run failure
+also stops the timer. Starting again resets it to zero. Durations below 24 hours
+use `HH:MM:SS`; from 24 hours onward they use `D+HH:MM:SS`, for example
+`1+02:03:04` for one day, two hours, three minutes and four seconds. This display
+belongs to the current GUI session and does not accumulate past runs.
+
+The **tools** button opens the `tools` folder inside the yadof installation used
+by this GUI in Windows Explorer. It works without a selected workspace and while
+optimization is running.
+Open **user_tools**, then double-click `aedt_parameters_gui.pyw` to open the
+[HFSS/AEDT variable exporter](optimization_workflow.md#double-click-aedt-parameter-exporter).
+
+Open **yadof_tools** for these independent desktop entries:
+
+- `viewcost.pyw`: select a workspace, generate its current-cost PNG and open it.
+- `viewtime.pyw`: select a workspace, generate its timing PNG and open it.
+- `viewerror.pyw`: select a workspace and inspect its sortable failure table.
+- `surrogateviewer.pyw`: open the existing read-only checkpoint viewer.
+
+The history entries accept `--workspace PATH` when launched from a terminal.
+Cancelling the directory chooser exits without writing files. Their implementation
+files live in separate subdirectories; the entries always use this installation's
+Python. The installed CLI command names and arguments remain unchanged. Python
+callers use the categorized `yadof.tools.yadof_tools` and
+`yadof.tools.user_tools.aedt_parameters` import paths.
 
 The slot table queries `condor_status` immediately and every 10 seconds by
 default; the interval can be changed in seconds. It shows Name, Machine, Activity,

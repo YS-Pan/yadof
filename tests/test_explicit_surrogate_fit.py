@@ -44,12 +44,12 @@ from yadof.surrogate import (
 )
 from yadof.surrogate.linear_subspace import runtime, scheduler
 from yadof.task_snapshot import create_generation_snapshot
-from yadof.tools.surrogate_viewer.backend import (
+from yadof.tools.yadof_tools.surrogate_viewer.backend import (
     CheckpointPredictor,
     PlotRequest,
     discover_checkpoints,
 )
-from yadof.tools.surrogate_viewer.backend.rawdata import flatten_samples_for_schema
+from yadof.tools.yadof_tools.surrogate_viewer.backend.rawdata import flatten_samples_for_schema
 from yadof.workspace.init import init_workspace
 
 

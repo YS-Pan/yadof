@@ -7,7 +7,7 @@ the actual I/B count.
 
 ## Responsibility
 
-The separate `yadof-gui` Windows GUI script is owned by `yadof.tools.condor_gui`,
+The separate `yadof-gui` Windows GUI script is owned by `yadof.tools.yadof_tools.console`,
 not by the `yadof` argparse tree. It launches the existing `yadof run` command for
 optimization and calls existing history tools for views.
 
@@ -78,11 +78,11 @@ while the one-pass history stream is still discovering them, and ends on the exa
 candidate count. Its bar fill instead uses the known frozen-segment position, so it
 continues moving while the candidate total is unknown; interactive frames overwrite
 in place and leave one final line per stage, while summaries and saved-path messages
-remain on stdout. The handler imports the stable `yadof.tools.cost_viewer` package
+remain on stdout. The handler imports the stable `yadof.tools.yadof_tools.cost_viewer` package
 surface rather than the legacy flat compatibility module.
 
 `view surrogate` is a separate optional kind. Its bare/default `gui` mode
-optionally receives one workspace and loads `yadof.tools.surrogate_viewer.app`
+optionally receives one workspace and loads `yadof.tools.yadof_tools.surrogate_viewer.app`
 only inside its handler. Its `summary` mode prints checkpoint/history/task/rawData
 metadata without model inference, while `audit` prints selected cross-generation
 error matrices after one backend inference pass. `inspect` resolves one exact

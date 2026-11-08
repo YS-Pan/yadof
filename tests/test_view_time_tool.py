@@ -6,7 +6,7 @@ import warnings
 
 import pytest
 
-import yadof.tools.view_time as view_time
+import yadof.tools.yadof_tools.view_time as view_time
 
 
 class FakeRecordedDataApi:

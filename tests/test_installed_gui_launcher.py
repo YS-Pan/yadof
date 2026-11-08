@@ -15,7 +15,7 @@ import yadof
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = Path(yadof.__file__).parent / "tools/condor_gui.pyw"
+LAUNCHER = Path(yadof.__file__).parent / "tools/yadof_tools/console/condor_gui.pyw"
 
 
 @pytest.mark.parametrize("layout", ("Scripts", "Lib/site-packages/yadof/tools", "site-packages/yadof/tools"))
@@ -108,7 +108,7 @@ def test_normal_pip_install_publishes_source_independent_launcher(tmp_path):
     # Deliberately run both copies with another environment's Python, as file
     # associations may do. The executable they find remains bound to this prefix.
     for host in (Path(sys.executable), Path(sys.executable).with_name("pythonw.exe")):
-        for entry in (launcher, package_file.parent / "tools/condor_gui.pyw"):
+        for entry in (launcher, package_file.parent / "tools/yadof_tools/console/condor_gui.pyw"):
             launched = _run([host, entry, "--help"], tmp_path, env_overrides={
                 "PYTHONPATH": str(support), "YADOF_TEST_LAUNCH_PROBE": str(evidence),
             })

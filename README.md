@@ -10,15 +10,17 @@ that you compose in ordinary Python.
 Use it for problems such as antenna design, circuit tuning, and multibody
 dynamics, where each simulation matters and the design objectives may evolve.
 
-**Source version 0.8.0** ·
+**Source version 0.8.1** ·
 Python **3.10+** ·
 [Quick start](#try-the-starter-task) ·
 [User guide](user_doc/README.md) ·
 [Examples](examples/README.md) ·
 [Benchmark results](#compare-optimization-programs)
 
-Version 0.7 adds an offline Windows MSI with a private `yadof_env` runtime and
-improves the HTCondor GUI for workspace selection, progress and queue controls.
+Version 0.8.1 organizes desktop tools into `yadof_tools` and `user_tools`, adds
+double-click history/checkpoint viewers and the AEDT parameter exporter, and keeps
+the offline Windows MSI with its private `yadof_env` runtime. The HTCondor GUI shows
+per-launch elapsed time alongside generation progress and queue controls.
 Upgrades from before 0.6 still require the [fast-workspace migration guide](user_doc/migration_0_6.md).
 
 ## Why yadof?
@@ -54,7 +56,7 @@ outputs pass through the current task's cost function.
 
 ## Try the starter task
 
-On Windows x64, download the MSI from the [0.8.0 release](https://github.com/YS-Pan/yadof/releases/tag/v0.8.0).
+On Windows x64, download the MSI from the [0.8.1 release](https://github.com/YS-Pan/yadof/releases/tag/v0.8.1).
 It installs the GUI, CLI and private Python dependencies; HTCondor, frp and solver
 packages are provisioned separately. See the [installer guide](admin_tool/windows_installer/README.md).
 
@@ -64,7 +66,7 @@ checkout, build and install the current wheel:
 ```powershell
 python -m pip install build
 python -m build --wheel
-python -m pip install "./dist/yadof-0.8.0-py3-none-any.whl[surrogate,plot]"
+python -m pip install "./dist/yadof-0.8.1-py3-none-any.whl[surrogate,plot]"
 python -m yadof version
 ```
 

@@ -30,6 +30,58 @@ Before replacement, the current parameter file is copied to
 current-format file, including `CONSTRAINTS`, and replaces only `PARAMETERS`. Use
 `--yes` for non-interactive confirmation.
 
+### Double-click AEDT parameter exporter
+
+In the installed Yadof GUI, click **tools**, open **user_tools**, then double-click
+`aedt_parameters_gui.pyw`. This script uses the Python
+runtime belonging to that installation, even when Windows associates `.pyw`
+with another Python.
+
+In a source checkout, double-click `aedt_parameters_gui.pyw` to open the Chinese
+desktop interface. The launcher uses the sibling `.venv` installation when
+available, or the current Python's installed yadof. Install the current wheel
+first; the launcher never imports repository `src/` directly. A Python runtime
+with Tkinter is required. The installed `.pyw` contains the complete desktop
+interface; its `aedt_parameters/` subdirectory shares parsing and atomic
+publication with the existing HFSS CLI.
+
+1. Enter the AEDT path or use **浏览...** to select a project.
+2. Optionally enter or browse for a backup directory. The installed tools-folder
+   launcher defaults to `%LOCALAPPDATA%\Yadof\parameters_backup`, outside the
+   installed package. The source-checkout launcher defaults to
+   `parameters_backup` beside its root `.pyw`, independent of the working
+   directory. Module launch uses the working directory. Clearing the field
+   restores the launcher's default when an action starts.
+3. **预览变量** reads only Include-checked variables in
+   `OptimizationSetup1/Variables` without writing files.
+   **备份并生成** reparses the project and writes `parameters_constraints.py`
+   beside it. Any existing file is first copied byte for byte to a unique
+   timestamped `.py` backup. A backup or parsing failure leaves the output intact.
+
+This project-based export needs no initialized workspace, never launches AEDT or
+PyAEDT, and never modifies the project. It generates a fresh current-format module
+with `Parameter`, `PARAMETERS`, `get_parameters()` and empty `CONSTRAINTS`.
+Previous constraints and custom code remain in the backup; copy back any needed
+task-specific constraints. The workspace CLI above instead preserves the existing
+current-format module outside `PARAMETERS`.
+
+The desktop exporter reads the exact `OptimizationSetup1` block and its
+`Variables` block. The Include checkbox is stored as `i=true`; only those records
+are included, using bounds, levels and units from the same records. Global
+`VariableProp`/`oa` settings, sensitivity/tuning settings, starting points and other
+Optimetrics setups are not variable or unit sources for this exporter. Missing or
+multiple target blocks, malformed blocks, an empty Include selection and duplicate
+variable records are errors; the existing parameter file is preserved and there
+is no wider search or simulator fallback.
+
+Continuous bounds use `Min`/`Max`; discrete `Level` lists retain their values.
+Integer intervals become discrete integer values (at most 100000 per variable).
+Mixed bound units, symbolic/non-finite bounds and reversed intervals are errors.
+Current variable values are not read. When several designs have their own
+`OptimizationSetup1`, use a project containing only the target design.
+After placing generated parameters in an initialized workspace's
+`job_template/`, run `yadof check --workspace PATH` before execution.
+
 ## 2. Workflow and adapters
 
 `job_template/workflow.py` consumes assigned raw parameter values and writes flat

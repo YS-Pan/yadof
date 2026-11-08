@@ -31,7 +31,7 @@ from yadof.recorded_data.segment_store import (
 )
 from yadof.recorded_data.session import CampaignSession, RecordingError
 from yadof.task_snapshot import GenerationTaskSnapshot
-from yadof.tools.history import clear_history
+from yadof.tools.yadof_tools._shared.history import clear_history
 from yadof.workspace.init import init_workspace
 
 

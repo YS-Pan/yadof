@@ -87,6 +87,13 @@ def test_status_keeps_job_and_address_without_machine():
     assert "hidden" not in row
 
 
+def test_metadata_cleanup_preserves_yadof_checkout_paths():
+    text = 'LOCAL_DIR = D:/yadof_latest/temp\nLOCAL_CONFIG_FILE = D:\\yadof_latest\\condor_config.local\n'
+    assert clean_config(text) == text
+    with pytest.raises(ValueError):
+        clean_config('START = $(YADOF_EXECUTE_READY)\n')
+
+
 def test_real_condor_parser_and_frpc(tmp_path):
     import shutil
     condor = shutil.which("condor_config_val")

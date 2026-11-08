@@ -30,6 +30,8 @@ installation. Every copied file must match the published release file manifest;
 unknown files are excluded. The new wheel replaces all previous yadof-owned package
 files, and the new manifest records the reference manifest digest. This operation
 only reads the existing installation.
+Reused payloads regenerate the CLI/GUI executables from the current `Launcher.cs`
+so a tool-module relocation cannot retain an obsolete GUI target.
 
 ## Included versions and exclusions
 
@@ -66,7 +68,7 @@ Then, from the repository root:
 
 ```powershell
 & '..\.venv\Scripts\python.exe' admin_tool/windows_installer/build_msi.py `
-    --wheel dist/yadof-0.8.0-py3-none-any.whl `
+    --wheel dist/yadof-0.8.1-py3-none-any.whl `
     --work temp/msi-a2094-build `
     --zig temp/toolchains/zig-x86_64-windows-0.14.1/zig.exe
 ```
@@ -95,7 +97,7 @@ Signing requires a publisher certificate and is separate from local construction
 ## Installation and servicing
 
 ```powershell
-msiexec /i yadof-0.8.0-a2094-win-x64.msi /qn INSTALLDIR="D:\Apps\Yadof" /L*v install.log
+msiexec /i yadof-0.8.1-a2094-win-x64.msi /qn INSTALLDIR="D:\Apps\Yadof" /L*v install.log
 ```
 
 The MSI owns its installed program files and shortcuts. Repair and uninstall are
@@ -116,7 +118,7 @@ campaign is needed for that acceptance.
 
 ```powershell
 & '..\.venv\Scripts\python.exe' admin_tool/windows_installer/validate_msi.py `
-    --msi dist/yadof-0.8.0-a2094-win-x64.msi `
+    --msi dist/yadof-0.8.1-a2094-win-x64.msi `
     --work temp/msi-qa
 ```
 
@@ -129,3 +131,19 @@ files when the complete target path reaches 260 UTF-16 code units. The MSI deriv
 the allowed installation-directory length from its longest payload path and checks
 it before copying files, including silent installations. Browse asks for a shorter
 folder when needed, and the full UI includes standard installer error dialogs.
+
+## GitHub release workflow
+
+`.github/workflows/release.yml` publishes version changes on `main` when the
+commit message starts with `Release yadof `; manual dispatch is also supported.
+The job uses the repository's short-lived `GITHUB_TOKEN`, builds the wheel and
+sdist, and verifies the pinned v0.8.0 MSI/reference-manifest hashes before reusing
+that private runtime. It regenerates both native launchers for the current
+module layout and validates a separate MSI identity with `--isolated-copy`.
+
+After acceptance, `release_metadata.py` packages administrator sources, runtime
+evidence and SHA-256 checksums. Only then does the workflow create a draft for
+the exact source commit, upload every artifact, and publish the release. It
+refuses to replace an already published release or reuse another commit's draft.
+The reference release and compiler hashes are pinned in the workflow; changing
+the runtime reference requires reviewing and updating those pins explicitly.

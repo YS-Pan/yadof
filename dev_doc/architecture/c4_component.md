@@ -131,6 +131,17 @@
   evidence, optimization resume state and derived model state. It holds the same
   workspace campaign lock throughout mutation so a new campaign cannot race cleanup.
   Integrated viewer subtrees own their detailed developer documentation.
+- The optional AEDT parameter GUI selects an explicit project file rather than a
+  campaign workspace. Its text-only exporter writes a task definition beside that
+  project and backs up the previous bytes to the caller-selected directory before
+  atomic replacement. It owns no simulator session or campaign state.
+  Its parameter selection is confined to the designated Optimetrics setup.
+
+The tools root separates framework viewers under `yadof_tools` from independent
+project utilities under `user_tools`. Runtime binding happens before optional
+imports; the shared desktop coordinator and error table serve both the main
+controller and standalone history entries. Numerical viewers remain read-only
+backend leaves, separate from these Tk shells.
 
 ## Dependency direction
 

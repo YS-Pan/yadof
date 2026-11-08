@@ -799,8 +799,8 @@ def test_checkpoint_publish_recover_and_full_rawdata_prediction(
     assert coordinate.authoritative_full_grid is False
     assert state.bundle_path.read_bytes() == bundle_before
 
-    from yadof.tools.surrogate_viewer.backend import PlotRequest
-    from yadof.tools.surrogate_viewer.backend.hierarchical_checkpoints import (
+    from yadof.tools.yadof_tools.surrogate_viewer.backend import PlotRequest
+    from yadof.tools.yadof_tools.surrogate_viewer.backend.hierarchical_checkpoints import (
         HierarchicalCAECheckpointPredictor,
         discover_hierarchical_cae_checkpoints,
     )

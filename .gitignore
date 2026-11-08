@@ -1,6 +1,7 @@
 # Disposable task-specific work
 /temp/*
 !/temp/.gitkeep
+/parameters_backup/
 
 # Python package and test artifacts
 /build/

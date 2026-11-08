@@ -52,7 +52,7 @@ dev = [
 yadof = "yadof.cli:main"
 
 [project.gui-scripts]
-yadof-gui = "yadof.tools.condor_gui:main"
+yadof-gui = "yadof.tools.yadof_tools.console:main"
 
 [project.urls]
 Repository = "https://github.com/YS-Pan/yadof"
@@ -69,12 +69,13 @@ packages = ["src/yadof"]
 "user_doc" = "yadof/_resources/docs/user_doc"
 
 [tool.hatch.build.targets.wheel.shared-scripts]
-"src/yadof/tools/condor_gui.pyw" = "condor_gui.pyw"
+"src/yadof/tools/yadof_tools/console/condor_gui.pyw" = "condor_gui.pyw"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "/README.md",
     "/condor_gui.pyw",
+    "/aedt_parameters_gui.pyw",
     "/pyproject.toml",
     "/src/yadof",
     "/dev_doc",

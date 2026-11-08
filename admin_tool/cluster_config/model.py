@@ -248,7 +248,7 @@ def clean_config(text: str, replace=()) -> str:
         if key in {"STARTD_ATTRS", "MASTER_ATTRS", "SCHEDD_ATTRS"}:
             prefix, value = line.split("=", 1)
             line = prefix + "= " + ", ".join(x for x in re.split(r"[,\s]+", value.strip()) if x and "YADOF_" not in x.upper())
-        elif not line.lstrip().startswith("#") and "YADOF_" in line.upper():
+        elif not line.lstrip().startswith("#") and re.search(r"(?<![\w/\\])YADOF_\w+(?![\w/\\])", line, re.I):
             raise ValueError("旧配置仍引用 YADOF_*；请先移除该自定义表达式")
         result.append(line)
     return "\n".join(result).rstrip() + "\n"

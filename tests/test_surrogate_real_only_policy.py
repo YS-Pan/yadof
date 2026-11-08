@@ -19,7 +19,7 @@ from yadof.surrogate.conditional_inr.types import (
     SurrogateState,
     TargetScaler,
 )
-from yadof.tools.surrogate_viewer.backend import discover_checkpoints
+from yadof.tools.yadof_tools.surrogate_viewer.backend import discover_checkpoints
 
 
 def test_field_macro_loss_is_invariant_to_slot_duplication() -> None:

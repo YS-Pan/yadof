@@ -11,8 +11,8 @@ import pytest
 
 pytest.importorskip("torch")
 
-from yadof.tools.surrogate_viewer import inspection as inspection_module
-from yadof.tools.surrogate_viewer.backend import (
+from yadof.tools.yadof_tools.surrogate_viewer import inspection as inspection_module
+from yadof.tools.yadof_tools.surrogate_viewer.backend import (
     CheckpointInfo,
     ParameterSpec,
     PlotData,
@@ -20,12 +20,12 @@ from yadof.tools.surrogate_viewer.backend import (
     RealResult,
     rawdata_dimensions,
 )
-from yadof.tools.surrogate_viewer.errors import (
+from yadof.tools.yadof_tools.surrogate_viewer.errors import (
     SurrogateToolError,
     format_surrogate_error,
     normalize_surrogate_error,
 )
-from yadof.tools.surrogate_viewer.inspection import (
+from yadof.tools.yadof_tools.surrogate_viewer.inspection import (
     INLINE_GRID_SCALAR_LIMIT,
     build_case_inspection,
     export_case_inspection,
@@ -582,7 +582,7 @@ def test_failed_render_leaves_no_manifest_or_apparently_complete_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from yadof.tools.surrogate_viewer import renderer
+    from yadof.tools.yadof_tools.surrogate_viewer import renderer
 
     axes = (("x", np.asarray([0.0, 1.0]), "m"),)
     viewer = _viewer(tmp_path / "case", np.asarray([1.0, 2.0]), axes)
@@ -605,7 +605,7 @@ def test_output_publication_failure_is_typed_and_leaves_no_manifest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from yadof.tools.surrogate_viewer import renderer
+    from yadof.tools.yadof_tools.surrogate_viewer import renderer
 
     axes = (("x", np.asarray([0.0, 1.0]), "m"),)
     viewer = _viewer(tmp_path / "case", np.asarray([1.0, 2.0]), axes)

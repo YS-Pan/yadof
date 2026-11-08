@@ -15,12 +15,12 @@ from yadof.cli.main import (
     _CostViewProgress,
     build_parser,
 )
-from yadof.tools.cost_viewer.types import ProgressMessage
+from yadof.tools.yadof_tools.cost_viewer.types import ProgressMessage
 from yadof.evaluate_manager import evaluate_population
 from yadof.recorded_data import list_records
 from yadof.resources import adapter_names, adapter_resource
-from yadof.tools.adapters import copy_adapter
-from yadof.tools.history import (
+from yadof.tools.yadof_tools._shared.adapters import copy_adapter
+from yadof.tools.yadof_tools._shared.history import (
     HistoryClearConfirmationRequired,
     clear_history,
 )
@@ -336,8 +336,8 @@ def test_surrogate_json_runtime_errors_use_one_stderr_object(
     monkeypatch,
     capsys,
 ):
-    from yadof.tools.surrogate_viewer.errors import SurrogateToolError
-    from yadof.tools.surrogate_viewer import inspection, report
+    from yadof.tools.yadof_tools.surrogate_viewer.errors import SurrogateToolError
+    from yadof.tools.yadof_tools.surrogate_viewer import inspection, report
 
     def fail(*_args, **_kwargs):
         raise SurrogateToolError(

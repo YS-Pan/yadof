@@ -176,9 +176,9 @@ hot-change contract; structural dimension changes are future work.
   CLI keeps parser/routing in `main.py` and isolates standalone smoke safety and
   optimization-run presentation in `smoke.py` and `run.py`; tiny lazy dispatchers
   keep help, version, and documentation commands independent of runtime imports.
-  `tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf
-  with its own nested developer documentation and a compatibility facade.
-  `tools.surrogate_viewer` is an explicitly launched, read-only GUI/text inspection
+  `tools.yadof_tools.cost_viewer` is a reusable read-only history-analysis/report/plot leaf
+  with its own nested developer documentation and one public package surface.
+  `tools.yadof_tools.surrogate_viewer` is an explicitly launched, read-only GUI/text inspection
   leaf with its own nested developer documentation and optional dependency group.
 - `_resources` contains immutable templates, adapter references, documentation, and
   the small worker helper copied into jobs.
@@ -240,7 +240,8 @@ domain.
 
 ## Invariants
 
-All stateful public APIs take a workspace. Package resources are never runtime write
+Campaign stateful public APIs take a workspace; project-based task exporters take
+an explicit input project and output/backup paths. Package resources are never runtime write
 targets. Config precedence is defaults < workspace < temporary override. Fresh task
 loading isolates same-named helpers between workspaces. Failures become diagnostics
 and correct-width infinity. Wheel/sdist exclude examples, workspaces, and runtime

@@ -1,0 +1,93 @@
+name: Build and publish release
+
+"on":
+  push:
+    branches: [main]
+    paths: [src/yadof/_version.py]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yadof-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release yadof ')
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      PYTHONIOENCODING: utf-8
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build and check Python distributions
+        run: |
+          python -m pip install build hatchling twine
+          if ($LASTEXITCODE -ne 0) { throw 'Build-tool installation failed' }
+          python -m build --no-isolation
+          if ($LASTEXITCODE -ne 0) { throw 'Distribution build failed' }
+          python -m twine check dist/*
+          if ($LASTEXITCODE -ne 0) { throw 'Distribution metadata check failed' }
+          $version = python -c "import re,runpy; v=runpy.run_path('src/yadof/_version.py')['__version__']; assert re.fullmatch(r'[0-9]+[.][0-9]+[.][0-9]+',v); print(v)"
+          "YADOF_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Obtain the hash-verified private runtime reference
+        run: |
+          New-Item -ItemType Directory -Path temp/reference-download -Force | Out-Null
+          gh release download v0.8.0 --pattern yadof-0.8.0-a2094-win-x64.msi --pattern yadof-0.8.0-a2094-win-x64.manifest.json --dir temp/reference-download
+          if ($LASTEXITCODE -ne 0) { throw 'Reference download failed' }
+          $msi = (Resolve-Path temp/reference-download/yadof-0.8.0-a2094-win-x64.msi).Path
+          $manifest = (Resolve-Path temp/reference-download/yadof-0.8.0-a2094-win-x64.manifest.json).Path
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath $msi).Hash.ToLower() -ne '6c9149408780bd7f83fb541b3d039769a40cde0359264eb7984afcdaaa7479d3') { throw 'Reference MSI digest mismatch' }
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifest).Hash.ToLower() -ne 'ef91541339988e31ba871f47ec7c1d9b6499d1888c7b37b9b7f48b7dcb93f354') { throw 'Reference manifest digest mismatch' }
+          $image = [IO.Path]::GetFullPath('temp/reference-image')
+          $log = [IO.Path]::GetFullPath('temp/reference-extract.log')
+          $process = Start-Process msiexec.exe -ArgumentList @('/a', "`"$msi`"", '/qn', "TARGETDIR=`"$image`"", '/L*v', "`"$log`"") -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Reference extraction failed: $($process.ExitCode)" }
+          $references = @(Get-ChildItem -LiteralPath $image -Recurse -File -Filter dependency-manifest.json)
+          if ($references.Count -ne 1) { throw 'Expected one extracted runtime reference' }
+          "YADOF_REFERENCE=$($references[0].DirectoryName)" >> $env:GITHUB_ENV
+      - name: Obtain the pinned folder-picker compiler
+        run: |
+          Invoke-WebRequest https://ziglang.org/download/0.14.1/zig-x86_64-windows-0.14.1.zip -OutFile temp/zig.zip
+          if ((Get-FileHash -Algorithm SHA256 temp/zig.zip).Hash.ToLower() -ne '554f5378228923ffd558eac35e21af020c73789d87afeabf4bfd16f2e6feed2c') { throw 'Compiler digest mismatch' }
+          Expand-Archive -LiteralPath temp/zig.zip -DestinationPath temp/toolchains
+      - name: Build the Windows MSI
+        run: |
+          $python = Join-Path $env:YADOF_REFERENCE 'yadof_env/Scripts/python.exe'
+          & $python admin_tool/windows_installer/build_msi.py --wheel "dist/yadof-${env:YADOF_VERSION}-py3-none-any.whl" --work temp/b --installed-source $env:YADOF_REFERENCE --source-manifest temp/reference-download/yadof-0.8.0-a2094-win-x64.manifest.json --zig temp/toolchains/zig-x86_64-windows-0.14.1/zig.exe --output "dist/yadof-${env:YADOF_VERSION}-a2094-win-x64.msi"
+          if ($LASTEXITCODE -ne 0) { throw 'MSI build failed' }
+      - name: Validate an isolated MSI identity
+        run: |
+          $python = Join-Path $env:YADOF_REFERENCE 'yadof_env/Scripts/python.exe'
+          & $python admin_tool/windows_installer/validate_msi.py --msi "dist/yadof-${env:YADOF_VERSION}-a2094-win-x64.msi" --work temp/q --isolated-copy
+          if ($LASTEXITCODE -ne 0) { throw 'MSI acceptance failed' }
+          python admin_tool/windows_installer/release_metadata.py --acceptance temp/q --dist dist
+          if ($LASTEXITCODE -ne 0) { throw 'Release evidence generation failed' }
+      - name: Upload verified artifacts and publish
+        run: |
+          $tag = "v$env:YADOF_VERSION"
+          $existingJson = gh api "repos/$env:GH_REPO/releases/tags/$tag" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $existing = $existingJson | ConvertFrom-Json
+            if (-not $existing.draft) { throw 'This release is already published; refusing to replace it' }
+            if ($existing.target_commitish -ne $env:GITHUB_SHA) { throw 'The existing draft belongs to another commit' }
+          } else {
+            gh release create $tag --target $env:GITHUB_SHA --title "Yadof $env:YADOF_VERSION" --notes-file temp/q/release-notes.md --draft
+            if ($LASTEXITCODE -ne 0) { throw 'Draft creation failed' }
+          }
+          $assets = @(Get-ChildItem dist -File | ForEach-Object { $_.FullName })
+          gh release upload $tag @assets --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
+          gh release edit $tag --draft=false --latest=true
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

@@ -33,7 +33,7 @@ internal static class Launcher
 #if ADMIN
             var arguments = new StringBuilder("-X utf8 -B -s " + Quote(Path.Combine(prefix, "..", "admin_config.pyw")));
 #else
-            var arguments = new StringBuilder("-X utf8 -B -s -m yadof.tools.condor_gui");
+            var arguments = new StringBuilder("-X utf8 -B -s -m yadof.tools.yadof_tools.console");
 #endif
 #else
             string python = Path.Combine(prefix, "Scripts", "python.exe");

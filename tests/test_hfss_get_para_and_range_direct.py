@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from yadof.tools.hfss import parameter_extraction as generator
+from yadof.tools.user_tools.aedt_parameters import parameter_extraction as generator
 
 
 def _parameters() -> tuple[list[generator.OptParam], tuple[str, str]]:
@@ -85,6 +85,24 @@ def test_direct_parser_reads_inline_variableprop_optimization_ranges(tmp_path):
     assert parameters == [
         generator.OptParam("mode", (1.0, 2.0, 3.0), 2.0, ""),
         generator.OptParam("Wc1", ((30.0, 40.0),), 36.9, "mm"),
+    ]
+
+
+def test_inline_parser_uses_oa_without_leaking_sensitivity_or_tuning_attributes(tmp_path):
+    aedt_path = _temporary_aedt_path(tmp_path)
+    aedt_path.write_text(
+        "VariableProp('width', 'UD', '', '1.5mm', "
+        "oa(i=true, int=false, Min='1mm', Max='2mm', Level='[1: 2] mm'), "
+        "sa(i=false, int=false, Min='10mm', Max='20mm'), "
+        "ta(i=false, int=false, Min='100mm', Max='200mm'))\n"
+        "VariableProp('fixed', 'UD', '', '2mm', "
+        "oa(i=false, int=false, Min='1mm', Max='3mm'), "
+        "sa(i=true, int=false, Min='10mm', Max='30mm'))\n",
+        encoding="utf-8",
+    )
+
+    assert generator._collect_parameters_from_aedt_file(aedt_path) == [
+        generator.OptParam("width", ((1.0, 2.0),), 1.5, "mm"),
     ]
 
 

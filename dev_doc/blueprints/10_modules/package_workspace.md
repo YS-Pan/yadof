@@ -9,8 +9,17 @@ code, generic templates/adapters, and version-matched documentation. The top-lev
 `yadof-benchmark/` project is a separate distribution with its own installed
 package resources and console entry point; it is not a yadof package resource or
 implicit yadof workspace.
+The source distribution also carries the root `aedt_parameters_gui.pyw` launcher;
+its UI lives in installed `tools/user_tools/aedt_parameters_gui.pyw` and its shared
+parser in `tools/user_tools/aedt_parameters/`. This launcher
+does not add a console entry or an installed shared script.
+The wheel additionally carries `tools/user_tools/aedt_parameters_gui.pyw` for double-click
+launch from the installed user toolbox. Its complete UI lives in that `.pyw`;
+the adjacent parser package is shared with the HFSS CLI. The four framework
+viewers have entries in `tools/yadof_tools/` and implementation subdirectories. It binds to that package's own Python
+runtime and uses a user-owned backup directory, without another console entry.
 The repository-root `condor_gui.pyw` is only a source-checkout launcher. The
-portable installed launcher is maintained under `src/yadof/tools/condor_gui.pyw`.
+portable installed launcher is maintained under `src/yadof/tools/yadof_tools/console/condor_gui.pyw`.
 Hatch's wheel `shared-scripts` mapping also places it in `.data/scripts/`, so
 ordinary pip installation publishes `Scripts/condor_gui.pyw` automatically.
 Both copies remain pip-managed artifacts, replaced and removed with the package.
@@ -22,7 +31,7 @@ user-site layout. Missing entries fail rather than choosing another environment.
 Non-Windows invocation uses the installed Python GUI entry directly. No fixed
 drive, source checkout, extra installation script or workspace mutation is needed.
 
-The current package version is 0.8.0. Recorded history uses immutable standard-ZIP
+The current package version is 0.8.1. Recorded history uses immutable standard-ZIP
 segments and immutable metadata event files below the workspace recorded-data root.
 
 ## Windows MSI deployment

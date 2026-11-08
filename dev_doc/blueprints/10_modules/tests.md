@@ -141,6 +141,16 @@ for separately authorized real adapter smoke or performance work.
   full-real backend fallback, support hard stop, and recorder-failure propagation.
   This validates framework behavior, not acquisition or optimizer performance;
 - CLI/docs, integrated cost/time views including grouped `view all`,
+  strict project-only AEDT preview/export, exact OptimizationSetup1 Include/range
+  selection, exclusion of other setups/global properties and no-fallback errors,
+  independent optimization/sensitivity/
+  tuning attributes, finite numeric ranges and integer/discrete levels, Unicode
+  paths and BOMs, exact old-byte backups and collision handling, backup/publication
+  failure preservation, and desktop chooser/manual-entry/default-backup behavior
+  when a Tk display is available,
+  installed tools-folder AEDT launcher discovery, owning-runtime selection,
+  cross-Python argument/exit forwarding, missing-runtime refusal and user-owned
+  default backup selection,
   installed `.pyw` publication through ordinary wheel/pip installation, exact
   argument and exit-code forwarding, venv/global/user-site layouts, refusal to
   fall back to another environment, and execution through a different Python in
@@ -156,6 +166,9 @@ for separately authorized real adapter smoke or performance work.
   independent queue removal via `condor_rm -all` without workspace/process mutation,
   duplicate-request blocking and success/error control recovery, and slot `JobId`
   association/string preservation/missing-value handling across refreshes,
+  installed tools-directory opening without a workspace and its failure reporting,
+  GUI elapsed timing across start/stop/restart, successful/failed exit and launch
+  failure, plus second/minute/hour/day formatting boundaries without real waiting,
   the 50-generation run default, default-on run progress with an explicit quiet
   override, per-generation successful/error/remaining outcome counts, streamed
   distributed result notification, flushed pre-execution standalone-smoke feedback,
@@ -189,6 +202,13 @@ for separately authorized real adapter smoke or performance work.
   runtime failures, hierarchical checkpoint
   discovery/dispatch, aggregate selection, sampling, and cancellation
   when optional dependencies are installed.
+
+The categorized desktop-entry suite verifies all four installed `.pyw` gateways,
+owning-runtime lookup and forwarding, workspace selection/cancellation, worker
+calculation versus Tk presentation, and visible error completion. Existing
+controller/table, cost/time, surrogate and AEDT tests consume the relocated APIs.
+Installer runtime-reuse coverage proves current launchers replace old ones while
+the hash-verified source prefix stays untouched.
 
 ## Test placement
 

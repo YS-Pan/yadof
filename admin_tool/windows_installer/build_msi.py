@@ -186,6 +186,17 @@ def install_wheel(wheel: Path, prefix: Path):
             destination.write_bytes(archive.read(member))
 
 
+def stage_launchers(prefix: Path):
+    """Compile entries for the current module layout, including reused runtimes."""
+    compiler = Path(os.environ["WINDIR"]) / "Microsoft.NET/Framework64/v4.0.30319/csc.exe"
+    scripts = prefix / "Scripts"
+    scripts.mkdir(exist_ok=True)
+    for gui in (False, True):
+        output = scripts / ("yadof-gui.exe" if gui else "yadof.exe")
+        run([compiler, "/nologo", "/optimize+", "/platform:x64", f"/out:{output}",
+             "/target:winexe" if gui else "/target:exe", *(["/define:GUI", "/reference:System.Windows.Forms.dll"] if gui else []), HERE / "Launcher.cs"])
+
+
 def prepare_payload(wheel: Path, work: Path, runtime_source: Path, reference_sites=()):
     payload = work / "payload"
     payload.mkdir(exist_ok=False)
@@ -198,13 +209,7 @@ def prepare_payload(wheel: Path, work: Path, runtime_source: Path, reference_sit
         stage_distribution(distribution, prefix / "Lib/site-packages")
     install_wheel(wheel, prefix)
     copy_file(HERE / "private_sitecustomize.py", prefix / "Lib/site-packages/sitecustomize.py")
-    compiler = Path(os.environ["WINDIR"]) / "Microsoft.NET/Framework64/v4.0.30319/csc.exe"
-    scripts = prefix / "Scripts"
-    scripts.mkdir(exist_ok=True)
-    for gui in (False, True):
-        output = scripts / ("yadof-gui.exe" if gui else "yadof.exe")
-        run([compiler, "/nologo", "/optimize+", "/platform:x64", f"/out:{output}",
-             "/target:winexe" if gui else "/target:exe", *(["/define:GUI", "/reference:System.Windows.Forms.dll"] if gui else []), HERE / "Launcher.cs"])
+    stage_launchers(prefix)
     info = {"baseline": "DESKTOP-A2094, audited 2026-10-27", "python": "3.11.15",
             "framework_extras": EXTRAS,
             "excluded": ["HTCondor", "frp", "PyAEDT", "PyChrono", "simulators"],
@@ -240,6 +245,7 @@ def payload_from_installation(wheel: Path, work: Path, source: Path, manifest: P
         copy_file(original, payload.joinpath(*relative.parts))
     prefix = payload / "yadof_env"
     install_wheel(wheel, prefix)
+    stage_launchers(prefix)
     info = json.loads((payload / "dependency-manifest.json").read_text(encoding="utf-8"))
     info.update(wheel=wheel.name, wheel_sha256=sha256(wheel),
                 runtime_reference_manifest_sha256=sha256(manifest))

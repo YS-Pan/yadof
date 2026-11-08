@@ -62,10 +62,24 @@ GaussianProcessRegressor().fit(np.array([[0.],[1.]]), np.array([0.,1.])).predict
 fig, ax = plt.subplots(); ax.plot([0,1],[0,1]); fig.savefig(pathlib.Path(sys.argv[1])/'plot.png'); plt.close(fig)
 import tkinter as tk
 root = tk.Tk(); root.withdraw()
-from yadof.tools import condor_gui
+from yadof.tools.yadof_tools import console as condor_gui
 condor_gui.query_status = lambda: []
 controller = condor_gui.CondorGUI(root, pathlib.Path(sys.argv[1])/'gui workspace')
 root.update(); root.destroy()
+import runpy
+import yadof
+tool_root = pathlib.Path(yadof.__file__).parent / 'tools'
+from yadof.tools.yadof_tools._shared.launcher import owning_runtime
+for name in ('viewcost', 'viewtime', 'viewerror', 'surrogateviewer'):
+    entry = tool_root / 'yadof_tools' / (name + '.pyw')
+    assert entry.is_file()
+    assert owning_runtime(entry).is_relative_to(prefix)
+aedt_entry = tool_root / 'user_tools/aedt_parameters_gui.pyw'
+aedt = runpy.run_path(str(aedt_entry))
+assert aedt['_runtime'](aedt_entry).is_relative_to(prefix)
+root = tk.Tk(); root.withdraw()
+exporter = aedt['AedtParametersApp'](root, script_dir=pathlib.Path(sys.argv[1]))
+root.update(); exporter._close()
 sys.path.insert(0, str(prefix.parent))
 from admin_tool.cluster_config.app import AdminApp
 root = tk.Tk(); root.withdraw()
