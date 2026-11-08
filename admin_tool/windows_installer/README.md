@@ -134,12 +134,18 @@ folder when needed, and the full UI includes standard installer error dialogs.
 
 ## GitHub release workflow
 
-`.github/workflows/release.yml` publishes version changes on `main` when the
-commit message starts with `Release yadof `; manual dispatch is also supported.
+`.github/workflows/release.yml` publishes version/release-tooling changes on
+`main` when the commit message starts with `Release yadof `; manual dispatch is
+also supported.
 The job uses the repository's short-lived `GITHUB_TOKEN`, builds the wheel and
 sdist, and verifies the pinned v0.8.0 MSI/reference-manifest hashes before reusing
 that private runtime. It regenerates both native launchers for the current
 module layout and validates a separate MSI identity with `--isolated-copy`.
+`extract_reference.py` reads the embedded cabinet and MSI directory/file tables
+using the native read-only MSI API. It extracts below root temp/ without
+registering the reference product, including older MSIs without an administrative
+installation sequence. The subsequent builder verifies every extracted file
+against the pinned published manifest.
 
 After acceptance, `release_metadata.py` packages administrator sources, runtime
 evidence and SHA-256 checksums. Only then does the workflow create a draft for
