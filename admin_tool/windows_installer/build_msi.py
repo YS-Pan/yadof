@@ -367,6 +367,29 @@ def add_dialogs(msi, db):
         add("ControlEvent", [("ErrorDlg", button, "EndDialog", button, "1", 1)])
 
 
+def set_database_codepage(destination: Path, work: Path):
+    """Declare Chinese filename encoding before adding non-ASCII table strings."""
+    archive = work / "_ForceCodepage.idt"
+    archive.write_bytes(b"\r\n\r\n936\t_ForceCodepage\r\n")
+    api = ctypes.WinDLL("msi")
+    api.MsiOpenDatabaseW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint)]
+    api.MsiDatabaseImportW.argtypes = [ctypes.c_uint, ctypes.c_wchar_p, ctypes.c_wchar_p]
+    api.MsiDatabaseCommit.argtypes = [ctypes.c_uint]
+    api.MsiCloseHandle.argtypes = [ctypes.c_uint]
+
+    def check(result):
+        if result:
+            raise ctypes.WinError(result)
+
+    database = ctypes.c_uint()
+    check(api.MsiOpenDatabaseW(str(destination), 1, ctypes.byref(database)))
+    try:
+        check(api.MsiDatabaseImportW(database, str(work), archive.name))
+        check(api.MsiDatabaseCommit(database))
+    finally:
+        api.MsiCloseHandle(database)
+
+
 def build_database(payload: Path, work: Path, destination: Path, version: str, folder_picker: Path):
     import msilib as msi
     from msilib import schema, sequence
@@ -378,6 +401,9 @@ def build_database(payload: Path, work: Path, destination: Path, version: str, f
     maximum_directory_length = 258 - max(len(row["path"].encode("utf-16-le")) // 2 for row in inventory)
     product = guid("product:" + fingerprint + ":" + sha256(Path(__file__)) + ":" + sha256(folder_picker))
     db = msi.init_database(str(destination), schema, "Yadof", product, version, "Yadof")
+    db.Close()
+    set_database_codepage(destination, work)
+    db = msi.OpenDatabase(str(destination), msi.MSIDBOPEN_TRANSACT)
     for table in ("InstallExecuteSequence", "InstallUISequence"):
         rows = list(getattr(sequence, table))
         rows = [(action, condition, 1501 if action == "RemoveExistingProducts" else order) for action, condition, order in rows]

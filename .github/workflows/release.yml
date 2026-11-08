@@ -53,7 +53,7 @@ jobs:
           $manifest = (Resolve-Path temp/reference-download/yadof-0.8.0-a2094-win-x64.manifest.json).Path
           if ((Get-FileHash -Algorithm SHA256 -LiteralPath $msi).Hash.ToLower() -ne '6c9149408780bd7f83fb541b3d039769a40cde0359264eb7984afcdaaa7479d3') { throw 'Reference MSI digest mismatch' }
           if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifest).Hash.ToLower() -ne 'ef91541339988e31ba871f47ec7c1d9b6499d1888c7b37b9b7f48b7dcb93f354') { throw 'Reference manifest digest mismatch' }
-          python admin_tool/windows_installer/extract_reference.py --msi $msi --output temp/reference-image
+          python admin_tool/windows_installer/extract_reference.py --msi $msi --manifest $manifest --output temp/reference-image
           if ($LASTEXITCODE -ne 0) { throw 'Reference extraction failed' }
           "YADOF_REFERENCE=$([IO.Path]::GetFullPath('temp/reference-image'))" >> $env:GITHUB_ENV
       - name: Obtain the pinned folder-picker compiler

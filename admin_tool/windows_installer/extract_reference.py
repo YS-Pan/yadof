@@ -4,16 +4,19 @@ from __future__ import annotations
 import argparse
 import ctypes
 from ctypes import wintypes
-from pathlib import Path
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
 import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def extract(msi_path: Path, output: Path) -> None:
+def extract(msi_path: Path, output: Path, manifest: Path | None = None) -> None:
     output = output.resolve()
     output.relative_to((ROOT / "temp").resolve())
+    inventory = json.loads(manifest.read_text(encoding="utf-8"))["files"] if manifest is not None else None
     output.mkdir(parents=True, exist_ok=False)
     api = ctypes.WinDLL("msi", use_last_error=True)
     handle = wintypes.UINT
@@ -96,11 +99,29 @@ def extract(msi_path: Path, output: Path) -> None:
         path.resolve().relative_to(output)
         return path
 
-    for alias, component, name in files:
+    if inventory is not None:
+        # Old code-page-neutral MSI tables decode localized names differently
+        # across machines. Cabinet aliases use a stable UTF-8 path hash; recover
+        # exact Unicode paths from the separately hash-pinned release manifest.
+        targets = {}
+        for item in inventory:
+            relative = PurePosixPath(item["path"])
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError("Unsafe reference manifest member")
+            alias = "F" + hashlib.sha256(relative.as_posix().lower().encode("utf-8")).hexdigest()[:28]
+            if alias in targets:
+                raise ValueError("Duplicate reference cabinet alias")
+            targets[alias] = (output.joinpath(*relative.parts), item["sha256"])
+        if set(targets) != {alias for alias, _, _ in files}:
+            raise ValueError("Reference cabinet inventory differs from manifest")
+    else:
+        targets = {alias: (directory_path(components[component]) / name.split("|")[-1], None) for alias, component, name in files}
+    for alias, (destination, expected_hash) in targets.items():
         source = expanded / alias
         source.resolve().relative_to(expanded)
-        destination = directory_path(components[component]) / name.split("|")[-1]
         destination.resolve().relative_to(output)
+        if expected_hash is not None and hashlib.sha256(source.read_bytes()).hexdigest() != expected_hash:
+            raise ValueError(f"Reference cabinet digest mismatch: {alias}")
         destination.parent.mkdir(parents=True, exist_ok=True)
         source.replace(destination)
     print(f"Extracted {len(files)} reference files to {output}", flush=True)
@@ -110,5 +131,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--msi", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, help="Hash-verified published manifest for locale-independent paths")
     args = parser.parse_args()
-    extract(args.msi, args.output)
+    extract(args.msi, args.output, args.manifest)

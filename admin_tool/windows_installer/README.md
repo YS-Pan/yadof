@@ -145,7 +145,11 @@ module layout and validates a separate MSI identity with `--isolated-copy`.
 using the native read-only MSI API. It extracts below root temp/ without
 registering the reference product, including older MSIs without an administrative
 installation sequence. The subsequent builder verifies every extracted file
-against the pinned published manifest.
+against the pinned published manifest. Cabinet aliases and manifest paths recover
+localized filenames from older code-page-neutral MSIs without depending on the
+runner's Windows language. New MSI databases explicitly declare code page 936
+before adding localized filenames, and acceptance checks every installed file
+against its release digest.
 
 After acceptance, `release_metadata.py` packages administrator sources, runtime
 evidence and SHA-256 checksums. Only then does the workflow create a draft for

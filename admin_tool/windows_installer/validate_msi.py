@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -204,6 +205,12 @@ def main():
     upgrade_product = None
     try:
         run(["msiexec.exe", "/i", msi, "/qn", "/norestart", f"INSTALLDIR={destination}", "/L*v", work / "install.log"], work, "install")
+        for item in manifest["files"]:
+            installed = destination / item["path"]
+            installed.resolve().relative_to(destination.resolve())
+            if hashlib.sha256(installed.read_bytes()).hexdigest() != item["sha256"]:
+                raise ValueError(f"Installed payload differs from release manifest: {item['path']}")
+        print("PASS all-installed-file-hashes", flush=True)
         run([cli, "version"], work, "version")
         run([destination / "yadof_env/Scripts/yadof-gui.exe", "--help"], work, "gui-launcher")
         run([destination / "yadof_env/Scripts/yadof-admin.exe", "--smoke-test"], work, "admin-launcher")
@@ -274,7 +281,7 @@ def main():
     assert unknown.read_text(encoding="utf-8") == "retain unknown files"
     assert installer.MsiQueryProductStateW(product) == -1
     (work / "acceptance.json").write_text(json.dumps({"msi":str(published_msi), "sha256":manifest["sha256"], "isolated_qa_copy":args.isolated_copy, "product_code":product,
-        "status":"passed", "checks":["installation", "CLI", "GUI launcher and Tk controller", "dependency/native imports", "isolation", "installed docs", "task init/check", "local smoke", "one four-individual generation", "repair", "same-version upgrade", "uninstall", "external and unknown data preserved"]},indent=2), encoding="utf-8")
+        "status":"passed", "checks":["installation", "all installed file hashes", "CLI", "GUI launcher and Tk controller", "dependency/native imports", "isolation", "installed docs", "task init/check", "local smoke", "one four-individual generation", "repair", "same-version upgrade", "uninstall", "external and unknown data preserved"]},indent=2), encoding="utf-8")
     print(f"Acceptance passed: {work / 'acceptance.json'}", flush=True)
 
 
