@@ -232,25 +232,49 @@ def condor_values(cfg: Settings, *, detached=False) -> dict[str, str]:
     return values
 
 
-def clean_config(text: str, replace=()) -> str:
+def _config_entries(text: str):
+    """Yield logical entries with their original lines and first line number."""
+    lines = iter(enumerate(text.splitlines(), 1))
+    for number, line in lines:
+        original, parts = [line], []
+        while not line.lstrip().startswith("#"):
+            continued = line.rstrip().endswith("\\")
+            parts.append(line.rstrip()[:-1] if continued else line)
+            if not continued:
+                break
+            for _, line in lines:
+                original.append(line)
+                if not line.lstrip().startswith("#"):
+                    break
+            else:
+                break
+        yield number, original, " ".join(parts)
+
+
+def clean_config(text: str, replace=(), *, source: Path | None = None) -> str:
     """Remove old GUI metadata and replace native assignments, including continuations."""
-    result, skip = [], False
+    result = []
     replace = {key.upper() for key in replace}
-    for line in text.splitlines():
-        if skip:
-            skip = line.rstrip().endswith("\\")
-            continue
+    for number, original, line in _config_entries(text):
         match = ASSIGNMENT.match(line)
         key = match[1].upper() if match else ""
         if "YADOF_" in key or key in replace or re.match(r"\s*use\s+POLICY\s*:\s*Preempt_if_Runtime_Exceeds", line, re.I):
-            skip = line.rstrip().endswith("\\")
             continue
         if key in {"STARTD_ATTRS", "MASTER_ATTRS", "SCHEDD_ATTRS"}:
             prefix, value = line.split("=", 1)
-            line = prefix + "= " + ", ".join(x for x in re.split(r"[,\s]+", value.strip()) if x and "YADOF_" not in x.upper())
-        elif not line.lstrip().startswith("#") and re.search(r"(?<![\w/\\])YADOF_\w+(?![\w/\\])", line, re.I):
-            raise ValueError("旧配置仍引用 YADOF_*；请先移除该自定义表达式")
-        result.append(line)
+            original = [prefix + "= " + ", ".join(x for x in re.split(r"[,\s]+", value.strip())
+                        if x and not re.fullmatch(r"YADOF_\w+", x, re.I))]
+            line = original[0]
+        # Macros expand even inside strings. Bare ClassAd attributes do not;
+        # quoted labels and filenames such as yadof_job.exe are ordinary values.
+        references = re.findall(r"\$\$?\(\s*((?:\w+\.)?YADOF_\w+)\b", line, re.I)
+        unquoted = re.sub(r'"(?:\\.|[^"\\])*"', "", line)
+        references += re.findall(r"(?<![\w/\\])(?:\w+\.)?YADOF_\w+(?![\w./\\])", unquoted, re.I)
+        if references:
+            names = ", ".join(sorted({name.upper() for name in references}))
+            raise ValueError(f"{source or '<配置文本>'}:{number}：配置项 {key or '<表达式>'} "
+                             f"仍引用旧配置 {names}；请改为原生配置或移除该自定义表达式")
+        result.extend(original)
     return "\n".join(result).rstrip() + "\n"
 
 
