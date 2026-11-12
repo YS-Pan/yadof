@@ -20,6 +20,12 @@ LOCAL_CONFIG_FILE uses existing Windows short directory paths when needed becaus
 its parser splits on whitespace. Old loaded YADOF_* metadata and attribute
 references are removed, retaining unrelated native settings. Staging, backups and
 JSON live below ACL-restricted ProgramData/Yadof.
+Cleanup processes logical backslash-continuation entries, ignoring whole-line
+comments within continuations. It filters complete legacy names from advertised
+attribute lists while preserving other attributes, literal strings and executable
+paths. Real macro references (including inside strings) and unquoted ClassAd
+references that survive managed replacement stop planning with source path,
+first entry line, native key and referenced legacy names, without exposing values.
 
 The PowerShell helper manages only the local condor service and Yadof-frpc startup
 task, and prepares execute-directory ACLs for slot accounts. The task runs as

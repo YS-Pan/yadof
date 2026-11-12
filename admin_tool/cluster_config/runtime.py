@@ -158,10 +158,10 @@ class Backend:
         local = root.with_name("condor_config.local")
         values = condor_values(cfg, detached=detached)
         directives = {"LOCAL_CONFIG_FILE", "LOCAL_CONFIG_DIR"}
-        root_text = clean_config(texts[root], [*directives, *values])
+        root_text = clean_config(texts[root], [*directives, *values], source=root)
         local_native = config_path(local)
         root_text += f"\nLOCAL_CONFIG_FILE = {local_native}\nLOCAL_CONFIG_DIR =\n"
-        local_text = "\n".join(clean_config(texts[p], [*directives, *values]) for p in sources if p != root)
+        local_text = "\n".join(clean_config(texts[p], [*directives, *values], source=p) for p in sources if p != root)
         local_text += "\n# HTCondor native settings managed by admin_config.pyw\n"
         local_text += "\n".join(f"{k} = {v}" for k, v in values.items()) + "\n"
         stage_local, stage_root = work / "condor_config.local", work / "condor_config"
