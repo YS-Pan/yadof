@@ -176,12 +176,17 @@ def test_ridge_prediction_uses_parameters_and_rejects_invalid_inputs() -> None:
         component.predict_rawdata(model, ((1.1,),))
     bad = list(data.raw_data)
     bad[2] = _sample(float("nan"))
-    with pytest.raises(ValueError, match="non-finite"):
-        component.fit_deployable(
-            data.normalized_variables,
-            bad,
-            parameter_names=data.parameter_names,
-        )
+    filtered_model = component.fit_deployable(
+        data.normalized_variables,
+        bad,
+        parameter_names=data.parameter_names,
+    )
+    filtered_prediction = component.predict_rawdata(filtered_model, ((0.33,),))[0]
+    assert np.allclose(
+        filtered_prediction.as_mapping()["field.npz"]["values"],
+        _sample(0.33).as_mapping()["field.npz"]["values"],
+        atol=2e-5,
+    )
     drift = list(data.raw_data)
     drift[-1] = _sample(1.0, filename="renamed.npz")
     with pytest.raises(Exception, match="selector set"):

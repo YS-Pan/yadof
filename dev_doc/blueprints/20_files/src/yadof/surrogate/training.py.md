@@ -4,10 +4,21 @@
 
 Own backend-neutral explicit surrogate values without importing Torch.
 `SurrogateTrainingData` accepts only fully materialized normalized rows and complete
-structured rawData, shares owned immutable samples, validates finite real main targets, and
+structured rawData, shares owned immutable samples, excludes invalid individuals, and
 separates a domain-versioned semantic content digest from JSON-safe provenance.
 `materialize_training_data()` strictly joins Stage 2 evidence and cost rows by
-identity; it never records or silently substitutes a failed row.
+identity; it never records or substitutes a failed row. Missing requested identities,
+root-identity mismatches and global alignment errors remain contract failures.
+Unreadable/corrupt individual payloads are skipped. Direct materialized values
+likewise skip malformed, empty, non-real or non-finite targets/coordinates. Complete
+samples form exact schema cohorts: retain the cohort with most selected rows, then
+most total rows, most fields, and most target points, with first occurrence breaking
+any remaining tie. Retain its original order, duplicates, IDs and aligned metadata.
+This avoids letting a first truncated sample define the whole training set.
+A bounded log summary reports dropped counts and at most eight reasons. No data
+is repaired, interpolated or written back. All-invalid input yields an empty value
+for the existing no-data/fallback lifecycle. Digests bind only retained rows;
+prediction DTOs and schema-template validation remain strict.
 It reads through the evidence handle's private shared-sample path, uses a retained
 schema template when available, and hashes contiguous arrays without allocating
 full byte copies. Mutable caller inputs are isolated on first construction;
