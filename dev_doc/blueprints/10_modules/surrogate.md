@@ -195,9 +195,19 @@ model architecture, or checkpoint mathematics.
 
 `materialize_training_data()` joins `EvidenceDataset` and `CostTable` only by row
 identity. Default selection accepts committed original or explicit derived rows
-with readable rawData and successful finite interpretation; explicit row IDs are
-strict. Direct values reject lazy loaders plus object, structured, complex,
-masked, or non-finite main targets. C/F source layout canonicalizes to the same
+with readable rawData and successful finite interpretation. Explicit row IDs are
+strict about existence and identity; unreadable or invalid individual payloads are
+skipped for both automatic and explicit selection. Direct values reject lazy
+loaders and global alignment errors but skip malformed, empty, object, structured,
+complex, masked, or non-finite individual targets and non-finite numeric axes.
+The largest exact schema cohort is retained; ties prefer more fields and points,
+then first occurrence. Masks and row-aligned provenance remain attached to their
+original identities. A bounded log summary reports skipped individuals without
+aborting training on good rows. An all-invalid input is empty, so normal selection
+uses its no-data/full-real fallback. Conditional-INR and hierarchical-CAE do not
+reuse or overwrite an old model when their current training input is empty;
+training-free oracle freshness remains independent of recorded training data.
+C/F source layout canonicalizes to the same
 digest, while dtype, shape, row order, duplicates, status, mask, or numeric content
 changes it. Source identity, lineage, and optional transform ID change only the
 provenance digest.

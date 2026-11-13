@@ -437,6 +437,8 @@ class ConditionalINRComponent:
         from .conditional_inr import runtime
 
         _conditional_training_data(training_data)
+        if training_data.sample_count < 1:
+            return False
         return bool(
             runtime.has_trained_state(
                 context.config.workspace, _settings=self.settings
@@ -447,6 +449,8 @@ class ConditionalINRComponent:
         from .conditional_inr import runtime
 
         _conditional_training_data(training_data)
+        if training_data.sample_count < 1:
+            return None
         return runtime.latest_state_generation(
             context.config.workspace,
             _settings=self.settings,
@@ -455,6 +459,9 @@ class ConditionalINRComponent:
     def start_training(self, context, training_data):
         from .conditional_inr import scheduler
 
+        explicit = _conditional_training_data(training_data)
+        if training_data.sample_count < 1:
+            return scheduler.TrainingScheduleStatus("skipped_no_data", context.generation_index)
         return scheduler.start_training(
             context.config.workspace,
             generation_index=context.generation_index,
@@ -462,7 +469,7 @@ class ConditionalINRComponent:
             _config=context.config,
             _settings=self.settings,
             _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
-            _training_data=_conditional_training_data(training_data),
+            _training_data=explicit,
         )
 
     def finish_training(self, context):
@@ -876,6 +883,8 @@ class HierarchicalCAEComponent:
         from .hierarchical_cae import runtime
 
         _cae_training_data(training_data)
+        if training_data.sample_count < 1:
+            return False
         return bool(
             runtime.has_trained_state(context.config.workspace, component=self)
         )
@@ -884,6 +893,8 @@ class HierarchicalCAEComponent:
         from .hierarchical_cae import runtime
 
         _cae_training_data(training_data)
+        if training_data.sample_count < 1:
+            return None
         return runtime.latest_state_generation(
             context.config.workspace,
             component=self,
@@ -892,6 +903,9 @@ class HierarchicalCAEComponent:
     def start_training(self, context, training_data):
         from .hierarchical_cae import scheduler
 
+        explicit = _cae_training_data(training_data)
+        if training_data.sample_count < 1:
+            return scheduler.TrainingScheduleStatus("skipped_no_data", context.generation_index)
         return scheduler.start_training(
             context.config.workspace,
             generation_index=context.generation_index,
@@ -899,7 +913,7 @@ class HierarchicalCAEComponent:
             _config=context.config,
             _component=self,
             _random_seed=int(context.config.OPTIMIZE_RANDOM_SEED),
-            _training_data=_cae_training_data(training_data),
+            _training_data=explicit,
         )
 
     def finish_training(self, context):

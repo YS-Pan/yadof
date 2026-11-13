@@ -113,6 +113,15 @@ predicted rawData or predicted costs as durable history.
 Surrogate training uses only recorded real rawData rows. By default every independently
 initialized ensemble member sees every retained real row; this preserves all measured
 design support because ensemble spread is diagnostic and does not steer GPSAF.
+Training skips an entire individual if its rawData cannot be read, has missing or
+empty data, or contains non-finite numeric values. It also excludes incompatible
+field/shape/dtype/axis/metadata schemas, retaining the most common complete schema;
+ties prefer more fields/data points and then the first occurrence. A log summary
+reports the skipped count and bounded examples. The remaining intact individuals
+continue training without an error dialog. If none remain, the normal no-data
+behavior keeps selection on its real-evaluation fallback. This selection never
+repairs or deletes recorded evidence. Invalid row identity joins, misaligned
+caller arrays, model errors and persistence failures still surface as errors.
 `conditional_inr(bootstrap_members=True)` remains an explicit opt-in for seeded
 bootstrap rows drawn only from that same evidence. It does not synthesize mixup targets
 and does not accept task-owned rawData importance or relative-loss settings.

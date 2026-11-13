@@ -186,6 +186,10 @@ GPSAF exploration and assisted quotas divide the current formal batch.
   not hard-code task-specific simulator or objective policy.
 - External simulator failures or partial artifacts never publish normal evidence.
 - Predicted rawData never enters real history.
+- Surrogate input selection skips unreadable, incomplete and non-finite individuals
+  and trains on one complete compatible schema cohort. This is a derived training
+  view; accepted evidence, task interpretation and publication guarantees remain
+  unchanged. No surviving rows means the normal no-data/real-evaluation fallback.
 - Unindexed smoke evidence never enters optimizer history or changes generation-zero
   global random initialization.
 - Search candidates, predicted costs, and mid-generation search state never enter

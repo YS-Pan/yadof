@@ -6,11 +6,13 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 import hashlib
 import json
+import logging
 import math
 from collections.abc import Iterator, Sequence as MaterializedSequence
 from types import MappingProxyType
 import threading
 import time
+import zipfile
 from typing import Callable, Mapping, Protocol, Sequence, runtime_checkable
 
 import numpy as np
@@ -28,7 +30,7 @@ _PROVENANCE_DOMAIN = b"yadof.surrogate-training-provenance:v1\0"
 
 @dataclass(frozen=True, slots=True)
 class SurrogateTrainingData:
-    """Owned, aligned, exactly hashable rawData training rows."""
+    """Owned, aligned, exactly hashable training rows, excluding invalid individuals."""
 
     parameter_names: tuple[str, ...]
     normalized_variables: tuple[tuple[float, ...], ...]
@@ -76,14 +78,8 @@ class SurrogateTrainingData:
             tuple(max(0.0, min(1.0, value)) for value in row)
             for row in variables
         )
-        samples = tuple(
-            sample
-            if isinstance(sample, StructuredRawDataSample)
-            else StructuredRawDataSample.from_items(sample)
-            for sample in self.raw_data
-        )
         count = len(variables)
-        if len(samples) != count:
+        if len(self.raw_data) != count:
             raise ValueError("parameter and rawData training rows must align")
         row_ids = _aligned_strings(
             self.row_ids,
@@ -120,6 +116,15 @@ class SurrogateTrainingData:
         if transform_id == "":
             raise ValueError("transform_id must be non-empty when provided")
 
+        kept, samples = _validated_training_samples(self.raw_data, row_ids, mask)
+        variables = tuple(variables[index] for index in kept)
+        row_ids = tuple(row_ids[index] for index in kept)
+        evidence_ids = tuple(evidence_ids[index] for index in kept)
+        statuses = tuple(statuses[index] for index in kept)
+        mask = tuple(mask[index] for index in kept)
+        lineage = tuple(lineage[index] for index in kept)
+        metadata_rows = tuple(metadata_rows[index] for index in kept)
+
         if not samples:
             schema_signature = _hash_json(
                 {"contract": "yadof.empty-surrogate-training-schema", "version": 1}
@@ -128,7 +133,6 @@ class SurrogateTrainingData:
             template = RawDataSchemaTemplate.from_items(samples[0])
             samples = tuple(template.validate_sample(sample) for sample in samples)
             schema_signature = template.signature
-            _validate_numeric_targets(samples)
 
         content_digest = _training_content_digest(
             names,
@@ -177,7 +181,7 @@ def materialize_training_data(
     row_ids: Sequence[str] | None = None,
     transform_id: str | None = None,
 ) -> SurrogateTrainingData:
-    """Materialize identity-joined successful evidence into one training value."""
+    """Join successful evidence by identity, skipping unreadable or invalid individuals."""
 
     from ..recorded_data.dataset import EvidenceState, InterpretationStatus
 
@@ -203,6 +207,8 @@ def materialize_training_data(
     statuses: list[str] = []
     lineage_rows: list[tuple[Mapping[str, object], ...]] = []
     metadata_rows: list[Mapping[str, object]] = []
+    loaded_ids: list[str] = []
+    unreadable = []
     for row_id in selected_ids:
         evidence = evidence_lookup.get(row_id)
         cost = cost_lookup.get(row_id)
@@ -218,21 +224,30 @@ def materialize_training_data(
             raise ValueError(f"training row {row_id!r} has no readable rawData")
         if cost.status != InterpretationStatus.SUCCEEDED or cost.normalized_variables is None:
             raise ValueError(f"training row {row_id!r} has no successful interpretation")
+        try:
+            sample = evidence._load_sample()
+        except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile) as exc:
+            if len(unreadable) < 8:
+                unreadable.append(f"{row_id[:128]}: {str(exc)[:256]}")
+            continue
+        loaded_ids.append(row_id)
         variables.append(tuple(float(value) for value in cost.normalized_variables))
-        samples.append(evidence._load_sample())
+        samples.append(sample)
         evidence_ids.append(evidence.evidence_id)
         statuses.append(f"{evidence.evidence_state.value}:{cost.status.value}")
         lineage_rows.append(tuple(step.as_dict() for step in evidence.lineage))
         metadata_rows.append(dict(evidence.record))
 
+    if len(loaded_ids) != len(selected_ids):
+        _report_skipped_training_rows(len(selected_ids) - len(loaded_ids), len(loaded_ids), unreadable)
     return SurrogateTrainingData(
         parameter_names=tuple(dataset.parameter_names),
         normalized_variables=tuple(variables),
         raw_data=tuple(samples),
-        row_ids=selected_ids,
+        row_ids=tuple(loaded_ids),
         evidence_ids=tuple(evidence_ids),
         statuses=tuple(statuses),
-        valid_mask=tuple(True for _ in selected_ids),
+        valid_mask=tuple(True for _ in loaded_ids),
         lineage=tuple(lineage_rows),
         record_metadata=tuple(metadata_rows),
         transform_id=transform_id,
@@ -672,6 +687,52 @@ class TrainingHandle:
             cleanup()
 
 
+def _report_skipped_training_rows(skipped: int, retained: int, examples: Sequence[str]) -> None:
+    logging.getLogger(__name__).warning(
+        "Surrogate training skipped %d invalid or incompatible individual(s); "
+        "retained %d. Examples: %s", skipped, retained, "; ".join(examples),
+    )
+
+
+def _validated_training_samples(raw_data, row_ids, valid_mask):
+    """Keep one complete finite schema cohort without allowing a bad first row to choose it."""
+    groups = {}
+    examples = []
+    for index, raw in enumerate(raw_data):
+        try:
+            sample = StructuredRawDataSample.from_items(raw)
+            _validate_numeric_targets((sample,))
+            template = RawDataSchemaTemplate.from_items(sample)
+        except (ValueError, TypeError, OverflowError) as exc:
+            if len(examples) < 8:
+                examples.append(f"{row_ids[index][:128]}: {str(exc)[:256]}")
+            continue
+        if template.signature not in groups:
+            groups[template.signature] = (template, [])
+        groups[template.signature][1].append((index, sample))
+    if not groups:
+        if raw_data:
+            _report_skipped_training_rows(len(raw_data), 0, examples)
+        return (), ()
+    # Exact schemas include axes, dtype and metadata. Prefer the largest cohort;
+    # ties favor more fields/points, so an early truncated row cannot win a tie.
+    template, rows = max(groups.values(), key=lambda group: (
+        sum(bool(valid_mask[index]) for index, _sample in group[1]),
+        len(group[1]), len(group[0].fields),
+        sum(np.asarray(field.payload[field.main_key]).size for field in group[0].fields),
+    ))
+    kept = tuple(index for index, _sample in rows)
+    skipped = len(raw_data) - len(kept)
+    if skipped:
+        for other_template, other_rows in groups.values():
+            if other_template is not template:
+                for index, _sample in other_rows:
+                    if len(examples) < 8:
+                        examples.append(f"{row_ids[index][:128]}: incompatible rawData shape/dtype/axis/metadata or fields")
+        _report_skipped_training_rows(skipped, len(kept), examples)
+    return kept, tuple(sample for _index, sample in rows)
+
+
 def _validate_numeric_targets(samples: Sequence[StructuredRawDataSample]) -> None:
     for sample in samples:
         for item in sample.items:
@@ -680,6 +741,8 @@ def _validate_numeric_targets(samples: Sequence[StructuredRawDataSample]) -> Non
             if np.ma.isMaskedArray(value):
                 raise ValueError(f"surrogate target {(item.filename, key)!r} cannot be masked")
             array = np.asarray(value)
+            if array.size == 0:
+                raise ValueError(f"surrogate target {(item.filename, key)!r} contains no data points")
             if (
                 array.dtype.hasobject
                 or array.dtype.fields is not None
@@ -691,6 +754,12 @@ def _validate_numeric_targets(samples: Sequence[StructuredRawDataSample]) -> Non
                 raise ValueError(
                     f"surrogate target {(item.filename, key)!r} contains non-finite values"
                 )
+            for name, auxiliary in item.payload.items():
+                if name in {key, "metadata"}:
+                    continue
+                values = np.asarray(auxiliary)
+                if np.issubdtype(values.dtype, np.number) and not np.all(np.isfinite(values)):
+                    raise ValueError(f"surrogate field {(item.filename, name)!r} contains non-finite values")
 
 
 def _training_content_digest(

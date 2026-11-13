@@ -228,7 +228,7 @@ def test_training_data_digest_separates_content_from_provenance() -> None:
     assert duplicated.content_digest != original.content_digest
 
 
-def test_training_data_rejects_lazy_and_non_real_targets() -> None:
+def test_training_data_rejects_lazy_but_skips_invalid_individuals() -> None:
     with pytest.raises(TypeError, match="materialized"):
         SurrogateTrainingData(
             parameter_names=("input_value",),
@@ -241,28 +241,23 @@ def test_training_data_rejects_lazy_and_non_real_targets() -> None:
             normalized_variables=((0.0,),),
             raw_data=(sample for sample in (_sample(0.0),)),
         )
-    with pytest.raises(Exception, match="mask|masked"):
-        SurrogateTrainingData(
-            parameter_names=("input_value",),
-            normalized_variables=((0.0,),),
-            raw_data=(_sample(np.ma.array([1.0], mask=[True])),),
-        )
-    with pytest.raises(Exception, match="non-finite"):
-        SurrogateTrainingData(
-            parameter_names=("input_value",),
-            normalized_variables=((0.0,),),
-            raw_data=(_sample(np.asarray([np.nan])),),
-        )
+    data = SurrogateTrainingData(
+        parameter_names=("input_value",),
+        normalized_variables=((0.0,),),
+        raw_data=(_sample(np.asarray([np.nan])),),
+    )
+    assert data.sample_count == 0
     for values in (
         np.asarray([1 + 2j], dtype=np.complex128),
         np.asarray([object()], dtype=object),
+        np.ma.array([1.0], mask=[True]),
     ):
-        with pytest.raises(Exception):
-            SurrogateTrainingData(
-                parameter_names=("input_value",),
-                normalized_variables=((0.0,),),
-                raw_data=(_sample(values),),
-            )
+        data = SurrogateTrainingData(
+            parameter_names=("input_value",),
+            normalized_variables=((0.0,),),
+            raw_data=({"response.npz": _payload(values)},),
+        )
+        assert data.sample_count == 0
 
 
 def test_stage2_identity_materializer_handles_selection_order_duplicates_and_lineage(

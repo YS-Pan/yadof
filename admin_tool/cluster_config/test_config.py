@@ -94,6 +94,48 @@ def test_metadata_cleanup_preserves_yadof_checkout_paths():
         clean_config('START = $(YADOF_EXECUTE_READY)\n')
 
 
+@pytest.mark.parametrize("key", ["STARTD_ATTRS", "MASTER_ATTRS", "SCHEDD_ATTRS"])
+def test_metadata_cleanup_handles_continued_attribute_lists(key):
+    text = (f'{key} = Keep, \\\n'
+            '# old advertised attributes \\\n'
+            '    YADOF_EXECUTE_READY, \\\n'
+            '    KeepToo, YADOF_EXECUTE_DIR\n'
+            'STARTER_NUM_THREADS_ENV_VARS = OMP_NUM_THREADS\n')
+    cleaned = clean_config(text)
+    assert f'{key} = Keep, KeepToo\n' in cleaned
+    assert 'STARTER_NUM_THREADS_ENV_VARS = OMP_NUM_THREADS\n' in cleaned
+    assert 'YADOF_' not in cleaned
+
+
+def test_metadata_cleanup_ignores_comments_inside_removed_continuation():
+    text = ('YADOF_OLD = first \\\n'
+            '# explanatory comment\n'
+            '    second\n'
+            'STARTER_NUM_THREADS_ENV_VARS = OMP_NUM_THREADS\n')
+    assert clean_config(text) == 'STARTER_NUM_THREADS_ENV_VARS = OMP_NUM_THREADS\n'
+
+
+@pytest.mark.parametrize("text", [
+    'LABEL = "YADOF_worker"\n',
+    'USER_JOB_WRAPPER = yadof_job.exe\n',
+    'REQUIREMENTS = (Name == "YADOF_worker")\n',
+])
+def test_metadata_cleanup_preserves_literal_names(text):
+    assert clean_config(text) == text
+
+
+@pytest.mark.parametrize("value", ['$(YADOF_READY)', 'TARGET.YADOF_READY', "TARGET.'YADOF_READY'", '"$(yadof_ready:False)"'])
+def test_legacy_reference_error_identifies_source_without_values(value):
+    with pytest.raises(ValueError) as error:
+        clean_config(f'# native customization\nCUSTOM_POLICY = {value} && "private-value"\n',
+                     source=Path('other-node/condor_config.local'))
+    message = str(error.value)
+    assert 'condor_config.local:2' in message
+    assert 'CUSTOM_POLICY' in message
+    assert 'YADOF_READY' in message.upper()
+    assert 'private-value' not in message
+
+
 def test_real_condor_parser_and_frpc(tmp_path):
     import shutil
     condor = shutil.which("condor_config_val")
@@ -103,14 +145,38 @@ def test_real_condor_parser_and_frpc(tmp_path):
     root = tmp_path / "condor_config"
     local = tmp_path / "condor_config.local"
     root.write_text(f'RELEASE_DIR = D:/condor\nLOCAL_DIR = {tmp_path.as_posix()}\nLOCAL_CONFIG_FILE = {config_path(local)}\n', encoding="utf-8")
-    local.write_text('YADOF_POOL_ROLE = Worker\nSTARTER_NUM_THREADS_ENV_VARS = OMP_NUM_THREADS\n', encoding="utf-8")
+    local.write_text('YADOF_POOL_ROLE = Worker\nSTARTER_NUM_THREADS_ENV_VARS = OMP_NUM_THREADS\n'
+                     'STARTD_ATTRS = Keep, \\\n'
+                     '  YADOF_EXECUTE_READY, KeepToo\n'
+                     'USER_JOB_WRAPPER = yadof_job.exe\n', encoding="utf-8")
     cfg = sample(root_config=str(root), frpc_exe=str(frpc))
     stage = tmp_path / "stage"
     stage.mkdir()
     changes, _ = Backend().plan(cfg, stage)
     assert "YADOF_" not in changes[local.resolve()]
     assert "OMP_NUM_THREADS" in changes[local.resolve()]
+    assert "STARTD_ATTRS = Keep, KeepToo" in changes[local.resolve()]
+    assert "USER_JOB_WRAPPER = yadof_job.exe" in changes[local.resolve()]
     assert "sample-only" not in changes[root.resolve()]
+
+
+def test_plan_reports_the_loaded_file_and_line_before_any_mutation(tmp_path):
+    root, local, stage = tmp_path / 'condor_config', tmp_path / 'legacy.local', tmp_path / 'stage'
+    root.write_text('RELEASE_DIR = D:/condor\n', encoding='utf-8')
+    local.write_text('# custom policy\nCUSTOM_POLICY = TARGET.YADOF_EXECUTE_READY\n', encoding='utf-8')
+    stage.mkdir()
+    original = {p: p.read_bytes() for p in (root, local)}
+    def run(args, **kwargs):
+        assert args == ['condor_config_val', '-config']
+        return f'{root}\n{local}'
+    def control(*args, **kwargs):
+        pytest.fail('configuration planning must not change services')
+    with pytest.raises(ValueError) as error:
+        Backend(run=run, control=control).plan(sample(root_config=str(root)), stage)
+    assert f'{local.resolve()}:2' in str(error.value)
+    assert 'CUSTOM_POLICY' in str(error.value)
+    assert all(p.read_bytes() == data for p, data in original.items())
+    assert not list(stage.iterdir())
 
 
 def test_failed_start_restores_files_and_lifecycle(tmp_path):
